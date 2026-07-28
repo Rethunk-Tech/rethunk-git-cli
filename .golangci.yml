@@ -1,0 +1,22 @@
+version: "2"
+
+# The default linter set (errcheck, govet, ineffassign, staticcheck, unused)
+# is kept as-is. The only tuning is below, and it is a deliberate exemption
+# rather than a preference.
+linters:
+  settings:
+    errcheck:
+      # Writes of diagnostics and results to the caller's stdout/stderr.
+      # There is no recovery available at these call sites: rgit is already
+      # reporting an outcome when it reaches them, and a second failure to
+      # report the first one has nowhere to go. Go's runtime already turns
+      # EPIPE on fd 1 or 2 into SIGPIPE, so the `rgit diff | head` case
+      # terminates the process rather than silently losing output.
+      #
+      # Every other discarded error in this repo is written `_ =` at the
+      # call site on purpose; see internal/lsp/dial.go for the best-effort
+      # cleanup paths and the reasoning attached to each.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
