@@ -3,14 +3,16 @@
 Future work only. Decisions already made live in
 [`specs/design.md`](specs/design.md).
 
-## v1 — implementation
+## Known limitations
 
-- [ ] Port [`spike/`](spike/) prototypes to Go tests, then delete the directory
-- [ ] Anchor resolution: tree-sitter extents, bare **and** qualified name indexes
-- [ ] Blob synthesis: splice, insertion, reverse-offset ordering, EOF-newline rule
-- [ ] Argument precedence: pathspec / revision / anchor, with `--` handling
-- [ ] LSP daemon probe, spawn-on-demand, and the normalized cross-check
-- [ ] `rgit diff` rendering, including `--porcelain`, `MODE`, and `BINARY` rows
+- [ ] TypeScript multi-declarator statements (`const a = 1, b = 2`) address only
+      the first declarator. A change to a later one reports as `(unanchorable)`
+      rather than being misattributed, so the output stays honest — but the
+      symbol is not nameable. Go's grouped `const`/`var`/`type` blocks address
+      each spec individually; TypeScript should match.
+- [ ] `@header` resolves to nothing in a TypeScript or Python file with no
+      shebang, since neither language has a package clause. Callers that
+      auto-stage `@header` for an untracked file must tolerate its absence.
 
 ## v2 — grammars
 

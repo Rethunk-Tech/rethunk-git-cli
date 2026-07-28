@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![status](https://img.shields.io/badge/status-design-blue)](specs/design.md)
+[![status](https://img.shields.io/badge/status-v1-brightgreen)](specs/design.md)
 [![go](https://img.shields.io/badge/go-1.26%2B-00ADD8)](https://go.dev)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -62,10 +62,10 @@ Prerequisites and language-server setup: [HUMANS.md](HUMANS.md).
 
 ## Status
 
-Design complete and validated against real repositories, language servers, and
-git behaviour. Implementation has not started — see
-[specs/design.md](specs/design.md) for what was measured and
-[TODO.md](TODO.md) for what is deferred.
+v1 works: both commands are implemented for Go, TypeScript/JavaScript and
+Python, with the language-server cross-check live for all three. See
+[specs/design.md](specs/design.md) for what was measured and [TODO.md](TODO.md)
+for known limitations and what is deferred.
 
 ## License
 

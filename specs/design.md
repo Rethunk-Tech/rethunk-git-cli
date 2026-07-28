@@ -126,8 +126,11 @@ made a bare `Get` *absent* rather than *ambiguous*, yielding exit 3 ("did you
 mean…") where exit 4 ("qualify it") is correct. **The resolver must index bare
 names alongside qualified ones** — the remediations differ.
 
-Spike sources are under [`../spike/`](../spike/) and are deletable once the Go
-tests cover the same cases.
+The spike has since been retired: every assertion above is covered by
+`index_test.go` and `resolver_test.go`, which additionally parse each
+synthesized blob rather than only inspecting its text. Comments in those files
+still cite the prototype they came from — the sources are in git history, under
+`spike/`, up to the commit that removed them.
 
 ## Symbol resolution
 

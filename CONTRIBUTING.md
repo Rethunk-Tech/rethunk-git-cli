@@ -39,8 +39,9 @@ skips cleanly when the binary is absent or `-short` is set — mocks cannot catc
 a change in real language-server range semantics, which is the class of defect
 that invalidated an earlier design.
 
-**Write tests before implementation.** The [`spike/`](spike/) prototypes are the
-executable source for the first two files; port them, then delete the directory.
+**Write tests before implementation.** The Python prototypes that validated the
+design have been retired into these files; a case they covered must not be lost
+when one is refactored.
 
 ```bash
 go test ./...          # full suite

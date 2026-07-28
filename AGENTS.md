@@ -29,8 +29,7 @@ Reasoning and the measurement behind each: @specs/design.md
 | @docs/USAGE.md | Command surface, argument grammar, flags, exit codes |
 | @docs/ANCHORS.md | Anchor syntax, extents, pseudo-anchors, special paths |
 | @docs/INSTALL.md | Build, language servers, env vars, verify |
-| @TODO.md | Backlog — v1 implementation order, v2 grammars, deferrals |
-| `spike/` | Python prototypes that validated the design. Reference only — delete once the Go tests cover the same cases |
+| @TODO.md | Backlog — known limitations, v2 grammars, deferrals |
 
 `docs/` ships with the tool. `specs/` does not — design record and migration
 plan live there.
