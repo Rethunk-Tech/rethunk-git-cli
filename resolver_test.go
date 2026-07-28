@@ -540,6 +540,66 @@ func F() int { return Alpha }
 	qt.Assert(t, qt.StringContains(toplevelText, "func F()"))
 }
 
+func TestResolve_GoContainerMembers(t *testing.T) {
+	// Struct fields and interface methods were both exit 3 before this; one
+	// fixture exercises the addressable and the deliberately-unaddressable
+	// shapes together, including a member reached inside a grouped
+	// `type ( ... )` block.
+	src := []byte(`package p
+
+type S struct {
+	Field int
+	A, B  int
+	Anon
+}
+
+type I interface {
+	Do()
+}
+
+type (
+	Grouped struct {
+		X int
+	}
+)
+`)
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".go", src, "S.Field"), "Field int"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".go", src, "I.Do"), "Do()"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".go", src, "Grouped.X"), "X int"))
+
+	lang := resolverGoLang(t)
+
+	// "A, B int" shares one field_declaration for both names -- neither gets
+	// its own anchor, since giving A one would silently drag B's text along.
+	_, err := resolve.Resolve(lang, src, "S.A")
+	qt.Assert(t, qt.IsNotNil(err))
+	var rerr *resolve.ResolveError
+	qt.Assert(t, qt.ErrorAs(err, &rerr))
+	qt.Assert(t, qt.Equals(rerr.Code, exitcode.AnchorUnresolvable))
+
+	// An embedded/anonymous field has no name of its own to address it by.
+	_, err = resolve.Resolve(lang, src, "S.Anon")
+	qt.Assert(t, qt.IsNotNil(err))
+
+	// A struct field and a method sharing both a receiver/container and a
+	// name collide the same way two methods do: ambiguous (exit 4), not a
+	// silent pick of one over the other.
+	collideSrc := []byte(`package p
+
+type Collide struct {
+	Get int
+}
+
+func (c *Collide) Get() int { return c.Get }
+`)
+	_, err = resolve.Resolve(lang, collideSrc, "Collide.Get")
+	qt.Assert(t, qt.IsNotNil(err))
+	var crerr *resolve.ResolveError
+	qt.Assert(t, qt.ErrorAs(err, &crerr))
+	qt.Assert(t, qt.Equals(crerr.Code, exitcode.AnchorAmbiguous))
+	qt.Assert(t, qt.DeepEquals(crerr.Candidates, []string{"Collide.Get#1", "Collide.Get#2"}))
+}
+
 func TestResolve_UnsupportedLanguage(t *testing.T) {
 	// A symbol anchor on a file whose language has no v1 grammar is the
 	// caller's exit 9 (docs/ANCHORS.md § Language support); the resolver's

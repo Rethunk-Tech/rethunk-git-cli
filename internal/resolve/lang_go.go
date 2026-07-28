@@ -133,12 +133,104 @@ func goSpecDeclarations(node *ts.Node, src []byte) []Declaration {
 		if !ok {
 			return nil
 		}
-		return []Declaration{d}
+		out := []Declaration{d}
+		if specs[0].Kind() == "type_spec" {
+			out = append(out, goContainerMembers(specs[0], d.Bare, src)...)
+		}
+		return out
 	}
 
 	out := make([]Declaration, 0, len(specs))
 	for _, spec := range specs {
 		if d, ok := namedDecl(src, spec, spec); ok {
+			out = append(out, d)
+			// type ( ... ) groups each spec individually (goSpecs above);
+			// members must work the same way inside a grouped block as
+			// beside it, so this runs for every spec, not just a lone one.
+			if spec.Kind() == "type_spec" {
+				out = append(out, goContainerMembers(spec, d.Bare, src)...)
+			}
+		}
+	}
+	return out
+}
+
+// goContainerMembers reaches one level into a type_spec's underlying type:
+// a struct's fields (S.Field) or an interface's methods (I.Do), container-
+// qualified by the type's own name. Measured against a compiled parse tree:
+// type_spec's "type" field holds the struct_type or interface_type directly,
+// not a further wrapper node. Any other underlying type — an alias, a named
+// slice or map, a defined basic type — has no members to reach, and yields
+// nil rather than descending into something that isn't a container.
+func goContainerMembers(spec *ts.Node, container string, src []byte) []Declaration {
+	typ := spec.ChildByFieldName("type")
+	if typ == nil {
+		return nil
+	}
+	switch typ.Kind() {
+	case "struct_type":
+		return goStructFields(typ, container, src)
+	case "interface_type":
+		return goInterfaceMethods(typ, container, src)
+	default:
+		return nil
+	}
+}
+
+// goStructFields enumerates a struct_type's own fields, container-qualified.
+// Measured against a compiled parse tree: struct_type's sole child is a
+// field_declaration_list, and each field_declaration carries its name(s) as
+// field_identifier children rather than in a single-valued "name" field —
+// field_declaration.name is itself multiple, because "A, B int" is one
+// field_declaration sharing a type between two names.
+//
+// A field_declaration with exactly one name is addressed the ordinary way.
+// Zero names means an embedded/anonymous field (`Anon` with no identifier of
+// its own) — skipped rather than fabricated from the type name, since
+// embedding is not the same construct as declaring a named field. More than
+// one name means a shared line like "A, B int": both names denote the same
+// byte extent, so there is no way to give A its own anchor without B's text
+// silently coming along too (and vice versa) — rather than pick one
+// arbitrarily, neither gets a per-name anchor. Name the type or the path.
+func goStructFields(structType *ts.Node, container string, src []byte) []Declaration {
+	list := structType.NamedChild(0)
+	if list == nil || list.Kind() != "field_declaration_list" {
+		return nil
+	}
+	var out []Declaration
+	for _, field := range namedChildren(list) {
+		if field.Kind() != "field_declaration" {
+			continue
+		}
+		var names []ts.Node
+		for _, c := range namedChildren(&field) {
+			if c.Kind() == "field_identifier" {
+				names = append(names, c)
+			}
+		}
+		if len(names) != 1 {
+			continue
+		}
+		out = append(out, Declaration{Node: &field, Bare: nodeText(src, &names[0]), Container: container})
+	}
+	return out
+}
+
+// goInterfaceMethods enumerates an interface_type's own method elements,
+// container-qualified. Measured against a compiled parse tree: interface_type
+// holds method_elem (an ordinary method) and type_elem (an embedded interface
+// or a type-set constraint term) directly as children, with no wrapping
+// list. type_elem names no method of its own and is skipped; method_elem
+// carries exactly one name in its "name" field, so namedDecl applies
+// unchanged.
+func goInterfaceMethods(interfaceType *ts.Node, container string, src []byte) []Declaration {
+	var out []Declaration
+	for _, elem := range namedChildren(interfaceType) {
+		if elem.Kind() != "method_elem" {
+			continue
+		}
+		if d, ok := namedDecl(src, &elem, &elem); ok {
+			d.Container = container
 			out = append(out, d)
 		}
 	}
