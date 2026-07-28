@@ -12,16 +12,6 @@ Future work only. Decisions already made live in
       resolve in every supported language, and one attached to the first
       declaration by the blank-line rule stays with that declaration rather
       than being claimed as header.
-- [ ] A symbol inserted into an existing container gains a blank line on each
-      side, because boundary padding normalizes spliced regions to exactly one
-      (`specs/design.md`). Members that sat adjacent in the worktree are
-      committed with a blank line between them — valid, and semantically the
-      right content, but not byte-identical to the worktree, so the file still
-      reads as modified afterwards. Indentation is preserved.
-      A fix now has a route: `spliceInsert` needs to know whether the inserted
-      symbol is a container member (no separator) or a top-level declaration
-      (separator), and `resolve.Declaration` already carries the `Container`
-      field that answers it — it is simply not threaded through.
 - [ ] Nested functions and methods of a class declared *inside* a function
       still resolve no finer than their nearest top-level declaration.
       Containers themselves are addressed one level down in every supported
@@ -35,14 +25,23 @@ Future work only. Decisions already made live in
       names share one pattern node. Each reports `(unanchorable)` rather than
       resolving to an extent that would drag a sibling's text along. Reasoning
       in [`specs/design.md`](specs/design.md).
-- [ ] `rgit commit`'s per-target `+N/-M` rows do not sum to git's own raw
-      insertion count. The gap is the blank-line separators synthesis writes
-      between spliced regions — bytes inside no single anchor's extent. Closing
-      it would mean an `(unanchorable)`-remainder row in commit's listing,
-      mirroring what `rgit diff` already shows; rolling those lines into a
-      named symbol instead would misattribute them. Preview and post-commit
-      listings do already agree row for row, which is what
-      [`docs/USAGE.md`](docs/USAGE.md) promises.
+- [ ] `rgit commit`'s per-target `+N/-M` rows sum to git's own insertion count
+      in **Go** but not in TypeScript or Python. An anchor may absorb a
+      separator only where the language's formatter makes that separator
+      mandatory — gofmt always writes exactly one blank line after the package
+      clause and after the import block, so `@header` and `@imports` own theirs.
+      Prettier and Black preserve whatever the author wrote instead, so no
+      anchor can claim the boundary without guessing, and those bytes stay
+      outside every extent. Preview and post-commit listings agree row for row
+      in every language, which is what [`docs/USAGE.md`](docs/USAGE.md) actually
+      promises.
+- [ ] Separator ownership stops at `@header` and `@imports`. The same rule was
+      verified to generalize to any chain of adjacent top-level declarations —
+      each non-final region absorbing its own trailing gap sums exactly, since
+      the final region's missing trailing newline offsets the file's own EOF
+      terminator — but adopting it would change the general insertion path used
+      by every commit, not just the new-file preamble. Deliberately deferred as
+      a much larger blast radius than the bug that motivated it.
 
 ## v2 — grammars
 
