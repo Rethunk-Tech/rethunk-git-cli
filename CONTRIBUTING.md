@@ -55,6 +55,23 @@ go test -coverpkg=./... -coverprofile=coverage.out ./...
 go tool cover -func=coverage.out | tail -1
 ```
 
+## Modernization
+
+Go 1.26's `go fix` is an analysis-driven modernizer, not the old import
+rewriter. Run it before opening a PR and commit what it changes:
+
+```bash
+go fix -diff ./...   # preview
+go fix ./...         # apply, then run it again — fixes can unlock fixes
+```
+
+It only applies a fix where the `go` directive in `go.mod` (or a file's own
+`//go:build` constraint) already permits the construct, so it cannot
+introduce something this module's Go version does not have. Read what it
+produces rather than committing it blind: the rewrites are correct but
+occasionally clumsy, and a mechanical `a, b := before, after` is worth
+collapsing by hand.
+
 ## Dependencies
 
 Binary size and dependency count are not constraints — but every dependency
