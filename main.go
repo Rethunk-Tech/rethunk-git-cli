@@ -109,7 +109,7 @@ func runDiff(args []string, stdout, stderr io.Writer) exitcode.Code {
 	}
 
 	ctx := context.Background()
-	classified, err := cli.ClassifyArgs(fs.Args(), true, cli.GitPathChecker{Root: root, Repo: repo, Ctx: ctx}, cli.GitRevisionResolver{Repo: repo, Ctx: ctx})
+	classified, err := cli.ClassifyArgs(restoreDoubleDash(fs), true, cli.GitPathChecker{Root: root, Repo: repo, Ctx: ctx}, cli.GitRevisionResolver{Repo: repo, Ctx: ctx})
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.InvalidUsage
@@ -198,7 +198,7 @@ func runCommit(args []string, stdout, stderr io.Writer) exitcode.Code {
 	}
 
 	ctx := context.Background()
-	classified, err := cli.ClassifyArgs(positionalsGiven, false, cli.GitPathChecker{Root: root, Repo: repo, Ctx: ctx}, cli.GitRevisionResolver{Repo: repo, Ctx: ctx})
+	classified, err := cli.ClassifyArgs(restoreDoubleDash(fs), false, cli.GitPathChecker{Root: root, Repo: repo, Ctx: ctx}, cli.GitRevisionResolver{Repo: repo, Ctx: ctx})
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.InvalidUsage
@@ -244,6 +244,24 @@ func hasConventionalShape(messages []string) bool {
 		return true
 	}
 	return conventionalShapeRe.MatchString(messages[0])
+}
+
+// restoreDoubleDash reconstructs the "--" separator pflag consumes
+// during Parse. fs.Args() alone loses the fact that "--" was ever
+// present, but cli.ClassifyArgs's rule 1 ("everything after -- is a
+// pathspec, always") needs to see it to force those positionals rather
+// than running them through the other five rules.
+func restoreDoubleDash(fs *pflag.FlagSet) []string {
+	args := fs.Args()
+	dashAt := fs.ArgsLenAtDash()
+	if dashAt < 0 {
+		return args
+	}
+	withDash := make([]string, 0, len(args)+1)
+	withDash = append(withDash, args[:dashAt]...)
+	withDash = append(withDash, "--")
+	withDash = append(withDash, args[dashAt:]...)
+	return withDash
 }
 
 // openRepo resolves the current working directory's git toplevel and
