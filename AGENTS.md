@@ -24,6 +24,9 @@ Reasoning and the measurement behind each: @specs/design.md
 
 | Path | Holds |
 | --- | --- |
+| @README.md | Orientation, 7-part structure, capability summary |
+| @HUMANS.md | Complete user guide — installation, usage walkthroughs, environment variables, verification |
+| @CONTRIBUTING.md | Developer guide — repository rules, workflow, commit style, testing |
 | @specs/design.md | Design record — why, mechanisms, and every measurement |
 | @docs/USAGE.md | Command surface, argument grammar, flags, exit codes |
 | @docs/ANCHORS.md | Anchor syntax, extents, pseudo-anchors, special paths |
