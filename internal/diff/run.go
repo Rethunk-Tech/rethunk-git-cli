@@ -139,7 +139,9 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 	}
 
 	if sess != nil {
-		report.Warnings = append(report.Warnings, crossCheckFile(ctx, sess, lang, root, newPath, newSrc)...)
+		degraded, warnings := crossCheckFile(ctx, sess, lang, root, newPath, newSrc)
+		report.TSOnly = report.TSOnly || degraded
+		report.Warnings = append(report.Warnings, warnings...)
 	}
 
 	rows, err := attributeSymbols(lang, oldSrc, newSrc, added, deleted)
@@ -393,10 +395,17 @@ func sortReport(report *Report) {
 // an error: rgit diff is a read-only report, and a server that is absent,
 // slow or simply silent about a symbol is the normal case the whole
 // resolution model is built to tolerate (specs/design.md).
-func crossCheckFile(ctx context.Context, sess *lsp.Session, lang resolve.Language, root, path string, src []byte) []string {
+//
+// degraded reports that this file had declarations to verify and none were,
+// which the caller surfaces once per invocation as [ts-only]. A file with
+// nothing to compare returns false: CrossCheckExtents answers degraded=true
+// for an empty resolution list, which is not the same claim as "no server
+// answered", and forwarding it would make an ordinary declaration-free file
+// report a whole invocation as unverified.
+func crossCheckFile(ctx context.Context, sess *lsp.Session, lang resolve.Language, root, path string, src []byte) (degraded bool, warnings []string) {
 	f, err := resolve.Open(lang, src)
 	if err != nil {
-		return nil
+		return false, nil
 	}
 	defer f.Close()
 
@@ -407,14 +416,17 @@ func crossCheckFile(ctx context.Context, sess *lsp.Session, lang resolve.Languag
 			list = append(list, res)
 		}
 	}
+	if len(list) == 0 {
+		return false, nil
+	}
 
 	degraded, mismatches := resolve.CrossCheckExtents(ctx, sess, lang, root, filepath.Join(root, path), src, list)
 	if degraded || len(mismatches) == 0 {
-		return nil
+		return degraded, nil
 	}
 	out := make([]string, 0, len(mismatches))
 	for _, m := range mismatches {
 		out = append(out, path+": "+m.Error())
 	}
-	return out
+	return false, out
 }

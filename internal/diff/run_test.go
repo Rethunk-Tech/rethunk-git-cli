@@ -348,3 +348,87 @@ func TestApplyFilters_NoSymsIsANoOp(t *testing.T) {
 		t.Errorf("report.Files = %+v; want unchanged", report.Files)
 	}
 }
+
+// pathWithGitOnly returns a PATH holding nothing but git, so a test can
+// guarantee no language server binary is discoverable while gitx still
+// works. Emptying PATH outright would break git lookup itself, and pointing
+// it at git's own directory is not enough on a machine where a server
+// happens to live there too (bash-language-server ships in /usr/bin).
+func pathWithGitOnly(t *testing.T) string {
+	t.Helper()
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		t.Skipf("git not on PATH: %v", err)
+	}
+	bin := t.TempDir()
+	if err := os.Symlink(gitPath, filepath.Join(bin, "git")); err != nil {
+		t.Fatal(err)
+	}
+	return bin
+}
+
+// TestRun_DegradedCrossCheckSetsTSOnly pins the signal docs/INSTALL.md §
+// Verify's recipe greps for. crossCheckFile used to discard the degraded
+// bool CrossCheckExtents returns, so `rgit diff` was silent whether or not a
+// server was reached -- and the documented way to tell the difference always
+// answered "cross-check active". rgit commit reported it all along.
+func TestRun_DegradedCrossCheckSetsTSOnly(t *testing.T) {
+	dir, repo := newDiffTestRepo(t)
+	writeDiffFile(t, dir, "b.py", "def existing():\n    return 2\n")
+	t.Setenv("PATH", pathWithGitOnly(t))
+
+	report, err := Run(context.Background(), repo, dir, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.TSOnly {
+		t.Error("TSOnly = false; want true with no language server reachable")
+	}
+}
+
+// TestRun_RevisionRangeIsNotDegraded separates "no comparison was possible"
+// from "no comparison was attempted". A revision-to-revision diff skips the
+// cross-check by design -- a language server has no view of an arbitrary
+// revision, so Run never builds a session at all -- and reporting [ts-only]
+// there would train the reader to ignore it.
+func TestRun_RevisionRangeIsNotDegraded(t *testing.T) {
+	dir, repo := newDiffTestRepo(t)
+	t.Setenv("PATH", pathWithGitOnly(t))
+
+	report, err := Run(context.Background(), repo, dir, Options{RangeFlag: "HEAD..HEAD"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.TSOnly {
+		t.Error("TSOnly = true; want false when the cross-check is inapplicable, not degraded")
+	}
+}
+
+// TestRun_NoResolvableDeclarationsIsNotDegraded guards the false positive the
+// report-level flag invites: CrossCheckExtents returns degraded=true for an
+// empty resolution list, which means "nothing to compare", not "no server".
+// A file with no addressable declaration must not make a whole invocation
+// claim its extents went unverified.
+func TestRun_NoResolvableDeclarationsIsNotDegraded(t *testing.T) {
+	dir, repo := newDiffTestRepo(t)
+	// PATH is stripped so the assertion discriminates: the guard must skip
+	// the dial entirely for a file with nothing to compare. Without it, the
+	// dial would be attempted, fail for want of a server, and report
+	// [ts-only] for a file that never had a symbol to verify.
+	t.Setenv("PATH", pathWithGitOnly(t))
+	// A Python file holding only a comment: parses, but declares nothing.
+	writeDiffFile(t, dir, "empty.py", "# no declarations here\n")
+	cmd := exec.Command("git", "add", "empty.py")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v: %s", err, out)
+	}
+
+	report, err := Run(context.Background(), repo, dir, Options{Files: []string{"empty.py"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.TSOnly {
+		t.Error("TSOnly = true; want false when the file had nothing to cross-check")
+	}
+}

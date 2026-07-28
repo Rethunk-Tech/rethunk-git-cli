@@ -85,6 +85,15 @@ type Report struct {
 	// time, and learning about it while reading a diff is the point of
 	// saying so here (docs/USAGE.md § Exit codes, exit 6).
 	Warnings []string
+
+	// TSOnly reports that at least one file had symbols to cross-check and
+	// no live language server was reached to check them, the same condition
+	// rgit commit announces via synth.Plan.TSOnly. It is deliberately not
+	// set for a cross-check that was never applicable -- a revision-to-
+	// revision diff, which no server can see, or a file with no addressable
+	// declaration -- since a signal that fires when nothing was wrong is one
+	// readers learn to ignore.
+	TSOnly bool
 }
 
 // Dirty reports whether anything in the report is committable — the
