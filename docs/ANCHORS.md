@@ -36,9 +36,20 @@ Same-named symbols are legal — Go permits two `func init()` in a file, and
 `(*A).Get` / `(*B).Get` share a bare name.
 
 A container qualifies its members in every supported language: Go's receiver
-type (`auth.go:A.Get`), and a TypeScript or Python class (`svc.ts:Svc.login`,
-`svc.py:Svc.login`). The class itself stays addressable by its bare name, and
-naming it claims every member — that is what asking for the class means.
+type (`auth.go:A.Get`), a struct's fields and an interface's methods
+(`auth.go:S.Field`, `auth.go:I.Do`), a TypeScript or Python class
+(`svc.ts:Svc.login`, `svc.py:Svc.login`), and a TypeScript namespace
+(`ns.ts:N.inner`). The container itself stays addressable by its bare name,
+and naming it claims every member — that is what asking for the container
+means.
+
+A struct field line naming several identifiers at once (`A, B int`) and an
+embedded/anonymous field are not addressable by their own anchor: the first
+has no way to give one name its own extent without the other's text coming
+along, and the second has no name of its own to begin with. Name the
+containing type or the path instead. TypeScript's anonymous default export
+(`export default function () {}`) is unaddressable for the same reason as the
+embedded field — the grammar gives it no name to read.
 
 The two nest differently, which matters when the container is new. A Go method
 sits beside its type rather than inside it, so staging one never drags the type

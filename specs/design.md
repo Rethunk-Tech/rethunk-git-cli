@@ -210,6 +210,31 @@ rather than the one-shot `Resolve` alone.
 nodes — a Go-only implementation would silently stage just the first import in
 a TS file.
 
+**Go's struct fields and interface methods are addressable one level in, the
+same as a TS/Python class's methods.** Measured against a compiled parse tree:
+a `type_spec`'s `"type"` field holds `struct_type` or `interface_type` directly;
+a `field_declaration`'s `"name"` field is itself multiple (`A, B int` is one
+node sharing a type between two names), while a `method_elem` carries exactly
+one. A shared-name field line and an embedded/anonymous field are left
+unaddressable rather than resolved to a byte extent that silently drags a
+sibling name's text along with it.
+
+**TypeScript's `declarationFor` covered five node kinds and fell through to
+`(unanchorable)` on everything else** — `enum_declaration`,
+`abstract_class_declaration`, `generator_function_declaration`,
+`variable_declaration` (`var`, the same declarator shape as `let`/`const`'s
+`lexical_declaration` under a different grammar node), and the namespace forms
+`internal_module`/`module`, all now addressable by bare name; the two class
+kinds and namespaces are also descended into for container-qualified members.
+One shape measured, not assumed: a bare (non-`export`ed) top-level
+`namespace N {}` parses as an `expression_statement` wrapping the
+`internal_module`, not the `internal_module` directly — `export namespace N {}`
+wraps it in `export_statement` instead, the same shape every other exported
+declaration already uses. `export default function () {}`'s wrapped node is a
+nameless `function_expression` (`export_statement`'s `"value"` field, not
+`"declaration"`) with no name field to read; it stays unaddressable rather than
+invent a spelling that could someday collide with a real identifier.
+
 ## Argument grammar
 
 Symbol anchors need no flag because **all git pathspec magic is leading-colon**
