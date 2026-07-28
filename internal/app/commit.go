@@ -117,6 +117,34 @@ func runCommit(args []string, stdout, stderr io.Writer) exitcode.Code {
 		return code
 	}
 
+	if plan.TSOnly() {
+		fmt.Fprintln(stderr, "rgit: [ts-only] no live language server reached in time; extents unverified")
+	}
+
+	allUnchanged := len(plan.Results()) > 0
+	for _, r := range plan.Results() {
+		if r.Outcome != synth.Unchanged {
+			allUnchanged = false
+			continue
+		}
+		fmt.Fprintf(stderr, "[warning] target '%s' has no uncommitted changes; skipping\n", targetLabel(r.Target))
+	}
+
+	// docs/USAGE.md § Targets with nothing to commit: exit 11 only when
+	// EVERY named target turned out unchanged, and only then -- a mix of
+	// changed and unchanged targets is a warning plus a commit of the rest,
+	// not a failure. --allow-empty suppresses it.
+	if allUnchanged && !f.allowEmpty {
+		return exitcode.NothingToCommit
+	}
+
+	if f.dryRun {
+		// docs/USAGE.md: dry-run "writes no objects, stages nothing, runs
+		// no hooks" -- resolution (including the cross-check above) already
+		// happened as a pure read; nothing past this point may execute.
+		return exitcode.Success
+	}
+
 	if err := plan.Apply(ctx, repo, root); err != nil {
 		code, msg := mapStageError(err)
 		fmt.Fprintf(stderr, "rgit: %s\n", msg)
@@ -150,7 +178,27 @@ func runCommit(args []string, stdout, stderr io.Writer) exitcode.Code {
 		return exitcode.GitFailure
 	}
 
+	if f.push {
+		// A push failure does not roll back the commit that preceded it
+		// (docs/USAGE.md § Flags, AGENTS.md's delegation boundary).
+		if err := repo.Push(ctx); err != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return exitcode.PushFailed
+		}
+	}
+
 	return exitcode.Success
+}
+
+// targetLabel renders a synth.Target the way docs/USAGE.md's warning
+// example does: "FILE:NAME" for a symbol anchor, the bare pathspec
+// otherwise -- matching exact copy-paste syntax, same as rgit diff's own
+// anchor labels.
+func targetLabel(t synth.Target) string {
+	if t.Pathspec != "" {
+		return t.Pathspec
+	}
+	return t.Symbol.Path + ":" + t.Symbol.Anchor
 }
 
 // mapStageError turns a synth/resolve error into the exit code
