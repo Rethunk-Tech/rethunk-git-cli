@@ -15,10 +15,9 @@ diverges from git must argue against it explicitly in the PR, not quietly.
 
 The consequences are listed in
 [docs/USAGE.md § Behaviour inherited from git](docs/USAGE.md#behaviour-inherited-from-git),
-and several of them read like bugs worth fixing. None is. Pre-staged work
-coming along, staging surviving a rejected commit, and a hook sweeping paths
-the caller never named are git's own behaviour, reproduced on purpose — do not
-exclude, roll back, or police them.
+and several of them read like bugs worth fixing. None is — each is git's own
+behaviour, reproduced on purpose. Do not exclude, roll back, or police any of
+them.
 
 Reasoning and the measurement behind each: [specs/design.md](specs/design.md)
 

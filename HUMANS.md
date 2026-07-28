@@ -35,10 +35,8 @@ every document lives in [`README.md`](README.md#documentation).
 ## Things worth knowing before you rely on it
 
 `rgit` deliberately behaves like `git add <pathspec> && git commit`. Most of
-that is unremarkable, but a few consequences surprise people: work you staged
-earlier comes along with the commit, a rejected commit leaves your staging
-untouched, and a `pre-commit` hook can stage paths you never named. None of
-these is an oversight — each is what plain `git commit` already does.
+that is unremarkable, but a few consequences surprise people — none of them
+oversights; each is what plain `git commit` already does.
 
 The full list is in
 [`docs/USAGE.md`](docs/USAGE.md#behaviour-inherited-from-git); what was
