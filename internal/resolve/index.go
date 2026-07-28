@@ -17,9 +17,21 @@ type ResolveError struct {
 	Code       exitcode.Code
 	Anchor     string
 	Candidates []string
+
+	// TreeSitterRange and LSPRange are set only for Code ==
+	// exitcode.ExtentMismatch: both sides of a cross-check disagreement, as
+	// 1-based "Lstart..Lend" strings, so the caller can print both without
+	// its own knowledge of resolve's byte-offset internals (docs/USAGE.md
+	// § Exit codes, exit 6).
+	TreeSitterRange string
+	LSPRange        string
 }
 
 func (e *ResolveError) Error() string {
+	if e.Code == exitcode.ExtentMismatch {
+		return fmt.Sprintf("resolve: %q: language-server extent mismatch (tree-sitter %s, language-server %s)",
+			e.Anchor, e.TreeSitterRange, e.LSPRange)
+	}
 	label := "unresolved"
 	if e.Code == exitcode.AnchorAmbiguous {
 		label = "ambiguous"
