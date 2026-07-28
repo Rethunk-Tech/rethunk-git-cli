@@ -23,6 +23,7 @@ import (
 	"github.com/go-quicktest/qt"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
 )
 
 // runApp invokes the command surface exactly as main does and returns what
@@ -38,24 +39,10 @@ func runApp(t *testing.T, args ...string) (stdout, stderr string, code exitcode.
 // makes it the working directory for the duration of the test.
 func chdirTempRepo(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
-
-	run := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v: %s", args, err, out)
-		}
-	}
-	run("init", "-q")
-	run("checkout", "-q", "-B", "main")
-	run("config", "user.email", "app-test@example.com")
-	run("config", "user.name", "App Test")
+	dir, _ := gittest.New(t)
 
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	run("add", "-A")
-	run("commit", "-q", "-m", "chore: initial")
+	gittest.Commit(t, dir, "chore: initial")
 
 	t.Chdir(dir)
 	return dir
@@ -63,24 +50,12 @@ func chdirTempRepo(t *testing.T) string {
 
 func writeAppFile(t *testing.T, dir, rel, content string) {
 	t.Helper()
-	full := filepath.Join(dir, rel)
-	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	gittest.Write(t, dir, rel, content)
 }
 
 func gitOut(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("git %v: %v", args, err)
-	}
-	return string(out)
+	return gittest.Git(t, dir, args...)
 }
 
 // TestRun_TopLevelDispatch covers every route that returns before a

@@ -9,47 +9,43 @@ import (
 	"testing"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
-// newDiffTestRepo is a self-contained temp repo, matching gitx_test.go's own
-// style rather than reusing package main's unexported test helpers (this is
-// a different package). One committed file, "b.py", holds a real Python
-// symbol so an anchor can resolve against it either at HEAD or worktree.
+// newDiffTestRepo is a temp repo with one committed file, "b.py", holding
+// a real Python symbol so an anchor can resolve against it either at HEAD
+// or in the worktree. The scaffolding itself lives in internal/gittest,
+// which four packages were each carrying their own copy of.
 func newDiffTestRepo(t *testing.T) (dir string, repo *gitx.Repo) {
 	t.Helper()
-	dir = t.TempDir()
-
-	run := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v: %s", args, err, out)
-		}
-	}
-	run("init", "-q")
-	run("checkout", "-q", "-B", "main")
-	run("config", "user.email", "diff-test@example.com")
-	run("config", "user.name", "Diff Test")
-
+	dir, repo = gittest.New(t)
 	writeDiffFile(t, dir, "b.py", "def existing():\n    return 1\n")
-	run("add", "b.py")
-	run("commit", "-q", "-m", "chore: initial b.py")
-
-	return dir, gitx.New(dir)
+	gittest.Git(t, dir, "add", "b.py")
+	gittest.Git(t, dir, "commit", "-q", "-m", "chore: initial b.py")
+	return dir, repo
 }
 
 func writeDiffFile(t *testing.T, dir, relPath, content string) {
 	t.Helper()
-	full := filepath.Join(dir, relPath)
-	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-		t.Fatal(err)
+	gittest.Write(t, dir, relPath, content)
+}
+
+// assertUnresolvable is the shape every --sym failure in this file shares:
+// a typed *resolve.ResolveError carrying exit 3, never a bare error and
+// never a silently clean report. It returns the error so a caller can go
+// on to assert the message text.
+func assertUnresolvable(t *testing.T, err error) *resolve.ResolveError {
+	t.Helper()
+	var rerr *resolve.ResolveError
+	if !errors.As(err, &rerr) {
+		t.Fatalf("Run error = %v (%T); want *resolve.ResolveError", err, err)
 	}
-	if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
+	if rerr.Code != exitcode.AnchorUnresolvable {
+		t.Errorf("Code = %v; want %v", rerr.Code, exitcode.AnchorUnresolvable)
 	}
+	return rerr
 }
 
 // TestRun_UnresolvableSymReturnsResolveError pins the fix for the reported
@@ -69,13 +65,7 @@ func TestRun_UnresolvableSymReturnsResolveError(t *testing.T) {
 		Syms: []SymRef{{File: "b.py", Name: "doesNotExist"}},
 	})
 
-	var rerr *resolve.ResolveError
-	if !errors.As(err, &rerr) {
-		t.Fatalf("Run error = %v (%T); want *resolve.ResolveError", err, err)
-	}
-	if rerr.Code != exitcode.AnchorUnresolvable {
-		t.Errorf("Code = %v; want %v", rerr.Code, exitcode.AnchorUnresolvable)
-	}
+	rerr := assertUnresolvable(t, err)
 	if got, want := rerr.Error(), `resolve: "doesNotExist": unresolved`; got != want {
 		t.Errorf("Error() = %q; want %q", got, want)
 	}
@@ -93,13 +83,7 @@ func TestRun_SymOnNonexistentFileReturnsResolveError(t *testing.T) {
 		Syms: []SymRef{{File: "nosuch.py", Name: "foo"}},
 	})
 
-	var rerr *resolve.ResolveError
-	if !errors.As(err, &rerr) {
-		t.Fatalf("Run error = %v (%T); want *resolve.ResolveError", err, err)
-	}
-	if rerr.Code != exitcode.AnchorUnresolvable {
-		t.Errorf("Code = %v; want %v", rerr.Code, exitcode.AnchorUnresolvable)
-	}
+	assertUnresolvable(t, err)
 }
 
 // TestRun_SymResolvesButUnchangedIsNotAnError pins the distinction the fix
@@ -171,16 +155,8 @@ func TestValidateSym_PrefersNewSideThenFallsBackToOld(t *testing.T) {
 func TestRun_ExtensionlessShebangEnumeratesSymbols(t *testing.T) {
 	dir, repo := newDiffTestRepo(t)
 	writeDiffFile(t, dir, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v1\n}\n\nbar() {\n  echo bar\n}\n")
-	run := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v: %s", args, err, out)
-		}
-	}
-	run("add", "pre-commit")
-	run("commit", "-q", "-m", "add pre-commit")
+	gittest.Git(t, dir, "add", "pre-commit")
+	gittest.Git(t, dir, "commit", "-q", "-m", "add pre-commit")
 
 	// Edit foo only; bar stays clean and must not appear as a row.
 	writeDiffFile(t, dir, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v2\n}\n\nbar() {\n  echo bar\n}\n")

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 )
 
@@ -17,22 +18,7 @@ import (
 // covers for the worktree-present half of classifyPath.
 func newSpecialTestRepo(t *testing.T) (dir string, repo *gitx.Repo) {
 	t.Helper()
-	dir = t.TempDir()
-
-	run := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v: %s", args, err, out)
-		}
-	}
-	run("init", "-q")
-	run("checkout", "-q", "-B", "main")
-	run("config", "user.email", "special-test@example.com")
-	run("config", "user.name", "Special Test")
-
-	return dir, gitx.New(dir)
+	return gittest.New(t)
 }
 
 func commitSpecial(t *testing.T, dir string, paths ...string) {

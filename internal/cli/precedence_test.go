@@ -4,13 +4,12 @@ import (
 	"context"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"github.com/go-quicktest/qt"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
 )
 
 // newClassifyRepo builds a real repository for the precedence table to be
@@ -27,42 +26,16 @@ import (
 //	gone.go              committed, then deleted from the worktree
 func newClassifyRepo(t *testing.T) (root string, checker GitPathChecker, revs GitRevisionResolver) {
 	t.Helper()
-	root = t.TempDir()
+	root, repo := gittest.New(t)
 
-	run := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = root
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v: %s", args, err, out)
-		}
-	}
-	write := func(rel, content string) {
-		t.Helper()
-		full := filepath.Join(root, rel)
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	run("init", "-q")
-	run("checkout", "-q", "-B", "main")
-	run("config", "user.email", "cli-test@example.com")
-	run("config", "user.name", "CLI Test")
-
-	write("a.go", "package a\n\nfunc A() {}\n")
-	write("src/notes:draft.md", "# draft\n")
-	write("gone.go", "package a\n\nfunc Gone() {}\n")
-	run("add", "-A")
-	run("commit", "-q", "-m", "chore: fixtures")
+	gittest.Write(t, root, "a.go", "package a\n\nfunc A() {}\n")
+	gittest.Write(t, root, "src/notes:draft.md", "# draft\n")
+	gittest.Write(t, root, "gone.go", "package a\n\nfunc Gone() {}\n")
+	gittest.Commit(t, root, "chore: fixtures")
 	if err := os.Remove(filepath.Join(root, "gone.go")); err != nil {
 		t.Fatal(err)
 	}
 
-	repo := gitx.New(root)
 	ctx := context.Background()
 	return root, GitPathChecker{Root: root, Repo: repo, Ctx: ctx}, GitRevisionResolver{Repo: repo, Ctx: ctx}
 }

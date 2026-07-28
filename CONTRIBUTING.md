@@ -29,6 +29,11 @@ Three top-level files, each holding one happy path plus the edge cases that
 have actually bitten — no permutation laundry lists. A package may add its own
 unit test beside a helper whose behaviour none of the three exercises directly.
 
+Temporary repositories come from [`internal/gittest`](internal/gittest/gittest.go)
+rather than being hand-rolled per package — four packages had grown a
+byte-identical copy of the same fifteen lines before it existed. It shells out
+to the real git binary, like everything else here.
+
 | File | Happy path | Critical edge cases |
 | --- | --- | --- |
 | `rgit_e2e_test.go` | Init repo → edit symbol → `rgit diff` → `rgit commit` → verify HEAD, clean index, hook ran, worktree preserved | Pre-staged sibling file comes along; hook rejection leaves staging intact (exit 128); resolve-all-before-stage leaves index untouched on failure; positional pathspec parity with `--file`; path escape and malformed `--sym` rejection (exit 129); exit 11 when every named target is unchanged; invocation from a subdirectory resolves paths relative to it; unborn branch lists everything committable |
