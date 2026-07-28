@@ -4,14 +4,24 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/spf13/pflag"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
+	diffpkg "github.com/Rethunk-Tech/rethunk-git-cli/internal/diff"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 )
+
+// diffCommittable is docs/USAGE.md § Flags' --exit-code/--quiet value:
+// "exit 1 when anything is committable, 0 when clean". It mirrors git's own
+// --exit-code convention and is deliberately not in exitcode's named table
+// — unlike every other exit status there, its meaning is conditional on a
+// flag rather than fixed.
+const diffCommittable exitcode.Code = 1
 
 // diffFlags mirrors the `rgit diff` flag surface in docs/USAGE.md § Flags.
 type diffFlags struct {
@@ -65,13 +75,73 @@ func runDiff(args []string, stdout, stderr io.Writer) exitcode.Code {
 	}
 
 	ctx := context.Background()
-	classified, err := cli.ClassifyArgs(restoreDoubleDash(fs), true, cli.GitPathChecker{Root: root, Repo: repo, Ctx: ctx}, cli.GitRevisionResolver{Repo: repo, Ctx: ctx})
+	checker := cli.GitPathChecker{Root: root, Repo: repo, Ctx: ctx}
+
+	rangeToken, rest, err := diffpkg.ExtractRangeToken(restoreDoubleDash(fs), checker)
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.InvalidUsage
 	}
-	_ = classified // rendering (--porcelain, MODE, BINARY rows) is internal/diff's job
 
-	fmt.Fprintln(stderr, "rgit: diff execution is not implemented yet (Phase 1 spine only)")
-	return NotImplemented
+	classified, err := cli.ClassifyArgs(rest, true, checker, cli.GitRevisionResolver{Repo: repo, Ctx: ctx})
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return exitcode.InvalidUsage
+	}
+
+	revisions, files, syms, err := diffpkg.BucketClassified(classified)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return exitcode.InvalidUsage
+	}
+
+	opts := diffpkg.Options{
+		Staged:          f.staged,
+		Unstaged:        f.unstaged,
+		RangeFlag:       f.rangeFlag,
+		PositionalRange: rangeToken,
+		Revisions:       revisions,
+		Files:           append(files, f.files...),
+		Syms:            append(syms, symRefsFromFlag(f.syms)...),
+	}
+
+	report, err := diffpkg.Run(ctx, repo, root, opts)
+	if err != nil {
+		var uerr *diffpkg.UsageError
+		if errors.As(err, &uerr) {
+			fmt.Fprintf(stderr, "rgit: %v\n", uerr)
+			return exitcode.InvalidUsage
+		}
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return exitcode.GitFailure
+	}
+
+	dirty := report.Dirty()
+	if !f.quiet {
+		if f.porcelain {
+			fmt.Fprint(stdout, diffpkg.RenderPorcelain(report))
+		} else {
+			fmt.Fprint(stdout, diffpkg.RenderText(report))
+		}
+	}
+
+	if (f.quiet || f.exitCode) && dirty {
+		return diffCommittable
+	}
+	return exitcode.Success
+}
+
+// symRefsFromFlag parses --sym's repeatable FILE:NAME values the same way
+// cli.ClassifyArgs's rule 5 does: split at the LAST colon, since a path may
+// itself contain one.
+func symRefsFromFlag(syms []string) []diffpkg.SymRef {
+	out := make([]diffpkg.SymRef, 0, len(syms))
+	for _, s := range syms {
+		idx := strings.LastIndexByte(s, ':')
+		if idx <= 0 || idx == len(s)-1 {
+			continue
+		}
+		out = append(out, diffpkg.SymRef{File: s[:idx], Name: s[idx+1:]})
+	}
+	return out
 }
