@@ -1,6 +1,7 @@
 package synth
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -35,6 +36,24 @@ func AnchorTarget(path, anchor string) Target {
 	return Target{Symbol: SymbolTarget{Path: path, Anchor: anchor}}
 }
 
+// Outcome reports what resolving one Target found: real, uncommitted
+// content worth staging, or an extent already byte-identical to HEAD --
+// docs/USAGE.md § Targets with nothing to commit, which the caller turns
+// into a per-target warning and the exit-11 rule.
+type Outcome int
+
+const (
+	Staged Outcome = iota
+	Unchanged
+)
+
+// TargetResult pairs a Target with what resolving it found, in the same
+// order as the targets slice the caller passed to PlanStage or Stage.
+type TargetResult struct {
+	Target  Target
+	Outcome Outcome
+}
+
 // filePlan accumulates every resolved edit for one file, plus the source
 // state classify needs to resolve further anchors against it.
 type filePlan struct {
@@ -53,6 +72,47 @@ type filePlan struct {
 type stagePlan struct {
 	pathspecs []string
 	files     []*filePlan
+	results   []TargetResult
+	tsOnly    bool
+}
+
+// Plan is a resolved, not-yet-applied Stage. Every target has been
+// classified and cross-checked -- a pure read -- but nothing has been
+// written or staged. A caller that needs to inspect what resolution found
+// before deciding whether to write anything at all (rgit commit's
+// --dry-run, and its "every named target already matches HEAD" exit-11
+// rule) resolves via PlanStage, decides, and calls Apply second; Stage
+// itself is the two steps run back to back unconditionally.
+type Plan struct {
+	plan *stagePlan
+}
+
+// Results reports what resolution found for each target, in the order
+// PlanStage (or Stage) received them.
+func (p *Plan) Results() []TargetResult { return p.plan.results }
+
+// TSOnly reports whether any anchor in the plan degraded to tree-sitter-only
+// resolution because no live language server answered in time for its
+// cross-check -- normal, not an error (specs/design.md), but the caller's
+// job to announce once on stderr.
+func (p *Plan) TSOnly() bool { return p.plan.tsOnly }
+
+// Apply performs Plan's only side-effecting step: staging pathspecs via
+// `git add` and writing + staging every file's synthesized blob.
+func (p *Plan) Apply(ctx context.Context, repo *gitx.Repo, root string) error {
+	return p.plan.apply(ctx, repo, root)
+}
+
+// PlanStage resolves every target against repo's worktree (root) and HEAD
+// -- the pure-read half of Stage -- without writing anything. A caller that
+// never calls the returned Plan's Apply (a --dry-run preview, or the
+// "nothing to commit" exit-11 case) leaves the index exactly as found.
+func PlanStage(ctx context.Context, repo *gitx.Repo, root string, targets []Target) (*Plan, error) {
+	plan, err := planStage(ctx, repo, root, targets)
+	if err != nil {
+		return nil, err
+	}
+	return &Plan{plan: plan}, nil
 }
 
 // Stage resolves every target against repo's worktree (root) and HEAD,
@@ -62,11 +122,11 @@ type stagePlan struct {
 // should have moved (specs/design.md § Blob synthesis; AGENTS.md's
 // invariant table).
 func Stage(ctx context.Context, repo *gitx.Repo, root string, targets []Target) error {
-	plan, err := planStage(ctx, repo, root, targets)
+	plan, err := PlanStage(ctx, repo, root, targets)
 	if err != nil {
 		return err
 	}
-	return plan.apply(ctx, repo, root)
+	return plan.Apply(ctx, repo, root)
 }
 
 func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Target) (*stagePlan, error) {
@@ -82,12 +142,28 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 			// magic pathspec up front the way it refuses a literal
 			// gitignored path. The refusal in docs/ANCHORS.md is about a
 			// caller naming one concrete path, so it only applies there.
-			if !strings.HasPrefix(t.Pathspec, ":") {
+			magic := strings.HasPrefix(t.Pathspec, ":")
+			if !magic {
 				if err := checkGitignoreRefusal(ctx, repo, t.Pathspec); err != nil {
 					return nil, err
 				}
 			}
 			plan.pathspecs = append(plan.pathspecs, t.Pathspec)
+
+			outcome := Staged
+			if !magic {
+				// A magic pathspec is a filter over many files, not one
+				// verifiable target, so it is never reported unchanged --
+				// only a literal path's own status is a meaningful answer.
+				unchanged, err := pathspecUnchanged(ctx, repo, t.Pathspec)
+				if err != nil {
+					return nil, err
+				}
+				if unchanged {
+					outcome = Unchanged
+				}
+			}
+			plan.results = append(plan.results, TargetResult{Target: t, Outcome: outcome})
 			continue
 		}
 
@@ -102,14 +178,35 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 			plan.files = append(plan.files, fp)
 		}
 
-		op, err := fp.classify(t.Symbol.Anchor)
+		op, unchanged, tsOnly, err := fp.classify(ctx, root, t.Symbol.Anchor)
 		if err != nil {
 			return nil, err
 		}
 		fp.ops = append(fp.ops, op)
+		if tsOnly {
+			plan.tsOnly = true
+		}
+		outcome := Staged
+		if unchanged {
+			outcome = Unchanged
+		}
+		plan.results = append(plan.results, TargetResult{Target: t, Outcome: outcome})
 	}
 
 	return plan, nil
+}
+
+// pathspecUnchanged answers docs/USAGE.md's "target has no uncommitted
+// changes" question for a literal pathspec: `git status --porcelain`
+// scoped to exactly that path. An empty result means the path is already
+// clean relative to HEAD (and, for a tracked path, the index) -- staging
+// it would be a real no-op, not merely a low-diff change.
+func pathspecUnchanged(ctx context.Context, repo *gitx.Repo, pathspec string) (bool, error) {
+	out, err := repo.Status(ctx, "--", pathspec)
+	if err != nil {
+		return false, err
+	}
+	return len(bytes.TrimSpace(out)) == 0, nil
 }
 
 // openFilePlan performs every pure read a file's anchors need before any

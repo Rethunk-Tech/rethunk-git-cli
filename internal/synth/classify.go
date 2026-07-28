@@ -1,6 +1,8 @@
 package synth
 
 import (
+	"bytes"
+	"context"
 	"errors"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
@@ -12,7 +14,14 @@ import (
 // and mutates nothing -- resolution is a pure read, so a failure here
 // leaves the caller free to abandon the whole batch with the index
 // exactly as found (AGENTS.md).
-func (fp *filePlan) classify(anchor string) (editOp, error) {
+//
+// unchanged reports whether the resolved extent is byte-identical between
+// HEAD and the worktree -- docs/USAGE.md's "target has no uncommitted
+// changes" warning, which the caller (not classify) turns into a message
+// and folds into the exit-11 rule. ctx and root are threaded through
+// unused for now; the LSP cross-check that needs them lands next.
+func (fp *filePlan) classify(ctx context.Context, root, anchor string) (op editOp, unchanged, tsOnly bool, err error) {
+	_, _ = ctx, root
 	var workRes, headRes *resolve.Resolution
 	var workErr, headErr error
 	if fp.workExists {
@@ -26,41 +35,45 @@ func (fp *filePlan) classify(anchor string) (editOp, error) {
 	// itself failed (e.g. SetLanguage), not "anchor not found" -- that
 	// is a hard failure, not grounds to guess this is a new symbol.
 	if workErr != nil && !isResolveError(workErr) {
-		return editOp{}, workErr
+		return editOp{}, false, false, workErr
 	}
 	if headErr != nil && !isResolveError(headErr) {
-		return editOp{}, headErr
+		return editOp{}, false, false, headErr
 	}
 	if amb, ok := asAmbiguous(workErr); ok {
-		return editOp{}, amb
+		return editOp{}, false, false, amb
 	}
 	if amb, ok := asAmbiguous(headErr); ok {
-		return editOp{}, amb
+		return editOp{}, false, false, amb
 	}
 
 	switch {
 	case workRes != nil && headRes != nil:
-		return editOp{
+		workBytes := fp.workSrc[workRes.Extent.Start:workRes.Extent.End]
+		headBytes := fp.headSrc[headRes.Extent.Start:headRes.Extent.End]
+		op = editOp{
 			kind:  editReplace,
 			start: headRes.Extent.Start,
 			end:   headRes.Extent.End,
-			text:  append([]byte(nil), fp.workSrc[workRes.Extent.Start:workRes.Extent.End]...),
-		}, nil
+			text:  append([]byte(nil), workBytes...),
+		}
+		return op, bytes.Equal(workBytes, headBytes), false, nil
 
 	case workRes != nil && headRes == nil:
 		pos, seq := fp.insertionPoint(workRes.Anchor)
-		return editOp{
+		op = editOp{
 			kind:  editInsert,
 			start: pos,
 			seq:   seq,
 			text:  append([]byte(nil), fp.workSrc[workRes.Extent.Start:workRes.Extent.End]...),
-		}, nil
+		}
+		return op, false, false, nil
 
 	case workRes == nil && headRes != nil:
-		return editOp{kind: editDelete, start: headRes.Extent.Start, end: headRes.Extent.End}, nil
+		return editOp{kind: editDelete, start: headRes.Extent.Start, end: headRes.Extent.End}, false, false, nil
 
 	default:
-		return editOp{}, &resolve.ResolveError{Code: exitcode.AnchorUnresolvable, Anchor: anchor}
+		return editOp{}, false, false, &resolve.ResolveError{Code: exitcode.AnchorUnresolvable, Anchor: anchor}
 	}
 }
 
