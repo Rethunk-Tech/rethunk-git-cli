@@ -5,17 +5,13 @@ Future work only. Decisions already made live in
 
 ## Known limitations
 
-- [ ] TypeScript multi-declarator statements (`const a = 1, b = 2`) address only
-      the first declarator. A change to a later one reports as `(unanchorable)`
-      rather than being misattributed, so the output stays honest — but the
-      symbol is not nameable. Go's grouped `const`/`var`/`type` blocks address
-      each spec individually; TypeScript should match.
-- [ ] `@header` resolves to nothing in a TypeScript file with no shebang
-      (`hash_bang_line` is the only header kind the grammar offers) or a Python
-      file that opens directly with code. A Python file opening with any
-      comment does resolve one, since Python's header kind is `comment` — a
-      shebang is not required. Callers that auto-stage `@header` for an
-      untracked file must tolerate its absence.
+- [ ] `@header` resolves to nothing in a file that opens directly with code —
+      no shebang, no licence or module comment, nothing to claim. That is
+      correct rather than wrong, but callers that auto-stage `@header` for an
+      untracked file must tolerate its absence. A leading comment block does
+      resolve in every supported language, and one attached to the first
+      declaration by the blank-line rule stays with that declaration rather
+      than being claimed as header.
 - [ ] A symbol inserted into an existing container gains a blank line on each
       side, because boundary padding normalizes spliced regions to exactly one
       (`specs/design.md`). Members that sat adjacent in the worktree are
@@ -33,10 +29,12 @@ Future work only. Decisions already made live in
       and Python class members; TypeScript namespace members.
 - [ ] Some declarations are deliberately left unaddressable, because no byte
       extent belongs to the name alone: Go's shared-name field lines
-      (`A, B int`) and embedded/anonymous struct fields, and TypeScript's
-      anonymous `export default function () {}`. Each reports `(unanchorable)`
-      rather than resolving to an extent that would drag a sibling's text
-      along. Reasoning in [`specs/design.md`](specs/design.md).
+      (`A, B int`) and embedded/anonymous struct fields, TypeScript's anonymous
+      `export default function () {}`, and TypeScript's destructuring
+      declarators (`const {a, b} = obj`, `const [x, y] = arr`), whose binding
+      names share one pattern node. Each reports `(unanchorable)` rather than
+      resolving to an extent that would drag a sibling's text along. Reasoning
+      in [`specs/design.md`](specs/design.md).
 - [ ] `rgit commit`'s per-target `+N/-M` rows do not sum to git's own raw
       insertion count. The gap is the blank-line separators synthesis writes
       between spliced regions — bytes inside no single anchor's extent. Closing
