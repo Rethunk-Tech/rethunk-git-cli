@@ -60,6 +60,7 @@ func mustResolveExt(t *testing.T, ext string, src []byte, anchor string) string 
 }
 
 func TestResolve_ExtentAndDocAttribution(t *testing.T) {
+	t.Parallel()
 	// A doc comment directly above ValidateToken, with no blank line,
 	// must be part of its
 	// extent; the sibling helper() must be untouched by resolving
@@ -98,6 +99,7 @@ func untouched() {}
 }
 
 func TestResolve_BlankLineBreaksDocAttribution(t *testing.T) {
+	t.Parallel()
 	// The locked decision: a blank line between a free-floating comment and the next symbol
 	// breaks attribution; a comment with no blank line before the symbol
 	// attaches.
@@ -121,6 +123,7 @@ func B() {}
 }
 
 func TestResolve_ContiguousCommentsAttach(t *testing.T) {
+	t.Parallel()
 	// Three consecutive
 	// comment lines with no blank line between them all attach to the
 	// symbol below.
@@ -140,6 +143,7 @@ func C() {}
 }
 
 func TestResolve_ReceiverQualifiedDisambiguation(t *testing.T) {
+	t.Parallel()
 	// Same-named methods on
 	// different receivers resolve independently when qualified, and the
 	// bare name is ambiguous rather than silently picking one.
@@ -177,6 +181,7 @@ func (b *B) Get() int { return 2 }
 }
 
 func TestResolve_UnresolvableAnchorSuggestsCandidate(t *testing.T) {
+	t.Parallel()
 	src := []byte(`package p
 
 func Foo() {}
@@ -191,6 +196,7 @@ func Foo() {}
 }
 
 func TestResolve_NestedFuncLiteralNotTopLevel(t *testing.T) {
+	t.Parallel()
 	// A function literal
 	// nested in Outer's body is not itself a top-level symbol — it comes
 	// along as part of Outer's own extent — and it does not fracture the
@@ -217,6 +223,7 @@ func After() {}
 }
 
 func TestResolve_ConsecutiveNewSymbolsEachResolveIndependently(t *testing.T) {
+	t.Parallel()
 	// internal/synth's nearest-existing-sibling insertion (specs/design.md
 	// § Blob synthesis) walks the worktree's declaration order to find a
 	// sibling also present in HEAD, skipping past any that are themselves
@@ -257,6 +264,7 @@ func C() {}
 }
 
 func TestResolve_OrdinalDisambiguatesRepeatedBareName(t *testing.T) {
+	t.Parallel()
 	// Go permits multiple func init() in one file; with no receiver to
 	// qualify them, the bare name is ambiguous and the ordinal form is
 	// the last resort (docs/ANCHORS.md).
@@ -282,6 +290,7 @@ func init() { println(2) }
 }
 
 func TestResolve_PseudoAnchors(t *testing.T) {
+	t.Parallel()
 	// @header, @imports, and @toplevel are
 	// all addressable. @header spans build tag through package_clause
 	// even though a blank line separates them — Go requires that blank
@@ -359,6 +368,7 @@ import "fmt"
 }
 
 func TestResolve_TypeScriptAndPython(t *testing.T) {
+	t.Parallel()
 	// The two grammars whose node shapes differ from Go in ways that fail
 	// silently rather than loudly. Values below were pinned by running the
 	// resolver against these fixtures and reading back real output.
@@ -415,6 +425,7 @@ def g():
 }
 
 func TestResolve_TypeScriptGrammarHoles(t *testing.T) {
+	t.Parallel()
 	// declarationFor used to handle only five node kinds; everything else in
 	// this fixture exited 3 unresolved. One fixture exercises every
 	// newly-addressable shape at once rather than one test per kind.
@@ -451,6 +462,7 @@ class Ok { hello() { return 3 } }
 }
 
 func TestResolve_ImportsSpanInteriorComments(t *testing.T) {
+	t.Parallel()
 	// A grouping comment between two imports is an ordinary named sibling
 	// in TypeScript and Python, and @imports spans it.
 	py := []byte(`import os
@@ -487,6 +499,7 @@ def f():
 }
 
 func TestResolve_GroupedDeclarationsAddressEachSpec(t *testing.T) {
+	t.Parallel()
 	// A grouped block that resolved to its first spec alone reported the
 	// wrong symbol: editing Beta showed up as a change to Alpha, and the
 	// anchor round-trip still passed because Alpha does resolve. A label
@@ -541,6 +554,7 @@ func F() int { return Alpha }
 }
 
 func TestResolve_GoContainerMembers(t *testing.T) {
+	t.Parallel()
 	// Struct fields and interface methods were both exit 3 before this; one
 	// fixture exercises the addressable and the deliberately-unaddressable
 	// shapes together, including a member reached inside a grouped
@@ -601,6 +615,7 @@ func (c *Collide) Get() int { return c.Get }
 }
 
 func TestResolve_UnsupportedLanguage(t *testing.T) {
+	t.Parallel()
 	// A symbol anchor on a file whose language has no v1 grammar is the
 	// caller's exit 9 (docs/ANCHORS.md § Language support); the resolver's
 	// contribution is just reporting the extension unclaimed.
@@ -709,6 +724,7 @@ func runMockLSPServer(conn io.ReadWriteCloser, resultJSON string) error {
 }
 
 func TestLSP_DocumentSymbolsDecodesBothUnionShapes(t *testing.T) {
+	t.Parallel()
 	// go.lsp.dev/protocol's DocumentSymbolResult is a sealed union over
 	// DocumentSymbolSlice (a tree, via Children -- gopls's hierarchical
 	// mode) and SymbolInformationSlice (flat, with a Location and an
@@ -766,6 +782,7 @@ func TestLSP_DocumentSymbolsDecodesBothUnionShapes(t *testing.T) {
 }
 
 func TestResolve_CrossCheckMatchAndCompare(t *testing.T) {
+	t.Parallel()
 	src := []byte(`package p
 
 // ValidateToken checks the JWT.
@@ -837,6 +854,7 @@ func init() { println(2) }
 }
 
 func TestResolve_CrossCheckLiveGopls(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("live language-server cross-check skipped under -short")
 	}
@@ -906,6 +924,7 @@ func ValidateToken(t string) error {
 }
 
 func TestResolve_MembersSharingANameAreOrdinal(t *testing.T) {
+	t.Parallel()
 	// Ordinals used to be assigned only among symbols with no container, so
 	// two members of one class produced the identical qualified name. The
 	// index kept whichever came last, `Box.size` silently resolved to one of
@@ -932,6 +951,7 @@ func TestResolve_MembersSharingANameAreOrdinal(t *testing.T) {
 }
 
 func TestResolve_SameNamedContainersDoNotMergeMembers(t *testing.T) {
+	t.Parallel()
 	// Both classes are named Svc, so both sets of members carried the same
 	// container and collided the same way.
 	src := []byte("class Svc { run(): number { return 1; } }\nclass Svc { run(): number { return 2; } }\n")
@@ -941,6 +961,7 @@ func TestResolve_SameNamedContainersDoNotMergeMembers(t *testing.T) {
 }
 
 func TestResolve_TypeScriptMultiDeclarator(t *testing.T) {
+	t.Parallel()
 	// A multi-declarator statement -- `const a = 1, b = 2` -- used to
 	// address only the first declarator. A change to b reported as a
 	// change to a: a label that validates while naming a symbol nobody
@@ -986,6 +1007,7 @@ export const c = 1, d = 2;
 }
 
 func TestResolve_TypeScriptHeaderWithoutShebang(t *testing.T) {
+	t.Parallel()
 	// TypeScript has no package clause or other "this precedes code"
 	// marker; a licence/copyright block at the top of a file with no
 	// shebang is an ordinary "comment" node like any other, so @header
@@ -1009,6 +1031,7 @@ export function F(): number { return 1 }
 }
 
 func TestResolve_MarkdownSections(t *testing.T) {
+	t.Parallel()
 	// A section's extent is the whole subtree -- heading plus everything
 	// under it, including nested subsections -- so naming a heading claims
 	// its whole subtree, the same as naming a class claims its members.
@@ -1125,6 +1148,7 @@ Second Usage options.
 }
 
 func TestResolve_YAML(t *testing.T) {
+	t.Parallel()
 	// A realistic GitHub Actions workflow: several jobs, nested steps, a
 	// block scalar `run: |`, a flow sequence, and a comment sitting between
 	// the end of a nested job and the next, more shallowly indented one --
@@ -1219,6 +1243,7 @@ jobs:
 }
 
 func TestResolve_YAMLGrammarEdgeShapes(t *testing.T) {
+	t.Parallel()
 	// A second fixture isolates shapes the realistic workflow above never
 	// exercises: a quoted key, an anchor/alias pair riding along verbatim
 	// inside whatever key contains them, a flow-style mapping value left
@@ -1288,6 +1313,7 @@ func mustYAMLLang(t *testing.T) resolve.Language {
 // "---"-separated multi-document stream has no addressable key at all,
 // rather than guessing which document a bare key path means.
 func TestResolve_YAMLMultiDocumentUnaddressable(t *testing.T) {
+	t.Parallel()
 	src := []byte("name: A\n---\nname: B\n")
 
 	lang, ok := resolve.ForExtension(".yml")
@@ -1303,6 +1329,7 @@ func TestResolve_YAMLMultiDocumentUnaddressable(t *testing.T) {
 // with no mapping anywhere in it, both leave nothing addressable -- there is
 // no key to qualify a Declaration with in either case.
 func TestResolve_YAMLNoTopLevelMapping(t *testing.T) {
+	t.Parallel()
 	lang, ok := resolve.ForExtension(".yml")
 	qt.Assert(t, qt.IsTrue(ok))
 
@@ -1329,6 +1356,7 @@ func TestResolve_YAMLNoTopLevelMapping(t *testing.T) {
 // unaddressable rather than resolved to an invented spelling, the same
 // reasoning Go's shared "A, B int" field line is refused for.
 func TestResolve_YAMLKeyShapes(t *testing.T) {
+	t.Parallel()
 	// The explicit "?" key's own value is a nested block mapping ("a: 1\n
 	// b: 2"), not a scalar -- measured against a compiled parse tree: its
 	// key field is a "block_node", not the ordinary "flow_node" every plain
@@ -1351,6 +1379,7 @@ func TestResolve_YAMLKeyShapes(t *testing.T) {
 }
 
 func TestResolve_Shell(t *testing.T) {
+	t.Parallel()
 	// Both function forms, a top-level var, source lines in two spellings, a
 	// heredoc whose body only looks like a function definition, and a
 	// redefinition -- byte extents pinned by running the resolver against
@@ -1424,6 +1453,7 @@ foo() {
 }
 
 func TestResolve_ForPathShebangFallback(t *testing.T) {
+	t.Parallel()
 	// A recognized extension is authoritative and never even looks at
 	// content: passing shebang-shaped bytes that would map to a different
 	// language must not steer a ".go" file anywhere else.

@@ -35,18 +35,38 @@ unit test beside a helper whose behaviour none of the three exercises directly.
 | `index_test.go` | Single-symbol blob synthesis staged into the real index | Initial commit on an unborn branch, and its gitignore refusal (exit 7); no-newline-at-EOF preserved, and an appended symbol inheriting HEAD's EOF newline; rename staged as two paths yields git's `R100`; pathspec glob and `:(exclude)` pass through; mode-only change surfaces as `MODE`; submodule and symlink staging; `.gitattributes` clean filter (the `--path` requirement) |
 | `resolver_test.go` | Tree-sitter extent + doc-comment attribution on a Go fixture | Exit 3 (unresolvable) and its did-you-mean candidates; new-symbol insertion when neighbours are also new; `@header`, `@imports`, and `@toplevel` extents, including imports spanning interior comments; live `gopls` cross-check |
 
-Units run against in-memory tree-sitter and a mock LSP. The live-`gopls` check
-skips cleanly when the binary is absent or `-short` is set — mocks cannot catch
-a change in real language-server range semantics, which is the class of defect
-that invalidated an earlier design.
+Units run against in-memory tree-sitter. Prefer the real dependency over a
+double wherever one is reachable: a language server that is installed gets
+dialled for real, and the live-`gopls` check skips cleanly only when the binary
+is absent or `-short` is set. A double encodes what its author believed the
+dependency did and then stops tracking it — which is exactly the class of
+defect that invalidated an earlier design, when real language-server range
+semantics turned out to differ from the assumption baked into the stand-in.
+Reach for one only where the real thing is unreachable, and say at the seam
+what would catch its drift.
+
+`rgit_e2e_test.go` is the slow lane: it builds the binary and execs it, so
+`-short` skips the whole file. **The unit tests are what must catch a
+regression** — anything only that file proves is a gap, not coverage. Measure
+it rather than assuming:
+
+```bash
+go test -short -coverpkg=./... -coverprofile=short.out ./...
+go tool cover -func=short.out | tail -1
+```
 
 **Write tests before implementation.** These three files are where the
 design's validated cases live; a case one of them covers must not be lost when
 it is refactored.
 
+Tests run in parallel — every top-level case in the three files above calls
+`t.Parallel()`. A case that needs `t.Setenv` or `t.Chdir` cannot, and must say
+so; everything else builds its own temp repository and shares nothing.
+
 ```bash
-go test ./...          # full suite
-go test -short ./...   # skip the live language-server check
+go test ./...          # full suite, end-to-end cases included
+go test -short ./...   # unit lane: skips the built binary and the live server
+go test -race ./...    # the concurrency that matters: jsonrpc2, the spawn lock
 
 # Coverage MUST pass -coverpkg=./... — most of this suite drives the built
 # binary, so without it internal/app, internal/cli, internal/resolve and

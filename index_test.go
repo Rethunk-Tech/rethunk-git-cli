@@ -84,6 +84,7 @@ func mustParseGo(t *testing.T, label, src string) {
 }
 
 func TestStage_SingleSymbolSynthesizedIntoRealIndex(t *testing.T) {
+	t.Parallel()
 	dir, repo := newSynthRepo(t)
 	head := "package main\n\n// A returns one.\nfunc A() int {\n\treturn 1\n}\n\n// B returns two.\nfunc B() int {\n\treturn 2\n}\n"
 	writeFile(t, dir, "greet.go", head)
@@ -110,6 +111,7 @@ func TestStage_SingleSymbolSynthesizedIntoRealIndex(t *testing.T) {
 }
 
 func TestStage_OverlappingAnchorsCoalesceIntoOneExtent(t *testing.T) {
+	t.Parallel()
 	// Pinned defect: two targets whose extents cover the same bytes were
 	// spliced independently. Every op addresses HEAD's original offsets and
 	// the pass runs in descending start order, so the inner splice shifted
@@ -187,6 +189,7 @@ func TestStage_OverlappingAnchorsCoalesceIntoOneExtent(t *testing.T) {
 }
 
 func TestStage_NewFileCarriesHeaderAndImports(t *testing.T) {
+	t.Parallel()
 	// docs/ANCHORS.md: "@header plus @imports is enough to make a synthesized
 	// new file compile, which is why both are staged automatically for an
 	// untracked file". Nothing implemented it, so naming one symbol in a file
@@ -251,6 +254,7 @@ func TestStage_NewFileCarriesHeaderAndImports(t *testing.T) {
 }
 
 func TestStage_ClassMemberAnchors(t *testing.T) {
+	t.Parallel()
 	// Go's methods are file-scope, so A.Get always worked. TypeScript and
 	// Python put theirs inside a class body, which v1 never descended into:
 	// the finest addressable unit was the whole class, and in an idiomatic
@@ -333,6 +337,7 @@ func TestStage_ClassMemberAnchors(t *testing.T) {
 }
 
 func TestStage_PythonModuleLevelAssignment(t *testing.T) {
+	t.Parallel()
 	// A module-level "X = 1" is an addressable symbol in the Python adapter,
 	// and nothing exercised it. Subscripted and attribute targets name
 	// nothing addressable and must stay unaddressable rather than resolving
@@ -355,6 +360,7 @@ func TestStage_PythonModuleLevelAssignment(t *testing.T) {
 }
 
 func TestStage_MemberDeletionKeepsTheFileParseable(t *testing.T) {
+	t.Parallel()
 	// spliceExcise collapses the gap a removal leaves by joining what
 	// precedes the cut to what follows it, which assumes the cut starts at a
 	// line boundary. That holds for a top-level declaration in column zero
@@ -405,6 +411,7 @@ func TestStage_MemberDeletionKeepsTheFileParseable(t *testing.T) {
 // nested key's own replace must reproduce the worktree byte-for-byte, not
 // merely "close."
 func TestStage_YAMLNestedKeyByteIdenticalRoundTrip(t *testing.T) {
+	t.Parallel()
 	head := "name: CI\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: go build ./...\n\n" +
 		"  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: go test ./...\n"
 
@@ -462,6 +469,7 @@ func TestStage_YAMLNestedKeyByteIdenticalRoundTrip(t *testing.T) {
 }
 
 func TestStage_UnbornBranchInitialCommit(t *testing.T) {
+	t.Parallel()
 	// No commits at all: HEAD does not resolve, so CatFile reports
 	// headExists=false rather than erroring (git itself exits 128 for
 	// "invalid object name 'HEAD'" uniformly with "path not in tree",
@@ -486,6 +494,7 @@ func TestStage_UnbornBranchInitialCommit(t *testing.T) {
 }
 
 func TestStage_UnbornBranchGitignoredPathRefused(t *testing.T) {
+	t.Parallel()
 	// The gitignore refusal consults HEAD to let an already-tracked path
 	// through; an unborn branch has no HEAD to consult, and must still
 	// produce the documented exit 7.
@@ -498,6 +507,7 @@ func TestStage_UnbornBranchGitignoredPathRefused(t *testing.T) {
 }
 
 func TestStage_NoNewlineAtEOFPreserved(t *testing.T) {
+	t.Parallel()
 	dir, repo := newSynthRepo(t)
 	head := "package main\n\nfunc A() {}\n\nfunc B() int { return 1 }" // deliberately no trailing \n
 	writeFile(t, dir, "tail.go", head)
@@ -514,6 +524,7 @@ func TestStage_NoNewlineAtEOFPreserved(t *testing.T) {
 }
 
 func TestStage_AppendedSymbolInheritsEOFNewline(t *testing.T) {
+	t.Parallel()
 	// Appending after the last symbol lands the insertion point just
 	// BEFORE HEAD's trailing newline, not at true end-of-file -- the
 	// case where that terminator is easiest to drop (AGENTS.md: EOF
@@ -531,6 +542,7 @@ func TestStage_AppendedSymbolInheritsEOFNewline(t *testing.T) {
 }
 
 func TestStage_RenameStagedAsTwoPathsYieldsR100(t *testing.T) {
+	t.Parallel()
 	dir, repo := newSynthRepo(t)
 	writeFile(t, dir, "old.txt", "hello world\nsecond line\n")
 	commitAll(t, dir, "chore: add old.txt")
@@ -548,6 +560,7 @@ func TestStage_RenameStagedAsTwoPathsYieldsR100(t *testing.T) {
 }
 
 func TestStage_PathspecGlobAndExcludePassThrough(t *testing.T) {
+	t.Parallel()
 	dir, repo := newSynthRepo(t)
 	writeFile(t, dir, "a.txt", "a\n")
 	writeFile(t, dir, "docs/c.txt", "c\n")
@@ -560,6 +573,7 @@ func TestStage_PathspecGlobAndExcludePassThrough(t *testing.T) {
 }
 
 func TestStage_ModeOnlyChangeStages(t *testing.T) {
+	t.Parallel()
 	dir, repo := newSynthRepo(t)
 	writeFile(t, dir, "script.sh", "#!/bin/sh\necho hi\n")
 	commitAll(t, dir, "chore: add script.sh")
@@ -577,6 +591,7 @@ func TestStage_ModeOnlyChangeStages(t *testing.T) {
 }
 
 func TestStage_SubmoduleAndSymlinkPathStaging(t *testing.T) {
+	t.Parallel()
 	dir, repo := newSynthRepo(t)
 
 	writeFile(t, dir, "target.txt", "content\n")
@@ -603,6 +618,7 @@ func TestStage_SubmoduleAndSymlinkPathStaging(t *testing.T) {
 }
 
 func TestStage_GitattributesCleanFilterRequiresPath(t *testing.T) {
+	t.Parallel()
 	dir, repo := newSynthRepo(t)
 	writeFile(t, dir, ".gitattributes", "*.go filter=upper\n")
 	gitIn(t, dir, "config", "filter.upper.clean", "tr a-z A-Z")
@@ -623,6 +639,7 @@ func TestStage_GitattributesCleanFilterRequiresPath(t *testing.T) {
 }
 
 func TestStage_GitignoredUntrackedRefused(t *testing.T) {
+	t.Parallel()
 	dir, repo := newSynthRepo(t)
 	writeFile(t, dir, ".gitignore", "*.log\n")
 	commitAll(t, dir, "chore: add gitignore")
@@ -633,6 +650,7 @@ func TestStage_GitignoredUntrackedRefused(t *testing.T) {
 }
 
 func TestStage_UnsupportedLanguageAnchorRefused(t *testing.T) {
+	t.Parallel()
 	dir, repo := newSynthRepo(t)
 	writeFile(t, dir, "notes.rs", "fn main() {}\n")
 	commitAll(t, dir, "chore: add notes.rs")
@@ -642,6 +660,7 @@ func TestStage_UnsupportedLanguageAnchorRefused(t *testing.T) {
 }
 
 func TestStage_ResolveAllBeforeStagingAnyLeavesIndexUntouched(t *testing.T) {
+	t.Parallel()
 	dir, repo := newSynthRepo(t)
 	writeFile(t, dir, "a.go", "package main\n\nfunc A() {}\n")
 	commitAll(t, dir, "chore: add a.go")
@@ -660,6 +679,7 @@ func TestStage_ResolveAllBeforeStagingAnyLeavesIndexUntouched(t *testing.T) {
 }
 
 func TestStage_NewSymbolInsertsAtNearestSiblingIncludingNewNeighbours(t *testing.T) {
+	t.Parallel()
 	dir, repo := newSynthRepo(t)
 	head := "package main\n\nfunc A() {}\n\nfunc C() {}\n"
 	writeFile(t, dir, "sib.go", head)
@@ -683,6 +703,7 @@ func TestStage_NewSymbolInsertsAtNearestSiblingIncludingNewNeighbours(t *testing
 }
 
 func TestStage_MultipleSymbolsSpliceInReverseOffsetOrder(t *testing.T) {
+	t.Parallel()
 	// Two extents in one file must be
 	// applied in reverse byte-offset order, or the first splice shifts the
 	// bytes out from under the second. A and B are adjacent with no blank
@@ -726,6 +747,7 @@ func TestStage_MultipleSymbolsSpliceInReverseOffsetOrder(t *testing.T) {
 }
 
 func TestStage_DeletedSymbolExcisedFromBlob(t *testing.T) {
+	t.Parallel()
 	// Deleting a symbol is
 	// anchored like any other change: the extent resolves against HEAD,
 	// where the symbol still exists, and staging removes it -- doc comment
@@ -768,6 +790,7 @@ func TestStage_DeletedSymbolExcisedFromBlob(t *testing.T) {
 // so a Python class method keeps the ordinary top-level-shaped padding
 // instead -- proven by its own subtest expecting that blank line to survive.
 func TestStage_ContainerMemberInsertIsByteIdenticalToWorktree(t *testing.T) {
+	t.Parallel()
 	t.Run("go struct field", func(t *testing.T) {
 		dir, repo := newSynthRepo(t)
 		writeFile(t, dir, "p.go", "package main\n\ntype Point struct {\n\tX int\n\tY int\n}\n")
@@ -858,6 +881,7 @@ func TestStage_ContainerMemberInsertIsByteIdenticalToWorktree(t *testing.T) {
 // Getting this wrong would splice a brand new method flush against
 // whatever the nearest existing declaration is.
 func TestStage_SiblingReceiverMethodKeepsBlankLinePadding(t *testing.T) {
+	t.Parallel()
 	dir, repo := newSynthRepo(t)
 	writeFile(t, dir, "a.go", "package main\n\ntype A struct{}\n\nfunc Seed() {}\n")
 	commitAll(t, dir, "chore: initial a.go")
@@ -889,6 +913,7 @@ func TestStage_SiblingReceiverMethodKeepsBlankLinePadding(t *testing.T) {
 // its own, and countLines' "no newline at end of file" convention already
 // credits it the one line that gap would otherwise be.
 func TestPlanStage_PreambleRowsAppearInResults(t *testing.T) {
+	t.Parallel()
 	dir, repo := newSynthRepo(t)
 	writeFile(t, dir, "seed.go", "package main\n\nfunc Seed() {}\n")
 	commitAll(t, dir, "chore: seed")
@@ -940,6 +965,7 @@ func TestPlanStage_PreambleRowsAppearInResults(t *testing.T) {
 // text -- not the file's true total, and that gap is accepted (TODO.md §
 // Known limitations), not silently guessed away.
 func TestPlanStage_PreambleDoesNotAbsorbSeparatorForLanguagesThatDontOwnOne(t *testing.T) {
+	t.Parallel()
 	dir, repo := newSynthRepo(t)
 	writeFile(t, dir, "seed.ts", "export const seed = 1;\n")
 	commitAll(t, dir, "chore: seed")

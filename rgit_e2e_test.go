@@ -11,6 +11,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -24,9 +25,22 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
+// rgitBin is the built binary every end-to-end case execs. It is empty
+// under -short, which is what requireBinary keys off to skip them: this
+// file is the slow lane, and building a binary is the slowest thing the
+// suite does. The unit tests beside it in this package carry the
+// regression coverage and run either way.
 var rgitBin string
 
 func TestMain(m *testing.M) {
+	// testing.Short() reads a flag, so the flags have to be parsed before
+	// it can be consulted -- m.Run() would otherwise be the first thing to
+	// do it, which is already too late to decide whether to build.
+	flag.Parse()
+	if testing.Short() {
+		os.Exit(m.Run())
+	}
+
 	bin, cleanup, err := buildRgit()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "build rgit for e2e tests:", err)
@@ -38,6 +52,17 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+// requireBinary skips a case that drives the built binary when there is no
+// binary to drive. Every route to one goes through here, including the few
+// cases that exec rgitBin directly rather than through runRgit, so adding
+// an end-to-end case cannot accidentally opt out of the gate.
+func requireBinary(t *testing.T) {
+	t.Helper()
+	if rgitBin == "" {
+		t.Skip("end-to-end binary cases skipped under -short")
+	}
+}
+
 func buildRgit() (bin string, cleanup func(), err error) {
 	dir, err := os.MkdirTemp("", "rgit-e2e-bin-*")
 	if err != nil {
@@ -46,6 +71,13 @@ func buildRgit() (bin string, cleanup func(), err error) {
 	cleanup = func() { _ = os.RemoveAll(dir) }
 
 	bin = filepath.Join(dir, "rgit")
+	// Not -race. Measured: race-instrumenting the cgo tree-sitter parse path
+	// costs 24x per invocation (1.05s against 0.044s), which across this
+	// file's invocations is minutes rather than seconds -- and it buys
+	// almost nothing, since a single rgit invocation resolves in sequence
+	// (lsp.Session: "not safe for concurrent use"). The concurrency worth
+	// checking is the jsonrpc2 read goroutine and the daemon spawn lock,
+	// both in-process: `go test -race ./...` reaches them and this does not.
 	cmd := exec.Command("go", "build", "-cover", "-o", bin, ".")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -87,6 +119,7 @@ type rgitResult struct {
 
 func runRgit(t *testing.T, repoDir string, args ...string) rgitResult {
 	t.Helper()
+	requireBinary(t)
 	cmd := exec.Command(rgitBin, args...)
 	cmd.Dir = repoDir
 	var stdout, stderr bytes.Buffer
@@ -107,6 +140,7 @@ func runRgit(t *testing.T, repoDir string, args ...string) rgitResult {
 }
 
 func TestCommit_InterspersedFlagAfterPositional(t *testing.T) {
+	t.Parallel()
 	// Pinned defect: stdlib flag and ff/ffcli stop parsing at the first
 	// positional, so this exact argv shape would silently yield zero
 	// messages and two targets ("auth.go:Foo", "msg"), failing with
@@ -123,6 +157,7 @@ func TestCommit_InterspersedFlagAfterPositional(t *testing.T) {
 }
 
 func TestCommit_ColonInFilenameIsPathspec(t *testing.T) {
+	t.Parallel()
 	// "src/notes:draft.md" is a legal tracked path (design.md measured
 	// git accepting it). Rule 4's existing-path check must claim it
 	// whole, before rule 5 gets a chance to split it into a bogus
@@ -136,6 +171,7 @@ func TestCommit_ColonInFilenameIsPathspec(t *testing.T) {
 }
 
 func TestCommit_DoubleDashForcesPathspec(t *testing.T) {
+	t.Parallel()
 	// Rule 1: everything after "--" is a pathspec, unconditionally — even
 	// a token shaped like FILE:NAME for a file that does not exist. If
 	// rule 5 got a chance at it instead, it would fail as an unresolvable
@@ -153,6 +189,7 @@ func TestCommit_DoubleDashForcesPathspec(t *testing.T) {
 }
 
 func TestCommit_LeadingColonPathspecMagicPassesThrough(t *testing.T) {
+	t.Parallel()
 	// Rule 2: all git pathspec magic is leading-colon, so this is claimed
 	// immediately, with no existence check at all -- paired here with a
 	// real target so the commit has something to actually stage.
@@ -165,6 +202,7 @@ func TestCommit_LeadingColonPathspecMagicPassesThrough(t *testing.T) {
 }
 
 func TestCommit_UnresolvableArgumentListsTriedInterpretations(t *testing.T) {
+	t.Parallel()
 	// Rule 6: none of the applicable rules matched. commit passes
 	// allowRevisions=false to ClassifyArgs (rule 3 is diff-only), so the
 	// error must list pathspec-magic, existing-path, and symbol-anchor —
@@ -182,6 +220,7 @@ func TestCommit_UnresolvableArgumentListsTriedInterpretations(t *testing.T) {
 }
 
 func TestInvalidFlagCombinations(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name       string
 		args       []string
@@ -220,6 +259,7 @@ func TestInvalidFlagCombinations(t *testing.T) {
 }
 
 func TestContradictoryPathAndAnchor(t *testing.T) {
+	t.Parallel()
 	// Pinned defect: the check ran on flag values only, so the positional
 	// spelling fell straight through it. Both targets were then built, and
 	// apply() ran `git add greet.go` before overwriting that same index
@@ -266,6 +306,7 @@ func TestContradictoryPathAndAnchor(t *testing.T) {
 }
 
 func TestCommit_AnnouncesPreambleAndOrdinalAnchors(t *testing.T) {
+	t.Parallel()
 	// docs/ANCHORS.md documents both announcements: the new-file preamble is
 	// "announced on stderr", and an ordinal is a last resort that "warns and
 	// suggests qualification". Both were silent.
@@ -304,6 +345,7 @@ func TestCommit_AnnouncesPreambleAndOrdinalAnchors(t *testing.T) {
 }
 
 func TestDiff_CrossCheckReportsWithoutGating(t *testing.T) {
+	t.Parallel()
 	// The cross-check ran only on the commit path, so rgit diff could emit
 	// an anchor rgit commit then refused with exit 6 -- the closed loop held
 	// syntactically and not semantically. Diff reports rather than gates: a
@@ -327,6 +369,7 @@ func TestDiff_CrossCheckReportsWithoutGating(t *testing.T) {
 }
 
 func TestDocumentedPathsWithoutOtherCoverage(t *testing.T) {
+	t.Parallel()
 	// Each of these is specified in docs/USAGE.md and was reachable only
 	// through paths no other case exercised.
 	commitOne := func(t *testing.T, repo string) {
@@ -382,6 +425,7 @@ func TestDocumentedPathsWithoutOtherCoverage(t *testing.T) {
 		// PATH stops a spawn, and pointing XDG_RUNTIME_DIR at an empty
 		// directory stops the socket probe finding a daemon some earlier
 		// invocation left behind.
+		requireBinary(t)
 		repo := newTempRepo(t)
 		writeFile(t, repo, "a.go", "package main\n\nfunc A() int { return 1 }\n")
 
@@ -494,6 +538,7 @@ func ValidateToken(tok string) bool {
 `
 
 func TestDiff_DefaultScopePicksUpStagedUnstagedAndUntracked(t *testing.T) {
+	t.Parallel()
 	repo := initRepoWithFile(t, "auth.go", authGoV1)
 
 	// Unstaged: modify the committed file.
@@ -520,6 +565,7 @@ func TestDiff_DefaultScopePicksUpStagedUnstagedAndUntracked(t *testing.T) {
 }
 
 func TestDiff_UnbornBranchListsEverythingCommittable(t *testing.T) {
+	t.Parallel()
 	// A fresh `git init` has no HEAD, so the default scope cannot run
 	// `git diff HEAD` -- it compares against the empty tree instead.
 	repo := newTempRepo(t)
@@ -540,6 +586,7 @@ func TestDiff_UnbornBranchListsEverythingCommittable(t *testing.T) {
 }
 
 func TestCommit_PushAfterSuccessfulCommit(t *testing.T) {
+	t.Parallel()
 	repo := initRepoWithFile(t, "auth.go", authGoV1)
 	remote := t.TempDir()
 	gitIn(t, remote, "init", "-q", "--bare")
@@ -556,6 +603,7 @@ func TestCommit_PushAfterSuccessfulCommit(t *testing.T) {
 }
 
 func TestCommit_MultiLanguageSymbolGranularity(t *testing.T) {
+	t.Parallel()
 	// One commit naming a symbol in each v1 grammar. The point is that
 	// each file's OTHER symbol changed too and must stay uncommitted:
 	// symbol granularity has to hold per grammar, in a single invocation.
@@ -586,6 +634,7 @@ func TestCommit_MultiLanguageSymbolGranularity(t *testing.T) {
 }
 
 func TestCommit_ExtensionlessShebangResolvesShellSymbol(t *testing.T) {
+	t.Parallel()
 	// A git-hook-style script with no extension at all: resolve.ForPath's
 	// shebang fallback is what makes it addressable, and staging one
 	// function must leave its sibling uncommitted exactly like any other
@@ -616,6 +665,7 @@ func TestCommit_ExtensionlessShebangResolvesShellSymbol(t *testing.T) {
 }
 
 func TestCommit_AllTargetsUnchangedExits11(t *testing.T) {
+	t.Parallel()
 	// docs/USAGE.md: an unchanged target warns and is skipped; exit is 11
 	// only when EVERY named target turned out unchanged.
 	repo := initRepoWithFile(t, "auth.go", authGoV1)
@@ -626,6 +676,7 @@ func TestCommit_AllTargetsUnchangedExits11(t *testing.T) {
 }
 
 func TestCommit_FromSubdirectoryResolvesCWDRelativePaths(t *testing.T) {
+	t.Parallel()
 	// git resolves a pathspec relative to the current directory: `git add
 	// a.go` in pkg/deep stages pkg/deep/a.go. Output stays root-relative,
 	// as git's own --numstat does.
@@ -647,6 +698,7 @@ func TestCommit_FromSubdirectoryResolvesCWDRelativePaths(t *testing.T) {
 }
 
 func TestDiff_RevisionRangeScopes(t *testing.T) {
+	t.Parallel()
 	// Precedence rule 3's three reachable shapes: a bare revision against
 	// the worktree, a two-dot range, and a three-dot range (whose old side
 	// is the merge base, not the left endpoint).
@@ -664,6 +716,7 @@ func TestDiff_RevisionRangeScopes(t *testing.T) {
 }
 
 func TestDiff_MalformedSymAndPathEscapeRejected(t *testing.T) {
+	t.Parallel()
 	// Both subcommands reject these identically: docs/USAGE.md's exit
 	// table qualifies neither to one of them. Silently dropping a
 	// malformed --sym would leave the caller reading an unfiltered diff
@@ -678,6 +731,7 @@ func TestDiff_MalformedSymAndPathEscapeRejected(t *testing.T) {
 }
 
 func TestDiff_UnstagedScopeExcludesStaged(t *testing.T) {
+	t.Parallel()
 	repo := initRepoWithFile(t, "auth.go", authGoV1)
 
 	writeFile(t, repo, "auth.go", authGoV2) // unstaged change
@@ -704,6 +758,7 @@ func TestDiff_UnstagedScopeExcludesStaged(t *testing.T) {
 // symbol must resolve against the worktree; a DELETED row's only ever
 // existed in HEAD, so it must resolve there instead.
 func TestDiff_AnchorRoundTrip(t *testing.T) {
+	t.Parallel()
 	repo := initRepoWithFile(t, "auth.go", authGoV1)
 	writeFile(t, repo, "auth.go", authGoV2) // modifies ValidateToken, deletes oldHelper
 
@@ -741,6 +796,7 @@ func TestDiff_AnchorRoundTrip(t *testing.T) {
 }
 
 func TestDiff_ModeRowOnChmod(t *testing.T) {
+	t.Parallel()
 	repo := initRepoWithFile(t, "script.sh", "#!/bin/sh\necho hi\n")
 
 	if err := os.Chmod(filepath.Join(repo, "script.sh"), 0o755); err != nil {
@@ -761,6 +817,7 @@ func TestDiff_ModeRowOnChmod(t *testing.T) {
 }
 
 func TestDiff_BinaryRowUsesDashCounts(t *testing.T) {
+	t.Parallel()
 	binary := []byte("PNGFAKE\x00\x01binary")
 	repo := newTempRepo(t)
 	if err := os.WriteFile(filepath.Join(repo, "logo.bin"), binary, 0o644); err != nil {
@@ -790,6 +847,7 @@ func TestDiff_BinaryRowUsesDashCounts(t *testing.T) {
 // function, and — the sum-of-hunks invariant — neither neighbouring
 // function may show any change at all.
 func TestDiff_UnanchorableHunk(t *testing.T) {
+	t.Parallel()
 	const before = `package notes
 
 func A() int {
@@ -875,6 +933,7 @@ func B() int {
 // A's change and NOT B's -- a whole-file commit would also move HEAD, so
 // checking that alone would not prove symbol granularity.
 func TestCommit_HappyPath(t *testing.T) {
+	t.Parallel()
 	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
 	marker := filepath.Join(repo, "hook-ran")
 	installHook(t, repo, "pre-commit", "#!/bin/sh\ntouch \""+marker+"\"\n")
@@ -911,6 +970,7 @@ func TestCommit_HappyPath(t *testing.T) {
 }
 
 func TestCommit_PreStagedSiblingFileComesAlong(t *testing.T) {
+	t.Parallel()
 	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
 	writeFile(t, repo, "auth.go", commitHappyV2)
 	writeFile(t, repo, "sibling.txt", "never named to rgit\n")
@@ -924,6 +984,7 @@ func TestCommit_PreStagedSiblingFileComesAlong(t *testing.T) {
 }
 
 func TestCommit_HookRejectionLeavesStagingIntact(t *testing.T) {
+	t.Parallel()
 	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
 	writeFile(t, repo, "auth.go", commitHappyV2)
 	installHook(t, repo, "pre-commit", "#!/bin/sh\nexit 1\n")
@@ -942,6 +1003,7 @@ func TestCommit_HookRejectionLeavesStagingIntact(t *testing.T) {
 }
 
 func TestCommit_ResolveAllBeforeStageLeavesIndexUntouched(t *testing.T) {
+	t.Parallel()
 	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
 	writeFile(t, repo, "auth.go", commitHappyV2)
 
@@ -955,6 +1017,7 @@ func TestCommit_ResolveAllBeforeStageLeavesIndexUntouched(t *testing.T) {
 }
 
 func TestCommit_PositionalPathspecParityWithFileFlag(t *testing.T) {
+	t.Parallel()
 	repoPositional := newTempRepo(t)
 	writeFile(t, repoPositional, "notes.txt", "hello\n")
 	gotPositional := runRgit(t, repoPositional, "commit", "notes.txt", "-m", "chore: add notes")
@@ -969,6 +1032,7 @@ func TestCommit_PositionalPathspecParityWithFileFlag(t *testing.T) {
 }
 
 func TestCommit_PathEscapeRejected(t *testing.T) {
+	t.Parallel()
 	parent := t.TempDir()
 	repo := filepath.Join(parent, "repo")
 	if err := os.MkdirAll(repo, 0o755); err != nil {
@@ -990,6 +1054,7 @@ func TestCommit_PathEscapeRejected(t *testing.T) {
 }
 
 func TestCommit_ReportsWhatItCommitted(t *testing.T) {
+	t.Parallel()
 	// A commit that prints nothing forces the caller to run `git show` or
 	// `git status` afterwards just to learn what landed -- which is the
 	// context cost rgit exists to remove. git's own summary carries the
@@ -1012,6 +1077,7 @@ func TestCommit_ReportsWhatItCommitted(t *testing.T) {
 }
 
 func TestCommit_DryRunPreviewsAndStagesNothing(t *testing.T) {
+	t.Parallel()
 	// A preview that prints nothing and exits 0 is indistinguishable from
 	// one that resolved nothing at all, which defeats the point of asking.
 	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
@@ -1047,6 +1113,7 @@ func TestCommit_DryRunPreviewsAndStagesNothing(t *testing.T) {
 }
 
 func TestCommit_PathAlreadyStagedAsDeleted(t *testing.T) {
+	t.Parallel()
 	// After `git rm`, the path matches nothing in the worktree and nothing
 	// in the index, so `git add` rejects it as a bad pathspec. Naming
 	// something already staged exactly as asked is not an error -- the
@@ -1065,6 +1132,7 @@ func TestCommit_PathAlreadyStagedAsDeleted(t *testing.T) {
 }
 
 func TestOutput_OrderedByPathThenPosition(t *testing.T) {
+	t.Parallel()
 	// Both listings sort alphabetically by path, then ascending by position
 	// within each file -- the same contract `git status` offers. Output that
 	// followed discovery order put @imports last despite it being the first
@@ -1121,6 +1189,7 @@ func TestOutput_OrderedByPathThenPosition(t *testing.T) {
 // --- help --------------------------------------------------------------
 
 func TestHelp_TopLevelExitsZeroOnEverySpelling(t *testing.T) {
+	t.Parallel()
 	// specs/design.md:231 measured "--help tokens" per flag library as a
 	// selection criterion, but nothing ever wired the flag up: bare
 	// "--help", "-h", and "help" all fell into the unknown-command branch
@@ -1143,6 +1212,7 @@ func TestHelp_TopLevelExitsZeroOnEverySpelling(t *testing.T) {
 }
 
 func TestHelp_BareInvocationStillExitsInvalidUsage(t *testing.T) {
+	t.Parallel()
 	// Bare `git` prints its own full help to stdout at exit 1 -- but rgit
 	// has exactly two subcommands and no useful no-op mode, and every other
 	// usage error in its table (missing message, no target, ...) is already
@@ -1156,6 +1226,7 @@ func TestHelp_BareInvocationStillExitsInvalidUsage(t *testing.T) {
 }
 
 func TestHelp_SubcommandExitsZeroAndDoesNotLeakPflag(t *testing.T) {
+	t.Parallel()
 	// Before: pflag's ContinueOnError returned pflag.ErrHelp from Parse,
 	// which fell into the generic parse-failure branch and printed the
 	// library's own internal error string -- "rgit: pflag: help requested"
@@ -1186,6 +1257,7 @@ func TestHelp_SubcommandExitsZeroAndDoesNotLeakPflag(t *testing.T) {
 // --- commit --amend ------------------------------------------------------
 
 func TestCommit_AmendWithNoMessageReusesHeadSubject(t *testing.T) {
+	t.Parallel()
 	// rgit never opens an editor (docs/USAGE.md: commit.template is
 	// deliberately not honoured), so --amend with neither -m nor -F has
 	// exactly one sensible meaning: `git commit --amend --no-edit`.
@@ -1202,6 +1274,7 @@ func TestCommit_AmendWithNoMessageReusesHeadSubject(t *testing.T) {
 }
 
 func TestCommit_NonAmendWithNoMessageStillRequiresOne(t *testing.T) {
+	t.Parallel()
 	// The message requirement is suppressed only for --amend; a plain
 	// commit with neither -m nor -F is still exit 129.
 	repo := newTempRepo(t)
@@ -1219,6 +1292,7 @@ func TestCommit_NonAmendWithNoMessageStillRequiresOne(t *testing.T) {
 // what earns a test here is a flag rgit does more with than hand to git.
 
 func TestCommit_FixupAndSquashGenerateAutosquashMessages(t *testing.T) {
+	t.Parallel()
 	repo := initRepoWithFile(t, "g.go", "package main\n\nfunc G() int { return 1 }\n")
 	target := strings.TrimSpace(gitIn(t, repo, "rev-parse", "HEAD"))
 
@@ -1241,6 +1315,7 @@ func TestCommit_FixupAndSquashGenerateAutosquashMessages(t *testing.T) {
 }
 
 func TestCommit_FixupWithMessageAppendsRatherThanConflicts(t *testing.T) {
+	t.Parallel()
 	// Verified against real git: --fixup plus -m is not the "-m and -F are
 	// mutually exclusive" shape of conflict. git appends -m's text as an
 	// extra body paragraph below the generated "fixup! ..." subject.
@@ -1257,6 +1332,7 @@ func TestCommit_FixupWithMessageAppendsRatherThanConflicts(t *testing.T) {
 }
 
 func TestCommit_AuthorAndDateForwarded(t *testing.T) {
+	t.Parallel()
 	repo := newTempRepo(t)
 	writeFile(t, repo, "g.go", "package main\n\nfunc G() {}\n")
 
@@ -1271,6 +1347,7 @@ func TestCommit_AuthorAndDateForwarded(t *testing.T) {
 }
 
 func TestCommit_GPGSignFlagsForwarded(t *testing.T) {
+	t.Parallel()
 	// gpg.program pointed at a binary that always fails turns any signing
 	// attempt into a deterministic, fast failure -- proof --gpg-sign (bare
 	// or with a key id) reached git and triggered signing, with no real
@@ -1298,6 +1375,7 @@ func TestCommit_GPGSignFlagsForwarded(t *testing.T) {
 }
 
 func TestCommit_PushWithNoUpstreamNamesTheFix(t *testing.T) {
+	t.Parallel()
 	// docs/USAGE.md / AGENTS.md's one invariant: rgit does not invent an
 	// implicit `-u` (a push.default=current caller already gets a
 	// successful push with no upstream at all, and pre-empting on that
@@ -1319,6 +1397,7 @@ func TestCommit_PushWithNoUpstreamNamesTheFix(t *testing.T) {
 }
 
 func TestCommit_ResetAuthorForwarded(t *testing.T) {
+	t.Parallel()
 	// --author sets an identity the amend must then discard: with
 	// --reset-author, git takes the author from the committer, so the
 	// Ada identity written by the first commit must not survive.
@@ -1340,6 +1419,7 @@ func TestCommit_ResetAuthorForwarded(t *testing.T) {
 }
 
 func TestCommit_PorcelainEmitsRecords(t *testing.T) {
+	t.Parallel()
 	// The machine-readable counterpart to the aligned listing, on both the
 	// preview and the commit it previews -- and the records must agree,
 	// which is the whole reason --dry-run's listing exists.
@@ -1371,6 +1451,7 @@ func TestCommit_PorcelainEmitsRecords(t *testing.T) {
 }
 
 func TestCommit_QuietSuppressesStdoutOnly(t *testing.T) {
+	t.Parallel()
 	repo := newTempRepo(t)
 	writeFile(t, repo, "g.go", "package main\n\nfunc G() int { return 1 }\n")
 	// An unchanged second target still has to warn on stderr: -q is git's
@@ -1389,6 +1470,7 @@ func TestCommit_QuietSuppressesStdoutOnly(t *testing.T) {
 }
 
 func TestCommit_PorcelainAndQuietConflict(t *testing.T) {
+	t.Parallel()
 	repo := newTempRepo(t)
 	writeFile(t, repo, "g.go", "package main\n\nfunc G() {}\n")
 
