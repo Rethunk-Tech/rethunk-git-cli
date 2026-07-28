@@ -50,7 +50,6 @@ func buildRegions(lang resolve.Language, src []byte) ([]region, error) {
 		}
 		regions = append(regions, region{name: name, ext: ext})
 	}
-	regions = dropSpanningRegions(regions)
 	for _, pseudo := range []string{"@header", "@imports"} {
 		if res, rerr := f.Resolve(pseudo); rerr == nil {
 			regions = append(regions, region{name: pseudo, ext: res.Extent})
@@ -59,37 +58,57 @@ func buildRegions(lang resolve.Language, src []byte) ([]region, error) {
 	return regions, nil
 }
 
-// dropSpanningRegions removes any region that strictly contains another.
+// exclusiveText returns src[ext.Start:ext.End] with every other region in
+// siblings that lies inside it removed, so a change entirely inside a
+// nested named region (a struct's field, a class's method, a Markdown
+// section's subsection or setext heading) is attributed to that region
+// alone rather than counted again under whichever container encloses it --
+// the same principle @toplevel's own exclusion from the region set already
+// applies once (region's doc comment), generalized here to every
+// container/member pair a language's grammar can nest.
 //
-// This is the rule that already keeps @toplevel out of the region set
-// (see region's doc), generalized now that a container and its members are
-// both addressable: a class's extent covers every one of its methods, so
-// keeping both would count a change inside a method twice -- once under the
-// method, once under the class -- and drive the (unanchorable) remainder
-// negative. The innermost region is the one that names the change.
-//
-// A change to the class declaration itself rather than to any member is
-// therefore reported as (unanchorable). That is the honest answer here:
-// naming the class would claim every method's change along with it.
-func dropSpanningRegions(regions []region) []region {
-	kept := make([]region, 0, len(regions))
-	for i, r := range regions {
-		spans := false
-		for j, other := range regions {
-			if i == j {
-				continue
-			}
-			if r.ext.Start <= other.ext.Start && other.ext.End <= r.ext.End &&
-				other.ext.End-other.ext.Start < r.ext.End-r.ext.Start {
-				spans = true
-				break
-			}
+// A container that contributes nothing beyond its members -- a Go struct
+// whose body is only fields, a class whose body is only methods -- ends up
+// with an empty or whitespace-only exclusive text, so its own row is
+// naturally absent (isolatedDiff/countLines report zero, and the caller
+// skips a zero row): the same (unanchorable)-for-the-container-line answer
+// this replaces, but reached because there is genuinely nothing left to
+// diff, not because the region was deleted outright before it got a
+// chance. A Markdown section is the case that outright deletion got wrong:
+// its body is ordinary prose around its subsections, not merely its
+// subsections, so removing the section from the region set the moment it
+// had any nested heading left that prose with no region owning it at all.
+func exclusiveText(src []byte, self region, siblings []region) []byte {
+	ext := self.ext
+	type hole struct{ start, end uint }
+	var holes []hole
+	for _, r := range siblings {
+		if r.name == self.name {
+			continue
 		}
-		if !spans {
-			kept = append(kept, r)
+		if r.ext.Start >= ext.Start && r.ext.End <= ext.End {
+			holes = append(holes, hole{r.ext.Start, r.ext.End})
 		}
 	}
-	return kept
+	if len(holes) == 0 {
+		return src[ext.Start:ext.End]
+	}
+	slices.SortFunc(holes, func(a, b hole) int { return cmp.Compare(a.start, b.start) })
+
+	out := make([]byte, 0, ext.End-ext.Start)
+	pos := ext.Start
+	for _, h := range holes {
+		if h.start > pos {
+			out = append(out, src[pos:h.start]...)
+		}
+		if h.end > pos {
+			pos = h.end
+		}
+	}
+	if ext.End > pos {
+		out = append(out, src[pos:ext.End]...)
+	}
+	return out
 }
 
 // isMultiDeclaratorLang reports whether lang's grammar can produce a
@@ -203,7 +222,9 @@ func attributeSymbols(lang resolve.Language, oldSrc, newSrc []byte, totalAdded, 
 		newExt, inNew := newByName[name]
 		switch {
 		case inOld && inNew:
-			added, deleted := isolatedDiff(oldSrc[oldExt.Start:oldExt.End], newSrc[newExt.Start:newExt.End])
+			oldText := exclusiveText(oldSrc, region{name: name, ext: oldExt}, oldRegions)
+			newText := exclusiveText(newSrc, region{name: name, ext: newExt}, newRegions)
+			added, deleted := isolatedDiff(oldText, newText)
 			if added == 0 && deleted == 0 {
 				return
 			}
@@ -211,7 +232,7 @@ func attributeSymbols(lang resolve.Language, oldSrc, newSrc []byte, totalAdded, 
 			accDeleted += deleted
 			rows = append(rows, Row{Symbol: name, Status: StatusMod, Added: itoa(added), Deleted: itoa(deleted), pos: newExt.Start})
 		case inOld && !inNew:
-			deleted := countLines(oldSrc[oldExt.Start:oldExt.End])
+			deleted := countLines(exclusiveText(oldSrc, region{name: name, ext: oldExt}, oldRegions))
 			if deleted == 0 {
 				return
 			}
@@ -221,7 +242,7 @@ func attributeSymbols(lang resolve.Language, oldSrc, newSrc []byte, totalAdded, 
 			// expects to find it.
 			rows = append(rows, Row{Symbol: name, Status: StatusDeleted, Added: "0", Deleted: itoa(deleted), pos: oldExt.Start})
 		case !inOld && inNew:
-			added := countLines(newSrc[newExt.Start:newExt.End])
+			added := countLines(exclusiveText(newSrc, region{name: name, ext: newExt}, newRegions))
 			if added == 0 {
 				return
 			}

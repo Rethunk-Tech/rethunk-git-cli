@@ -40,3 +40,47 @@ func TestNarrowMultiDeclarator(t *testing.T) {
 		t.Errorf("narrowMultiDeclarator got range [%d, %d]; want [0, 11]", got.Start, got.End)
 	}
 }
+
+// TestAttributeSymbols_MarkdownSectionOwnParagraphSurvivesNestedSetext pins
+// the fix for a real misattribution: a Markdown section containing a setext
+// heading (which never opens its own nested section, lang_markdown.go's
+// sectionDeclarations) used to vanish from the region set entirely once
+// dropSpanningRegions saw it "span" the setext heading's own tiny
+// declaration -- so editing the section's own paragraph, untouched by the
+// setext heading itself, fell all the way to (unanchorable) instead of
+// attributing to the enclosing section.
+func TestAttributeSymbols_MarkdownSectionOwnParagraphSurvivesNestedSetext(t *testing.T) {
+	lang, ok := resolve.ForExtension(".md")
+	if !ok {
+		t.Fatal("resolve: no adapter registered for .md")
+	}
+
+	// Two "## Options" under one "# Usage": the second's own body is a
+	// paragraph, then a setext heading, then another paragraph -- the exact
+	// shape from the bug report.
+	oldSrc := []byte("# Usage\n\n## Options\n\nFirst options.\n\n## Options\n\n" +
+		"Second options paragraph.\n\nSetext Title\n============\n\nBody after.\n")
+	newSrc := []byte("# Usage\n\n## Options\n\nFirst options.\n\n## Options\n\n" +
+		"Second options paragraph, edited.\n\nSetext Title\n============\n\nBody after.\n")
+
+	rows, err := attributeSymbols(lang, oldSrc, newSrc, 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var found *Row
+	for i := range rows {
+		if rows[i].Symbol == "usage.options#2" {
+			found = &rows[i]
+		}
+		if rows[i].Status == StatusUnanchorable {
+			t.Errorf("editing the section's own paragraph must not fall back to (unanchorable): %+v", rows[i])
+		}
+	}
+	if found == nil {
+		t.Fatalf("want a row for usage.options#2, got %+v", rows)
+	}
+	if found.Added != "1" || found.Deleted != "1" {
+		t.Errorf("usage.options#2 row = %+v; want Added=1 Deleted=1", found)
+	}
+}
