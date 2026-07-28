@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
 	diffpkg "github.com/Rethunk-Tech/rethunk-git-cli/internal/diff"
@@ -87,8 +88,8 @@ func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) exitc
 		return exitcode.InvalidUsage
 	}
 
-	allFiles := append(files, f.files...)
-	allSyms := append(syms, symFlags...)
+	allFiles := slices.Concat(files, f.files)
+	allSyms := slices.Concat(syms, symFlags)
 	for i, p := range allFiles {
 		resolved, err := repoPath(root, prefix, p)
 		if err != nil {
