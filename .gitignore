@@ -6,8 +6,3 @@
 # orchestration scratch
 .orchestrate/
 
-# spike scratch
-__pycache__/
-*.pyc
-spike/mod/go.sum
-spike/gopls.json
