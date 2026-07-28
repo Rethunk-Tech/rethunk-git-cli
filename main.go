@@ -7,7 +7,10 @@
 package main
 
 import (
+	"context"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/app"
 )
@@ -18,5 +21,8 @@ import (
 var version = "dev"
 
 func main() {
-	os.Exit(int(app.Run(version, os.Args[1:], os.Stdout, os.Stderr)))
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	code := app.Run(ctx, version, os.Args[1:], os.Stdout, os.Stderr)
+	stop() // not deferred: os.Exit would skip it
+	os.Exit(int(code))
 }

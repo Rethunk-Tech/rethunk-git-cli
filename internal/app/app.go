@@ -4,6 +4,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -15,7 +16,7 @@ const usageLine = "usage: rgit [--version] <diff|commit> [flags] [target...]"
 // Run dispatches one rgit invocation and returns its exit code. version is
 // supplied by the caller so the build-time -ldflags value stays attached to
 // package main.
-func Run(version string, args []string, stdout, stderr io.Writer) exitcode.Code {
+func Run(ctx context.Context, version string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	if len(args) == 0 {
 		fmt.Fprintln(stderr, usageLine)
 		return exitcode.InvalidUsage
@@ -26,9 +27,9 @@ func Run(version string, args []string, stdout, stderr io.Writer) exitcode.Code 
 		fmt.Fprintf(stdout, "rgit %s\n", version)
 		return exitcode.Success
 	case "diff":
-		return runDiff(args[1:], stdout, stderr)
+		return runDiff(ctx, args[1:], stdout, stderr)
 	case "commit":
-		return runCommit(args[1:], stdout, stderr)
+		return runCommit(ctx, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "rgit: unknown command %q\n", args[0])
 		fmt.Fprintln(stderr, usageLine)

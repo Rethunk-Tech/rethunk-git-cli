@@ -34,7 +34,7 @@ type commitFlags struct {
 	files      []string
 }
 
-func runCommit(args []string, stdout, stderr io.Writer) exitcode.Code {
+func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exitcode.Code {
 	fs := pflag.NewFlagSet("commit", pflag.ContinueOnError)
 	fs.SetInterspersed(true)
 	fs.SetOutput(io.Discard)
@@ -87,12 +87,11 @@ func runCommit(args []string, stdout, stderr io.Writer) exitcode.Code {
 		fmt.Fprintln(stderr, `rgit: warning: message does not look like "type(scope): subject"`)
 	}
 
-	root, prefix, repo, code := openRepo(stderr)
+	root, prefix, repo, code := openRepo(ctx, stderr)
 	if code != exitcode.Success {
 		return code
 	}
 
-	ctx := context.Background()
 	classified, err := cli.ClassifyArgs(restoreDoubleDash(fs), false, cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo, Ctx: ctx}, cli.GitRevisionResolver{Repo: repo, Ctx: ctx})
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)

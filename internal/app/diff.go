@@ -34,7 +34,7 @@ type diffFlags struct {
 	files     []string
 }
 
-func runDiff(args []string, stdout, stderr io.Writer) exitcode.Code {
+func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) exitcode.Code {
 	fs := pflag.NewFlagSet("diff", pflag.ContinueOnError)
 	fs.SetInterspersed(true) // git accepts flags after positionals; stdlib flag does not
 	fs.SetOutput(io.Discard) // errors are reported by us, not pflag's own usage printer
@@ -68,12 +68,11 @@ func runDiff(args []string, stdout, stderr io.Writer) exitcode.Code {
 		return code
 	}
 
-	root, prefix, repo, code := openRepo(stderr)
+	root, prefix, repo, code := openRepo(ctx, stderr)
 	if code != exitcode.Success {
 		return code
 	}
 
-	ctx := context.Background()
 	checker := cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo, Ctx: ctx}
 
 	rangeToken, rest, err := diffpkg.ExtractRangeToken(restoreDoubleDash(fs), checker)
