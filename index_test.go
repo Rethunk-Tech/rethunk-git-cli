@@ -353,6 +353,51 @@ func TestStage_PythonModuleLevelAssignment(t *testing.T) {
 	qt.Assert(t, qt.IsNotNil(err))
 }
 
+func TestStage_MemberDeletionKeepsTheFileParseable(t *testing.T) {
+	// spliceExcise collapses the gap a removal leaves by joining what
+	// precedes the cut to what follows it, which assumes the cut starts at a
+	// line boundary. That holds for a top-level declaration in column zero
+	// and not for a class member: the member's own indentation was left
+	// behind and ran into the next member's, producing a Python file that
+	// raised IndentationError and a TypeScript file with a stray brace.
+	t.Run("python", func(t *testing.T) {
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "svc.py", "class Svc:\n    def keep(self):\n        return 1\n\n    def gone(self):\n        return 2\n\n    def also(self):\n        return 3\n")
+		commitAll(t, dir, "chore: svc.py")
+		writeFile(t, dir, "svc.py", "class Svc:\n    def keep(self):\n        return 1\n\n    def also(self):\n        return 3\n")
+
+		mustStage(t, repo, dir, synth.AnchorTarget("svc.py", "Svc.gone"))
+
+		qt.Assert(t, qt.Equals(indexBlob(t, repo, "svc.py"),
+			"class Svc:\n    def keep(self):\n        return 1\n\n    def also(self):\n        return 3\n"))
+	})
+
+	t.Run("typescript", func(t *testing.T) {
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "svc.ts", "export class Svc {\n  keep(): number { return 1; }\n  gone(): number { return 2; }\n}\n")
+		commitAll(t, dir, "chore: svc.ts")
+		writeFile(t, dir, "svc.ts", "export class Svc {\n  keep(): number { return 1; }\n}\n")
+
+		mustStage(t, repo, dir, synth.AnchorTarget("svc.ts", "Svc.gone"))
+
+		qt.Assert(t, qt.Equals(indexBlob(t, repo, "svc.ts"),
+			"export class Svc {\n  keep(): number { return 1; }\n}\n"))
+	})
+
+	t.Run("a top-level deletion is unaffected", func(t *testing.T) {
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "a.go", "package main\n\nfunc Keep() {}\n\nfunc Gone() {}\n\nfunc Also() {}\n")
+		commitAll(t, dir, "chore: a.go")
+		writeFile(t, dir, "a.go", "package main\n\nfunc Keep() {}\n\nfunc Also() {}\n")
+
+		mustStage(t, repo, dir, synth.AnchorTarget("a.go", "Gone"))
+
+		got := indexBlob(t, repo, "a.go")
+		mustParseGo(t, "top-level deletion", got)
+		qt.Assert(t, qt.Equals(got, "package main\n\nfunc Keep() {}\n\nfunc Also() {}\n"))
+	})
+}
+
 func TestStage_UnbornBranchInitialCommit(t *testing.T) {
 	// No commits at all: HEAD does not resolve, so CatFile reports
 	// headExists=false rather than erroring (git itself exits 128 for

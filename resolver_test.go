@@ -808,3 +808,38 @@ func ValidateToken(t string) error {
 	qt.Assert(t, qt.ErrorAs(mismatchErr, &rerr))
 	qt.Assert(t, qt.Equals(rerr.Code, exitcode.ExtentMismatch))
 }
+
+func TestResolve_MembersSharingANameAreOrdinal(t *testing.T) {
+	// Ordinals used to be assigned only among symbols with no container, so
+	// two members of one class produced the identical qualified name. The
+	// index kept whichever came last, `Box.size` silently resolved to one of
+	// the two, and the other became unaddressable -- with no ambiguity
+	// reported, which is precisely what exit 4 exists to say. A TypeScript
+	// get/set pair is the ordinary case, not a corner.
+	src := []byte("export class Box {\n  get size(): number { return 1; }\n  set size(n: number) { }\n  only(): number { return 3; }\n}\n")
+
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "Box.size#1"), "get size(): number { return 1; }"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "Box.size#2"), "set size(n: number) { }"))
+
+	// A member whose name is unique in its container keeps the plain form.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "Box.only"), "only(): number { return 3; }"))
+
+	// The bare container-qualified name is ambiguous, not absent: the
+	// remediation is "pick one of these two", not "did you mean".
+	lang, ok := resolve.ForExtension(".ts")
+	qt.Assert(t, qt.IsTrue(ok))
+	_, err := resolve.Resolve(lang, src, "Box.size")
+	var rerr *resolve.ResolveError
+	qt.Assert(t, qt.ErrorAs(err, &rerr))
+	qt.Assert(t, qt.Equals(rerr.Code, exitcode.AnchorAmbiguous))
+	qt.Assert(t, qt.DeepEquals(rerr.Candidates, []string{"Box.size#1", "Box.size#2"}))
+}
+
+func TestResolve_SameNamedContainersDoNotMergeMembers(t *testing.T) {
+	// Both classes are named Svc, so both sets of members carried the same
+	// container and collided the same way.
+	src := []byte("class Svc { run(): number { return 1; } }\nclass Svc { run(): number { return 2; } }\n")
+
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "Svc.run#1"), "run(): number { return 1; }"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "Svc.run#2"), "run(): number { return 2; }"))
+}
