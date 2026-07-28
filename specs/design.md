@@ -136,7 +136,7 @@ process-spawn latency. A language server, when reachable, cross-checks.
 
 1. **Probe** an existing daemon socket — `$RGIT_LSP_SOCKET`, then
    `$XDG_RUNTIME_DIR/rgit-<server>.sock`. Dial budget **150ms**, query deadline
-   **250ms**.
+   **2s**.
 2. **Spawn on demand** if no socket is live, completing the *current*
    invocation in `[ts-only]` mode rather than blocking on a cold index.
    Guarded by an `O_EXCL` lock beside the socket.
@@ -195,27 +195,32 @@ has no unix-socket form to standardize on with `gopls`.
 alone gets the probe → spawn → degrade sequence above, at
 `$XDG_RUNTIME_DIR/rgit-gopls.sock`. `vtsls` and `pyright-langserver` get a
 one-shot stdio subprocess (`--stdio`, their default and only listen-free mode)
-spawned fresh per query, bounded by dial budget + query deadline (400ms total)
-end to end, and killed on close rather than left running — there is no
-persistent daemon for either to reuse, so pretending otherwise would just be a
-subprocess rgit forgets to clean up.
+spawned fresh per query, bounded by dial budget + query deadline end to end,
+and killed on close rather than left running — there is no persistent daemon
+for either to reuse, so pretending otherwise would just be a subprocess rgit
+forgets to clean up.
 
-**Measured stdio latency**, single-declaration fixtures, warm binaries already
-on disk:
+**The query deadline is 2s, not the 250ms first specified.** That figure came
+from a warm `gopls` daemon, which answers in single-digit milliseconds, and it
+did not survive contact with the stdio servers. Measured end to end through
+`Dial` + `DocumentSymbols`, single-declaration fixtures, warm binaries:
 
-| Server | Spawn + handshake | First `documentSymbol` after `didOpen` |
-| --- | --- | --- |
-| `pyright-langserver` | ~105ms total, within budget | Succeeded in the same call |
-| `vtsls` | ~90ms, within budget | Exceeded the 250ms query deadline on the first call every time; a retry ~500ms later answered in ~4ms |
+| Server | Transport | Dial | First `documentSymbol` after `didOpen` |
+| --- | --- | --- | --- |
+| `gopls` | unix socket, warm daemon | 1ms | 23ms |
+| `pyright-langserver` | one-shot stdio | 102ms | 135ms |
+| `vtsls` | one-shot stdio | 84ms | **259ms** |
 
-So `vtsls`'s cross-check degrades to `[ts-only]` on effectively every real
-invocation — tsserver's own startup cost outlives the query deadline before it
-can answer even one request — while `pyright-langserver` and `gopls` (once its
-daemon is warm) both cross-check successfully within budget on small files.
-This is not a bug: "never block on a cold server" was always going to cost the
-TypeScript path more than the other two, since it is the only language without
-either a real daemon or a fast first response, and degrading is the documented
-outcome for exactly this case, not a failure to fix.
+`vtsls` misses a 250ms deadline by single-digit milliseconds, so under the
+original budget the TypeScript cross-check degraded to `[ts-only]` on every
+run — present in the code and absent in effect. A deadline that only ever
+fires is not a budget, it is a disabled feature, and the accuracy argument for
+symbol anchors depends on the cross-check actually executing.
+
+2s clears all three with room for larger files. It does not weaken "never
+block on a cold server": that rule is about a server still building its index,
+which is handled by degrading, not by the deadline. The deadline exists to
+bound a server that has already answered the handshake and is now merely slow.
 
 ### Cross-check exemptions
 
