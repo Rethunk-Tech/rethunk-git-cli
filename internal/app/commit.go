@@ -9,8 +9,6 @@ import (
 	"io"
 	"os"
 
-	"github.com/spf13/pflag"
-
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
@@ -35,11 +33,8 @@ type commitFlags struct {
 }
 
 func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exitcode.Code {
-	fs := pflag.NewFlagSet("commit", pflag.ContinueOnError)
-	fs.SetInterspersed(true)
-	fs.SetOutput(io.Discard)
-
 	var f commitFlags
+	fs := newTargetFlagSet("commit", &f.syms, &f.files)
 	// -m's long spelling matches git commit's own --message, and -F's long
 	// spelling is --message-file (to avoid collision with rgit's --file
 	// pathspec flag).
@@ -52,12 +47,9 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 	fs.BoolVar(&f.push, "push", false, "push upstream after a successful commit")
 	fs.BoolVar(&f.dryRun, "dry-run", false, "preview only; writes and stages nothing")
 	fs.BoolVar(&f.noVerify, "no-verify", false, "skip git hooks")
-	fs.StringArrayVar(&f.syms, "sym", nil, "explicit FILE:NAME anchor (repeatable)")
-	fs.StringArrayVar(&f.files, "file", nil, "explicit pathspec (repeatable)")
 
-	if err := fs.Parse(args); err != nil {
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return exitcode.InvalidUsage
+	if code := parseFlags(fs, args, stderr); code != exitcode.Success {
+		return code
 	}
 
 	if len(f.messages) > 0 && f.msgFile != "" {
@@ -266,19 +258,19 @@ func commitTargets(root, prefix string, classified []cli.Classification, files, 
 	targets := make([]synth.Target, 0, len(classified)+len(files)+len(syms))
 
 	addPathspec := func(p string) error {
-		p = cli.PrefixPath(prefix, p)
-		if err := checkPathEscape(root, p); err != nil {
+		resolved, err := repoPath(root, prefix, p)
+		if err != nil {
 			return err
 		}
-		targets = append(targets, synth.PathTarget(p))
+		targets = append(targets, synth.PathTarget(resolved))
 		return nil
 	}
 	addAnchor := func(file, name string) error {
-		file = cli.PrefixPath(prefix, file)
-		if err := checkPathEscape(root, file); err != nil {
+		resolved, err := repoPath(root, prefix, file)
+		if err != nil {
 			return err
 		}
-		targets = append(targets, synth.AnchorTarget(file, name))
+		targets = append(targets, synth.AnchorTarget(resolved, name))
 		return nil
 	}
 

@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/spf13/pflag"
-
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
 	diffpkg "github.com/Rethunk-Tech/rethunk-git-cli/internal/diff"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
@@ -35,11 +33,8 @@ type diffFlags struct {
 }
 
 func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) exitcode.Code {
-	fs := pflag.NewFlagSet("diff", pflag.ContinueOnError)
-	fs.SetInterspersed(true) // git accepts flags after positionals; stdlib flag does not
-	fs.SetOutput(io.Discard) // errors are reported by us, not pflag's own usage printer
-
 	var f diffFlags
+	fs := newTargetFlagSet("diff", &f.syms, &f.files)
 	fs.BoolVar(&f.unstaged, "unstaged", false, "worktree vs index (git's bare diff)")
 	fs.BoolVar(&f.staged, "staged", false, "index vs HEAD")
 	fs.BoolVar(&f.staged, "cached", false, "alias for --staged")
@@ -47,12 +42,9 @@ func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) exitc
 	fs.BoolVar(&f.porcelain, "porcelain", false, "stable tab-separated records")
 	fs.BoolVar(&f.exitCode, "exit-code", false, "exit 1 when anything is committable")
 	fs.BoolVar(&f.quiet, "quiet", false, "implies --exit-code and suppresses output")
-	fs.StringArrayVar(&f.syms, "sym", nil, "explicit FILE:NAME anchor (repeatable)")
-	fs.StringArrayVar(&f.files, "file", nil, "explicit pathspec (repeatable)")
 
-	if err := fs.Parse(args); err != nil {
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return exitcode.InvalidUsage
+	if code := parseFlags(fs, args, stderr); code != exitcode.Success {
+		return code
 	}
 
 	if f.staged && f.rangeFlag != "" {
@@ -98,19 +90,20 @@ func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) exitc
 	allFiles := append(files, f.files...)
 	allSyms := append(syms, symFlags...)
 	for i, p := range allFiles {
-		p = cli.PrefixPath(prefix, p)
-		if err := checkPathEscape(root, p); err != nil {
+		resolved, err := repoPath(root, prefix, p)
+		if err != nil {
 			fmt.Fprintf(stderr, "rgit: %v\n", err)
 			return exitcode.InvalidUsage
 		}
-		allFiles[i] = p
+		allFiles[i] = resolved
 	}
 	for i, s := range allSyms {
-		s.File = cli.PrefixPath(prefix, s.File)
-		if err := checkPathEscape(root, s.File); err != nil {
+		resolved, err := repoPath(root, prefix, s.File)
+		if err != nil {
 			fmt.Fprintf(stderr, "rgit: %v\n", err)
 			return exitcode.InvalidUsage
 		}
+		s.File = resolved
 		allSyms[i] = s
 	}
 

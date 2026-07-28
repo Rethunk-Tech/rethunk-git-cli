@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 )
@@ -46,6 +47,43 @@ func checkPathEscape(root, path string) error {
 		return fmt.Errorf("path %q escapes the repository root", path)
 	}
 	return nil
+}
+
+// repoPath resolves one caller-supplied path to its root-relative form and
+// refuses it if it climbs above root. Every pathspec and every anchor file
+// in both subcommands goes through here, so the one piece of path safety
+// rgit owns rather than delegating to git cannot end up applied on one
+// command and skipped on the other.
+func repoPath(root, prefix, path string) (string, error) {
+	p := cli.PrefixPath(prefix, path)
+	if err := checkPathEscape(root, p); err != nil {
+		return "", err
+	}
+	return p, nil
+}
+
+// newTargetFlagSet builds the flag set both subcommands start from: git's
+// own interspersed parsing (git accepts flags after positionals, and stdlib
+// flag does not), errors reported by us rather than by pflag's usage
+// printer, and the --sym/--file pair, which names targets identically on
+// each command. Callers add their own flags to the returned set.
+func newTargetFlagSet(name string, syms, files *[]string) *pflag.FlagSet {
+	fs := pflag.NewFlagSet(name, pflag.ContinueOnError)
+	fs.SetInterspersed(true)
+	fs.SetOutput(io.Discard)
+	fs.StringArrayVar(syms, "sym", nil, "explicit FILE:NAME anchor (repeatable)")
+	fs.StringArrayVar(files, "file", nil, "explicit pathspec (repeatable)")
+	return fs
+}
+
+// parseFlags runs fs.Parse and reports a parse failure as docs/USAGE.md's
+// exit 129, with the same message shape on either subcommand.
+func parseFlags(fs *pflag.FlagSet, args []string, stderr io.Writer) exitcode.Code {
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return exitcode.InvalidUsage
+	}
+	return exitcode.Success
 }
 
 // pathAnchorContradiction implements docs/USAGE.md's "--sym and --file on
