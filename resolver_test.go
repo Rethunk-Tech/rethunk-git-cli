@@ -7,11 +7,24 @@
 package main
 
 import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-quicktest/qt"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
@@ -400,4 +413,286 @@ func TestResolve_UnsupportedLanguage(t *testing.T) {
 	// contribution is just reporting the extension unclaimed.
 	_, ok := resolve.ForExtension(".rs")
 	qt.Assert(t, qt.IsFalse(ok))
+}
+
+// --- Language-server cross-check (specs/design.md § Symbol resolution) ---
+//
+// Coverage here is split by what can prove it: the union-shape decode and
+// the anchor-normalization/comparison logic run against an in-process mock
+// server, since a mock cannot catch a change in real language-server range
+// semantics but can exercise every line of rgit's own decode and compare
+// code cheaply and deterministically. The one thing only a real server can
+// prove -- that gopls's actual reported ranges still match tree-sitter's
+// normalized extent -- gets exactly one live case, skipped cleanly when
+// gopls is absent or -short is set (CONTRIBUTING.md § Tests).
+
+// lspReadFrame reads one LSP header-framed JSON-RPC message
+// (Content-Length, blank line, JSON body -- go.lsp.dev/jsonrpc2's
+// NewStream framing) off r. ok=false at a clean EOF.
+func lspReadFrame(r *bufio.Reader) (msg map[string]any, ok bool, err error) {
+	length := -1
+	for {
+		line, rerr := r.ReadString('\n')
+		if rerr != nil {
+			return nil, false, nil //nolint:nilerr // EOF between frames is the normal shutdown path
+		}
+		line = strings.TrimRight(line, "\r\n")
+		if line == "" {
+			break
+		}
+		if after, found := strings.CutPrefix(line, "Content-Length:"); found {
+			n, convErr := strconv.Atoi(strings.TrimSpace(after))
+			if convErr != nil {
+				return nil, false, fmt.Errorf("mock lsp server: bad Content-Length %q: %w", line, convErr)
+			}
+			length = n
+		}
+	}
+	if length < 0 {
+		return nil, false, fmt.Errorf("mock lsp server: frame missing Content-Length")
+	}
+	body := make([]byte, length)
+	if _, rerr := io.ReadFull(r, body); rerr != nil {
+		return nil, false, fmt.Errorf("mock lsp server: read body: %w", rerr)
+	}
+	if uErr := json.Unmarshal(body, &msg); uErr != nil {
+		return nil, false, fmt.Errorf("mock lsp server: decode body: %w", uErr)
+	}
+	return msg, true, nil
+}
+
+func lspWriteFrame(w io.Writer, msg map[string]any) error {
+	body, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("mock lsp server: encode: %w", err)
+	}
+	_, err = fmt.Fprintf(w, "Content-Length: %d\r\n\r\n%s", len(body), body)
+	return err
+}
+
+// runMockLSPServer serves one initialize/initialized/didOpen/documentSymbol
+// exchange over conn, answering documentSymbol with resultJSON verbatim --
+// the raw union payload under test -- then returns. It never calls a *testing.T
+// method: it runs on its own goroutine, and only Fatal-family calls are
+// unsafe off the test goroutine.
+func runMockLSPServer(conn io.ReadWriteCloser, resultJSON string) error {
+	r := bufio.NewReader(conn)
+	for {
+		msg, ok, err := lspReadFrame(r)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return nil
+		}
+
+		method, _ := msg["method"].(string)
+		id, hasID := msg["id"]
+
+		switch method {
+		case "textDocument/documentSymbol":
+			return lspWriteFrame(conn, map[string]any{
+				"jsonrpc": "2.0",
+				"id":      id,
+				"result":  json.RawMessage(resultJSON),
+			})
+		case "initialize":
+			if err := lspWriteFrame(conn, map[string]any{
+				"jsonrpc": "2.0",
+				"id":      id,
+				"result":  map[string]any{"capabilities": map[string]any{}},
+			}); err != nil {
+				return err
+			}
+		default:
+			if hasID {
+				if err := lspWriteFrame(conn, map[string]any{"jsonrpc": "2.0", "id": id, "result": nil}); err != nil {
+					return err
+				}
+			}
+			// Notifications (initialized, didOpen) get no reply.
+		}
+	}
+}
+
+func TestLSP_DocumentSymbolsDecodesBothUnionShapes(t *testing.T) {
+	// go.lsp.dev/protocol's DocumentSymbolResult is a sealed union over
+	// DocumentSymbolSlice (a tree, via Children -- gopls's hierarchical
+	// mode) and SymbolInformationSlice (flat, with a Location and an
+	// optional containerName). AGENTS.md: a client that assumes one shape
+	// decodes the other wrongly, so both are exercised here against a real
+	// (if hand-framed) wire exchange, not a stubbed union value.
+	cases := []struct {
+		name       string
+		resultJSON string
+		want       []lsp.Symbol
+	}{
+		{
+			name: "DocumentSymbolSlice (tree, hierarchical)",
+			resultJSON: `[{"name":"A","kind":6,"range":{"start":{"line":1,"character":0},"end":{"line":5,"character":1}},` +
+				`"selectionRange":{"start":{"line":1,"character":6},"end":{"line":1,"character":7}},` +
+				`"children":[{"name":"Get","kind":6,"range":{"start":{"line":3,"character":1},"end":{"line":3,"character":20}},` +
+				`"selectionRange":{"start":{"line":3,"character":1},"end":{"line":3,"character":4}}}]}]`,
+			want: []lsp.Symbol{
+				{Name: "A", Container: "", StartLine: 1, EndLine: 5},
+				{Name: "Get", Container: "A", StartLine: 3, EndLine: 3},
+			},
+		},
+		{
+			name: "SymbolInformationSlice (flat, with containerName)",
+			resultJSON: `[{"name":"Get","kind":6,"containerName":"A",` +
+				`"location":{"uri":"file:///tmp/a.go","range":{"start":{"line":3,"character":1},"end":{"line":3,"character":20}}}}]`,
+			want: []lsp.Symbol{
+				{Name: "Get", Container: "A", StartLine: 3, EndLine: 3},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			serverConn, clientConn := net.Pipe()
+			errCh := make(chan error, 1)
+			go func() { errCh <- runMockLSPServer(serverConn, tc.resultJSON) }()
+
+			client, err := lsp.NewClient(context.Background(), clientConn, t.TempDir())
+			if err != nil {
+				t.Fatalf("NewClient: %v", err)
+			}
+			defer client.Close()
+
+			got, err := client.DocumentSymbols(context.Background(), "/tmp/a.go", []byte("package p\n"))
+			if err != nil {
+				t.Fatalf("DocumentSymbols: %v", err)
+			}
+			if srvErr := <-errCh; srvErr != nil {
+				t.Fatalf("mock server: %v", srvErr)
+			}
+			qt.Assert(t, qt.DeepEquals(got, tc.want))
+		})
+	}
+}
+
+func TestResolve_CrossCheckMatchAndCompare(t *testing.T) {
+	src := []byte(`package p
+
+// ValidateToken checks the JWT.
+func ValidateToken(t string) error {
+	return nil
+}
+`)
+	res := mustResolve(t, src, "ValidateToken")
+
+	t.Run("matching range confirms clean", func(t *testing.T) {
+		found, err := resolve.MatchAndCompare(src, res, []lsp.Symbol{
+			{Name: "ValidateToken", StartLine: 3, EndLine: 5},
+		})
+		qt.Assert(t, qt.IsTrue(found))
+		qt.Assert(t, qt.IsNil(err))
+	})
+
+	t.Run("disagreement is exit 6 with both ranges attached", func(t *testing.T) {
+		found, err := resolve.MatchAndCompare(src, res, []lsp.Symbol{
+			{Name: "ValidateToken", StartLine: 3, EndLine: 6},
+		})
+		qt.Assert(t, qt.IsTrue(found))
+		qt.Assert(t, qt.IsNotNil(err))
+		var rerr *resolve.ResolveError
+		qt.Assert(t, qt.ErrorAs(err, &rerr))
+		qt.Assert(t, qt.Equals(rerr.Code, exitcode.ExtentMismatch))
+		qt.Assert(t, qt.Equals(rerr.TreeSitterRange, "L4..L6"))
+		qt.Assert(t, qt.Equals(rerr.LSPRange, "L4..L7"))
+	})
+
+	t.Run("server outline not naming the anchor degrades, is not an error", func(t *testing.T) {
+		found, err := resolve.MatchAndCompare(src, res, nil)
+		qt.Assert(t, qt.IsFalse(found))
+		qt.Assert(t, qt.IsNil(err))
+	})
+
+	t.Run("gopls receiver spelling normalizes for comparison", func(t *testing.T) {
+		methodSrc := []byte(`package p
+
+type A struct{}
+
+func (a *A) Get() int { return 1 }
+`)
+		getRes := mustResolve(t, methodSrc, "A.Get")
+		// gopls reports no containerName for methods (docs/ANCHORS.md); the
+		// receiver lives in the name string itself.
+		found, err := resolve.MatchAndCompare(methodSrc, getRes, []lsp.Symbol{
+			{Name: "(*A).Get", StartLine: 4, EndLine: 4},
+		})
+		qt.Assert(t, qt.IsTrue(found))
+		qt.Assert(t, qt.IsNil(err))
+	})
+
+	t.Run("ordinal anchor matches the Nth same-named symbol in order", func(t *testing.T) {
+		initSrc := []byte(`package p
+
+func init() { println(1) }
+
+func init() { println(2) }
+`)
+		second := mustResolve(t, initSrc, "init#2")
+		found, err := resolve.MatchAndCompare(initSrc, second, []lsp.Symbol{
+			{Name: "init", StartLine: 2, EndLine: 2},
+			{Name: "init", StartLine: 4, EndLine: 4},
+		})
+		qt.Assert(t, qt.IsTrue(found))
+		qt.Assert(t, qt.IsNil(err))
+	})
+}
+
+func TestResolve_CrossCheckLiveGopls(t *testing.T) {
+	if testing.Short() {
+		t.Skip("live language-server cross-check skipped under -short")
+	}
+	if _, err := exec.LookPath("gopls"); err != nil {
+		t.Skip("gopls not on PATH")
+	}
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module fixture\n\ngo 1.21\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	src := []byte(`package p
+
+// ValidateToken checks the JWT.
+// Returns ErrExpired if stale.
+func ValidateToken(t string) error {
+	return nil
+}
+`)
+	path := filepath.Join(dir, "auth.go")
+	if err := os.WriteFile(path, src, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	res := mustResolve(t, src, "ValidateToken")
+	lang := resolverGoLang(t)
+	ctx := context.Background()
+
+	// The first Dial almost certainly finds no daemon and spawns one
+	// without waiting for it (specs/design.md: "never block on a cold
+	// server"); give it a beat to come up, mirroring two rgit invocations
+	// moments apart rather than one that blocks.
+	_, _ = resolve.CrossCheckExtent(ctx, lang, dir, path, src, res, false)
+	time.Sleep(1500 * time.Millisecond)
+
+	degraded, err := resolve.CrossCheckExtent(ctx, lang, dir, path, src, res, false)
+	if degraded {
+		t.Skip("gopls daemon did not come up within the test's budget -- degraded, not a failure")
+	}
+	qt.Assert(t, qt.IsNil(err))
+
+	// Corrupting DeclOnly.End forces a genuine disagreement, proving exit 6
+	// fires against a real server's range, not only the mock-driven table
+	// test above.
+	mismatched := *res
+	mismatched.DeclOnly.End -= 5
+	_, mismatchErr := resolve.CrossCheckExtent(ctx, lang, dir, path, src, &mismatched, false)
+	qt.Assert(t, qt.IsNotNil(mismatchErr))
+	var rerr *resolve.ResolveError
+	qt.Assert(t, qt.ErrorAs(mismatchErr, &rerr))
+	qt.Assert(t, qt.Equals(rerr.Code, exitcode.ExtentMismatch))
 }

@@ -49,21 +49,34 @@ func CrossCheckExtent(ctx context.Context, lang Language, repoRoot, absPath stri
 		return true, nil
 	}
 
-	match, found := matchLSPSymbol(res.Anchor, symbols)
+	found, cmpErr := MatchAndCompare(src, res, symbols)
 	if !found {
-		// The server's own outline simply does not name this symbol (a
-		// kind it does not surface, or a container shape rgit's
-		// normalization does not recognize). There is nothing to compare,
-		// which is not the same claim as "the extents disagree".
 		return true, nil
+	}
+	return false, cmpErr
+}
+
+// MatchAndCompare is CrossCheckExtent's comparison, factored out so it can
+// be driven with an already-fetched symbol table instead of a live
+// connection -- the seam resolver_test.go's mock-server and normalization
+// coverage uses, since a mock cannot exercise Dial's real socket/subprocess
+// machinery but can exercise everything this function does.
+//
+// found=false means symbols simply does not name res.Anchor (see
+// CrossCheckExtent's doc on the fourth cross-check exemption); err is
+// non-nil only when a match was found and its range disagreed.
+func MatchAndCompare(src []byte, res *Resolution, symbols []lsp.Symbol) (found bool, err error) {
+	match, ok := matchLSPSymbol(res.Anchor, symbols)
+	if !ok {
+		return false, nil
 	}
 
 	wantStart, wantEnd := lineOf(src, res.DeclOnly.Start), lineOf(src, res.DeclOnly.End)
 	if wantStart == match.StartLine && wantEnd == match.EndLine {
-		return false, nil
+		return true, nil
 	}
 
-	return false, &ResolveError{
+	return true, &ResolveError{
 		Code:            exitcode.ExtentMismatch,
 		Anchor:          res.Anchor,
 		TreeSitterRange: formatRange(wantStart, wantEnd),
