@@ -10,9 +10,12 @@ Future work only. Decisions already made live in
       rather than being misattributed, so the output stays honest — but the
       symbol is not nameable. Go's grouped `const`/`var`/`type` blocks address
       each spec individually; TypeScript should match.
-- [ ] `@header` resolves to nothing in a TypeScript or Python file with no
-      shebang, since neither language has a package clause. Callers that
-      auto-stage `@header` for an untracked file must tolerate its absence.
+- [ ] `@header` resolves to nothing in a TypeScript file with no shebang
+      (`hash_bang_line` is the only header kind the grammar offers) or a Python
+      file that opens directly with code. A Python file opening with any
+      comment does resolve one, since Python's header kind is `comment` — a
+      shebang is not required. Callers that auto-stage `@header` for an
+      untracked file must tolerate its absence.
 
 ## v2 — grammars
 
