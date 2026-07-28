@@ -100,11 +100,17 @@ func resolvePseudo(lang Language, src []byte, root *ts.Node, anchor string) (*Re
 	)
 	switch anchor {
 	case "@header":
-		ext, ok = headerExtent(lang, root, buildIndex(lang, src, root))
+		// Bounded by where @toplevel starts, so the two cannot both claim a
+		// leading doc comment.
+		limit := ^uint(0)
+		if tl, found := toplevelExtent(lang, src, root, buildIndex(lang, src, root)); found {
+			limit = tl.Start
+		}
+		ext, ok = headerExtent(lang, root, limit)
 	case "@imports":
 		ext, ok = importsExtent(lang, root)
 	case "@toplevel":
-		ext, ok = toplevelExtent(buildIndex(lang, src, root))
+		ext, ok = toplevelExtent(lang, src, root, buildIndex(lang, src, root))
 	}
 	if !ok {
 		return nil, &ResolveError{Code: exitcode.AnchorUnresolvable, Anchor: anchor}

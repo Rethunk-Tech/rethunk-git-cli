@@ -407,6 +407,60 @@ def g():
 		"import os\nfrom sys import path"))
 }
 
+func TestResolve_GroupedDeclarationsAddressEachSpec(t *testing.T) {
+	// A grouped block that resolved to its first spec alone reported the
+	// wrong symbol: editing Beta showed up as a change to Alpha, and the
+	// anchor round-trip still passed because Alpha does resolve. A label
+	// that validates while naming a symbol nobody touched is worse than no
+	// label at all.
+	src := []byte(`package p
+
+// Numbers we care about.
+const (
+	Alpha = 1
+	Beta  = 2
+)
+
+const Solo = 3
+
+var (
+	One = "one"
+	Two = "two"
+)
+
+func F() int { return Alpha }
+`)
+
+	// Every spec is addressable on its own, in source order.
+	order, err := resolve.DeclOrder(resolverGoLang(t), src)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.DeepEquals(order, []string{"Alpha", "Beta", "Solo", "One", "Two", "F"}))
+
+	// A grouped spec's extent is the spec alone — the keyword and parens
+	// belong to the block, not to any one of its specs.
+	qt.Assert(t, qt.Equals(string(src[mustResolve(t, src, "Beta").Extent.Start:mustResolve(t, src, "Beta").Extent.End]),
+		"Beta  = 2"))
+	qt.Assert(t, qt.Equals(string(src[mustResolve(t, src, "Two").Extent.Start:mustResolve(t, src, "Two").Extent.End]),
+		`Two = "two"`))
+
+	// A single-spec declaration keeps the whole node, so its extent still
+	// covers the const keyword.
+	solo := mustResolve(t, src, "Solo")
+	qt.Assert(t, qt.Equals(string(src[solo.Extent.Start:solo.Extent.End]), "const Solo = 3"))
+
+	// The block's own doc comment belongs to @toplevel, and @header must
+	// stop before it. Both are bounded by the same point, so neither can
+	// claim bytes the other already owns.
+	header := mustResolve(t, src, "@header")
+	toplevel := mustResolve(t, src, "@toplevel")
+	qt.Assert(t, qt.Equals(string(src[header.Extent.Start:header.Extent.End]), "package p"))
+	qt.Assert(t, qt.IsTrue(header.Extent.End <= toplevel.Extent.Start))
+	toplevelText := string(src[toplevel.Extent.Start:toplevel.Extent.End])
+	qt.Assert(t, qt.StringContains(toplevelText, "// Numbers we care about."))
+	qt.Assert(t, qt.StringContains(toplevelText, "const ("))
+	qt.Assert(t, qt.StringContains(toplevelText, "func F()"))
+}
+
 func TestResolve_UnsupportedLanguage(t *testing.T) {
 	// A symbol anchor on a file whose language has no v1 grammar is the
 	// caller's exit 9 (docs/ANCHORS.md § Language support); the resolver's

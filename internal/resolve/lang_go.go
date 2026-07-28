@@ -43,27 +43,29 @@ func (g *goLanguage) Declarations(src []byte, root *ts.Node) []Declaration {
 		if !goTopLevelKinds[c.Kind()] {
 			continue
 		}
-		if d, ok := goDeclaration(c, src); ok {
-			out = append(out, d)
-		}
+		out = append(out, goDeclarations(c, src)...)
 	}
 	return out
 }
 
-func goDeclaration(node *ts.Node, src []byte) (Declaration, bool) {
+func goDeclarations(node *ts.Node, src []byte) []Declaration {
 	switch node.Kind() {
 	case "method_declaration":
-		return goMethodDeclaration(node, src)
+		if d, ok := goMethodDeclaration(node, src); ok {
+			return []Declaration{d}
+		}
 	case "function_declaration":
-		return goNamedDeclaration(node, src, "function")
+		if d, ok := goNamedDeclaration(node, src, "function"); ok {
+			return []Declaration{d}
+		}
 	case "const_declaration":
-		return goSpecWrappedDeclaration(node, src, "const")
+		return goSpecDeclarations(node, src, "const")
 	case "var_declaration":
-		return goSpecWrappedDeclaration(node, src, "var")
+		return goSpecDeclarations(node, src, "var")
 	case "type_declaration":
-		return goSpecWrappedDeclaration(node, src, "type")
+		return goSpecDeclarations(node, src, "type")
 	}
-	return Declaration{}, false
+	return nil
 }
 
 func goNamedDeclaration(node *ts.Node, src []byte, kind string) (Declaration, bool) {
@@ -125,27 +127,59 @@ func goReceiverContainer(recv *ts.Node, src []byte) string {
 // type_alias). A grouped block ("const a = 1\nb = 2") takes the first
 // spec's name, matching spike/synth.py's same first-spec shortcut for
 // multi-name specs.
-func goSpecWrappedDeclaration(node *ts.Node, src []byte, kind string) (Declaration, bool) {
-	name := goFirstSpecName(node)
-	if name == nil {
-		return Declaration{}, false
+// goSpecDeclarations addresses each spec of a const/var/type declaration
+// separately when the declaration groups several, and the whole declaration
+// when it holds one.
+//
+// A grouped block that resolved to its first spec alone was measured
+// reporting the wrong symbol: editing Beta in `const ( Alpha = 1; Beta = 2 )`
+// showed up as a change to Alpha, and the anchor round-trip still passed
+// because Alpha does resolve. A label that validates while naming a symbol
+// the caller did not touch is worse than no label.
+//
+// A single-spec declaration keeps the whole node so its extent covers the
+// `const`/`var`/`type` keyword; a grouped spec cannot, since the keyword and
+// parentheses belong to the block rather than to any one spec.
+func goSpecDeclarations(node *ts.Node, src []byte, kind string) []Declaration {
+	specs := goSpecs(node)
+	if len(specs) == 0 {
+		return nil
 	}
-	return Declaration{Node: node, Bare: nodeText(src, name), Kind: kind}, true
+	if len(specs) == 1 {
+		name := specs[0].ChildByFieldName("name")
+		if name == nil {
+			return nil
+		}
+		return []Declaration{{Node: node, Bare: nodeText(src, name), Kind: kind}}
+	}
+
+	out := make([]Declaration, 0, len(specs))
+	for _, spec := range specs {
+		name := spec.ChildByFieldName("name")
+		if name == nil {
+			continue
+		}
+		out = append(out, Declaration{Node: spec, Bare: nodeText(src, name), Kind: kind})
+	}
+	return out
 }
 
-func goFirstSpecName(node *ts.Node) *ts.Node {
+// goSpecs collects a declaration's specs. The nesting is not uniform across
+// kinds: const and type hold their specs directly, while a grouped var wraps
+// them in a var_spec_list, so the walk has to descend through any *_spec_list
+// rather than assuming one shape.
+func goSpecs(node *ts.Node) []*ts.Node {
+	var out []*ts.Node
 	for _, child := range namedChildren(node) {
 		child := child
-		if n := child.ChildByFieldName("name"); n != nil {
-			return n
-		}
-		if strings.HasSuffix(child.Kind(), "_spec_list") {
-			if n := goFirstSpecName(&child); n != nil {
-				return n
-			}
+		switch {
+		case strings.HasSuffix(child.Kind(), "_spec_list"):
+			out = append(out, goSpecs(&child)...)
+		case strings.HasSuffix(child.Kind(), "_spec"):
+			out = append(out, &child)
 		}
 	}
-	return nil
+	return out
 }
 
 func nodeText(src []byte, n *ts.Node) string {

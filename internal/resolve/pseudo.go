@@ -25,19 +25,19 @@ func kindSet(kinds []string) map[string]bool {
 // constraint and the package clause, and both belong to @header regardless
 // (docs/ANCHORS.md).
 //
-// The run also stops at the first declaration's extent. Comments are a header
-// kind in both Go and Python, so without that limit a doc comment belonging to
-// the first declaration would be swallowed: @header and that symbol's anchor
-// would each claim the same bytes, and staging @header alone would commit a
-// comment the caller never named.
-func headerExtent(lang Language, root *ts.Node, idx *index) (Extent, bool) {
+// The run also stops at limit, where @toplevel begins. Comments are a header
+// kind in both Go and Python, so without that bound a doc comment belonging to
+// the first declaration would be swallowed: @header and @toplevel would each
+// claim the same bytes, and staging @header alone would commit a comment the
+// caller never named.
+//
+// The bound is @toplevel's start rather than the first declaration's, because
+// a declaration can sit inside a top-level node — a spec in a grouped
+// `const (...)` block — leaving the block's own doc comment ahead of it and
+// therefore inside the header run.
+func headerExtent(lang Language, root *ts.Node, limit uint) (Extent, bool) {
 	kinds := kindSet(lang.HeaderKinds())
 	children := namedChildren(root)
-
-	limit := ^uint(0)
-	if len(idx.order) > 0 {
-		limit = idx.order[0].Full.Start
-	}
 
 	end := uint(0)
 	found := false
@@ -87,10 +87,31 @@ func importsExtent(lang Language, root *ts.Node) (Extent, bool) {
 // toplevelExtent spans every addressable declaration's full extent (leading
 // doc comments included). This excludes header and import material by
 // construction: a Language's Declarations never returns entries for those.
-func toplevelExtent(idx *index) (Extent, bool) {
+//
+// The bounds widen to whichever top-level node contains the first and last
+// declaration, because a declaration is not always a top-level node itself: a
+// spec inside a grouped `const (...)` block is addressed on its own, and
+// stopping at its extent would leave the block's keyword and parentheses
+// outside @toplevel while their contents were inside it.
+func toplevelExtent(lang Language, src []byte, root *ts.Node, idx *index) (Extent, bool) {
 	if len(idx.order) == 0 {
 		return Extent{}, false
 	}
 	first, last := idx.order[0], idx.order[len(idx.order)-1]
-	return Extent{Start: first.Full.Start, End: last.Full.End}, true
+	ext := Extent{Start: first.Full.Start, End: last.Full.End}
+
+	for _, c := range namedChildren(root) {
+		c := c
+		if c.StartByte() <= first.Full.Start && first.Full.Start < c.EndByte() {
+			if outer := fullExtent(lang, src, &c); outer.Start < ext.Start {
+				ext.Start = outer.Start
+			}
+		}
+		if c.StartByte() < last.Full.End && last.Full.End <= c.EndByte() {
+			if c.EndByte() > ext.End {
+				ext.End = c.EndByte()
+			}
+		}
+	}
+	return ext, true
 }
