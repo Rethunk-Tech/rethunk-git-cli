@@ -124,9 +124,10 @@ with a pathspec (`rgit commit script.sh`); `--sym` cannot express a mode change.
 ## Help
 
 `rgit --help`, `rgit -h`, and `rgit help` print the top-level command list on
-stdout and exit 0. `rgit commit --help` / `-h` prints that command's own flags
-the same way. A bare `rgit` (no command at all) is a usage error, not a help
-request — see § Exit codes.
+stdout and exit 0. `rgit diff --help` / `-h` and `rgit commit --help` / `-h`
+print that command's own flags the same way, generated from the flag set itself
+so the two cannot drift. A bare `rgit` (no command at all) is a usage error, not
+a help request — see § Exit codes.
 
 ## Flags
 

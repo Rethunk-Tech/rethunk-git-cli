@@ -45,7 +45,12 @@ func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) exitc
 	fs.BoolVar(&f.exitCode, "exit-code", false, "exit 1 when anything is committable")
 	fs.BoolVar(&f.quiet, "quiet", false, "implies --exit-code and suppresses output")
 
-	if code := parseFlags(fs, args, stderr); code != exitcode.Success {
+	help := "usage: rgit diff [flags] [target...]\n\n" +
+		"Show what is committable -- staged, unstaged, and untracked -- broken\n" +
+		"down by symbol. Filter with a FILE:NAME anchor or a pathspec.\n\n" +
+		fs.FlagUsages() +
+		"\nFull reference: docs/USAGE.md\n"
+	if code, done := parseFlagsOrHelp(fs, args, stdout, stderr, help); done {
 		return code
 	}
 
