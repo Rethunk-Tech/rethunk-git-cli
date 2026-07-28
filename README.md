@@ -26,11 +26,13 @@ stays plain `git`.
 ## Quick start
 
 ```bash
-go build -o rgit . && cd /some/git/repo
+cd /some/git/repo
 rgit diff && rgit commit -m "fix(auth): reject expired" auth.go:ValidateToken
 ```
 
-Prerequisites and language-server setup: [HUMANS.md](HUMANS.md).
+Build, prerequisites, and language-server setup:
+[docs/INSTALL.md](docs/INSTALL.md). Everything about running it:
+[HUMANS.md](HUMANS.md).
 
 ## Highlights
 
