@@ -249,6 +249,88 @@ func TestStage_NewFileCarriesHeaderAndImports(t *testing.T) {
 	})
 }
 
+func TestStage_ClassMemberAnchors(t *testing.T) {
+	// Go's methods are file-scope, so A.Get always worked. TypeScript and
+	// Python put theirs inside a class body, which v1 never descended into:
+	// the finest addressable unit was the whole class, and in an idiomatic
+	// one-class-per-file module that is the same thing as naming the path.
+	tsHead := "export class Svc {\n  login(): number { return 1; }\n  logout(): number { return 2; }\n}\n"
+	tsWork := "export class Svc {\n  login(): number { return 111; }\n  logout(): number { return 222; }\n}\n"
+	pyHead := "class Svc:\n    def login(self):\n        return 1\n\n    def logout(self):\n        return 2\n"
+	pyWork := "class Svc:\n    def login(self):\n        return 111\n\n    def logout(self):\n        return 222\n"
+
+	t.Run("typescript member stages without its sibling", func(t *testing.T) {
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "svc.ts", tsHead)
+		commitAll(t, dir, "chore: svc.ts")
+		writeFile(t, dir, "svc.ts", tsWork)
+
+		mustStage(t, repo, dir, synth.AnchorTarget("svc.ts", "Svc.login"))
+
+		got := indexBlob(t, repo, "svc.ts")
+		qt.Assert(t, qt.StringContains(got, "return 111"))
+		qt.Assert(t, qt.StringContains(got, "return 2; }")) // logout untouched
+		qt.Assert(t, qt.Not(qt.StringContains(got, "return 222")))
+	})
+
+	t.Run("python member stages without its sibling", func(t *testing.T) {
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "svc.py", pyHead)
+		commitAll(t, dir, "chore: svc.py")
+		writeFile(t, dir, "svc.py", pyWork)
+
+		mustStage(t, repo, dir, synth.AnchorTarget("svc.py", "Svc.login"))
+
+		got := indexBlob(t, repo, "svc.py")
+		qt.Assert(t, qt.StringContains(got, "return 111"))
+		qt.Assert(t, qt.StringContains(got, "return 2\n"))
+		qt.Assert(t, qt.Not(qt.StringContains(got, "return 222")))
+	})
+
+	t.Run("the class itself remains addressable", func(t *testing.T) {
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "svc.ts", tsHead)
+		commitAll(t, dir, "chore: svc.ts")
+		writeFile(t, dir, "svc.ts", tsWork)
+
+		mustStage(t, repo, dir, synth.AnchorTarget("svc.ts", "Svc"))
+
+		// Naming the container claims every member, which is what asking for
+		// the class means.
+		qt.Assert(t, qt.Equals(indexBlob(t, repo, "svc.ts"), tsWork))
+	})
+
+	t.Run("a member of a class new to HEAD stages the class", func(t *testing.T) {
+		// Splicing the member alone puts a method at file scope, which is
+		// not the file in the worktree and does not parse as TypeScript.
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "svc.ts", "export const seed = 1;\n")
+		commitAll(t, dir, "chore: seed")
+		writeFile(t, dir, "svc.ts", "export const seed = 1;\n\nexport class Fresh {\n  hello(): number { return 1; }\n}\n")
+
+		mustStage(t, repo, dir, synth.AnchorTarget("svc.ts", "Fresh.hello"))
+
+		got := indexBlob(t, repo, "svc.ts")
+		qt.Assert(t, qt.StringContains(got, "class Fresh"))
+		qt.Assert(t, qt.StringContains(got, "hello(): number"))
+	})
+
+	t.Run("a Go receiver container is a sibling, never escalated into", func(t *testing.T) {
+		// The same container-qualified shape, but the type declaration does
+		// not enclose the method, so staging the method must not drag it in.
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "a.go", "package main\n\ntype A struct{}\n\nfunc Seed() {}\n")
+		commitAll(t, dir, "chore: a.go")
+		writeFile(t, dir, "a.go", "package main\n\ntype A struct{}\n\nfunc (a *A) Get() int { return 1 }\n\nfunc Seed() {}\n")
+
+		mustStage(t, repo, dir, synth.AnchorTarget("a.go", "A.Get"))
+
+		got := indexBlob(t, repo, "a.go")
+		mustParseGo(t, "new Go method", got)
+		qt.Assert(t, qt.Equals(strings.Count(got, "type A struct{}"), 1))
+	})
+}
+
 func TestStage_UnbornBranchInitialCommit(t *testing.T) {
 	// No commits at all: HEAD does not resolve, so CatFile reports
 	// headExists=false rather than erroring (git itself exits 128 for
