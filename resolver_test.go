@@ -417,6 +417,44 @@ def g():
 		"import os\nfrom sys import path"))
 }
 
+func TestResolve_ImportsSpanInteriorComments(t *testing.T) {
+	// A grouping comment between two imports is an ordinary named sibling
+	// in TypeScript and Python. Treating it as the end of the run ended
+	// @imports early, so staging it reported success while committing
+	// only the imports above the comment -- silent partial staging.
+	py := []byte(`import os
+
+# stdlib extras
+import sys
+
+
+def f():
+    pass
+`)
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".py", py, "@imports"),
+		"import os\n\n# stdlib extras\nimport sys"))
+
+	ts := []byte(`import a from 'a'
+
+// external utils
+import b from 'b'
+
+export function f() {}
+`)
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", ts, "@imports"),
+		"import a from 'a'\n\n// external utils\nimport b from 'b'"))
+
+	// A comment after the last import belongs to what follows, not to the
+	// import block: end advances only on an import, so it stays outside.
+	trailing := []byte(`import os
+
+# note about f
+def f():
+    pass
+`)
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".py", trailing, "@imports"), "import os"))
+}
+
 func TestResolve_GroupedDeclarationsAddressEachSpec(t *testing.T) {
 	// A grouped block that resolved to its first spec alone reported the
 	// wrong symbol: editing Beta showed up as a change to Alpha, and the

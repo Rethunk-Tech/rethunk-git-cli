@@ -60,6 +60,12 @@ func headerExtent(lang Language, root *ts.Node, limit uint) (Extent, bool) {
 // per import statement, so the run can be many nodes wide — the pseudo-
 // anchor must cover the whole run or staging @imports would silently drop
 // everything after the first import (contracts-waveB.md).
+//
+// Comments do not break the run. In TypeScript and Python a grouping
+// comment between two imports ("# stdlib", "// external") is an ordinary
+// named sibling, and treating it as a terminator ended the extent early —
+// staging @imports then reported success while committing only the
+// imports above the first comment.
 func importsExtent(lang Language, root *ts.Node) (Extent, bool) {
 	kinds := kindSet(lang.ImportKinds())
 	children := namedChildren(root)
@@ -74,9 +80,16 @@ func importsExtent(lang Language, root *ts.Node) (Extent, bool) {
 			end = i
 			continue
 		}
-		if start != -1 {
-			break
+		if start == -1 {
+			continue
 		}
+		// Interior comments are carried along: end only advances on an
+		// import, so a comment after the last one stays outside the
+		// extent while one between two imports is spanned by it.
+		if lang.IsComment(c.Kind()) {
+			continue
+		}
+		break
 	}
 	if start == -1 {
 		return Extent{}, false
