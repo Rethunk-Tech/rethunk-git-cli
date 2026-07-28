@@ -5,46 +5,6 @@ decision. Behaviour itself is documented in [`../docs/USAGE.md`](../docs/USAGE.m
 and [`../docs/ANCHORS.md`](../docs/ANCHORS.md); this record explains the
 reasoning and holds the evidence.
 
-## Origin
-
-The `rethunk-git` MCP surface (v7, 24 tools) was audited against plain
-`bash git`. Only two operations justified their context cost:
-
-| Measurement | Result |
-| --- | --- |
-| Full schema | 8,220 tokens (cl100k) across 24 tools |
-| `batch_commit` schema alone, on materialization | 696 tokens |
-| Non-deferrable `CLAUDE.md` routing prose | 304 tokens/session |
-| `git_status` output vs bash, 1 repo | 7.0× worse |
-| `git_status` output vs bash, 3 repos | 2.6× worse |
-| `git_log -5` vs bash, same information | 1.8× worse |
-
-`batch_commit` earned its place on hunk-level staging; `git_diff_summary` was
-the only tool that *reduced* context. Everything else was slower, more verbose,
-or both, than the `git` already installed.
-
-Two documented claims did not survive verification: that MCP commits landed as
-"Bastion Agent" (false — ambient git config, verified across 20 commits), and
-that multi-root routing was worth a tool (a `for` loop is also one call, at 2.6×
-less output).
-
-### Measured after cutover
-
-The routing prose in `~/.claude/CLAUDE.md` — non-deferrable, so paid on every
-session — was replaced in full by this standing instruction:
-
-> Commit: `rgit diff`, then `rgit commit -m "type(scope): subject" TARGET...`.
-> TARGET = path or `FILE:SYMBOL`. All other git: plain `git`. One repo per call.
-
-| Measurement | Result |
-| --- | --- |
-| MCP routing prose, before | 659 tokens (cl100k) |
-| `rgit` standing instruction, after | 50 tokens |
-| Saved per session | **609 tokens, a 92% reduction** |
-
-That is the recurring cost. The 8,220-token tool schema is no longer
-materialized at all, and 17 allowlist entries went with it.
-
 ## Governing principle
 
 **`rgit` is `git add <pathspec> && git commit` at symbol granularity.** Where
@@ -63,23 +23,9 @@ explicitly. Each consequence was established by measurement, not assertion:
 | Merges are not special-cased | `git commit` mid-merge reads `MERGE_HEAD` and writes a correct two-parent commit unaided |
 
 An earlier design used a temporary index seeded from `HEAD` to *exclude*
-pre-staged work. That was the legacy tool's mistake reproduced: it forced index
-snapshots, restores, and rollback, and it diverged from the `add && commit`
-semantics `rgit` replaces. Removing it deleted roughly a third of the mechanism.
-
-## What the legacy tool got wrong
-
-`batch_commit` was the most-patched component in the MCP repo — **14** commits
-with `fix(batch*)` in the subject, **17** `fix*` commits touching the legacy repo's
-`batch-commit-tool.ts` out of **40** touching it at all. The clusters say what
-to design away:
-
-| Legacy failure cluster | Legacy patch pattern | `rgit` |
-| --- | --- | --- |
-| Index restore / rollback | Unstaged unrelated paths around each commit, then restored them | Does not exclude pre-staged work; nothing to restore |
-| Line-range fragility | Hunk overlap via unified-diff line numbers | AST symbol anchors, byte-extent synthesis |
-| Path canonicalization | Fragmented across commands | One canonicalizer at the entry boundary |
-| Output noise | Verbose JSON payloads | Terse text default, `--porcelain` for machines |
+pre-staged work. It forced index snapshots, restores, and rollback, and it
+diverged from the `add && commit` semantics `rgit` replaces. Removing it deleted
+roughly a third of the mechanism.
 
 ## Blob synthesis
 
