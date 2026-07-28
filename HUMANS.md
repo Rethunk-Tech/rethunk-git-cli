@@ -28,13 +28,9 @@ attributes, and body — and leaves every other edit in the file uncommitted.
 Everything else stays plain `git`. `rgit` has two commands and no opinions
 about the rest of your workflow.
 
-## Reference
-
-| Topic | Where |
-| --- | --- |
-| Install, language servers, env vars, verify, uninstall | [`docs/INSTALL.md`](docs/INSTALL.md) |
-| Commands, argument grammar, flags, exit codes, diff scope | [`docs/USAGE.md`](docs/USAGE.md) |
-| Anchor syntax, extents, pseudo-anchors, special paths | [`docs/ANCHORS.md`](docs/ANCHORS.md) |
+Commands, flags, and exit codes are in [`docs/USAGE.md`](docs/USAGE.md);
+anchor syntax is in [`docs/ANCHORS.md`](docs/ANCHORS.md). The full index of
+every document lives in [`README.md`](README.md#documentation).
 
 ## Things worth knowing before you rely on it
 

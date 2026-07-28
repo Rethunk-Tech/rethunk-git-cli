@@ -23,16 +23,8 @@ and nothing more. Hooks run, filters apply, pre-staged work comes along, trailer
 and signing work — because git does all of it. Two commands; everything else
 stays plain `git`.
 
-## Quick start
-
-```bash
-cd /some/git/repo
-rgit diff && rgit commit -m "fix(auth): reject expired" auth.go:ValidateToken
-```
-
-Build, prerequisites, and language-server setup:
-[docs/INSTALL.md](docs/INSTALL.md). Everything about running it:
-[HUMANS.md](HUMANS.md).
+Start with [HUMANS.md](HUMANS.md) to run it, or
+[docs/INSTALL.md](docs/INSTALL.md) to build it.
 
 ## Highlights
 
