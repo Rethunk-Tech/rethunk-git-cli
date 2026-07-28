@@ -61,6 +61,12 @@ Ordinals are positional, so an inserted symbol repoints them. `rgit diff` emits
 the qualified anchor when unambiguous and the ordinal form otherwise, so
 copy-paste always matches resolution.
 
+The ordinal rule counts container-qualified names, not bare ones, so it reaches
+inside a container as well as beside one. A TypeScript `get`/`set` pair share a
+name within their class, and address as `Box.size#1` and `Box.size#2`; the bare
+`Box.size` is ambiguous (exit 4) and lists both. The same applies to two classes
+of the same name in one file.
+
 ## Pseudo-anchors
 
 Regions no symbol owns:
