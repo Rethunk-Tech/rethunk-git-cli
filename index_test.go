@@ -331,6 +331,28 @@ func TestStage_ClassMemberAnchors(t *testing.T) {
 	})
 }
 
+func TestStage_PythonModuleLevelAssignment(t *testing.T) {
+	// A module-level "X = 1" is an addressable symbol in the Python adapter,
+	// and nothing exercised it. Subscripted and attribute targets name
+	// nothing addressable and must stay unaddressable rather than resolving
+	// under a bogus symbol.
+	dir, repo := newSynthRepo(t)
+	head := "TIMEOUT = 30\nRETRIES = 3\nCONFIG = {}\nCONFIG[\"k\"] = 1\n"
+	writeFile(t, dir, "conf.py", head)
+	commitAll(t, dir, "chore: conf.py")
+	writeFile(t, dir, "conf.py", "TIMEOUT = 90\nRETRIES = 9\nCONFIG = {}\nCONFIG[\"k\"] = 1\n")
+
+	mustStage(t, repo, dir, synth.AnchorTarget("conf.py", "TIMEOUT"))
+
+	got := indexBlob(t, repo, "conf.py")
+	qt.Assert(t, qt.StringContains(got, "TIMEOUT = 90"))
+	qt.Assert(t, qt.StringContains(got, "RETRIES = 3")) // sibling untouched
+
+	// CONFIG["k"] names no symbol, so it cannot be staged by anchor.
+	err := synth.Stage(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("conf.py", "CONFIG[\"k\"]")})
+	qt.Assert(t, qt.IsNotNil(err))
+}
+
 func TestStage_UnbornBranchInitialCommit(t *testing.T) {
 	// No commits at all: HEAD does not resolve, so CatFile reports
 	// headExists=false rather than erroring (git itself exits 128 for

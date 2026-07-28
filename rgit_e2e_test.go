@@ -326,6 +326,93 @@ func TestDiff_CrossCheckReportsWithoutGating(t *testing.T) {
 	qt.Assert(t, qt.Not(qt.StringContains(got.Stderr, "[warning]")))
 }
 
+func TestDocumentedPathsWithoutOtherCoverage(t *testing.T) {
+	// Each of these is specified in docs/USAGE.md and was reachable only
+	// through paths no other case exercised.
+	commitOne := func(t *testing.T, repo string) {
+		t.Helper()
+		gitIn(t, repo, "add", "-A")
+		gitIn(t, repo, "-c", "user.email=t@t.t", "-c", "user.name=T", "commit", "-q", "-m", "init")
+	}
+
+	t.Run("diff --exit-code reports 1 when committable", func(t *testing.T) {
+		repo := newTempRepo(t)
+		writeFile(t, repo, "a.go", "package main\n\nfunc A() int { return 1 }\n")
+		commitOne(t, repo)
+		writeFile(t, repo, "a.go", "package main\n\nfunc A() int { return 2 }\n")
+
+		dirty := runRgit(t, repo, "diff", "--exit-code", "--porcelain")
+		qt.Assert(t, qt.Equals(dirty.ExitCode, 1))
+		qt.Assert(t, qt.StringContains(dirty.Stdout, "a.go"))
+
+		// git's own --exit-code convention: 0 once there is nothing to report.
+		commitOne(t, repo)
+		clean := runRgit(t, repo, "diff", "--exit-code", "--porcelain")
+		qt.Assert(t, qt.Equals(clean.ExitCode, 0))
+	})
+
+	t.Run("diff --quiet implies --exit-code and prints nothing", func(t *testing.T) {
+		repo := newTempRepo(t)
+		writeFile(t, repo, "a.go", "package main\n\nfunc A() int { return 1 }\n")
+		commitOne(t, repo)
+		writeFile(t, repo, "a.go", "package main\n\nfunc A() int { return 2 }\n")
+
+		got := runRgit(t, repo, "diff", "--quiet")
+
+		qt.Assert(t, qt.Equals(got.ExitCode, 1))
+		qt.Assert(t, qt.Equals(got.Stdout, ""))
+	})
+
+	t.Run("a non-conventional message warns but still commits", func(t *testing.T) {
+		repo := newTempRepo(t)
+		writeFile(t, repo, "a.go", "package main\n\nfunc A() {}\n")
+
+		got := runRgit(t, repo, "commit", "-m", "just some words", "a.go:A")
+
+		qt.Assert(t, qt.Equals(got.ExitCode, 0))
+		qt.Assert(t, qt.StringContains(got.Stderr, "type(scope): subject"))
+	})
+
+	t.Run("no reachable language server degrades to ts-only", func(t *testing.T) {
+		// specs/design.md: degraded resolution is normal, announced once, and
+		// never blocks.
+		//
+		// Both routes to a server have to be closed, or this passes or fails
+		// on what the developer's machine happens to be running: stripping
+		// PATH stops a spawn, and pointing XDG_RUNTIME_DIR at an empty
+		// directory stops the socket probe finding a daemon some earlier
+		// invocation left behind.
+		repo := newTempRepo(t)
+		writeFile(t, repo, "a.go", "package main\n\nfunc A() int { return 1 }\n")
+
+		cmd := exec.Command(rgitBin, "commit", "-m", "feat(x): a", "a.go:A")
+		cmd.Dir = repo
+		cmd.Env = append(os.Environ(),
+			"PATH=/usr/bin:/bin",
+			"XDG_RUNTIME_DIR="+t.TempDir(),
+			"RGIT_LSP_SOCKET=")
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout, cmd.Stderr = &stdout, &stderr
+		err := cmd.Run()
+
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.StringContains(stderr.String(), "[ts-only]"))
+	})
+
+	t.Run("push failure is exit 8 and keeps the commit", func(t *testing.T) {
+		// docs/USAGE.md § Flags: a push failure does not roll back the commit
+		// that preceded it. No remote is configured, so the push cannot work.
+		repo := newTempRepo(t)
+		writeFile(t, repo, "a.go", "package main\n\nfunc A() {}\n")
+
+		got := runRgit(t, repo, "commit", "--push", "-m", "feat(x): a", "a.go:A")
+
+		qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.PushFailed)))
+		// The commit itself landed: HEAD resolves and holds the file.
+		qt.Assert(t, qt.StringContains(gitIn(t, repo, "cat-file", "-p", "HEAD:a.go"), "func A()"))
+	})
+}
+
 // --- rgit diff execution ----------------------------------------------
 //
 // These cases build real temporary git repositories with real commits, per
