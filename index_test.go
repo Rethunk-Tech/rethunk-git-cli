@@ -12,7 +12,6 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -24,32 +23,32 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/synth"
 )
 
-// newSynthRepo creates a git repository with a committer identity, unlike
-// rgit_e2e_test.go's newTempRepo -- these tests actually call `git
-// commit`, which newTempRepo's callers never needed to.
+// newSynthRepo is newTempRepo plus a committer identity -- unlike the
+// cases in rgit_e2e_test.go, these actually call `git commit`.
 func newSynthRepo(t *testing.T) (dir string, repo *gitx.Repo) {
 	t.Helper()
-	dir = t.TempDir()
-	runGitRaw(t, dir, "init", "-q")
-	runGitRaw(t, dir, "config", "user.email", "synth-test@example.com")
-	runGitRaw(t, dir, "config", "user.name", "Synth Test")
+	dir = newTempRepo(t)
+	gitIn(t, dir, "config", "user.email", "synth-test@example.com")
+	gitIn(t, dir, "config", "user.name", "Synth Test")
 	return dir, gitx.New(dir)
-}
-
-func runGitRaw(t *testing.T, dir string, args ...string) string {
-	t.Helper()
-	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
-	return string(out)
 }
 
 func commitAll(t *testing.T, dir, msg string) {
 	t.Helper()
-	runGitRaw(t, dir, "add", "-A")
-	runGitRaw(t, dir, "commit", "-q", "-m", msg)
+	gitIn(t, dir, "add", "-A")
+	gitIn(t, dir, "commit", "-q", "-m", msg)
+}
+
+// assertPathError pins both halves of a refusal: that staging failed with a
+// *synth.PathError at all, and that it carries the exit code docs/USAGE.md
+// assigns that refusal. Asserting only the code would pass for any error
+// type that happened to wrap one.
+func assertPathError(t *testing.T, err error, want exitcode.Code) {
+	t.Helper()
+	qt.Assert(t, qt.IsNotNil(err))
+	var perr *synth.PathError
+	qt.Assert(t, qt.ErrorAs(err, &perr))
+	qt.Assert(t, qt.Equals(perr.Code, want))
 }
 
 // indexBlob reads a path's staged (index) content -- `git cat-file -p
@@ -105,7 +104,7 @@ func TestStage_SingleSymbolSynthesizedIntoRealIndex(t *testing.T) {
 	qt.Assert(t, qt.Equals(string(onDisk), work))
 
 	// B's own change is still outstanding, unstaged.
-	unstaged := runGitRaw(t, dir, "diff", "--numstat")
+	unstaged := gitIn(t, dir, "diff", "--numstat")
 	qt.Assert(t, qt.StringContains(unstaged, "greet.go"))
 }
 
@@ -198,8 +197,8 @@ func TestStage_UnbornBranchInitialCommit(t *testing.T) {
 
 	qt.Assert(t, qt.Equals(indexBlob(t, repo, "new.go"), "func Hello() string {\n\treturn \"hi\"\n}"))
 
-	runGitRaw(t, dir, "commit", "-q", "-m", "feat: add Hello")
-	head := runGitRaw(t, dir, "cat-file", "-p", "HEAD:new.go")
+	gitIn(t, dir, "commit", "-q", "-m", "feat: add Hello")
+	head := gitIn(t, dir, "cat-file", "-p", "HEAD:new.go")
 	qt.Assert(t, qt.Equals(head, "func Hello() string {\n\treturn \"hi\"\n}"))
 }
 
@@ -212,10 +211,7 @@ func TestStage_UnbornBranchGitignoredPathRefused(t *testing.T) {
 	writeFile(t, dir, "debug.log", "noise\n")
 
 	err := synth.Stage(context.Background(), repo, dir, []synth.Target{synth.PathTarget("debug.log")})
-	qt.Assert(t, qt.IsNotNil(err))
-	var perr *synth.PathError
-	qt.Assert(t, qt.ErrorAs(err, &perr))
-	qt.Assert(t, qt.Equals(perr.Code, exitcode.PathRefused))
+	assertPathError(t, err, exitcode.PathRefused)
 }
 
 func TestStage_NoNewlineAtEOFPreserved(t *testing.T) {
@@ -264,7 +260,7 @@ func TestStage_RenameStagedAsTwoPathsYieldsR100(t *testing.T) {
 
 	mustStage(t, repo, dir, synth.PathTarget("old.txt"), synth.PathTarget("new.txt"))
 
-	status := runGitRaw(t, dir, "status", "--porcelain")
+	status := gitIn(t, dir, "status", "--porcelain")
 	qt.Assert(t, qt.StringContains(status, "R  old.txt -> new.txt"))
 }
 
@@ -275,7 +271,7 @@ func TestStage_PathspecGlobAndExcludePassThrough(t *testing.T) {
 
 	mustStage(t, repo, dir, synth.PathTarget(":(glob)**/*.txt"), synth.PathTarget(":(exclude)docs/*"))
 
-	status := runGitRaw(t, dir, "status", "--porcelain")
+	status := gitIn(t, dir, "status", "--porcelain")
 	qt.Assert(t, qt.StringContains(status, "A  a.txt"))
 	qt.Assert(t, qt.Not(qt.StringContains(status, "c.txt")))
 }
@@ -291,9 +287,9 @@ func TestStage_ModeOnlyChangeStages(t *testing.T) {
 
 	mustStage(t, repo, dir, synth.PathTarget("script.sh"))
 
-	summary := runGitRaw(t, dir, "diff", "--staged", "--summary")
+	summary := gitIn(t, dir, "diff", "--staged", "--summary")
 	qt.Assert(t, qt.StringContains(summary, "mode change 100644 => 100755"))
-	numstat := runGitRaw(t, dir, "diff", "--staged", "--numstat")
+	numstat := gitIn(t, dir, "diff", "--staged", "--numstat")
 	qt.Assert(t, qt.StringContains(numstat, "0\t0\tscript.sh"))
 }
 
@@ -305,32 +301,29 @@ func TestStage_SubmoduleAndSymlinkPathStaging(t *testing.T) {
 
 	subDir := filepath.Join(dir, "sub")
 	qt.Assert(t, qt.IsNil(os.MkdirAll(subDir, 0o755)))
-	runGitRaw(t, subDir, "init", "-q")
-	runGitRaw(t, subDir, "config", "user.email", "sub@example.com")
-	runGitRaw(t, subDir, "config", "user.name", "Sub")
+	gitIn(t, subDir, "init", "-q")
+	gitIn(t, subDir, "config", "user.email", "sub@example.com")
+	gitIn(t, subDir, "config", "user.name", "Sub")
 	writeFile(t, subDir, "x.txt", "x\n")
 	commitAll(t, subDir, "chore: sub commit")
 
 	mustStage(t, repo, dir, synth.PathTarget("target.txt"), synth.PathTarget("link.txt"), synth.PathTarget("sub"))
 
-	lsFiles := runGitRaw(t, dir, "ls-files", "-s")
+	lsFiles := gitIn(t, dir, "ls-files", "-s")
 	qt.Assert(t, qt.StringContains(lsFiles, "120000"))
 	qt.Assert(t, qt.StringContains(lsFiles, "160000"))
 
 	// A symbol anchor on the same symlink is refused rather than
 	// misresolved (docs/ANCHORS.md § Paths that anchors cannot address).
 	err := synth.Stage(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("link.txt", "Foo")})
-	qt.Assert(t, qt.IsNotNil(err))
-	var perr *synth.PathError
-	qt.Assert(t, qt.ErrorAs(err, &perr))
-	qt.Assert(t, qt.Equals(perr.Code, exitcode.SpecialPathRefused))
+	assertPathError(t, err, exitcode.SpecialPathRefused)
 }
 
 func TestStage_GitattributesCleanFilterRequiresPath(t *testing.T) {
 	dir, repo := newSynthRepo(t)
 	writeFile(t, dir, ".gitattributes", "*.go filter=upper\n")
-	runGitRaw(t, dir, "config", "filter.upper.clean", "tr a-z A-Z")
-	runGitRaw(t, dir, "config", "filter.upper.smudge", "cat")
+	gitIn(t, dir, "config", "filter.upper.clean", "tr a-z A-Z")
+	gitIn(t, dir, "config", "filter.upper.smudge", "cat")
 	commitAll(t, dir, "chore: add gitattributes")
 
 	// A brand new file: staging it exercises HashObject with no prior
@@ -351,10 +344,7 @@ func TestStage_GitignoredUntrackedRefused(t *testing.T) {
 	writeFile(t, dir, "debug.log", "noise\n")
 
 	err := synth.Stage(context.Background(), repo, dir, []synth.Target{synth.PathTarget("debug.log")})
-	qt.Assert(t, qt.IsNotNil(err))
-	var perr *synth.PathError
-	qt.Assert(t, qt.ErrorAs(err, &perr))
-	qt.Assert(t, qt.Equals(perr.Code, exitcode.PathRefused))
+	assertPathError(t, err, exitcode.PathRefused)
 }
 
 func TestStage_UnsupportedLanguageAnchorRefused(t *testing.T) {
@@ -363,10 +353,7 @@ func TestStage_UnsupportedLanguageAnchorRefused(t *testing.T) {
 	commitAll(t, dir, "chore: add notes.rs")
 
 	err := synth.Stage(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("notes.rs", "main")})
-	qt.Assert(t, qt.IsNotNil(err))
-	var perr *synth.PathError
-	qt.Assert(t, qt.ErrorAs(err, &perr))
-	qt.Assert(t, qt.Equals(perr.Code, exitcode.UnsupportedLanguage))
+	assertPathError(t, err, exitcode.UnsupportedLanguage)
 }
 
 func TestStage_ResolveAllBeforeStagingAnyLeavesIndexUntouched(t *testing.T) {
@@ -383,7 +370,7 @@ func TestStage_ResolveAllBeforeStagingAnyLeavesIndexUntouched(t *testing.T) {
 	})
 	qt.Assert(t, qt.IsNotNil(err))
 
-	status := runGitRaw(t, dir, "status", "--porcelain")
+	status := gitIn(t, dir, "status", "--porcelain")
 	qt.Assert(t, qt.Equals(status, " M a.go\n"))
 }
 
