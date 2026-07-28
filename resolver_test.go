@@ -939,3 +939,48 @@ func TestResolve_SameNamedContainersDoNotMergeMembers(t *testing.T) {
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "Svc.run#1"), "run(): number { return 1; }"))
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "Svc.run#2"), "run(): number { return 2; }"))
 }
+
+func TestResolve_TypeScriptMultiDeclarator(t *testing.T) {
+	// A multi-declarator statement -- `const a = 1, b = 2` -- used to
+	// address only the first declarator. A change to b reported as a
+	// change to a: a label that validates while naming a symbol nobody
+	// touched, the same defect goSpecDeclarations closed for Go's grouped
+	// const/var/type blocks.
+	src := []byte(`const a = 1, b = 2;
+var m = 1, n = 2;
+const {x, y} = obj;
+const [p, q] = arr;
+export const c = 1, d = 2;
+`)
+
+	// Each declarator in a grouped statement is addressed by its own extent
+	// -- the declarator alone, not the keyword or the comma joining it to
+	// its siblings, the same rule goSpecDeclarations applies to a grouped
+	// Go spec.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "a"), "a = 1"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "b"), "b = 2"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "m"), "m = 1"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "n"), "n = 2"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "c"), "c = 1"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "d"), "d = 2"))
+
+	// A destructuring declarator's "name" field is object_pattern or
+	// array_pattern, not identifier -- there is no way to give x its own
+	// extent without y's (and obj's) text coming along too, the same
+	// principle as Go's shared "A, B int" field line. Reporting it
+	// unanchorable is deliberate, not an oversight; none of the four names
+	// below ever resolves.
+	lang, ok := resolve.ForExtension(".ts")
+	qt.Assert(t, qt.IsTrue(ok))
+	for _, name := range []string{"x", "y", "p", "q"} {
+		_, err := resolve.Resolve(lang, src, name)
+		qt.Assert(t, qt.IsNotNil(err))
+	}
+
+	// The destructuring declarators never enter the index at all -- not
+	// merely unresolvable under their own name, but absent from source
+	// order too.
+	order, err := resolve.DeclOrder(lang, src)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.DeepEquals(order, []string{"a", "b", "m", "n", "c", "d"}))
+}
