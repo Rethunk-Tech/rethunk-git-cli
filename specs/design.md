@@ -28,6 +28,21 @@ Two documented claims did not survive verification: that MCP commits landed as
 that multi-root routing was worth a tool (a `for` loop is also one call, at 2.6×
 less output).
 
+### Measured after cutover
+
+The routing prose in `~/.claude/CLAUDE.md` — non-deferrable, so paid on every
+session — was replaced by the standing instruction in
+[`CUTOVER.md`](CUTOVER.md):
+
+| Measurement | Result |
+| --- | --- |
+| MCP routing prose, before | 659 tokens (cl100k) |
+| `rgit` standing instruction, after | 50 tokens |
+| Saved per session | **609 tokens, a 92% reduction** |
+
+That is the recurring cost. The 8,220-token tool schema is no longer
+materialized at all, and 17 allowlist entries went with it.
+
 ## Governing principle
 
 **`rgit` is `git add <pathspec> && git commit` at symbol granularity.** Where
