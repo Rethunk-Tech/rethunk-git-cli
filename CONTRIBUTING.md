@@ -27,8 +27,7 @@ Conventional commits: `type(scope): subject`.
 **Least tests, highest coverage. The suite stays under 30s** (ideally under 10).
 Three top-level files, each holding one happy path plus the edge cases that
 have actually bitten — no permutation laundry lists. A package may add its own
-unit test beside a helper whose behaviour none of the three exercises directly
-(`internal/util/fileutil_test.go` is the one today).
+unit test beside a helper whose behaviour none of the three exercises directly.
 
 | File | Happy path | Critical edge cases |
 | --- | --- | --- |
@@ -48,6 +47,12 @@ when one is refactored.
 ```bash
 go test ./...          # full suite
 go test -short ./...   # skip the live language-server check
+
+# Coverage MUST pass -coverpkg=./... — most of this suite drives the built
+# binary, so without it internal/app, internal/cli, internal/resolve and
+# internal/synth all report 0.0% while being covered heavily in fact.
+go test -coverpkg=./... -coverprofile=coverage.out ./...
+go tool cover -func=coverage.out | tail -1
 ```
 
 ## Dependencies
