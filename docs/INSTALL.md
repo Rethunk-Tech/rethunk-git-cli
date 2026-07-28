@@ -17,9 +17,8 @@ today; it rises whenever a dependency raises its own.
 go build -ldflags="-s -w" -o rgit .
 ```
 
-The binary is ~11 MB stripped. The three vendored tree-sitter grammars are the
-largest single contributor; the language-server client accounts for most of the
-rest.
+The binary is ~11 MB stripped; what accounts for that is recorded in
+[`specs/design.md`](../specs/design.md#dependencies).
 
 Install it anywhere on `PATH`:
 
@@ -33,28 +32,32 @@ install -m 0755 rgit ~/.local/bin/rgit
 and prints `[ts-only]` on stderr. Installing one enables the extent
 cross-check, which catches build-tag, macro, and type-level mismatches.
 
-| Language | Server | Install |
-| --- | --- | --- |
-| Go | `gopls` | `go install golang.org/x/tools/gopls@latest` |
-| TypeScript/JavaScript | `vtsls` | `npm i -g @vtsls/language-server` |
-| Python | `pyright` | `npm i -g pyright` |
+| Language | Server | Install | How `rgit` runs it |
+| --- | --- | --- | --- |
+| Go | `gopls` | `go install golang.org/x/tools/gopls@latest` | Background daemon, reused |
+| TypeScript/JavaScript | `vtsls` | `npm i -g @vtsls/language-server` | One-shot subprocess per query |
+| Python | `pyright-langserver` | `npm i -g pyright` | One-shot subprocess per query |
 
-`rgit` starts a server as a background daemon on first use and reuses it
-afterwards. The current invocation completes in `[ts-only]` mode rather than
-blocking on a cold index; the next one gets the full cross-check.
+Only `gopls` has a listen mode, so Go is the only language with a reusable
+daemon: `rgit` probes for one and starts it in the background if none answers.
+That first invocation finishes in `[ts-only]` mode rather than blocking on a
+cold index; later ones get the full cross-check. `vtsls` and
+`pyright-langserver` have no listen mode, so `rgit` spawns one over stdio per
+query and kills it on close — nothing persists, and the cross-check is live on
+the first invocation. The transport survey behind this split is in
+[`specs/design.md`](../specs/design.md#transport-support-per-server).
 
 ## Environment variables
 
 | Variable | Effect |
 | --- | --- |
-| `RGIT_LSP_SOCKET` | Path to an existing language-server socket. Checked before the default location. |
-| `XDG_RUNTIME_DIR` | Where `rgit` creates `rgit-<server>.sock` and its spawn lock. Falls back to the system temp dir. |
-| `GIT_TERMINAL_PROMPT` | Set to `0` automatically when stdin is not a terminal, so credential and GPG prompts fail fast instead of hanging. Set it yourself to override. |
+| `RGIT_LSP_SOCKET` | Path to an existing `gopls` socket. Checked before the default location. No effect on the stdio servers. |
+| `XDG_RUNTIME_DIR` | Where `rgit` creates `rgit-gopls.sock` and its spawn lock. Falls back to the system temp dir. |
+| `GIT_TERMINAL_PROMPT` | Set to `0` automatically when stdin is not a terminal. Set it yourself to override. |
 
 Everything else is git's own configuration, honoured because `git commit` does
-the committing — including `commit.cleanup`, `commit.gpgsign`, `core.hooksPath`,
-and `.gitattributes` filters. `commit.template` is the one exception: it
-prefills an editor, and `rgit` never opens one.
+the committing. Which settings that covers, and the one exception, is in
+[`USAGE.md`](USAGE.md#behaviour-inherited-from-git).
 
 ## Verify
 
@@ -81,4 +84,5 @@ rm ~/.local/bin/rgit
 rm -f "${XDG_RUNTIME_DIR:-/tmp}"/rgit-*.sock "${XDG_RUNTIME_DIR:-/tmp}"/rgit-*.lock
 ```
 
-Any language-server daemons `rgit` started exit on their own idle timeout.
+Those two files exist only for `gopls`; the stdio servers leave nothing behind.
+A `gopls` daemon `rgit` started exits on its own idle timeout.
