@@ -172,6 +172,23 @@ func (r *Repo) UpdateIndexCacheinfo(ctx context.Context, mode, sha, path string)
 	return nil
 }
 
+// Add stages pathspecs verbatim via `git add --`, for targets that are
+// plain paths rather than symbol anchors. specs/design.md: staging by
+// path is plain `git add <pathspec>`, delegated rather than synthesized,
+// so every pathspec form (globs, ":(exclude)...") keeps working exactly
+// as it does under bash git.
+func (r *Repo) Add(ctx context.Context, pathspecs ...string) error {
+	args := append([]string{"add", "--"}, pathspecs...)
+	res, err := r.run(ctx, nil, args...)
+	if err != nil {
+		return err
+	}
+	if res.ExitCode != 0 {
+		return gitError(args, res)
+	}
+	return nil
+}
+
 // LsTreeEntry is one entry of `git ls-tree` output.
 type LsTreeEntry struct {
 	Mode string
