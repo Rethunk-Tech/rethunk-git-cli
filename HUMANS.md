@@ -7,15 +7,13 @@ Everything needed to run and use `rgit`. Internals live in
 ## Quick start
 
 ```bash
-go build -ldflags="-s -w" -o rgit . && install -m 0755 rgit ~/.local/bin/rgit
-
 cd /some/git/repo
 rgit diff                                        # what can I commit?
 rgit commit -m "fix(auth): reject expired" auth.go:ValidateToken
 ```
 
-Prerequisites, language-server setup, environment variables, verification, and
-uninstall: [`docs/INSTALL.md`](docs/INSTALL.md).
+Build, prerequisites, language-server setup, environment variables,
+verification, and uninstall: [`docs/INSTALL.md`](docs/INSTALL.md).
 
 ## What it does
 
@@ -39,28 +37,27 @@ about the rest of your workflow.
 
 ## Things worth knowing before you rely on it
 
-`rgit` deliberately behaves like `git add <pathspec> && git commit`, which has
-consequences people are sometimes surprised by:
+`rgit` deliberately behaves like `git add <pathspec> && git commit`. Most of
+that is unremarkable, but a few consequences surprise people: work you staged
+earlier comes along with the commit, a rejected commit leaves your staging
+untouched, and a `pre-commit` hook can stage paths you never named. None of
+these is an oversight — each is what plain `git commit` already does.
 
-- **Work you staged earlier comes along.** If you ran `git add` before invoking
-  `rgit`, that work is in the commit. This is git's behaviour, not an oversight.
-- **A rejected commit leaves your staging alone.** Nothing is rolled back,
-  exactly as with `git commit`.
-- **Hooks can stage things you did not name.** A `pre-commit` hook running
-  `git add -A` sweeps the worktree, under `rgit` just as under `git`. Use
-  `--no-verify` when that matters.
-
-The full list, with what was measured to establish each:
+The full list is in
+[`docs/USAGE.md`](docs/USAGE.md#behaviour-inherited-from-git); what was
+measured to establish each is in
 [`specs/design.md`](specs/design.md#governing-principle).
 
 ## When a symbol anchor will not work
 
 Anchors need a parsed syntax tree, so they are refused on binaries, symlinks,
 submodules, and languages outside the v1 set (Go, TypeScript/JavaScript,
-Python). Name the path instead — `rgit commit package.json` works fine.
+Python). A `chmod +x` with no content change has nothing to name either. In
+every case, name the path instead — `rgit commit package.json` works fine, and
+`rgit diff` never reports such a file as clean.
 
-A `chmod +x` with no content change has no symbols to name either; `rgit diff`
-still lists it as `MODE` so it is never silently missed.
+Which paths are refused, and how each kind stages:
+[`docs/ANCHORS.md`](docs/ANCHORS.md#paths-that-anchors-cannot-address).
 
 ## Degraded mode
 
