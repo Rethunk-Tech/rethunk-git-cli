@@ -24,10 +24,28 @@ Conventional commits: `type(scope): subject`.
 
 ## Tests
 
-**Least tests, highest coverage. The suite stays under 30s** (ideally under 10).
-Three top-level files, each holding one happy path plus the edge cases that
-have actually bitten — no permutation laundry lists. A package may add its own
-unit test beside a helper whose behaviour none of the three exercises directly.
+**Least tests, highest coverage. The suite stays under 30s** (ideally under 10;
+it currently runs in about 3, or 2 under `-short`). Each file holds one happy
+path plus the edge cases that have actually bitten — no permutation laundry
+lists.
+
+There are two lanes, and which one a case belongs in is the first decision:
+
+- **The unit lane is where the guarantee lives.** It runs under `-short`, and
+  **a regression must fail here.** Anything only the end-to-end file proves is
+  a gap, not coverage — measure it rather than assuming (see § Coverage).
+  `internal/app/app_test.go` covers the whole command surface by calling
+  `app.Run` directly with buffers, which is why `internal/app` exists outside
+  `main` at all; `internal/cli/precedence_test.go` covers the six-rule
+  argument table; other packages test their own internals beside them.
+- **`rgit_e2e_test.go` is the slow lane.** It builds the binary and execs it,
+  so `-short` skips the whole file. It earns its place by proving the assembled
+  program behaves — argument precedence through a real process, hooks, the
+  index, exit codes as a caller observes them — not by being the only thing
+  that proves a behaviour at all.
+
+The three top-level files below remain the home for the design's validated
+cases; a case one of them covers must not be lost when it is refactored.
 
 Temporary repositories come from [`internal/gittest`](internal/gittest/gittest.go)
 rather than being hand-rolled per package — four packages had grown a
@@ -50,34 +68,38 @@ semantics turned out to differ from the assumption baked into the stand-in.
 Reach for one only where the real thing is unreachable, and say at the seam
 what would catch its drift.
 
-`rgit_e2e_test.go` is the slow lane: it builds the binary and execs it, so
-`-short` skips the whole file. **The unit tests are what must catch a
-regression** — anything only that file proves is a gap, not coverage. Measure
-it rather than assuming:
-
-```bash
-go test -short -coverpkg=./... -coverprofile=short.out ./...
-go tool cover -func=short.out | tail -1
-```
-
-**Write tests before implementation.** These three files are where the
-design's validated cases live; a case one of them covers must not be lost when
-it is refactored.
+**Write tests before implementation.**
 
 Tests run in parallel — every top-level case in the three files above calls
 `t.Parallel()`. A case that needs `t.Setenv` or `t.Chdir` cannot, and must say
-so; everything else builds its own temp repository and shares nothing.
+so: `internal/app`'s cases change directory, because `openRepo` resolves the
+repository from the working directory. Everything else builds its own temp
+repository and shares nothing.
 
 ```bash
 go test ./...          # full suite, end-to-end cases included
 go test -short ./...   # unit lane: skips the built binary and the live server
 go test -race ./...    # the concurrency that matters: jsonrpc2, the spawn lock
+```
 
-# Coverage MUST pass -coverpkg=./... — most of this suite drives the built
-# binary, so without it internal/app, internal/cli, internal/resolve and
-# internal/synth all report 0.0% while being covered heavily in fact.
+### Coverage
+
+Always pass `-coverpkg=./...`: much of this suite drives code from another
+package, so without it `internal/app`, `internal/cli`, `internal/resolve` and
+`internal/synth` report 0.0% while being covered heavily in fact.
+
+```bash
 go test -coverpkg=./... -coverprofile=coverage.out ./...
 go tool cover -func=coverage.out | tail -1
+```
+
+The number that matters is the **`-short` one**, since that is the lane a
+regression has to fail in. Compare the two; a package that drops sharply
+without the binary is one the unit lane does not really cover:
+
+```bash
+go test -short -coverpkg=./... -coverprofile=short.out ./...
+go tool cover -func=short.out | tail -1
 ```
 
 ## Modernization
