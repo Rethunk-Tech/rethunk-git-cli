@@ -329,10 +329,39 @@ type preambleOp struct {
 // be "comparable line for line") -- rolling their line counts silently into
 // whichever symbol the caller actually named would misattribute bytes to a
 // symbol that never touched them.
+//
+// Each pseudo-anchor's own reported extent also absorbs its mandatory
+// trailing separator where the language owns one (resolve.
+// OwnsTrailingSeparator): gofmt always leaves exactly one blank line after
+// Go's package clause and after its import block, so that blank line is as
+// much part of "the header" and "the imports" as their own trailing newline
+// -- owning it is not misattribution, and it is what lets these rows sum to
+// git's own raw insertion count for a brand new file (TODO.md § Known
+// limitations). The synthesized blob itself is unaffected either way:
+// mergeInsertTies' joinWithSeparator trims and renormalizes every insert's
+// boundary regardless of what either side's own text already carries.
 func (fp *filePlan) addPreamble(named map[string]bool) (pairs []preambleOp) {
 	if fp.headExists || !fp.workExists {
 		return nil
 	}
+
+	// firstDeclStart bounds @imports' (or, absent @imports, @header's) own
+	// trailing separator: the start of the first real declaration, or EOF
+	// when the new file has none yet.
+	firstDeclStart := uint(len(fp.workSrc))
+	if len(fp.workOrder) > 0 {
+		if res, err := fp.workFile.Resolve(fp.workOrder[0]); err == nil {
+			firstDeclStart = res.Extent.Start
+		}
+	}
+	// @header's own boundary is @imports' start when the file has imports,
+	// else the same first declaration (or EOF).
+	headerLimit := firstDeclStart
+	if importsRes, err := fp.workFile.Resolve("@imports"); err == nil {
+		headerLimit = importsRes.Extent.Start
+	}
+	limits := map[string]uint{"@header": headerLimit, "@imports": firstDeclStart}
+
 	for _, pseudo := range []string{"@header", "@imports"} {
 		if named[pseudo] {
 			continue
@@ -341,11 +370,12 @@ func (fp *filePlan) addPreamble(named map[string]bool) (pairs []preambleOp) {
 		if err != nil {
 			continue
 		}
+		ext := resolve.ExtendThroughOwnedSeparator(fp.lang, fp.workSrc, res.Extent, limits[pseudo])
 		op := editOp{
 			kind:  editInsert,
 			start: 0,
 			seq:   int(res.Extent.Start),
-			text:  append([]byte(nil), fp.workSrc[res.Extent.Start:res.Extent.End]...),
+			text:  append([]byte(nil), fp.workSrc[ext.Start:ext.End]...),
 		}
 		fp.ops = append(fp.ops, op)
 		pairs = append(pairs, preambleOp{name: pseudo, op: op})

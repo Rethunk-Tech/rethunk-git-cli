@@ -699,15 +699,14 @@ func TestStage_DeletedSymbolExcisedFromBlob(t *testing.T) {
 // nothing but plan.Results()) reported only the named symbol's own count,
 // silently dropping the preamble's.
 //
-// The row-level counts here do not sum to git's raw numstat total for the
-// whole file: the blank lines mergeInsertTies' joinWithBlankLine synthesizes
-// between same-offset inserts when applying the plan belong to no single
-// anchor's own extent, exactly as they already do not for an ordinary new
-// symbol spliced in between two existing ones with blank-line padding on
-// both sides (pre-existing, unrelated to this fix). docs/USAGE.md's
-// "comparable line for line" promise is against `rgit diff`'s own
-// per-symbol accounting, not a claim that named-anchor rows exhaustively
-// partition every byte of a brand new file.
+// The row-level counts here DO sum to git's raw numstat total for the whole
+// file: @header and @imports each absorb their own mandatory trailing
+// separator (gofmt always leaves exactly one blank line after Go's package
+// clause and after its import block), so the blank line between two regions
+// belongs to whichever one precedes it rather than to nobody. Hello, being
+// last, needs no such absorption -- its extent has no trailing newline of
+// its own, and countLines' "no newline at end of file" convention already
+// credits it the one line that gap would otherwise be.
 func TestPlanStage_PreambleRowsAppearInResults(t *testing.T) {
 	dir, repo := newSynthRepo(t)
 	writeFile(t, dir, "seed.go", "package main\n\nfunc Seed() {}\n")
@@ -721,10 +720,12 @@ func TestPlanStage_PreambleRowsAppearInResults(t *testing.T) {
 	qt.Assert(t, qt.Equals(len(results), 3))
 
 	labels := make([]string, len(results))
+	totalAdded := 0
 	for i, r := range results {
 		labels[i] = r.Target.Symbol.Path + ":" + r.Target.Symbol.Anchor
 		qt.Assert(t, qt.Equals(r.Outcome, synth.Staged))
 		qt.Assert(t, qt.Equals(r.Deleted, 0))
+		totalAdded += r.Added
 	}
 	// @header and @imports sort ahead of the named symbol -- same ordering
 	// rule as any other anchor in this file (sortResults: path, then
@@ -733,12 +734,43 @@ func TestPlanStage_PreambleRowsAppearInResults(t *testing.T) {
 	qt.Assert(t, qt.DeepEquals(labels, []string{"new.go:@header", "new.go:@imports", "new.go:Hello"}))
 	// Before this fix, results held only the Hello row; @header and @imports
 	// were staged (proven by TestStage_NewFileCarriesHeaderAndImports) but
-	// invisible to the caller. Both now carry their own real magnitude.
-	qt.Assert(t, qt.Equals(results[0].Added, 1)) // "package main"
-	qt.Assert(t, qt.Equals(results[1].Added, 1)) // `import "fmt"`
+	// invisible to the caller.
+	qt.Assert(t, qt.Equals(results[0].Added, 2)) // "package main" + its absorbed blank line
+	qt.Assert(t, qt.Equals(results[1].Added, 2)) // `import "fmt"` + its absorbed blank line
 	qt.Assert(t, qt.Equals(results[2].Added, 3)) // Hello's own 3-line body
 
 	qt.Assert(t, qt.IsNil(plan.Apply(context.Background(), repo, dir)))
 	got := indexBlob(t, repo, "new.go")
 	mustParseGo(t, "preamble rows reflect what was actually staged", got)
+	qt.Assert(t, qt.Equals(got, "package main\n\nimport \"fmt\"\n\nfunc Hello() {\n\tfmt.Println(\"hi\")\n}\n"))
+
+	numstat := gitIn(t, dir, "diff", "--staged", "--numstat", "--", "new.go")
+	fields := strings.Fields(strings.TrimSpace(numstat))
+	qt.Assert(t, qt.Equals(len(fields), 3))
+	fileAdded, err := strconv.Atoi(fields[0])
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(totalAdded, fileAdded))
+}
+
+// TestPlanStage_PreambleDoesNotAbsorbSeparatorForLanguagesThatDontOwnOne is
+// the negative case resolve.OwnsTrailingSeparator exists to decide: neither
+// TypeScript nor Python inserts a blank line after the import block the way
+// gofmt does after Go's, so @imports' own row must stay exactly its own
+// text -- not the file's true total, and that gap is accepted (TODO.md §
+// Known limitations), not silently guessed away.
+func TestPlanStage_PreambleDoesNotAbsorbSeparatorForLanguagesThatDontOwnOne(t *testing.T) {
+	dir, repo := newSynthRepo(t)
+	writeFile(t, dir, "seed.ts", "export const seed = 1;\n")
+	commitAll(t, dir, "chore: seed")
+	writeFile(t, dir, "new.ts", "import { z } from \"./z\";\n\nexport function hello() {}\n")
+
+	plan, err := synth.PlanStage(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("new.ts", "hello")})
+	qt.Assert(t, qt.IsNil(err))
+
+	results := plan.Results()
+	qt.Assert(t, qt.Equals(len(results), 2))
+	qt.Assert(t, qt.Equals(results[0].Target.Symbol.Anchor, "@imports"))
+	// `import { z } from "./z";` alone -- one line, no absorbed blank line.
+	qt.Assert(t, qt.Equals(results[0].Added, 1))
+	qt.Assert(t, qt.Equals(results[1].Target.Symbol.Anchor, "hello"))
 }

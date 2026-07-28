@@ -90,6 +90,52 @@ func importsExtent(lang Language, root *ts.Node) (Extent, bool) {
 	return Extent{Start: children[start].StartByte(), End: children[end].EndByte()}, true
 }
 
+// OwnsTrailingSeparator reports whether lang's own formatting convention
+// treats the blank line following its @header or @imports region as
+// belonging to that region, rather than as free-floating whitespace between
+// two otherwise unrelated fragments. gofmt inserts exactly one there
+// unconditionally for Go -- after the package clause and after the import
+// block -- so in a gofmt'd file that blank line is as much "part of the
+// header" as the package clause's own trailing newline is.
+//
+// Prettier and Black carry no equivalent rule: both preserve whatever
+// blank-line count the author wrote rather than inserting one deterministically,
+// so guessing a mandatory separator into either would misattribute a byte
+// the region does not structurally own. Only Go claims it, so this is
+// decided here, once, per language, rather than assumed universally by
+// whichever caller needs the answer.
+func OwnsTrailingSeparator(lang Language) bool {
+	return lang.Name() == "go"
+}
+
+// ExtendThroughOwnedSeparator widens ext's End through the whitespace
+// immediately following it, up to limit, when lang's convention makes that
+// whitespace part of the region itself (OwnsTrailingSeparator) -- otherwise
+// ext is returned unchanged.
+//
+// This is deliberately not built into headerExtent/importsExtent themselves:
+// those also compute the extent rgit diff renders for an ordinary (tracked-
+// file) change, where the boundary between two regions has never been
+// either one's to claim -- rgit diff's own (unanchorable) row is exactly the
+// honest answer there. The caller that does need it is internal/synth's
+// new-file preamble staging, where @header and @imports are the only things
+// that will ever get their own row for that boundary at all.
+func ExtendThroughOwnedSeparator(lang Language, src []byte, ext Extent, limit uint) Extent {
+	if !OwnsTrailingSeparator(lang) {
+		return ext
+	}
+	end := ext.End
+	for end < limit {
+		switch src[end] {
+		case '\n', '\r', ' ', '\t':
+			end++
+		default:
+			return Extent{Start: ext.Start, End: end}
+		}
+	}
+	return Extent{Start: ext.Start, End: end}
+}
+
 // toplevelExtent spans every addressable declaration's full extent (leading
 // doc comments included). This excludes header and import material by
 // construction: a Language's Declarations never returns entries for those.
