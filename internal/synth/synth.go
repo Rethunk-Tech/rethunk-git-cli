@@ -153,7 +153,15 @@ func spliceInsert(out []byte, start uint, text []byte) []byte {
 	after := out[start:]
 
 	mid := joinWithBlankLine(before, text)
-	if len(after) == 0 {
+	// after is empty at true end-of-file, and newlines-only when start
+	// lands just past the file's last symbol -- which is the common case
+	// for an append, because HEAD's own trailing newline sits between
+	// that symbol and EOF. Both are end-of-file: nothing follows the
+	// insertion but the file's terminator. Routing the newlines-only case
+	// through joinWithBlankLine instead dropped that terminator, since it
+	// trims b's leading newlines and then sees an empty b.
+	if len(bytes.TrimLeft(after, "\n")) == 0 {
+		mid = bytes.TrimRight(mid, "\n")
 		if bytes.HasSuffix(out, []byte("\n")) {
 			mid = append(mid, '\n')
 		}

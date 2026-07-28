@@ -158,6 +158,25 @@ func TestStage_NoNewlineAtEOFPreserved(t *testing.T) {
 	qt.Assert(t, qt.IsFalse(len(got) > 0 && got[len(got)-1] == '\n'))
 }
 
+func TestStage_AppendedSymbolInheritsEOFNewline(t *testing.T) {
+	// Appending after the file's last symbol lands the insertion point
+	// just BEFORE HEAD's own trailing newline, not at true end-of-file.
+	// That newlines-only tail was routed through the blank-line join,
+	// which trims a leading newline and then sees nothing left -- so the
+	// file's terminator was silently dropped, a byte git tracks
+	// (AGENTS.md: EOF newline inherited, never normalized).
+	dir, repo := newSynthRepo(t)
+	writeFile(t, dir, "tail.go", "package main\n\nfunc A() {}\n")
+	commitAll(t, dir, "chore: initial tail.go")
+
+	writeFile(t, dir, "tail.go", "package main\n\nfunc A() {}\n\nfunc Z() int { return 2 }\n")
+	mustStage(t, repo, dir, synth.AnchorTarget("tail.go", "Z"))
+
+	got := indexBlob(t, repo, "tail.go")
+	qt.Assert(t, qt.IsTrue(len(got) > 0 && got[len(got)-1] == '\n'))
+	qt.Assert(t, qt.IsFalse(len(got) > 1 && got[len(got)-2] == '\n'))
+}
+
 func TestStage_RenameStagedAsTwoPathsYieldsR100(t *testing.T) {
 	dir, repo := newSynthRepo(t)
 	writeFile(t, dir, "old.txt", "hello world\nsecond line\n")
