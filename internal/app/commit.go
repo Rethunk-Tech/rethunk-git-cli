@@ -48,7 +48,12 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 	fs.BoolVar(&f.dryRun, "dry-run", false, "preview only; writes and stages nothing")
 	fs.BoolVar(&f.noVerify, "no-verify", false, "skip git hooks")
 
-	if code := parseFlags(fs, args, stderr); code != exitcode.Success {
+	help := "usage: rgit commit [flags] [target...]\n\n" +
+		"Stage named targets -- pathspecs and/or FILE:NAME symbol anchors\n" +
+		"(e.g. auth.go:ValidateToken) -- and commit them.\n\n" +
+		fs.FlagUsages() +
+		"\nFull reference: docs/USAGE.md\n"
+	if code, done := parseFlagsOrHelp(fs, args, stdout, stderr, help); done {
 		return code
 	}
 
@@ -60,7 +65,12 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 		fmt.Fprintln(stderr, "rgit: --dry-run and --push are mutually exclusive")
 		return exitcode.InvalidUsage
 	}
-	if len(f.messages) == 0 && f.msgFile == "" {
+	// --amend with neither -m nor -F reuses HEAD's message via --no-edit
+	// (docs/USAGE.md: rgit never opens an editor, so that is the only
+	// sensible reading); every other no-message invocation is still a
+	// usage error.
+	noEdit := f.amend && len(f.messages) == 0 && f.msgFile == ""
+	if len(f.messages) == 0 && f.msgFile == "" && !f.amend {
 		fmt.Fprintln(stderr, "rgit: commit requires a message (-m or -F)")
 		return exitcode.InvalidUsage
 	}
@@ -164,6 +174,7 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 		Amend:      f.amend,
 		AllowEmpty: f.allowEmpty,
 		NoVerify:   f.noVerify,
+		NoEdit:     noEdit,
 	}
 	if f.msgFile == "-" {
 		data, rerr := io.ReadAll(os.Stdin)

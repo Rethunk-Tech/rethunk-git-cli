@@ -1122,3 +1122,22 @@ func TestHelp_BareInvocationStillExitsInvalidUsage(t *testing.T) {
 	qt.Assert(t, qt.Equals(got.Stdout, ""))
 	qt.Assert(t, qt.StringContains(got.Stderr, "usage: rgit"))
 }
+
+func TestHelp_CommitExitsZeroAndDoesNotLeakPflag(t *testing.T) {
+	// Before: pflag's ContinueOnError returned pflag.ErrHelp from Parse,
+	// which fell into the generic parse-failure branch and printed the
+	// library's own internal error string -- "rgit: pflag: help requested"
+	// -- to stderr at exit 129. errors.Is(err, pflag.ErrHelp) now routes
+	// -h/--help to the subcommand's own help on stdout at exit 0 instead.
+	repo := newTempRepo(t)
+	for _, spelling := range []string{"--help", "-h"} {
+		t.Run(spelling, func(t *testing.T) {
+			got := runRgit(t, repo, "commit", spelling)
+			qt.Assert(t, qt.Equals(got.ExitCode, 0))
+			qt.Assert(t, qt.Not(qt.StringContains(got.Stdout, "pflag")))
+			qt.Assert(t, qt.Not(qt.StringContains(got.Stderr, "pflag")))
+			qt.Assert(t, qt.StringContains(got.Stdout, "--amend"))
+			qt.Assert(t, qt.StringContains(got.Stdout, "FILE:NAME"))
+		})
+	}
+}

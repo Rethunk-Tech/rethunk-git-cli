@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -86,6 +87,33 @@ func parseFlags(fs *pflag.FlagSet, args []string, stderr io.Writer) exitcode.Cod
 	return exitcode.Success
 }
 
+// parseFlagsOrHelp is parseFlags with -h/--help handled. pflag's
+// ContinueOnError returns pflag.ErrHelp from Parse rather than printing
+// anything itself -- the FlagSet's own output is discarded (see
+// newTargetFlagSet) precisely so nothing is written by accident -- so this
+// is the one place that turns ErrHelp into the caller-supplied help text on
+// stdout at exit 0, instead of the exit-129 usage error every other Parse
+// failure gets.
+//
+// done is true whenever the caller must return code immediately: on any
+// Parse failure, ErrHelp included. Unlike plain parseFlags's "non-success
+// means stop" shortcut, a successful help print is also a stop -- it must
+// not fall through into validation that assumes flags were meant to be
+// acted on (e.g. reporting a missing commit message after just printing
+// how to supply one).
+func parseFlagsOrHelp(fs *pflag.FlagSet, args []string, stdout, stderr io.Writer, help string) (code exitcode.Code, done bool) {
+	err := fs.Parse(args)
+	if err == nil {
+		return exitcode.Success, false
+	}
+	if errors.Is(err, pflag.ErrHelp) {
+		fmt.Fprint(stdout, help)
+		return exitcode.Success, true
+	}
+	fmt.Fprintf(stderr, "rgit: %v\n", err)
+	return exitcode.InvalidUsage, true
+}
+
 // pathAnchorContradiction implements docs/USAGE.md's "--sym and --file on
 // the same path → exit 5": naming a path both ways is a contradiction the
 // caller must resolve, not a case rgit could silently pick a side on.
@@ -120,8 +148,11 @@ var conventionalShapeRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]*(\([^()]+\)
 
 func hasConventionalShape(messages []string) bool {
 	if len(messages) == 0 {
-		// -F was used instead; the message lives in a file the execution
-		// step reads, not something this parse-only phase inspects.
+		// Either -F was used (the message lives in a file the execution
+		// step reads, not something this parse-only phase inspects) or
+		// --amend is reusing HEAD's message via --no-edit (there is no
+		// in-process string at all to check). Neither warns, since neither
+		// has anything here to judge.
 		return true
 	}
 	return conventionalShapeRe.MatchString(messages[0])
