@@ -181,7 +181,7 @@ func runCommit(args []string, stdout, stderr io.Writer) exitcode.Code {
 	// formatter or codegen telling them what it did, and on failure it is
 	// usually the reason.
 	if len(res.Stderr) > 0 {
-		stderr.Write(res.Stderr)
+		_, _ = stderr.Write(res.Stderr)
 	}
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
@@ -190,7 +190,7 @@ func runCommit(args []string, stdout, stderr io.Writer) exitcode.Code {
 	// git's own summary -- branch, new SHA, and the changed/insertion/
 	// deletion counts. Relaying it verbatim is what stops a caller having to
 	// run `git show` afterwards just to find out what landed.
-	stdout.Write(res.Stdout)
+	_, _ = stdout.Write(res.Stdout)
 
 	// Then the part git cannot report: which symbols went in, and by how
 	// much. Same listing and same order as --dry-run, so a preview and the
