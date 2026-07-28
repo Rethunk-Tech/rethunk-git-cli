@@ -1,6 +1,7 @@
 {
   "skip": [
-    "stale-ref"
+    "stale-ref",
+    "readme-no-quick-start"
   ],
-  "_comment": "Example filenames in docs (auth.go, script.sh) are illustrative code references, not real repo paths."
+  "_comment": "stale-ref: example filenames in docs (auth.go, script.sh) are illustrative code references, not real repo paths. readme-no-quick-start: this repo keeps exactly one quick start, in HUMANS.md, and README links to it — two copies drifted."
 }
