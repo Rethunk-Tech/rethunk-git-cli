@@ -183,12 +183,19 @@ commit for a symbol tree-sitter resolved correctly.
 
 ### Grammar scope
 
-Three grammars in v1. Measured against 60 real commits in a live repo, **78%**
-of touched files were Go/TS/Python and **91%** of added lines fell inside a
-symbol body — so three grammars cover the dominant case, and `@toplevel` /
-`@imports` handle the 8% at module scope. Median churn per touched file was
+Grammars are chosen by measured demand, never by popularity. Go, TypeScript and
+Python came first: measured against 60 real commits in a live repo, **78%** of
+touched files were one of the three and **91%** of added lines fell inside a
+symbol body, so those three cover the dominant case, with `@toplevel` /
+`@imports` handling the 8% at module scope. Median churn per touched file was
 **4%** (p90 20%), which is precisely where symbol staging beats whole-file
 staging; if commits typically rewrote most of a file, the tool would add nothing.
+
+Markdown and Shell were added on the same basis, surveyed across 51
+repositories: Markdown appears in every one of them, Shell in 45%. Shell earns
+a caveat the others do not — fewer than half of its lines sit inside a function
+and most shell files define none at all, so its value concentrates in
+library-style scripts rather than spreading across the language.
 
 **Named nested declarations do not clear that bar, so they get no anchor of
 their own.** Measured across 51 repositories: 0.00% of Go functions contain a
