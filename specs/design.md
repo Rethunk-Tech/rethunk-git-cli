@@ -293,6 +293,48 @@ built.
 | `github.com/aymanbagabas/go-udiff` | v0.4.1 | Per-symbol `+N/-M` counts in-process, no fork/exec per anchor |
 | `golang.org/x/term` | v0.45.0 | `IsTerminal`, gating the `GIT_TERMINAL_PROMPT=0` rule |
 | `github.com/go-quicktest/qt` | v1.102.0 | Tests; matches `claude-format-hooks` |
+| `tree-sitter-grammars/tree-sitter-markdown` | v0.5.1 | Markdown sections; import path is `<module>/bindings/go`, block grammar only |
+
+**Markdown earns its place two ways, both verified against the grammar's own
+`node-types.json`, not assumed.** It is the one language present in every
+repository `rgit` runs against, so a symbol anchor that only ever worked in
+code left the single most common file kind staged whole-file-or-nothing.
+`fenced_code_block` is a real node kind — a `#` inside a ` ```bash ` fence
+(this repo's own docs are full of console fences) parses as
+`code_fence_content`, never `atx_heading`, so a regex heading-splitter's
+false-positive is structurally impossible here rather than merely rare.
+`section` nests — a section's own named children include further `section`
+nodes for its subsections — so container qualification (`install.options`)
+falls out of the parse tree the same way a Go struct's fields or a
+TypeScript class's methods already do, instead of a hand-maintained
+heading-level counter.
+
+**Only the block grammar is used, not tree-sitter-markdown's separate inline
+grammar** (emphasis, links, code spans) — headings and sections are decided
+entirely at the block level, so the inline grammar buys nothing here.
+**Latest available is v0.5.3, not v0.5.1** — v0.5.2 dropped the Go bindings
+(`bindings/go`) from the module entirely, leaving only Node/Python/Rust/Swift;
+v0.5.1 is the newest release that still ships one, measured directly against
+each tag's own file tree rather than assumed from a changelog. Taking v0.5.3
+would mean hand-writing a cgo binding for a grammar the upstream project no
+longer supports in Go, which is a worse position than pinning one version
+behind latest.
+
+**The inline grammar's binary cost could not actually be avoided by simply
+not calling it.** `bindings/go` compiles both grammars' C sources
+(`markdown.go` and `markdown_inline.go`) into one Go package; there is no
+second, inline-only package to skip importing. Measured with `go tool nm` on
+an unstripped build: `tree_sitter_markdown_inline` and its four external-
+scanner symbols are present in the final binary even though nothing in this
+codebase ever calls `InlineLanguage()` — cgo objects link at the object-file
+level, not per-function, so the Go linker's dead-code elimination cannot drop
+an unreferenced C function sitting in the same translation unit as one that
+is referenced. Avoiding that cost for real would mean vendoring the block
+grammar's own C sources directly rather than depending on the upstream
+module's Go bindings package — a materially bigger commitment (an unversioned
+copy to track by hand, diverging from how every other grammar in this repo is
+consumed) than the measured 768 KB it would save, and not undertaken here
+without that being a deliberate, separate decision.
 
 **`go-git` is rejected.** It reimplements git in pure Go and provides none of
 what this design delegates: hook execution, `.gitattributes` filters, git's
@@ -305,3 +347,11 @@ baseline. The figure at design time was 5284 KB, before the language-server
 client was written; the grammars and `go.lsp.dev` together account for the
 difference. The grammars remain the largest single contributor; every other
 dependency is noise beside them.
+
+Adding the Markdown grammar: **12004 KB** stripped, up from **11236 KB**
+measured the same way immediately beforehand (`go build -ldflags="-s -w"`,
+`stat`'s byte count, both built at the same commit modulo this one
+dependency) — **+768 KB, +6.8%**. The 11236 KB pre-Markdown figure differs
+from the 11091 KB recorded above because it is a fresh measurement against
+current `main`, not a re-derivation of the original one; the two are from
+different points in the repository's history and are not in tension.
