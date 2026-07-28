@@ -134,7 +134,7 @@ func buildUntrackedReport(root, path string) (*FileReport, error) {
 		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: "-", Deleted: "-"}}}, nil
 	}
 
-	row := Row{Status: StatusUntracked, Added: itoa(countLines(string(content))), Deleted: "0"}
+	row := Row{Status: StatusUntracked, Added: itoa(countLines(content)), Deleted: "0"}
 	if lang, ok := resolve.ForExtension(filepath.Ext(path)); ok {
 		if names, derr := resolve.DeclOrder(lang, content); derr == nil && len(names) > 0 {
 			row.HintSymbol = names[0]

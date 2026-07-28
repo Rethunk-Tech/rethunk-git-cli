@@ -9,6 +9,7 @@ import (
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/util"
 )
 
 // sideKind is which of the three places a file's content for one side of a
@@ -70,10 +71,7 @@ func (s contentSide) mode(ctx context.Context, repo *gitx.Repo, root, path strin
 			}
 			return "", false, err
 		}
-		if info.Mode()&0o111 != 0 {
-			return "100755", true, nil
-		}
-		return "100644", true, nil
+		return util.GitFileMode(info), true, nil
 	case sideIndex:
 		return repo.LsFilesStage(ctx, path)
 	default:

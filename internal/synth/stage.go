@@ -13,6 +13,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/util"
 )
 
 // SymbolTarget names one symbol anchor to stage within one file.
@@ -321,10 +322,7 @@ func resolveMode(ctx context.Context, repo *gitx.Repo, root, path string, workEx
 		if err != nil {
 			return "", err
 		}
-		if info.Mode()&0o111 != 0 {
-			return "100755", nil
-		}
-		return "100644", nil
+		return util.GitFileMode(info), nil
 	}
 
 	entry, found, err := repo.LsTree(ctx, "HEAD", path)

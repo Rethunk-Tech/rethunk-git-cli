@@ -1,9 +1,9 @@
 package diff
 
 import (
+	"bytes"
 	"sort"
 	"strconv"
-	"strings"
 
 	udiff "github.com/aymanbagabas/go-udiff"
 
@@ -178,7 +178,7 @@ func attributeSymbols(lang resolve.Language, oldSrc, newSrc []byte, totalAdded, 
 			accDeleted += deleted
 			rows = append(rows, Row{Symbol: name, Status: StatusMod, Added: itoa(added), Deleted: itoa(deleted), pos: newExt.Start})
 		case inOld && !inNew:
-			deleted := countLines(string(oldSrc[oldExt.Start:oldExt.End]))
+			deleted := countLines(oldSrc[oldExt.Start:oldExt.End])
 			if deleted == 0 {
 				return
 			}
@@ -188,7 +188,7 @@ func attributeSymbols(lang resolve.Language, oldSrc, newSrc []byte, totalAdded, 
 			// expects to find it.
 			rows = append(rows, Row{Symbol: name, Status: StatusDeleted, Added: "0", Deleted: itoa(deleted), pos: oldExt.Start})
 		case !inOld && inNew:
-			added := countLines(string(newSrc[newExt.Start:newExt.End]))
+			added := countLines(newSrc[newExt.Start:newExt.End])
 			if added == 0 {
 				return
 			}
@@ -242,8 +242,8 @@ func LineCounts(oldText, newText []byte) (added, deleted int) {
 func isolatedDiff(oldText, newText []byte) (added, deleted int) {
 	edits := udiff.Lines(string(oldText), string(newText))
 	for _, e := range edits {
-		deleted += countLines(string(oldText[e.Start:e.End]))
-		added += countLines(e.New)
+		deleted += countLines(oldText[e.Start:e.End])
+		added += countLines([]byte(e.New))
 	}
 	return added, deleted
 }
@@ -252,12 +252,12 @@ func isolatedDiff(oldText, newText []byte) (added, deleted int) {
 // one line, plus one more for a trailing partial line with no newline
 // (git's own "no newline at end of file" convention, AGENTS.md's invariant
 // table).
-func countLines(s string) int {
-	if s == "" {
+func countLines(b []byte) int {
+	if len(b) == 0 {
 		return 0
 	}
-	n := strings.Count(s, "\n")
-	if !strings.HasSuffix(s, "\n") {
+	n := bytes.Count(b, []byte("\n"))
+	if !bytes.HasSuffix(b, []byte("\n")) {
 		n++
 	}
 	return n
