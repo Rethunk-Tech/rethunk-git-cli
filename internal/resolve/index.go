@@ -220,16 +220,9 @@ func levenshtein(a, b string) int {
 			if ar[i-1] == br[j-1] {
 				cost = 0
 			}
-			curr[j] = minInt(prev[j]+1, minInt(curr[j-1]+1, prev[j-1]+cost))
+			curr[j] = min(prev[j]+1, curr[j-1]+1, prev[j-1]+cost)
 		}
 		prev, curr = curr, prev
 	}
 	return prev[len(br)]
-}
-
-func minInt(a, b int) int {
-	if b < a {
-		return b
-	}
-	return a
 }
