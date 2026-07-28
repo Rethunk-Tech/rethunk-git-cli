@@ -44,9 +44,3 @@ or a version bump wants regardless.
       function calling `rgit diff --porcelain`; no framework needed. Cheaper now
       than when it was deferred: `pflag` is already a dependency and
       `--porcelain` is the data source.
-- [ ] `-S` is not accepted as shorthand for `--gpg-sign`; the long form is.
-      `pflag` checks a shorthand's `NoOptDefVal` before checking for an attached
-      value, so git's own idiomatic `-Skeyid` misparses as an unknown `-k`
-      flag. Shipping the shorthand needs that resolved upstream or worked
-      around, and a flag that silently misreads its argument is worse than one
-      that is absent.

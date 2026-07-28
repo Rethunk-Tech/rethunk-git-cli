@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
@@ -41,6 +42,43 @@ type commitFlags struct {
 	files       []string
 }
 
+// expandGPGSignShorthand rewrites git's own -S spelling into the long form
+// before pflag ever sees it, which is what lets rgit accept the flag every
+// GPG user actually types.
+//
+// It cannot be a registered shorthand: pflag resolves an optional-value
+// flag's NoOptDefVal before checking for an attached value, so -SDEADBEEF
+// parses as a chain of nonexistent single-letter flags rather than as a key
+// id (verified against pflag directly; specs/design.md § CLI handling).
+//
+// The rewrite follows getopt's rule, which is git's: for a short option
+// taking an optional argument, the rest of the token IS the argument. -Ss
+// therefore means the key "s", not "-s -S", and that is exactly why this
+// cannot expand general shorthand chains -- there is no way to tell a key
+// id from a run of flags, and git does not try either. A token that packs
+// S in behind other shorthands (-sS) is left alone and pflag rejects it by
+// name, which is an honest refusal rather than a silent misread.
+//
+// Everything after "--" is a pathspec (docs/USAGE.md § Argument shape) and
+// is never rewritten.
+func expandGPGSignShorthand(args []string) []string {
+	out := make([]string, 0, len(args))
+	for i, a := range args {
+		if a == "--" {
+			return append(out, args[i:]...)
+		}
+		switch {
+		case a == "-S":
+			out = append(out, "--gpg-sign")
+		case strings.HasPrefix(a, "-S") && len(a) > 2:
+			out = append(out, "--gpg-sign="+a[2:])
+		default:
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
 // gpgSignBare is commitFlags.gpgSignKey's NoOptDefVal sentinel for a bare
 // --gpg-sign (no key id): the empty string is already "flag not given" at
 // all, so the sentinel is what lets bare-vs-absent be told apart after
@@ -69,13 +107,9 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 	fs.BoolVar(&f.resetAuthor, "reset-author", false, "take the author identity from the committer (with --amend)")
 	fs.BoolVar(&f.porcelain, "porcelain", false, "list staged targets as stable tab-separated records")
 	fs.BoolVarP(&f.quiet, "quiet", "q", false, "suppress the commit summary and target listing")
-	// git's -S accepts an optional attached key id (-Skeyid); pflag's
-	// shorthand parser resolves an optional-value flag's default before it
-	// checks for an attached value, so -Skeyid misparses as a chain of
-	// nonexistent single-letter flags (verified against pflag directly).
-	// Only the long form is exposed here rather than shipping a shorthand
-	// that silently breaks the one form GPG users actually type.
-	fs.StringVar(&f.gpgSignKey, "gpg-sign", "", "GPG-sign the commit; optionally --gpg-sign=<key-id> (no -S; see docs/USAGE.md)")
+	// -S is not registered as a shorthand here; expandGPGSignShorthand
+	// rewrites it before Parse, for the pflag reason documented there.
+	fs.StringVar(&f.gpgSignKey, "gpg-sign", "", "GPG-sign the commit; -S/-S<key-id>/--gpg-sign=<key-id>")
 	fs.Lookup("gpg-sign").NoOptDefVal = gpgSignBare
 	fs.BoolVar(&f.noGPGSign, "no-gpg-sign", false, "do not GPG-sign, overriding commit.gpgsign")
 
@@ -84,7 +118,7 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 		"(e.g. auth.go:ValidateToken) -- and commit them.\n\n" +
 		fs.FlagUsages() +
 		"\nFull reference: docs/USAGE.md\n"
-	if code, done := parseFlagsOrHelp(fs, args, stdout, stderr, help); done {
+	if code, done := parseFlagsOrHelp(fs, expandGPGSignShorthand(args), stdout, stderr, help); done {
 		return code
 	}
 

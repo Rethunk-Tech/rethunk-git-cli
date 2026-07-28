@@ -393,3 +393,51 @@ func TestRun_DiffFromSubdirectory(t *testing.T) {
 	// Named as c.go from pkg/deep, reported as pkg/deep/c.go.
 	qt.Assert(t, qt.StringContains(stdout, "pkg/deep/c.go"))
 }
+
+// TestExpandGPGSignShorthand pins the argv rewrite that makes git's own -S
+// spelling work. pflag resolves an optional-value shorthand's NoOptDefVal
+// before it looks for an attached value, so registering -S directly makes
+// git's idiomatic -Skeyid parse as a chain of nonexistent single-letter
+// flags. Rewriting the token before Parse sidesteps that entirely.
+//
+// The rule is getopt's, which is git's: for a short option taking an
+// optional argument, whatever follows in the same token IS the argument.
+// So -Ss means the key "s", not "sign plus signoff" -- verified against
+// git, and the reason this cannot be a general shorthand-chain expansion.
+func TestExpandGPGSignShorthand(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name string
+		in   []string
+		want []string
+	}{
+		{"bare -S", []string{"-S", "a.go"}, []string{"--gpg-sign", "a.go"}},
+		{"attached key id", []string{"-SDEADBEEF"}, []string{"--gpg-sign=DEADBEEF"}},
+		{"single-letter key id", []string{"-Ss"}, []string{"--gpg-sign=s"}},
+		{"long form untouched", []string{"--gpg-sign=X"}, []string{"--gpg-sign=X"}},
+		{"other shorthands untouched", []string{"-s", "-m", "x"}, []string{"-s", "-m", "x"}},
+		{"nothing after -- is rewritten", []string{"--", "-Sfile"}, []string{"--", "-Sfile"}},
+		{"a lone dash is not a flag", []string{"-"}, []string{"-"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := expandGPGSignShorthand(tc.in)
+			qt.Assert(t, qt.DeepEquals(got, tc.want))
+		})
+	}
+}
+
+// TestRun_GPGSignShorthandReachesGit closes the loop through the real
+// command surface: -S must trigger signing exactly as --gpg-sign does.
+// gpg.program pointed at a binary that always fails turns any signing
+// attempt into a deterministic failure, which is proof the flag arrived.
+func TestRun_GPGSignShorthandReachesGit(t *testing.T) {
+	dir := chdirTempRepo(t)
+	gittest.Git(t, dir, "config", "gpg.program", "/bin/false")
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 5\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+
+	_, stderr, code := runApp(t, "commit", "-SDEADBEEF", "-m", "feat(a): signed", "a.go:A")
+
+	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))
+	qt.Assert(t, qt.StringContains(stderr, "sign"))
+}

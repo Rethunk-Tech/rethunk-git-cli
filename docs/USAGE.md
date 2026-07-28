@@ -141,7 +141,7 @@ a build that did not set one.
 | `--reset-author` | Take the author identity from the committer instead of carrying the original forward. Plain forwarding; git accepts it only with `--amend` or `--fixup=amend:`, and `rgit` does not police the combination. |
 | `--porcelain` | (`commit`) List staged targets as stable tab-separated records instead of the aligned listing. Replaces `git commit`'s own summary rather than adding to it, exactly as `git commit --porcelain` does. Works with `--dry-run`, which then emits records alone with no preamble. |
 | `-q`, `--quiet` | (`commit`) Suppress the summary and the target listing. stdout is empty; warnings, notices and hook output still go to stderr, as under git's own `-q`. |
-| `--gpg-sign`, `--gpg-sign=<key-id>` | GPG-sign the commit, with the configured default key or an explicit one. **Long form only** — see below. |
+| `-S`, `-S<key-id>`, `--gpg-sign`, `--gpg-sign=<key-id>` | GPG-sign the commit, with the configured default key or an explicit one. See the note below on how `-S` is parsed. |
 | `--no-gpg-sign` | Do not GPG-sign, overriding `commit.gpgsign=true`. |
 | `--unstaged` | (`diff`) Worktree vs index — git's bare `diff`. |
 | `--staged`, `--cached` | (`diff`) Index vs `HEAD`. Both spellings. |
@@ -155,10 +155,14 @@ a build that did not set one.
 own message (`--amend` reuses HEAD's via `--no-edit`; `--fixup`/`--squash`
 generate `fixup!`/`squash! <subject>`, exactly as plain `git commit` does).
 
-`-S` is not exposed: git's short form takes an *optional* attached key id
-(`-Skeyid`), and pflag's shorthand parser resolves an optional-value flag's
-default before checking for an attached value, so `-Skeyid` would misparse as
-a chain of nonexistent single-letter flags. Use `--gpg-sign=<key-id>`.
+`-S` is accepted in git's own spellings: bare `-S`, or `-S<key-id>` with the
+key attached. It is rewritten to the long form before the flag parser runs,
+because `pflag` resolves an optional-value shorthand's default before checking
+for an attached value, so a registered `-S` would read `-SDEADBEEF` as a chain
+of nonexistent single-letter flags. Following getopt (and git), everything
+after `-S` in the same token is the key id — `-Ss` means the key `s`. Packing
+`S` into a chain behind other shorthands (`-sS`) is not supported and is
+refused by name rather than misread.
 
 On success it relays `git commit`'s own summary — branch, new SHA, and the
 changed/insertion/deletion counts — then lists each staged target with its
