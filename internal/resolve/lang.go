@@ -6,7 +6,13 @@
 // fragility symbol anchors exist to avoid.
 package resolve
 
-import ts "github.com/tree-sitter/go-tree-sitter"
+import (
+	"bytes"
+	"path/filepath"
+	"strings"
+
+	ts "github.com/tree-sitter/go-tree-sitter"
+)
 
 // Extent is a half-open byte range [Start, End) in a source file.
 type Extent struct {
@@ -135,4 +141,88 @@ func register(l Language) {
 func ForExtension(ext string) (Language, bool) {
 	l, ok := registered[ext]
 	return l, ok
+}
+
+// shebangExtension maps a shebang's own interpreter name to the file
+// extension whose adapter should resolve it. Deliberately conservative and
+// short: bash and (POSIX) sh both go to the shell grammar; python3 and
+// python go to Python, which needs no special-casing of its own to accept
+// a shebang arriving via a path with no ".py" suffix -- HeaderKinds already
+// treats a shebang as an ordinary "comment" node regardless of how the
+// adapter was looked up (lang_python.go).
+//
+// zsh is deliberately absent, not merely unmapped: tree-sitter-bash
+// mis-parses zsh-only syntax, so silently routing it to the shell adapter
+// would produce wrong extents rather than an honest refusal (lang_shell.go).
+// Every other interpreter -- perl, ruby, node, a project's own wrapper
+// script -- is left unmapped for the same reason: guessing wrong is worse
+// than the plain "no grammar registered" a caller already handles.
+var shebangExtension = map[string]string{
+	"bash": ".sh",
+	"sh":   ".sh",
+
+	"python3": ".py",
+	"python":  ".py",
+}
+
+// ForPath returns the adapter for path. Extension lookup is tried first and
+// is byte-for-byte ForExtension's own result -- a ".go" file, or any other
+// recognized extension, never reaches the code below. Only when that yields
+// nothing does ForPath fall back to sniffing content's first line for a "#!"
+// interpreter line, via shebangExtension.
+//
+// content is whatever the caller already has; ForPath itself never reads a
+// file. It looks at content's first line alone and nothing past it -- a
+// caller that only peeked a bounded prefix of a large or binary file (rather
+// than reading the whole thing just to decide it has no shebang) gets
+// exactly the same answer a full read would have given, since a real
+// shebang line is always the first thing in the file. content may be nil,
+// meaning no bytes were available to peek (e.g. the path exists only in
+// HEAD, not the worktree); ForPath then behaves exactly like ForExtension.
+func ForPath(path string, content []byte) (Language, bool) {
+	if l, ok := ForExtension(filepath.Ext(path)); ok {
+		return l, true
+	}
+	interp, ok := shebangInterpreter(content)
+	if !ok {
+		return nil, false
+	}
+	ext, ok := shebangExtension[interp]
+	if !ok {
+		return nil, false
+	}
+	return ForExtension(ext)
+}
+
+// shebangInterpreter reads the interpreter name off content's own first
+// line, or reports ok=false when that line is not a shebang at all -- an
+// ordinary leading "# comment" is the most common false start, and only a
+// line starting with the literal two bytes "#!" is considered.
+//
+// "#!/usr/bin/env bash" and "#!/bin/bash" both resolve to "bash": the
+// "/usr/bin/env NAME" indirection is unwrapped to NAME, the same interpreter
+// a direct "#!/bin/NAME" spells directly. An env invocation carrying flags
+// of its own ("#!/usr/bin/env -S bash -x") is not unwrapped -- the first
+// field after "env" would be "-S", not the interpreter -- and is left
+// unmapped rather than guessed at; this is a known gap, not a silent
+// misparse, since an unrecognized interpreter falls through to the same
+// honest "no grammar registered" refusal every other unmapped shebang does.
+func shebangInterpreter(content []byte) (string, bool) {
+	line := content
+	if i := bytes.IndexByte(line, '\n'); i >= 0 {
+		line = line[:i]
+	}
+	line = bytes.TrimRight(line, "\r")
+	if !bytes.HasPrefix(line, []byte("#!")) {
+		return "", false
+	}
+	fields := strings.Fields(string(line[2:]))
+	if len(fields) == 0 {
+		return "", false
+	}
+	interp := filepath.Base(fields[0])
+	if interp == "env" && len(fields) > 1 {
+		interp = filepath.Base(fields[1])
+	}
+	return interp, true
 }
