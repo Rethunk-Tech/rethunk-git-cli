@@ -86,6 +86,14 @@ symbol had changed:
      It must not touch end-of-file: git tracks no-newline-at-EOF as real content
      (`\ No newline at end of file`), so blanket normalization would commit a
      byte the caller never changed.
+   - **Appending at end-of-file inherits `B_head`'s own convention.** When the
+     insertion point is the end of the file — the common case, since appending
+     after the last existing symbol lands there — the synthesized blob ends with
+     a newline if and only if `B_head` did. Neither the spike nor its
+     adversarial round covered this, and it is the one place where "insert
+     between two regions" has only one region: forcing a trailing newline would
+     add a byte to a file that never had one, and forcing its absence would
+     strip one from a file that did.
 4. **Write** — `git hash-object -w --path <path> --stdin`. **`--path` is
    mandatory**: without it, `.gitattributes` clean filters and LFS
    normalization are bypassed. Measured writing `synthesized` where `git add`
