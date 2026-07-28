@@ -157,6 +157,55 @@ func headingText(src []byte, heading *ts.Node) string {
 	return strings.TrimSpace(nodeText(src, inline))
 }
 
+// toplevelExtent is markdown's own @toplevel: the lede — any content between
+// @header (frontmatter) and the first heading — rather than the span-of-
+// declarations pseudo.go's shared toplevelExtent computes for every other
+// language.
+//
+// That shared algorithm spans idx.order's first through last declaration,
+// which for markdown is the opposite region: Declarations never returns an
+// entry for the lede (sectionDeclarations has no heading to name it by,
+// see atxHeadingOf), so "first declaration" is always the first actual
+// heading, and the shared formula computes "first heading through end of
+// document" -- everything the lede is not. pseudo.go dispatches here via a
+// type assertion on *mdLanguage rather than a new Language method, so Go,
+// TypeScript, and Python's own @toplevel stay on the shared code path,
+// byte-identical to before this existed.
+//
+// found is false when there is no lede to stage: a document with no
+// content before its first heading (or none at all after frontmatter) has
+// nothing here for @toplevel to claim, the same "degraded, not an error"
+// answer @imports already gives every markdown file.
+func (m *mdLanguage) toplevelExtent(src []byte, root *ts.Node, idx *index) (Extent, bool) {
+	children := namedChildren(root)
+	if len(children) == 0 {
+		return Extent{}, false
+	}
+
+	// @header (frontmatter) is always root's first child when present
+	// (HeaderKinds' own doc comment), so the lede starts right after it.
+	start := uint(0)
+	if header := kindSet(m.HeaderKinds()); header[children[0].Kind()] {
+		start = children[0].EndByte()
+	}
+
+	// The lede ends where the first heading section begins. idx.order is in
+	// document order (Declarations walks depth-first, naming a section
+	// before descending into it), so its first entry is always the
+	// document's very first heading, at whatever nesting depth that
+	// happens to be. No heading anywhere means the whole post-frontmatter
+	// document is the lede.
+	end := uint(len(src))
+	if len(idx.order) > 0 {
+		end = idx.order[0].Full.Start
+	}
+
+	if end <= start {
+		return Extent{}, false
+	}
+	return Extent{Start: start, End: end}, true
+}
+
 // slugify renders heading text the way rgit always emits an anchor:
 // lowercase ASCII alphanumerics, any run of anything else collapsed to a
 // single hyphen, no leading or trailing hyphen. A heading with no

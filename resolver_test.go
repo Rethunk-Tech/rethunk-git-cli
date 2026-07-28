@@ -1068,6 +1068,15 @@ Second Usage options.
 	// not part of @header, even though both precede the first heading.
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".md", src, "@header"), "---\ntitle: Doc\n---\n"))
 
+	// @toplevel is the lede -- content between @header and the first
+	// heading -- not "first heading through end of document", which is what
+	// the shared declaration-span formula every other language uses would
+	// otherwise compute here (sectionDeclarations names no declaration for
+	// the lede). Before this fix the lede was reachable only by naming the
+	// path.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".md", src, "@toplevel"),
+		"\nLede paragraph before any heading.\n\n"))
+
 	// A second fixture isolates the shapes above from a fenced code block
 	// containing a line that looks like a heading, and a setext heading.
 	src2 := []byte("# Diff Scope\n\nSome intro.\n\n```bash\n# not a heading, inside a fence\necho hi\n```\n\nSetext Title\n============\n\nBody after the setext heading.\n")

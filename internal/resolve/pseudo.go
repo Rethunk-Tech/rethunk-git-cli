@@ -187,7 +187,19 @@ func MembersSitFlush(lang Language) bool {
 // spec inside a grouped `const (...)` block is addressed on its own, and
 // stopping at its extent would leave the block's keyword and parentheses
 // outside @toplevel while their contents were inside it.
+//
+// Markdown's @toplevel is a different region entirely -- the lede, not a
+// declaration span -- because sectionDeclarations never returns an entry for
+// the lede, so this formula would otherwise compute "first heading through
+// end of document", the opposite of the decided design (lang_markdown.go's
+// mdLanguage.toplevelExtent). Dispatched via a type assertion rather than a
+// new Language method, so this function stays the one implementation Go,
+// TypeScript, and Python actually run, unchanged.
 func toplevelExtent(lang Language, src []byte, root *ts.Node, idx *index) (Extent, bool) {
+	if md, ok := lang.(*mdLanguage); ok {
+		return md.toplevelExtent(src, root, idx)
+	}
+
 	if len(idx.order) == 0 {
 		return Extent{}, false
 	}
