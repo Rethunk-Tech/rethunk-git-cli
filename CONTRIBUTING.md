@@ -79,10 +79,14 @@ Two repo conventions that are easy to undo by accident:
 
 - **`docs/` is only for documentation shipped with the tool.** Design record and
   migration material go in `specs/`.
-- **`AGENTS.md` uses `@-references` (`@specs/design.md`), not markdown links.**
-  An agent resolves those without spending a tool call; ordinary links cost a
-  `Read` round-trip each. Every other file uses normal markdown links, because
-  `@-refs` render as literal text for humans.
+- **An `@-reference` in `AGENTS.md` is a budget line, not a link.** `CLAUDE.md`
+  symlinks to `AGENTS.md`, so every `@path` there is pulled into *every* agent
+  session whether or not the change touches that file — @-referencing all eight
+  docs cost ~17k tokens a session to save a `Read` that most sessions never
+  needed. Only `@CONTRIBUTING.md` keeps one, because its test and coverage rules
+  bind changes that would not think to look them up. Everything else is a
+  markdown link, which also renders properly for humans; add a new `@-ref` only
+  by arguing the same way.
 
 Lint before opening a PR that touches any `.md`:
 

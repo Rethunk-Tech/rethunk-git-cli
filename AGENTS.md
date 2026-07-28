@@ -1,7 +1,9 @@
 # AGENTS.md
 
 Internals for anyone — human or model — changing this repository. To *use*
-`rgit`, read @HUMANS.md. To submit changes, read @CONTRIBUTING.md.
+`rgit`, read [HUMANS.md](HUMANS.md). To submit changes, read @CONTRIBUTING.md —
+the only file pulled in eagerly, because its test layout and coverage rules bind
+changes that would not otherwise think to consult it.
 
 ## The one invariant
 
@@ -11,26 +13,29 @@ Where git has an opinion, match it exactly. Do not invent semantics git already
 defines. This rule has overturned several drafts of this project; a change that
 diverges from git must argue against it explicitly in the PR, not quietly.
 
-The consequences are listed in @docs/USAGE.md § Behaviour inherited from git,
+The consequences are listed in
+[docs/USAGE.md § Behaviour inherited from git](docs/USAGE.md#behaviour-inherited-from-git),
 and several of them read like bugs worth fixing. None is. Pre-staged work
 coming along, staging surviving a rejected commit, and a hook sweeping paths
 the caller never named are git's own behaviour, reproduced on purpose — do not
 exclude, roll back, or police them.
 
-Reasoning and the measurement behind each: @specs/design.md
+Reasoning and the measurement behind each: [specs/design.md](specs/design.md)
 
 ## File map
 
+Read whichever one the change touches; none is loaded for you.
+
 | Path | Holds |
 | --- | --- |
-| @README.md | Orientation and the documentation index |
-| @HUMANS.md | Running and using `rgit` — what it does, inherited behaviour, degraded mode |
-| @CONTRIBUTING.md | Process — commit style, test layout, dependency and documentation policy |
-| @specs/design.md | Design record — why, mechanisms, and every measurement |
-| @docs/USAGE.md | Command surface, argument grammar, flags, exit codes |
-| @docs/ANCHORS.md | Anchor syntax, extents, pseudo-anchors, special paths |
-| @docs/INSTALL.md | Build, language servers, env vars, verify |
-| @TODO.md | Backlog — known limitations, v2 grammars, deferrals |
+| [README.md](README.md) | Orientation and the documentation index |
+| [HUMANS.md](HUMANS.md) | Running and using `rgit` — what it does, inherited behaviour, degraded mode |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Process — commit style, test layout, dependency and documentation policy |
+| [specs/design.md](specs/design.md) | Design record — why, mechanisms, and every measurement |
+| [docs/USAGE.md](docs/USAGE.md) | Command surface, argument grammar, flags, exit codes |
+| [docs/ANCHORS.md](docs/ANCHORS.md) | Anchor syntax, extents, pseudo-anchors, special paths |
+| [docs/INSTALL.md](docs/INSTALL.md) | Build, language servers, env vars, verify |
+| [TODO.md](TODO.md) | Backlog — known limitations, v2 grammars, deferrals |
 
 `docs/` ships with the tool. `specs/` does not — the design record lives there.
 
