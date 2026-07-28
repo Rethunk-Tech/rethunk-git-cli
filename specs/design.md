@@ -434,19 +434,14 @@ pathspec matching, credential and GPG prompting. Shelling out is the design, not
 a shortcut — using it even for reads would create a second, subtly divergent
 source of truth about repository state.
 
-Measured binary size: **11091 KB** stripped, against a 1644 KB no-dependency
-baseline. The figure at design time was 5284 KB, before the language-server
-client was written; the grammars and `go.lsp.dev` together account for the
-difference. The grammars remain the largest single contributor; every other
+Measured binary size: **11236 KB** stripped, against a 1644 KB no-dependency
+baseline. The grammars are the largest single contributor; every other
 dependency is noise beside them.
 
 Adding the Markdown grammar: **12004 KB** stripped, up from **11236 KB**
 measured the same way immediately beforehand (`go build -ldflags="-s -w"`,
 `stat`'s byte count, both built at the same commit modulo this one
-dependency) — **+768 KB, +6.8%**. The 11236 KB pre-Markdown figure differs
-from the 11091 KB recorded above because it is a fresh measurement against
-current `main`, not a re-derivation of the original one; the two are from
-different points in the repository's history and are not in tension.
+dependency) — **+768 KB, +6.8%**.
 
 Adding the shell grammar on top of that: **13336 KB** stripped, up from the
 same **12004 KB** — **+1332 KB, +11.1%**, the largest single-grammar jump
