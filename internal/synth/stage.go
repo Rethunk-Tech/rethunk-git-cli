@@ -1,6 +1,7 @@
 package synth
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"fmt"
@@ -95,6 +96,13 @@ type stagePlan struct {
 	files     []*filePlan
 	results   []TargetResult
 	tsOnly    bool
+
+	// preamble lists files whose @header/@imports were staged for them
+	// because the file is new, and ordinals lists anchors that resolved
+	// positionally. Both are the caller's to announce on stderr
+	// (docs/ANCHORS.md); synth writes to no stream of its own.
+	preamble []string
+	ordinals []string
 }
 
 // Plan is a resolved, not-yet-applied Stage. Every target has been
@@ -117,6 +125,18 @@ func (p *Plan) Results() []TargetResult { return p.plan.results }
 // cross-check -- normal, not an error (specs/design.md), but the caller's
 // job to announce once on stderr.
 func (p *Plan) TSOnly() bool { return p.plan.tsOnly }
+
+// Preamble lists the files whose @header and @imports were staged alongside
+// the symbols actually named, because the file does not exist in HEAD --
+// docs/ANCHORS.md's "both are staged automatically for an untracked file".
+// Without them the synthesized blob is a bare function body with no package
+// clause, which does not compile.
+func (p *Plan) Preamble() []string { return p.plan.preamble }
+
+// Ordinals lists anchors that resolved by position ("init#2") rather than by
+// a unique or container-qualified name. docs/ANCHORS.md calls the form a last
+// resort because an inserted symbol repoints it.
+func (p *Plan) Ordinals() []string { return p.plan.ordinals }
 
 // Apply performs Plan's only side-effecting step: staging pathspecs via
 // `git add` and writing + staging every file's synthesized blob.
@@ -153,6 +173,9 @@ func Stage(ctx context.Context, repo *gitx.Repo, root string, targets []Target) 
 func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Target) (*stagePlan, error) {
 	plan := &stagePlan{}
 	byPath := map[string]*filePlan{}
+	// Anchors the caller named per path, so the new-file preamble pass below
+	// does not stage a second copy of one they asked for themselves.
+	named := map[string]map[string]bool{}
 
 	sess := lsp.NewSession()
 	defer sess.Close()
@@ -211,6 +234,13 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 		if tsOnly {
 			plan.tsOnly = true
 		}
+		if named[fp.path] == nil {
+			named[fp.path] = map[string]bool{}
+		}
+		named[fp.path][t.Symbol.Anchor] = true
+		if isOrdinalAnchor(t.Symbol.Anchor) {
+			plan.ordinals = append(plan.ordinals, fp.path+":"+t.Symbol.Anchor)
+		}
 		outcome := Staged
 		if unchanged {
 			outcome = Unchanged
@@ -226,8 +256,62 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 		})
 	}
 
+	for _, fp := range plan.files {
+		if fp.addPreamble(named[fp.path]) {
+			plan.preamble = append(plan.preamble, fp.path)
+		}
+	}
+
 	sortResults(plan.results)
 	return plan, nil
+}
+
+// addPreamble stages @header and @imports for a file that does not exist in
+// HEAD (docs/ANCHORS.md). Synthesizing only the symbols the caller named
+// would write a blob holding a bare declaration with no package clause and
+// no imports -- valid as an extent, but not as a file.
+//
+// Either region legitimately resolves to nothing: TypeScript has no header
+// without a shebang, and a file need not import anything. TODO.md records
+// that callers must tolerate the absence, so an unresolvable one is skipped
+// rather than failing the commit.
+//
+// Ordering needs no special case: seq is the region's own worktree offset,
+// the same rule insertionPoint uses, so the header sorts ahead of the
+// imports and both ahead of every declaration by construction.
+func (fp *filePlan) addPreamble(named map[string]bool) (added bool) {
+	if fp.headExists || !fp.workExists {
+		return false
+	}
+	for _, pseudo := range []string{"@header", "@imports"} {
+		if named[pseudo] {
+			continue
+		}
+		res, err := resolve.Resolve(fp.lang, fp.workSrc, pseudo)
+		if err != nil {
+			continue
+		}
+		fp.ops = append(fp.ops, editOp{
+			kind:  editInsert,
+			start: 0,
+			seq:   int(res.Extent.Start),
+			text:  append([]byte(nil), fp.workSrc[res.Extent.Start:res.Extent.End]...),
+		})
+		added = true
+	}
+	return added
+}
+
+// isOrdinalAnchor reports whether anchor uses docs/ANCHORS.md's positional
+// "Bare#N" form. No identifier in a supported grammar contains "#", so a
+// suffix that parses as a number is unambiguous.
+func isOrdinalAnchor(anchor string) bool {
+	bare, ordinal, ok := strings.Cut(anchor, "#")
+	if !ok || bare == "" {
+		return false
+	}
+	n, err := strconv.Atoi(ordinal)
+	return err == nil && n > 0
 }
 
 // openFilePlan performs every pure read a file's anchors need before any
@@ -288,7 +372,7 @@ func (p *stagePlan) apply(ctx context.Context, repo *gitx.Repo, root string) err
 		}
 	}
 	for _, fp := range p.files {
-		content := applyEdits(fp.headSrc, fp.ops)
+		content := inheritEOF(fp, applyEdits(fp.headSrc, fp.ops))
 
 		mode, err := resolveMode(ctx, repo, root, fp.path, fp.workExists)
 		if err != nil {
@@ -303,6 +387,24 @@ func (p *stagePlan) apply(ctx context.Context, repo *gitx.Repo, root string) err
 		}
 	}
 	return nil
+}
+
+// inheritEOF supplies the trailing newline for a file with no HEAD blob to
+// inherit one from. AGENTS.md's rule is that EOF newline is inherited and
+// never normalized; for a file that exists only in the worktree, the
+// worktree file is the only thing there is to inherit from. Splicing alone
+// cannot know that -- it never manufactures a trailing newline -- so a new
+// file would otherwise land with git's "\ No newline at end of file" against
+// a worktree that plainly has one.
+func inheritEOF(fp *filePlan, content []byte) []byte {
+	if fp.headExists || !fp.workExists || len(content) == 0 {
+		return content
+	}
+	nl := []byte("\n")
+	if bytes.HasSuffix(fp.workSrc, nl) && !bytes.HasSuffix(content, nl) {
+		return append(content, '\n')
+	}
+	return content
 }
 
 // resolveMode reports the git file mode the staged blob should carry:
