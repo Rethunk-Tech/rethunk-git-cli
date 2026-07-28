@@ -68,7 +68,7 @@ func (fp *filePlan) classify(ctx context.Context, sess *lsp.Session, root, ancho
 		return op, bytes.Equal(workBytes, headBytes), tsOnly, nil
 
 	case workRes != nil && headRes == nil:
-		pos, seq := fp.insertionPoint(workRes.Anchor)
+		pos, seq := fp.insertionPoint(workRes)
 		tsOnly, err = fp.crossCheck(ctx, sess, root, workRes)
 		if err != nil {
 			return editOp{}, false, false, err
@@ -120,29 +120,37 @@ func (fp *filePlan) crossCheck(ctx context.Context, sess *lsp.Session, root stri
 // It must work when the immediate neighbours are themselves new (W =
 // [A, X_new, Y_new, C], staging Y_new inserts after A) -- which is
 // exactly why this walks fp.workOrder rather than only checking adjacent
-// entries. seq is qualified's index in that order, used later to keep
-// multiple same-offset insertions in worktree order (mergeInsertTies).
-func (fp *filePlan) insertionPoint(qualified string) (pos uint, seq int) {
-	idx := slices.Index(fp.workOrder, qualified)
+// entries.
+//
+// seq is the anchor's own start offset in the worktree, which is what
+// mergeInsertTies orders same-offset insertions by. Declaration order and
+// byte order agree, so this matches the old index-based seq for every
+// declaration -- but a pseudo-anchor is not a declaration and so has no
+// index at all. Ranking it by a missing index put @header after every
+// symbol, writing the package clause at the bottom of a new file.
+func (fp *filePlan) insertionPoint(res *resolve.Resolution) (pos uint, seq int) {
+	seq = int(res.Extent.Start)
+
+	idx := slices.Index(fp.workOrder, res.Anchor)
 	if idx < 0 {
-		// Cannot happen: qualified is Resolve's own normalized answer
-		// for the anchor that was just resolved against fp.workSrc.
+		// A pseudo-anchor: real position, but no entry in the declaration
+		// table, so there is no sibling walk to do from here.
 		idx = len(fp.workOrder)
 	}
 	if !fp.headExists {
-		return 0, idx
+		return 0, seq
 	}
 	for i := idx - 1; i >= 0; i-- {
-		if res, err := resolve.Resolve(fp.lang, fp.headSrc, fp.workOrder[i]); err == nil {
-			return res.Extent.End, idx
+		if sib, err := resolve.Resolve(fp.lang, fp.headSrc, fp.workOrder[i]); err == nil {
+			return sib.Extent.End, seq
 		}
 	}
 	for i := idx + 1; i < len(fp.workOrder); i++ {
-		if res, err := resolve.Resolve(fp.lang, fp.headSrc, fp.workOrder[i]); err == nil {
-			return res.Extent.Start, idx
+		if sib, err := resolve.Resolve(fp.lang, fp.headSrc, fp.workOrder[i]); err == nil {
+			return sib.Extent.Start, seq
 		}
 	}
-	return uint(len(fp.headSrc)), idx
+	return uint(len(fp.headSrc)), seq
 }
 
 func isResolveError(err error) bool {
