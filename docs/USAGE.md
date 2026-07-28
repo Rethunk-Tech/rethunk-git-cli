@@ -124,6 +124,14 @@ A `chmod +x` with no content edit produces no changed symbols, so `rgit diff`
 lists it as a `MODE` entry — the file is never falsely reported clean. Stage it
 with a pathspec (`rgit commit script.sh`); `--sym` cannot express a mode change.
 
+Per-target `+N/-M` rows sum to git's own insertion count in Go, but not always
+in TypeScript or Python: an anchor absorbs a boundary separator only where the
+formatter makes it mandatory — gofmt always writes one blank line after the
+package clause and after the import block, while Prettier and Black preserve
+whatever blank lines the author wrote. What `rgit diff` promises instead is
+that its preview and `rgit commit --dry-run`'s listing agree row for row, in
+every language.
+
 ## Help
 
 `rgit --help`, `rgit -h`, and `rgit help` print the top-level command list on

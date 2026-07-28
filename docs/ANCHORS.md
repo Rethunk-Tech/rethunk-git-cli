@@ -54,7 +54,10 @@ has no way to give one name its own extent without the other's text coming
 along, and the second has no name of its own to begin with. Name the
 containing type or the path instead. TypeScript's anonymous default export
 (`export default function () {}`) is unaddressable for the same reason as the
-embedded field — the grammar gives it no name to read.
+embedded field — the grammar gives it no name to read. So are TypeScript's
+destructuring declarators — `const {a, b} = obj` and `const [x, y] = arr` bind
+several names off one pattern node, so no single name owns an extent of its
+own; name the containing statement or the path instead.
 
 The two nest differently, which matters when the container is new. A Go method
 sits beside its type rather than inside it, so staging one never drags the type

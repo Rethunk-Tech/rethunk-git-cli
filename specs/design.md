@@ -190,6 +190,18 @@ symbol body — so three grammars cover the dominant case, and `@toplevel` /
 **4%** (p90 20%), which is precisely where symbol staging beats whole-file
 staging; if commits typically rewrote most of a file, the tool would add nothing.
 
+**Named nested declarations do not clear that bar, so they get no anchor of
+their own.** Measured across 51 repositories: 0.00% of Go functions contain a
+named nested declaration (structurally impossible — the grammar permits only
+an anonymous `func_literal` in a function body, and Go has no nested classes),
+versus 1.98% of TypeScript functions (6.32% of files), 3.36% of TSX (9.95% of
+files), and 9.26% of Python (25.61% of files). TSX and Python are
+repository-concentrated rather than general — one repository accounts for 55%
+of the TSX hits, another for 60% of Python's — and anonymous nesting
+outnumbers named nesting 6–30× everywhere but Python. None of this clears the
+78%/91% bar the v1 grammars themselves were held to above; closed as not worth
+building, not deferred.
+
 **Container members are addressable, and the parse is held open.** Go's methods
 are file-scope, so `A.Get` resolved from the start; TypeScript and Python keep
 theirs in a class body, and until that body was descended into the finest unit
@@ -217,7 +229,11 @@ a `field_declaration`'s `"name"` field is itself multiple (`A, B int` is one
 node sharing a type between two names), while a `method_elem` carries exactly
 one. A shared-name field line and an embedded/anonymous field are left
 unaddressable rather than resolved to a byte extent that silently drags a
-sibling name's text along with it.
+sibling name's text along with it. TypeScript's destructuring declarators
+(`const {a, b} = obj`, `const [x, y] = arr`) are unaddressable by the same
+reasoning — the binding names share one pattern node — documented alongside
+the rest of TypeScript's addressable and unaddressable shapes in
+[`../docs/ANCHORS.md`](../docs/ANCHORS.md#qualification).
 
 **TypeScript's `declarationFor` covered five node kinds and fell through to
 `(unanchorable)` on everything else** — `enum_declaration`,
