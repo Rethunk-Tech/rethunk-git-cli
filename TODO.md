@@ -97,11 +97,9 @@ Two pieces of shared plumbing the next grammar needs, whichever it is:
       than when it was deferred: `pflag` is already a dependency and
       `--porcelain` is the data source.
 - [ ] `--json` output — `--porcelain` covers machine consumption for now
-- [ ] `--fixup` / `--squash` passthrough. `rgit` is the only commit path in
-      repositories that adopt it, so a fixup commit currently means dropping to
-      plain `git`.
-- [ ] `--author`, `--date`, and `--gpg-sign` passthrough. `commit.gpgsign` is
-      already honoured as configuration; the flag form is not accepted.
-- [ ] `--push` sets no upstream, so a first push from a new branch fails with
-      exit 8. `gitx.Push` already takes variadic arguments; the call site passes
-      none.
+- [ ] `-S` is not accepted as shorthand for `--gpg-sign`; the long form is.
+      `pflag` checks a shorthand's `NoOptDefVal` before checking for an attached
+      value, so git's own idiomatic `-Skeyid` misparses as an unknown `-k`
+      flag. Shipping the shorthand needs that resolved upstream or worked
+      around, and a flag that silently misreads its argument is worse than one
+      that is absent.
