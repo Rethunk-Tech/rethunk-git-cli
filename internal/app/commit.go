@@ -111,6 +111,12 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 	if plan.TSOnly() {
 		fmt.Fprintln(stderr, "rgit: [ts-only] no live language server reached in time; extents unverified")
 	}
+	for _, path := range plan.Preamble() {
+		fmt.Fprintf(stderr, "[notice] %s is new; staging its @header and @imports so the file compiles\n", path)
+	}
+	for _, anchor := range plan.Ordinals() {
+		fmt.Fprintf(stderr, "[warning] anchor '%s' is positional; inserting a symbol above it repoints it -- qualify it where the language allows\n", anchor)
+	}
 
 	allUnchanged := len(plan.Results()) > 0
 	for _, r := range plan.Results() {
