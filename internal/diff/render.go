@@ -26,7 +26,8 @@ func RenderText(report *Report) string {
 			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", file, rowLabel(row), rowStatusWord(row), rowCounts(row), rowHint(f.Path, row))
 		}
 	}
-	tw.Flush()
+	// Writes go to a bytes.Buffer, which never fails.
+	_ = tw.Flush()
 	return buf.String()
 }
 
