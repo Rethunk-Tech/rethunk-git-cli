@@ -57,9 +57,9 @@ func (p *pythonLanguage) Declarations(src []byte, root *ts.Node) []Declaration {
 func (p *pythonLanguage) declarationFor(src []byte, node *ts.Node) (Declaration, bool) {
 	switch node.GrammarName() {
 	case "function_definition":
-		return p.namedDeclaration(src, node, node, "function")
+		return p.namedDeclaration(src, node, node)
 	case "class_definition":
-		return p.namedDeclaration(src, node, node, "class")
+		return p.namedDeclaration(src, node, node)
 	case "decorated_definition":
 		return p.decoratedDeclaration(src, node)
 	case "expression_statement":
@@ -79,15 +79,15 @@ func (p *pythonLanguage) decoratedDeclaration(src []byte, node *ts.Node) (Declar
 		inner := node.NamedChild(i)
 		switch inner.GrammarName() {
 		case "function_definition":
-			return p.namedDeclaration(src, node, inner, "function")
+			return p.namedDeclaration(src, node, inner)
 		case "class_definition":
-			return p.namedDeclaration(src, node, inner, "class")
+			return p.namedDeclaration(src, node, inner)
 		}
 	}
 	return Declaration{}, false
 }
 
-func (p *pythonLanguage) namedDeclaration(src []byte, extent, nameHost *ts.Node, kind string) (Declaration, bool) {
+func (p *pythonLanguage) namedDeclaration(src []byte, extent, nameHost *ts.Node) (Declaration, bool) {
 	nameNode := nameHost.ChildByFieldName("name")
 	if nameNode == nil {
 		return Declaration{}, false
@@ -95,7 +95,6 @@ func (p *pythonLanguage) namedDeclaration(src []byte, extent, nameHost *ts.Node,
 	return Declaration{
 		Node: extent,
 		Bare: string(src[nameNode.StartByte():nameNode.EndByte()]),
-		Kind: kind,
 	}, true
 }
 
@@ -117,6 +116,5 @@ func (p *pythonLanguage) assignmentDeclaration(src []byte, node *ts.Node) (Decla
 	return Declaration{
 		Node: node,
 		Bare: string(src[left.StartByte():left.EndByte()]),
-		Kind: "var",
 	}, true
 }

@@ -44,13 +44,9 @@ type Anchor struct {
 }
 
 // Classification is the result of applying the six-rule table to one
-// positional argument. Rule records which of the six rules matched
-// (1-indexed, matching docs/USAGE.md's table), which is diagnostic only —
-// downstream code should switch on Kind, not Rule.
+// positional argument.
 type Classification struct {
 	Kind     Kind
-	Rule     int
-	Raw      string
 	Pathspec string
 	Revision string
 	RevPath  RevPath
@@ -105,7 +101,7 @@ func ClassifyArgs(args []string, allowRevisions bool, paths PathChecker, revs Re
 			continue
 		}
 		if seenDoubleDash {
-			out = append(out, Classification{Kind: KindPathspec, Rule: 1, Raw: a, Pathspec: a})
+			out = append(out, Classification{Kind: KindPathspec, Pathspec: a})
 			continue
 		}
 		c, err := classifyOne(a, allowRevisions, paths, revs)
@@ -124,7 +120,7 @@ func classifyOne(a string, allowRevisions bool, paths PathChecker, revs Revision
 	// disambiguates it from an interior-colon symbol anchor; no escaping
 	// is ever needed.
 	if strings.HasPrefix(a, ":") {
-		return Classification{Kind: KindPathspec, Rule: 2, Raw: a, Pathspec: a}, nil
+		return Classification{Kind: KindPathspec, Pathspec: a}, nil
 	}
 	tried = append(tried, "pathspec magic (leading ':')")
 
@@ -138,9 +134,9 @@ func classifyOne(a string, allowRevisions bool, paths PathChecker, revs Revision
 		}
 		if ok {
 			if idx := strings.IndexByte(a, ':'); idx >= 0 {
-				return Classification{Kind: KindRevPath, Rule: 3, Raw: a, RevPath: RevPath{Rev: a[:idx], Path: a[idx+1:]}}, nil
+				return Classification{Kind: KindRevPath, RevPath: RevPath{Rev: a[:idx], Path: a[idx+1:]}}, nil
 			}
-			return Classification{Kind: KindRevision, Rule: 3, Raw: a, Revision: a}, nil
+			return Classification{Kind: KindRevision, Revision: a}, nil
 		}
 		tried = append(tried, "revision, rev:path, or range (git rev-parse --verify)")
 	}
@@ -153,7 +149,7 @@ func classifyOne(a string, allowRevisions bool, paths PathChecker, revs Revision
 		return Classification{}, err
 	}
 	if exists {
-		return Classification{Kind: KindPathspec, Rule: 4, Raw: a, Pathspec: a}, nil
+		return Classification{Kind: KindPathspec, Pathspec: a}, nil
 	}
 	tried = append(tried, "existing path (worktree or HEAD)")
 
@@ -167,7 +163,7 @@ func classifyOne(a string, allowRevisions bool, paths PathChecker, revs Revision
 			return Classification{}, ferr
 		}
 		if fileExists {
-			return Classification{Kind: KindAnchor, Rule: 5, Raw: a, Anchor: Anchor{File: file, Name: name}}, nil
+			return Classification{Kind: KindAnchor, Anchor: Anchor{File: file, Name: name}}, nil
 		}
 	}
 	tried = append(tried, "symbol anchor (existing path + name after last ':')")

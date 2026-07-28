@@ -33,10 +33,6 @@ type Declaration struct {
 	// Container qualifies Bare when the language nests the symbol, e.g. the
 	// receiver type "A" for Go's (a *A) Get. Empty when there is none.
 	Container string
-
-	// Kind is a human-facing category used in diagnostics: "function",
-	// "method", "type", "const", "var", "class", "interface".
-	Kind string
 }
 
 // Language adapts one tree-sitter grammar. An implementation reports which

@@ -55,25 +55,25 @@ func goDeclarations(node *ts.Node, src []byte) []Declaration {
 			return []Declaration{d}
 		}
 	case "function_declaration":
-		if d, ok := goNamedDeclaration(node, src, "function"); ok {
+		if d, ok := goNamedDeclaration(node, src); ok {
 			return []Declaration{d}
 		}
 	case "const_declaration":
-		return goSpecDeclarations(node, src, "const")
+		return goSpecDeclarations(node, src)
 	case "var_declaration":
-		return goSpecDeclarations(node, src, "var")
+		return goSpecDeclarations(node, src)
 	case "type_declaration":
-		return goSpecDeclarations(node, src, "type")
+		return goSpecDeclarations(node, src)
 	}
 	return nil
 }
 
-func goNamedDeclaration(node *ts.Node, src []byte, kind string) (Declaration, bool) {
+func goNamedDeclaration(node *ts.Node, src []byte) (Declaration, bool) {
 	name := node.ChildByFieldName("name")
 	if name == nil {
 		return Declaration{}, false
 	}
-	return Declaration{Node: node, Bare: nodeText(src, name), Kind: kind}, true
+	return Declaration{Node: node, Bare: nodeText(src, name)}, true
 }
 
 // goMethodDeclaration disambiguates by receiver container. It must read the
@@ -95,7 +95,6 @@ func goMethodDeclaration(node *ts.Node, src []byte) (Declaration, bool) {
 		Node:      node,
 		Bare:      nodeText(src, name),
 		Container: container,
-		Kind:      "method",
 	}, true
 }
 
@@ -139,7 +138,7 @@ func goReceiverContainer(recv *ts.Node, src []byte) string {
 // A single-spec declaration keeps the whole node so its extent covers the
 // `const`/`var`/`type` keyword; a grouped spec cannot, since the keyword and
 // parentheses belong to the block rather than to any one spec.
-func goSpecDeclarations(node *ts.Node, src []byte, kind string) []Declaration {
+func goSpecDeclarations(node *ts.Node, src []byte) []Declaration {
 	specs := goSpecs(node)
 	if len(specs) == 0 {
 		return nil
@@ -149,7 +148,7 @@ func goSpecDeclarations(node *ts.Node, src []byte, kind string) []Declaration {
 		if name == nil {
 			return nil
 		}
-		return []Declaration{{Node: node, Bare: nodeText(src, name), Kind: kind}}
+		return []Declaration{{Node: node, Bare: nodeText(src, name)}}
 	}
 
 	out := make([]Declaration, 0, len(specs))
@@ -158,7 +157,7 @@ func goSpecDeclarations(node *ts.Node, src []byte, kind string) []Declaration {
 		if name == nil {
 			continue
 		}
-		out = append(out, Declaration{Node: spec, Bare: nodeText(src, name), Kind: kind})
+		out = append(out, Declaration{Node: spec, Bare: nodeText(src, name)})
 	}
 	return out
 }
