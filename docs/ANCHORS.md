@@ -82,8 +82,7 @@ binary or non-parseable files. Name the path instead. Behaviour per kind:
 v1 vendors three grammars: **Go, TypeScript/JavaScript** (including TSX/JSX),
 and **Python**. Anything else → exit 9 on a symbol anchor; name the path.
 
-Deferred to v2: CSS/SCSS selectors, JSON/YAML/TOML key paths, HTML elements,
-and Rust/C/C++. See [`../TODO.md`](../TODO.md).
+The grammars deferred to v2 are listed in [`../TODO.md`](../TODO.md).
 
 ## Deletions
 
