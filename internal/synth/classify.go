@@ -2,9 +2,6 @@ package synth
 
 import (
 	"errors"
-	"fmt"
-
-	ts "github.com/tree-sitter/go-tree-sitter"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
@@ -119,70 +116,4 @@ func asAmbiguous(err error) (*resolve.ResolveError, bool) {
 		return rerr, true
 	}
 	return nil, false
-}
-
-// declOrder returns every top-level declaration in src, in source order,
-// as the exact qualified anchor string resolve.Resolve accepts for it.
-//
-// Seam note: internal/resolve.Resolve only resolves one named anchor at a
-// time; it has no exported enumeration. Nearest-existing-sibling
-// insertion needs the FULL ordered symbol table (spike/synth.py's
-// w_order), so this duplicates resolve's own (unexported)
-// assignQualifiedNames -- deliberately the small, mechanical half of
-// resolution, not the fragile half. Extent computation, doc-comment
-// attribution, and ambiguity handling all still go through
-// resolve.Resolve itself; declOrder only supplies the name each
-// worktree-order position resolves to. A follow-up to internal/resolve
-// exporting this enumeration (or Symbol.Qualified) directly would let
-// this duplication go away -- reported as a seam in the Phase 3 handoff.
-func declOrder(lang resolve.Language, src []byte) ([]string, error) {
-	root, err := parseRoot(lang, src)
-	if err != nil {
-		return nil, err
-	}
-	decls := lang.Declarations(src, root)
-	return assignQualified(decls), nil
-}
-
-// assignQualified mirrors resolve/index.go's assignQualifiedNames exactly:
-// container-qualified when the declaration has one, the bare name when
-// it's the only uncontained declaration sharing that name, else an
-// ordinal suffix (Go's repeated func init()).
-func assignQualified(decls []resolve.Declaration) []string {
-	uncontained := map[string]int{}
-	for _, d := range decls {
-		if d.Container == "" {
-			uncontained[d.Bare]++
-		}
-	}
-	seen := map[string]int{}
-	out := make([]string, len(decls))
-	for i, d := range decls {
-		switch {
-		case d.Container != "":
-			out[i] = d.Container + "." + d.Bare
-		case uncontained[d.Bare] == 1:
-			out[i] = d.Bare
-		default:
-			seen[d.Bare]++
-			out[i] = fmt.Sprintf("%s#%d", d.Bare, seen[d.Bare])
-		}
-	}
-	return out
-}
-
-// parseRoot parses src with lang's grammar and returns its root node,
-// mirroring internal/resolve's own parseSource -- duplicated for the same
-// seam reason as declOrder: it is not exported.
-func parseRoot(lang resolve.Language, src []byte) (*ts.Node, error) {
-	parser := ts.NewParser()
-	defer parser.Close()
-	if err := parser.SetLanguage(lang.TSLanguage()); err != nil {
-		return nil, fmt.Errorf("synth: set language %s: %w", lang.Name(), err)
-	}
-	tree := parser.Parse(src, nil)
-	if tree == nil {
-		return nil, fmt.Errorf("synth: %s: parse produced no tree", lang.Name())
-	}
-	return tree.RootNode(), nil
 }

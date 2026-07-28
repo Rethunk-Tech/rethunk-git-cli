@@ -153,7 +153,7 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 		workExists: workExists,
 	}
 	if workExists {
-		fp.workOrder, err = declOrder(lang, workSrc)
+		fp.workOrder, err = resolve.DeclOrder(lang, workSrc)
 		if err != nil {
 			return nil, err
 		}

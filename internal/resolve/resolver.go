@@ -30,6 +30,10 @@ func Resolve(lang Language, src []byte, anchor string) (*Resolution, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Trees hold C-side memory that the garbage collector does not track.
+	// Nothing returned from here points into the tree — a Resolution carries
+	// byte offsets and strings only — so releasing it now is safe.
+	defer tree.Close()
 	root := tree.RootNode()
 
 	if isPseudoAnchor(anchor) {
@@ -42,6 +46,30 @@ func Resolve(lang Language, src []byte, anchor string) (*Resolution, error) {
 		return nil, err
 	}
 	return &Resolution{Extent: sym.Full, DeclOnly: sym.DeclOnly, Anchor: sym.Qualified}, nil
+}
+
+// DeclOrder returns the anchor rgit emits for each top-level declaration in
+// src, in source order — the same strings Resolve accepts back.
+//
+// Blob synthesis needs the whole ordered table, not one named anchor: placing
+// a new symbol means walking the worktree's declarations outward from it to
+// find the nearest sibling that also exists in HEAD. Exported here rather
+// than recomputed by the caller so the qualification rules — container
+// prefix, bare name, ordinal fallback — have exactly one implementation and
+// cannot drift into disagreeing about what an anchor is called.
+func DeclOrder(lang Language, src []byte) ([]string, error) {
+	tree, err := parseSource(lang, src)
+	if err != nil {
+		return nil, err
+	}
+	defer tree.Close()
+
+	idx := buildIndex(lang, src, tree.RootNode())
+	out := make([]string, len(idx.order))
+	for i, s := range idx.order {
+		out[i] = s.Qualified
+	}
+	return out, nil
 }
 
 func parseSource(lang Language, src []byte) (*ts.Tree, error) {
