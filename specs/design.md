@@ -173,11 +173,64 @@ socket exited from the bind conflict unaided, so the `O_EXCL` lock is not
 required for correctness — it is kept to avoid launching doomed processes and
 their stderr noise under concurrent invocation.
 
+### Transport support per server
+
+The daemon design above was verified only for `gopls` when it was written.
+Measured directly for the other two before implementing against them:
+
+| Server | `--help` claim | Measured behaviour | Verdict |
+| --- | --- | --- | --- |
+| `gopls` | `-listen=string`, prefixable `unix;` | Creates a real unix-domain socket file; other processes dial in | Listen-mode daemon |
+| `vtsls` | `--socket=<number>` | With nothing listening on that TCP port, exits immediately (code 0, no output). Given a pre-bound TCP listener, connects to it as a client | Dials **out**, not a daemon |
+| `pyright-langserver` | `--socket=<number>` | Same shape as `vtsls`: exits immediately with nothing listening; given a pre-bound TCP listener, connects out and streams `window/logMessage` over it | Dials **out**, not a daemon |
+
+Verified with `vtsls --socket=<port>` / `pyright-langserver --socket=<port>`
+against an empty port (immediate exit) and then against a port with `nc -l`
+already bound (successful outbound connection, confirmed via `ss -tn` and by
+observing `pyright-langserver` write real JSON-RPC frames to the accepting
+listener). Neither tool's `--socket` takes a path, so even the outbound mode
+has no unix-socket form to standardize on with `gopls`.
+
+**Consequence: two transports behind one `Dial` interface, not one.** `gopls`
+alone gets the probe → spawn → degrade sequence above, at
+`$XDG_RUNTIME_DIR/rgit-gopls.sock`. `vtsls` and `pyright-langserver` get a
+one-shot stdio subprocess (`--stdio`, their default and only listen-free mode)
+spawned fresh per query, bounded by dial budget + query deadline (400ms total)
+end to end, and killed on close rather than left running — there is no
+persistent daemon for either to reuse, so pretending otherwise would just be a
+subprocess rgit forgets to clean up.
+
+**Measured stdio latency**, single-declaration fixtures, warm binaries already
+on disk:
+
+| Server | Spawn + handshake | First `documentSymbol` after `didOpen` |
+| --- | --- | --- |
+| `pyright-langserver` | ~105ms total, within budget | Succeeded in the same call |
+| `vtsls` | ~90ms, within budget | Exceeded the 250ms query deadline on the first call every time; a retry ~500ms later answered in ~4ms |
+
+So `vtsls`'s cross-check degrades to `[ts-only]` on effectively every real
+invocation — tsserver's own startup cost outlives the query deadline before it
+can answer even one request — while `pyright-langserver` and `gopls` (once its
+daemon is warm) both cross-check successfully within budget on small files.
+This is not a bug: "never block on a cold server" was always going to cost the
+TypeScript path more than the other two, since it is the only language without
+either a real daemon or a fast first response, and degrading is the documented
+outcome for exactly this case, not a failure to fix.
+
 ### Cross-check exemptions
 
 Tree-sitter alone, no LSP comparison: pseudo-anchors (servers do not report
 import blocks as document symbols), deletions (the symbol exists only in HEAD,
 outside the server's worktree view), and any degraded or absent daemon.
+
+A fourth case surfaced during implementation, not anticipated when the three
+above were written: the daemon answers, but its own `documentSymbol` outline
+simply does not name the anchor being checked (a symbol kind the server
+doesn't surface, or a container shape rgit's name normalization doesn't
+recognize). That is not the same claim as "the extents disagree" — there is
+nothing to compare — so it degrades to `[ts-only]` rather than hard-failing.
+Treating it as exit 6 would mean an incomplete server outline could block a
+commit for a symbol tree-sitter resolved correctly.
 
 ### Grammar scope
 
