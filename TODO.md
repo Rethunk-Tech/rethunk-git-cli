@@ -17,6 +17,16 @@ Future work only. Decisions already made live in
       shebang is not required. Callers that auto-stage `@header` for an
       untracked file must tolerate its absence.
 
+- [ ] A symbol inserted into an existing container gains a blank line on each
+      side, because boundary padding normalizes spliced regions to exactly one
+      (`specs/design.md`). Members that sat adjacent in the worktree are
+      committed with a blank line between them — valid, and semantically the
+      right content, but not byte-identical to the worktree, so the file still
+      reads as modified afterwards. Indentation is preserved.
+- [ ] Only class members are addressed one level down. Nested functions,
+      methods of a class declared inside a function, and TypeScript namespace
+      members still resolve no finer than their nearest top-level declaration.
+
 ## v2 — grammars
 
 Config and data files stage by path meanwhile, which is what a lockfile or a

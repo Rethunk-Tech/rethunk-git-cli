@@ -35,6 +35,17 @@ before staging.
 Same-named symbols are legal — Go permits two `func init()` in a file, and
 `(*A).Get` / `(*B).Get` share a bare name.
 
+A container qualifies its members in every supported language: Go's receiver
+type (`auth.go:A.Get`), and a TypeScript or Python class (`svc.ts:Svc.login`,
+`svc.py:Svc.login`). The class itself stays addressable by its bare name, and
+naming it claims every member — that is what asking for the class means.
+
+The two nest differently, which matters when the container is new. A Go method
+sits beside its type rather than inside it, so staging one never drags the type
+along. A class encloses its members, so naming a member of a class absent from
+`HEAD` stages the whole class: there is no way to add a method to a class that
+does not exist yet. `rgit` says so on stderr rather than doing it quietly.
+
 | Form | Example | Notes |
 | --- | --- | --- |
 | Bare | `auth.go:ValidateToken` | Fails with exit 4 if several symbols match |
