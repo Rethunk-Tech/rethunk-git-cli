@@ -65,7 +65,7 @@ type index struct {
 	order       []*Symbol
 	byQualified map[string]*Symbol
 	// byBare indexes every symbol under its bare name too, not just symbols
-	// that lack a container. This is Rule 0 (contracts-waveB.md): keying
+	// that lack a container: keying
 	// only on qualified names makes a bare "Get" resolve as absent (exit 3)
 	// when the correct answer is ambiguous (exit 4) — the remediations
 	// differ, so both indexes must exist.

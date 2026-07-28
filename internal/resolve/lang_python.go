@@ -4,9 +4,9 @@ import ts "github.com/tree-sitter/go-tree-sitter"
 
 func init() { register(newPythonLanguage()) }
 
-// pythonLanguage adapts the tree-sitter Python grammar. See
-// .orchestrate/contracts-waveB.md for the node shapes this file encodes —
-// they were measured against a compiled parse tree, not guessed from docs.
+// pythonLanguage adapts the tree-sitter Python grammar. The node shapes
+// this file encodes were measured against a compiled parse tree, not
+// guessed from documentation.
 type pythonLanguage struct {
 	lang *ts.Language
 }

@@ -110,9 +110,8 @@ func (c *Client) DocumentSymbols(ctx context.Context, path string, src []byte) (
 
 // flatten normalizes DocumentSymbolResult's two possible shapes —
 // DocumentSymbolSlice (a tree, via Children) and SymbolInformationSlice (a
-// flat list with a Location) — into one []Symbol. Ported from
-// spike/lsp.py's flatten, which validated the shape distinction against a
-// live gopls.
+// flat list with a Location) — into one []Symbol. The shape
+// distinction was validated against a live gopls.
 func flatten(result protocol.DocumentSymbolResult) []Symbol {
 	switch v := result.(type) {
 	case protocol.DocumentSymbolSlice:

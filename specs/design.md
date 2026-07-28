@@ -52,9 +52,9 @@ symbol had changed:
    - **Appending at end-of-file inherits `B_head`'s own convention.** When the
      insertion point is the end of the file — the common case, since appending
      after the last existing symbol lands there — the synthesized blob ends with
-     a newline if and only if `B_head` did. Neither the spike nor its
-     adversarial round covered this, and it is the one place where "insert
-     between two regions" has only one region: forcing a trailing newline would
+     a newline if and only if `B_head` did. This is the one place where
+     "insert between two regions" has only one region: forcing a trailing
+     newline would
      add a byte to a file that never had one, and forcing its absence would
      strip one from a file that did.
 4. **Write** — `git hash-object -w --path <path> --stdin`. **`--path` is
@@ -72,28 +72,6 @@ nothing should have moved.
 
 **Concurrency** needs no handling: two `rgit` runs contend on `.git/index`
 exactly as two `git add` runs do, and git's `index.lock` arbitrates.
-
-### Validation
-
-A Python + tree-sitter spike executed this algorithm against real Go sources —
-**38 assertions**, all passing, every synthesized blob re-parsing with no ERROR
-nodes. Coverage included doc-comment attribution in both directions (contiguous
-comments attach; a blank line breaks it), single and multi-symbol splicing,
-reverse-offset ordering, EOF-newline preservation, nearest-sibling insertion
-where the neighbour is itself new, deletion synthesis, receiver-qualified method
-disambiguation, adjacent symbols with no separating blank line, and nested
-function literals.
-
-The spike also found a defect in this record: keying only on qualified names
-made a bare `Get` *absent* rather than *ambiguous*, yielding exit 3 ("did you
-mean…") where exit 4 ("qualify it") is correct. **The resolver must index bare
-names alongside qualified ones** — the remediations differ.
-
-The spike has since been retired: every assertion above is covered by
-`index_test.go` and `resolver_test.go`, which additionally parse each
-synthesized blob rather than only inspecting its text. Comments in those files
-still cite the prototype they came from — the sources are in git history, under
-`spike/`, up to the commit that removed them.
 
 ## Symbol resolution
 

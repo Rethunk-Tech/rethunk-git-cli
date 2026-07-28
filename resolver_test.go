@@ -62,8 +62,8 @@ func mustResolveExt(t *testing.T, ext string, src []byte, anchor string) string 
 }
 
 func TestResolve_ExtentAndDocAttribution(t *testing.T) {
-	// Ported from spike/test_basic.go's HEAD fixture: a doc comment
-	// directly above ValidateToken, no blank line, must be part of its
+	// A doc comment directly above ValidateToken, with no blank line,
+	// must be part of its
 	// extent; the sibling helper() must be untouched by resolving
 	// ValidateToken alone.
 	src := []byte(`package p
@@ -100,8 +100,7 @@ func untouched() {}
 }
 
 func TestResolve_BlankLineBreaksDocAttribution(t *testing.T) {
-	// Ported from spike/adversarial.py section A (the locked decision): a
-	// blank line between a free-floating comment and the next symbol
+	// The locked decision: a blank line between a free-floating comment and the next symbol
 	// breaks attribution; a comment with no blank line before the symbol
 	// attaches.
 	src := []byte(`package p
@@ -124,7 +123,7 @@ func B() {}
 }
 
 func TestResolve_ContiguousCommentsAttach(t *testing.T) {
-	// Ported from spike/adversarial.py section B: three consecutive
+	// Three consecutive
 	// comment lines with no blank line between them all attach to the
 	// symbol below.
 	src := []byte(`package p
@@ -143,7 +142,7 @@ func C() {}
 }
 
 func TestResolve_ReceiverQualifiedDisambiguation(t *testing.T) {
-	// Ported from spike/adversarial.py section D: same-named methods on
+	// Same-named methods on
 	// different receivers resolve independently when qualified, and the
 	// bare name is ambiguous rather than silently picking one.
 	src := []byte(`package p
@@ -194,7 +193,7 @@ func Foo() {}
 }
 
 func TestResolve_NestedFuncLiteralNotTopLevel(t *testing.T) {
-	// Ported from spike/adversarial.py section G: a function literal
+	// A function literal
 	// nested in Outer's body is not itself a top-level symbol — it comes
 	// along as part of Outer's own extent — and it does not fracture the
 	// file into extra unaddressable siblings.
@@ -227,7 +226,7 @@ func TestResolve_ConsecutiveNewSymbolsEachResolveIndependently(t *testing.T) {
 	// That walk depends on this resolver giving each consecutive new
 	// symbol its own correct extent and preserving their source order;
 	// this is the resolve-level guarantee synth's insertion logic relies
-	// on, ported from spike/test_basic.py case 5.
+	// on.
 	src := []byte(`package p
 
 func A() {}
@@ -285,7 +284,7 @@ func init() { println(2) }
 }
 
 func TestResolve_PseudoAnchors(t *testing.T) {
-	// Ported from spike/pseudo.py: @header, @imports, and @toplevel are
+	// @header, @imports, and @toplevel are
 	// all addressable. @header spans build tag through package_clause
 	// even though a blank line separates them — Go requires that blank
 	// line, and both still belong to the header (docs/ANCHORS.md).
@@ -385,7 +384,7 @@ export const G = (x: number) => x + 1
 
 	// @imports spans N nodes here where Go has exactly one. A Go-shaped
 	// implementation stages only the first import and silently drops the
-	// rest (contracts-waveB.md).
+	// rest.
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", ts, "@imports"),
 		"import {a} from 'a'\nimport b from 'b'"))
 

@@ -40,9 +40,9 @@ skips cleanly when the binary is absent or `-short` is set — mocks cannot catc
 a change in real language-server range semantics, which is the class of defect
 that invalidated an earlier design.
 
-**Write tests before implementation.** The Python prototypes that validated the
-design have been retired into these files; a case they covered must not be lost
-when one is refactored.
+**Write tests before implementation.** These three files are where the
+design's validated cases live; a case one of them covers must not be lost when
+it is refactored.
 
 ```bash
 go test ./...          # full suite

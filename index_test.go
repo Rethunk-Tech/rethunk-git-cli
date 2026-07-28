@@ -69,9 +69,9 @@ func mustStage(t *testing.T, repo *gitx.Repo, dir string, targets ...synth.Targe
 	qt.Assert(t, qt.IsNil(err))
 }
 
-// mustParseGo fails if src is not valid Go. The spike asserted that every
-// synthesized blob re-parses with no ERROR nodes, and it is the cheap check
-// that catches a splice landing at the wrong offset: a misplaced extent
+// mustParseGo fails if src is not valid Go. Every synthesized blob must
+// re-parse with no ERROR nodes, and this is the cheap check that catches
+// a splice landing at the wrong offset: a misplaced extent
 // usually produces syntactically broken output rather than subtly wrong
 // output. go/parser is a stricter oracle than tree-sitter here, which is
 // error-tolerant by design and would report a damaged tree rather than
@@ -320,7 +320,7 @@ func TestStage_NewSymbolInsertsAtNearestSiblingIncludingNewNeighbours(t *testing
 	commitAll(t, dir, "chore: add sib.go")
 
 	// XNew is not staged; YNew's nearest existing sibling must be walked
-	// back to A past XNew (spike/adversarial.py's ported case).
+	// back to A past XNew.
 	work := "package main\n\nfunc A() {}\n\nfunc XNew() {}\n\nfunc YNew() {}\n\nfunc C() {}\n"
 	writeFile(t, dir, "sib.go", work)
 
@@ -337,8 +337,7 @@ func TestStage_NewSymbolInsertsAtNearestSiblingIncludingNewNeighbours(t *testing
 }
 
 func TestStage_MultipleSymbolsSpliceInReverseOffsetOrder(t *testing.T) {
-	// Ported from spike/test_basic.py's multi-symbol case and
-	// spike/adversarial.py section F. Two extents in one file must be
+	// Two extents in one file must be
 	// applied in reverse byte-offset order, or the first splice shifts the
 	// bytes out from under the second. A and B are adjacent with no blank
 	// line between them, which is where an off-by-one boundary shows up as
@@ -381,7 +380,7 @@ func TestStage_MultipleSymbolsSpliceInReverseOffsetOrder(t *testing.T) {
 }
 
 func TestStage_DeletedSymbolExcisedFromBlob(t *testing.T) {
-	// Ported from spike/adversarial.py section C. Deleting a symbol is
+	// Deleting a symbol is
 	// anchored like any other change: the extent resolves against HEAD,
 	// where the symbol still exists, and staging removes it -- doc comment
 	// included, since the doc comment is part of the extent.

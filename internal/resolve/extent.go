@@ -11,8 +11,7 @@ import (
 // first time the gap between a comment's end and the current start contains
 // more than one newline — the blank-line rule: a comment block directly
 // above a symbol with no intervening blank line belongs to it; a blank line
-// breaks the association (docs/ANCHORS.md). Ported from spike/synth.py's
-// _doc_start, which pinned this rule against real Go doc comments.
+// breaks the association (docs/ANCHORS.md).
 func docStart(lang Language, src []byte, node *ts.Node) uint {
 	start := node.StartByte()
 	prev := node.PrevNamedSibling()

@@ -24,8 +24,8 @@ func (g *goLanguage) TSLanguage() *ts.Language { return g.lang }
 
 func (g *goLanguage) IsComment(kind string) bool { return kind == "comment" }
 
-// goTopLevelKinds are the addressable top-level node kinds pinned by
-// contracts-waveB.md: functions and methods by their own "name" field,
+// goTopLevelKinds are the addressable top-level node kinds: functions
+// and methods by their own "name" field,
 // const/var/type declarations by the name field of the spec they wrap.
 var goTopLevelKinds = map[string]bool{
 	"function_declaration": true,
@@ -80,7 +80,7 @@ func goNamedDeclaration(node *ts.Node, src []byte, kind string) (Declaration, bo
 // "name" and "receiver" fields, never positional children:
 // method_declaration has two parameter_list children (receiver, then
 // parameters), and its name node is a field_identifier, not an identifier —
-// positional indexing silently picks the wrong node (contracts-waveB.md).
+// positional indexing silently picks the wrong node.
 func goMethodDeclaration(node *ts.Node, src []byte) (Declaration, bool) {
 	name := node.ChildByFieldName("name")
 	recv := node.ChildByFieldName("receiver")
@@ -125,8 +125,7 @@ func goReceiverContainer(recv *ts.Node, src []byte) string {
 // which carry a "name" field of their own — the name lives on the spec
 // node(s) they wrap (const_spec, var_spec or var_spec_list, type_spec or
 // type_alias). A grouped block ("const a = 1\nb = 2") takes the first
-// spec's name, matching spike/synth.py's same first-spec shortcut for
-// multi-name specs.
+// spec's name -- the same first-spec shortcut used for multi-name specs.
 // goSpecDeclarations addresses each spec of a const/var/type declaration
 // separately when the declaration groups several, and the whole declaration
 // when it holds one.

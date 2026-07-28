@@ -59,7 +59,7 @@ func headerExtent(lang Language, root *ts.Node, limit uint) (Extent, bool) {
 // emits exactly one import_declaration; TypeScript and Python emit one node
 // per import statement, so the run can be many nodes wide — the pseudo-
 // anchor must cover the whole run or staging @imports would silently drop
-// everything after the first import (contracts-waveB.md).
+// everything after the first import.
 //
 // Comments do not break the run. In TypeScript and Python a grouping
 // comment between two imports ("# stdlib", "// external") is an ordinary

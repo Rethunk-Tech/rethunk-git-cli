@@ -4,10 +4,9 @@
 // else (hooks, pathspec matching, credential prompting) stays git's job,
 // delegated through internal/gitx.
 //
-// The algorithm is specs/design.md's "Blob synthesis" section, ported
-// from the validated prototype in spike/synth.py: read HEAD and worktree
-// content, resolve each anchor's extent in both, and splice, insert, or
-// excise accordingly. Multiple edits in one file apply in reverse
+// The algorithm is specs/design.md's "Blob synthesis" section: read HEAD
+// and worktree content, resolve each anchor's extent in both, and splice,
+// insert, or excise accordingly. Multiple edits in one file apply in reverse
 // byte-offset order so an earlier splice cannot invalidate a later
 // offset (AGENTS.md's invariant table).
 package synth
@@ -116,9 +115,9 @@ func spliceReplace(out []byte, start, end uint, text []byte) []byte {
 }
 
 // spliceExcise removes out[start:end] -- a deleted symbol's extent -- and
-// collapses the blank-line gap it leaves, per spike/adversarial.py
-// section C. When the excised symbol was the last thing in the file (mod
-// trailing whitespace), collapsing naively would consume HEAD's own
+// collapses the blank-line gap it leaves. When the excised symbol was the
+// last thing in the file (mod trailing whitespace), collapsing naively
+// would consume HEAD's own
 // trailing newline along with the gap; the branch below restores it
 // separately so deletion never touches EOF newline-or-not, matching every
 // other edit kind.
