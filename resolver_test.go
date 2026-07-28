@@ -779,9 +779,21 @@ func ValidateToken(t string) error {
 	// server"); give it a beat to come up, mirroring two rgit invocations
 	// moments apart rather than one that blocks.
 	_, _ = resolve.CrossCheckExtent(ctx, lang, dir, path, src, res, false)
-	time.Sleep(1500 * time.Millisecond)
 
-	degraded, err := resolve.CrossCheckExtent(ctx, lang, dir, path, src, res, false)
+	// Poll rather than sleep a fixed 1.5s: a daemon that is already warm
+	// answers on the first retry, and this test was otherwise the single
+	// largest contributor to the suite's runtime.
+	var (
+		degraded = true
+		err      error
+	)
+	for deadline := time.Now().Add(3 * time.Second); ; {
+		degraded, err = resolve.CrossCheckExtent(ctx, lang, dir, path, src, res, false)
+		if !degraded || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 	if degraded {
 		t.Skip("gopls daemon did not come up within the test's budget -- degraded, not a failure")
 	}
