@@ -25,8 +25,10 @@ Conventional commits: `type(scope): subject`.
 ## Tests
 
 **Least tests, highest coverage. The suite stays under 30s** (ideally under 10).
-Exactly three files, each holding one happy path plus the edge cases that have
-actually bitten — no permutation laundry lists.
+Three top-level files, each holding one happy path plus the edge cases that
+have actually bitten — no permutation laundry lists. A package may add its own
+unit test beside a helper whose behaviour none of the three exercises directly
+(`internal/util/fileutil_test.go` is the one today).
 
 | File | Happy path | Critical edge cases |
 | --- | --- | --- |
@@ -61,9 +63,9 @@ the delegation boundary in [`AGENTS.md`](AGENTS.md#delegation-boundary).
 ## Documentation
 
 This repo follows the tiered doc layout: README orients and links, `HUMANS.md`
-is the authoritative run/use surface, `AGENTS.md` holds internals,
-`CONTRIBUTING.md` holds process, `specs/` holds the design record, deep
-reference lives in `docs/`.
+introduces running and using `rgit`, `docs/` holds the authoritative reference
+it points at, `AGENTS.md` holds internals, `CONTRIBUTING.md` holds process, and
+`specs/` holds the design record.
 
 Do not repeat content between tiers. If something belongs in two places, it
 belongs in one and gets linked from the other.
