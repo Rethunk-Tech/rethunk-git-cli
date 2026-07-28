@@ -71,3 +71,28 @@ type Language interface {
 	// build tags, copyright, package clause.
 	HeaderKinds() []string
 }
+
+// registered holds every adapter, keyed by file extension. Adapters add
+// themselves from an init function in their own file so that adding a grammar
+// touches exactly one file and no shared registry.
+var registered = map[string]Language{}
+
+// register claims each of l's extensions. It panics on a duplicate claim,
+// which can only be a programming error: two grammars fighting over one
+// extension would make resolution depend on package initialisation order.
+func register(l Language) {
+	for _, ext := range l.Extensions() {
+		if prior, dup := registered[ext]; dup {
+			panic("resolve: " + ext + " claimed by both " + prior.Name() + " and " + l.Name())
+		}
+		registered[ext] = l
+	}
+}
+
+// ForExtension returns the adapter claiming ext (including the leading dot).
+// A false result means the language is unsupported, which callers report as
+// exit 9 — not an error, since naming the path still works.
+func ForExtension(ext string) (Language, bool) {
+	l, ok := registered[ext]
+	return l, ok
+}
