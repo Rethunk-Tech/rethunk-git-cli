@@ -585,6 +585,36 @@ func TestCommit_MultiLanguageSymbolGranularity(t *testing.T) {
 	}
 }
 
+func TestCommit_ExtensionlessShebangResolvesShellSymbol(t *testing.T) {
+	// A git-hook-style script with no extension at all: resolve.ForPath's
+	// shebang fallback is what makes it addressable, and staging one
+	// function must leave its sibling uncommitted exactly like any other
+	// symbol-granular commit.
+	repo := newTempRepo(t)
+	writeFile(t, repo, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v1\n}\n\nbar() {\n  echo bar\n}\n")
+	gitIn(t, repo, "add", "-A")
+	gitIn(t, repo, "commit", "-q", "-m", "init")
+
+	writeFile(t, repo, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v2\n}\n\nbar() {\n  echo changed too\n}\n")
+
+	got := runRgit(t, repo, "commit", "-m", "fix: bump foo only", "pre-commit:foo")
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
+
+	head := gitIn(t, repo, "show", "HEAD:pre-commit")
+	qt.Assert(t, qt.StringContains(head, "echo v2"))
+	qt.Assert(t, qt.StringContains(head, "echo bar")) // bar's edit stayed uncommitted
+
+	// A zsh shebang is deliberately not routed to the shell grammar
+	// (tree-sitter-bash mis-parses zsh-only syntax), so an extensionless
+	// zsh script still refuses a symbol anchor -- the same exit 9 an
+	// unrecognized extension already gets, not a new failure mode.
+	writeFile(t, repo, "zsh-script", "#!/bin/zsh\n\nfoo() {\n  echo hi\n}\n")
+	gitIn(t, repo, "add", "-A")
+	gitIn(t, repo, "commit", "-q", "-m", "add zsh script")
+	got = runRgit(t, repo, "commit", "-m", "chore: touch", "zsh-script:foo")
+	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.UnsupportedLanguage)))
+}
+
 func TestCommit_AllTargetsUnchangedExits11(t *testing.T) {
 	// docs/USAGE.md: an unchanged target warns and is skipped; exit is 11
 	// only when EVERY named target turned out unchanged.
