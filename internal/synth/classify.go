@@ -91,7 +91,17 @@ func (fp *filePlan) classify(ctx context.Context, sess *lsp.Session, root, ancho
 		// invoke this for deletions") are explicit that this is the
 		// caller's job to skip, not something the exempted function
 		// itself is trusted to catch every time.
-		return editOp{kind: editDelete, start: headRes.Extent.Start, end: headRes.Extent.End}, false, false, nil
+		// Excise the extent's own indentation with it. spliceExcise collapses
+		// the gap the removal leaves by joining what precedes to what
+		// follows, which assumes the cut begins at a line boundary -- true
+		// for a top-level declaration in column zero, and false for a class
+		// member, where the leading whitespace would be left behind to run
+		// into the next member's own indentation.
+		return editOp{
+			kind:  editDelete,
+			start: lineStart(fp.headSrc, headRes.Extent.Start),
+			end:   headRes.Extent.End,
+		}, false, false, nil
 
 	default:
 		return editOp{}, false, false, &resolve.ResolveError{Code: exitcode.AnchorUnresolvable, Anchor: anchor}
@@ -122,15 +132,26 @@ func (fp *filePlan) crossCheck(ctx context.Context, sess *lsp.Session, root stri
 // costs nothing, but for a class member means a method landing hard against
 // the left margin of a body indented one level in.
 func insertionText(src []byte, ext resolve.Extent) []byte {
-	lineStart := bytes.LastIndexByte(src[:ext.Start], '\n') + 1
-	indent := src[lineStart:ext.Start]
-	if len(bytes.TrimLeft(indent, " \t")) != 0 {
-		indent = nil // something other than whitespace precedes it on the line
-	}
+	indent := src[lineStart(src, ext.Start):ext.Start]
 
 	out := make([]byte, 0, len(indent)+int(ext.End-ext.Start))
 	out = append(out, indent...)
 	return append(out, src[ext.Start:ext.End]...)
+}
+
+// lineStart is the offset of the start of the line holding off, when only
+// whitespace separates the two, and off itself otherwise. It is what makes
+// an extent's own indentation part of the extent for the two operations
+// that need it: an insertion carries it, and a deletion takes it away.
+//
+// A top-level declaration begins in column zero, so this returns off
+// unchanged and neither operation behaves differently than before.
+func lineStart(src []byte, off uint) uint {
+	start := uint(bytes.LastIndexByte(src[:off], '\n') + 1)
+	if len(bytes.TrimLeft(src[start:off], " \t")) != 0 {
+		return off // something other than whitespace precedes it on the line
+	}
+	return start
 }
 
 // escalateToContainer widens a new member anchor to the container that
