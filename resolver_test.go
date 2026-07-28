@@ -984,3 +984,26 @@ export const c = 1, d = 2;
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.DeepEquals(order, []string{"a", "b", "m", "n", "c", "d"}))
 }
+
+func TestResolve_TypeScriptHeaderWithoutShebang(t *testing.T) {
+	// TypeScript has no package clause or other "this precedes code"
+	// marker; a licence/copyright block at the top of a file with no
+	// shebang is an ordinary "comment" node like any other, so @header
+	// resolved to nothing before this -- HeaderKinds() named only
+	// hash_bang_line. Matching Python's "comment" header kind fixes it.
+	src := []byte(`// Copyright 2026 Example Corp.
+// SPDX-License-Identifier: MIT
+
+/** Doc for F. */
+export function F(): number { return 1 }
+`)
+
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "@header"),
+		"// Copyright 2026 Example Corp.\n// SPDX-License-Identifier: MIT"))
+
+	// The blank line between the licence block and F's own doc comment
+	// keeps the two from merging into one comment run (docs/ANCHORS.md);
+	// @header must not steal F's doc comment, and F must keep it.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "F"),
+		"/** Doc for F. */\nexport function F(): number { return 1 }"))
+}
