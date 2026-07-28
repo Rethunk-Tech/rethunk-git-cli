@@ -48,21 +48,26 @@ func checkPathEscape(root, path string) error {
 	return nil
 }
 
-// anchorFileContradiction implements docs/USAGE.md's "--sym and --file on
+// pathAnchorContradiction implements docs/USAGE.md's "--sym and --file on
 // the same path → exit 5": naming a path both ways is a contradiction the
 // caller must resolve, not a case rgit could silently pick a side on.
-func anchorFileContradiction(syms, files []string, stderr io.Writer) exitcode.Code {
-	fileSet := make(map[string]bool, len(files))
-	for _, path := range files {
-		fileSet[path] = true
+//
+// It runs on the merged, prefix-resolved targets rather than on the flag
+// values alone, so the positional form is held to the identical rule. The
+// two spellings have to agree: a whole-path target stages every byte of the
+// file, while an anchor target stages a blob synthesized from HEAD plus one
+// extent, and the synthesized blob is written to the index second. Letting
+// both through means the anchor silently discards the rest of the file's
+// worktree changes -- the caller asked for the whole path and would get one
+// symbol, with nothing on stderr to say so.
+func pathAnchorContradiction(paths, anchorFiles []string, stderr io.Writer) exitcode.Code {
+	pathSet := make(map[string]bool, len(paths))
+	for _, path := range paths {
+		pathSet[path] = true
 	}
-	for _, sym := range syms {
-		file, _, ok := splitAnchor(sym)
-		if !ok {
-			continue // malformed --sym value; not this check's job to diagnose
-		}
-		if fileSet[file] {
-			fmt.Fprintf(stderr, "rgit: --sym and --file both name %q\n", file)
+	for _, file := range anchorFiles {
+		if pathSet[file] {
+			fmt.Fprintf(stderr, "rgit: %q is named both as a path and as a symbol anchor\n", file)
 			return exitcode.ContradictoryAnchors
 		}
 	}

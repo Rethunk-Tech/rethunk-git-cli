@@ -79,10 +79,6 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 		return exitcode.InvalidUsage
 	}
 
-	if code := anchorFileContradiction(f.syms, f.files, stderr); code != exitcode.Success {
-		return code
-	}
-
 	if !hasConventionalShape(f.messages) {
 		fmt.Fprintln(stderr, `rgit: warning: message does not look like "type(scope): subject"`)
 	}
@@ -102,6 +98,15 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.InvalidUsage
+	}
+
+	// Checked on the built targets, not the raw arguments: by this point
+	// positionals and flags have collapsed into one list and every path has
+	// been resolved against the invocation prefix, so "src/a.go" named from
+	// a subdirectory and "a.go" named from the root compare equal.
+	paths, anchorFiles := targetPaths(targets)
+	if code := pathAnchorContradiction(paths, anchorFiles, stderr); code != exitcode.Success {
+		return code
 	}
 
 	plan, err := synth.PlanStage(ctx, repo, root, targets)
@@ -204,6 +209,19 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 	}
 
 	return exitcode.Success
+}
+
+// targetPaths splits built targets into the plain pathspecs and the files
+// named by a symbol anchor, the two sides pathAnchorContradiction compares.
+func targetPaths(targets []synth.Target) (paths, anchorFiles []string) {
+	for _, t := range targets {
+		if t.Pathspec != "" {
+			paths = append(paths, t.Pathspec)
+			continue
+		}
+		anchorFiles = append(anchorFiles, t.Symbol.Path)
+	}
+	return paths, anchorFiles
 }
 
 // targetLabel renders a synth.Target the way docs/USAGE.md's warning

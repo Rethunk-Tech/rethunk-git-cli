@@ -163,8 +163,9 @@ before decode. Closes #42." \
 ```
 
 **Invalid combinations:** `--dry-run` + `--push`, `--staged` + `--range`,
-`--staged` + `--unstaged`, `-m` + `-F` → exit 129. `--sym` and `--file` on the
-same path → exit 5.
+`--staged` + `--unstaged`, `-m` + `-F` → exit 129. Naming one path both as a
+path and as a symbol anchor → exit 5, in whichever spelling: `--file` with
+`--sym`, or the positional forms `greet.go greet.go:A`.
 
 A missing conventional-commit shape (`type(scope): subject`) warns on stderr;
 the commit proceeds.
@@ -203,7 +204,7 @@ when there is genuinely nothing to commit. `--allow-empty` suppresses it.
 | 0 | Success (possibly with stderr warnings for unchanged targets) |
 | 3 | Anchor unresolvable — missing in both worktree and HEAD; candidates listed |
 | 4 | Ambiguous anchor — candidates listed |
-| 5 | Contradictory anchors (`--sym` and `--file` on same path) |
+| 5 | Contradictory anchors — one path named both as a path and as a symbol anchor |
 | 6 | Normalized LSP ↔ tree-sitter extent mismatch |
 | 7 | Refused path — gitignored and untracked |
 | 8 | Commit succeeded; `--push` failed |

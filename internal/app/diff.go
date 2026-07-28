@@ -64,10 +64,6 @@ func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) exitc
 		return exitcode.InvalidUsage
 	}
 
-	if code := anchorFileContradiction(f.syms, f.files, stderr); code != exitcode.Success {
-		return code
-	}
-
 	root, prefix, repo, code := openRepo(ctx, stderr)
 	if code != exitcode.Success {
 		return code
@@ -116,6 +112,17 @@ func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) exitc
 			return exitcode.InvalidUsage
 		}
 		allSyms[i] = s
+	}
+
+	// Same rule and same point in the flow as rgit commit: positionals and
+	// flags have merged and every path carries the invocation prefix, so the
+	// two spellings of the same contradiction are caught identically.
+	anchorFiles := make([]string, 0, len(allSyms))
+	for _, s := range allSyms {
+		anchorFiles = append(anchorFiles, s.File)
+	}
+	if code := pathAnchorContradiction(allFiles, anchorFiles, stderr); code != exitcode.Success {
+		return code
 	}
 
 	opts := diffpkg.Options{

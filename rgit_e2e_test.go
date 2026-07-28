@@ -219,6 +219,52 @@ func TestInvalidFlagCombinations(t *testing.T) {
 	}
 }
 
+func TestContradictoryPathAndAnchor(t *testing.T) {
+	// Pinned defect: the check ran on flag values only, so the positional
+	// spelling fell straight through it. Both targets were then built, and
+	// apply() ran `git add greet.go` before overwriting that same index
+	// entry with a blob synthesized from HEAD plus one extent -- silently
+	// dropping every other worktree change in the file the caller had just
+	// asked for by path, while the listing still reported the whole path's
+	// line counts.
+	//
+	// docs/USAGE.md § Exit codes assigns 5 to naming a path both ways; the
+	// spelling used to say it cannot change the answer.
+	setup := func(t *testing.T) string {
+		t.Helper()
+		repo := newTempRepo(t)
+		writeFile(t, repo, "greet.go", "package main\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+		return repo
+	}
+
+	contradictory := []struct {
+		name string
+		args []string
+	}{
+		{"both positional", []string{"commit", "-m", "chore: x", "greet.go", "greet.go:A"}},
+		{"both flags", []string{"commit", "-m", "chore: x", "--file", "greet.go", "--sym", "greet.go:A"}},
+		{"positional path and --sym", []string{"commit", "-m", "chore: x", "greet.go", "--sym", "greet.go:A"}},
+		{"diff, both positional", []string{"diff", "greet.go", "greet.go:A"}},
+	}
+	for _, tc := range contradictory {
+		t.Run(tc.name, func(t *testing.T) {
+			got := runRgit(t, setup(t), tc.args...)
+			qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.ContradictoryAnchors)))
+			qt.Assert(t, qt.StringContains(got.Stderr, "named both as a path and as a symbol anchor"))
+		})
+	}
+
+	t.Run("different files are not a contradiction", func(t *testing.T) {
+		// The rule is per path, not "a path and an anchor were both given".
+		repo := setup(t)
+		writeFile(t, repo, "other.go", "package main\n\nfunc C() int {\n\treturn 3\n}\n")
+
+		got := runRgit(t, repo, "commit", "-m", "chore: mixed targets", "other.go", "greet.go:A")
+
+		qt.Assert(t, qt.Equals(got.ExitCode, 0))
+	})
+}
+
 // --- rgit diff execution ----------------------------------------------
 //
 // These cases build real temporary git repositories with real commits, per
