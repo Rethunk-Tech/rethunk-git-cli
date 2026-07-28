@@ -349,6 +349,17 @@ func TestDiff_UnbornBranchListsEverythingCommittable(t *testing.T) {
 	}
 }
 
+func TestCommit_AllTargetsUnchangedExits11(t *testing.T) {
+	// docs/USAGE.md: an unchanged target warns and is skipped; exit is 11
+	// only when EVERY named target turned out unchanged. CONTRIBUTING
+	// credited resolver_test.go with covering this, and nothing did.
+	repo := initRepoWithFile(t, "auth.go", authGoV1)
+
+	got := runRgit(t, repo, "commit", "-m", "chore: noop", "auth.go:ValidateToken")
+	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.NothingToCommit)))
+	qt.Assert(t, qt.StringContains(got.Stderr, "no uncommitted changes"))
+}
+
 func TestCommit_FromSubdirectoryResolvesCWDRelativePaths(t *testing.T) {
 	// git resolves a pathspec relative to the current directory: `git add
 	// a.go` in pkg/deep stages pkg/deep/a.go. rgit tested <root>/a.go
