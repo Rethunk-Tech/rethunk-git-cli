@@ -1,6 +1,7 @@
 # HUMANS.md
 
-Everything needed to run and use `rgit`. Internals live in
+The starting point for running and using `rgit`, pointing into
+[`docs/`](docs/) for the full reference. Internals live in
 [`AGENTS.md`](AGENTS.md); the reasoning behind the design is in
 [`specs/design.md`](specs/design.md).
 
