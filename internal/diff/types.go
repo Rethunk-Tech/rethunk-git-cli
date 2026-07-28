@@ -9,10 +9,11 @@
 // back — rgit diff and rgit commit must agree on what a symbol is called.
 package diff
 
-// Status is one row's classification, matching docs/USAGE.md § Output's six
-// porcelain spellings plus the internal StatusNoSymbols case (an
-// unsupported-language file, ported to porcelain as MOD since it is an
-// ordinary modification that merely could not be split by symbol).
+// Status is one row's classification. The six porcelain spellings it maps to
+// are specified in docs/CODES.md § Output records; StatusNoSymbols is
+// internal to this package, an unsupported-language file reported as MOD
+// since it is an ordinary modification that merely could not be split by
+// symbol.
 type Status int
 
 const (
@@ -25,8 +26,8 @@ const (
 	StatusNoSymbols
 )
 
-// Porcelain returns the exact status token docs/USAGE.md § Output specifies
-// for --porcelain records.
+// Porcelain returns the exact status token docs/CODES.md § Output records
+// specifies for --porcelain output.
 func (s Status) Porcelain() string {
 	switch s {
 	case StatusDeleted:
@@ -83,7 +84,7 @@ type Report struct {
 	// Warnings are extents a live language server disagreed with. rgit diff
 	// reports rather than gates: the same disagreement is exit 6 at commit
 	// time, and learning about it while reading a diff is the point of
-	// saying so here (docs/USAGE.md § Exit codes, exit 6).
+	// saying so here (docs/CODES.md § Exit codes, exit 6).
 	Warnings []string
 
 	// TSOnly reports that at least one file had symbols to cross-check and

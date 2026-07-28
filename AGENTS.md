@@ -31,8 +31,9 @@ Read whichever one the change touches; none is loaded for you.
 | [HUMANS.md](HUMANS.md) | Running and using `rgit` — what it does, inherited behaviour, degraded mode |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Process — commit style, test layout, dependency and documentation policy |
 | [specs/design.md](specs/design.md) | Design record — why, mechanisms, and every measurement |
-| [docs/USAGE.md](docs/USAGE.md) | Command surface, argument grammar, flags, exit codes |
+| [docs/USAGE.md](docs/USAGE.md) | Command surface, argument grammar, flags |
 | [docs/ANCHORS.md](docs/ANCHORS.md) | Anchor syntax, extents, pseudo-anchors, special paths |
+| [docs/CODES.md](docs/CODES.md) | Exit codes and `--porcelain` record formats — the machine contract |
 | [docs/INSTALL.md](docs/INSTALL.md) | Build, language servers, env vars, verify |
 | [TODO.md](TODO.md) | Backlog — known limitations, v2 grammars, deferrals |
 

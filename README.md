@@ -47,8 +47,9 @@ Start with [HUMANS.md](HUMANS.md) to run it, or
 | --- | --- |
 | [HUMANS.md](HUMANS.md) | Run and use: quick start, behaviour, degraded mode |
 | [docs/INSTALL.md](docs/INSTALL.md) | Build, language servers, env vars, verify, uninstall |
-| [docs/USAGE.md](docs/USAGE.md) | Commands, argument grammar, flags, exit codes |
+| [docs/USAGE.md](docs/USAGE.md) | Commands, argument grammar, flags |
 | [docs/ANCHORS.md](docs/ANCHORS.md) | Anchor syntax, extents, pseudo-anchors, special paths |
+| [docs/CODES.md](docs/CODES.md) | Exit codes and `--porcelain` record formats |
 | [AGENTS.md](AGENTS.md) | Internals, invariants, delegation boundary |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Commits, tests, dependency policy |
 | [specs/design.md](specs/design.md) | Design record and the measurements behind it |

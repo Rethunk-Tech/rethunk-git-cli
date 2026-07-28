@@ -50,14 +50,3 @@ or a version bump wants regardless.
       flag. Shipping the shorthand needs that resolved upstream or worked
       around, and a flag that silently misreads its argument is worse than one
       that is absent.
-
-## Documentation
-
-- [ ] Give the exit codes and the `--porcelain` record formats one authoritative
-      file under `docs/`, and replace every restatement elsewhere with a link.
-      They are currently spelled out in `docs/USAGE.md` § Exit codes and
-      § Output, referenced piecemeal from `docs/ANCHORS.md`, and restated again
-      in `internal/exitcode/exitcode.go` and several Go doc comments — the one
-      duplication `CONTRIBUTING.md` § Documentation explicitly forbids, and the
-      reason a code's meaning can drift between the table and the comment that
-      cites it.

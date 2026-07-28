@@ -12,7 +12,7 @@ import (
 )
 
 // ResolveError is a typed resolution failure. Callers map Code directly onto
-// a process exit status (docs/USAGE.md § Exit codes) rather than pattern
+// a process exit status (docs/CODES.md § Exit codes) rather than pattern
 // matching on Error's text.
 type ResolveError struct {
 	Code       exitcode.Code

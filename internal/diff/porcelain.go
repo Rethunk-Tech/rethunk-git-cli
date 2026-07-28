@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-// RenderPorcelain renders report as docs/USAGE.md § Output's stable
+// RenderPorcelain renders report as docs/CODES.md § Output records' stable
 // tab-separated records: FILE<TAB>SYMBOL<TAB>STATUS<TAB>ADDED<TAB>DELETED,
 // one line per row, no header.
 func RenderPorcelain(report *Report) string {

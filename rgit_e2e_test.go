@@ -228,7 +228,7 @@ func TestContradictoryPathAndAnchor(t *testing.T) {
 	// asked for by path, while the listing still reported the whole path's
 	// line counts.
 	//
-	// docs/USAGE.md § Exit codes assigns 5 to naming a path both ways; the
+	// docs/CODES.md § Exit codes assigns 5 to naming a path both ways; the
 	// spelling used to say it cannot change the answer.
 	setup := func(t *testing.T) string {
 		t.Helper()

@@ -28,8 +28,9 @@ attributes, and body — and leaves every other edit in the file uncommitted.
 Everything else stays plain `git`. `rgit` has two commands and no opinions
 about the rest of your workflow.
 
-Commands, flags, and exit codes are in [`docs/USAGE.md`](docs/USAGE.md);
-anchor syntax is in [`docs/ANCHORS.md`](docs/ANCHORS.md). The full index of
+Commands and flags are in [`docs/USAGE.md`](docs/USAGE.md); anchor syntax is
+in [`docs/ANCHORS.md`](docs/ANCHORS.md); exit codes and the `--porcelain`
+record formats are in [`docs/CODES.md`](docs/CODES.md). The full index of
 every document lives in [`README.md`](README.md#documentation).
 
 ## Things worth knowing before you rely on it
