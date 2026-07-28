@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
@@ -22,6 +23,10 @@ import (
 func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Report, error) {
 	scope, err := ResolveScope(ctx, repo, opts)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := validateSyms(ctx, repo, root, scope, opts.Syms); err != nil {
 		return nil, err
 	}
 
@@ -232,6 +237,59 @@ func withPathspecs(args, pathspecs []string) []string {
 	out = append(out, "--")
 	out = append(out, pathspecs...)
 	return out
+}
+
+// validateSyms confirms every --sym/bare-anchor filter opts named actually
+// resolves against the applicable side of scope, before any rendering
+// happens. Without this, a typo in a --sym value was indistinguishable from
+// "that symbol is clean": applyFilters only ever drops rows that do not
+// match, so a name nothing resolves to and a name whose symbol has simply
+// not changed both rendered as the same empty, exit-0 output -- inverting
+// the check-before-commit workflow rgit diff exists to serve.
+//
+// This applies only to --sym/bare-anchor (rgit's own invention, where git
+// has no opinion): a --file/bare-pathspec naming a file that does not exist
+// keeps matching plain `git diff -- nosuch.py`'s own silent exit 0
+// (AGENTS.md's one invariant).
+func validateSyms(ctx context.Context, repo *gitx.Repo, root string, scope Scope, syms []SymRef) error {
+	for _, s := range syms {
+		if err := validateSym(ctx, repo, root, scope, s); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateSym resolves one anchor against whichever side of scope actually
+// has the file, preferring New (the side a caller is normally asking "what
+// changed" about) and falling back to Old for an anchor that only exists on
+// a since-deleted side. A file present on neither side reads the same as an
+// empty source: resolving any name against it fails exactly the way a real
+// but absent symbol would, with the identical "unresolved" message rgit
+// commit already produces for the same anchor (internal/resolve.ResolveError),
+// so a missing file and a missing symbol need no separate message shape.
+func validateSym(ctx context.Context, repo *gitx.Repo, root string, scope Scope, s SymRef) error {
+	lang, ok := resolve.ForExtension(filepath.Ext(s.File))
+	if !ok {
+		// No grammar to resolve against at all -- rgit commit's own exit 9
+		// ("unsupported language for a symbol anchor") is the closer match
+		// than pretending the name might resolve.
+		return &resolve.ResolveError{Code: exitcode.UnsupportedLanguage, Anchor: s.Name}
+	}
+
+	src, exists, err := scope.New.read(ctx, repo, root, s.File)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		src, _, err = scope.Old.read(ctx, repo, root, s.File)
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = resolve.Resolve(lang, src, s.Name)
+	return err
 }
 
 // applyFilters implements docs/USAGE.md's "--sym and --file filter output

@@ -12,6 +12,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
 	diffpkg "github.com/Rethunk-Tech/rethunk-git-cli/internal/diff"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
 // diffCommittable is docs/USAGE.md § Flags' --exit-code/--quiet value:
@@ -135,6 +136,16 @@ func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) exitc
 		if errors.As(err, &uerr) {
 			fmt.Fprintf(stderr, "rgit: %v\n", uerr)
 			return exitcode.InvalidUsage
+		}
+		// A --sym/bare-anchor value that does not resolve (internal/diff's
+		// validateSyms): the same *resolve.ResolveError rgit commit produces
+		// for the identical anchor, mapped through its own Code field rather
+		// than a second table of what each code means (mapStageError in
+		// internal/app/commit.go does the equivalent dispatch for commit).
+		var rerr *resolve.ResolveError
+		if errors.As(err, &rerr) {
+			fmt.Fprintf(stderr, "rgit: %v\n", rerr)
+			return rerr.Code
 		}
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.GitFailure
