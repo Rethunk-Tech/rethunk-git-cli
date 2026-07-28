@@ -134,13 +134,13 @@ func qualifyLSPSymbol(s lsp.Symbol) string {
 // splitOrdinal separates "init#2" into ("init", 2); a name with no "#"
 // returns (anchor, 0).
 func splitOrdinal(anchor string) (bare string, ordinal int) {
-	idx := strings.IndexByte(anchor, '#')
-	if idx < 0 {
+	before, after, ok := strings.Cut(anchor, "#")
+	if !ok {
 		return anchor, 0
 	}
-	n, err := strconv.Atoi(anchor[idx+1:])
+	n, err := strconv.Atoi(after)
 	if err != nil {
 		return anchor, 0
 	}
-	return anchor[:idx], n
+	return before, n
 }

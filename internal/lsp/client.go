@@ -54,7 +54,7 @@ func NewClient(handshakeCtx context.Context, rwc io.ReadWriteCloser, root string
 		Capabilities: protocol.ClientCapabilities{
 			TextDocument: &protocol.TextDocumentClientCapabilities{
 				DocumentSymbol: &protocol.DocumentSymbolClientCapabilities{
-					HierarchicalDocumentSymbolSupport: boolPtr(true),
+					HierarchicalDocumentSymbolSupport: new(true),
 				},
 			},
 		},
@@ -177,5 +177,3 @@ func languageKindFor(path string) protocol.LanguageKind {
 		return protocol.LanguageKindTypeScript
 	}
 }
-
-func boolPtr(b bool) *bool { return &b }

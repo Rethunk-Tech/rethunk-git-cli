@@ -148,8 +148,7 @@ func committableBase(ctx context.Context, repo *gitx.Repo) (string, error) {
 // but per-symbol content diffing needs an actual revision to read, so the
 // merge base has to be resolved explicitly.
 func resolveRangeScope(ctx context.Context, repo *gitx.Repo, rangeToken string) (Scope, error) {
-	if idx := strings.Index(rangeToken, "..."); idx >= 0 {
-		a, b := rangeToken[:idx], rangeToken[idx+3:]
+	if a, b, ok := strings.Cut(rangeToken, "..."); ok {
 		if a == "" || b == "" {
 			return Scope{}, &UsageError{Msg: fmt.Sprintf("malformed revision range %q", rangeToken)}
 		}
@@ -162,8 +161,7 @@ func resolveRangeScope(ctx context.Context, repo *gitx.Repo, rangeToken string) 
 		}
 		return Scope{Old: revSide(base), New: revSide(b), NumstatArgs: []string{rangeToken}}, nil
 	}
-	if idx := strings.Index(rangeToken, ".."); idx >= 0 {
-		a, b := rangeToken[:idx], rangeToken[idx+2:]
+	if a, b, ok := strings.Cut(rangeToken, ".."); ok {
 		if a == "" || b == "" {
 			return Scope{}, &UsageError{Msg: fmt.Sprintf("malformed revision range %q", rangeToken)}
 		}

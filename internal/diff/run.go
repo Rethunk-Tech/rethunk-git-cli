@@ -173,14 +173,14 @@ func numstatPath(raw string) (oldPath, newPath string) {
 		if braceEnd := strings.Index(raw[braceStart:], "}"); braceEnd >= 0 {
 			braceEnd += braceStart
 			inner := raw[braceStart+1 : braceEnd]
-			if arrow := strings.Index(inner, " => "); arrow >= 0 {
+			if before, after, ok := strings.Cut(inner, " => "); ok {
 				prefix, suffix := raw[:braceStart], raw[braceEnd+1:]
-				return prefix + inner[:arrow] + suffix, prefix + inner[arrow+4:] + suffix
+				return prefix + before + suffix, prefix + after + suffix
 			}
 		}
 	}
-	if arrow := strings.Index(raw, " => "); arrow >= 0 {
-		return raw[:arrow], raw[arrow+4:]
+	if before, after, ok := strings.Cut(raw, " => "); ok {
+		return before, after
 	}
 	return raw, raw
 }

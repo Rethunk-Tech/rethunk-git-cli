@@ -133,8 +133,8 @@ func classifyOne(a string, allowRevisions bool, paths PathChecker, revs Revision
 			return Classification{}, err
 		}
 		if ok {
-			if idx := strings.IndexByte(a, ':'); idx >= 0 {
-				return Classification{Kind: KindRevPath, RevPath: RevPath{Rev: a[:idx], Path: a[idx+1:]}}, nil
+			if rev, path, hasColon := strings.Cut(a, ":"); hasColon {
+				return Classification{Kind: KindRevPath, RevPath: RevPath{Rev: rev, Path: path}}, nil
 			}
 			return Classification{Kind: KindRevision, Revision: a}, nil
 		}

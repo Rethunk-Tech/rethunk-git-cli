@@ -39,9 +39,6 @@ const BinarySampleLimit = 8000
 // LooksBinary applies git's heuristic: a NUL byte anywhere in a leading
 // sample means binary.
 func LooksBinary(content []byte) bool {
-	n := len(content)
-	if n > BinarySampleLimit {
-		n = BinarySampleLimit
-	}
+	n := min(len(content), BinarySampleLimit)
 	return bytes.IndexByte(content[:n], 0) != -1
 }

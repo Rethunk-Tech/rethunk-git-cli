@@ -46,7 +46,7 @@ func (p *pythonLanguage) HeaderKinds() []string {
 func (p *pythonLanguage) Declarations(src []byte, root *ts.Node) []Declaration {
 	var decls []Declaration
 	count := root.NamedChildCount()
-	for i := uint(0); i < count; i++ {
+	for i := range count {
 		if d, ok := p.declarationFor(src, root.NamedChild(i)); ok {
 			decls = append(decls, d)
 		}
@@ -75,7 +75,7 @@ func (p *pythonLanguage) declarationFor(src []byte, node *ts.Node) (Declaration,
 // is the only node carrying a "name" field.
 func (p *pythonLanguage) decoratedDeclaration(src []byte, node *ts.Node) (Declaration, bool) {
 	count := node.NamedChildCount()
-	for i := uint(0); i < count; i++ {
+	for i := range count {
 		inner := node.NamedChild(i)
 		switch inner.GrammarName() {
 		case "function_definition":

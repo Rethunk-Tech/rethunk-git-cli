@@ -96,7 +96,6 @@ func goMethodDeclaration(node *ts.Node, src []byte) (Declaration, bool) {
 // (docs/ANCHORS.md).
 func goReceiverContainer(recv *ts.Node, src []byte) string {
 	for _, param := range namedChildren(recv) {
-		param := param
 		typ := param.ChildByFieldName("type")
 		if typ == nil {
 			continue
@@ -153,7 +152,6 @@ func goSpecDeclarations(node *ts.Node, src []byte) []Declaration {
 func goSpecs(node *ts.Node) []*ts.Node {
 	var out []*ts.Node
 	for _, child := range namedChildren(node) {
-		child := child
 		switch {
 		case strings.HasSuffix(child.Kind(), "_spec_list"):
 			out = append(out, goSpecs(&child)...)

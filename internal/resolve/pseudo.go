@@ -107,7 +107,6 @@ func toplevelExtent(lang Language, src []byte, root *ts.Node, idx *index) (Exten
 	ext := Extent{Start: first.Full.Start, End: last.Full.End}
 
 	for _, c := range namedChildren(root) {
-		c := c
 		if c.StartByte() <= first.Full.Start && first.Full.Start < c.EndByte() {
 			if outer := fullExtent(lang, src, &c); outer.Start < ext.Start {
 				ext.Start = outer.Start

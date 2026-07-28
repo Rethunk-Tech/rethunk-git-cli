@@ -305,7 +305,7 @@ func parsePorcelain(t *testing.T, output string) []porcelainRow {
 		return nil
 	}
 	var rows []porcelainRow
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		fields := strings.Split(line, "\t")
 		if len(fields) != 5 {
 			t.Fatalf("malformed porcelain line %q: want 5 tab-separated fields, got %d", line, len(fields))

@@ -301,15 +301,15 @@ func (r *Repo) LsTreeTolerant(ctx context.Context, rev, path string) (LsTreeEntr
 }
 
 func parseLsTreeLine(line string) (LsTreeEntry, error) {
-	tab := strings.IndexByte(line, '\t')
-	if tab < 0 {
+	before, after, ok := strings.Cut(line, "\t")
+	if !ok {
 		return LsTreeEntry{}, fmt.Errorf("gitx: malformed ls-tree line %q", line)
 	}
-	fields := strings.Fields(line[:tab])
+	fields := strings.Fields(before)
 	if len(fields) != 3 {
 		return LsTreeEntry{}, fmt.Errorf("gitx: malformed ls-tree line %q", line)
 	}
-	return LsTreeEntry{Mode: fields[0], Type: fields[1], SHA: fields[2], Path: line[tab+1:]}, nil
+	return LsTreeEntry{Mode: fields[0], Type: fields[1], SHA: fields[2], Path: after}, nil
 }
 
 // RevParseVerify answers whether rev names a valid object, per

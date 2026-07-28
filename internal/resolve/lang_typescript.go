@@ -46,7 +46,7 @@ func (l *tsFamily) HeaderKinds() []string { return []string{"hash_bang_line"} }
 func (l *tsFamily) Declarations(src []byte, root *ts.Node) []Declaration {
 	var decls []Declaration
 	n := root.NamedChildCount()
-	for i := uint(0); i < n; i++ {
+	for i := range n {
 		outer := root.NamedChild(i)
 		if outer == nil {
 			continue
