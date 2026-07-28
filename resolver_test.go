@@ -349,6 +349,16 @@ func A() {}
 	qt.Assert(t, qt.Equals(string(documented[docA.Extent.Start:docA.Extent.End]),
 		"// Doc for A.\nfunc A() {}"))
 	qt.Assert(t, qt.IsTrue(docHeader.Extent.End <= docA.Extent.Start))
+
+	// @header must also stop before @imports start if @imports exists without declarations.
+	importsOnly := []byte(`package p
+
+import "fmt"
+`)
+	impHeader := mustResolve(t, importsOnly, "@header")
+	qt.Assert(t, qt.Equals(string(importsOnly[impHeader.Extent.Start:impHeader.Extent.End]), "package p"))
+	impBlock := mustResolve(t, importsOnly, "@imports")
+	qt.Assert(t, qt.IsTrue(impHeader.Extent.End <= impBlock.Extent.Start))
 }
 
 func TestResolve_TypeScriptAndPython(t *testing.T) {

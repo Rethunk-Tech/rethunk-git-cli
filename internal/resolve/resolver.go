@@ -100,11 +100,14 @@ func resolvePseudo(lang Language, src []byte, root *ts.Node, anchor string) (*Re
 	)
 	switch anchor {
 	case "@header":
-		// Bounded by where @toplevel starts, so the two cannot both claim a
-		// leading doc comment.
+		// Bounded by where @imports or @toplevel starts, so @header cannot
+		// claim leading comments that belong to imports or top-level declarations.
 		limit := ^uint(0)
 		if tl, found := toplevelExtent(lang, src, root, buildIndex(lang, src, root)); found {
 			limit = tl.Start
+		}
+		if imp, found := importsExtent(lang, root); found && imp.Start < limit {
+			limit = imp.Start
 		}
 		ext, ok = headerExtent(lang, root, limit)
 	case "@imports":
