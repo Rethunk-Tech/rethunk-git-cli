@@ -72,7 +72,7 @@ func resolvePseudo(lang Language, src []byte, root *ts.Node, anchor string) (*Re
 	)
 	switch anchor {
 	case "@header":
-		ext, ok = headerExtent(lang, root)
+		ext, ok = headerExtent(lang, root, buildIndex(lang, src, root))
 	case "@imports":
 		ext, ok = importsExtent(lang, root)
 	case "@toplevel":

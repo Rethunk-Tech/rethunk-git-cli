@@ -24,15 +24,26 @@ func kindSet(kinds []string) map[string]bool {
 // not broken by blank lines: Go itself requires one between a build
 // constraint and the package clause, and both belong to @header regardless
 // (docs/ANCHORS.md).
-func headerExtent(lang Language, root *ts.Node) (Extent, bool) {
+//
+// The run also stops at the first declaration's extent. Comments are a header
+// kind in both Go and Python, so without that limit a doc comment belonging to
+// the first declaration would be swallowed: @header and that symbol's anchor
+// would each claim the same bytes, and staging @header alone would commit a
+// comment the caller never named.
+func headerExtent(lang Language, root *ts.Node, idx *index) (Extent, bool) {
 	kinds := kindSet(lang.HeaderKinds())
 	children := namedChildren(root)
+
+	limit := ^uint(0)
+	if len(idx.order) > 0 {
+		limit = idx.order[0].Full.Start
+	}
 
 	end := uint(0)
 	found := false
 	for i := range children {
 		c := &children[i]
-		if !kinds[c.Kind()] {
+		if !kinds[c.Kind()] || c.StartByte() >= limit {
 			break
 		}
 		end = c.EndByte()

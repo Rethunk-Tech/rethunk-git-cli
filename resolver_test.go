@@ -257,6 +257,30 @@ func Run() { fmt.Println(Version) }
 	qt.Assert(t, qt.StringContains(toplevelText, "func Run()"))
 	qt.Assert(t, qt.Not(qt.StringContains(toplevelText, "import")))
 	qt.Assert(t, qt.Not(qt.StringContains(toplevelText, "go:build")))
+
+	// @header must stop at the first declaration's extent, not at the first
+	// non-header node. Comments are a header kind, so a doc comment on the
+	// first declaration is otherwise swallowed: @header and that symbol
+	// would claim the same bytes, and staging @header alone would commit a
+	// comment nobody named. The fixture above cannot catch this because
+	// its first declaration is undocumented.
+	documented := []byte(`//go:build linux
+
+// Package p does things.
+package p
+
+// Doc for A.
+func A() {}
+`)
+
+	docHeader := mustResolve(t, documented, "@header")
+	qt.Assert(t, qt.Equals(string(documented[docHeader.Extent.Start:docHeader.Extent.End]),
+		"//go:build linux\n\n// Package p does things.\npackage p"))
+
+	docA := mustResolve(t, documented, "A")
+	qt.Assert(t, qt.Equals(string(documented[docA.Extent.Start:docA.Extent.End]),
+		"// Doc for A.\nfunc A() {}"))
+	qt.Assert(t, qt.IsTrue(docHeader.Extent.End <= docA.Extent.Start))
 }
 
 func TestResolve_UnsupportedLanguage(t *testing.T) {
