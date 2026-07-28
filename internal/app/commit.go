@@ -42,12 +42,9 @@ func runCommit(args []string, stdout, stderr io.Writer) exitcode.Code {
 	fs.SetOutput(io.Discard)
 
 	var f commitFlags
-	// -m's long spelling matches git commit's own --message exactly, per
-	// AGENTS.md's governing principle. -F has no documented long spelling
-	// in docs/USAGE.md (git's own --file would collide with rgit's
-	// existing --file pathspec-target flag below), so its long form here
-	// is an unadvertised, purely internal registration name pflag
-	// requires; only -F is documented.
+	// -m's long spelling matches git commit's own --message, and -F's long
+	// spelling is --message-file (to avoid collision with rgit's --file
+	// pathspec flag).
 	fs.StringArrayVarP(&f.messages, "message", "m", nil, "commit message (repeatable)")
 	fs.StringVarP(&f.msgFile, "message-file", "F", "", "read the message from a file, or - for stdin")
 	fs.BoolVarP(&f.signoff, "signoff", "s", false, "append Signed-off-by")

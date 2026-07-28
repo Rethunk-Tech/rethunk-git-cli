@@ -115,7 +115,7 @@ with a pathspec (`rgit commit script.sh`); `--sym` cannot express a mode change.
 | `--sym FILE:NAME` | Explicit anchor form; equivalent to a bare `FILE:NAME` positional. Repeatable. |
 | `--file PATH` | Explicit pathspec form; equivalent to a bare positional. Repeatable. |
 | `-m MSG` | Commit message. **Repeatable** — values join as blank-line-separated paragraphs, as git does. |
-| `-F FILE` | Read the message from a file, or `-` for stdin. Mutually exclusive with `-m`. |
+| `-F FILE`, `--message-file FILE` | Read the message from a file, or `-` for stdin. Mutually exclusive with `-m`. |
 | `-s`, `--signoff` | Append `Signed-off-by:`. Forwarded to `git commit`. |
 | `--trailer TOKEN:VALUE` | Append a trailer (`Refs:`, `Co-authored-by:`). Repeatable, forwarded. |
 | `--amend` | Amend the previous commit. Anchors stage into it as they would a new commit. |
