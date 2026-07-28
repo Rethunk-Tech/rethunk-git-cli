@@ -7,7 +7,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 )
+
+// staleLockAge is how old a spawn lock must be before it is treated as
+// abandoned. A daemon spawn completes in well under a second; anything
+// this old belongs to a process that died before its deferred cleanup.
+const staleLockAge = time.Minute
 
 // Dial obtains a Client cross-checking source in lang (a resolve.Language's
 // Name(): "go", "typescript", "tsx", or "python"), rooted at repoRoot.
@@ -102,7 +108,18 @@ func trySpawnDaemon(spec serverSpec, sockPath string) {
 	lockPath := sockPath + ".lock"
 	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
-		return // another invocation is already spawning this daemon
+		// Normally this means another invocation is already spawning the
+		// daemon. But a lock left behind by a process killed before its
+		// deferred Remove would otherwise pin every later invocation to
+		// [ts-only] permanently, with nothing to tell the caller why.
+		// The lock exists only to avoid launching doomed duplicates
+		// (specs/design.md: it is not required for correctness), so one
+		// older than any real spawn is cleared for the next invocation
+		// to claim -- this one still does not wait on a cold server.
+		if info, statErr := os.Stat(lockPath); statErr == nil && time.Since(info.ModTime()) > staleLockAge {
+			os.Remove(lockPath)
+		}
+		return
 	}
 	defer os.Remove(lockPath)
 	defer lock.Close()
@@ -132,7 +149,10 @@ func dialStdio(ctx context.Context, spec serverSpec, repoRoot string) (*Client, 
 		return nil, true
 	}
 
-	cmd := exec.Command(spec.bin, spec.stdioArgs...)
+	// CommandContext, unlike the daemon spawn above: this process is meant
+	// to live only as long as the query, so a cancelled context must take
+	// it down rather than leave it running on a pipe nobody reads.
+	cmd := exec.CommandContext(ctx, spec.bin, spec.stdioArgs...)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, true
