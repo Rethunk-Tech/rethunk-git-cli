@@ -163,6 +163,23 @@ func normalizeAnchorInput(anchor string) string {
 	return recv + anchor[closeParen+1:]
 }
 
+// rawHeadingFallback reports slugify(anchor) when anchor looks like a
+// markdown heading's raw text copied verbatim rather than rgit's emitted
+// slug. The space check is what keeps this scoped to that one case: no
+// Go/TS/Python anchor this index could otherwise match ever contains a
+// space, so the fallback is inert for every other language, not merely
+// unlikely to fire.
+func rawHeadingFallback(anchor string) (string, bool) {
+	if !strings.Contains(anchor, " ") {
+		return "", false
+	}
+	slug := slugify(anchor)
+	if slug == "" || slug == anchor {
+		return "", false
+	}
+	return slug, true
+}
+
 // resolve maps anchor to its Symbol, or a typed error carrying the exit code
 // the caller should use: AnchorAmbiguous when a bare name matches more than
 // one symbol, AnchorUnresolvable otherwise.
@@ -186,6 +203,24 @@ func (idx *index) resolve(anchor string) (*Symbol, error) {
 			Code:       exitcode.AnchorAmbiguous,
 			Anchor:     anchor,
 			Candidates: candidates,
+		}
+	}
+
+	// Markdown accepts a heading's own raw text on input (docs/ANCHORS.md)
+	// the same way Go accepts gopls's "(*A).Get" spelling on input while
+	// always emitting "A.Get": the canonical, emitted spelling is a slug,
+	// but a person typing an anchor by hand may copy the heading text
+	// itself, spaces and all. Gated on the anchor containing a space so it
+	// can never fire for a Go/TS/Python anchor -- no identifier in any of
+	// those three languages can contain one -- this is a generic fallback
+	// living in the shared resolver, not a markdown special case wired into
+	// it; only a bare heading's raw text is accepted this way, not a raw
+	// "Container.Raw Text" combination.
+	if slug, ok := rawHeadingFallback(anchor); ok {
+		if s, err := idx.resolve(slug); err == nil {
+			return s, nil
+		} else if rerr, ok := err.(*ResolveError); ok && rerr.Code == exitcode.AnchorAmbiguous {
+			return nil, rerr
 		}
 	}
 
