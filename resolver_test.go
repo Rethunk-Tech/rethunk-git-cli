@@ -1007,3 +1007,90 @@ export function F(): number { return 1 }
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "F"),
 		"/** Doc for F. */\nexport function F(): number { return 1 }"))
 }
+
+func TestResolve_MarkdownSections(t *testing.T) {
+	// A section's extent is the whole subtree -- heading plus everything
+	// under it, including nested subsections -- so naming a heading claims
+	// its whole subtree, the same as naming a class claims its members.
+	// Two "## Options" headings sharing a name but nesting under different
+	// parents are not the same symbol and do not collide; two sharing both
+	// a name and a parent do, and disambiguate with rgit's existing "#N"
+	// ordinal rather than GitHub's "-1"/"-2" slug-dedupe suffix.
+	src := []byte(`---
+title: Doc
+---
+
+Lede paragraph before any heading.
+
+# Install
+
+Install content.
+
+## Options
+
+Install-specific options.
+
+# Usage
+
+Usage content.
+
+## Options
+
+First Usage options.
+
+## Options
+
+Second Usage options.
+`)
+
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".md", src, "install"),
+		"# Install\n\nInstall content.\n\n## Options\n\nInstall-specific options.\n\n"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".md", src, "install.options"),
+		"## Options\n\nInstall-specific options.\n\n"))
+
+	// Same name, different parent: qualification is the nearest ancestor
+	// heading only, so these are two distinct, unambiguous anchors.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".md", src, "usage.options#1"),
+		"## Options\n\nFirst Usage options.\n\n"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".md", src, "usage.options#2"),
+		"## Options\n\nSecond Usage options.\n"))
+
+	lang, ok := resolve.ForExtension(".md")
+	qt.Assert(t, qt.IsTrue(ok))
+
+	_, err := resolve.Resolve(lang, src, "usage.options")
+	var rerr *resolve.ResolveError
+	qt.Assert(t, qt.ErrorAs(err, &rerr))
+	qt.Assert(t, qt.Equals(rerr.Code, exitcode.AnchorAmbiguous))
+	qt.Assert(t, qt.DeepEquals(rerr.Candidates, []string{"usage.options#1", "usage.options#2"}))
+
+	// @header is frontmatter alone -- the lede paragraph that follows it is
+	// not part of @header, even though both precede the first heading.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".md", src, "@header"), "---\ntitle: Doc\n---\n"))
+
+	// A second fixture isolates the shapes above from a fenced code block
+	// containing a line that looks like a heading, and a setext heading.
+	src2 := []byte("# Diff Scope\n\nSome intro.\n\n```bash\n# not a heading, inside a fence\necho hi\n```\n\nSetext Title\n============\n\nBody after the setext heading.\n")
+
+	// The "#" inside the fence must never be read as a heading: naming the
+	// whole section is the only way to touch it.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".md", src2, "diff-scope"),
+		"# Diff Scope\n\nSome intro.\n\n```bash\n# not a heading, inside a fence\necho hi\n```\n\n"+
+			"Setext Title\n============\n\nBody after the setext heading.\n"))
+
+	// A setext heading is addressable by its own slug, but -- measured
+	// against a compiled parse tree -- unlike an atx heading it never opens
+	// its own section, so its extent is the heading line alone, not a
+	// header-plus-body span: the following paragraph belongs to the
+	// enclosing "diff-scope" section instead.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".md", src2, "diff-scope.setext-title"),
+		"Setext Title\n============\n"))
+
+	// rgit always emits the slug, but accepts a heading's own raw text on
+	// input, the same way it accepts gopls's "(*A).Get" spelling.
+	lang2, ok := resolve.ForExtension(".md")
+	qt.Assert(t, qt.IsTrue(ok))
+	res, err := resolve.Resolve(lang2, src2, "Diff Scope")
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(res.Anchor, "diff-scope"))
+}
