@@ -390,6 +390,11 @@ type CommitOptions struct {
 	Amend        bool
 	AllowEmpty   bool
 	NoVerify     bool
+	// NoEdit forwards --no-edit: reuse HEAD's message unchanged. rgit sets
+	// this itself when --amend is given with neither -m nor -F, since rgit
+	// never opens an editor and reusing HEAD's message is the only
+	// sensible reading of "amend, but don't tell me what to say".
+	NoEdit bool
 }
 
 // Commit runs `git commit` with opts translated to flags. A non-zero exit
@@ -417,6 +422,9 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 	}
 	if opts.Amend {
 		args = append(args, "--amend")
+	}
+	if opts.NoEdit {
+		args = append(args, "--no-edit")
 	}
 	if opts.AllowEmpty {
 		args = append(args, "--allow-empty")

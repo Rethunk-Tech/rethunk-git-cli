@@ -1141,3 +1141,31 @@ func TestHelp_CommitExitsZeroAndDoesNotLeakPflag(t *testing.T) {
 		})
 	}
 }
+
+func TestCommit_AmendWithNoMessageReusesHeadSubject(t *testing.T) {
+	// rgit never opens an editor (docs/USAGE.md: commit.template is
+	// deliberately not honoured), so --amend with neither -m nor -F has
+	// exactly one sensible meaning: `git commit --amend --no-edit`.
+	repo := initRepoWithFile(t, "g.go", "package main\n\nfunc G() int { return 1 }\n")
+	before := gitIn(t, repo, "log", "-1", "--format=%s")
+
+	writeFile(t, repo, "g.go", "package main\n\nfunc G() int { return 2 }\n")
+	got := runRgit(t, repo, "commit", "--amend", "g.go:G")
+
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
+	after := gitIn(t, repo, "log", "-1", "--format=%s")
+	qt.Assert(t, qt.Equals(after, before))
+	qt.Assert(t, qt.StringContains(gitIn(t, repo, "cat-file", "-p", "HEAD:g.go"), "return 2"))
+}
+
+func TestCommit_NonAmendWithNoMessageStillRequiresOne(t *testing.T) {
+	// The message requirement is suppressed only for --amend; a plain
+	// commit with neither -m nor -F is still exit 129.
+	repo := newTempRepo(t)
+	writeFile(t, repo, "g.go", "package main\n\nfunc G() {}\n")
+
+	got := runRgit(t, repo, "commit", "g.go")
+
+	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.InvalidUsage)))
+	qt.Assert(t, qt.StringContains(got.Stderr, "commit requires a message"))
+}
