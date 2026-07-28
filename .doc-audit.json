@@ -1,0 +1,6 @@
+{
+  "skip": [
+    "stale-ref"
+  ],
+  "_comment": "Example filenames in docs (auth.go, script.sh) are illustrative code references, not real repo paths."
+}
