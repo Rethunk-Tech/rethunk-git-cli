@@ -11,12 +11,11 @@ Where git has an opinion, match it exactly. Do not invent semantics git already
 defines. This rule has overturned several drafts of this project; a change that
 diverges from git must argue against it explicitly in the PR, not quietly.
 
-Practical consequences that are easy to "fix" by mistake:
-
-- Pre-staged work **comes along** with the commit. Do not exclude it.
-- A rejected commit **leaves staging in place**. There is nothing to roll back.
-- Hooks may stage paths the caller never named. Do not police them.
-- Merges are not special-cased.
+The consequences are listed in @docs/USAGE.md § Behaviour inherited from git,
+and several of them read like bugs worth fixing. None is. Pre-staged work
+coming along, staging surviving a rejected commit, and a hook sweeping paths
+the caller never named are git's own behaviour, reproduced on purpose — do not
+exclude, roll back, or police them.
 
 Reasoning and the measurement behind each: @specs/design.md
 
