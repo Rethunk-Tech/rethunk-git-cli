@@ -320,6 +320,8 @@ pathspec matching, credential and GPG prompting. Shelling out is the design, not
 a shortcut — using it even for reads would create a second, subtly divergent
 source of truth about repository state.
 
-Measured binary size: **5284 KB** with all three grammars linked, against a
-1644 KB no-dependency baseline. The grammars dominate; every other dependency
-is noise beside them.
+Measured binary size: **11091 KB** stripped, against a 1644 KB no-dependency
+baseline. The figure at design time was 5284 KB, before the language-server
+client was written; the grammars and `go.lsp.dev` together account for the
+difference. The grammars remain the largest single contributor; every other
+dependency is noise beside them.

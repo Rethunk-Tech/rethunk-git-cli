@@ -17,8 +17,9 @@ today; it rises whenever a dependency raises its own.
 go build -ldflags="-s -w" -o rgit .
 ```
 
-The binary is ~5.3 MB; three vendored tree-sitter grammars account for nearly
-all of it.
+The binary is ~11 MB stripped. The three vendored tree-sitter grammars are the
+largest single contributor; the language-server client accounts for most of the
+rest.
 
 Install it anywhere on `PATH`:
 
