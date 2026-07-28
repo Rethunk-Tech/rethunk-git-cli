@@ -256,7 +256,7 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 	if err != nil {
 		return nil, err
 	}
-	workSrc, workExists, err := readWorktreeFile(root, path)
+	workSrc, workExists, err := util.ReadFileIfExists(filepath.Join(root, path))
 	if err != nil {
 		return nil, err
 	}
@@ -276,17 +276,6 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 		}
 	}
 	return fp, nil
-}
-
-func readWorktreeFile(root, path string) (content []byte, exists bool, err error) {
-	content, err = os.ReadFile(filepath.Join(root, path))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, false, nil
-		}
-		return nil, false, err
-	}
-	return content, true, nil
 }
 
 // apply is the plan's only side-effecting step: pathspecs delegate to

@@ -15,6 +15,23 @@ func GitFileMode(info os.FileInfo) string {
 	return "100644"
 }
 
+// ReadFileIfExists reads path, reporting a missing file as exists=false
+// rather than as an error. Both the diff scope's worktree side and blob
+// synthesis need exactly that distinction -- a path absent from the worktree
+// is an ordinary outcome (new in HEAD, or staged-deleted), not a failure --
+// and it matches gitx.CatFile's convention for the same question asked of a
+// tree, so the two sides of a comparison read alike.
+func ReadFileIfExists(path string) (content []byte, exists bool, err error) {
+	content, err = os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return content, true, nil
+}
+
 // BinarySampleLimit matches core.bigFileThreshold scale used elsewhere in git's
 // own binary-detection sampling.
 const BinarySampleLimit = 8000

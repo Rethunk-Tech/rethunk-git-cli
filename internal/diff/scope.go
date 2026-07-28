@@ -42,14 +42,7 @@ func revSide(rev string) contentSide { return contentSide{kind: sideRev, rev: re
 func (s contentSide) read(ctx context.Context, repo *gitx.Repo, root, path string) (content []byte, exists bool, err error) {
 	switch s.kind {
 	case sideWorktree:
-		b, err := os.ReadFile(filepath.Join(root, path))
-		if err != nil {
-			if os.IsNotExist(err) {
-				return nil, false, nil
-			}
-			return nil, false, err
-		}
-		return b, true, nil
+		return util.ReadFileIfExists(filepath.Join(root, path))
 	case sideIndex:
 		// CatFile builds rev+":"+path; an empty rev yields ":path", which
 		// git reads as the index's stage-0 entry.
