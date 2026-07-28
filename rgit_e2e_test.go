@@ -265,6 +265,44 @@ func TestContradictoryPathAndAnchor(t *testing.T) {
 	})
 }
 
+func TestCommit_AnnouncesPreambleAndOrdinalAnchors(t *testing.T) {
+	// docs/ANCHORS.md documents both announcements: the new-file preamble is
+	// "announced on stderr", and an ordinal is a last resort that "warns and
+	// suggests qualification". Both were silent.
+	t.Run("new-file preamble is announced", func(t *testing.T) {
+		repo := newTempRepo(t)
+		writeFile(t, repo, "new.go", "package main\n\nimport \"fmt\"\n\nfunc Hi() { fmt.Println(\"hi\") }\n")
+
+		got := runRgit(t, repo, "commit", "-m", "feat(x): hi", "new.go:Hi")
+
+		qt.Assert(t, qt.Equals(got.ExitCode, 0))
+		qt.Assert(t, qt.StringContains(got.Stderr, "new.go is new"))
+		qt.Assert(t, qt.StringContains(got.Stderr, "@header"))
+	})
+
+	t.Run("ordinal anchors warn", func(t *testing.T) {
+		repo := newTempRepo(t)
+		writeFile(t, repo, "dup.go", "package main\n\nfunc init() { println(1) }\n\nfunc init() { println(2) }\n")
+
+		got := runRgit(t, repo, "commit", "-m", "feat(x): dup", "dup.go:init#2")
+
+		qt.Assert(t, qt.Equals(got.ExitCode, 0))
+		qt.Assert(t, qt.StringContains(got.Stderr, "dup.go:init#2"))
+		qt.Assert(t, qt.StringContains(got.Stderr, "positional"))
+	})
+
+	t.Run("a uniquely named anchor does not warn", func(t *testing.T) {
+		// The warning must key on the ordinal form, not fire on every anchor.
+		repo := newTempRepo(t)
+		writeFile(t, repo, "one.go", "package main\n\nfunc Only() {}\n")
+
+		got := runRgit(t, repo, "commit", "-m", "feat(x): only", "one.go:Only")
+
+		qt.Assert(t, qt.Equals(got.ExitCode, 0))
+		qt.Assert(t, qt.Not(qt.StringContains(got.Stderr, "positional")))
+	})
+}
+
 // --- rgit diff execution ----------------------------------------------
 //
 // These cases build real temporary git repositories with real commits, per

@@ -185,21 +185,92 @@ func TestStage_OverlappingAnchorsCoalesceIntoOneExtent(t *testing.T) {
 	})
 }
 
+func TestStage_NewFileCarriesHeaderAndImports(t *testing.T) {
+	// docs/ANCHORS.md: "@header plus @imports is enough to make a synthesized
+	// new file compile, which is why both are staged automatically for an
+	// untracked file". Nothing implemented it, so naming one symbol in a file
+	// absent from HEAD staged a bare declaration -- no package clause, no
+	// imports -- and committed a file that does not parse, at exit 0.
+	work := "package main\n\nimport (\n\t\"fmt\"\n\t\"strings\"\n)\n\nfunc Shout(s string) string {\n\treturn strings.ToUpper(fmt.Sprint(s))\n}\n\nfunc Unrelated() {}\n"
+
+	t.Run("staged automatically", func(t *testing.T) {
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "seed.go", "package main\n\nfunc Seed() {}\n")
+		commitAll(t, dir, "chore: seed")
+		writeFile(t, dir, "new.go", work)
+
+		mustStage(t, repo, dir, synth.AnchorTarget("new.go", "Shout"))
+
+		got := indexBlob(t, repo, "new.go")
+		mustParseGo(t, "new file staged by symbol", got)
+		qt.Assert(t, qt.StringContains(got, "package main"))
+		qt.Assert(t, qt.StringContains(got, `"strings"`))
+		// Symbol granularity still holds: the preamble comes along, the
+		// symbols the caller did not name do not.
+		qt.Assert(t, qt.Not(qt.StringContains(got, "Unrelated")))
+		// A file with no HEAD blob inherits its EOF newline from the
+		// worktree, the only side that has one.
+		qt.Assert(t, qt.IsTrue(strings.HasSuffix(got, "}\n")))
+	})
+
+	t.Run("naming the header explicitly does not duplicate or reorder it", func(t *testing.T) {
+		// insertionPoint ranked insertions by index in the declaration
+		// table, and a pseudo-anchor has no entry there -- so an explicitly
+		// named @header sorted after every symbol and the package clause
+		// landed at the bottom of the file.
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "seed.go", "package main\n\nfunc Seed() {}\n")
+		commitAll(t, dir, "chore: seed")
+		writeFile(t, dir, "new.go", work)
+
+		mustStage(t, repo, dir,
+			synth.AnchorTarget("new.go", "@header"),
+			synth.AnchorTarget("new.go", "Shout"))
+
+		got := indexBlob(t, repo, "new.go")
+		mustParseGo(t, "explicit @header on a new file", got)
+		qt.Assert(t, qt.Equals(strings.Count(got, "package main"), 1))
+		qt.Assert(t, qt.IsTrue(strings.HasPrefix(got, "package main")))
+	})
+
+	t.Run("a file already in HEAD gets no preamble", func(t *testing.T) {
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "tracked.go", "package main\n\nimport \"fmt\"\n\nfunc A() { fmt.Println(1) }\n\nfunc B() { fmt.Println(2) }\n")
+		commitAll(t, dir, "chore: tracked")
+		writeFile(t, dir, "tracked.go", "package main\n\nimport \"fmt\"\n\nfunc A() { fmt.Println(100) }\n\nfunc B() { fmt.Println(200) }\n")
+
+		mustStage(t, repo, dir, synth.AnchorTarget("tracked.go", "A"))
+
+		got := indexBlob(t, repo, "tracked.go")
+		mustParseGo(t, "tracked file", got)
+		qt.Assert(t, qt.Equals(strings.Count(got, "package main"), 1))
+		// B is untouched, proving nothing beyond A was restaged.
+		qt.Assert(t, qt.StringContains(got, "fmt.Println(2)"))
+	})
+}
+
 func TestStage_UnbornBranchInitialCommit(t *testing.T) {
 	// No commits at all: HEAD does not resolve, so CatFile reports
 	// headExists=false rather than erroring (git itself exits 128 for
 	// "invalid object name 'HEAD'" uniformly with "path not in tree",
 	// which gitx.CatFile already folds into a plain false).
+	//
+	// Every file is absent from HEAD here, so this is also the new-file case:
+	// the package clause comes along, or the repository's very first commit
+	// holds a Go file that does not compile. This expectation previously
+	// pinned that defect.
 	dir, repo := newSynthRepo(t)
 	writeFile(t, dir, "new.go", "package main\n\nfunc Hello() string {\n\treturn \"hi\"\n}\n")
 
 	mustStage(t, repo, dir, synth.AnchorTarget("new.go", "Hello"))
 
-	qt.Assert(t, qt.Equals(indexBlob(t, repo, "new.go"), "func Hello() string {\n\treturn \"hi\"\n}"))
+	want := "package main\n\nfunc Hello() string {\n\treturn \"hi\"\n}\n"
+	qt.Assert(t, qt.Equals(indexBlob(t, repo, "new.go"), want))
 
 	gitIn(t, dir, "commit", "-q", "-m", "feat: add Hello")
 	head := gitIn(t, dir, "cat-file", "-p", "HEAD:new.go")
-	qt.Assert(t, qt.Equals(head, "func Hello() string {\n\treturn \"hi\"\n}"))
+	qt.Assert(t, qt.Equals(head, want))
+	mustParseGo(t, "unborn-branch initial commit", head)
 }
 
 func TestStage_UnbornBranchGitignoredPathRefused(t *testing.T) {
@@ -333,8 +404,10 @@ func TestStage_GitattributesCleanFilterRequiresPath(t *testing.T) {
 	mustStage(t, repo, dir, synth.AnchorTarget("f.go", "A"))
 
 	// Without --path on hash-object, the clean filter is bypassed and
-	// this would read back lower-case (AGENTS.md's invariant table).
-	qt.Assert(t, qt.Equals(indexBlob(t, repo, "f.go"), "FUNC A() INT { RETURN 1 }"))
+	// this would read back lower-case (AGENTS.md's invariant table). The
+	// package clause is present because f.go is absent from HEAD, and the
+	// filter has to reach the synthesized preamble too, not just the symbol.
+	qt.Assert(t, qt.Equals(indexBlob(t, repo, "f.go"), "PACKAGE P\n\nFUNC A() INT { RETURN 1 }\n"))
 }
 
 func TestStage_GitignoredUntrackedRefused(t *testing.T) {
