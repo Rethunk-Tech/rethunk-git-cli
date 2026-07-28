@@ -121,6 +121,56 @@ func gitError(args []string, res Result) *GitError {
 	return &GitError{Args: args, ExitCode: res.ExitCode, Stderr: res.Stderr}
 }
 
+// checked runs git and returns stdout, treating any non-zero exit as a
+// *GitError. It is the shape of every method that has no "normal negative
+// answer" of its own to report.
+//
+// The methods that do have one -- CatFile, RevParseVerify, MergeBase,
+// CheckIgnore, Add -- deliberately do not use it: each reads res.ExitCode
+// itself, because folding their negative case into an error is precisely
+// what this package's three-outcome contract forbids.
+func (r *Repo) checked(ctx context.Context, args ...string) ([]byte, error) {
+	return r.checkedStdin(ctx, nil, args...)
+}
+
+// checkedStdin is checked with content piped to git's stdin.
+func (r *Repo) checkedStdin(ctx context.Context, stdin io.Reader, args ...string) ([]byte, error) {
+	res, err := r.run(ctx, stdin, args...)
+	if err != nil {
+		return nil, err
+	}
+	if res.ExitCode != 0 {
+		return nil, gitError(args, res)
+	}
+	return res.Stdout, nil
+}
+
+// optionalLine runs a query whose non-zero exit IS a normal negative
+// answer -- "no such revision", "no common ancestor" -- and returns its
+// single-line stdout. ok=false with err=nil is the expected outcome there,
+// which is why these cannot go through checked: turning that answer into a
+// *GitError is exactly what the package's three-outcome contract forbids.
+func (r *Repo) optionalLine(ctx context.Context, args ...string) (line string, ok bool, err error) {
+	res, err := r.run(ctx, nil, args...)
+	if err != nil {
+		return "", false, err
+	}
+	if res.ExitCode != 0 {
+		return "", false, nil
+	}
+	return strings.TrimSpace(string(res.Stdout)), true, nil
+}
+
+// checkedLine is checked with surrounding whitespace stripped, for the git
+// queries that answer with exactly one value.
+func (r *Repo) checkedLine(ctx context.Context, args ...string) (string, error) {
+	out, err := r.checked(ctx, args...)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 // CatFile reads the blob at rev:path (e.g. "HEAD:auth.go"). Per
 // specs/design.md's blob-synthesis algorithm, a path absent from rev is a
 // normal case — an untracked file has no HEAD blob — so exists reports
@@ -144,15 +194,11 @@ func (r *Repo) CatFile(ctx context.Context, rev, path string) (content []byte, e
 // path --stdin`. --path is mandatory here, not optional: without it,
 // .gitattributes clean filters and LFS normalization are bypassed.
 func (r *Repo) HashObject(ctx context.Context, path string, content []byte) (sha string, err error) {
-	args := []string{"hash-object", "-w", "--path", path, "--stdin"}
-	res, err := r.run(ctx, bytes.NewReader(content), args...)
+	out, err := r.checkedStdin(ctx, bytes.NewReader(content), "hash-object", "-w", "--path", path, "--stdin")
 	if err != nil {
 		return "", err
 	}
-	if res.ExitCode != 0 {
-		return "", gitError(args, res)
-	}
-	return strings.TrimSpace(string(res.Stdout)), nil
+	return strings.TrimSpace(string(out)), nil
 }
 
 // EmptyTree returns the SHA of the empty tree, computed rather than
@@ -161,29 +207,14 @@ func (r *Repo) HashObject(ctx context.Context, path string, content []byte) (sha
 // commits there is no HEAD to diff against, and every tracked path is an
 // addition relative to nothing.
 func (r *Repo) EmptyTree(ctx context.Context) (sha string, err error) {
-	args := []string{"hash-object", "-t", "tree", "/dev/null"}
-	res, err := r.run(ctx, nil, args...)
-	if err != nil {
-		return "", err
-	}
-	if res.ExitCode != 0 {
-		return "", gitError(args, res)
-	}
-	return strings.TrimSpace(string(res.Stdout)), nil
+	return r.checkedLine(ctx, "hash-object", "-t", "tree", "/dev/null")
 }
 
 // UpdateIndexCacheinfo stages a single entry directly, as the final step
 // of blob synthesis: `git update-index --add --cacheinfo mode,sha,path`.
 func (r *Repo) UpdateIndexCacheinfo(ctx context.Context, mode, sha, path string) error {
-	args := []string{"update-index", "--add", "--cacheinfo", mode + "," + sha + "," + path}
-	res, err := r.run(ctx, nil, args...)
-	if err != nil {
-		return err
-	}
-	if res.ExitCode != 0 {
-		return gitError(args, res)
-	}
-	return nil
+	_, err := r.checked(ctx, "update-index", "--add", "--cacheinfo", mode+","+sha+","+path)
+	return err
 }
 
 // Add stages pathspecs verbatim via `git add --`, for targets that are
@@ -214,15 +245,11 @@ func (r *Repo) Add(ctx context.Context, pathspecs ...string) error {
 // hasStagedChange reports whether any of pathspecs already differs between
 // HEAD and the index.
 func (r *Repo) hasStagedChange(ctx context.Context, pathspecs []string) (bool, error) {
-	args := append([]string{"diff", "--cached", "--name-only", "--"}, pathspecs...)
-	res, err := r.run(ctx, nil, args...)
+	out, err := r.checked(ctx, append([]string{"diff", "--cached", "--name-only", "--"}, pathspecs...)...)
 	if err != nil {
 		return false, err
 	}
-	if res.ExitCode != 0 {
-		return false, gitError(args, res)
-	}
-	return len(bytes.TrimSpace(res.Stdout)) > 0, nil
+	return len(bytes.TrimSpace(out)) > 0, nil
 }
 
 // LsTreeEntry is one entry of `git ls-tree` output.
@@ -237,15 +264,11 @@ type LsTreeEntry struct {
 // the path is simply absent from that tree — the normal case when, for
 // example, resolving the mode of a file deleted from the worktree.
 func (r *Repo) LsTree(ctx context.Context, rev, path string) (entry LsTreeEntry, found bool, err error) {
-	args := []string{"ls-tree", rev, "--", path}
-	res, err := r.run(ctx, nil, args...)
+	out, err := r.checked(ctx, "ls-tree", rev, "--", path)
 	if err != nil {
 		return LsTreeEntry{}, false, err
 	}
-	if res.ExitCode != 0 {
-		return LsTreeEntry{}, false, gitError(args, res)
-	}
-	line := strings.TrimRight(string(res.Stdout), "\n")
+	line := strings.TrimRight(string(out), "\n")
 	if line == "" {
 		return LsTreeEntry{}, false, nil
 	}
@@ -295,14 +318,7 @@ func parseLsTreeLine(line string) (LsTreeEntry, error) {
 // answer rather than a fatal error, so ok=false, err=nil is the expected
 // outcome for an ordinary pathspec or symbol anchor argument.
 func (r *Repo) RevParseVerify(ctx context.Context, rev string) (sha string, ok bool, err error) {
-	res, err := r.run(ctx, nil, "rev-parse", "--verify", "--quiet", rev)
-	if err != nil {
-		return "", false, err
-	}
-	if res.ExitCode != 0 {
-		return "", false, nil
-	}
-	return strings.TrimSpace(string(res.Stdout)), true, nil
+	return r.optionalLine(ctx, "rev-parse", "--verify", "--quiet", rev)
 }
 
 // DiffNumstat runs `git diff --numstat` with the given extra arguments
@@ -317,15 +333,11 @@ type NumstatEntry struct {
 }
 
 func (r *Repo) DiffNumstat(ctx context.Context, extra ...string) ([]NumstatEntry, error) {
-	args := append([]string{"diff", "--numstat"}, extra...)
-	res, err := r.run(ctx, nil, args...)
+	out, err := r.checked(ctx, append([]string{"diff", "--numstat"}, extra...)...)
 	if err != nil {
 		return nil, err
 	}
-	if res.ExitCode != 0 {
-		return nil, gitError(args, res)
-	}
-	return parseNumstat(res.Stdout), nil
+	return parseNumstat(out), nil
 }
 
 func parseNumstat(out []byte) []NumstatEntry {
@@ -433,45 +445,26 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 // AGENTS.md is explicit that a push failure does not roll back the commit
 // that preceded it; Push reports the failure and nothing more.
 func (r *Repo) Push(ctx context.Context, extra ...string) error {
-	args := append([]string{"push"}, extra...)
-	res, err := r.run(ctx, nil, args...)
-	if err != nil {
-		return err
-	}
-	if res.ExitCode != 0 {
-		return gitError(args, res)
-	}
-	return nil
+	_, err := r.checked(ctx, append([]string{"push"}, extra...)...)
+	return err
 }
 
 // Status runs `git status --porcelain=v1` with extra arguments and
 // returns the raw output for the caller to parse; rendering the
 // "everything committable" view is the diff layer's job, not gitx's.
 func (r *Repo) Status(ctx context.Context, extra ...string) ([]byte, error) {
-	args := append([]string{"status", "--porcelain=v1"}, extra...)
-	res, err := r.run(ctx, nil, args...)
-	if err != nil {
-		return nil, err
-	}
-	if res.ExitCode != 0 {
-		return nil, gitError(args, res)
-	}
-	return res.Stdout, nil
+	return r.checked(ctx, append([]string{"status", "--porcelain=v1"}, extra...)...)
 }
 
 // LsFilesOthers lists untracked files via `git ls-files --others
 // --exclude-standard -z`, NUL-terminated so no path-quoting rules apply.
 // extra is appended after the flags, for pathspec scoping (`-- <pathspec>`).
 func (r *Repo) LsFilesOthers(ctx context.Context, extra ...string) ([]string, error) {
-	args := append([]string{"ls-files", "--others", "--exclude-standard", "-z"}, extra...)
-	res, err := r.run(ctx, nil, args...)
+	out, err := r.checked(ctx, append([]string{"ls-files", "--others", "--exclude-standard", "-z"}, extra...)...)
 	if err != nil {
 		return nil, err
 	}
-	if res.ExitCode != 0 {
-		return nil, gitError(args, res)
-	}
-	trimmed := bytes.Trim(res.Stdout, "\x00")
+	trimmed := bytes.Trim(out, "\x00")
 	if len(trimmed) == 0 {
 		return nil, nil
 	}
@@ -482,15 +475,11 @@ func (r *Repo) LsFilesOthers(ctx context.Context, extra ...string) ([]string, er
 // found is false when path is simply not in the index — the normal case
 // for a file that is untracked or staged-deleted, not a failure.
 func (r *Repo) LsFilesStage(ctx context.Context, path string) (mode string, found bool, err error) {
-	args := []string{"ls-files", "--stage", "--", path}
-	res, err := r.run(ctx, nil, args...)
+	out, err := r.checked(ctx, "ls-files", "--stage", "--", path)
 	if err != nil {
 		return "", false, err
 	}
-	if res.ExitCode != 0 {
-		return "", false, gitError(args, res)
-	}
-	line := strings.TrimRight(string(res.Stdout), "\n")
+	line := strings.TrimRight(string(out), "\n")
 	if line == "" {
 		return "", false, nil
 	}
@@ -507,29 +496,13 @@ func (r *Repo) LsFilesStage(ctx context.Context, path string) (mode string, foun
 // revisions share no common ancestor — a normal negative answer, not a
 // failure.
 func (r *Repo) MergeBase(ctx context.Context, a, b string) (sha string, ok bool, err error) {
-	args := []string{"merge-base", a, b}
-	res, err := r.run(ctx, nil, args...)
-	if err != nil {
-		return "", false, err
-	}
-	if res.ExitCode != 0 {
-		return "", false, nil
-	}
-	return strings.TrimSpace(string(res.Stdout)), true, nil
+	return r.optionalLine(ctx, "merge-base", a, b)
 }
 
 // Toplevel returns the working tree's root directory, via `git rev-parse
 // --show-toplevel`.
 func (r *Repo) Toplevel(ctx context.Context) (string, error) {
-	args := []string{"rev-parse", "--show-toplevel"}
-	res, err := r.run(ctx, nil, args...)
-	if err != nil {
-		return "", err
-	}
-	if res.ExitCode != 0 {
-		return "", gitError(args, res)
-	}
-	return strings.TrimSpace(string(res.Stdout)), nil
+	return r.checkedLine(ctx, "rev-parse", "--show-toplevel")
 }
 
 // ShowPrefix returns the current directory's path relative to the
@@ -538,13 +511,5 @@ func (r *Repo) Toplevel(ctx context.Context) (string, error) {
 // turns a caller's `a.go` into the root-relative `pkg/deep/a.go` that
 // rgit works in internally.
 func (r *Repo) ShowPrefix(ctx context.Context) (string, error) {
-	args := []string{"rev-parse", "--show-prefix"}
-	res, err := r.run(ctx, nil, args...)
-	if err != nil {
-		return "", err
-	}
-	if res.ExitCode != 0 {
-		return "", gitError(args, res)
-	}
-	return strings.TrimSpace(string(res.Stdout)), nil
+	return r.checkedLine(ctx, "rev-parse", "--show-prefix")
 }
