@@ -64,6 +64,12 @@ Regions no symbol owns:
 which is why both are staged automatically for an untracked file (announced on
 stderr).
 
+`@imports` spans the whole import block, including any grouping comments
+*between* imports — Go has one `import_declaration`, while TypeScript and
+Python emit one node per import, so the anchor covers a run rather than a
+single node. A comment after the last import belongs to whatever follows it,
+not to the block.
+
 ## Paths that anchors cannot address
 
 Symbol anchors are refused (exit 10) on symlinks, gitlinks/submodules, and

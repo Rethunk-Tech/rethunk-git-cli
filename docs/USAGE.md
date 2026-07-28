@@ -45,6 +45,13 @@ No escaping is ever needed. `src/notes:draft.md` is a legal path, so rule 4
 claims it; `auth.go:ValidateToken` names nothing, so rule 5 splits it. Use
 `--sym` or `--file` to force the reading when a repo genuinely has both.
 
+**Paths are relative to the directory you run in, not the repository root** —
+git's own rule. In `pkg/deep`, `rgit commit a.go` stages `pkg/deep/a.go`, and
+naming `pkg/deep/a.go` from there looks for `pkg/deep/pkg/deep/a.go` and finds
+nothing, exactly as `git add` behaves. Leading-colon magic is the exception git
+already defines: `:/` and `:(top)` are root-relative wherever you stand.
+Output is always root-relative, matching `git diff --numstat`.
+
 Files and symbols mix freely in one invocation:
 
 ```console
@@ -78,6 +85,12 @@ would `rgit commit` pick up". Narrower scopes use git's own flag names:
 
 `--sym` and `--file` filter output to specific targets; when filtered by
 `--sym`, `(unanchorable)` hunks in that file are omitted.
+
+On a repository with no commits yet there is no `HEAD` to compare against, and
+`git diff HEAD` fails outright. The default scope falls back to the empty tree,
+so everything staged or untracked lists as an addition — `rgit diff` answers
+the same question in a fresh `git init` that it does anywhere else, and
+`rgit commit` writes the root commit.
 
 ## Output
 
