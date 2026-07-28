@@ -68,13 +68,13 @@ func runDiff(args []string, stdout, stderr io.Writer) exitcode.Code {
 		return code
 	}
 
-	root, repo, code := openRepo(stderr)
+	root, prefix, repo, code := openRepo(stderr)
 	if code != exitcode.Success {
 		return code
 	}
 
 	ctx := context.Background()
-	checker := cli.GitPathChecker{Root: root, Repo: repo, Ctx: ctx}
+	checker := cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo, Ctx: ctx}
 
 	rangeToken, rest, err := diffpkg.ExtractRangeToken(restoreDoubleDash(fs), checker)
 	if err != nil {
@@ -102,17 +102,21 @@ func runDiff(args []string, stdout, stderr io.Writer) exitcode.Code {
 
 	allFiles := append(files, f.files...)
 	allSyms := append(syms, symFlags...)
-	for _, p := range allFiles {
+	for i, p := range allFiles {
+		p = cli.PrefixPath(prefix, p)
 		if err := checkPathEscape(root, p); err != nil {
 			fmt.Fprintf(stderr, "rgit: %v\n", err)
 			return exitcode.InvalidUsage
 		}
+		allFiles[i] = p
 	}
-	for _, s := range allSyms {
+	for i, s := range allSyms {
+		s.File = cli.PrefixPath(prefix, s.File)
 		if err := checkPathEscape(root, s.File); err != nil {
 			fmt.Fprintf(stderr, "rgit: %v\n", err)
 			return exitcode.InvalidUsage
 		}
+		allSyms[i] = s
 	}
 
 	opts := diffpkg.Options{

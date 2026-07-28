@@ -105,19 +105,27 @@ func restoreDoubleDash(fs *pflag.FlagSet) []string {
 // openRepo resolves the current working directory's git toplevel and
 // returns a Repo rooted there. Every subcommand needs this before
 // classification, since rules 3-5 all query git or the filesystem.
-func openRepo(stderr io.Writer) (root string, repo *gitx.Repo, code exitcode.Code) {
+func openRepo(stderr io.Writer) (root, prefix string, repo *gitx.Repo, code exitcode.Code) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return "", nil, exitcode.GitFailure
+		return "", "", nil, exitcode.GitFailure
 	}
 
 	probe := gitx.New(cwd)
 	top, err := probe.Toplevel(context.Background())
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return "", nil, exitcode.GitFailure
+		return "", "", nil, exitcode.GitFailure
 	}
 
-	return top, gitx.New(top), exitcode.Success
+	// Read the prefix from the invocation directory, not the toplevel --
+	// it is precisely the difference between the two.
+	pfx, err := probe.ShowPrefix(context.Background())
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return "", "", nil, exitcode.GitFailure
+	}
+
+	return top, pfx, gitx.New(top), exitcode.Success
 }

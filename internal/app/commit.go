@@ -87,19 +87,19 @@ func runCommit(args []string, stdout, stderr io.Writer) exitcode.Code {
 		fmt.Fprintln(stderr, `rgit: warning: message does not look like "type(scope): subject"`)
 	}
 
-	root, repo, code := openRepo(stderr)
+	root, prefix, repo, code := openRepo(stderr)
 	if code != exitcode.Success {
 		return code
 	}
 
 	ctx := context.Background()
-	classified, err := cli.ClassifyArgs(restoreDoubleDash(fs), false, cli.GitPathChecker{Root: root, Repo: repo, Ctx: ctx}, cli.GitRevisionResolver{Repo: repo, Ctx: ctx})
+	classified, err := cli.ClassifyArgs(restoreDoubleDash(fs), false, cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo, Ctx: ctx}, cli.GitRevisionResolver{Repo: repo, Ctx: ctx})
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.InvalidUsage
 	}
 
-	targets, err := commitTargets(root, classified, f.files, f.syms)
+	targets, err := commitTargets(root, prefix, classified, f.files, f.syms)
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.InvalidUsage
@@ -245,10 +245,11 @@ func mapStageError(err error) (exitcode.Code, string) {
 // anchor file that resolves outside root is an invalid-usage error (exit
 // 129) caught before anything runs, not a fatal git failure discovered
 // only after `git add` itself refuses it.
-func commitTargets(root string, classified []cli.Classification, files, syms []string) ([]synth.Target, error) {
+func commitTargets(root, prefix string, classified []cli.Classification, files, syms []string) ([]synth.Target, error) {
 	targets := make([]synth.Target, 0, len(classified)+len(files)+len(syms))
 
 	addPathspec := func(p string) error {
+		p = cli.PrefixPath(prefix, p)
 		if err := checkPathEscape(root, p); err != nil {
 			return err
 		}
@@ -256,6 +257,7 @@ func commitTargets(root string, classified []cli.Classification, files, syms []s
 		return nil
 	}
 	addAnchor := func(file, name string) error {
+		file = cli.PrefixPath(prefix, file)
 		if err := checkPathEscape(root, file); err != nil {
 			return err
 		}

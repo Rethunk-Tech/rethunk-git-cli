@@ -534,3 +534,20 @@ func (r *Repo) Toplevel(ctx context.Context) (string, error) {
 	}
 	return strings.TrimSpace(string(res.Stdout)), nil
 }
+
+// ShowPrefix returns the current directory's path relative to the
+// repository root, slash-terminated, or "" at the root itself. git
+// resolves pathspecs relative to the current directory, so this is what
+// turns a caller's `a.go` into the root-relative `pkg/deep/a.go` that
+// rgit works in internally.
+func (r *Repo) ShowPrefix(ctx context.Context) (string, error) {
+	args := []string{"rev-parse", "--show-prefix"}
+	res, err := r.run(ctx, nil, args...)
+	if err != nil {
+		return "", err
+	}
+	if res.ExitCode != 0 {
+		return "", gitError(args, res)
+	}
+	return strings.TrimSpace(string(res.Stdout)), nil
+}

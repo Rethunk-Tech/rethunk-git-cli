@@ -349,6 +349,29 @@ func TestDiff_UnbornBranchListsEverythingCommittable(t *testing.T) {
 	}
 }
 
+func TestCommit_FromSubdirectoryResolvesCWDRelativePaths(t *testing.T) {
+	// git resolves a pathspec relative to the current directory: `git add
+	// a.go` in pkg/deep stages pkg/deep/a.go. rgit tested <root>/a.go
+	// instead, so every argument form failed from a subdirectory -- which
+	// is where people actually work. Output stays root-relative, as git's
+	// own --numstat does.
+	repo := newTempRepo(t)
+	writeFile(t, repo, "pkg/deep/a.go", "package deep\n\nfunc Alpha() int { return 1 }\n")
+	gitIn(t, repo, "add", "-A")
+	gitIn(t, repo, "commit", "-q", "-m", "init")
+	writeFile(t, repo, "pkg/deep/a.go", "package deep\n\nfunc Alpha() int { return 42 }\n")
+
+	sub := filepath.Join(repo, "pkg", "deep")
+
+	got := runRgit(t, sub, "diff", "--porcelain", "a.go")
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
+	qt.Assert(t, qt.StringContains(got.Stdout, "pkg/deep/a.go"))
+
+	got = runRgit(t, sub, "commit", "-m", "fix: bump", "a.go:Alpha")
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
+	qt.Assert(t, qt.StringContains(gitIn(t, repo, "show", "--stat", "--format=", "HEAD"), "pkg/deep/a.go"))
+}
+
 func TestDiff_MalformedSymAndPathEscapeRejected(t *testing.T) {
 	// diff used to skip a colon-less --sym value silently, leaving the
 	// caller reading an unfiltered diff while believing it was filtered,

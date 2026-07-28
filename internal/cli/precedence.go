@@ -176,22 +176,41 @@ func classifyOne(a string, allowRevisions bool, paths PathChecker, revs Revision
 	return Classification{}, &UnresolvedArgError{Arg: a, Tried: tried}
 }
 
+// PrefixPath rebases a caller-supplied path onto the repository root.
+// git resolves a pathspec relative to the current directory, so `a.go`
+// typed in pkg/deep means pkg/deep/a.go; rgit works in root-relative
+// paths internally, and every path a caller names goes through here.
+//
+// Leading-colon pathspec magic is exempt: git already defines those as
+// root-relative (`:/`, `:(top)`), and their interior is not a plain path
+// to join onto anything.
+func PrefixPath(prefix, path string) string {
+	if prefix == "" || strings.HasPrefix(path, ":") {
+		return path
+	}
+	return filepath.Join(prefix, path)
+}
+
 // GitPathChecker is the real PathChecker: worktree existence via the
-// filesystem, HEAD existence via gitx.
+// filesystem, HEAD existence via gitx. Prefix is the current directory
+// relative to Root (gitx.Repo.ShowPrefix), so rules 4 and 5 test the
+// same path git would.
 type GitPathChecker struct {
-	Root string
-	Repo *gitx.Repo
-	Ctx  context.Context
+	Root   string
+	Prefix string
+	Repo   *gitx.Repo
+	Ctx    context.Context
 }
 
 func (c GitPathChecker) ExistsInWorktreeOrHEAD(path string) (bool, error) {
-	if _, err := os.Stat(filepath.Join(c.Root, path)); err == nil {
+	rel := PrefixPath(c.Prefix, path)
+	if _, err := os.Stat(filepath.Join(c.Root, rel)); err == nil {
 		return true, nil
 	} else if !os.IsNotExist(err) {
 		return false, err
 	}
 
-	_, found, err := c.Repo.LsTreeTolerant(c.Ctx, "HEAD", path)
+	_, found, err := c.Repo.LsTreeTolerant(c.Ctx, "HEAD", rel)
 	if err != nil {
 		return false, err
 	}
