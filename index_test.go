@@ -109,6 +109,83 @@ func TestStage_SingleSymbolSynthesizedIntoRealIndex(t *testing.T) {
 	qt.Assert(t, qt.StringContains(unstaged, "greet.go"))
 }
 
+func TestStage_OverlappingAnchorsCoalesceIntoOneExtent(t *testing.T) {
+	// Pinned defect: two targets whose extents cover the same bytes were
+	// spliced independently. Every op addresses HEAD's original offsets and
+	// the pass runs in descending start order, so the inner splice shifted
+	// the bytes the outer one's end still pointed at; the outer splice then
+	// landed mid-token and staged "return 100\n}00\n}" -- a blob that does
+	// not parse, committed at exit 0 with nothing on stderr.
+	//
+	// docs/ANCHORS.md requires overlapping or nested anchors to merge into a
+	// single contiguous extent. The enclosing extent is already that merged
+	// result: its replacement text is its own worktree content, which
+	// contains the nested anchor in its new form.
+	head := "package main\n\n// A returns one.\nfunc A() int {\n\treturn 1\n}\n\n// B returns two.\nfunc B() int {\n\treturn 2\n}\n"
+
+	t.Run("pseudo-anchor encloses a named symbol", func(t *testing.T) {
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "greet.go", head)
+		commitAll(t, dir, "chore: initial greet.go")
+
+		work := "package main\n\n// A returns one.\nfunc A() int {\n\treturn 100\n}\n\n// B returns two.\nfunc B() int {\n\treturn 200\n}\n"
+		writeFile(t, dir, "greet.go", work)
+
+		// @toplevel spans both functions, so it strictly contains A.
+		mustStage(t, repo, dir,
+			synth.AnchorTarget("greet.go", "@toplevel"),
+			synth.AnchorTarget("greet.go", "A"))
+
+		got := indexBlob(t, repo, "greet.go")
+		mustParseGo(t, "overlapping @toplevel and A", got)
+		// @toplevel won, so B's change comes along with it -- naming the
+		// wider extent is what asked for that.
+		qt.Assert(t, qt.Equals(got, work))
+	})
+
+	t.Run("a new symbol inserted inside an enclosing extent", func(t *testing.T) {
+		// The insertion path: C exists only in the worktree, so it resolves
+		// to an insert point rather than a replaced range. That point falls
+		// inside @toplevel, whose text already contains C -- splicing it in
+		// again would stage C twice.
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "greet.go", head)
+		commitAll(t, dir, "chore: initial greet.go")
+
+		work := head + "\n// C returns three.\nfunc C() int {\n\treturn 3\n}\n"
+		writeFile(t, dir, "greet.go", work)
+
+		mustStage(t, repo, dir,
+			synth.AnchorTarget("greet.go", "@toplevel"),
+			synth.AnchorTarget("greet.go", "C"))
+
+		got := indexBlob(t, repo, "greet.go")
+		mustParseGo(t, "insertion inside @toplevel", got)
+		qt.Assert(t, qt.Equals(got, work))
+		qt.Assert(t, qt.Equals(strings.Count(got, "func C() int"), 1))
+	})
+
+	t.Run("the same anchor named twice", func(t *testing.T) {
+		// Degenerate overlap: an extent overlaps itself. Applying the
+		// identical replacement twice cut the wrong bytes the second time
+		// whenever the new text was not the same length as the old.
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "greet.go", head)
+		commitAll(t, dir, "chore: initial greet.go")
+
+		work := "package main\n\n// A returns one.\nfunc A() int {\n\treturn 7777777\n}\n\n// B returns two.\nfunc B() int {\n\treturn 2\n}\n"
+		writeFile(t, dir, "greet.go", work)
+
+		mustStage(t, repo, dir,
+			synth.AnchorTarget("greet.go", "A"),
+			synth.AnchorTarget("greet.go", "A"))
+
+		got := indexBlob(t, repo, "greet.go")
+		mustParseGo(t, "same anchor twice", got)
+		qt.Assert(t, qt.Equals(got, work))
+	})
+}
+
 func TestStage_UnbornBranchInitialCommit(t *testing.T) {
 	// No commits at all: HEAD does not resolve, so CatFile reports
 	// headExists=false rather than erroring (git itself exits 128 for
