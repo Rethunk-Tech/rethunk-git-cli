@@ -53,9 +53,6 @@ func New(dir string) *Repo {
 	return &Repo{root: dir, env: env}
 }
 
-// Root returns the directory this Repo was opened against.
-func (r *Repo) Root() string { return r.root }
-
 // Result is the raw outcome of a git invocation that ran to completion,
 // whatever its exit status. A non-zero ExitCode is not itself an error —
 // see the package doc for how individual methods interpret it.

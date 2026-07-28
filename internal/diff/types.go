@@ -56,9 +56,9 @@ type Row struct {
 	// ModeNote is "644->755"-shaped, set only for StatusMode rows.
 	ModeNote string
 
-	// HintHasSymbol marks a StatusUntracked row whose file has a resolvable
-	// first symbol, for the "-> use --sym FILE:NAME or --file FILE" hint.
-	// HintSymbol carries that name.
+	// HintSymbol is the resolvable first symbol of a StatusUntracked row's
+	// file, for the "-> use --sym FILE:NAME or --file FILE" hint. Empty
+	// when the file has none.
 	HintSymbol string
 
 	// pos is the row's byte offset in the file, used only to order rows
