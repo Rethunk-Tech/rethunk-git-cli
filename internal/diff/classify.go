@@ -15,8 +15,7 @@ import (
 // KindRevPath (a bare "rev:path" positional) is refused rather than
 // silently mishandled: comparing two arbitrary blobs by revision is valid
 // git diff syntax (specs/design.md), but it names two independent blobs
-// with no single "changed file" to enumerate, and nothing in this phase's
-// required scope exercises it.
+// with no single changed file for rgit diff to group rows under.
 func BucketClassified(classified []cli.Classification) (revisions, files []string, syms []SymRef, err error) {
 	for _, c := range classified {
 		switch c.Kind {
