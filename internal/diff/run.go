@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/util"
 )
@@ -24,6 +25,16 @@ func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Repo
 		return nil, err
 	}
 
+	// One session for the invocation; Dial caches per language inside it, so
+	// a repository of many changed files pays for at most one handshake each.
+	// Only the worktree side can be cross-checked -- a language server has no
+	// view of an arbitrary revision -- so a revision-to-revision diff skips it.
+	var sess *lsp.Session
+	if scope.New.kind == sideWorktree {
+		sess = lsp.NewSession()
+		defer sess.Close()
+	}
+
 	pathspecs := effectivePathspecs(opts)
 
 	entries, err := repo.DiffNumstat(ctx, withPathspecs(scope.NumstatArgs, pathspecs)...)
@@ -34,7 +45,7 @@ func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Repo
 	report := &Report{}
 	for _, e := range entries {
 		oldPath, newPath := numstatPath(e.Path)
-		fr, ferr := buildFileReport(ctx, repo, root, scope, oldPath, newPath, e.Added, e.Deleted)
+		fr, ferr := buildFileReport(ctx, repo, root, scope, oldPath, newPath, e.Added, e.Deleted, sess, report)
 		if ferr != nil {
 			return nil, ferr
 		}
@@ -68,7 +79,7 @@ func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Repo
 // has none to attempt); an unsupported language falls back to the file's
 // numstat total under StatusNoSymbols; everything else goes through
 // attributeSymbols.
-func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Scope, oldPath, newPath, addedStr, deletedStr string) (*FileReport, error) {
+func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Scope, oldPath, newPath, addedStr, deletedStr string, sess *lsp.Session, report *Report) (*FileReport, error) {
 	if addedStr == "-" && deletedStr == "-" {
 		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusBinary, Added: "-", Deleted: "-"}}}, nil
 	}
@@ -107,6 +118,10 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 	newSrc, _, err := scope.New.read(ctx, repo, root, newPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if sess != nil {
+		report.Warnings = append(report.Warnings, crossCheckFile(ctx, sess, lang, root, newPath, newSrc)...)
 	}
 
 	rows, err := attributeSymbols(lang, oldSrc, newSrc, added, deleted)
@@ -262,4 +277,35 @@ func applyFilters(report *Report, opts Options) {
 // guarantee, so this is the one place that ordering is actually decided.
 func sortReport(report *Report) {
 	slices.SortFunc(report.Files, func(a, b FileReport) int { return cmp.Compare(a.Path, b.Path) })
+}
+
+// crossCheckFile verifies every declaration rgit would emit for one file
+// against a live language server, in one query. It returns messages, never
+// an error: rgit diff is a read-only report, and a server that is absent,
+// slow or simply silent about a symbol is the normal case the whole
+// resolution model is built to tolerate (specs/design.md).
+func crossCheckFile(ctx context.Context, sess *lsp.Session, lang resolve.Language, root, path string, src []byte) []string {
+	f, err := resolve.Open(lang, src)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	names := f.DeclOrder()
+	list := make([]*resolve.Resolution, 0, len(names))
+	for _, name := range names {
+		if res, rerr := f.Resolve(name); rerr == nil {
+			list = append(list, res)
+		}
+	}
+
+	degraded, mismatches := resolve.CrossCheckExtents(ctx, sess, lang, root, filepath.Join(root, path), src, list)
+	if degraded || len(mismatches) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(mismatches))
+	for _, m := range mismatches {
+		out = append(out, path+": "+m.Error())
+	}
+	return out
 }

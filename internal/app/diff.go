@@ -140,6 +140,13 @@ func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) exitc
 		return exitcode.GitFailure
 	}
 
+	// Reported, never fatal: the identical disagreement is exit 6 at commit
+	// time, and the point of saying so here is that the caller finds out
+	// while reading the diff rather than mid-commit.
+	for _, w := range report.Warnings {
+		fmt.Fprintf(stderr, "[warning] %s\n", w)
+	}
+
 	dirty := report.Dirty()
 	if !f.quiet {
 		if f.porcelain {

@@ -303,6 +303,29 @@ func TestCommit_AnnouncesPreambleAndOrdinalAnchors(t *testing.T) {
 	})
 }
 
+func TestDiff_CrossCheckReportsWithoutGating(t *testing.T) {
+	// The cross-check ran only on the commit path, so rgit diff could emit
+	// an anchor rgit commit then refused with exit 6 -- the closed loop held
+	// syntactically and not semantically. Diff reports rather than gates: a
+	// disagreement is worth knowing while reading the diff, but a read-only
+	// command must not fail on one, and a server that is absent, slow or
+	// silent about a symbol stays the normal case.
+	repo := newTempRepo(t)
+	writeFile(t, repo, "go.mod", "module x\n\ngo 1.21\n")
+	writeFile(t, repo, "a.go", "package x\n\n// Doc for A.\nfunc A() int {\n\treturn 1\n}\n")
+	gitIn(t, repo, "add", "-A")
+	gitIn(t, repo, "-c", "user.email=t@t.t", "-c", "user.name=T", "commit", "-q", "-m", "init")
+	writeFile(t, repo, "a.go", "package x\n\n// Doc for A.\nfunc A() int {\n\treturn 111\n}\n")
+
+	got := runRgit(t, repo, "diff", "--porcelain")
+
+	// Extents agree, so nothing is reported -- the false-positive guard that
+	// matters most, since a warning on every symbol would be worse than none.
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
+	qt.Assert(t, qt.StringContains(got.Stdout, "a.go"))
+	qt.Assert(t, qt.Not(qt.StringContains(got.Stderr, "[warning]")))
+}
+
 // --- rgit diff execution ----------------------------------------------
 //
 // These cases build real temporary git repositories with real commits, per

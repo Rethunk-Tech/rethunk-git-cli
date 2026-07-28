@@ -49,6 +49,41 @@ func CrossCheckExtent(ctx context.Context, sess *lsp.Session, lang Language, rep
 	return false, cmpErr
 }
 
+// CrossCheckExtents verifies a whole file's worth of resolutions against a
+// single language-server query. CrossCheckExtent dials and asks for the
+// document's symbols per anchor, which is right when there is one anchor
+// and wrong when there are dozens: `rgit diff` resolves every declaration in
+// every changed file, and one round trip per symbol would put a language
+// server in the middle of the fast path.
+//
+// degraded=true means no comparison happened at all, exactly as for the
+// single-anchor form. mismatches holds one error per resolution whose range
+// the server disagreed with; a resolution the server does not name at all is
+// not a mismatch (docs/ANCHORS.md's fourth exemption).
+func CrossCheckExtents(ctx context.Context, sess *lsp.Session, lang Language, repoRoot, absPath string, src []byte, list []*Resolution) (degraded bool, mismatches []error) {
+	if len(list) == 0 {
+		return true, nil
+	}
+	client, deg := sess.Dial(ctx, lang.Name(), repoRoot)
+	if deg {
+		return true, nil
+	}
+	symbols, err := client.DocumentSymbols(ctx, absPath, src)
+	if err != nil {
+		return true, nil
+	}
+
+	for _, res := range list {
+		if res == nil || res.Pseudo {
+			continue
+		}
+		if _, cerr := MatchAndCompare(src, res, symbols); cerr != nil {
+			mismatches = append(mismatches, cerr)
+		}
+	}
+	return false, mismatches
+}
+
 // MatchAndCompare is CrossCheckExtent's comparison, factored out so it can
 // be driven with an already-fetched symbol table instead of a live
 // connection -- the seam resolver_test.go's mock-server and normalization

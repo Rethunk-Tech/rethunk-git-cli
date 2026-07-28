@@ -79,6 +79,12 @@ type FileReport struct {
 // and sorted for rendering.
 type Report struct {
 	Files []FileReport
+
+	// Warnings are extents a live language server disagreed with. rgit diff
+	// reports rather than gates: the same disagreement is exit 6 at commit
+	// time, and learning about it while reading a diff is the point of
+	// saying so here (docs/USAGE.md § Exit codes, exit 6).
+	Warnings []string
 }
 
 // Dirty reports whether anything in the report is committable — the
