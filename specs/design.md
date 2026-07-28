@@ -305,6 +305,83 @@ with no `.sh` suffix) is deferred, not solved: `ForExtension` is keyed on file
 extension alone, and changing that is a registry-contract change every grammar
 shares, not a shell-specific one.
 
+**YAML was next by measured demand, not popularity: 49% of the 51 surveyed
+repositories, second only to Markdown.** The unit that matters is the same one
+TODO.md named before this was built — one CI job, one service in a compose
+file, one section of config — which is a container-qualified key path
+(`ci.yml:jobs.build`), not a whole-file grammar the way Shell's function
+namespace is flat.
+
+**Node kinds were measured against tree-sitter-yaml v0.7.2's own
+`src/node-types.json` and a compiled parse tree, not assumed.** `stream` is the
+root, holding one or more `document` children; a `block_mapping_pair` carries
+`"key"` and `"value"` fields, each typed `block_node | flow_node`. The ordinary
+key is a `flow_node` wrapping exactly one `plain_scalar` (or a quoted-scalar
+kind for `'...'`/`"..."`); a value nests further only through
+`block_node → block_mapping`, which is why `lang_yaml.go` only ever needs to
+look one level for a `block_mapping` among a `block_node`'s own children, never
+recurse to find one — an anchored mapping (`&x\n  a: 1`) parses as a
+`block_node` whose named children are the `anchor` node and the `block_mapping`
+node as siblings, never one wrapping the other.
+
+**Qualification follows Markdown's nearest-ancestor-only rule, for the same
+reason: `Declaration` carries one `Container` field, not a path.**
+`jobs.build`'s own `runs-on` key qualifies as `build.runs-on`, never
+`jobs.build.runs-on` — verified this collides exactly the way two Markdown
+`## Options` headings under different parents do: two keys named `port`, each
+nested under a mapping named `common`, but under different grandparents,
+disambiguate as `common.port#1` / `common.port#2` rather than merging, since
+the ordinal rule already counts container-qualified names generically
+(`index.go`).
+
+**Sequence items are not addressable, on the same reasoning Go's shared `A, B
+int` field line and TypeScript's destructuring declarators already are:**
+`block_sequence_item` has no name field to key a `Declaration` by.
+`build.steps` addresses the whole list; no single step does. Flow-style values
+(`{ a: 1 }`, `[1, 2]`) are leaves too, at any depth — there is no measured
+demand for descending into one in the CI/compose files this grammar targets,
+and "flow style is never descended into" is one rule rather than a second
+recursion maintained in parallel with the block-style one. A multi-document
+stream (more than one `---`-separated `document` under `stream`) has nothing
+addressable by key at all, rather than inventing a document-index qualifier
+nothing else in this resolver has syntax for.
+
+**A real defect surfaced only once fixture-tested against a realistic
+multi-job workflow, not from reading the grammar's docs: tree-sitter-yaml's
+own external scanner can graft a comment onto the wrong node's trailing
+edge.** A comment sitting between the end of a nested job and the next, more
+shallowly indented one does not attach as that job's leading trivia the way
+every other grammar's comment reliably does — it becomes the trailing child of
+whatever block was still structurally open when the scanner consumed the
+comment token, regardless of the comment's own written column, because
+dedent-token emission depends on the next *real* line, which the scanner has
+not looked ahead to yet when it emits the comment. Left alone, a
+container-qualified extent ending right before such a comment would silently
+absorb content written to describe its successor. `extent.go`'s
+`trailingCommentTrimmer` seam (implemented only by `lang_yaml.go`) walks a
+declaration's own "last named child" spine and excludes any comment run found
+there, along with the whitespace before it — deliberately in the safe
+direction: it can end a single-key anchor one comment short of the raw parse
+(still reachable via `@toplevel` or the whole file), never graft one key's
+edit onto its neighbour's extent. Go, TypeScript, Python, Markdown, and Shell
+are unaffected — the seam is optional and only `lang_yaml.go` implements it.
+
+**The byte-identical round trip TODO.md's own warning demanded was verified,
+not assumed.** A `block_scalar` (`|`, `>`) is one opaque leaf node whose byte
+range already includes every line of its body verbatim, so staging the pair
+that contains one never requires reasoning about the scalar's own internal
+indentation. A `block_mapping_pair`'s own extent starts at its key's first
+byte, never at the line's indentation — the same convention every other
+adapter's container members already use — so `internal/synth`'s existing
+`lineStart`/`insertionText` machinery (`classify.go`, `8b8629d`) handles a
+YAML member's indentation with no YAML-specific code in that package at all.
+
+**No language-server cross-check.** No entry was added to
+`internal/lsp/servers.go`'s `servers` map — YAML has no dominant, universally
+installed language server the way `gopls`/`vtsls`/`pyright` are, and there was
+no measured need strong enough to justify probing for a fourth stdio process
+sight unseen; YAML always resolves in `[ts-only]` mode, the same as Markdown.
+
 ## Argument grammar
 
 Symbol anchors need no flag because **all git pathspec magic is leading-colon**
@@ -365,6 +442,7 @@ built.
 | `github.com/go-quicktest/qt` | v1.102.0 | Tests; matches `claude-format-hooks` |
 | `tree-sitter-grammars/tree-sitter-markdown` | v0.5.1 | Markdown sections; import path is `<module>/bindings/go`, block grammar only |
 | `github.com/tree-sitter/tree-sitter-bash` | v0.25.1 | Shell function/variable anchors; import path is `<module>/bindings/go` |
+| `github.com/tree-sitter-grammars/tree-sitter-yaml` | v0.7.2 | YAML key-path anchors; import path is `<module>/bindings/go` |
 
 **Markdown earns its place two ways, both verified against the grammar's own
 `node-types.json`, not assumed.** It is the one language present in every
@@ -434,6 +512,44 @@ materially bigger jump than markdown's +768 KB (+6.8%) for the same reason
 noted above: bash's grammar and external scanner are simply larger than
 markdown's block-only grammar, not because anything unused rode along with
 it.
+
+**YAML's grammar was checked the same way, on the same organisation's own
+precedent for the exact failure mode that mattered here.**
+`tree-sitter-grammars/tree-sitter-yaml` is the same maintaining organisation as
+`tree-sitter-markdown`, whose own `v0.5.2` had already been measured dropping
+Go bindings — so every candidate tag's own `bindings/go` directory was checked
+directly against the module proxy rather than assumed current from the
+version number. v0.7.2 is both the latest tag and still ships one:
+`bindings/go/binding.go`, package `tree_sitter_yaml`, exporting `Language()`,
+with no `go.mod` of its own — it is an ordinary subpackage of the repository's
+single root module (`go-tree-sitter v0.24.0` there, compatible with this
+project's v0.25.0 via ordinary minimum-version selection), the same
+single-root shape `tree-sitter-markdown` and `tree-sitter-bash` already use.
+An older tag (v0.6.1) instead carried its own nested `go.mod` inside
+`bindings/go`, naming the identical module path as the repository root and
+depending on the long-deprecated `smacker/go-tree-sitter` fork — two `go.mod`
+files claiming one module path, which would have made `bindings/go` a
+separate, unresolvable module boundary had it still been there at the pinned
+tag. It was already gone by v0.7.0, well before the latest tag, so this was a
+past risk checked and closed, not a live one at v0.7.2.
+
+**No unused second grammar rides along, the same property `tree-sitter-bash`
+already had and `tree-sitter-markdown` did not.** `go tool nm` on an
+unstripped build shows exactly `tree_sitter_yaml`, its external scanner's four
+entry points (`_create`, `_destroy`, `_scan`, `_(de)serialize`), and the cgo
+glue calling them — no second, uncalled grammar's symbols the way
+`tree_sitter_markdown_inline` rides along unused (recorded above).
+
+Measured **+196 KB (+1.5%)**, `go build -ldflags="-s -w"` before (**13360
+KB**, this same commit with the dependency reverted) and after (**13556 KB**)
+adding `tree-sitter-yaml` — the smallest single-grammar jump recorded here,
+smaller than either Markdown's +768 KB or Shell's +1332 KB, because YAML's
+own grammar and external scanner (indentation/flow-context tracking) are
+simply smaller than either. The 13360 KB baseline is itself measured fresh
+immediately beforehand rather than reused from the 13336 KB recorded above for
+the post-Markdown-and-Shell figure; the ~24 KB gap between the two is ordinary
+toolchain/dependency drift accumulated since that record was written, not
+anything this dependency introduced.
 
 **`go-git` is rejected.** It reimplements git in pure Go and provides none of
 what this design delegates: hook execution, `.gitattributes` filters, git's

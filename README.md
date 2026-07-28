@@ -38,8 +38,8 @@ Start with [HUMANS.md](HUMANS.md) to run it, or
   a mismatch is a hard failure rather than a silent wrong commit.
 - **Git semantics throughout** — git's exit codes, git's pathspecs, git's hooks
   and config. Divergence is treated as a bug.
-- **Go, TypeScript/JavaScript, Python, Markdown, Shell**; anything else stages
-  by path.
+- **Go, TypeScript/JavaScript, Python, Markdown, Shell, YAML**; anything else
+  stages by path.
 
 ## Documentation
 
@@ -56,9 +56,9 @@ Start with [HUMANS.md](HUMANS.md) to run it, or
 
 ## Status
 
-Both commands are implemented for Go, TypeScript/JavaScript, Python, Markdown
-and Shell, with the language-server cross-check live for Go, TypeScript and
-Python. See [specs/design.md](specs/design.md) for what was measured and
+Both commands are implemented for Go, TypeScript/JavaScript, Python, Markdown,
+Shell, and YAML, with the language-server cross-check live for Go, TypeScript
+and Python. See [specs/design.md](specs/design.md) for what was measured and
 [TODO.md](TODO.md) for known limitations and what is deferred.
 
 ## License

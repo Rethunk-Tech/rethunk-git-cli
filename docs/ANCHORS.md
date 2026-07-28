@@ -39,14 +39,17 @@ A container qualifies its members in every supported language: Go's receiver
 type (`auth.go:A.Get`), a struct's fields and an interface's methods
 (`auth.go:S.Field`, `auth.go:I.Do`), a TypeScript or Python class
 (`svc.ts:Svc.login`, `svc.py:Svc.login`), a TypeScript namespace
-(`ns.ts:N.inner`), and a Markdown heading (`USAGE.md:install.options`). The
-container itself stays addressable by its bare name, and naming it claims
-every member — that is what asking for the container means.
+(`ns.ts:N.inner`), a Markdown heading (`USAGE.md:install.options`), and a YAML
+mapping key (`ci.yml:jobs.build`). The container itself stays addressable by
+its bare name, and naming it claims every member — that is what asking for the
+container means.
 
 Qualification is always the *nearest* container, one level, never a full
 breadcrumb — a Markdown `### Options` nested under `## Setup` nested under
 `# Install` still addresses as `setup.options`, not `install.setup.options`,
-the same ceiling a Go struct's field or a TypeScript namespace's member uses.
+the same ceiling a Go struct's field, a TypeScript namespace's member, or a
+YAML key nested three levels deep uses: `jobs.build`'s own `runs-on` key
+addresses as `build.runs-on`, not `jobs.build.runs-on`.
 
 A struct field line naming several identifiers at once (`A, B int`) and an
 embedded/anonymous field are not addressable by their own anchor: the first
@@ -57,7 +60,12 @@ containing type or the path instead. TypeScript's anonymous default export
 embedded field — the grammar gives it no name to read. So are TypeScript's
 destructuring declarators — `const {a, b} = obj` and `const [x, y] = arr` bind
 several names off one pattern node, so no single name owns an extent of its
-own; name the containing statement or the path instead.
+own; name the containing statement or the path instead. A YAML sequence item
+is unaddressable the same way — `steps` in a GitHub Actions job addresses the
+whole list (`build.steps`), but no single step has a name of its own to
+address it by. A flow-style mapping or sequence (`{ a: 1 }`, `[1, 2]`) is a
+leaf too, at any nesting depth: the key holding one is addressable, but
+nothing inside it is.
 
 The two nest differently, which matters when the container is new. A Go method
 sits beside its type rather than inside it, so staging one never drags the type
@@ -94,6 +102,12 @@ of the same name in one file — and to two Markdown headings of the same text
 nested under the same parent (`options#1` / `options#2`). Two headings with the
 same text under *different* parents do not collide at all: `install.options`
 and `usage.options` are already distinct.
+
+Because qualification is only ever one level, two YAML keys can collide
+without their trees having anything to do with each other: `a.common.port` and
+`b.common.port` both qualify to `common.port` — the immediate parent's own
+name, discarding that its own grandparents differ — so they disambiguate as
+`common.port#1` / `common.port#2`, the same ordinal rule, not a merge.
 
 A Markdown heading's extent is the whole section it opens — the heading line
 plus everything nested under it, subsections included — so naming a heading
@@ -137,6 +151,12 @@ file's lede — any content between frontmatter and its first heading — so the
 whole document body is reachable through one pseudo-anchor or the other once
 frontmatter is set aside.
 
+A YAML file's own `@header` is a leading top-of-file comment run, not the
+`---` document-start marker or a `%YAML`/`%TAG` directive — those stay with
+whichever key's extent happens to contain them. `@imports` resolves to nothing,
+the same as Markdown. `@toplevel` spans every top-level key, first through
+last, which in practice is the whole document once `@header` is set aside.
+
 ## Paths that anchors cannot address
 
 Symbol anchors are refused (exit 10) on symlinks, gitlinks/submodules, and
@@ -152,13 +172,24 @@ binary or non-parseable files. Name the path instead. Behaviour per kind:
 
 ## Language support
 
-v1 vendors five grammars: **Go, TypeScript/JavaScript** (including TSX/JSX),
+Six grammars ship: **Go, TypeScript/JavaScript** (including TSX/JSX),
 **Python**, **Markdown** (`.md`, `.markdown` — headings and their sections
 only; inline constructs such as emphasis, links, and code spans are not
-parsed and have nothing to address), and **Shell** (`.sh`, `.bash` —
+parsed and have nothing to address), **Shell** (`.sh`, `.bash` —
 functions and top-level variable assignments; shell has no containers, so a
 redefined function disambiguates by ordinal the same way two same-named Go
-functions would).
+functions would), and **YAML** (`.yaml`, `.yml` — mapping keys, container-
+qualified one level the same way a Markdown heading is; sequence items and
+anything inside a flow-style `{...}`/`[...]` value have no name to address).
+
+A `---`-separated multi-document YAML stream has nothing addressable by key at
+all — name the path instead — rather than guessing which document a bare key
+path means. A comment sitting between the end of a nested value and the next,
+more shallowly indented key is excluded from every key's own anchor: measured
+directly against tree-sitter-yaml, its own scanner grafts such a comment onto
+whichever block was still open when it read the comment token, regardless of
+the comment's own written column, so neither neighbour's extent claims it
+(still reachable via `@toplevel` or the whole file).
 
 A file whose extension claims no grammar is matched by its shebang instead, so
 an extensionless `bin/` script or git hook is addressable like any other file.
@@ -175,9 +206,9 @@ whole-file entry. Deliberate: reading it from a blob instead would buy one
 uncommon case at the cost of a bounded read through `git cat-file`.
 
 The language-server cross-check exists only for Go, TypeScript, and Python
-([`docs/INSTALL.md#language-servers`](INSTALL.md#language-servers)); Markdown
-and Shell resolve with tree-sitter alone, always in `[ts-only]` mode. Anything
-else → exit 9 on a symbol anchor; name the path.
+([`docs/INSTALL.md#language-servers`](INSTALL.md#language-servers)); Markdown,
+Shell, and YAML resolve with tree-sitter alone, always in `[ts-only]` mode.
+Anything else → exit 9 on a symbol anchor; name the path.
 
 The grammars deferred to v2 are listed in [`../TODO.md`](../TODO.md).
 

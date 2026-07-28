@@ -13,6 +13,13 @@ behaviour that ships lives in [`docs/`](docs/).
       terminator — but adopting it would change the general insertion path used
       by every commit, not just the new-file preamble. Deferred as a much larger
       blast radius than the bug that motivated it.
+- [ ] A YAML comment sitting between the end of a nested value and the next,
+      more shallowly indented sibling is unreachable by any single-key anchor.
+      tree-sitter-yaml's own external scanner grafts it onto whichever block
+      was still open when it consumed the comment token, regardless of the
+      comment's own written column, so neither the preceding key nor the one
+      it was written above claims it (`lang_yaml.go`'s `trimTrailingComment`).
+      Still reachable via `@toplevel` or the whole file.
 
 ## v2 — grammars
 
@@ -21,9 +28,6 @@ against, the same way the v1 three were chosen (`specs/design.md` § Grammar
 scope). Config and data files stage by path meanwhile, which is what a lockfile
 or a version bump wants regardless.
 
-- [ ] YAML key-path anchors (`ci.yml:jobs.build`). Editing one CI job is a
-      genuine unit, but YAML is whitespace-sensitive and the synthesis path's
-      indentation handling is exactly where bugs have hidden before.
 - [ ] CSS/SCSS selector anchors (`.button-primary`, `@media`).
 - [ ] JSON/TOML key-path anchors (`server.port`). Breadth overstates the value:
       most of it is `package.json`, tsconfig, and lockfiles, which want
