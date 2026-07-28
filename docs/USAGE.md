@@ -241,7 +241,7 @@ when there is genuinely nothing to commit. `--allow-empty` suppresses it.
 | 3 | Anchor unresolvable — missing in both worktree and HEAD; candidates listed |
 | 4 | Ambiguous anchor — candidates listed |
 | 5 | Contradictory anchors — one path named both as a path and as a symbol anchor |
-| 6 | Normalized LSP ↔ tree-sitter extent mismatch |
+| 6 | Normalized LSP ↔ tree-sitter extent mismatch (`commit` only — see below) |
 | 7 | Refused path — gitignored and untracked |
 | 8 | Commit succeeded; `--push` failed |
 | 9 | Unsupported / deferred language for a symbol anchor |
@@ -251,3 +251,14 @@ when there is genuinely nothing to commit. `--allow-empty` suppresses it.
 | 129 | Invalid usage (bad flags, missing message, no targets, path escape) |
 
 128 and 129 follow git's own conventions.
+
+Exit 6 is `rgit commit`'s alone. `rgit diff` reports the identical
+disagreement as a `[warning]` on stderr and still exits 0 (or 1 under
+`--exit-code`): a diff is a read-only report, and the point of surfacing it
+there is that the caller learns of it while reading the diff rather than
+mid-commit.
+
+Neither command treats a *missing* cross-check as a failure. When no language
+server is reached, both print `[ts-only]` on stderr and proceed — degraded
+resolution is normal, not an error. `rgit diff --quiet` still prints it, since
+`--quiet` suppresses the report on stdout, not diagnostics.

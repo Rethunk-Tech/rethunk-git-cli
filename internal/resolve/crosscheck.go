@@ -17,7 +17,7 @@ import (
 //
 // Callers must not invoke this for deletions -- the symbol exists only in
 // HEAD, outside the server's worktree view. res.Pseudo is exempt for the
-// same reason and is checked here (docs/ANCHORS.md § Cross-check
+// same reason and is checked here (specs/design.md § Cross-check
 // exemptions).
 //
 // degraded=true means no comparison happened: absent or slow server,
@@ -59,7 +59,7 @@ func CrossCheckExtent(ctx context.Context, sess *lsp.Session, lang Language, rep
 // degraded=true means no comparison happened at all, exactly as for the
 // single-anchor form. mismatches holds one error per resolution whose range
 // the server disagreed with; a resolution the server does not name at all is
-// not a mismatch (docs/ANCHORS.md's fourth exemption).
+// not a mismatch (specs/design.md's fourth exemption).
 func CrossCheckExtents(ctx context.Context, sess *lsp.Session, lang Language, repoRoot, absPath string, src []byte, list []*Resolution) (degraded bool, mismatches []error) {
 	if len(list) == 0 {
 		return true, nil
