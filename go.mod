@@ -3,25 +3,25 @@ module github.com/Rethunk-Tech/rethunk-git-cli
 go 1.26
 
 require (
+	github.com/aymanbagabas/go-udiff v0.4.1
 	github.com/go-quicktest/qt v1.102.0
 	github.com/spf13/pflag v1.0.10
 	github.com/tree-sitter/go-tree-sitter v0.25.0
 	github.com/tree-sitter/tree-sitter-go v0.25.0
 	github.com/tree-sitter/tree-sitter-python v0.25.0
 	github.com/tree-sitter/tree-sitter-typescript v0.23.2
+	go.lsp.dev/jsonrpc2 v1.0.1
+	go.lsp.dev/protocol v1.0.1
+	go.lsp.dev/uri v1.0.1
 	golang.org/x/term v0.45.0
 )
 
 require (
-	github.com/aymanbagabas/go-udiff v0.4.1 // indirect
 	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-pointer v0.0.1 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
-	go.lsp.dev/jsonrpc2 v1.0.1 // indirect
-	go.lsp.dev/protocol v1.0.1 // indirect
-	go.lsp.dev/uri v1.0.1 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
