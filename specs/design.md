@@ -190,6 +190,20 @@ symbol body — so three grammars cover the dominant case, and `@toplevel` /
 **4%** (p90 20%), which is precisely where symbol staging beats whole-file
 staging; if commits typically rewrote most of a file, the tool would add nothing.
 
+**Container members are addressable, and the parse is held open.** Go's methods
+are file-scope, so `A.Get` resolved from the start; TypeScript and Python keep
+theirs in a class body, and until that body was descended into the finest unit
+in a one-class-per-file module was the class — which for staging is the same
+thing as naming the path.
+
+Descending multiplies the declaration count, and both hot paths resolved every
+declaration by re-parsing the whole file each time: attributing a diff does it
+once per declaration per side, and synthesis walks declarations looking for the
+nearest one `HEAD` also has. Measured on a 200-member class, `rgit diff` took
+**0.78s** re-parsing and **0.02s** against a parse held open for the file's
+lifetime — a ~39× difference on one file, which is why `resolve.File` exists
+rather than the one-shot `Resolve` alone.
+
 **`@imports` node shape differs by language.** Go exposes a single
 `import_declaration` block; TypeScript and Python emit a separate
 `import_statement` per import. The pseudo-anchor must span a contiguous run of

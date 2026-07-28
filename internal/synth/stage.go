@@ -87,7 +87,13 @@ type filePlan struct {
 	workExists bool
 	workOrder  []string // qualified anchor names in worktree declaration order
 	ops        []editOp
-	escalated  []string // member anchors widened to their enclosing container
+
+	// headFile and workFile are the two sources parsed once and held open;
+	// every anchor in this file resolves against them rather than re-parsing.
+	// Either is nil when that side has no such file. close() releases both.
+	headFile  *resolve.File
+	workFile  *resolve.File
+	escalated []string // member anchors widened to their enclosing container
 }
 
 // stagePlan is the pure-read result of resolving every target: nothing in
@@ -187,6 +193,13 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 
 	sess := lsp.NewSession()
 	defer sess.Close()
+	// The trees are needed only while resolving; apply works from the byte
+	// offsets and text the plan already holds.
+	defer func() {
+		for _, fp := range plan.files {
+			fp.close()
+		}
+	}()
 
 	for _, t := range targets {
 		if t.Pathspec != "" {
@@ -298,7 +311,7 @@ func (fp *filePlan) addPreamble(named map[string]bool) (added bool) {
 		if named[pseudo] {
 			continue
 		}
-		res, err := resolve.Resolve(fp.lang, fp.workSrc, pseudo)
+		res, err := fp.workFile.Resolve(pseudo)
 		if err != nil {
 			continue
 		}
@@ -365,13 +378,26 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 		workSrc:    workSrc,
 		workExists: workExists,
 	}
-	if workExists {
-		fp.workOrder, err = resolve.DeclOrder(lang, workSrc)
-		if err != nil {
+	if headExists {
+		if fp.headFile, err = resolve.Open(lang, headSrc); err != nil {
 			return nil, err
 		}
 	}
+	if workExists {
+		if fp.workFile, err = resolve.Open(lang, workSrc); err != nil {
+			fp.close()
+			return nil, err
+		}
+		fp.workOrder = fp.workFile.DeclOrder()
+	}
 	return fp, nil
+}
+
+// close releases both parse trees. Extents already resolved out of them are
+// plain byte offsets, so anything the plan is holding stays valid.
+func (fp *filePlan) close() {
+	fp.headFile.Close()
+	fp.workFile.Close()
 }
 
 // apply is the plan's only side-effecting step: pathspecs delegate to

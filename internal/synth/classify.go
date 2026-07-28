@@ -30,10 +30,10 @@ func (fp *filePlan) classify(ctx context.Context, sess *lsp.Session, root, ancho
 	var workRes, headRes *resolve.Resolution
 	var workErr, headErr error
 	if fp.workExists {
-		workRes, workErr = resolve.Resolve(fp.lang, fp.workSrc, anchor)
+		workRes, workErr = fp.workFile.Resolve(anchor)
 	}
 	if fp.headExists {
-		headRes, headErr = resolve.Resolve(fp.lang, fp.headSrc, anchor)
+		headRes, headErr = fp.headFile.Resolve(anchor)
 	}
 
 	// A non-ResolveError means tree-sitter or the language adapter
@@ -154,10 +154,12 @@ func (fp *filePlan) escalateToContainer(member *resolve.Resolution) *resolve.Res
 
 	// Already in HEAD: the ordinary insertion path can find a sibling
 	// member to splice against, inside the container that is already there.
-	if _, err := resolve.Resolve(fp.lang, fp.headSrc, container); err == nil {
-		return member
+	if fp.headExists {
+		if _, err := fp.headFile.Resolve(container); err == nil {
+			return member
+		}
 	}
-	outer, err := resolve.Resolve(fp.lang, fp.workSrc, container)
+	outer, err := fp.workFile.Resolve(container)
 	if err != nil {
 		return member
 	}
@@ -196,12 +198,12 @@ func (fp *filePlan) insertionPoint(res *resolve.Resolution) (pos uint, seq int) 
 		return 0, seq
 	}
 	for i := idx - 1; i >= 0; i-- {
-		if sib, err := resolve.Resolve(fp.lang, fp.headSrc, fp.workOrder[i]); err == nil {
+		if sib, err := fp.headFile.Resolve(fp.workOrder[i]); err == nil {
 			return sib.Extent.End, seq
 		}
 	}
 	for i := idx + 1; i < len(fp.workOrder); i++ {
-		if sib, err := resolve.Resolve(fp.lang, fp.headSrc, fp.workOrder[i]); err == nil {
+		if sib, err := fp.headFile.Resolve(fp.workOrder[i]); err == nil {
 			return sib.Extent.Start, seq
 		}
 	}

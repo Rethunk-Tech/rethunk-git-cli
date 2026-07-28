@@ -29,14 +29,18 @@ type region struct {
 // region only ever downgrades a row to (unanchorable), never mis-attributes
 // one.
 func buildRegions(lang resolve.Language, src []byte) ([]region, error) {
-	names, err := resolve.DeclOrder(lang, src)
+	// One parse for the whole file: this resolves every declaration in it,
+	// and it runs once per side of every comparison.
+	f, err := resolve.Open(lang, src)
 	if err != nil {
 		return nil, err
 	}
+	defer f.Close()
 
+	names := f.DeclOrder()
 	regions := make([]region, 0, len(names)+2)
 	for _, name := range names {
-		res, rerr := resolve.Resolve(lang, src, name)
+		res, rerr := f.Resolve(name)
 		if rerr != nil {
 			continue
 		}
@@ -48,7 +52,7 @@ func buildRegions(lang resolve.Language, src []byte) ([]region, error) {
 	}
 	regions = dropSpanningRegions(regions)
 	for _, pseudo := range []string{"@header", "@imports"} {
-		if res, rerr := resolve.Resolve(lang, src, pseudo); rerr == nil {
+		if res, rerr := f.Resolve(pseudo); rerr == nil {
 			regions = append(regions, region{name: pseudo, ext: res.Extent})
 		}
 	}
