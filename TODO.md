@@ -29,8 +29,3 @@ version bump wants regardless.
 - [ ] Shell completion — the useful form (symbols after `auth.go:`) is a dynamic
       function calling `rgit diff --porcelain`; no framework needed
 - [ ] `--json` output — `--porcelain` covers machine consumption for now
-
-## Migration
-
-- [ ] Cut over from the `rethunk-git` MCP — checklist in
-      [`specs/CUTOVER.md`](specs/CUTOVER.md)

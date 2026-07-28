@@ -36,7 +36,6 @@ about the rest of your workflow.
 | Install, language servers, env vars, verify, uninstall | [`docs/INSTALL.md`](docs/INSTALL.md) |
 | Commands, argument grammar, flags, exit codes, diff scope | [`docs/USAGE.md`](docs/USAGE.md) |
 | Anchor syntax, extents, pseudo-anchors, special paths | [`docs/ANCHORS.md`](docs/ANCHORS.md) |
-| Migrating off the `rethunk-git` MCP | [`specs/CUTOVER.md`](specs/CUTOVER.md) |
 
 ## Things worth knowing before you rely on it
 

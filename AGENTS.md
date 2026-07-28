@@ -25,14 +25,12 @@ Reasoning and the measurement behind each: @specs/design.md
 | Path | Holds |
 | --- | --- |
 | @specs/design.md | Design record — why, mechanisms, and every measurement |
-| @specs/CUTOVER.md | Migration off the rethunk-git MCP |
 | @docs/USAGE.md | Command surface, argument grammar, flags, exit codes |
 | @docs/ANCHORS.md | Anchor syntax, extents, pseudo-anchors, special paths |
 | @docs/INSTALL.md | Build, language servers, env vars, verify |
 | @TODO.md | Backlog — known limitations, v2 grammars, deferrals |
 
-`docs/` ships with the tool. `specs/` does not — design record and migration
-plan live there.
+`docs/` ships with the tool. `specs/` does not — the design record lives there.
 
 ## Delegation boundary
 

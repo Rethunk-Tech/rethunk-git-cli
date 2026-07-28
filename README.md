@@ -54,7 +54,6 @@ Prerequisites and language-server setup: [HUMANS.md](HUMANS.md).
 | [docs/INSTALL.md](docs/INSTALL.md) | Build, language servers, env vars, verify, uninstall |
 | [docs/USAGE.md](docs/USAGE.md) | Commands, argument grammar, flags, exit codes |
 | [docs/ANCHORS.md](docs/ANCHORS.md) | Anchor syntax, extents, pseudo-anchors, special paths |
-| [specs/CUTOVER.md](specs/CUTOVER.md) | Migrating off the `rethunk-git` MCP |
 | [AGENTS.md](AGENTS.md) | Internals, invariants, delegation boundary |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Commits, tests, dependency policy |
 | [specs/design.md](specs/design.md) | Design record and the measurements behind it |

@@ -31,8 +31,10 @@ less output).
 ### Measured after cutover
 
 The routing prose in `~/.claude/CLAUDE.md` — non-deferrable, so paid on every
-session — was replaced by the standing instruction in
-[`CUTOVER.md`](CUTOVER.md):
+session — was replaced in full by this standing instruction:
+
+> Commit: `rgit diff`, then `rgit commit -m "type(scope): subject" TARGET...`.
+> TARGET = path or `FILE:SYMBOL`. All other git: plain `git`. One repo per call.
 
 | Measurement | Result |
 | --- | --- |
