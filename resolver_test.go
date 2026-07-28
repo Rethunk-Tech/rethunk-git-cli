@@ -414,6 +414,42 @@ def g():
 		"import os\nfrom sys import path"))
 }
 
+func TestResolve_TypeScriptGrammarHoles(t *testing.T) {
+	// declarationFor used to handle only five node kinds; everything else in
+	// this fixture exited 3 unresolved. One fixture exercises every
+	// newly-addressable shape at once rather than one test per kind.
+	src := []byte(`enum Color { Red, Blue }
+abstract class Base { run() { return 1 } }
+function* gen() { yield 1 }
+var legacy = 1
+namespace N { export function inner() { return 1 } }
+export default function () { return 2 }
+class Ok { hello() { return 3 } }
+`)
+
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "Color"), "enum Color { Red, Blue }"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "Base"),
+		"abstract class Base { run() { return 1 } }"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "Base.run"), "run() { return 1 }"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "gen"), "function* gen() { yield 1 }"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "legacy"), "var legacy = 1"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "N"),
+		"namespace N { export function inner() { return 1 } }"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "N.inner"),
+		"export function inner() { return 1 }"))
+
+	// The anonymous default export (export_statement wrapping a nameless
+	// function_expression) must not appear in the index under any spelling —
+	// it is deliberately unaddressable, not merely absent under a wrong
+	// guess.
+	lang, ok := resolve.ForExtension(".ts")
+	qt.Assert(t, qt.IsTrue(ok))
+	order, err := resolve.DeclOrder(lang, src)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.DeepEquals(order,
+		[]string{"Color", "Base", "Base.run", "gen", "legacy", "N", "N.inner", "Ok", "Ok.hello"}))
+}
+
 func TestResolve_ImportsSpanInteriorComments(t *testing.T) {
 	// A grouping comment between two imports is an ordinary named sibling
 	// in TypeScript and Python, and @imports spans it.

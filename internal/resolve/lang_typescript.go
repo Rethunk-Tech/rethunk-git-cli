@@ -52,7 +52,8 @@ func (l *tsFamily) Declarations(src []byte, root *ts.Node) []Declaration {
 			continue
 		}
 		target := outer
-		if outer.Kind() == "export_statement" {
+		switch outer.Kind() {
+		case "export_statement":
 			if d := outer.ChildByFieldName("declaration"); d != nil {
 				target = d
 			} else {
@@ -61,29 +62,63 @@ func (l *tsFamily) Declarations(src []byte, root *ts.Node) []Declaration {
 				// Nothing to name; it is not an addressable symbol.
 				continue
 			}
+		case "expression_statement":
+			// A bare (non-exported) `namespace N { ... }` parses as an
+			// expression_statement wrapping internal_module, not as the
+			// internal_module directly — measured against a compiled parse
+			// tree (`export namespace N {}` instead wraps it in
+			// export_statement, handled by the case above). Only this one
+			// wrapped shape is unwrapped here; an ordinary expression
+			// statement like `foo();` has no name and must keep falling
+			// through to declarationFor's default case.
+			if only := onlyNamedChild(outer); only != nil &&
+				(only.Kind() == "internal_module" || only.Kind() == "module") {
+				target = only
+			}
 		}
 
 		if d, ok := declarationFor(outer, target, src); ok {
 			decls = append(decls, d)
-			if target.Kind() == "class_declaration" {
+			switch target.Kind() {
+			case "class_declaration", "abstract_class_declaration":
 				decls = append(decls, classMembers(target, d.Bare, src)...)
+			case "internal_module", "module":
+				decls = append(decls, moduleMembers(target, d.Bare, src)...)
 			}
 		}
 	}
 	return decls
 }
 
+// onlyNamedChild returns n's sole named child, or nil when n has zero or
+// more than one — the guard that keeps the expression_statement unwrap in
+// Declarations from ever firing on an ordinary expression statement, which
+// has exactly one named child too but of some other kind entirely.
+func onlyNamedChild(n *ts.Node) *ts.Node {
+	if n.NamedChildCount() != 1 {
+		return nil
+	}
+	return n.NamedChild(0)
+}
+
 // classMembers enumerates a class body's own members, container-qualified,
 // so `svc.ts:UserService.login` addresses one method instead of collapsing
 // to the whole class. Without it the finest unit in an idiomatic
 // one-class-per-file module is the class, which for staging purposes is the
-// same thing as naming the path.
+// same thing as naming the path. It is shared by class_declaration and
+// abstract_class_declaration, which both hold their body under a "body"
+// field of kind class_body — measured against a compiled parse tree, the two
+// declarations are otherwise unrelated node kinds with no common parent, but
+// this function only ever looks at the shape the field points to.
 //
 // Shapes measured against a compiled parse tree, not assumed: class_body
 // holds method_definition (ordinary methods, statics and accessors alike)
-// and public_field_definition, each carrying its own "name" field. The
-// extent is the member node, so a doc comment above it is attributed by the
-// same blank-line rule as any other declaration.
+// and public_field_definition, each carrying its own "name" field. Signature-
+// only members with no body (method_signature, abstract_method_signature —
+// legal inside an abstract class) fall through the switch below and stay
+// unaddressable, same as interface_declaration's members today. The extent
+// is the member node, so a doc comment above it is attributed by the same
+// blank-line rule as any other declaration.
 func classMembers(class *ts.Node, container string, src []byte) []Declaration {
 	body := class.ChildByFieldName("body")
 	if body == nil {
@@ -120,12 +155,28 @@ func declarationFor(outer, target *ts.Node, src []byte) (Declaration, bool) {
 		return namedDecl(src, outer, target)
 	case "interface_declaration":
 		return namedDecl(src, outer, target)
-	case "lexical_declaration":
-		// const/let bindings — including const-bound arrow functions and
-		// function expressions, which the language server reports no
-		// differently from any other const. Only the first declarator is
-		// addressable; `const a = 1, b = 2` is 8% territory (design.md),
-		// not v1 scope.
+	case "abstract_class_declaration":
+		// name field "type_identifier", same as class_declaration — measured
+		// against a compiled parse tree. Members are enumerated by the
+		// Declarations loop, exactly as for class_declaration.
+		return namedDecl(src, outer, target)
+	case "enum_declaration":
+		// name field "identifier"; body is enum_body. Members (Color.Red)
+		// are out of scope for v1 — an enum's own values are not addressed,
+		// only the enum itself, matching how enum_body is never descended
+		// into below.
+		return namedDecl(src, outer, target)
+	case "generator_function_declaration":
+		// Same shape as function_declaration but a distinct grammar kind —
+		// measured against a compiled parse tree, not assumed.
+		return namedDecl(src, outer, target)
+	case "lexical_declaration", "variable_declaration":
+		// const/let (lexical_declaration) and var (variable_declaration) —
+		// two distinct node kinds for what reads like one construct,
+		// measured against a compiled parse tree, both wrapping one or more
+		// variable_declarator children with no field name of their own.
+		// Only the first declarator is addressable; `const a = 1, b = 2` (or
+		// `var a = 1, b = 2`) is 8% territory (design.md), not v1 scope.
 		for j := uint(0); j < target.NamedChildCount(); j++ {
 			vd := target.NamedChild(j)
 			if vd != nil && vd.Kind() == "variable_declarator" {
@@ -133,9 +184,68 @@ func declarationFor(outer, target *ts.Node, src []byte) (Declaration, bool) {
 			}
 		}
 		return Declaration{}, false
+	case "internal_module", "module":
+		// TypeScript spells the common `namespace N {}` internal_module, and
+		// the rarer ambient `module "pkg" {}` form module — both carry a
+		// "name" field and an optional "body" field, measured against a
+		// compiled parse tree. Members are enumerated by the Declarations
+		// loop via moduleMembers.
+		return namedDecl(src, outer, target)
+	case "function_expression":
+		// Deliberately unaddressable, not merely unhandled: this is what
+		// `export default function () {}` wraps its anonymous function in —
+		// export_statement's "value" field, not "declaration" — and the
+		// grammar gives function_expression no name field to read one from.
+		// Inventing a stand-in spelling (e.g. a synthetic "default") risks
+		// colliding with a real identifier someday, so this stays
+		// unaddressable; name the path to stage it (docs/ANCHORS.md). A
+		// *named* default export (`export default function f() {}`) is a
+		// function_declaration under "declaration" instead, and already
+		// resolves via the case above.
+		return Declaration{}, false
 	default:
 		return Declaration{}, false
 	}
+}
+
+// moduleMembers enumerates a namespace body's own top-level declarations,
+// container-qualified, so `ns.ts:N.inner` addresses one function inside
+// `namespace N { ... }` instead of collapsing to the whole namespace.
+//
+// Measured against a compiled parse tree: internal_module's (and module's)
+// "body" field is a statement_block whose named children are either the
+// declaration directly — an unexported member, `namespace N { function
+// inner() {} }` — or an export_statement wrapping one, `namespace N { export
+// function inner() {} }`. Both are exactly the two shapes declarationFor
+// already resolves at the top level, so this reuses it rather than
+// duplicating the export-unwrap logic. A member that is itself a container
+// (a class or nested namespace) is not descended a second level —
+// `N.Cls.method` is out of scope, matching how a top-level class's own
+// members are not descended into either.
+func moduleMembers(mod *ts.Node, container string, src []byte) []Declaration {
+	body := mod.ChildByFieldName("body")
+	if body == nil {
+		// `declare namespace N` with no body — an ambient signature-only
+		// form — has nothing to enumerate.
+		return nil
+	}
+	var out []Declaration
+	for i := uint(0); i < body.NamedChildCount(); i++ {
+		member := body.NamedChild(i)
+		target := member
+		if member.Kind() == "export_statement" {
+			d := member.ChildByFieldName("declaration")
+			if d == nil {
+				continue
+			}
+			target = d
+		}
+		if d, ok := declarationFor(member, target, src); ok {
+			d.Container = container
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 // newTypeScriptLanguage claims .ts, .mts, .cts.
