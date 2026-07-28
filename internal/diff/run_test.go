@@ -138,9 +138,12 @@ func TestValidateSym_PrefersNewSideThenFallsBackToOld(t *testing.T) {
 		t.Fatalf("ResolveScope: %v", err)
 	}
 
-	// New (worktree) has the file and the symbol: resolves clean.
-	if err := validateSym(ctx, repo, dir, scope, SymRef{File: "b.py", Name: "existing"}); err != nil {
+	// New (worktree) has the file and the symbol: resolves clean, to its own
+	// canonical spelling since "existing" is already canonical.
+	if name, err := validateSym(ctx, repo, dir, scope, SymRef{File: "b.py", Name: "existing"}); err != nil {
 		t.Errorf("worktree resolution: %v", err)
+	} else if name != "existing" {
+		t.Errorf("canonical anchor = %q; want %q", name, "existing")
 	}
 
 	// Delete the worktree file but keep it in HEAD: New has nothing, Old
@@ -148,15 +151,70 @@ func TestValidateSym_PrefersNewSideThenFallsBackToOld(t *testing.T) {
 	if err := os.Remove(filepath.Join(dir, "b.py")); err != nil {
 		t.Fatal(err)
 	}
-	if err := validateSym(ctx, repo, dir, scope, SymRef{File: "b.py", Name: "existing"}); err != nil {
+	if _, err := validateSym(ctx, repo, dir, scope, SymRef{File: "b.py", Name: "existing"}); err != nil {
 		t.Errorf("HEAD fallback resolution after worktree deletion: %v", err)
 	}
 
 	// Neither side has it: unresolvable.
 	var rerr *resolve.ResolveError
-	err = validateSym(ctx, repo, dir, scope, SymRef{File: "b.py", Name: "neverExisted"})
+	_, err = validateSym(ctx, repo, dir, scope, SymRef{File: "b.py", Name: "neverExisted"})
 	if !errors.As(err, &rerr) || rerr.Code != exitcode.AnchorUnresolvable {
 		t.Errorf("validateSym = %v; want *resolve.ResolveError{Code: AnchorUnresolvable}", err)
+	}
+}
+
+// TestRun_SymFilterMatchesAnyAcceptedAliasSpelling pins the fix for a
+// silent-empty-diff hazard identical in shape to the one
+// TestRun_UnresolvableSymReturnsResolveError already covers: applyFilters
+// used to match a --sym request against Row.Symbol using the caller's own
+// literal string, but Row.Symbol is always rgit's canonical, emitted
+// spelling (resolve.DeclOrder) -- never one of the alternate spellings
+// resolve.Resolve accepts on input but never produces (docs/ANCHORS.md):
+// gopls's "(*A).Get" receiver form, or a Markdown heading's raw text. Both
+// used to resolve cleanly (no error, exit 0) and then filter to zero rows,
+// indistinguishable from "that symbol is clean" -- the same false-negative
+// this package's validateSyms already exists to prevent for a name that
+// does not resolve at all.
+//
+// One fixture covers every aliasing shape at once rather than one test per
+// language: a canonical name (must keep working), gopls's receiver spelling,
+// and a Markdown heading's raw text.
+func TestRun_SymFilterMatchesAnyAcceptedAliasSpelling(t *testing.T) {
+	dir, repo := newDiffTestRepo(t)
+
+	writeDiffFile(t, dir, "a.go", "package p\n\ntype A struct{}\n\nfunc (a *A) Get() int { return 1 }\n")
+	writeDiffFile(t, dir, "doc.md", "# Diff Scope\n\nOriginal.\n")
+	runGit := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	runGit("add", "a.go", "doc.md")
+	runGit("commit", "-q", "-m", "chore: add a.go and doc.md")
+
+	writeDiffFile(t, dir, "a.go", "package p\n\ntype A struct{}\n\nfunc (a *A) Get() int { return 2 }\n")
+	writeDiffFile(t, dir, "doc.md", "# Diff Scope\n\nEdited.\n")
+
+	for _, tt := range []struct {
+		name string
+		sym  SymRef
+	}{
+		{"canonical Go receiver", SymRef{File: "a.go", Name: "A.Get"}},
+		{"gopls receiver spelling", SymRef{File: "a.go", Name: "(*A).Get"}},
+		{"Markdown raw heading text", SymRef{File: "doc.md", Name: "Diff Scope"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			report, err := Run(context.Background(), repo, dir, Options{Syms: []SymRef{tt.sym}})
+			if err != nil {
+				t.Fatalf("Run(%+v): %v", tt.sym, err)
+			}
+			if len(report.Files) != 1 || len(report.Files[0].Rows) != 1 {
+				t.Fatalf("Run(%+v) report = %+v; want exactly one row", tt.sym, report)
+			}
+		})
 	}
 }
 
@@ -183,10 +241,10 @@ func TestApplyFilters_KeepsOnlyNamedSymbolsAcrossFiles(t *testing.T) {
 		},
 	}
 
-	applyFilters(report, Options{Syms: []SymRef{
+	applyFilters(report, []SymRef{
 		{File: "a.go", Name: "A"},
 		{File: "c.go", Name: "AnythingAtAll"},
-	}})
+	})
 
 	if len(report.Files) != 1 {
 		t.Fatalf("report.Files = %+v; want exactly a.go", report.Files)
@@ -207,7 +265,7 @@ func TestApplyFilters_NoSymsIsANoOp(t *testing.T) {
 	report := &Report{Files: []FileReport{
 		{Path: "a.go", Rows: []Row{{Status: StatusUnanchorable, Added: "1", Deleted: "0"}}},
 	}}
-	applyFilters(report, Options{})
+	applyFilters(report, nil)
 	if len(report.Files) != 1 {
 		t.Errorf("report.Files = %+v; want unchanged", report.Files)
 	}
