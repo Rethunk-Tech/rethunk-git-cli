@@ -160,6 +160,20 @@ functions and top-level variable assignments; shell has no containers, so a
 redefined function disambiguates by ordinal the same way two same-named Go
 functions would).
 
+A file whose extension claims no grammar is matched by its shebang instead, so
+an extensionless `bin/` script or git hook is addressable like any other file.
+`bash` and `sh` resolve to the shell grammar and `python3`/`python` to Python,
+in both the `#!/bin/sh` and `#!/usr/bin/env sh` spellings. **`zsh` is
+deliberately excluded** — the bash grammar mis-parses zsh-specific syntax, and
+a wrong extent is worse than an honest refusal. `#!/usr/bin/env -S bash` is not
+unwrapped. The extension is always tried first, so this changes nothing for a
+file that has one.
+
+The shebang is read from the worktree, so a script that exists only in `HEAD` —
+one being deleted, or a comparison between two revisions — falls back to a
+whole-file entry. Deliberate: reading it from a blob instead would buy one
+uncommon case at the cost of a bounded read through `git cat-file`.
+
 The language-server cross-check exists only for Go, TypeScript, and Python
 ([`docs/INSTALL.md#language-servers`](INSTALL.md#language-servers)); Markdown
 and Shell resolve with tree-sitter alone, always in `[ts-only]` mode. Anything

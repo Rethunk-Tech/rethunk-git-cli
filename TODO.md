@@ -34,13 +34,6 @@ or a version bump wants regardless.
 - [ ] Rust, C, C++. Speculative: no surveyed repository contains any. Worth
       doing if that changes, but not ahead of the languages above.
 
-Shared plumbing the next grammar may need:
-
-- [ ] Language lookup is keyed on file extension, so an extensionless script
-      with a `#!` line resolves nothing — a minority of shell scripts, but not
-      a negligible one. A `ForPath` variant that sniffs the shebang would fix
-      it, but it changes a registry contract every grammar shares.
-
 ## Deferred features
 
 - [ ] Shell completion — the useful form (symbols after `auth.go:`) is a dynamic
