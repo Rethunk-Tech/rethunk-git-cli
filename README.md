@@ -3,7 +3,7 @@
 <div align="center">
 
 [![status](https://img.shields.io/badge/status-design-blue)](specs/design.md)
-[![go](https://img.shields.io/badge/go-1.25%2B-00ADD8)](https://go.dev)
+[![go](https://img.shields.io/badge/go-1.26%2B-00ADD8)](https://go.dev)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 </div>

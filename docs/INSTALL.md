@@ -2,14 +2,14 @@
 
 ## Prerequisites
 
-- **Go 1.25+** with cgo enabled — the tree-sitter grammars are C.
+- **Go 1.26+** with cgo enabled — the tree-sitter grammars are C.
 - **git** on `PATH`. `rgit` shells out to it for everything git already does.
 - Optionally, a **language server** per language you want cross-checked
   (see [Language servers](#language-servers)).
 
 The Go floor is not chosen — it tracks whatever the dependencies declare, since
-`rgit` keeps them at their latest releases. `golang.org/x/term` and
-`golang.org/x/sys` set it today; it rises whenever a dependency raises its own.
+`rgit` keeps them at their latest releases. The `go.lsp.dev` modules set it
+today; it rises whenever a dependency raises its own.
 
 ## Build
 

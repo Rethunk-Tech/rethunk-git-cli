@@ -1,6 +1,6 @@
 module github.com/Rethunk-Tech/rethunk-git-cli
 
-go 1.25.0
+go 1.26
 
 require (
 	github.com/go-quicktest/qt v1.102.0
@@ -13,10 +13,15 @@ require (
 )
 
 require (
-	github.com/google/go-cmp v0.6.0 // indirect
+	github.com/aymanbagabas/go-udiff v0.4.1 // indirect
+	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68 // indirect
+	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-pointer v0.0.1 // indirect
-	github.com/rogpeppe/go-internal v1.12.0 // indirect
+	github.com/rogpeppe/go-internal v1.14.1 // indirect
+	go.lsp.dev/jsonrpc2 v1.0.1 // indirect
+	go.lsp.dev/protocol v1.0.1 // indirect
+	go.lsp.dev/uri v1.0.1 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
