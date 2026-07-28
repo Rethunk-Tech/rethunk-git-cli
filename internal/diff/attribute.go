@@ -46,12 +46,46 @@ func buildRegions(lang resolve.Language, src []byte) ([]region, error) {
 		}
 		regions = append(regions, region{name: name, ext: ext})
 	}
+	regions = dropSpanningRegions(regions)
 	for _, pseudo := range []string{"@header", "@imports"} {
 		if res, rerr := resolve.Resolve(lang, src, pseudo); rerr == nil {
 			regions = append(regions, region{name: pseudo, ext: res.Extent})
 		}
 	}
 	return regions, nil
+}
+
+// dropSpanningRegions removes any region that strictly contains another.
+//
+// This is the rule that already keeps @toplevel out of the region set
+// (see region's doc), generalized now that a container and its members are
+// both addressable: a class's extent covers every one of its methods, so
+// keeping both would count a change inside a method twice -- once under the
+// method, once under the class -- and drive the (unanchorable) remainder
+// negative. The innermost region is the one that names the change.
+//
+// A change to the class declaration itself rather than to any member is
+// therefore reported as (unanchorable). That is the honest answer here:
+// naming the class would claim every method's change along with it.
+func dropSpanningRegions(regions []region) []region {
+	kept := make([]region, 0, len(regions))
+	for i, r := range regions {
+		spans := false
+		for j, other := range regions {
+			if i == j {
+				continue
+			}
+			if r.ext.Start <= other.ext.Start && other.ext.End <= r.ext.End &&
+				other.ext.End-other.ext.Start < r.ext.End-r.ext.Start {
+				spans = true
+				break
+			}
+		}
+		if !spans {
+			kept = append(kept, r)
+		}
+	}
+	return kept
 }
 
 // isMultiDeclaratorLang reports whether lang's grammar can produce a
