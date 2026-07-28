@@ -87,6 +87,7 @@ type filePlan struct {
 	workExists bool
 	workOrder  []string // qualified anchor names in worktree declaration order
 	ops        []editOp
+	escalated  []string // member anchors widened to their enclosing container
 }
 
 // stagePlan is the pure-read result of resolving every target: nothing in
@@ -101,8 +102,9 @@ type stagePlan struct {
 	// because the file is new, and ordinals lists anchors that resolved
 	// positionally. Both are the caller's to announce on stderr
 	// (docs/ANCHORS.md); synth writes to no stream of its own.
-	preamble []string
-	ordinals []string
+	preamble  []string
+	ordinals  []string
+	escalated []string
 }
 
 // Plan is a resolved, not-yet-applied Stage. Every target has been
@@ -137,6 +139,12 @@ func (p *Plan) Preamble() []string { return p.plan.preamble }
 // a unique or container-qualified name. docs/ANCHORS.md calls the form a last
 // resort because an inserted symbol repoints it.
 func (p *Plan) Ordinals() []string { return p.plan.ordinals }
+
+// Escalated lists member anchors that were widened to their enclosing
+// container because HEAD has neither -- a method cannot be added to a class
+// that does not exist yet. The caller announces it; staging more than was
+// named is not something to do quietly.
+func (p *Plan) Escalated() []string { return p.plan.escalated }
 
 // Apply performs Plan's only side-effecting step: staging pathspecs via
 // `git add` and writing + staging every file's synthesized blob.
@@ -259,6 +267,9 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 	for _, fp := range plan.files {
 		if fp.addPreamble(named[fp.path]) {
 			plan.preamble = append(plan.preamble, fp.path)
+		}
+		for _, e := range fp.escalated {
+			plan.escalated = append(plan.escalated, fp.path+":"+e)
 		}
 	}
 

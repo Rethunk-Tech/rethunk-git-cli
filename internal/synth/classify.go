@@ -6,6 +6,7 @@ import (
 	"errors"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
@@ -68,6 +69,7 @@ func (fp *filePlan) classify(ctx context.Context, sess *lsp.Session, root, ancho
 		return op, bytes.Equal(workBytes, headBytes), tsOnly, nil
 
 	case workRes != nil && headRes == nil:
+		workRes = fp.escalateToContainer(workRes)
 		pos, seq := fp.insertionPoint(workRes)
 		tsOnly, err = fp.crossCheck(ctx, sess, root, workRes)
 		if err != nil {
@@ -77,7 +79,7 @@ func (fp *filePlan) classify(ctx context.Context, sess *lsp.Session, root, ancho
 			kind:  editInsert,
 			start: pos,
 			seq:   seq,
-			text:  append([]byte(nil), fp.workSrc[workRes.Extent.Start:workRes.Extent.End]...),
+			text:  insertionText(fp.workSrc, workRes.Extent),
 		}
 		return op, false, tsOnly, nil
 
@@ -111,6 +113,59 @@ func (fp *filePlan) crossCheck(ctx context.Context, sess *lsp.Session, root stri
 		return false, cerr
 	}
 	return degraded, nil
+}
+
+// insertionText is the extent's own bytes prefixed with the indentation of
+// the line it starts on. An extent begins at the declaration's first token,
+// not at the start of its line, so splicing one in verbatim puts it at
+// column zero -- which for a top-level declaration is where it belongs and
+// costs nothing, but for a class member means a method landing hard against
+// the left margin of a body indented one level in.
+func insertionText(src []byte, ext resolve.Extent) []byte {
+	lineStart := bytes.LastIndexByte(src[:ext.Start], '\n') + 1
+	indent := src[lineStart:ext.Start]
+	if len(bytes.TrimLeft(indent, " \t")) != 0 {
+		indent = nil // something other than whitespace precedes it on the line
+	}
+
+	out := make([]byte, 0, len(indent)+int(ext.End-ext.Start))
+	out = append(out, indent...)
+	return append(out, src[ext.Start:ext.End]...)
+}
+
+// escalateToContainer widens a new member anchor to the container that
+// encloses it when HEAD has neither. A method spliced in on its own lands at
+// file scope -- `hello(): number { return 1 }` sitting beside the imports --
+// which is not the file the caller has in their worktree and does not parse
+// as the language it claims to be. There is no way to add a member to a
+// class HEAD does not have without bringing the class.
+//
+// Nesting is tested structurally, by extent containment, rather than by the
+// mere presence of a container name. Go's receiver container is a sibling of
+// its methods, not their parent: staging `(*A).Get` must never drag in the
+// `type A struct` declaration, and does not, because A's extent does not
+// enclose Get's.
+func (fp *filePlan) escalateToContainer(member *resolve.Resolution) *resolve.Resolution {
+	dot := strings.LastIndexByte(member.Anchor, '.')
+	if dot <= 0 {
+		return member
+	}
+	container := member.Anchor[:dot]
+
+	// Already in HEAD: the ordinary insertion path can find a sibling
+	// member to splice against, inside the container that is already there.
+	if _, err := resolve.Resolve(fp.lang, fp.headSrc, container); err == nil {
+		return member
+	}
+	outer, err := resolve.Resolve(fp.lang, fp.workSrc, container)
+	if err != nil {
+		return member
+	}
+	if outer.Extent.Start > member.Extent.Start || member.Extent.End > outer.Extent.End {
+		return member // a sibling, not a parent -- Go's receiver container
+	}
+	fp.escalated = append(fp.escalated, member.Anchor+" -> "+container)
+	return outer
 }
 
 // insertionPoint implements design.md's nearest-existing-sibling rule:

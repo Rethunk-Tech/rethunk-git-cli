@@ -114,6 +114,9 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 	for _, path := range plan.Preamble() {
 		fmt.Fprintf(stderr, "[notice] %s is new; staging its @header and @imports so the file compiles\n", path)
 	}
+	for _, e := range plan.Escalated() {
+		fmt.Fprintf(stderr, "[notice] %s: container is new, so the whole container is staged\n", e)
+	}
 	for _, anchor := range plan.Ordinals() {
 		fmt.Fprintf(stderr, "[warning] anchor '%s' is positional; inserting a symbol above it repoints it -- qualify it where the language allows\n", anchor)
 	}
