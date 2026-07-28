@@ -10,12 +10,6 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 )
 
-// NotImplemented marks a command whose parsing and validation succeed but
-// whose execution has not landed yet. It is deliberately outside the
-// public table in docs/USAGE.md, and disappears once every command
-// executes.
-const NotImplemented exitcode.Code = 1
-
 const usageLine = "usage: rgit [--version] <diff|commit> [flags] [target...]"
 
 // Run dispatches one rgit invocation and returns its exit code. version is
