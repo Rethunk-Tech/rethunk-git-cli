@@ -20,6 +20,7 @@ import (
 
 	"github.com/go-quicktest/qt"
 
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/app"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 )
 
@@ -112,7 +113,7 @@ func runRgit(t *testing.T, repoDir string, args ...string) rgitResult {
 // argument precedence resolved every target correctly.
 func wantParsed(t *testing.T, got rgitResult) {
 	t.Helper()
-	qt.Assert(t, qt.Equals(got.ExitCode, int(phase1Unimplemented)))
+	qt.Assert(t, qt.Equals(got.ExitCode, int(app.NotImplemented)))
 }
 
 func TestCommit_InterspersedFlagAfterPositional(t *testing.T) {
