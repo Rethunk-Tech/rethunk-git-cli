@@ -1,7 +1,6 @@
 package diff
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/util"
 )
 
 // Run resolves opts' scope, enumerates every changed file within it, builds
@@ -130,7 +130,7 @@ func buildUntrackedReport(root, path string) (*FileReport, error) {
 	if err != nil {
 		return nil, err
 	}
-	if looksBinary(content) {
+	if util.LooksBinary(content) {
 		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: "-", Deleted: "-"}}}, nil
 	}
 
@@ -162,21 +162,6 @@ func formatModeNote(oldMode string, oldFound bool, newMode string, newFound bool
 		n = trim(newMode)
 	}
 	return o + "->" + n
-}
-
-// looksBinary applies git's own heuristic to an untracked file, which never
-// goes through `git diff` and so never gets git's own binary
-// classification: a NUL byte anywhere in a leading sample means binary.
-// 8000 bytes matches core.bigFileThreshold scale used elsewhere in git's
-// own binary-detection sampling (also used by internal/synth's identical,
-// independently-scoped check).
-func looksBinary(content []byte) bool {
-	n := len(content)
-	const sample = 8000
-	if n > sample {
-		n = sample
-	}
-	return bytes.IndexByte(content[:n], 0) != -1
 }
 
 // numstatPath parses gitx.NumstatEntry.Path, which may carry git's own

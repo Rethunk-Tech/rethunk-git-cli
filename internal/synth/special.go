@@ -1,7 +1,6 @@
 package synth
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -9,6 +8,7 @@ import (
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/util"
 )
 
 // PathError is a target refused before any resolution was attempted on
@@ -73,7 +73,7 @@ func classifyPath(ctx context.Context, repo *gitx.Repo, root, path string) (path
 	if err != nil {
 		return pathRegular, err
 	}
-	if exists && looksBinary(content) {
+	if exists && util.LooksBinary(content) {
 		return pathBinary, nil
 	}
 	return pathRegular, nil
@@ -96,22 +96,10 @@ func classifyWorktreeEntry(full string, info os.FileInfo) (pathKind, error) {
 	if err != nil {
 		return pathRegular, err
 	}
-	if looksBinary(content) {
+	if util.LooksBinary(content) {
 		return pathBinary, nil
 	}
 	return pathRegular, nil
-}
-
-// looksBinary applies git's own heuristic: a NUL byte anywhere in a
-// leading sample means binary. 8000 bytes matches core.bigFileThreshold
-// scale used elsewhere in git's own binary-detection sampling.
-func looksBinary(content []byte) bool {
-	n := len(content)
-	const sample = 8000
-	if n > sample {
-		n = sample
-	}
-	return bytes.IndexByte(content[:n], 0) != -1
 }
 
 // refusalFor turns a non-regular pathKind into the PathError docs/ANCHORS.md
