@@ -65,9 +65,44 @@ func (l *tsFamily) Declarations(src []byte, root *ts.Node) []Declaration {
 
 		if d, ok := declarationFor(outer, target, src); ok {
 			decls = append(decls, d)
+			if target.Kind() == "class_declaration" {
+				decls = append(decls, classMembers(target, d.Bare, src)...)
+			}
 		}
 	}
 	return decls
+}
+
+// classMembers enumerates a class body's own members, container-qualified,
+// so `svc.ts:UserService.login` addresses one method instead of collapsing
+// to the whole class. Without it the finest unit in an idiomatic
+// one-class-per-file module is the class, which for staging purposes is the
+// same thing as naming the path.
+//
+// Shapes measured against a compiled parse tree, not assumed: class_body
+// holds method_definition (ordinary methods, statics and accessors alike)
+// and public_field_definition, each carrying its own "name" field. The
+// extent is the member node, so a doc comment above it is attributed by the
+// same blank-line rule as any other declaration.
+func classMembers(class *ts.Node, container string, src []byte) []Declaration {
+	body := class.ChildByFieldName("body")
+	if body == nil {
+		return nil
+	}
+	var out []Declaration
+	for i := uint(0); i < body.NamedChildCount(); i++ {
+		member := body.NamedChild(i)
+		switch member.Kind() {
+		case "method_definition", "public_field_definition":
+		default:
+			continue
+		}
+		if d, ok := namedDecl(src, member, member); ok {
+			d.Container = container
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 // declarationFor names target, the (possibly descended-into) declaration

@@ -47,11 +47,70 @@ func (p *pythonLanguage) Declarations(src []byte, root *ts.Node) []Declaration {
 	var decls []Declaration
 	count := root.NamedChildCount()
 	for i := range count {
-		if d, ok := p.declarationFor(src, root.NamedChild(i)); ok {
-			decls = append(decls, d)
+		node := root.NamedChild(i)
+		d, ok := p.declarationFor(src, node)
+		if !ok {
+			continue
+		}
+		decls = append(decls, d)
+		if cls := classBody(node); cls != nil {
+			decls = append(decls, p.classMembers(cls, d.Bare, src)...)
 		}
 	}
 	return decls
+}
+
+// classBody returns the class_definition carrying the body, unwrapping a
+// decorated_definition, or nil for anything that is not a class. The
+// decorator wrapper has no "body" field of its own -- only the definition
+// inside it does.
+func classBody(node *ts.Node) *ts.Node {
+	switch node.GrammarName() {
+	case "class_definition":
+		return node
+	case "decorated_definition":
+		count := node.NamedChildCount()
+		for i := range count {
+			if inner := node.NamedChild(i); inner.GrammarName() == "class_definition" {
+				return inner
+			}
+		}
+	}
+	return nil
+}
+
+// classMembers enumerates a class body's methods, container-qualified, so
+// `svc.py:UserService.login` addresses one method rather than the whole
+// class. Measured shape: class_definition's "body" is a block whose named
+// children are function_definition, or decorated_definition wrapping one --
+// the same two forms declarationFor already handles at module level.
+func (p *pythonLanguage) classMembers(class *ts.Node, container string, src []byte) []Declaration {
+	body := class.ChildByFieldName("body")
+	if body == nil {
+		return nil
+	}
+	var out []Declaration
+	count := body.NamedChildCount()
+	for i := range count {
+		member := body.NamedChild(i)
+		var (
+			d  Declaration
+			ok bool
+		)
+		switch member.GrammarName() {
+		case "function_definition":
+			d, ok = namedDecl(src, member, member)
+		case "decorated_definition":
+			d, ok = p.decoratedDeclaration(src, member)
+		default:
+			continue
+		}
+		if ok {
+			d.Container = container
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 func (p *pythonLanguage) declarationFor(src []byte, node *ts.Node) (Declaration, bool) {
