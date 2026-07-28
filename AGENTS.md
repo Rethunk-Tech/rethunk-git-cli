@@ -55,16 +55,19 @@ this reason; it would create a second, divergent source of truth.
 
 ## Invariants in the synthesis path
 
-Each of these was a bug at some point in design. Breaking one is silent.
+Each of these was a bug at some point in design. Breaking one is silent. The
+mechanism and the measurement behind each is in
+[specs/design.md § Blob synthesis](specs/design.md#blob-synthesis) and
+[§ Grammar scope](specs/design.md#grammar-scope).
 
 | Invariant | Why |
 | --- | --- |
-| `hash-object` **must** carry `--path` | Without it, `.gitattributes` clean filters and LFS normalization are bypassed |
-| EOF newline is inherited, never normalized | Git tracks no-newline-at-EOF as real content; adding one commits a byte nobody changed |
-| Multiple extents apply in **reverse byte-offset order** | Earlier replacements otherwise invalidate later offsets |
-| Resolve every target before staging any | Resolution is a pure read; a failure must leave the index as found |
+| `hash-object` **must** carry `--path` | Skips `.gitattributes`/LFS filters otherwise |
+| EOF newline is inherited, never normalized | Git tracks a missing EOF newline as real content |
+| Multiple extents apply in **reverse byte-offset order** | Earlier replacements would invalidate later offsets |
+| Resolve every target before staging any | A failure must leave the index untouched |
 | The resolver indexes bare **and** qualified names | A bare name that is merely absent yields "did you mean" where "qualify it" is correct |
-| `@imports` spans N nodes | Go has one `import_declaration`; TS and Python emit one `import_statement` per import |
+| `@imports` spans N nodes | Go emits one `import_declaration`; TS and Python emit one `import_statement` per import |
 
 ## Resolution model
 
