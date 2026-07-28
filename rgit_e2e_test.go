@@ -481,3 +481,159 @@ func B() int {
 		}
 	}
 }
+
+// --- Phase 5: rgit commit execution ------------------------------------
+
+// installHook writes an executable git hook, e.g. a pre-commit hook that
+// exits non-zero to exercise AGENTS.md's "a rejected commit leaves staging
+// in place" rule.
+func installHook(t *testing.T, repo, name, script string) {
+	t.Helper()
+	path := filepath.Join(repo, ".git", "hooks", name)
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+const commitHappyV1 = `package auth
+
+func A() int {
+	return 1
+}
+
+func B() int {
+	return 2
+}
+`
+
+const commitHappyV2 = `package auth
+
+func A() int {
+	return 100
+}
+
+func B() int {
+	return 200
+}
+`
+
+// TestCommit_HappyPath is CONTRIBUTING.md's pinned rgit_e2e_test.go happy
+// path: init repo -> edit symbol -> rgit diff -> rgit commit -> verify HEAD,
+// clean index, hook ran, worktree preserved. Both A and B change in the
+// worktree; only A is named. The load-bearing assertion is HEAD carrying
+// A's change and NOT B's -- a whole-file commit would also move HEAD, so
+// checking that alone would not prove symbol granularity.
+func TestCommit_HappyPath(t *testing.T) {
+	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
+	marker := filepath.Join(repo, "hook-ran")
+	installHook(t, repo, "pre-commit", "#!/bin/sh\ntouch \""+marker+"\"\n")
+
+	writeFile(t, repo, "auth.go", commitHappyV2)
+
+	diffGot := runRgit(t, repo, "diff", "--porcelain")
+	qt.Assert(t, qt.Equals(diffGot.ExitCode, 0))
+	if _, ok := findRow(parsePorcelain(t, diffGot.Stdout), "auth.go", "MOD"); !ok {
+		t.Fatalf("rgit diff must show auth.go as modified before commit: %q", diffGot.Stdout)
+	}
+
+	got := runRgit(t, repo, "commit", "auth.go:A", "-m", "feat(auth): give A a real value")
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
+
+	head := gitIn(t, repo, "show", "HEAD:auth.go")
+	qt.Assert(t, qt.StringContains(head, "return 100"))
+	qt.Assert(t, qt.Not(qt.StringContains(head, "return 200")))
+
+	// Clean index: nothing left staged after the commit.
+	qt.Assert(t, qt.Equals(gitIn(t, repo, "diff", "--staged", "--numstat"), ""))
+
+	// B's own edit is still outstanding, unstaged -- staging never touched it.
+	qt.Assert(t, qt.StringContains(gitIn(t, repo, "diff", "--numstat"), "auth.go"))
+
+	// The worktree file itself is never touched by staging.
+	onDisk, err := os.ReadFile(filepath.Join(repo, "auth.go"))
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(string(onDisk), commitHappyV2))
+
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("pre-commit hook did not run: %v", err)
+	}
+}
+
+func TestCommit_PreStagedSiblingFileComesAlong(t *testing.T) {
+	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
+	writeFile(t, repo, "auth.go", commitHappyV2)
+	writeFile(t, repo, "sibling.txt", "never named to rgit\n")
+	gitIn(t, repo, "add", "--", "sibling.txt")
+
+	got := runRgit(t, repo, "commit", "auth.go:A", "-m", "feat(auth): update A")
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
+
+	show := gitIn(t, repo, "show", "--stat", "HEAD")
+	qt.Assert(t, qt.StringContains(show, "sibling.txt"))
+}
+
+func TestCommit_HookRejectionLeavesStagingIntact(t *testing.T) {
+	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
+	writeFile(t, repo, "auth.go", commitHappyV2)
+	installHook(t, repo, "pre-commit", "#!/bin/sh\nexit 1\n")
+
+	got := runRgit(t, repo, "commit", "auth.go:A", "-m", "feat(auth): update A")
+	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.GitFailure)))
+
+	// Nothing rolled back: A's synthesized edit is still staged.
+	indexed := gitIn(t, repo, "show", ":auth.go")
+	qt.Assert(t, qt.StringContains(indexed, "return 100"))
+	qt.Assert(t, qt.Not(qt.StringContains(indexed, "return 200")))
+	// Staged (index differs from HEAD) AND unstaged (B's edit, worktree
+	// differs from index) both hold: git's porcelain reports "MM".
+	status := gitIn(t, repo, "status", "--porcelain")
+	qt.Assert(t, qt.StringContains(status, "MM auth.go"))
+}
+
+func TestCommit_ResolveAllBeforeStageLeavesIndexUntouched(t *testing.T) {
+	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
+	writeFile(t, repo, "auth.go", commitHappyV2)
+
+	// "Bogus" resolves nowhere -- the whole batch must fail before A (which
+	// resolves cleanly) is ever staged.
+	got := runRgit(t, repo, "commit", "auth.go:A", "auth.go:Bogus", "-m", "feat(auth): update A")
+	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.AnchorUnresolvable)))
+
+	status := gitIn(t, repo, "status", "--porcelain")
+	qt.Assert(t, qt.Equals(status, " M auth.go\n"))
+}
+
+func TestCommit_PositionalPathspecParityWithFileFlag(t *testing.T) {
+	repoPositional := newTempRepo(t)
+	writeFile(t, repoPositional, "notes.txt", "hello\n")
+	gotPositional := runRgit(t, repoPositional, "commit", "notes.txt", "-m", "chore: add notes")
+	qt.Assert(t, qt.Equals(gotPositional.ExitCode, 0))
+
+	repoFlag := newTempRepo(t)
+	writeFile(t, repoFlag, "notes.txt", "hello\n")
+	gotFlag := runRgit(t, repoFlag, "commit", "--file", "notes.txt", "-m", "chore: add notes")
+	qt.Assert(t, qt.Equals(gotFlag.ExitCode, 0))
+
+	qt.Assert(t, qt.Equals(gitIn(t, repoPositional, "show", "HEAD:notes.txt"), gitIn(t, repoFlag, "show", "HEAD:notes.txt")))
+}
+
+func TestCommit_PathEscapeRejected(t *testing.T) {
+	parent := t.TempDir()
+	repo := filepath.Join(parent, "repo")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, repo, "init", "-q", ".")
+
+	// A real file just outside the repo root: rule 4's existence check
+	// succeeds, so the token reaches rgit's own target construction --
+	// proving the escape is caught there, not merely that classification
+	// found no interpretation for it at all.
+	if err := os.WriteFile(filepath.Join(parent, "outside.txt"), []byte("nope\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := runRgit(t, repo, "commit", "-m", "chore: escape", "../outside.txt")
+	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.InvalidUsage)))
+	qt.Assert(t, qt.StringContains(got.Stderr, "escapes the repository root"))
+}
