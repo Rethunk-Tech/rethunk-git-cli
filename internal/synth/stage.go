@@ -540,6 +540,13 @@ func resolveMode(ctx context.Context, repo *gitx.Repo, root, path string, workEx
 // opLineCounts reports how many lines one resolved edit adds and removes,
 // using the same counter internal/diff renders with so a --dry-run preview
 // and `rgit diff` cannot disagree about the same symbol.
+//
+// A whole-region insert or delete also moves the blank line separating that
+// region from its neighbour -- spliceInsert pads one in, spliceExcise
+// collapses one out -- so the count includes it, by the same rule
+// internal/diff attributes it with. Counting the extent alone is what made
+// `rgit diff` report a phantom (unanchorable) remainder for a line the
+// commit was going to move anyway.
 func opLineCounts(fp *filePlan, op editOp) (added, deleted int) {
 	var old []byte
 	switch op.kind {
@@ -548,7 +555,20 @@ func opLineCounts(fp *filePlan, op editOp) (added, deleted int) {
 			old = fp.headSrc[op.start:op.end]
 		}
 	}
-	return diff.LineCounts(old, op.text)
+	added, deleted = diff.LineCounts(old, op.text)
+
+	switch op.kind {
+	case editDelete:
+		deleted += diff.SeparatorLines(fp.headSrc, op.start, op.end, op.member)
+	case editInsert:
+		// spliceInsert joins onto whatever precedes the insertion point, so
+		// there is a separator to add only when something precedes it: the
+		// first declaration in an empty file is joined onto nothing.
+		if !op.member && len(fp.headSrc) > 0 {
+			added++
+		}
+	}
+	return added, deleted
 }
 
 // pathspecLineCounts totals a whole pathspec's change, so a --dry-run preview

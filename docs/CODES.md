@@ -102,10 +102,21 @@ they were named. Output is therefore stable between runs on an unchanged tree,
 and greppable. A file's `(unanchorable)` row sorts last, since it covers hunks
 spread across the file rather than any one position.
 
-Per-target `+N/-M` counts sum to git's own insertion count in Go, but not
-always in TypeScript or Python: an anchor absorbs a boundary separator only
-where the formatter makes it mandatory — gofmt always writes one blank line
-after the package clause and after the import block, while Prettier and Black
-preserve whatever blank lines the author wrote. What `rgit` promises instead is
-that `rgit diff` and `rgit commit --dry-run` agree row for row, in every
-language.
+A symbol that is wholly added or removed carries **one** blank separator line
+with it, because that is what staging it actually moves — a top-level
+declaration is spliced in with one blank line before it and excised with that
+gap collapsed again. A container member carries none: members sit flush
+against their siblings, separated by a single newline their own extent already
+covers.
+
+Where a formatter writes more than one blank line, the surplus belongs to
+nobody and shows up as `(unanchorable)`. PEP 8 writes two between top-level
+definitions, so adding a Python function reports the symbol plus one
+unanchorable line — and staging the anchor alone really does leave exactly
+that line behind. In Go and TypeScript, where one blank line is the whole
+separator, there is no remainder and no such row.
+
+**Every per-symbol row therefore agrees with `rgit commit --dry-run`, in every
+language.** An `(unanchorable)` row is the one thing `--dry-run` has no
+counterpart for, by definition: it is the part of the change no anchor will
+stage. It appears only when that part is real.

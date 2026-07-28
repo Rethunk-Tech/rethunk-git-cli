@@ -173,6 +173,77 @@ func topLevelComma(text []byte) int {
 	return -1
 }
 
+// isNested reports whether r sits inside another region -- a struct's
+// field, a class's method, a Markdown subsection. It is the same
+// containment test exclusiveText uses to hole a container out, asked the
+// other way round.
+func isNested(r region, siblings []region) bool {
+	for _, s := range siblings {
+		if s.name == r.name {
+			continue
+		}
+		if r.ext.Start >= s.ext.Start && r.ext.End <= s.ext.End {
+			return true
+		}
+	}
+	return false
+}
+
+// separatorLines reports how many blank lines a region that exists on only
+// one side takes with it, so attribution counts what internal/synth will
+// actually move rather than the declaration's extent alone.
+//
+// The answer is at most one, because that is precisely what synth moves:
+// joinWithSeparator writes exactly one blank line between two top-level
+// declarations when splicing an insert, and spliceExcise collapses exactly
+// that gap on a delete. Attributing every adjacent blank line instead would
+// be wrong wherever a formatter writes more than one -- PEP 8 writes two
+// between top-level defs, synth still moves one, and the second genuinely
+// stays unowned. That leftover is what (unanchorable) is for.
+//
+// A nested region gets none: members are separated by a single newline
+// rather than a blank line (joinWithSeparator's member case), which the
+// member's own extent already accounts for.
+//
+// The gap is looked for after the region first and before it only at
+// end-of-file, mirroring spliceExcise: it trims the following gap when
+// anything follows, and falls back to the preceding one when the region was
+// last in the file.
+func separatorLines(src []byte, self region, siblings []region) int {
+	return SeparatorLines(src, self.ext.Start, self.ext.End, isNested(self, siblings))
+}
+
+// SeparatorLines is separatorLines' own rule, taking a plain byte range so
+// internal/synth can apply it to the edit it is about to splice.
+//
+// Exported for the same reason LineCounts is: `rgit diff` and
+// `rgit commit --dry-run` promise to agree row for row (docs/CODES.md), and
+// two implementations of "does this symbol carry its separator" would be
+// free to drift apart -- which is exactly how the phantom (unanchorable)
+// row this fixes came about in the first place.
+func SeparatorLines(src []byte, start, end uint, member bool) int {
+	if member {
+		return 0
+	}
+
+	trailing := 0
+	for e := end; e < uint(len(src)) && src[e] == '\n'; e++ {
+		trailing++
+	}
+	if end+uint(trailing) < uint(len(src)) {
+		return min(trailing, 1)
+	}
+
+	// Nothing but the file's own terminator follows, so the gap that moves
+	// is the one before this region. One of those newlines ends the
+	// previous declaration's last line and is already counted there.
+	leading := 0
+	for s := start; s > 0 && src[s-1] == '\n'; s-- {
+		leading++
+	}
+	return min(max(leading-1, 0), 1)
+}
+
 // indexRegions maps each region's name to its extent for O(1) lookup.
 func indexRegions(regions []region) map[string]resolve.Extent {
 	out := make(map[string]resolve.Extent, len(regions))
@@ -232,20 +303,24 @@ func attributeSymbols(lang resolve.Language, oldSrc, newSrc []byte, totalAdded, 
 			accDeleted += deleted
 			rows = append(rows, Row{Symbol: name, Status: StatusMod, Added: itoa(added), Deleted: itoa(deleted), pos: newExt.Start})
 		case inOld && !inNew:
-			deleted := countLines(exclusiveText(oldSrc, region{name: name, ext: oldExt}, oldRegions))
+			self := region{name: name, ext: oldExt}
+			deleted := countLines(exclusiveText(oldSrc, self, oldRegions))
 			if deleted == 0 {
 				return
 			}
+			deleted += separatorLines(oldSrc, self, oldRegions)
 			accDeleted += deleted
 			// A deleted symbol has no position in the new file, so it sorts
 			// by where it used to be — stable, and close to where a reader
 			// expects to find it.
 			rows = append(rows, Row{Symbol: name, Status: StatusDeleted, Added: "0", Deleted: itoa(deleted), pos: oldExt.Start})
 		case !inOld && inNew:
-			added := countLines(exclusiveText(newSrc, region{name: name, ext: newExt}, newRegions))
+			self := region{name: name, ext: newExt}
+			added := countLines(exclusiveText(newSrc, self, newRegions))
 			if added == 0 {
 				return
 			}
+			added += separatorLines(newSrc, self, newRegions)
 			accAdded += added
 			rows = append(rows, Row{Symbol: name, Status: StatusMod, Added: itoa(added), Deleted: "0", pos: newExt.Start})
 		}

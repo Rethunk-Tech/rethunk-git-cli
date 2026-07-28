@@ -3,9 +3,11 @@ package diff
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
@@ -406,5 +408,96 @@ func TestRun_NoResolvableDeclarationsIsNotDegraded(t *testing.T) {
 	}
 	if report.TSOnly {
 		t.Error("TSOnly = true; want false when the file had nothing to cross-check")
+	}
+}
+
+// rowsFor runs a default-scope diff and returns the rows for one path, so a
+// case can assert the exact row set a reader would see.
+func rowsFor(t *testing.T, dir string, repo *gitx.Repo, path string) []Row {
+	t.Helper()
+	report, err := Run(context.Background(), repo, dir, Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	for _, f := range report.Files {
+		if f.Path == path {
+			return f.Rows
+		}
+	}
+	return nil
+}
+
+func describeRows(rows []Row) string {
+	var b strings.Builder
+	for _, r := range rows {
+		fmt.Fprintf(&b, "[%s %s +%s/-%s]", r.Symbol, r.Status.Porcelain(), r.Added, r.Deleted)
+	}
+	return b.String()
+}
+
+// TestAttribute_TopLevelSymbolOwnsOneSeparator pins the fix for a row that
+// told the reader to do the one thing rgit exists to avoid.
+//
+// Adding or removing a top-level declaration also moves the blank line
+// between it and its neighbour. internal/synth moves exactly one such line
+// (joinWithSeparator for an insert, spliceExcise's gap collapse for a
+// delete), but attribution counted only the declaration's own extent, so
+// that line fell to (unanchorable) -- a row carrying "-> use --file X",
+// advising a whole-path stage that was already unnecessary. Measured before
+// the fix: staging the anchor alone left the tree clean in Go and
+// TypeScript, with the row claiming work that did not exist.
+//
+// Python is the case that proves the rule is "one separator", not "all
+// adjacent blank lines": PEP 8 writes two, synth still inserts one, and the
+// second genuinely does remain unowned -- so exactly one (unanchorable)
+// line must survive there.
+func TestAttribute_TopLevelSymbolOwnsOneSeparator(t *testing.T) {
+	for _, tc := range []struct {
+		name, path, head, work string
+		wantRows               string
+	}{{
+		name: "go insertion",
+		path: "a.go",
+		head: "package p\n\nfunc Keep() int {\n\treturn 1\n}\n",
+		work: "package p\n\nfunc Keep() int {\n\treturn 1\n}\n\nfunc Added() int {\n\treturn 9\n}\n",
+		// The separator is the symbol's, so there is no remainder at all.
+		wantRows: "[Added MOD +4/-0]",
+	}, {
+		name:     "go deletion",
+		path:     "a.go",
+		head:     "package p\n\nfunc Keep() int {\n\treturn 1\n}\n\nfunc Doomed() int {\n\treturn 2\n}\n",
+		work:     "package p\n\nfunc Keep() int {\n\treturn 1\n}\n",
+		wantRows: "[Doomed DELETED +0/-4]",
+	}, {
+		name:     "typescript insertion",
+		path:     "b.ts",
+		head:     "export function g(): number {\n  return 1;\n}\n",
+		work:     "export function g(): number {\n  return 1;\n}\n\nexport function h(): number {\n  return 2;\n}\n",
+		wantRows: "[h MOD +4/-0]",
+	}, {
+		name:     "python insertion leaves the second blank line unowned",
+		path:     "c.py",
+		head:     "def g():\n    return 1\n",
+		work:     "def g():\n    return 1\n\n\ndef h():\n    return 2\n",
+		wantRows: "[h MOD +3/-0][ UNANCHORABLE +1/-0]",
+	}, {
+		name: "a container member owns no blank line",
+		path: "d.go",
+		head: "package p\n\ntype S struct {\n\tA int\n}\n",
+		work: "package p\n\ntype S struct {\n\tA int\n\tB int\n}\n",
+		// A member is separated by one newline, not a blank line, so
+		// nothing extra is attributed and no remainder appears.
+		wantRows: "[S MOD +1/-0][S.B MOD +1/-0]",
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, repo := gittest.New(t)
+			gittest.Write(t, dir, tc.path, tc.head)
+			gittest.Commit(t, dir, "chore: fixture")
+			gittest.Write(t, dir, tc.path, tc.work)
+
+			if got := describeRows(rowsFor(t, dir, repo, tc.path)); got != tc.wantRows {
+				t.Errorf("rows = %s; want %s", got, tc.wantRows)
+			}
+		})
 	}
 }
