@@ -1213,6 +1213,9 @@ func TestCommit_NonAmendWithNoMessageStillRequiresOne(t *testing.T) {
 	qt.Assert(t, qt.StringContains(got.Stderr, "commit requires a message"))
 }
 
+// --- TODO.md § Deferred features: --fixup/--squash, --author/--date,
+// --gpg-sign/--no-gpg-sign, and a clearer --push-with-no-upstream message.
+
 func TestCommit_FixupAndSquashGenerateAutosquashMessages(t *testing.T) {
 	repo := initRepoWithFile(t, "g.go", "package main\n\nfunc G() int { return 1 }\n")
 	target := strings.TrimSpace(gitIn(t, repo, "rev-parse", "HEAD"))
