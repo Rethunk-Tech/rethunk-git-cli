@@ -142,6 +142,30 @@ func runCommit(args []string, stdout, stderr io.Writer) exitcode.Code {
 		// docs/USAGE.md: dry-run "writes no objects, stages nothing, runs
 		// no hooks" -- resolution (including the cross-check above) already
 		// happened as a pure read; nothing past this point may execute.
+		//
+		// It still has to say what it resolved. A preview that prints
+		// nothing and exits 0 is indistinguishable from one that found
+		// nothing, which is the opposite of what a preview is for.
+		fmt.Fprintln(stdout, "dry run: nothing written, nothing staged. Would commit:")
+		width := 0
+		for _, r := range plan.Results() {
+			if r.Outcome != synth.Unchanged && len(targetLabel(r.Target)) > width {
+				width = len(targetLabel(r.Target))
+			}
+		}
+		for _, r := range plan.Results() {
+			if r.Outcome == synth.Unchanged {
+				continue
+			}
+			// A pathspec's change is git's to describe, not rgit's -- it is
+			// staged wholesale rather than synthesized, so there is no single
+			// extent to count.
+			if r.Target.Pathspec != "" {
+				fmt.Fprintf(stdout, "  %-*s  (path)\n", width, targetLabel(r.Target))
+				continue
+			}
+			fmt.Fprintf(stdout, "  %-*s  +%d/-%d\n", width, targetLabel(r.Target), r.Added, r.Deleted)
+		}
 		return exitcode.Success
 	}
 
@@ -173,10 +197,21 @@ func runCommit(args []string, stdout, stderr io.Writer) exitcode.Code {
 
 	// AGENTS.md: a hook rejecting the commit leaves staging in place, and
 	// rgit does not roll it back -- Commit's own error is simply reported.
-	if err := repo.Commit(ctx, opts); err != nil {
+	res, err := repo.Commit(ctx, opts)
+	// Hook output goes to the user either way: on success it is the
+	// formatter or codegen telling them what it did, and on failure it is
+	// usually the reason.
+	if len(res.Stderr) > 0 {
+		stderr.Write(res.Stderr)
+	}
+	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.GitFailure
 	}
+	// git's own summary -- branch, new SHA, and the changed/insertion/
+	// deletion counts. Relaying it verbatim is what stops a caller having to
+	// run `git show` afterwards just to find out what landed.
+	stdout.Write(res.Stdout)
 
 	if f.push {
 		// A push failure does not roll back the commit that preceded it

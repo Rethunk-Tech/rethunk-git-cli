@@ -114,7 +114,7 @@ with a pathspec (`rgit commit script.sh`); `--sym` cannot express a mode change.
 | `--amend` | Amend the previous commit. Anchors stage into it as they would a new commit. |
 | `--allow-empty` | Permit a commit with no changes. Suppresses exit 11. |
 | `--push` | Push upstream after a successful commit. No rollback on push failure. |
-| `--dry-run` | Preview only. Writes no objects, stages nothing, runs no hooks. |
+| `--dry-run` | Preview only. Writes no objects, stages nothing, runs no hooks. Lists each target it resolved with that symbol's `+N/-M`, using the same counts as `rgit diff`. |
 | `--no-verify` | Skip git hooks (standard git meaning). Hooks run by default. |
 | `--unstaged` | (`diff`) Worktree vs index — git's bare `diff`. |
 | `--staged`, `--cached` | (`diff`) Index vs `HEAD`. Both spellings. |
@@ -124,6 +124,10 @@ with a pathspec (`rgit commit script.sh`); `--sym` cannot express a mode change.
 | `--quiet` | (`diff`) Implies `--exit-code` and suppresses output. |
 
 `commit` requires a message (`-m` or `-F`) and at least one target.
+
+On success it relays `git commit`'s own summary — branch, new SHA, and the
+changed/insertion/deletion counts — so there is no need to run `git show`
+afterwards to find out what landed. Hook output is passed through too.
 
 Repeatable `-m` gives subject and body without embedding newlines in one shell
 argument:

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/diff"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
@@ -51,6 +52,14 @@ const (
 type TargetResult struct {
 	Target  Target
 	Outcome Outcome
+
+	// Added and Deleted are the line counts for this target's own extent,
+	// so a --dry-run preview can report magnitude and not just names. They
+	// come from the same counter `rgit diff` uses; a preview that disagreed
+	// with the diff it previews would be worse than none. Both are zero for
+	// a pathspec target, whose change is git's to describe, not rgit's.
+	Added   int
+	Deleted int
 }
 
 // filePlan accumulates every resolved edit for one file, plus the source
@@ -183,7 +192,13 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 		if unchanged {
 			outcome = Unchanged
 		}
-		plan.results = append(plan.results, TargetResult{Target: t, Outcome: outcome})
+		added, deleted := opLineCounts(fp, op)
+		plan.results = append(plan.results, TargetResult{
+			Target:  t,
+			Outcome: outcome,
+			Added:   added,
+			Deleted: deleted,
+		})
 	}
 
 	return plan, nil
@@ -300,4 +315,18 @@ func resolveMode(ctx context.Context, repo *gitx.Repo, root, path string, workEx
 		return "", fmt.Errorf("synth: %s: no HEAD entry to derive mode for a deleted worktree file", path)
 	}
 	return entry.Mode, nil
+}
+
+// opLineCounts reports how many lines one resolved edit adds and removes,
+// using the same counter internal/diff renders with so a --dry-run preview
+// and `rgit diff` cannot disagree about the same symbol.
+func opLineCounts(fp *filePlan, op editOp) (added, deleted int) {
+	var old []byte
+	switch op.kind {
+	case editReplace, editDelete:
+		if int(op.end) <= len(fp.headSrc) && op.start <= op.end {
+			old = fp.headSrc[op.start:op.end]
+		}
+	}
+	return diff.LineCounts(old, op.text)
 }

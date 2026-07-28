@@ -637,3 +637,64 @@ func TestCommit_PathEscapeRejected(t *testing.T) {
 	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.InvalidUsage)))
 	qt.Assert(t, qt.StringContains(got.Stderr, "escapes the repository root"))
 }
+
+func TestCommit_ReportsWhatItCommitted(t *testing.T) {
+	// A commit that prints nothing forces the caller to run `git show` or
+	// `git status` afterwards just to learn what landed -- which is the
+	// context cost rgit exists to remove. git's own summary carries the
+	// branch, the new SHA, and the changed/insertion/deletion counts, so
+	// relaying it verbatim is both the cheapest fix and the one that
+	// matches git (AGENTS.md's governing principle).
+	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
+	writeFile(t, repo, "auth.go", commitHappyV2)
+
+	got := runRgit(t, repo, "commit", "auth.go:A", "-m", "feat(auth): give A a real value")
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
+	qt.Assert(t, qt.StringContains(got.Stdout, "feat(auth): give A a real value"))
+	qt.Assert(t, qt.StringContains(got.Stdout, "1 file changed"))
+	qt.Assert(t, qt.StringContains(got.Stdout, "insertion"))
+}
+
+func TestCommit_DryRunPreviewsAndStagesNothing(t *testing.T) {
+	// A preview that prints nothing and exits 0 is indistinguishable from
+	// one that resolved nothing at all, which defeats the point of asking.
+	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
+	writeFile(t, repo, "auth.go", commitHappyV2)
+
+	before := gitIn(t, repo, "rev-parse", "HEAD")
+	got := runRgit(t, repo, "commit", "--dry-run", "auth.go:A", "-m", "feat(auth): preview only")
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
+	qt.Assert(t, qt.StringContains(got.Stdout, "auth.go:A"))
+
+	// The preview reports magnitude, not just names, and its numbers come
+	// from the same counter `rgit diff` renders with -- assert they agree,
+	// since a preview that contradicts the diff it previews is worse than
+	// no preview at all.
+	diffGot := runRgit(t, repo, "diff", "--porcelain")
+	row, ok := findRow(parsePorcelain(t, diffGot.Stdout), "auth.go", "MOD")
+	qt.Assert(t, qt.IsTrue(ok))
+	qt.Assert(t, qt.StringContains(got.Stdout, "+"+row.Added+"/-"+row.Deleted))
+
+	// "writes no objects, stages nothing" (docs/USAGE.md): HEAD unmoved and
+	// the index untouched.
+	qt.Assert(t, qt.Equals(gitIn(t, repo, "rev-parse", "HEAD"), before))
+	qt.Assert(t, qt.Equals(gitIn(t, repo, "diff", "--staged", "--numstat"), ""))
+}
+
+func TestCommit_PathAlreadyStagedAsDeleted(t *testing.T) {
+	// After `git rm`, the path matches nothing in the worktree and nothing
+	// in the index, so `git add` rejects it as a bad pathspec. Naming
+	// something already staged exactly as asked is not an error -- the
+	// commit includes it either way -- and failing made `rgit commit <path>`
+	// unusable after a `git rm`.
+	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
+	writeFile(t, repo, "gone.md", "bye\n")
+	gitIn(t, repo, "add", "gone.md")
+	gitIn(t, repo, "commit", "-q", "-m", "chore: add gone.md")
+	gitIn(t, repo, "rm", "-q", "gone.md")
+
+	got := runRgit(t, repo, "commit", "gone.md", "-m", "chore: drop gone.md")
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
+	qt.Assert(t, qt.StringContains(got.Stdout, "1 deletion"))
+	qt.Assert(t, qt.Not(qt.StringContains(gitIn(t, repo, "ls-files"), "gone.md")))
+}

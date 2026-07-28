@@ -184,9 +184,31 @@ func (r *Repo) Add(ctx context.Context, pathspecs ...string) error {
 		return err
 	}
 	if res.ExitCode != 0 {
+		// A path whose removal is already staged matches nothing in either
+		// the worktree or the index, so `git add` calls it a bad pathspec.
+		// Naming something that is already staged exactly as asked is not an
+		// error — the commit will include it either way — and failing here
+		// would make `rgit commit <path>` unusable after a `git rm`.
+		if staged, serr := r.hasStagedChange(ctx, pathspecs); serr == nil && staged {
+			return nil
+		}
 		return gitError(args, res)
 	}
 	return nil
+}
+
+// hasStagedChange reports whether any of pathspecs already differs between
+// HEAD and the index.
+func (r *Repo) hasStagedChange(ctx context.Context, pathspecs []string) (bool, error) {
+	args := append([]string{"diff", "--cached", "--name-only", "--"}, pathspecs...)
+	res, err := r.run(ctx, nil, args...)
+	if err != nil {
+		return false, err
+	}
+	if res.ExitCode != 0 {
+		return false, gitError(args, res)
+	}
+	return len(bytes.TrimSpace(res.Stdout)) > 0, nil
 }
 
 // LsTreeEntry is one entry of `git ls-tree` output.
@@ -328,7 +350,12 @@ type CommitOptions struct {
 // — including a hook rejection — is reported as a *GitError; per
 // AGENTS.md, staging is never rolled back on that path, and Commit does
 // not attempt to.
-func (r *Repo) Commit(ctx context.Context, opts CommitOptions) error {
+// Commit runs `git commit` and returns its output. The caller is expected to
+// relay that to the user: git prints the branch, the new SHA, and the
+// changed/insertion/deletion counts, and swallowing it forces the caller to
+// run `git show` afterwards to learn what just happened. Hook output arrives
+// on Stderr and matters for the same reason.
+func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 	args := []string{"commit"}
 	for _, m := range opts.Messages {
 		args = append(args, "-m", m)
@@ -359,12 +386,12 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) error {
 
 	res, err := r.run(ctx, stdin, args...)
 	if err != nil {
-		return err
+		return Result{}, err
 	}
 	if res.ExitCode != 0 {
-		return gitError(args, res)
+		return res, gitError(args, res)
 	}
-	return nil
+	return res, nil
 }
 
 // Push runs `git push` with the given arguments (remote, refspec, ...).

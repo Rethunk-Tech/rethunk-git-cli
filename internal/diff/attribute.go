@@ -215,6 +215,17 @@ func attributeSymbols(lang resolve.Language, oldSrc, newSrc []byte, totalAdded, 
 	return rows, nil
 }
 
+// LineCounts line-diffs two extents' own text in isolation and reports the
+// insertions and deletions between them.
+//
+// Exported so `rgit commit --dry-run` previews the same numbers `rgit diff`
+// prints. Two implementations of "how much did this symbol change" would be
+// free to disagree, and a preview that disagrees with the diff it previews is
+// worse than no preview.
+func LineCounts(oldText, newText []byte) (added, deleted int) {
+	return isolatedDiff(oldText, newText)
+}
+
 // isolatedDiff line-diffs two extents' own text in isolation via go-udiff,
 // summing insertions and deletions across every returned edit.
 func isolatedDiff(oldText, newText []byte) (added, deleted int) {
