@@ -4,13 +4,20 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/spf13/pflag"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/synth"
 )
 
 // commitFlags mirrors the `rgit commit` flag surface in docs/USAGE.md §
@@ -96,8 +103,141 @@ func runCommit(args []string, stdout, stderr io.Writer) exitcode.Code {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.InvalidUsage
 	}
-	_ = classified // staging (blob synthesis, git add) is internal/resolve + internal/synth's job
 
-	fmt.Fprintln(stderr, "rgit: commit execution is not implemented yet (Phase 1 spine only)")
-	return NotImplemented
+	targets, err := commitTargets(root, classified, f.files, f.syms)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return exitcode.InvalidUsage
+	}
+
+	plan, err := synth.PlanStage(ctx, repo, root, targets)
+	if err != nil {
+		code, msg := mapStageError(err)
+		fmt.Fprintf(stderr, "rgit: %s\n", msg)
+		return code
+	}
+
+	if err := plan.Apply(ctx, repo, root); err != nil {
+		code, msg := mapStageError(err)
+		fmt.Fprintf(stderr, "rgit: %s\n", msg)
+		return code
+	}
+
+	opts := gitx.CommitOptions{
+		Messages:   f.messages,
+		Signoff:    f.signoff,
+		Trailers:   f.trailers,
+		Amend:      f.amend,
+		AllowEmpty: f.allowEmpty,
+		NoVerify:   f.noVerify,
+	}
+	if f.msgFile == "-" {
+		data, rerr := io.ReadAll(os.Stdin)
+		if rerr != nil {
+			fmt.Fprintf(stderr, "rgit: reading commit message from stdin: %v\n", rerr)
+			return exitcode.GitFailure
+		}
+		opts.MessageFile = "-"
+		opts.StdinMessage = data
+	} else if f.msgFile != "" {
+		opts.MessageFile = f.msgFile
+	}
+
+	// AGENTS.md: a hook rejecting the commit leaves staging in place, and
+	// rgit does not roll it back -- Commit's own error is simply reported.
+	if err := repo.Commit(ctx, opts); err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return exitcode.GitFailure
+	}
+
+	return exitcode.Success
+}
+
+// mapStageError turns a synth/resolve error into the exit code
+// docs/USAGE.md's table assigns it. Both error types already carry their
+// own Code field and format their own message via Error(), so this is a
+// pure dispatch, not a second source of truth about what each code means.
+func mapStageError(err error) (exitcode.Code, string) {
+	var perr *synth.PathError
+	if errors.As(err, &perr) {
+		return perr.Code, perr.Error()
+	}
+	var rerr *resolve.ResolveError
+	if errors.As(err, &rerr) {
+		return rerr.Code, rerr.Error()
+	}
+	// Anything else reaching here ran through gitx (hash-object,
+	// update-index, git add, check-ignore, ls-tree) and failed at the git
+	// or system level -- docs/USAGE.md's exit 128, mirroring git's own
+	// convention for a fatal failure that is not a usage error.
+	return exitcode.GitFailure, err.Error()
+}
+
+// commitTargets turns rule-classified positionals plus explicit --file/
+// --sym flags into synth targets, in the order docs/USAGE.md documents
+// pathspecs and anchors mixing freely. It also enforces the one piece of
+// path safety rgit owns rather than delegating to git: a pathspec or
+// anchor file that resolves outside root is an invalid-usage error (exit
+// 129) caught before anything runs, not a fatal git failure discovered
+// only after `git add` itself refuses it.
+func commitTargets(root string, classified []cli.Classification, files, syms []string) ([]synth.Target, error) {
+	targets := make([]synth.Target, 0, len(classified)+len(files)+len(syms))
+
+	addPathspec := func(p string) error {
+		if err := checkPathEscape(root, p); err != nil {
+			return err
+		}
+		targets = append(targets, synth.PathTarget(p))
+		return nil
+	}
+	addAnchor := func(file, name string) error {
+		if err := checkPathEscape(root, file); err != nil {
+			return err
+		}
+		targets = append(targets, synth.AnchorTarget(file, name))
+		return nil
+	}
+
+	for _, c := range classified {
+		switch c.Kind {
+		case cli.KindPathspec:
+			if err := addPathspec(c.Pathspec); err != nil {
+				return nil, err
+			}
+		case cli.KindAnchor:
+			if err := addAnchor(c.Anchor.File, c.Anchor.Name); err != nil {
+				return nil, err
+			}
+		}
+	}
+	for _, file := range files {
+		if err := addPathspec(file); err != nil {
+			return nil, err
+		}
+	}
+	for _, sym := range syms {
+		idx := strings.LastIndexByte(sym, ':')
+		if idx <= 0 || idx == len(sym)-1 {
+			return nil, fmt.Errorf("malformed --sym value %q", sym)
+		}
+		if err := addAnchor(sym[:idx], sym[idx+1:]); err != nil {
+			return nil, err
+		}
+	}
+	return targets, nil
+}
+
+// checkPathEscape refuses a pathspec or anchor file whose path climbs
+// above root via "..". A leading-colon pathspec is magic passed through
+// verbatim (docs/USAGE.md § Argument shape), not a literal path, so it is
+// exempt -- there is nothing here to resolve against root at all.
+func checkPathEscape(root, path string) error {
+	if strings.HasPrefix(path, ":") {
+		return nil
+	}
+	rel, err := filepath.Rel(root, filepath.Join(root, path))
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("path %q escapes the repository root", path)
+	}
+	return nil
 }

@@ -1,12 +1,12 @@
 // End-to-end coverage for rgit, per CONTRIBUTING.md's three-file test
-// budget. This slice is Phase 1's: argument precedence and usage errors
-// only. The commit happy path (init repo -> edit symbol -> rgit diff ->
-// rgit commit -> verify HEAD) lands in Phase 5, once staging is real.
+// budget. Covers argument precedence and usage errors (Phase 1), rgit diff
+// rendering (Phase 4), and rgit commit's real execution -- staging through
+// git commit, hooks, and the invariants AGENTS.md pins (Phase 5).
 //
 // Every case execs the actual built binary against a real temporary git
 // repository — no gitx mocking — so a regression in pflag's interspersed
-// parsing, or in cli.ClassifyArgs's rule order, shows up exactly as a
-// user would see it.
+// parsing, cli.ClassifyArgs's rule order, or internal/synth's staging
+// shows up exactly as a user would see it.
 package main
 
 import (
@@ -21,7 +21,6 @@ import (
 
 	"github.com/go-quicktest/qt"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/app"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
@@ -108,29 +107,19 @@ func runRgit(t *testing.T, repoDir string, args ...string) rgitResult {
 	return rgitResult{Stdout: stdout.String(), Stderr: stderr.String(), ExitCode: exitCode}
 }
 
-// wantParsed asserts that classification succeeded and the command
-// reached the (unimplemented) execution step — i.e. no usage error, no
-// classification error. Phase 1 has no real commit/diff execution yet,
-// so "reached execution" is the strongest observable signal that
-// argument precedence resolved every target correctly.
-func wantParsed(t *testing.T, got rgitResult) {
-	t.Helper()
-	qt.Assert(t, qt.Equals(got.ExitCode, int(app.NotImplemented)))
-}
-
 func TestCommit_InterspersedFlagAfterPositional(t *testing.T) {
 	// Pinned defect: stdlib flag and ff/ffcli stop parsing at the first
 	// positional, so this exact argv shape would silently yield zero
 	// messages and two targets ("auth.go:Foo", "msg"), failing with
-	// exit 129 ("commit requires a message") instead of reaching
-	// execution. pflag's interspersed parsing must read one message and
-	// one target.
+	// exit 129 ("commit requires a message"). pflag's interspersed
+	// parsing must read one message and one target instead, letting the
+	// commit actually succeed.
 	repo := newTempRepo(t)
-	writeFile(t, repo, "auth.go", "package main\n")
+	writeFile(t, repo, "auth.go", "package main\n\nfunc Foo() {}\n")
 
 	got := runRgit(t, repo, "commit", "auth.go:Foo", "-m", "msg")
 
-	wantParsed(t, got)
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
 	qt.Assert(t, qt.Not(qt.StringContains(got.Stderr, "requires a message")))
 }
 
@@ -144,29 +133,36 @@ func TestCommit_ColonInFilenameIsPathspec(t *testing.T) {
 
 	got := runRgit(t, repo, "commit", "src/notes:draft.md", "-m", "chore: add draft notes")
 
-	wantParsed(t, got)
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
 }
 
 func TestCommit_DoubleDashForcesPathspec(t *testing.T) {
 	// Rule 1: everything after "--" is a pathspec, unconditionally — even
-	// a token shaped like FILE:NAME for a file that does not exist, which
-	// would otherwise fail rule 6 with an unresolvable-argument error.
+	// a token shaped like FILE:NAME for a file that does not exist. If
+	// rule 5 got a chance at it instead, it would fail as an unresolvable
+	// anchor (exit 3); forced as a pathspec, `git add` itself refuses it
+	// (exit 128, "did not match any files") -- proof the whole string
+	// reached git as one literal path, never split at its colon.
 	// -m must come before "--", since pflag stops flag parsing there too.
 	repo := newTempRepo(t)
 
 	got := runRgit(t, repo, "commit", "-m", "chore: force pathspec", "--", "missing.go:NotASymbol")
 
-	wantParsed(t, got)
+	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.GitFailure)))
+	qt.Assert(t, qt.StringContains(got.Stderr, "did not match any files"))
+	qt.Assert(t, qt.Not(qt.StringContains(got.Stderr, "cannot classify")))
 }
 
 func TestCommit_LeadingColonPathspecMagicPassesThrough(t *testing.T) {
 	// Rule 2: all git pathspec magic is leading-colon, so this is claimed
-	// immediately, with no existence check at all.
+	// immediately, with no existence check at all -- paired here with a
+	// real target so the commit has something to actually stage.
 	repo := newTempRepo(t)
+	writeFile(t, repo, "keep.go", "package main\n\nfunc Keep() {}\n")
 
-	got := runRgit(t, repo, "commit", "-m", "chore: exclude docs", ":(exclude)docs/*")
+	got := runRgit(t, repo, "commit", "-m", "chore: exclude docs", "keep.go", ":(exclude)docs/*")
 
-	wantParsed(t, got)
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
 }
 
 func TestCommit_UnresolvableArgumentListsTriedInterpretations(t *testing.T) {
