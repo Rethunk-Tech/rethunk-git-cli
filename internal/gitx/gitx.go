@@ -345,9 +345,8 @@ func parseNumstat(out []byte) []NumstatEntry {
 	if trimmed == "" {
 		return nil
 	}
-	lines := strings.Split(trimmed, "\n")
-	entries := make([]NumstatEntry, 0, len(lines))
-	for _, line := range lines {
+	entries := make([]NumstatEntry, 0, strings.Count(trimmed, "\n")+1)
+	for line := range strings.SplitSeq(trimmed, "\n") {
 		parts := strings.SplitN(line, "\t", 3)
 		if len(parts) != 3 {
 			continue
