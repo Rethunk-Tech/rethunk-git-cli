@@ -1213,8 +1213,10 @@ func TestCommit_NonAmendWithNoMessageStillRequiresOne(t *testing.T) {
 	qt.Assert(t, qt.StringContains(got.Stderr, "commit requires a message"))
 }
 
-// --- TODO.md § Deferred features: --fixup/--squash, --author/--date,
-// --gpg-sign/--no-gpg-sign, and a clearer --push-with-no-upstream message.
+// --- Forwarded git flags: --fixup/--squash, --author/--date/--reset-author,
+// --gpg-sign/--no-gpg-sign, the --porcelain and -q output modes, and a clearer
+// --push-with-no-upstream message. Each is specified in docs/USAGE.md § Flags;
+// what earns a test here is a flag rgit does more with than hand to git.
 
 func TestCommit_FixupAndSquashGenerateAutosquashMessages(t *testing.T) {
 	repo := initRepoWithFile(t, "g.go", "package main\n\nfunc G() int { return 1 }\n")
@@ -1353,7 +1355,7 @@ func TestCommit_PorcelainEmitsRecords(t *testing.T) {
 	// A pathspec target leaves the SYMBOL column empty; an anchor fills it.
 	qt.Assert(t, qt.StringContains(dry.Stdout, "g.go\tG\t"))
 	qt.Assert(t, qt.StringContains(dry.Stdout, "notes.txt\t\t"))
-	for _, line := range strings.Split(strings.TrimRight(dry.Stdout, "\n"), "\n") {
+	for line := range strings.SplitSeq(strings.TrimRight(dry.Stdout, "\n"), "\n") {
 		if got := len(strings.Split(line, "\t")); got != 4 {
 			t.Errorf("record %q has %d fields; want 4", line, got)
 		}
