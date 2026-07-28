@@ -4,24 +4,26 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"path/filepath"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
 // classify resolves one anchor against a file's already-loaded HEAD and
-// worktree content and reports what to do about it. It performs no I/O
-// and mutates nothing -- resolution is a pure read, so a failure here
-// leaves the caller free to abandon the whole batch with the index
-// exactly as found (AGENTS.md).
+// worktree content and reports what to do about it. It performs no
+// mutating I/O -- resolution (including the LSP cross-check) is a pure
+// read, so a failure here leaves the caller free to abandon the whole
+// batch with the index exactly as found (AGENTS.md).
 //
 // unchanged reports whether the resolved extent is byte-identical between
 // HEAD and the worktree -- docs/USAGE.md's "target has no uncommitted
 // changes" warning, which the caller (not classify) turns into a message
-// and folds into the exit-11 rule. ctx and root are threaded through
-// unused for now; the LSP cross-check that needs them lands next.
+// and folds into the exit-11 rule. tsOnly reports whether the cross-check
+// degraded to tree-sitter-only for this anchor because no live language
+// server answered in time -- normal, not an error (specs/design.md), but
+// worth the caller announcing once on stderr.
 func (fp *filePlan) classify(ctx context.Context, root, anchor string) (op editOp, unchanged, tsOnly bool, err error) {
-	_, _ = ctx, root
 	var workRes, headRes *resolve.Resolution
 	var workErr, headErr error
 	if fp.workExists {
@@ -51,30 +53,62 @@ func (fp *filePlan) classify(ctx context.Context, root, anchor string) (op editO
 	case workRes != nil && headRes != nil:
 		workBytes := fp.workSrc[workRes.Extent.Start:workRes.Extent.End]
 		headBytes := fp.headSrc[headRes.Extent.Start:headRes.Extent.End]
+		tsOnly, err = fp.crossCheck(ctx, root, workRes)
+		if err != nil {
+			return editOp{}, false, false, err
+		}
 		op = editOp{
 			kind:  editReplace,
 			start: headRes.Extent.Start,
 			end:   headRes.Extent.End,
 			text:  append([]byte(nil), workBytes...),
 		}
-		return op, bytes.Equal(workBytes, headBytes), false, nil
+		return op, bytes.Equal(workBytes, headBytes), tsOnly, nil
 
 	case workRes != nil && headRes == nil:
 		pos, seq := fp.insertionPoint(workRes.Anchor)
+		tsOnly, err = fp.crossCheck(ctx, root, workRes)
+		if err != nil {
+			return editOp{}, false, false, err
+		}
 		op = editOp{
 			kind:  editInsert,
 			start: pos,
 			seq:   seq,
 			text:  append([]byte(nil), fp.workSrc[workRes.Extent.Start:workRes.Extent.End]...),
 		}
-		return op, false, false, nil
+		return op, false, tsOnly, nil
 
 	case workRes == nil && headRes != nil:
+		// Deletion: never cross-checked. The symbol exists only in HEAD,
+		// outside a language server's worktree view -- both
+		// docs/ANCHORS.md's cross-check exemptions and
+		// resolve.CrossCheckExtent's own doc comment ("callers must not
+		// invoke this for deletions") are explicit that this is the
+		// caller's job to skip, not something the exempted function
+		// itself is trusted to catch every time.
 		return editOp{kind: editDelete, start: headRes.Extent.Start, end: headRes.Extent.End}, false, false, nil
 
 	default:
 		return editOp{}, false, false, &resolve.ResolveError{Code: exitcode.AnchorUnresolvable, Anchor: anchor}
 	}
+}
+
+// crossCheck verifies res against a live language server, when reachable.
+// Pseudo-anchors are skipped here too, proactively, even though
+// resolve.CrossCheckExtent also treats res.Pseudo as a safety net --
+// docs/ANCHORS.md documents the exemption as the caller's rule to know,
+// not something to rely on a callee catching.
+func (fp *filePlan) crossCheck(ctx context.Context, root string, res *resolve.Resolution) (tsOnly bool, err error) {
+	if res.Pseudo {
+		return false, nil
+	}
+	absPath := filepath.Join(root, fp.path)
+	degraded, cerr := resolve.CrossCheckExtent(ctx, fp.lang, root, absPath, fp.workSrc, res, false)
+	if cerr != nil {
+		return false, cerr
+	}
+	return degraded, nil
 }
 
 // insertionPoint implements design.md's nearest-existing-sibling rule:
