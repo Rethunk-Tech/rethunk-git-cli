@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
@@ -74,8 +75,17 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 
 	for _, t := range targets {
 		if t.Pathspec != "" {
-			if err := checkGitignoreRefusal(ctx, repo, t.Pathspec); err != nil {
-				return nil, err
+			// Pathspec magic (leading ":") is a pattern, not a path --
+			// check-ignore does not accept the same magic forms `git add`
+			// does (e.g. ":(glob)**/*.txt" is not a valid check-ignore
+			// argument), and git add itself does not refuse a glob or
+			// magic pathspec up front the way it refuses a literal
+			// gitignored path. The refusal in docs/ANCHORS.md is about a
+			// caller naming one concrete path, so it only applies there.
+			if !strings.HasPrefix(t.Pathspec, ":") {
+				if err := checkGitignoreRefusal(ctx, repo, t.Pathspec); err != nil {
+					return nil, err
+				}
 			}
 			plan.pathspecs = append(plan.pathspecs, t.Pathspec)
 			continue

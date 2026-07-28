@@ -206,6 +206,46 @@ func After() {}
 	qt.Assert(t, qt.IsNotNil(err))
 }
 
+func TestResolve_ConsecutiveNewSymbolsEachResolveIndependently(t *testing.T) {
+	// internal/synth's nearest-existing-sibling insertion (specs/design.md
+	// § Blob synthesis) walks the worktree's declaration order to find a
+	// sibling also present in HEAD, skipping past any that are themselves
+	// new -- for W = [A, XNew, YNew, C], staging YNew must insert after A.
+	// That walk depends on this resolver giving each consecutive new
+	// symbol its own correct extent and preserving their source order;
+	// this is the resolve-level guarantee synth's insertion logic relies
+	// on, ported from spike/test_basic.py case 5.
+	src := []byte(`package p
+
+func A() {}
+
+func XNew() {}
+
+func YNew() {}
+
+func C() {}
+`)
+
+	a := mustResolve(t, src, "A")
+	qt.Assert(t, qt.Equals(string(src[a.Extent.Start:a.Extent.End]), "func A() {}"))
+
+	xNew := mustResolve(t, src, "XNew")
+	qt.Assert(t, qt.Equals(string(src[xNew.Extent.Start:xNew.Extent.End]), "func XNew() {}"))
+
+	yNew := mustResolve(t, src, "YNew")
+	qt.Assert(t, qt.Equals(string(src[yNew.Extent.Start:yNew.Extent.End]), "func YNew() {}"))
+
+	c := mustResolve(t, src, "C")
+	qt.Assert(t, qt.Equals(string(src[c.Extent.Start:c.Extent.End]), "func C() {}"))
+
+	// Source order must hold even though XNew and YNew are consecutive
+	// and both "new" -- this is what lets a nearest-sibling walk skip
+	// past XNew to find A.
+	qt.Assert(t, qt.IsTrue(a.Extent.Start < xNew.Extent.Start))
+	qt.Assert(t, qt.IsTrue(xNew.Extent.Start < yNew.Extent.Start))
+	qt.Assert(t, qt.IsTrue(yNew.Extent.Start < c.Extent.Start))
+}
+
 func TestResolve_OrdinalDisambiguatesRepeatedBareName(t *testing.T) {
 	// Go permits multiple func init() in one file; with no receiver to
 	// qualify them, the bare name is ambiguous and the ordinal form is
