@@ -23,9 +23,9 @@ Reasoning and the measurement behind each: @specs/design.md
 
 | Path | Holds |
 | --- | --- |
-| @README.md | Orientation, 7-part structure, capability summary |
-| @HUMANS.md | Complete user guide — installation, usage walkthroughs, environment variables, verification |
-| @CONTRIBUTING.md | Developer guide — repository rules, workflow, commit style, testing |
+| @README.md | Orientation and the documentation index |
+| @HUMANS.md | Running and using `rgit` — what it does, inherited behaviour, degraded mode |
+| @CONTRIBUTING.md | Process — commit style, test layout, dependency and documentation policy |
 | @specs/design.md | Design record — why, mechanisms, and every measurement |
 | @docs/USAGE.md | Command surface, argument grammar, flags, exit codes |
 | @docs/ANCHORS.md | Anchor syntax, extents, pseudo-anchors, special paths |
