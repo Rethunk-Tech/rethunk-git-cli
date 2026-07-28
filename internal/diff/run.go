@@ -114,6 +114,18 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 
 	lang, ok := resolve.ForExtension(filepath.Ext(newPath))
 	if !ok {
+		// A worktree copy of newPath may still carry a recognizable "#!"
+		// line -- an extensionless git hook or bin/ entry, resolve.ForPath's
+		// case. There is none to peek for a deletion (newPath no longer
+		// exists in the worktree) or a rev-to-rev comparison that never
+		// touches it; that degrades to the same whole-file row as any other
+		// unsupported extension, deliberately -- not a corner case missed,
+		// see internal/resolve/lang.go's PeekShebangLine.
+		if line, peeked := resolve.PeekShebangLine(filepath.Join(root, newPath)); peeked {
+			lang, ok = resolve.ForPath(newPath, line)
+		}
+	}
+	if !ok {
 		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusNoSymbols, Added: addedStr, Deleted: deletedStr}}}, nil
 	}
 
@@ -157,7 +169,11 @@ func buildUntrackedReport(root, path string) (*FileReport, error) {
 	}
 
 	row := Row{Status: StatusUntracked, Added: itoa(countLines(content)), Deleted: "0"}
-	if lang, ok := resolve.ForExtension(filepath.Ext(path)); ok {
+	// content is already fully read above (needed for the binary check and
+	// line count regardless), so ForPath's shebang fallback costs nothing
+	// extra here -- unlike the other two call sites, there is no separate
+	// bounded peek to reason about.
+	if lang, ok := resolve.ForPath(path, content); ok {
 		if names, derr := resolve.DeclOrder(lang, content); derr == nil && len(names) > 0 {
 			row.HintSymbol = names[0]
 		}
@@ -287,6 +303,15 @@ func validateSyms(ctx context.Context, repo *gitx.Repo, root string, scope Scope
 // missing symbol need no separate message shape.
 func validateSym(ctx context.Context, repo *gitx.Repo, root string, scope Scope, s SymRef) (string, error) {
 	lang, ok := resolve.ForExtension(filepath.Ext(s.File))
+	if !ok {
+		// Same worktree-shebang fallback as buildFileReport: a --sym anchor
+		// naming an extensionless script is only resolvable if its worktree
+		// copy is there to peek. A since-deleted or rev-only file has none,
+		// and degrades to the exit-9 refusal below exactly as before.
+		if line, peeked := resolve.PeekShebangLine(filepath.Join(root, s.File)); peeked {
+			lang, ok = resolve.ForPath(s.File, line)
+		}
+	}
 	if !ok {
 		// No grammar to resolve against at all -- rgit commit's own exit 9
 		// ("unsupported language for a symbol anchor") is the closer match

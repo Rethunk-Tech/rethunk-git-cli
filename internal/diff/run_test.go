@@ -163,6 +163,84 @@ func TestValidateSym_PrefersNewSideThenFallsBackToOld(t *testing.T) {
 	}
 }
 
+// TestRun_ExtensionlessShebangEnumeratesSymbols closes the loop
+// resolve.ForPath opened for rgit commit: rgit diff must reveal the same
+// anchors a symbol-granular commit already accepts, or the documented
+// read-diff-copy-anchor-commit workflow can never discover them for a
+// git-hook-style script with no extension at all.
+func TestRun_ExtensionlessShebangEnumeratesSymbols(t *testing.T) {
+	dir, repo := newDiffTestRepo(t)
+	writeDiffFile(t, dir, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v1\n}\n\nbar() {\n  echo bar\n}\n")
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	run("add", "pre-commit")
+	run("commit", "-q", "-m", "add pre-commit")
+
+	// Edit foo only; bar stays clean and must not appear as a row.
+	writeDiffFile(t, dir, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v2\n}\n\nbar() {\n  echo bar\n}\n")
+
+	report, err := Run(context.Background(), repo, dir, Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	var got *FileReport
+	for i := range report.Files {
+		if report.Files[i].Path == "pre-commit" {
+			got = &report.Files[i]
+		}
+	}
+	if got == nil {
+		t.Fatalf("no report for pre-commit; report.Files = %+v", report.Files)
+	}
+	if len(got.Rows) != 1 || got.Rows[0].Symbol != "foo" {
+		t.Fatalf("pre-commit rows = %+v; want exactly one row named foo", got.Rows)
+	}
+
+	// The anchor Run just printed must be exactly what validateSym (and so
+	// rgit commit) accepts back -- the property the whole loop rests on.
+	scope, err := ResolveScope(context.Background(), repo, Options{})
+	if err != nil {
+		t.Fatalf("ResolveScope: %v", err)
+	}
+	canonical, err := validateSym(context.Background(), repo, dir, scope, SymRef{File: "pre-commit", Name: got.Rows[0].Symbol})
+	if err != nil {
+		t.Fatalf("validateSym(%q): %v", got.Rows[0].Symbol, err)
+	}
+	if canonical != "foo" {
+		t.Errorf("canonical anchor = %q; want %q", canonical, "foo")
+	}
+
+	// A deleted extensionless script has no worktree copy left to peek --
+	// PeekShebangLine returns ok=false, and this degrades to the same
+	// whole-file row any other unsupported extension already gets, not a
+	// missed case.
+	if err := os.Remove(filepath.Join(dir, "pre-commit")); err != nil {
+		t.Fatal(err)
+	}
+	report, err = Run(context.Background(), repo, dir, Options{})
+	if err != nil {
+		t.Fatalf("Run after deletion: %v", err)
+	}
+	got = nil
+	for i := range report.Files {
+		if report.Files[i].Path == "pre-commit" {
+			got = &report.Files[i]
+		}
+	}
+	if got == nil {
+		t.Fatalf("no report for deleted pre-commit; report.Files = %+v", report.Files)
+	}
+	if len(got.Rows) != 1 || got.Rows[0].Symbol != "" || got.Rows[0].Status != StatusNoSymbols {
+		t.Errorf("deleted pre-commit rows = %+v; want one whole-file StatusNoSymbols row", got.Rows)
+	}
+}
+
 // TestRun_SymFilterMatchesAnyAcceptedAliasSpelling pins the fix for a
 // silent-empty-diff hazard identical in shape to the one
 // TestRun_UnresolvableSymReturnsResolveError already covers: applyFilters
