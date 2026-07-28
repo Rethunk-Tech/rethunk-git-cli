@@ -77,7 +77,7 @@ func (l *tsFamily) Declarations(src []byte, root *ts.Node) []Declaration {
 			}
 		}
 
-		if d, ok := declarationFor(outer, target, src); ok {
+		for _, d := range declarationFor(outer, target, src) {
 			decls = append(decls, d)
 			switch target.Kind() {
 			case "class_declaration", "abstract_class_declaration":
@@ -145,52 +145,51 @@ func classMembers(class *ts.Node, container string, src []byte) []Declaration {
 // "file.ts:F" means the whole export_statement, not the function_declaration
 // buried inside it — the extent is always the outermost node even though the
 // name is found further down.
-func declarationFor(outer, target *ts.Node, src []byte) (Declaration, bool) {
+//
+// It returns a slice rather than one (Declaration, bool) because a grouped
+// lexical_declaration/variable_declaration wraps several variable_declarator
+// children that each need their own entry — every other case here still
+// reports at most one.
+func declarationFor(outer, target *ts.Node, src []byte) []Declaration {
 	switch target.Kind() {
 	case "function_declaration":
-		return namedDecl(src, outer, target)
+		return declOne(namedDecl(src, outer, target))
 	case "class_declaration":
-		return namedDecl(src, outer, target)
+		return declOne(namedDecl(src, outer, target))
 	case "type_alias_declaration":
-		return namedDecl(src, outer, target)
+		return declOne(namedDecl(src, outer, target))
 	case "interface_declaration":
-		return namedDecl(src, outer, target)
+		return declOne(namedDecl(src, outer, target))
 	case "abstract_class_declaration":
 		// name field "type_identifier", same as class_declaration — measured
 		// against a compiled parse tree. Members are enumerated by the
 		// Declarations loop, exactly as for class_declaration.
-		return namedDecl(src, outer, target)
+		return declOne(namedDecl(src, outer, target))
 	case "enum_declaration":
 		// name field "identifier"; body is enum_body. Members (Color.Red)
 		// are out of scope for v1 — an enum's own values are not addressed,
 		// only the enum itself, matching how enum_body is never descended
 		// into below.
-		return namedDecl(src, outer, target)
+		return declOne(namedDecl(src, outer, target))
 	case "generator_function_declaration":
 		// Same shape as function_declaration but a distinct grammar kind —
 		// measured against a compiled parse tree, not assumed.
-		return namedDecl(src, outer, target)
+		return declOne(namedDecl(src, outer, target))
 	case "lexical_declaration", "variable_declaration":
 		// const/let (lexical_declaration) and var (variable_declaration) —
 		// two distinct node kinds for what reads like one construct,
 		// measured against a compiled parse tree, both wrapping one or more
 		// variable_declarator children with no field name of their own.
-		// Only the first declarator is addressable; `const a = 1, b = 2` (or
-		// `var a = 1, b = 2`) is 8% territory (design.md), not v1 scope.
-		for j := uint(0); j < target.NamedChildCount(); j++ {
-			vd := target.NamedChild(j)
-			if vd != nil && vd.Kind() == "variable_declarator" {
-				return namedDecl(src, outer, vd)
-			}
-		}
-		return Declaration{}, false
+		// Each declarator is addressed individually, the same fix
+		// goSpecDeclarations applies to Go's grouped const/var/type blocks.
+		return lexicalDeclarations(outer, target, src)
 	case "internal_module", "module":
 		// TypeScript spells the common `namespace N {}` internal_module, and
 		// the rarer ambient `module "pkg" {}` form module — both carry a
 		// "name" field and an optional "body" field, measured against a
 		// compiled parse tree. Members are enumerated by the Declarations
 		// loop via moduleMembers.
-		return namedDecl(src, outer, target)
+		return declOne(namedDecl(src, outer, target))
 	case "function_expression":
 		// Deliberately unaddressable, not merely unhandled: this is what
 		// `export default function () {}` wraps its anonymous function in —
@@ -202,10 +201,77 @@ func declarationFor(outer, target *ts.Node, src []byte) (Declaration, bool) {
 		// *named* default export (`export default function f() {}`) is a
 		// function_declaration under "declaration" instead, and already
 		// resolves via the case above.
-		return Declaration{}, false
+		return nil
 	default:
+		return nil
+	}
+}
+
+// declOne adapts namedDecl's (Declaration, bool) to declarationFor's slice
+// return, so every single-declaration case above can keep sharing namedDecl
+// unchanged.
+func declOne(d Declaration, ok bool) []Declaration {
+	if !ok {
+		return nil
+	}
+	return []Declaration{d}
+}
+
+// lexicalDeclarations addresses each variable_declarator in target
+// individually. A single declarator keeps outer (the export_statement, if
+// any, or the bare declaration) as its extent, matching every other
+// declarationFor case, so its extent still covers the `const`/`let`/`var`
+// keyword. A grouped statement cannot: the keyword and the commas joining
+// declarators belong to the statement as a whole, not to any one of them, so
+// each is addressed by its own variable_declarator node alone — mirroring how
+// a grouped Go spec's extent is the spec, not the block (goSpecDeclarations).
+//
+// A destructuring declarator (`const {a, b} = obj`, `const [x, y] = arr`) is
+// skipped by identifierDecl below rather than given a fabricated name —
+// see its comment for why.
+func lexicalDeclarations(outer, target *ts.Node, src []byte) []Declaration {
+	var vds []*ts.Node
+	for j := uint(0); j < target.NamedChildCount(); j++ {
+		if vd := target.NamedChild(j); vd != nil && vd.Kind() == "variable_declarator" {
+			vds = append(vds, vd)
+		}
+	}
+	switch len(vds) {
+	case 0:
+		return nil
+	case 1:
+		return declOne(identifierDecl(src, outer, vds[0]))
+	default:
+		out := make([]Declaration, 0, len(vds))
+		for _, vd := range vds {
+			if d, ok := identifierDecl(src, vd, vd); ok {
+				out = append(out, d)
+			}
+		}
+		return out
+	}
+}
+
+// identifierDecl names vd, a variable_declarator, when its "name" field is a
+// plain identifier — e.g. `const a = 1` — and reports it unaddressable
+// otherwise.
+//
+// A destructuring declarator's "name" field is object_pattern or
+// array_pattern instead — measured against a compiled parse tree parsing
+// `const {x, y} = obj` and `const [p, q] = arr` — with no single name to
+// read. `const {a, b} = obj` binds two names to one right-hand side; there is
+// no way to give `a` its own extent without `b`'s (and obj's) text coming
+// along too, the same principle as Go's shared `A, B int` field line
+// (goStructFields). Reporting (unanchorable) here is a deliberate choice,
+// not a missing case — inventing a name from the pattern's own text (e.g.
+// "{x, y}") would resolve to an anchor that drags every sibling binding's
+// bytes along with it.
+func identifierDecl(src []byte, extent, vd *ts.Node) (Declaration, bool) {
+	name := vd.ChildByFieldName("name")
+	if name == nil || name.Kind() != "identifier" {
 		return Declaration{}, false
 	}
+	return Declaration{Node: extent, Bare: nodeText(src, name)}, true
 }
 
 // moduleMembers enumerates a namespace body's own top-level declarations,
@@ -240,7 +306,7 @@ func moduleMembers(mod *ts.Node, container string, src []byte) []Declaration {
 			}
 			target = d
 		}
-		if d, ok := declarationFor(member, target, src); ok {
+		for _, d := range declarationFor(member, target, src) {
 			d.Container = container
 			out = append(out, d)
 		}
