@@ -397,6 +397,65 @@ func (r *Repo) Status(ctx context.Context, extra ...string) ([]byte, error) {
 	return res.Stdout, nil
 }
 
+// LsFilesOthers lists untracked files via `git ls-files --others
+// --exclude-standard -z`, NUL-terminated so no path-quoting rules apply.
+// extra is appended after the flags, for pathspec scoping (`-- <pathspec>`).
+func (r *Repo) LsFilesOthers(ctx context.Context, extra ...string) ([]string, error) {
+	args := append([]string{"ls-files", "--others", "--exclude-standard", "-z"}, extra...)
+	res, err := r.run(ctx, nil, args...)
+	if err != nil {
+		return nil, err
+	}
+	if res.ExitCode != 0 {
+		return nil, gitError(args, res)
+	}
+	trimmed := bytes.Trim(res.Stdout, "\x00")
+	if len(trimmed) == 0 {
+		return nil, nil
+	}
+	return strings.Split(string(trimmed), "\x00"), nil
+}
+
+// LsFilesStage reads path's index-stage-0 mode via `git ls-files --stage`.
+// found is false when path is simply not in the index — the normal case
+// for a file that is untracked or staged-deleted, not a failure.
+func (r *Repo) LsFilesStage(ctx context.Context, path string) (mode string, found bool, err error) {
+	args := []string{"ls-files", "--stage", "--", path}
+	res, err := r.run(ctx, nil, args...)
+	if err != nil {
+		return "", false, err
+	}
+	if res.ExitCode != 0 {
+		return "", false, gitError(args, res)
+	}
+	line := strings.TrimRight(string(res.Stdout), "\n")
+	if line == "" {
+		return "", false, nil
+	}
+	fields := strings.Fields(line)
+	if len(fields) < 1 {
+		return "", false, fmt.Errorf("gitx: malformed ls-files --stage line %q", line)
+	}
+	return fields[0], true, nil
+}
+
+// MergeBase resolves the merge base of a and b via `git merge-base`, needed
+// for a diff-scope's `A...B` symmetric range: the range's "old" content
+// endpoint is the merge base, not A itself. ok is false when the two
+// revisions share no common ancestor — a normal negative answer, not a
+// failure.
+func (r *Repo) MergeBase(ctx context.Context, a, b string) (sha string, ok bool, err error) {
+	args := []string{"merge-base", a, b}
+	res, err := r.run(ctx, nil, args...)
+	if err != nil {
+		return "", false, err
+	}
+	if res.ExitCode != 0 {
+		return "", false, nil
+	}
+	return strings.TrimSpace(string(res.Stdout)), true, nil
+}
+
 // Toplevel returns the working tree's root directory, via `git rev-parse
 // --show-toplevel`.
 func (r *Repo) Toplevel(ctx context.Context) (string, error) {

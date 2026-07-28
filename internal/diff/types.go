@@ -1,0 +1,131 @@
+// Package diff implements `rgit diff`'s execution: resolving which of the
+// four scopes docs/USAGE.md § Diff scope describes applies, enumerating the
+// changed files within it, attributing each file's hunks to the symbol
+// anchors docs/ANCHORS.md defines, and rendering the result in the default
+// aligned layout or --porcelain's stable tab-separated form.
+//
+// The governing promise (AGENTS.md, docs/USAGE.md) is that every FILE:NAME
+// label this package prints is exactly the string internal/resolve accepts
+// back — rgit diff and rgit commit must agree on what a symbol is called.
+package diff
+
+// Status is one row's classification, matching docs/USAGE.md § Output's six
+// porcelain spellings plus the internal StatusNoSymbols case (an
+// unsupported-language file, ported to porcelain as MOD since it is an
+// ordinary modification that merely could not be split by symbol).
+type Status int
+
+const (
+	StatusMod Status = iota
+	StatusDeleted
+	StatusUnanchorable
+	StatusUntracked
+	StatusMode
+	StatusBinary
+	StatusNoSymbols
+)
+
+// Porcelain returns the exact status token docs/USAGE.md § Output specifies
+// for --porcelain records.
+func (s Status) Porcelain() string {
+	switch s {
+	case StatusDeleted:
+		return "DELETED"
+	case StatusUnanchorable:
+		return "UNANCHORABLE"
+	case StatusUntracked:
+		return "UNTRACKED"
+	case StatusMode:
+		return "MODE"
+	case StatusBinary:
+		return "BINARY"
+	default: // StatusMod, StatusNoSymbols
+		return "MOD"
+	}
+}
+
+// Row is one line of rgit diff output. Symbol is empty for every
+// file-level row (unanchorable, untracked, mode, binary, no-symbols); a
+// non-empty Symbol is always the anchor rgit commit accepts back.
+type Row struct {
+	Symbol  string
+	Status  Status
+	Added   string // numstat-shaped: a decimal count, or "-" for binary
+	Deleted string
+
+	// ModeNote is "644->755"-shaped, set only for StatusMode rows.
+	ModeNote string
+
+	// HintHasSymbol marks a StatusUntracked row whose file has a resolvable
+	// first symbol, for the "-> use --sym FILE:NAME or --file FILE" hint.
+	// HintSymbol carries that name.
+	HintSymbol string
+}
+
+// FileReport is every row rgit diff has to say about one file.
+type FileReport struct {
+	Path string
+	Rows []Row
+}
+
+// Report is the full result of one rgit diff invocation, already filtered
+// and sorted for rendering.
+type Report struct {
+	Files []FileReport
+}
+
+// Dirty reports whether anything in the report is committable — the
+// question docs/USAGE.md's --exit-code and --quiet flags answer.
+func (r *Report) Dirty() bool {
+	for _, f := range r.Files {
+		if len(f.Rows) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// SymRef is a FILE:NAME anchor filter: --sym's explicit form or a bare
+// KindAnchor positional (docs/USAGE.md § Flags: the two are equivalent).
+type SymRef struct {
+	File string
+	Name string
+}
+
+// Options is runDiff's fully-classified input: flags plus the buckets
+// cli.ClassifyArgs's positionals sorted into (see Bucket in classify.go).
+type Options struct {
+	Staged   bool
+	Unstaged bool
+
+	// RangeFlag is --range's value. PositionalRange is a bare ".."/"..."
+	// shaped positional pulled out ahead of cli.ClassifyArgs by
+	// ExtractRangeToken, since git's own rev-parse --verify — which rule 3
+	// relies on — rejects range syntax outright. At most one may be set;
+	// ResolveScope rejects both together.
+	RangeFlag       string
+	PositionalRange string
+
+	// Revisions are bare revision positionals rule 3 resolved (KindRevision),
+	// in argument order. 0 with no other scope selector is the default
+	// scope; 1 diffs the worktree against that revision; 2 diffs the first
+	// against the second — both mirroring plain git diff's own positional
+	// forms.
+	Revisions []string
+
+	// Files are pathspecs that scope the git-level query: --file values
+	// plus bare KindPathspec positionals. Passed to git verbatim.
+	Files []string
+
+	// Syms filter rendered output to specific anchors: --sym values plus
+	// bare KindAnchor positionals. Unlike Files, these narrow rendering
+	// only — git has no notion of a symbol (docs/USAGE.md § Diff scope).
+	Syms []SymRef
+}
+
+// UsageError is a scope- or argument-shape problem Run detects itself,
+// distinct from a *gitx.GitError or *gitx.ExecError: it maps to
+// exitcode.InvalidUsage rather than exitcode.GitFailure.
+type UsageError struct{ Msg string }
+
+func (e *UsageError) Error() string { return e.Msg }
