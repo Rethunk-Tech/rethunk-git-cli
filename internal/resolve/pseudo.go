@@ -51,23 +51,27 @@ func headerExtent(lang Language, root *ts.Node, limit uint) (Extent, bool) {
 	return Extent{Start: 0, End: end}, true
 }
 
-// importsExtent spans the first contiguous run of ImportKinds nodes. Go
-// emits exactly one import_declaration; TypeScript and Python emit one node
-// per import statement, so the run can be many nodes wide — the pseudo-
-// anchor must cover the whole run or staging @imports would silently drop
+// importsExtent spans the first contiguous run of import nodes. Go emits
+// exactly one import_declaration; TypeScript and Python emit one node per
+// import statement, so the run can be many nodes wide — the pseudo-anchor
+// must cover the whole run or staging @imports would silently drop
 // everything after the first import.
 //
 // Comments do not break the run: in TypeScript and Python a grouping
 // comment between two imports ("# stdlib", "// external") is an ordinary
 // named sibling, and the block a person means by @imports spans it.
-func importsExtent(lang Language, root *ts.Node) (Extent, bool) {
-	kinds := kindSet(lang.ImportKinds())
+//
+// What counts as "an import node" is lang's own ImportMatcher when it
+// implements one, falling back to an ImportKinds lookup otherwise — see
+// importPredicate.
+func importsExtent(lang Language, src []byte, root *ts.Node) (Extent, bool) {
+	isImport := importPredicate(lang, src)
 	children := namedChildren(root)
 
 	start, end := -1, -1
 	for i := range children {
 		c := &children[i]
-		if kinds[c.Kind()] {
+		if isImport(c) {
 			if start == -1 {
 				start = i
 			}
@@ -88,6 +92,21 @@ func importsExtent(lang Language, root *ts.Node) (Extent, bool) {
 		return Extent{}, false
 	}
 	return Extent{Start: children[start].StartByte(), End: children[end].EndByte()}, true
+}
+
+// importPredicate builds the test importsExtent walks root's children with:
+// lang's own IsImport when it implements ImportMatcher — needed by a grammar
+// like shell's, where an import is a node kind shared with everything else,
+// distinguished only by its own text — or a plain ImportKinds membership
+// test otherwise. Built once per call rather than re-checked per node, so
+// the common (kind-only) path still pays for exactly one map allocation,
+// same as before this existed.
+func importPredicate(lang Language, src []byte) func(*ts.Node) bool {
+	if m, ok := lang.(ImportMatcher); ok {
+		return func(n *ts.Node) bool { return m.IsImport(src, n) }
+	}
+	kinds := kindSet(lang.ImportKinds())
+	return func(n *ts.Node) bool { return kinds[n.Kind()] }
 }
 
 // OwnsTrailingSeparator reports whether lang's own formatting convention

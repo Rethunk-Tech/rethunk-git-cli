@@ -153,12 +153,12 @@ func resolvePseudo(lang Language, src []byte, root *ts.Node, idx *index, anchor 
 		if tl, found := toplevelExtent(lang, src, root, idx); found {
 			limit = tl.Start
 		}
-		if imp, found := importsExtent(lang, root); found && imp.Start < limit {
+		if imp, found := importsExtent(lang, src, root); found && imp.Start < limit {
 			limit = imp.Start
 		}
 		ext, ok = headerExtent(lang, root, limit)
 	case "@imports":
-		ext, ok = importsExtent(lang, root)
+		ext, ok = importsExtent(lang, src, root)
 	case "@toplevel":
 		ext, ok = toplevelExtent(lang, src, root, idx)
 	}

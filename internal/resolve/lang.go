@@ -61,11 +61,36 @@ type Language interface {
 	// single kind, because Go emits one import_declaration while TypeScript
 	// and Python emit one node per import and Python distinguishes
 	// import_statement from import_from_statement.
+	//
+	// This is a fallback, not the only mechanism: a Language whose import
+	// statement is not identifiable by node kind alone (shell's `source
+	// f.sh` is an ordinary "command" node, the same kind as every other
+	// command) should instead implement ImportMatcher, which importsExtent
+	// consults first.
 	ImportKinds() []string
 
 	// HeaderKinds lists the node kinds belonging to @header — shebang,
 	// build tags, copyright, package clause.
 	HeaderKinds() []string
+}
+
+// ImportMatcher is an optional refinement of Language for a grammar whose
+// import statement cannot be identified by node kind alone. Shell's `source
+// f.sh` (or `. f.sh`) parses as an ordinary "command" node — the same kind
+// every other command in the script uses — distinguished only by its own
+// command name, so ImportKinds cannot describe it: returning "command" would
+// make @imports span nearly every line of a script, silently.
+//
+// importsExtent (pseudo.go) type-asserts for this and consults it first when
+// present; a Language that does not implement it falls back to ImportKinds
+// exactly as before, so Go, TypeScript and Python — none of which need
+// per-node text inspection to recognize an import — are unaffected.
+type ImportMatcher interface {
+	// IsImport reports whether n, one of root's own named children, is an
+	// import. src is the whole file, passed for the same reason
+	// Declarations already takes it: a tree-sitter Node carries no source
+	// text of its own to read without it.
+	IsImport(src []byte, n *ts.Node) bool
 }
 
 // nodeText is n's own source text.
