@@ -399,6 +399,68 @@ func TestStage_MemberDeletionKeepsTheFileParseable(t *testing.T) {
 	})
 }
 
+// TestStage_YAMLNestedKeyByteIdenticalRoundTrip pins the acceptance bar
+// TODO.md's own warning set for this grammar: YAML's indentation handling
+// is exactly where synthesis bugs have hidden before (8b8629d), so a
+// nested key's own replace must reproduce the worktree byte-for-byte, not
+// merely "close."
+func TestStage_YAMLNestedKeyByteIdenticalRoundTrip(t *testing.T) {
+	head := "name: CI\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: go build ./...\n\n" +
+		"  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: go test ./...\n"
+
+	t.Run("a lone nested-key edit round-trips byte-identical", func(t *testing.T) {
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "ci.yml", head)
+		commitAll(t, dir, "chore: ci.yml")
+		work := "name: CI\n\njobs:\n  build:\n    runs-on: macos-latest\n    steps:\n      - run: go build ./...\n\n" +
+			"  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: go test ./...\n"
+		writeFile(t, dir, "ci.yml", work)
+
+		mustStage(t, repo, dir, synth.AnchorTarget("ci.yml", "build.runs-on"))
+
+		// Nothing else in the file changed, so staging the one nested key
+		// that did must reproduce the worktree exactly -- indentation,
+		// sibling jobs, and the block-scalar-free step list all untouched.
+		qt.Assert(t, qt.Equals(indexBlob(t, repo, "ci.yml"), work))
+	})
+
+	t.Run("a sibling job's own pending edit stays unstaged", func(t *testing.T) {
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "ci.yml", head)
+		commitAll(t, dir, "chore: ci.yml")
+		work := "name: CI\n\njobs:\n  build:\n    runs-on: macos-latest\n    steps:\n      - run: go build ./...\n\n" +
+			"  test:\n    runs-on: windows-latest\n    steps:\n      - run: go test ./...\n"
+		writeFile(t, dir, "ci.yml", work)
+
+		mustStage(t, repo, dir, synth.AnchorTarget("ci.yml", "build.runs-on"))
+
+		got := indexBlob(t, repo, "ci.yml")
+		qt.Assert(t, qt.StringContains(got, "runs-on: macos-latest"))
+		// test's own runs-on is still HEAD's value: naming build.runs-on
+		// alone must never carry test's still-pending edit along with it.
+		qt.Assert(t, qt.StringContains(got, "  test:\n    runs-on: ubuntu-latest\n"))
+		qt.Assert(t, qt.Not(qt.StringContains(got, "windows-latest")))
+	})
+
+	t.Run("naming the job stages its whole subtree, block scalar included", func(t *testing.T) {
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "ci.yml", head)
+		commitAll(t, dir, "chore: ci.yml")
+		work := "name: CI\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n" +
+			"          go build ./...\n          go vet ./...\n\n" +
+			"  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: go test ./...\n"
+		writeFile(t, dir, "ci.yml", work)
+
+		mustStage(t, repo, dir, synth.AnchorTarget("ci.yml", "jobs.build"))
+
+		// The whole file changed only inside "build", so this must also
+		// round-trip byte-identical -- including the block scalar's own
+		// internal indentation, preserved verbatim rather than reasoned
+		// about.
+		qt.Assert(t, qt.Equals(indexBlob(t, repo, "ci.yml"), work))
+	})
+}
+
 func TestStage_UnbornBranchInitialCommit(t *testing.T) {
 	// No commits at all: HEAD does not resolve, so CatFile reports
 	// headExists=false rather than erroring (git itself exits 128 for

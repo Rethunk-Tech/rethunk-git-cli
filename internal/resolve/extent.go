@@ -26,10 +26,36 @@ func docStart(lang Language, src []byte, node *ts.Node) uint {
 	return start
 }
 
-// fullExtent is [docStart, node.EndByte()) — the symbol together with any
-// leading comments attributed to it.
+// fullExtent is [docStart, extentEnd) — the symbol together with any leading
+// comments attributed to it.
 func fullExtent(lang Language, src []byte, node *ts.Node) Extent {
-	return Extent{Start: docStart(lang, src, node), End: node.EndByte()}
+	return Extent{Start: docStart(lang, src, node), End: extentEnd(lang, src, node)}
+}
+
+// trailingCommentTrimmer is an optional refinement of Language for a
+// grammar whose own external scanner can graft a comment onto the wrong
+// node's trailing edge. lang_yaml.go is the only implementer: measured
+// directly against tree-sitter-yaml v0.7.2, a comment between the end of a
+// nested value and the next, more shallowly indented sibling is not
+// attached as that sibling's leading trivia the way every other grammar in
+// this resolver places a comment -- it becomes the trailing child of
+// whatever block was still structurally open when the scanner consumed it,
+// regardless of the comment's own written column, because the scanner
+// decides whether to dedent based on the next real line, which it has not
+// looked ahead to yet when it emits the comment token.
+//
+// extentEnd consults this when a Language implements it, falling back to
+// node.EndByte() unchanged otherwise -- Go, TypeScript, Python, Markdown and
+// Shell keep exactly the extent they always computed.
+type trailingCommentTrimmer interface {
+	trimTrailingComment(src []byte, node *ts.Node) uint
+}
+
+func extentEnd(lang Language, src []byte, node *ts.Node) uint {
+	if t, ok := lang.(trailingCommentTrimmer); ok {
+		return t.trimTrailingComment(src, node)
+	}
+	return node.EndByte()
 }
 
 // declOnlyExtent is the declaration node's own range, excluding any

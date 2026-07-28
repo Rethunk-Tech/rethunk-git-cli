@@ -169,6 +169,15 @@ func ExtendThroughOwnedSeparator(lang Language, src []byte, ext Extent, limit ui
 // Python method is treated as an ordinary top-level-shaped boundary, not a
 // flush one, or the synthesized blob would drop a blank line every Python
 // style guide expects there.
+//
+// YAML defaults to the Python side of this for a different reason: unlike
+// gofmt or prettier, no YAML formatter enforces either convention
+// deterministically (the same "author's own blank lines are preserved, not
+// normalized" reasoning OwnsTrailingSeparator already gives for Prettier and
+// Black), so there is no tool-enforced flush convention to match the way
+// there is for Go and TypeScript. This only governs a brand-new nested key
+// being inserted, not the byte-identical replace/delete path a committed
+// key already takes.
 func MembersSitFlush(lang Language) bool {
 	switch lang.Name() {
 	case "go", "typescript", "tsx":

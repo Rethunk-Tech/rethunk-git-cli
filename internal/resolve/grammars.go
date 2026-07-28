@@ -7,6 +7,7 @@ import (
 	tsts "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 
 	tsmd "github.com/tree-sitter-grammars/tree-sitter-markdown/bindings/go"
+	tsyaml "github.com/tree-sitter-grammars/tree-sitter-yaml/bindings/go"
 	tsbash "github.com/tree-sitter/tree-sitter-bash/bindings/go"
 )
 
@@ -41,3 +42,6 @@ func markdownGrammar() *ts.Language { return ts.NewLanguage(tsmd.Language()) }
 // bashGrammar parses .sh and .bash. Not .zsh: tree-sitter-bash is a POSIX/Bash
 // grammar and mis-parses zsh-only syntax (lang_shell.go).
 func bashGrammar() *ts.Language { return ts.NewLanguage(tsbash.Language()) }
+
+// yamlGrammar parses .yaml and .yml.
+func yamlGrammar() *ts.Language { return ts.NewLanguage(tsyaml.Language()) }
