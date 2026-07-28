@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/diff"
@@ -57,7 +58,8 @@ type TargetResult struct {
 	// so a --dry-run preview can report magnitude and not just names. They
 	// come from the same counter `rgit diff` uses; a preview that disagreed
 	// with the diff it previews would be worse than none. Both are zero for
-	// a pathspec target, whose change is git's to describe, not rgit's.
+	// a pathspec target these cover the whole path, matching what
+	// `rgit diff` reports for a file with no addressable symbols.
 	Added   int
 	Deleted int
 }
@@ -165,7 +167,13 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 			// error -- exactly the kind of divergence AGENTS.md's governing
 			// principle forbids. `git add` is left to answer both cases
 			// itself, at apply time, the way plain git would.
-			plan.results = append(plan.results, TargetResult{Target: t, Outcome: Staged})
+			added, deleted := pathspecLineCounts(ctx, repo, root, t.Pathspec)
+			plan.results = append(plan.results, TargetResult{
+				Target:  t,
+				Outcome: Staged,
+				Added:   added,
+				Deleted: deleted,
+			})
 			continue
 		}
 
@@ -329,4 +337,47 @@ func opLineCounts(fp *filePlan, op editOp) (added, deleted int) {
 		}
 	}
 	return diff.LineCounts(old, op.text)
+}
+
+// pathspecLineCounts totals a whole pathspec's change, so a --dry-run preview
+// reports the same +N/-M for a path target that `rgit diff` does. Scoped to
+// HEAD rather than the index because that is what rgit commit would pick up:
+// staged and unstaged together.
+//
+// A numstat against HEAD says nothing about a file git does not track yet, so
+// an untracked path falls back to counting its lines as pure additions --
+// which is how `rgit diff` reports an UNTRACKED row.
+func pathspecLineCounts(ctx context.Context, repo *gitx.Repo, root, pathspec string) (added, deleted int) {
+	if entries, err := repo.DiffNumstat(ctx, "HEAD", "--", pathspec); err == nil {
+		for _, e := range entries {
+			// git writes "-" for both counts on a binary file; there are no
+			// lines to report and nothing to sum.
+			if e.Added == "-" || e.Deleted == "-" {
+				continue
+			}
+			a, aerr := strconv.Atoi(e.Added)
+			d, derr := strconv.Atoi(e.Deleted)
+			if aerr == nil && derr == nil {
+				added += a
+				deleted += d
+			}
+		}
+	}
+	if added != 0 || deleted != 0 {
+		return added, deleted
+	}
+
+	others, err := repo.LsFilesOthers(ctx, "--", pathspec)
+	if err != nil {
+		return added, deleted
+	}
+	for _, rel := range others {
+		content, rerr := os.ReadFile(filepath.Join(root, rel))
+		if rerr != nil {
+			continue
+		}
+		a, _ := diff.LineCounts(nil, content)
+		added += a
+	}
+	return added, deleted
 }

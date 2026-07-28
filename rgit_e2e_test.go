@@ -675,6 +675,15 @@ func TestCommit_DryRunPreviewsAndStagesNothing(t *testing.T) {
 	qt.Assert(t, qt.IsTrue(ok))
 	qt.Assert(t, qt.StringContains(got.Stdout, "+"+row.Added+"/-"+row.Deleted))
 
+	// A whole-path target reports counts too. Labelling it "(path)" and
+	// leaving the numbers out made the preview inconsistent with the diff
+	// for exactly the targets a caller is least able to eyeball.
+	writeFile(t, repo, "notes.md", "one\ntwo\n")
+	pathGot := runRgit(t, repo, "commit", "--dry-run", "notes.md", "-m", "docs: preview a path")
+	qt.Assert(t, qt.Equals(pathGot.ExitCode, 0))
+	qt.Assert(t, qt.StringContains(pathGot.Stdout, "notes.md"))
+	qt.Assert(t, qt.StringContains(pathGot.Stdout, "+2/-0"))
+
 	// "writes no objects, stages nothing" (docs/USAGE.md): HEAD unmoved and
 	// the index untouched.
 	qt.Assert(t, qt.Equals(gitIn(t, repo, "rev-parse", "HEAD"), before))

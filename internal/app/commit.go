@@ -157,13 +157,6 @@ func runCommit(args []string, stdout, stderr io.Writer) exitcode.Code {
 			if r.Outcome == synth.Unchanged {
 				continue
 			}
-			// A pathspec's change is git's to describe, not rgit's -- it is
-			// staged wholesale rather than synthesized, so there is no single
-			// extent to count.
-			if r.Target.Pathspec != "" {
-				fmt.Fprintf(stdout, "  %-*s  (path)\n", width, targetLabel(r.Target))
-				continue
-			}
 			fmt.Fprintf(stdout, "  %-*s  +%d/-%d\n", width, targetLabel(r.Target), r.Added, r.Deleted)
 		}
 		return exitcode.Success
