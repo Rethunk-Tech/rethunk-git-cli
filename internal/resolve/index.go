@@ -96,6 +96,13 @@ func buildIndex(lang Language, src []byte, root *ts.Node) *index {
 	for _, s := range syms {
 		idx.byQualified[s.Qualified] = s
 		idx.byBare[s.Decl.Bare] = append(idx.byBare[s.Decl.Bare], s)
+		// The same reasoning one level in: when an ordinal had to be appended,
+		// "Box.size" is no longer a key of its own, and without this it reads
+		// as absent (exit 3, "did you mean") when the honest answer is
+		// ambiguous (exit 4, "here are the two").
+		if cq := containerQualified(s); cq != s.Decl.Bare {
+			idx.byBare[cq] = append(idx.byBare[cq], s)
+		}
 	}
 	return idx
 }
@@ -105,25 +112,38 @@ func buildIndex(lang Language, src []byte, root *ts.Node) *index {
 // a bare name with no container to disambiguate them — Go's repeated
 // func init() is the case docs/ANCHORS.md names explicitly.
 func assignQualifiedNames(syms []*Symbol) {
-	uncontained := map[string]int{}
+	total := map[string]int{}
 	for _, s := range syms {
-		if s.Decl.Container == "" {
-			uncontained[s.Decl.Bare]++
-		}
+		total[containerQualified(s)]++
 	}
 
 	seen := map[string]int{}
 	for _, s := range syms {
-		switch {
-		case s.Decl.Container != "":
-			s.Qualified = s.Decl.Container + "." + s.Decl.Bare
-		case uncontained[s.Decl.Bare] == 1:
-			s.Qualified = s.Decl.Bare
-		default:
-			seen[s.Decl.Bare]++
-			s.Qualified = fmt.Sprintf("%s#%d", s.Decl.Bare, seen[s.Decl.Bare])
+		name := containerQualified(s)
+		if total[name] == 1 {
+			s.Qualified = name
+			continue
 		}
+		seen[name]++
+		s.Qualified = fmt.Sprintf("%s#%d", name, seen[name])
 	}
+}
+
+// containerQualified is a symbol's name before ordinals are applied:
+// Container.Bare where there is a container, the bare name otherwise.
+//
+// The ordinal rule counts these, not bare names, so it reaches inside a
+// container as well as beside one. Two members of one class can share a name
+// -- a TypeScript get/set pair is the ordinary case, not a corner -- and
+// before this they produced the identical qualified name, so the index kept
+// whichever came last and `Box.size` silently resolved to one of the two
+// with no ambiguity reported. Two classes of the same name in one file
+// collided the same way, one member set overwriting the other.
+func containerQualified(s *Symbol) string {
+	if s.Decl.Container == "" {
+		return s.Decl.Bare
+	}
+	return s.Decl.Container + "." + s.Decl.Bare
 }
 
 // normalizeAnchorInput rewrites gopls's receiver spelling, "(*A).Get" or
