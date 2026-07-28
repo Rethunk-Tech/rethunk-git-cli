@@ -9,6 +9,8 @@ package main
 
 import (
 	"context"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -65,6 +67,20 @@ func mustStage(t *testing.T, repo *gitx.Repo, dir string, targets ...synth.Targe
 	t.Helper()
 	err := synth.Stage(context.Background(), repo, dir, targets)
 	qt.Assert(t, qt.IsNil(err))
+}
+
+// mustParseGo fails if src is not valid Go. The spike asserted that every
+// synthesized blob re-parses with no ERROR nodes, and it is the cheap check
+// that catches a splice landing at the wrong offset: a misplaced extent
+// usually produces syntactically broken output rather than subtly wrong
+// output. go/parser is a stricter oracle than tree-sitter here, which is
+// error-tolerant by design and would report a damaged tree rather than
+// refuse it.
+func mustParseGo(t *testing.T, label, src string) {
+	t.Helper()
+	if _, err := parser.ParseFile(token.NewFileSet(), "synthesized.go", src, parser.ParseComments); err != nil {
+		t.Fatalf("%s: synthesized blob does not parse: %v\n%s", label, err, src)
+	}
 }
 
 func TestStage_SingleSymbolSynthesizedIntoRealIndex(t *testing.T) {
@@ -283,4 +299,77 @@ func TestStage_NewSymbolInsertsAtNearestSiblingIncludingNewNeighbours(t *testing
 	iy := strings.Index(got, "func YNew()")
 	ic := strings.Index(got, "func C()")
 	qt.Assert(t, qt.IsTrue(ia >= 0 && ia < iy && iy < ic))
+}
+
+func TestStage_MultipleSymbolsSpliceInReverseOffsetOrder(t *testing.T) {
+	// Ported from spike/test_basic.py's multi-symbol case and
+	// spike/adversarial.py section F. Two extents in one file must be
+	// applied in reverse byte-offset order, or the first splice shifts the
+	// bytes out from under the second. A and B are adjacent with no blank
+	// line between them, which is where an off-by-one boundary shows up as
+	// run-together syntax rather than as a wrong value.
+	dir, repo := newSynthRepo(t)
+	head := "package main\n\n" +
+		"// A returns one.\nfunc A() int { return 1 }\n" +
+		"func B() int { return 2 }\n\n" +
+		"// C returns three.\nfunc C() int { return 3 }\n"
+	writeFile(t, dir, "m.go", head)
+	commitAll(t, dir, "chore: initial m.go")
+
+	// Every symbol changes, but only the outer two are named.
+	work := strings.NewReplacer(
+		"return 1", "return 11",
+		"return 2", "return 22",
+		"return 3", "return 33",
+	).Replace(head)
+	writeFile(t, dir, "m.go", work)
+
+	mustStage(t, repo, dir, synth.AnchorTarget("m.go", "A"), synth.AnchorTarget("m.go", "C"))
+	got := indexBlob(t, repo, "m.go")
+
+	qt.Assert(t, qt.StringContains(got, "func A() int { return 11 }"))
+	qt.Assert(t, qt.StringContains(got, "func C() int { return 33 }"))
+	// B was not named, so it keeps HEAD's value even though the worktree
+	// changed it -- the whole point of symbol granularity.
+	qt.Assert(t, qt.StringContains(got, "func B() int { return 2 }"))
+	qt.Assert(t, qt.Not(qt.StringContains(got, "return 22")))
+
+	// A splice applied at a stale offset duplicates or truncates content
+	// rather than failing outright, so count rather than trusting the
+	// substring assertions above.
+	qt.Assert(t, qt.Equals(strings.Count(got, "func A()"), 1))
+	qt.Assert(t, qt.Equals(strings.Count(got, "func B()"), 1))
+	qt.Assert(t, qt.Equals(strings.Count(got, "func C()"), 1))
+	qt.Assert(t, qt.Equals(strings.Count(got, "// A returns one."), 1))
+
+	mustParseGo(t, "multi-symbol splice", got)
+}
+
+func TestStage_DeletedSymbolExcisedFromBlob(t *testing.T) {
+	// Ported from spike/adversarial.py section C. Deleting a symbol is
+	// anchored like any other change: the extent resolves against HEAD,
+	// where the symbol still exists, and staging removes it -- doc comment
+	// included, since the doc comment is part of the extent.
+	dir, repo := newSynthRepo(t)
+	head := "package main\n\n" +
+		"// A does a thing.\nfunc A() {}\n\n" +
+		"// B does another.\nfunc B() {}\n\n" +
+		"func C() {}\n"
+	writeFile(t, dir, "d.go", head)
+	commitAll(t, dir, "chore: initial d.go")
+
+	writeFile(t, dir, "d.go", "package main\n\n"+
+		"// A does a thing.\nfunc A() {}\n\n"+
+		"func C() {}\n")
+
+	mustStage(t, repo, dir, synth.AnchorTarget("d.go", "B"))
+	got := indexBlob(t, repo, "d.go")
+
+	qt.Assert(t, qt.Not(qt.StringContains(got, "func B()")))
+	qt.Assert(t, qt.Not(qt.StringContains(got, "B does another")))
+	qt.Assert(t, qt.StringContains(got, "func A() {}"))
+	qt.Assert(t, qt.StringContains(got, "// A does a thing."))
+	qt.Assert(t, qt.StringContains(got, "func C() {}"))
+
+	mustParseGo(t, "deletion", got)
 }
