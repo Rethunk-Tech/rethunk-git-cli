@@ -121,6 +121,13 @@ A `chmod +x` with no content edit produces no changed symbols, so `rgit diff`
 lists it as a `MODE` entry — the file is never falsely reported clean. Stage it
 with a pathspec (`rgit commit script.sh`); `--sym` cannot express a mode change.
 
+## Help
+
+`rgit --help`, `rgit -h`, and `rgit help` print the top-level command list on
+stdout and exit 0. `rgit commit --help` / `-h` prints that command's own flags
+the same way. A bare `rgit` (no command at all) is a usage error, not a help
+request — see § Exit codes.
+
 ## Flags
 
 | Flag | Behavior |
@@ -131,7 +138,7 @@ with a pathspec (`rgit commit script.sh`); `--sym` cannot express a mode change.
 | `-F FILE`, `--message-file FILE` | Read the message from a file, or `-` for stdin. Mutually exclusive with `-m`. |
 | `-s`, `--signoff` | Append `Signed-off-by:`. Forwarded to `git commit`. |
 | `--trailer TOKEN:VALUE` | Append a trailer (`Refs:`, `Co-authored-by:`). Repeatable, forwarded. |
-| `--amend` | Amend the previous commit. Anchors stage into it as they would a new commit. |
+| `--amend` | Amend the previous commit. Anchors stage into it as they would a new commit. With neither `-m` nor `-F`, reuses HEAD's message unchanged (`--no-edit`) — `rgit` never opens an editor, so that is the only message an unattended `--amend` can have. Give `-m`/`-F` to replace it as usual. |
 | `--allow-empty` | Permit a commit with no changes. Suppresses exit 11. |
 | `--push` | Push upstream after a successful commit. No rollback on push failure. |
 | `--dry-run` | Preview only. Writes no objects, stages nothing, runs no hooks. Lists each target it resolved with that symbol's `+N/-M`, using the same counts as `rgit diff`. |
@@ -143,7 +150,8 @@ with a pathspec (`rgit commit script.sh`); `--sym` cannot express a mode change.
 | `--exit-code` | (`diff`) Exit 1 when anything is committable, 0 when clean. |
 | `--quiet` | (`diff`) Implies `--exit-code` and suppresses output. |
 
-`commit` requires a message (`-m` or `-F`) and at least one target.
+`commit` requires a message (`-m` or `-F`) and at least one target, unless
+`--amend` is given with neither — then it reuses HEAD's message via `--no-edit`.
 
 On success it relays `git commit`'s own summary — branch, new SHA, and the
 changed/insertion/deletion counts — then lists each staged target with its
