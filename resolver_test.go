@@ -100,9 +100,9 @@ func untouched() {}
 
 func TestResolve_BlankLineBreaksDocAttribution(t *testing.T) {
 	t.Parallel()
-	// The locked decision: a blank line between a free-floating comment and the next symbol
-	// breaks attribution; a comment with no blank line before the symbol
-	// attaches.
+	// The locked decision: a blank line between a free-floating comment
+	// and the next symbol breaks attribution; a comment with no blank line
+	// before the symbol attaches.
 	src := []byte(`package p
 
 func A() {}
@@ -356,7 +356,8 @@ func A() {}
 		"// Doc for A.\nfunc A() {}"))
 	qt.Assert(t, qt.IsTrue(docHeader.Extent.End <= docA.Extent.Start))
 
-	// @header must also stop before @imports start if @imports exists without declarations.
+	// @header must also stop before @imports starts, even when @imports
+	// exists with no declarations after it.
 	importsOnly := []byte(`package p
 
 import "fmt"

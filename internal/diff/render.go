@@ -67,8 +67,9 @@ func rowStatusWord(row Row) string {
 	return ""
 }
 
-// rowCounts renders "+N/-M", or "-/-" for a binary row — matching `git diff
-// --numstat`'s own convention for binary counts (docs/CODES.md § Output records).
+// rowCounts renders "+N/-M", or "-/-" for a binary row — matching `git
+// diff --numstat`'s own convention for binary counts (docs/CODES.md §
+// Output records).
 func rowCounts(row Row) string {
 	if row.Added == "-" {
 		return "-/-"

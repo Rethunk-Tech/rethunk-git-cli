@@ -44,7 +44,8 @@ daemon: `rgit` probes for one and starts it in the background if none answers.
 That first invocation finishes in `[ts-only]` mode rather than blocking on a
 cold index; later ones get the full cross-check. The other three have no listen
 mode, so `rgit` spawns one over stdio per query and kills it on close — nothing
-persists, and the cross-check is live on the first invocation. The transport survey behind this split is in
+persists, and the cross-check is live on the first invocation. The transport
+survey behind this split is in
 [`specs/design.md`](../specs/design.md#transport-support-per-server).
 
 ## Environment variables

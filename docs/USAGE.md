@@ -191,8 +191,9 @@ before decode. Closes #42." \
 ```
 
 **Invalid combinations:** `--dry-run` + `--push`, `--staged` + `--range`,
-`--staged` + `--unstaged`, `-m` + `-F`, `--porcelain` + `--quiet` → exit 129. Naming one path both as a
-path and as a symbol anchor → exit 5, in whichever spelling: `--file` with
+`--staged` + `--unstaged`, `-m` + `-F`, `--porcelain` + `--quiet` → exit 129.
+Naming one path both as a path and as a symbol anchor → exit 5, in
+whichever spelling: `--file` with
 `--sym`, or the positional forms `greet.go greet.go:A`.
 
 A missing conventional-commit shape (`type(scope): subject`) warns on stderr;

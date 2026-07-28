@@ -118,8 +118,9 @@ func importPredicate(lang Language, src []byte) func(*ts.Node) bool {
 // header" as the package clause's own trailing newline is.
 //
 // Prettier and Black carry no equivalent rule: both preserve whatever
-// blank-line count the author wrote rather than inserting one deterministically,
-// so guessing a mandatory separator into either would misattribute a byte
+// blank-line count the author wrote rather than inserting one
+// deterministically, so guessing a mandatory separator into either would
+// misattribute a byte
 // the region does not structurally own. Only Go claims it, so this is
 // decided here, once, per language, rather than assumed universally by
 // whichever caller needs the answer.
