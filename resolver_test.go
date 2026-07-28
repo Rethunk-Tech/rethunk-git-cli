@@ -655,7 +655,7 @@ func TestLSP_DocumentSymbolsDecodesBothUnionShapes(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewClient: %v", err)
 			}
-			defer client.Close()
+			defer func() { _ = client.Close() }()
 
 			got, err := client.DocumentSymbols(context.Background(), "/tmp/a.go", []byte("package p\n"))
 			if err != nil {

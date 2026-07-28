@@ -33,7 +33,7 @@ func TestLsFilesStageAndMergeBase(t *testing.T) {
 	repo := New(dir)
 
 	// LsFilesStage for untracked file
-	mode, found, err := repo.LsFilesStage(ctx, "file.txt")
+	_, found, err := repo.LsFilesStage(ctx, "file.txt")
 	if err != nil {
 		t.Fatalf("LsFilesStage error: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestLsFilesStageAndMergeBase(t *testing.T) {
 
 	// Add file and check LsFilesStage
 	runCmd("add", "file.txt")
-	mode, found, err = repo.LsFilesStage(ctx, "file.txt")
+	mode, found, err := repo.LsFilesStage(ctx, "file.txt")
 	if err != nil {
 		t.Fatalf("LsFilesStage error: %v", err)
 	}

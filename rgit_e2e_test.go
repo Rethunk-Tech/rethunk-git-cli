@@ -43,7 +43,7 @@ func buildRgit() (bin string, cleanup func(), err error) {
 	if err != nil {
 		return "", func() {}, err
 	}
-	cleanup = func() { os.RemoveAll(dir) }
+	cleanup = func() { _ = os.RemoveAll(dir) }
 
 	bin = filepath.Join(dir, "rgit")
 	cmd := exec.Command("go", "build", "-cover", "-o", bin, ".")
