@@ -278,7 +278,19 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 	}
 
 	for _, fp := range plan.files {
-		if fp.addPreamble(named[fp.path]) {
+		pseudos := fp.addPreamble(named[fp.path])
+		for _, po := range pseudos {
+			added, deleted := opLineCounts(fp, po.op)
+			plan.results = append(plan.results, TargetResult{
+				Target:  AnchorTarget(fp.path, po.name),
+				Outcome: Staged,
+				Added:   added,
+				Deleted: deleted,
+				path:    fp.path,
+				start:   po.op.start,
+			})
+		}
+		if len(pseudos) > 0 {
 			plan.preamble = append(plan.preamble, fp.path)
 		}
 		for _, e := range fp.escalated {
@@ -288,6 +300,14 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 
 	sortResults(plan.results)
 	return plan, nil
+}
+
+// preambleOp pairs one auto-staged pseudo-anchor ("@header" or "@imports")
+// with the editOp addPreamble appended for it, so the caller can report the
+// same magnitude it just staged rather than a bare file name.
+type preambleOp struct {
+	name string
+	op   editOp
 }
 
 // addPreamble stages @header and @imports for a file that does not exist in
@@ -303,9 +323,15 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 // Ordering needs no special case: seq is the region's own worktree offset,
 // the same rule insertionPoint uses, so the header sorts ahead of the
 // imports and both ahead of every declaration by construction.
-func (fp *filePlan) addPreamble(named map[string]bool) (added bool) {
+//
+// The returned pairs are the caller's to turn into their own TargetResult
+// rows (docs/USAGE.md: a --dry-run preview and the commit it previews must
+// be "comparable line for line") -- rolling their line counts silently into
+// whichever symbol the caller actually named would misattribute bytes to a
+// symbol that never touched them.
+func (fp *filePlan) addPreamble(named map[string]bool) (pairs []preambleOp) {
 	if fp.headExists || !fp.workExists {
-		return false
+		return nil
 	}
 	for _, pseudo := range []string{"@header", "@imports"} {
 		if named[pseudo] {
@@ -315,15 +341,16 @@ func (fp *filePlan) addPreamble(named map[string]bool) (added bool) {
 		if err != nil {
 			continue
 		}
-		fp.ops = append(fp.ops, editOp{
+		op := editOp{
 			kind:  editInsert,
 			start: 0,
 			seq:   int(res.Extent.Start),
 			text:  append([]byte(nil), fp.workSrc[res.Extent.Start:res.Extent.End]...),
-		})
-		added = true
+		}
+		fp.ops = append(fp.ops, op)
+		pairs = append(pairs, preambleOp{name: pseudo, op: op})
 	}
-	return added
+	return pairs
 }
 
 // isOrdinalAnchor reports whether anchor uses docs/ANCHORS.md's positional

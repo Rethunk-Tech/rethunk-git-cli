@@ -690,3 +690,55 @@ func TestStage_DeletedSymbolExcisedFromBlob(t *testing.T) {
 
 	mustParseGo(t, "deletion", got)
 }
+
+// TestPlanStage_PreambleRowsAppearInResults pins the fix for a --dry-run
+// undercount: TestStage_NewFileCarriesHeaderAndImports already proves the
+// @header/@imports preamble is staged for a new file, but before this fix
+// plan.Results() never carried a row for it -- the preamble was announced
+// only on stderr's [notice] line, so a --dry-run preview (which prints
+// nothing but plan.Results()) reported only the named symbol's own count,
+// silently dropping the preamble's.
+//
+// The row-level counts here do not sum to git's raw numstat total for the
+// whole file: the blank lines mergeInsertTies' joinWithBlankLine synthesizes
+// between same-offset inserts when applying the plan belong to no single
+// anchor's own extent, exactly as they already do not for an ordinary new
+// symbol spliced in between two existing ones with blank-line padding on
+// both sides (pre-existing, unrelated to this fix). docs/USAGE.md's
+// "comparable line for line" promise is against `rgit diff`'s own
+// per-symbol accounting, not a claim that named-anchor rows exhaustively
+// partition every byte of a brand new file.
+func TestPlanStage_PreambleRowsAppearInResults(t *testing.T) {
+	dir, repo := newSynthRepo(t)
+	writeFile(t, dir, "seed.go", "package main\n\nfunc Seed() {}\n")
+	commitAll(t, dir, "chore: seed")
+	writeFile(t, dir, "new.go", "package main\n\nimport \"fmt\"\n\nfunc Hello() {\n\tfmt.Println(\"hi\")\n}\n")
+
+	plan, err := synth.PlanStage(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("new.go", "Hello")})
+	qt.Assert(t, qt.IsNil(err))
+
+	results := plan.Results()
+	qt.Assert(t, qt.Equals(len(results), 3))
+
+	labels := make([]string, len(results))
+	for i, r := range results {
+		labels[i] = r.Target.Symbol.Path + ":" + r.Target.Symbol.Anchor
+		qt.Assert(t, qt.Equals(r.Outcome, synth.Staged))
+		qt.Assert(t, qt.Equals(r.Deleted, 0))
+	}
+	// @header and @imports sort ahead of the named symbol -- same ordering
+	// rule as any other anchor in this file (sortResults: path, then
+	// position, then name), and both pseudos happen to share position 0 in a
+	// brand new file, same as the named symbol does.
+	qt.Assert(t, qt.DeepEquals(labels, []string{"new.go:@header", "new.go:@imports", "new.go:Hello"}))
+	// Before this fix, results held only the Hello row; @header and @imports
+	// were staged (proven by TestStage_NewFileCarriesHeaderAndImports) but
+	// invisible to the caller. Both now carry their own real magnitude.
+	qt.Assert(t, qt.Equals(results[0].Added, 1)) // "package main"
+	qt.Assert(t, qt.Equals(results[1].Added, 1)) // `import "fmt"`
+	qt.Assert(t, qt.Equals(results[2].Added, 3)) // Hello's own 3-line body
+
+	qt.Assert(t, qt.IsNil(plan.Apply(context.Background(), repo, dir)))
+	got := indexBlob(t, repo, "new.go")
+	mustParseGo(t, "preamble rows reflect what was actually staged", got)
+}
