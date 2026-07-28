@@ -349,6 +349,52 @@ func TestDiff_UnbornBranchListsEverythingCommittable(t *testing.T) {
 	}
 }
 
+func TestCommit_PushAfterSuccessfulCommit(t *testing.T) {
+	repo := initRepoWithFile(t, "auth.go", authGoV1)
+	remote := t.TempDir()
+	gitIn(t, remote, "init", "-q", "--bare")
+	gitIn(t, repo, "remote", "add", "origin", remote)
+	branch := strings.TrimSpace(gitIn(t, repo, "rev-parse", "--abbrev-ref", "HEAD"))
+	gitIn(t, repo, "push", "-q", "-u", "origin", branch)
+
+	writeFile(t, repo, "auth.go", authGoV2)
+	got := runRgit(t, repo, "commit", "--push", "-m", "fix(auth): reject expired", "auth.go:ValidateToken")
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
+
+	local := strings.TrimSpace(gitIn(t, repo, "rev-parse", "HEAD"))
+	qt.Assert(t, qt.Equals(strings.TrimSpace(gitIn(t, remote, "rev-parse", branch)), local))
+}
+
+func TestCommit_MultiLanguageSymbolGranularity(t *testing.T) {
+	// One commit naming a symbol in each v1 grammar. The point is that
+	// each file's OTHER symbol changed too and must stay uncommitted:
+	// symbol granularity has to hold per grammar, in a single invocation.
+	repo := newTempRepo(t)
+	writeFile(t, repo, "auth.go", "package auth\n\nfunc GoA() int { return 1 }\n\nfunc GoB() int { return 1 }\n")
+	writeFile(t, repo, "app.ts", "export function TsA(): number { return 1 }\n\nexport function TsB(): number { return 1 }\n")
+	writeFile(t, repo, "svc.py", "def py_a():\n    return 1\n\n\ndef py_b():\n    return 1\n")
+	gitIn(t, repo, "add", "-A")
+	gitIn(t, repo, "commit", "-q", "-m", "init")
+
+	writeFile(t, repo, "auth.go", "package auth\n\nfunc GoA() int { return 2 }\n\nfunc GoB() int { return 2 }\n")
+	writeFile(t, repo, "app.ts", "export function TsA(): number { return 2 }\n\nexport function TsB(): number { return 2 }\n")
+	writeFile(t, repo, "svc.py", "def py_a():\n    return 2\n\n\ndef py_b():\n    return 2\n")
+
+	got := runRgit(t, repo, "commit", "-m", "fix: bump the first of each",
+		"auth.go:GoA", "app.ts:TsA", "svc.py:py_a")
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
+
+	for _, c := range []struct{ path, committed, withheld string }{
+		{"auth.go", "func GoA() int { return 2 }", "func GoB() int { return 1 }"},
+		{"app.ts", "export function TsA(): number { return 2 }", "export function TsB(): number { return 1 }"},
+		{"svc.py", "def py_a():\n    return 2", "def py_b():\n    return 1"},
+	} {
+		head := gitIn(t, repo, "show", "HEAD:"+c.path)
+		qt.Assert(t, qt.StringContains(head, c.committed))
+		qt.Assert(t, qt.StringContains(head, c.withheld))
+	}
+}
+
 func TestCommit_AllTargetsUnchangedExits11(t *testing.T) {
 	// docs/USAGE.md: an unchanged target warns and is skipped; exit is 11
 	// only when EVERY named target turned out unchanged. CONTRIBUTING
@@ -381,6 +427,23 @@ func TestCommit_FromSubdirectoryResolvesCWDRelativePaths(t *testing.T) {
 	got = runRgit(t, sub, "commit", "-m", "fix: bump", "a.go:Alpha")
 	qt.Assert(t, qt.Equals(got.ExitCode, 0))
 	qt.Assert(t, qt.StringContains(gitIn(t, repo, "show", "--stat", "--format=", "HEAD"), "pkg/deep/a.go"))
+}
+
+func TestDiff_RevisionRangeScopes(t *testing.T) {
+	// Precedence rule 3's three reachable shapes: a bare revision against
+	// the worktree, a two-dot range, and a three-dot range (whose old side
+	// is the merge base, not the left endpoint).
+	repo := initRepoWithFile(t, "auth.go", authGoV1)
+	writeFile(t, repo, "auth.go", authGoV2)
+	gitIn(t, repo, "commit", "-q", "-a", "-m", "fix: v2")
+
+	for _, rev := range []string{"HEAD~1", "HEAD~1..HEAD", "HEAD~1...HEAD"} {
+		got := runRgit(t, repo, "diff", "--porcelain", rev)
+		qt.Assert(t, qt.Equals(got.ExitCode, 0))
+		if !strings.Contains(got.Stdout, "auth.go") {
+			t.Errorf("scope %q reported no change to auth.go: %q", rev, got.Stdout)
+		}
+	}
 }
 
 func TestDiff_MalformedSymAndPathEscapeRejected(t *testing.T) {
