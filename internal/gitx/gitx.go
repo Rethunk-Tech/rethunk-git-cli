@@ -395,6 +395,31 @@ type CommitOptions struct {
 	// never opens an editor and reusing HEAD's message is the only
 	// sensible reading of "amend, but don't tell me what to say".
 	NoEdit bool
+	// Fixup and Squash are --fixup and --squash's raw values (e.g.
+	// "HEAD~2", "amend:HEAD~2"), forwarded verbatim as
+	// --fixup=<Fixup>/--squash=<Squash>. Both generate their own commit
+	// message the same way --no-edit does, so the caller may leave
+	// Messages and MessageFile empty; git appends any -m given on top of
+	// the generated subject rather than rejecting the combination.
+	Fixup  string
+	Squash string
+	// Author and Date forward --author and --date verbatim; plain git
+	// passthrough, no rgit-owned semantics.
+	Author string
+	Date   string
+	// GPGSign is --gpg-sign, bare or with a key id. GPGSignKeyID holds the
+	// key id when one was given; empty means bare --gpg-sign (git signs
+	// with the configured default key). NoGPGSign is --no-gpg-sign,
+	// overriding commit.gpgsign=true.
+	//
+	// git's own -S accepts an OPTIONAL attached key id (-Skeyid), but
+	// pflag's shorthand parser resolves an optional-value flag's default
+	// before checking for an attached value, so -Skeyid misparses as a
+	// chain of nonexistent single-letter flags. Only the long form is
+	// exposed on rgit's command line; see docs/USAGE.md.
+	GPGSign      bool
+	GPGSignKeyID string
+	NoGPGSign    bool
 }
 
 // Commit runs `git commit` with opts translated to flags. A non-zero exit
@@ -414,6 +439,12 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 	if opts.MessageFile != "" {
 		args = append(args, "-F", opts.MessageFile)
 	}
+	if opts.Fixup != "" {
+		args = append(args, "--fixup="+opts.Fixup)
+	}
+	if opts.Squash != "" {
+		args = append(args, "--squash="+opts.Squash)
+	}
 	if opts.Signoff {
 		args = append(args, "--signoff")
 	}
@@ -425,6 +456,22 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 	}
 	if opts.NoEdit {
 		args = append(args, "--no-edit")
+	}
+	if opts.Author != "" {
+		args = append(args, "--author="+opts.Author)
+	}
+	if opts.Date != "" {
+		args = append(args, "--date="+opts.Date)
+	}
+	if opts.GPGSign {
+		if opts.GPGSignKeyID != "" {
+			args = append(args, "--gpg-sign="+opts.GPGSignKeyID)
+		} else {
+			args = append(args, "--gpg-sign")
+		}
+	}
+	if opts.NoGPGSign {
+		args = append(args, "--no-gpg-sign")
 	}
 	if opts.AllowEmpty {
 		args = append(args, "--allow-empty")
@@ -451,9 +498,38 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 // Push runs `git push` with the given arguments (remote, refspec, ...).
 // AGENTS.md is explicit that a push failure does not roll back the commit
 // that preceded it; Push reports the failure and nothing more.
+//
+// Push never adds `--set-upstream` on its own initiative, even for a
+// branch with none configured: `push.default=current` (among other
+// configurations) already pushes such a branch successfully with no
+// upstream at all, so guessing `-u` here would fail a push for some
+// callers that plain `git push` would have completed -- exactly the
+// silent divergence AGENTS.md's one invariant forbids. A caller wanting a
+// clearer message on the specific "no upstream" failure uses HasUpstream
+// and CurrentBranch to add one after Push has already failed, never
+// before.
 func (r *Repo) Push(ctx context.Context, extra ...string) error {
 	_, err := r.checked(ctx, append([]string{"push"}, extra...)...)
 	return err
+}
+
+// CurrentBranch returns HEAD's branch name via `git rev-parse --abbrev-ref
+// HEAD`. Meaningful only once at least one commit exists (HEAD is
+// otherwise unborn and this fails); rgit only calls it right after a
+// commit has just succeeded, so that is always the case in practice. On a
+// detached HEAD it returns the literal "HEAD", matching git's own output.
+func (r *Repo) CurrentBranch(ctx context.Context) (string, error) {
+	return r.checkedLine(ctx, "rev-parse", "--abbrev-ref", "HEAD")
+}
+
+// HasUpstream reports whether the current branch has an upstream tracking
+// ref configured, via whether `@{u}` resolves. Like MergeBase and
+// CheckIgnore, "no upstream configured" is a normal negative answer -- the
+// default state of a newly created branch -- not a failure, so this goes
+// through optionalLine rather than turning it into a *GitError.
+func (r *Repo) HasUpstream(ctx context.Context) (bool, error) {
+	_, ok, err := r.optionalLine(ctx, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+	return ok, err
 }
 
 // Status runs `git status --porcelain=v1` with extra arguments and
