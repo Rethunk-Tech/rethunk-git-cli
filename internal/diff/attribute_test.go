@@ -7,6 +7,8 @@ import (
 )
 
 func TestTopLevelComma(t *testing.T) {
+	// want is the byte index of the separating comma, or -1 for none. The
+	// commas inside strings, calls, and brackets below are all decoys.
 	tests := []struct {
 		input string
 		want  int
