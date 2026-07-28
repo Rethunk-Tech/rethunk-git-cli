@@ -1087,10 +1087,30 @@ Second Usage options.
 		"Setext Title\n============\n"))
 
 	// rgit always emits the slug, but accepts a heading's own raw text on
-	// input, the same way it accepts gopls's "(*A).Get" spelling.
+	// input, the same way it accepts gopls's "(*A).Get" spelling -- whether
+	// or not that text contains a space. A single-word heading's raw text
+	// ("Install") must resolve exactly like a multi-word one ("Diff Scope");
+	// gating the fallback on a literal space made the single-word case
+	// unresolvable for no reason a caller could act on.
 	lang2, ok := resolve.ForExtension(".md")
 	qt.Assert(t, qt.IsTrue(ok))
 	res, err := resolve.Resolve(lang2, src2, "Diff Scope")
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(res.Anchor, "diff-scope"))
+
+	res2, err := resolve.Resolve(lang2, src, "Install")
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(res2.Anchor, "install"))
+
+	// A single-word raw heading that names several headings at once must
+	// still be ambiguous (exit 4), never silently resolve one of them: three
+	// "Options" headings exist in src (install.options, usage.options#1,
+	// usage.options#2), so raw text "Options" collides the same way its
+	// slug does.
+	_, err = resolve.Resolve(lang2, src, "Options")
+	var ambigErr *resolve.ResolveError
+	qt.Assert(t, qt.ErrorAs(err, &ambigErr))
+	qt.Assert(t, qt.Equals(ambigErr.Code, exitcode.AnchorAmbiguous))
+	qt.Assert(t, qt.DeepEquals(ambigErr.Candidates,
+		[]string{"install.options", "usage.options#1", "usage.options#2"}))
 }

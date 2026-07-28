@@ -71,6 +71,16 @@ type index struct {
 	// when the correct answer is ambiguous (exit 4) — the remediations
 	// differ, so both indexes must exist.
 	byBare map[string][]*Symbol
+
+	// allowRawHeading gates rawHeadingFallback. It is set true only for the
+	// markdown adapter (buildIndex), never inferred from the anchor text
+	// itself: the fallback's raw-text-to-slug rewrite is a markdown-only
+	// accommodation (docs/ANCHORS.md), and gating on the language that was
+	// already selected by the file's extension is the only test that can
+	// never produce a false positive for Go/TS/Python — unlike gating on
+	// whether the anchor text merely contains a space, which excludes every
+	// single-word heading for no reason tied to cross-language safety.
+	allowRawHeading bool
 }
 
 func buildIndex(lang Language, src []byte, root *ts.Node) *index {
@@ -89,9 +99,10 @@ func buildIndex(lang Language, src []byte, root *ts.Node) *index {
 	assignQualifiedNames(syms)
 
 	idx := &index{
-		order:       syms,
-		byQualified: make(map[string]*Symbol, len(syms)),
-		byBare:      make(map[string][]*Symbol, len(syms)),
+		order:           syms,
+		byQualified:     make(map[string]*Symbol, len(syms)),
+		byBare:          make(map[string][]*Symbol, len(syms)),
+		allowRawHeading: lang.Name() == "markdown",
 	}
 	for _, s := range syms {
 		idx.byQualified[s.Qualified] = s
@@ -165,14 +176,14 @@ func normalizeAnchorInput(anchor string) string {
 
 // rawHeadingFallback reports slugify(anchor) when anchor looks like a
 // markdown heading's raw text copied verbatim rather than rgit's emitted
-// slug. The space check is what keeps this scoped to that one case: no
-// Go/TS/Python anchor this index could otherwise match ever contains a
-// space, so the fallback is inert for every other language, not merely
-// unlikely to fire.
+// slug — whether or not that text happens to contain a space. A single-word
+// heading's raw text ("Install") is exactly as valid a copy-paste source as
+// a multi-word one ("Diff Scope"); gating on the presence of a space made
+// the single-word case unreachable by its own text for no reason a caller
+// could act on. Scoping this to markdown is now the caller's job
+// (idx.allowRawHeading), not this function's -- see resolve for why that
+// gate is safe to relax.
 func rawHeadingFallback(anchor string) (string, bool) {
-	if !strings.Contains(anchor, " ") {
-		return "", false
-	}
 	slug := slugify(anchor)
 	if slug == "" || slug == anchor {
 		return "", false
@@ -210,17 +221,20 @@ func (idx *index) resolve(anchor string) (*Symbol, error) {
 	// the same way Go accepts gopls's "(*A).Get" spelling on input while
 	// always emitting "A.Get": the canonical, emitted spelling is a slug,
 	// but a person typing an anchor by hand may copy the heading text
-	// itself, spaces and all. Gated on the anchor containing a space so it
-	// can never fire for a Go/TS/Python anchor -- no identifier in any of
-	// those three languages can contain one -- this is a generic fallback
-	// living in the shared resolver, not a markdown special case wired into
-	// it; only a bare heading's raw text is accepted this way, not a raw
-	// "Container.Raw Text" combination.
-	if slug, ok := rawHeadingFallback(anchor); ok {
-		if s, err := idx.resolve(slug); err == nil {
-			return s, nil
-		} else if rerr, ok := err.(*ResolveError); ok && rerr.Code == exitcode.AnchorAmbiguous {
-			return nil, rerr
+	// itself, single word or several. Gated on idx.allowRawHeading, set only
+	// for the markdown adapter (buildIndex), rather than on whether anchor
+	// contains a space: the fallback is reachable only for a markdown file
+	// to begin with -- the file's extension already selected this adapter --
+	// so there is no cross-language ambiguity a text-shape gate needs to
+	// protect against; only a bare heading's raw text is accepted this way,
+	// not a raw "Container.Raw Text" combination.
+	if idx.allowRawHeading {
+		if slug, ok := rawHeadingFallback(anchor); ok {
+			if s, err := idx.resolve(slug); err == nil {
+				return s, nil
+			} else if rerr, ok := err.(*ResolveError); ok && rerr.Code == exitcode.AnchorAmbiguous {
+				return nil, rerr
+			}
 		}
 	}
 
