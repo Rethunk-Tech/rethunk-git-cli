@@ -56,7 +56,7 @@ func classifyPath(ctx context.Context, repo *gitx.Repo, root, path string) (path
 		return pathRegular, statErr
 	}
 
-	entry, found, err := repo.LsTree(ctx, "HEAD", path)
+	entry, found, err := repo.LsTreeTolerant(ctx, "HEAD", path)
 	if err != nil {
 		return pathRegular, err
 	}
@@ -131,7 +131,7 @@ func checkGitignoreRefusal(ctx context.Context, repo *gitx.Repo, path string) er
 	if !ignored {
 		return nil
 	}
-	_, tracked, err := repo.LsTree(ctx, "HEAD", path)
+	_, tracked, err := repo.LsTreeTolerant(ctx, "HEAD", path)
 	if err != nil {
 		return err
 	}

@@ -6,7 +6,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -192,16 +191,9 @@ func (c GitPathChecker) ExistsInWorktreeOrHEAD(path string) (bool, error) {
 		return false, err
 	}
 
-	_, found, err := c.Repo.LsTree(c.Ctx, "HEAD", path)
+	_, found, err := c.Repo.LsTreeTolerant(c.Ctx, "HEAD", path)
 	if err != nil {
-		var execErr *gitx.ExecError
-		if errors.As(err, &execErr) {
-			return false, err
-		}
-		// A *GitError here is almost always "HEAD does not exist yet" (an
-		// unborn branch), not a real failure — a tree that does not exist
-		// trivially contains no path.
-		return false, nil
+		return false, err
 	}
 	return found, nil
 }

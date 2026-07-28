@@ -326,6 +326,29 @@ func TestDiff_DefaultScopePicksUpStagedUnstagedAndUntracked(t *testing.T) {
 	}
 }
 
+func TestDiff_UnbornBranchListsEverythingCommittable(t *testing.T) {
+	// A fresh `git init` has no HEAD, so the default scope's `git diff
+	// HEAD` failed outright with exit 128 -- on the one repository state
+	// where "what can I commit?" gets asked most, and the exact command
+	// docs/INSTALL.md § Verify hands a new user. rgit commit already
+	// worked here, so diff could not describe a commit rgit would make.
+	repo := newTempRepo(t)
+	writeFile(t, repo, "staged.go", "package auth\n\nfunc Staged() int { return 3 }\n")
+	gitIn(t, repo, "add", "--", "staged.go")
+	writeFile(t, repo, "untracked.go", "package auth\n\nfunc Untracked() int { return 4 }\n")
+
+	got := runRgit(t, repo, "diff", "--porcelain")
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
+	rows := parsePorcelain(t, got.Stdout)
+
+	if _, ok := findRow(rows, "staged.go", "MOD"); !ok {
+		t.Errorf("unborn-branch diff missed the staged file: %+v", rows)
+	}
+	if _, ok := findRow(rows, "untracked.go", "UNTRACKED"); !ok {
+		t.Errorf("unborn-branch diff missed the untracked file: %+v", rows)
+	}
+}
+
 func TestDiff_UnstagedScopeExcludesStaged(t *testing.T) {
 	repo := initRepoWithFile(t, "auth.go", authGoV1)
 

@@ -158,6 +158,23 @@ func (r *Repo) HashObject(ctx context.Context, path string, content []byte) (sha
 	return strings.TrimSpace(string(res.Stdout)), nil
 }
 
+// EmptyTree returns the SHA of the empty tree, computed rather than
+// hardcoded so it is correct under both sha1 and sha256 object formats.
+// It is the comparison base for an unborn branch: on a repository with no
+// commits there is no HEAD to diff against, and every tracked path is an
+// addition relative to nothing.
+func (r *Repo) EmptyTree(ctx context.Context) (sha string, err error) {
+	args := []string{"hash-object", "-t", "tree", "/dev/null"}
+	res, err := r.run(ctx, nil, args...)
+	if err != nil {
+		return "", err
+	}
+	if res.ExitCode != 0 {
+		return "", gitError(args, res)
+	}
+	return strings.TrimSpace(string(res.Stdout)), nil
+}
+
 // UpdateIndexCacheinfo stages a single entry directly, as the final step
 // of blob synthesis: `git update-index --add --cacheinfo mode,sha,path`.
 func (r *Repo) UpdateIndexCacheinfo(ctx context.Context, mode, sha, path string) error {
@@ -240,6 +257,27 @@ func (r *Repo) LsTree(ctx context.Context, rev, path string) (entry LsTreeEntry,
 		return LsTreeEntry{}, false, perr
 	}
 	return entry, true, nil
+}
+
+// LsTreeTolerant is LsTree with one git failure folded into the normal
+// negative answer: a rev that does not resolve at all, which in practice
+// means an unborn branch -- HEAD exists as a ref but names no commit yet.
+// A tree that does not exist trivially contains no path, so found=false is
+// the honest answer rather than an error every caller has to decode.
+// An *ExecError (git could not be run at all) stays a real failure.
+//
+// Callers asking "is this path in HEAD" want this; callers that genuinely
+// need to distinguish "no such tree" from "not in the tree" want LsTree.
+func (r *Repo) LsTreeTolerant(ctx context.Context, rev, path string) (LsTreeEntry, bool, error) {
+	entry, found, err := r.LsTree(ctx, rev, path)
+	if err != nil {
+		var execErr *ExecError
+		if errors.As(err, &execErr) {
+			return LsTreeEntry{}, false, err
+		}
+		return LsTreeEntry{}, false, nil
+	}
+	return entry, found, nil
 }
 
 func parseLsTreeLine(line string) (LsTreeEntry, error) {

@@ -126,6 +126,22 @@ func TestStage_UnbornBranchInitialCommit(t *testing.T) {
 	qt.Assert(t, qt.Equals(head, "func Hello() string {\n\treturn \"hi\"\n}"))
 }
 
+func TestStage_UnbornBranchGitignoredPathRefused(t *testing.T) {
+	// The gitignore refusal consults HEAD so an already-tracked-but-now-
+	// ignored path is let through. On an unborn branch there is no HEAD,
+	// and that lookup surfaced git's "Not a valid object name HEAD" as a
+	// bare exit 128 instead of the documented exit 7.
+	dir, repo := newSynthRepo(t)
+	writeFile(t, dir, ".gitignore", "*.log\n")
+	writeFile(t, dir, "debug.log", "noise\n")
+
+	err := synth.Stage(context.Background(), repo, dir, []synth.Target{synth.PathTarget("debug.log")})
+	qt.Assert(t, qt.IsNotNil(err))
+	var perr *synth.PathError
+	qt.Assert(t, qt.ErrorAs(err, &perr))
+	qt.Assert(t, qt.Equals(perr.Code, exitcode.PathRefused))
+}
+
 func TestStage_NoNewlineAtEOFPreserved(t *testing.T) {
 	dir, repo := newSynthRepo(t)
 	head := "package main\n\nfunc A() {}\n\nfunc B() int { return 1 }" // deliberately no trailing \n

@@ -130,8 +130,29 @@ func ResolveScope(ctx context.Context, repo *gitx.Repo, opts Options) (Scope, er
 	case len(opts.Revisions) > 2:
 		return Scope{}, &UsageError{Msg: "at most two revision arguments are accepted"}
 	default:
-		return Scope{Old: revSide("HEAD"), New: worktreeSide(), NumstatArgs: []string{"HEAD"}, IncludeUntracked: true}, nil
+		base, err := committableBase(ctx, repo)
+		if err != nil {
+			return Scope{}, err
+		}
+		return Scope{Old: revSide(base), New: worktreeSide(), NumstatArgs: []string{base}, IncludeUntracked: true}, nil
 	}
+}
+
+// committableBase is the old side of the default "everything committable"
+// scope. That is HEAD, except on an unborn branch, where HEAD names no
+// commit and `git diff HEAD` fails outright -- so the honest base is the
+// empty tree, against which every tracked path reads as an addition.
+//
+// rgit commit already works on an unborn branch (it writes a root commit),
+// so without this rgit diff could not answer "what would that commit?" for
+// the one repository state where the question is asked most: a fresh one.
+func committableBase(ctx context.Context, repo *gitx.Repo) (string, error) {
+	if _, ok, err := repo.RevParseVerify(ctx, "HEAD"); err != nil {
+		return "", err
+	} else if ok {
+		return "HEAD", nil
+	}
+	return repo.EmptyTree(ctx)
 }
 
 // resolveRangeScope splits a "A..B" or "A...B" positional. The three-dot
