@@ -140,6 +140,10 @@ print that command's own flags the same way, generated from the flag set itself
 so the two cannot drift. A bare `rgit` (no command at all) is a usage error, not
 a help request — see § Exit codes.
 
+`rgit --version` prints `rgit <version>` on stdout and exits 0. The version is
+stamped at build time (`-ldflags "-X main.version=vX.Y.Z"`) and reads `dev` in
+a build that did not set one.
+
 ## Flags
 
 | Flag | Behavior |

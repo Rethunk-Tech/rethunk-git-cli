@@ -37,14 +37,14 @@ cross-check, which catches build-tag, macro, and type-level mismatches.
 | Go | `gopls` | `go install golang.org/x/tools/gopls@latest` | Background daemon, reused |
 | TypeScript/JavaScript | `vtsls` | `npm i -g @vtsls/language-server` | One-shot subprocess per query |
 | Python | `pyright-langserver` | `npm i -g pyright` | One-shot subprocess per query |
+| Shell | `bash-language-server` | `npm i -g bash-language-server` | One-shot subprocess per query |
 
 Only `gopls` has a listen mode, so Go is the only language with a reusable
 daemon: `rgit` probes for one and starts it in the background if none answers.
 That first invocation finishes in `[ts-only]` mode rather than blocking on a
-cold index; later ones get the full cross-check. `vtsls` and
-`pyright-langserver` have no listen mode, so `rgit` spawns one over stdio per
-query and kills it on close — nothing persists, and the cross-check is live on
-the first invocation. The transport survey behind this split is in
+cold index; later ones get the full cross-check. The other three have no listen
+mode, so `rgit` spawns one over stdio per query and kills it on close — nothing
+persists, and the cross-check is live on the first invocation. The transport survey behind this split is in
 [`specs/design.md`](../specs/design.md#transport-support-per-server).
 
 ## Environment variables

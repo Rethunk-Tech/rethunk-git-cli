@@ -120,13 +120,14 @@ their stderr noise under concurrent invocation.
 ### Transport support per server
 
 The daemon design above was verified only for `gopls` when it was written.
-Measured directly for the other two before implementing against them:
+Measured directly for each of the others before implementing against them:
 
 | Server | `--help` claim | Measured behaviour | Verdict |
 | --- | --- | --- | --- |
 | `gopls` | `-listen=string`, prefixable `unix;` | Creates a real unix-domain socket file; other processes dial in | Listen-mode daemon |
 | `vtsls` | `--socket=<number>` | With nothing listening on that TCP port, exits immediately (code 0, no output). Given a pre-bound TCP listener, connects to it as a client | Dials **out**, not a daemon |
 | `pyright-langserver` | `--socket=<number>` | Same shape as `vtsls`: exits immediately with nothing listening; given a pre-bound TCP listener, connects out and streams `window/logMessage` over it | Dials **out**, not a daemon |
+| `bash-language-server` | `start` — "listening on stdin/stdout" | No socket or listen option of any kind: `--help` offers `start`, `--help` and `--version` and nothing else | stdio only, no transport choice to make |
 
 Verified with `vtsls --socket=<port>` / `pyright-langserver --socket=<port>`
 against an empty port (immediate exit) and then against a port with `nc -l`

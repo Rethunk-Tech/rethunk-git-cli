@@ -172,15 +172,17 @@ binary or non-parseable files. Name the path instead. Behaviour per kind:
 
 ## Language support
 
-Six grammars ship: **Go, TypeScript/JavaScript** (including TSX/JSX),
-**Python**, **Markdown** (`.md`, `.markdown` — headings and their sections
-only; inline constructs such as emphasis, links, and code spans are not
-parsed and have nothing to address), **Shell** (`.sh`, `.bash` —
-functions and top-level variable assignments; shell has no containers, so a
-redefined function disambiguates by ordinal the same way two same-named Go
-functions would), and **YAML** (`.yaml`, `.yml` — mapping keys, container-
-qualified one level the same way a Markdown heading is; sequence items and
-anything inside a flow-style `{...}`/`[...]` value have no name to address).
+Six grammars ship, claiming these extensions:
+
+| Grammar | Extensions | Addresses |
+| --- | --- | --- |
+| Go | `.go` | Every top-level declaration |
+| TypeScript | `.ts`, `.mts`, `.cts` | Every top-level declaration |
+| TSX/JavaScript | `.tsx`, `.jsx`, `.js`, `.mjs`, `.cjs` | As above; plain JS parses under the TSX grammar, a superset that also accepts untyped JS |
+| Python | `.py`, `.pyi` | Every top-level declaration |
+| Markdown | `.md`, `.markdown` | Headings and their sections only — inline constructs such as emphasis, links, and code spans are not parsed and have nothing to address |
+| Shell | `.sh`, `.bash` | Functions and top-level variable assignments. Shell has no containers, so a redefined function disambiguates by ordinal the same way two same-named Go functions would |
+| YAML | `.yaml`, `.yml` | Mapping keys, container-qualified one level the same way a Markdown heading is. Sequence items and anything inside a flow-style `{...}`/`[...]` value have no name to address |
 
 A `---`-separated multi-document YAML stream has nothing addressable by key at
 all — name the path instead — rather than guessing which document a bare key
@@ -205,10 +207,10 @@ one being deleted, or a comparison between two revisions — falls back to a
 whole-file entry. Deliberate: reading it from a blob instead would buy one
 uncommon case at the cost of a bounded read through `git cat-file`.
 
-The language-server cross-check exists only for Go, TypeScript, and Python
-([`docs/INSTALL.md#language-servers`](INSTALL.md#language-servers)); Markdown,
-Shell, and YAML resolve with tree-sitter alone, always in `[ts-only]` mode.
-Anything else → exit 9 on a symbol anchor; name the path.
+The language-server cross-check covers Go, TypeScript, Python, and Shell
+([`docs/INSTALL.md#language-servers`](INSTALL.md#language-servers)); Markdown
+and YAML have no server entry and resolve with tree-sitter alone, always in
+`[ts-only]` mode. Anything else → exit 9 on a symbol anchor; name the path.
 
 The grammars deferred to v2 are listed in [`../TODO.md`](../TODO.md).
 
