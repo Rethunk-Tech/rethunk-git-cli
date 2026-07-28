@@ -349,6 +349,21 @@ func TestDiff_UnbornBranchListsEverythingCommittable(t *testing.T) {
 	}
 }
 
+func TestDiff_MalformedSymAndPathEscapeRejected(t *testing.T) {
+	// diff used to skip a colon-less --sym value silently, leaving the
+	// caller reading an unfiltered diff while believing it was filtered,
+	// and left a path escape to surface as git's own exit 128. commit
+	// rejected both as exit 129; docs/USAGE.md's exit table does not
+	// qualify either to one subcommand.
+	repo := initRepoWithFile(t, "auth.go", authGoV1)
+
+	got := runRgit(t, repo, "diff", "--sym", "malformed")
+	qt.Assert(t, qt.Equals(got.ExitCode, 129))
+
+	got = runRgit(t, repo, "diff", "--file", "../outside.txt")
+	qt.Assert(t, qt.Equals(got.ExitCode, 129))
+}
+
 func TestDiff_UnstagedScopeExcludesStaged(t *testing.T) {
 	repo := initRepoWithFile(t, "auth.go", authGoV1)
 

@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/spf13/pflag"
 
@@ -283,30 +281,15 @@ func commitTargets(root string, classified []cli.Classification, files, syms []s
 		}
 	}
 	for _, sym := range syms {
-		idx := strings.LastIndexByte(sym, ':')
-		if idx <= 0 || idx == len(sym)-1 {
+		file, name, ok := splitAnchor(sym)
+		if !ok {
 			return nil, fmt.Errorf("malformed --sym value %q", sym)
 		}
-		if err := addAnchor(sym[:idx], sym[idx+1:]); err != nil {
+		if err := addAnchor(file, name); err != nil {
 			return nil, err
 		}
 	}
 	return targets, nil
-}
-
-// checkPathEscape refuses a pathspec or anchor file whose path climbs
-// above root via "..". A leading-colon pathspec is magic passed through
-// verbatim (docs/USAGE.md § Argument shape), not a literal path, so it is
-// exempt -- there is nothing here to resolve against root at all.
-func checkPathEscape(root, path string) error {
-	if strings.HasPrefix(path, ":") {
-		return nil
-	}
-	rel, err := filepath.Rel(root, filepath.Join(root, path))
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return fmt.Errorf("path %q escapes the repository root", path)
-	}
-	return nil
 }
 
 // writeTargetListing prints one aligned line per staged target with its

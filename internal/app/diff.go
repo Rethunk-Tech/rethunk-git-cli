@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/spf13/pflag"
 
@@ -95,14 +94,35 @@ func runDiff(args []string, stdout, stderr io.Writer) exitcode.Code {
 		return exitcode.InvalidUsage
 	}
 
+	symFlags, err := symRefsFromFlag(f.syms)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return exitcode.InvalidUsage
+	}
+
+	allFiles := append(files, f.files...)
+	allSyms := append(syms, symFlags...)
+	for _, p := range allFiles {
+		if err := checkPathEscape(root, p); err != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return exitcode.InvalidUsage
+		}
+	}
+	for _, s := range allSyms {
+		if err := checkPathEscape(root, s.File); err != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return exitcode.InvalidUsage
+		}
+	}
+
 	opts := diffpkg.Options{
 		Staged:          f.staged,
 		Unstaged:        f.unstaged,
 		RangeFlag:       f.rangeFlag,
 		PositionalRange: rangeToken,
 		Revisions:       revisions,
-		Files:           append(files, f.files...),
-		Syms:            append(syms, symRefsFromFlag(f.syms)...),
+		Files:           allFiles,
+		Syms:            allSyms,
 	}
 
 	report, err := diffpkg.Run(ctx, repo, root, opts)
@@ -131,17 +151,18 @@ func runDiff(args []string, stdout, stderr io.Writer) exitcode.Code {
 	return exitcode.Success
 }
 
-// symRefsFromFlag parses --sym's repeatable FILE:NAME values the same way
-// cli.ClassifyArgs's rule 5 does: split at the LAST colon, since a path may
-// itself contain one.
-func symRefsFromFlag(syms []string) []diffpkg.SymRef {
+// symRefsFromFlag parses --sym's repeatable FILE:NAME values. A malformed
+// value is rejected rather than skipped: silently dropping it would leave
+// the caller looking at an unfiltered diff believing it was filtered, and
+// rgit commit already refuses the same value with the same message.
+func symRefsFromFlag(syms []string) ([]diffpkg.SymRef, error) {
 	out := make([]diffpkg.SymRef, 0, len(syms))
 	for _, s := range syms {
-		idx := strings.LastIndexByte(s, ':')
-		if idx <= 0 || idx == len(s)-1 {
-			continue
+		file, name, ok := splitAnchor(s)
+		if !ok {
+			return nil, fmt.Errorf("malformed --sym value %q", s)
 		}
-		out = append(out, diffpkg.SymRef{File: s[:idx], Name: s[idx+1:]})
+		out = append(out, diffpkg.SymRef{File: file, Name: name})
 	}
-	return out
+	return out, nil
 }

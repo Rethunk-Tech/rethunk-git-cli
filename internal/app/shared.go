@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -13,6 +14,39 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 )
+
+// splitAnchor splits a FILE:NAME anchor the way cli.ClassifyArgs's rule 5
+// does: at the LAST colon, since a path may itself contain one. ok is
+// false when the value has no colon, nothing before it, or nothing after
+// it -- none of which names a symbol. Both subcommands and the
+// contradiction check share this so a value one accepts is never one
+// another silently drops.
+func splitAnchor(s string) (file, name string, ok bool) {
+	idx := strings.LastIndexByte(s, ':')
+	if idx <= 0 || idx == len(s)-1 {
+		return "", "", false
+	}
+	return s[:idx], s[idx+1:], true
+}
+
+// checkPathEscape refuses a pathspec or anchor file whose path climbs
+// above root via "..". A leading-colon pathspec is magic passed through
+// verbatim (docs/USAGE.md § Argument shape), not a literal path, so it is
+// exempt -- there is nothing here to resolve against root at all.
+//
+// This is the one piece of path safety rgit owns rather than delegating,
+// so both subcommands apply it: docs/USAGE.md's exit table lists a path
+// escape as 129 without qualifying it to commit.
+func checkPathEscape(root, path string) error {
+	if strings.HasPrefix(path, ":") {
+		return nil
+	}
+	rel, err := filepath.Rel(root, filepath.Join(root, path))
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("path %q escapes the repository root", path)
+	}
+	return nil
+}
 
 // anchorFileContradiction implements docs/USAGE.md's "--sym and --file on
 // the same path → exit 5": naming a path both ways is a contradiction the
@@ -23,11 +57,10 @@ func anchorFileContradiction(syms, files []string, stderr io.Writer) exitcode.Co
 		fileSet[path] = true
 	}
 	for _, sym := range syms {
-		idx := strings.LastIndexByte(sym, ':')
-		if idx <= 0 {
+		file, _, ok := splitAnchor(sym)
+		if !ok {
 			continue // malformed --sym value; not this check's job to diagnose
 		}
-		file := sym[:idx]
 		if fileSet[file] {
 			fmt.Fprintf(stderr, "rgit: --sym and --file both name %q\n", file)
 			return exitcode.ContradictoryAnchors
