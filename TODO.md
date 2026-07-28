@@ -12,11 +12,19 @@ Future work only. Decisions already made live in
       resolve in every supported language, and one attached to the first
       declaration by the blank-line rule stays with that declaration rather
       than being claimed as header.
-- [ ] Nested functions and methods of a class declared *inside* a function
-      still resolve no finer than their nearest top-level declaration.
-      Containers themselves are addressed one level down in every supported
-      language: Go receivers, struct fields and interface methods; TypeScript
-      and Python class members; TypeScript namespace members.
+- [x] Nested functions and methods of a class declared *inside* a function
+      resolve no finer than their nearest top-level declaration — **measured
+      and closed as not worth building.** Across 51 repositories, named nested
+      declarations are 0.00% of Go functions (the grammar makes them
+      structurally impossible), 1.98% in TypeScript, 3.36% in TSX and 9.26% in
+      Python — and the TSX and Python figures are repo-concentrated rather than
+      general, one repository accounting for 55% and 60% of their respective
+      hits. Anonymous nesting outnumbers named nesting by 6–30× in every
+      language but Python, so most nested functions are callbacks an anchor
+      could never name in any case. Nothing here clears the bar the v1 grammars
+      were held to. Containers remain addressed one level down: Go receivers,
+      struct fields and interface methods; TypeScript and Python class members;
+      TypeScript namespace members; Markdown subsections.
 - [ ] Some declarations are deliberately left unaddressable, because no byte
       extent belongs to the name alone: Go's shared-name field lines
       (`A, B int`) and embedded/anonymous struct fields, TypeScript's anonymous

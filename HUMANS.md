@@ -48,10 +48,10 @@ measured to establish each is in
 ## When a symbol anchor will not work
 
 Anchors need a parsed syntax tree, so they are refused on binaries, symlinks,
-submodules, and languages outside the v1 set (Go, TypeScript/JavaScript,
-Python). A `chmod +x` with no content change has nothing to name either. In
-every case, name the path instead — `rgit commit package.json` works fine, and
-`rgit diff` never reports such a file as clean.
+submodules, and languages without a grammar (Go, TypeScript/JavaScript, Python
+and Markdown have one). A `chmod +x` with no content change has nothing to name
+either. In every case, name the path instead — `rgit commit package.json` works
+fine, and `rgit diff` never reports such a file as clean.
 
 Which paths are refused, and how each kind stages:
 [`docs/ANCHORS.md`](docs/ANCHORS.md#paths-that-anchors-cannot-address).
