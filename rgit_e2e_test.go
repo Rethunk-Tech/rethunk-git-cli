@@ -1087,3 +1087,38 @@ func TestOutput_OrderedByPathThenPosition(t *testing.T) {
 	iC := strings.Index(dry.Stdout, "zsub/c.go:Mango")
 	qt.Assert(t, qt.IsTrue(iZebra >= 0 && iZebra < iApple && iApple < iB && iB < iC))
 }
+
+func TestHelp_TopLevelExitsZeroOnEverySpelling(t *testing.T) {
+	// specs/design.md:231 measured "--help tokens" per flag library as a
+	// selection criterion, but nothing ever wired the flag up: bare
+	// "--help", "-h", and "help" all fell into the unknown-command branch
+	// (exit 129). All three now print the same top-level help to stdout
+	// and exit 0.
+	repo := newTempRepo(t)
+	for _, spelling := range []string{"--help", "-h", "help"} {
+		t.Run(spelling, func(t *testing.T) {
+			got := runRgit(t, repo, spelling)
+			qt.Assert(t, qt.Equals(got.ExitCode, 0))
+			// Not an exact-empty check: the e2e binary is built with -cover
+			// (buildRgit), which itself warns on stderr when GOCOVERDIR is
+			// unset -- noise unrelated to this command's own behaviour.
+			qt.Assert(t, qt.Not(qt.StringContains(got.Stderr, "rgit:")))
+			qt.Assert(t, qt.StringContains(got.Stdout, "diff"))
+			qt.Assert(t, qt.StringContains(got.Stdout, "commit"))
+			qt.Assert(t, qt.StringContains(got.Stdout, "--version"))
+		})
+	}
+}
+
+func TestHelp_BareInvocationStillExitsInvalidUsage(t *testing.T) {
+	// Bare `git` prints its own full help to stdout at exit 1 -- but rgit
+	// has exactly two subcommands and no useful no-op mode, and every other
+	// usage error in its table (missing message, no target, ...) is already
+	// pinned to exit 129. Naming no command is the same kind of usage
+	// error, so it keeps rgit's own convention rather than adopting git's
+	// top-level dispatcher quirk.
+	got := runRgit(t, newTempRepo(t))
+	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.InvalidUsage)))
+	qt.Assert(t, qt.Equals(got.Stdout, ""))
+	qt.Assert(t, qt.StringContains(got.Stderr, "usage: rgit"))
+}
