@@ -1,11 +1,12 @@
 package synth
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -389,14 +390,11 @@ func pathspecLineCounts(ctx context.Context, repo *gitx.Repo, root, pathspec str
 // position within that file, with the anchor name as a final tiebreak so the
 // order is total and every run of an unchanged tree prints the same thing.
 func sortResults(results []TargetResult) {
-	sort.SliceStable(results, func(i, j int) bool {
-		a, b := results[i], results[j]
-		if a.path != b.path {
-			return a.path < b.path
-		}
-		if a.start != b.start {
-			return a.start < b.start
-		}
-		return a.Target.Symbol.Anchor < b.Target.Symbol.Anchor
+	slices.SortStableFunc(results, func(a, b TargetResult) int {
+		return cmp.Or(
+			cmp.Compare(a.path, b.path),
+			cmp.Compare(a.start, b.start),
+			cmp.Compare(a.Target.Symbol.Anchor, b.Target.Symbol.Anchor),
+		)
 	})
 }

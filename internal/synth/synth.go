@@ -13,7 +13,8 @@ package synth
 
 import (
 	"bytes"
-	"sort"
+	"cmp"
+	"slices"
 )
 
 // editKind is what one resolved target does to a file's HEAD content.
@@ -52,7 +53,7 @@ type editOp struct {
 // edit's offset invalidating another's.
 func applyEdits(head []byte, ops []editOp) []byte {
 	sorted := mergeInsertTies(coalesceOverlaps(ops))
-	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].start > sorted[j].start })
+	slices.SortStableFunc(sorted, func(a, b editOp) int { return cmp.Compare(b.start, a.start) })
 
 	out := append([]byte(nil), head...)
 	for _, op := range sorted {
@@ -87,9 +88,7 @@ func applyEdits(head []byte, ops []editOp) []byte {
 // therefore picks the container every time.
 func coalesceOverlaps(ops []editOp) []editOp {
 	ranked := append([]editOp(nil), ops...)
-	sort.SliceStable(ranked, func(i, j int) bool {
-		return ranked[i].span() > ranked[j].span()
-	})
+	slices.SortStableFunc(ranked, func(a, b editOp) int { return cmp.Compare(b.span(), a.span()) })
 
 	kept := make([]editOp, 0, len(ranked))
 	for _, op := range ranked {
@@ -156,7 +155,7 @@ func mergeInsertTies(ops []editOp) []editOp {
 	}
 	for _, start := range order {
 		group := groups[start]
-		sort.SliceStable(group, func(i, j int) bool { return group[i].seq < group[j].seq })
+		slices.SortStableFunc(group, func(a, b editOp) int { return cmp.Compare(a.seq, b.seq) })
 		text := group[0].text
 		for _, g := range group[1:] {
 			text = joinWithBlankLine(text, g.text)

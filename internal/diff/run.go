@@ -1,11 +1,12 @@
 package diff
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -260,5 +261,5 @@ func applyFilters(report *Report, opts Options) {
 // discovered via two independent git calls with no shared ordering
 // guarantee, so this is the one place that ordering is actually decided.
 func sortReport(report *Report) {
-	sort.Slice(report.Files, func(i, j int) bool { return report.Files[i].Path < report.Files[j].Path })
+	slices.SortFunc(report.Files, func(a, b FileReport) int { return cmp.Compare(a.Path, b.Path) })
 }

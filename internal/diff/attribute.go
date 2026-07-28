@@ -2,7 +2,8 @@ package diff
 
 import (
 	"bytes"
-	"sort"
+	"cmp"
+	"slices"
 	"strconv"
 
 	udiff "github.com/aymanbagabas/go-udiff"
@@ -211,7 +212,7 @@ func attributeSymbols(lang resolve.Language, oldSrc, newSrc []byte, totalAdded, 
 	// (unanchorable) is every hunk no symbol owns, spread across the whole
 	// file rather than sitting at one offset, so it has no position to sort
 	// by and belongs last.
-	sort.SliceStable(rows, func(i, j int) bool { return rows[i].pos < rows[j].pos })
+	slices.SortStableFunc(rows, func(a, b Row) int { return cmp.Compare(a.pos, b.pos) })
 
 	if unAdded > 0 || unDeleted > 0 {
 		rows = append(rows, Row{Status: StatusUnanchorable, Added: itoa(unAdded), Deleted: itoa(unDeleted)})

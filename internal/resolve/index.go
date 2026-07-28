@@ -1,8 +1,9 @@
 package resolve
 
 import (
+	"cmp"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	ts "github.com/tree-sitter/go-tree-sitter"
@@ -160,7 +161,7 @@ func (idx *index) resolve(anchor string) (*Symbol, error) {
 		for i, s := range group {
 			candidates[i] = s.Qualified
 		}
-		sort.Strings(candidates)
+		slices.Sort(candidates)
 		return nil, &ResolveError{
 			Code:       exitcode.AnchorAmbiguous,
 			Anchor:     anchor,
@@ -189,11 +190,8 @@ func (idx *index) suggest(anchor string) []string {
 	for name := range idx.byQualified {
 		all = append(all, scored{name, levenshtein(anchor, name)})
 	}
-	sort.Slice(all, func(i, j int) bool {
-		if all[i].dist != all[j].dist {
-			return all[i].dist < all[j].dist
-		}
-		return all[i].name < all[j].name
+	slices.SortFunc(all, func(x, y scored) int {
+		return cmp.Or(cmp.Compare(x.dist, y.dist), cmp.Compare(x.name, y.name))
 	})
 
 	out := make([]string, 0, maxCandidates)

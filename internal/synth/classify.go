@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"slices"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
@@ -122,7 +123,7 @@ func (fp *filePlan) crossCheck(ctx context.Context, sess *lsp.Session, root stri
 // entries. seq is qualified's index in that order, used later to keep
 // multiple same-offset insertions in worktree order (mergeInsertTies).
 func (fp *filePlan) insertionPoint(qualified string) (pos uint, seq int) {
-	idx := indexOf(fp.workOrder, qualified)
+	idx := slices.Index(fp.workOrder, qualified)
 	if idx < 0 {
 		// Cannot happen: qualified is Resolve's own normalized answer
 		// for the anchor that was just resolved against fp.workSrc.
@@ -142,15 +143,6 @@ func (fp *filePlan) insertionPoint(qualified string) (pos uint, seq int) {
 		}
 	}
 	return uint(len(fp.headSrc)), idx
-}
-
-func indexOf(order []string, name string) int {
-	for i, n := range order {
-		if n == name {
-			return i
-		}
-	}
-	return -1
 }
 
 func isResolveError(err error) bool {
