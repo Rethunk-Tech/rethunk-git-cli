@@ -3,7 +3,10 @@ package diff
 import (
 	"bytes"
 	"fmt"
+	"path/filepath"
 	"text/tabwriter"
+
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
 // RenderText renders report in the default aligned layout from
@@ -78,7 +81,7 @@ func rowCounts(row Row) string {
 func rowHint(path string, row Row) string {
 	switch row.Status {
 	case StatusUnanchorable:
-		return "-> use --file " + path
+		return unanchorableHint(path)
 	case StatusUntracked:
 		if row.HintSymbol != "" {
 			return "-> use --sym " + path + ":" + row.HintSymbol + " or --file " + path
@@ -89,4 +92,25 @@ func rowHint(path string, row Row) string {
 	default:
 		return ""
 	}
+}
+
+// unanchorableHint is the (unanchorable) row's own suggestion. For most
+// languages @toplevel spans every declaration's Full extent -- a superset of
+// every row this package already emits, never a target this remainder could
+// be -- so --file remains the only way to stage it. Markdown is the
+// exception: @toplevel there is a disjoint region, the lede (content before
+// the first heading), which no other row can ever cover by construction
+// (lang_markdown.go's Declarations never returns an entry for it) -- so an
+// (unanchorable) row in a Markdown file is always the lede, and always
+// stageable more precisely than the whole path.
+//
+// Deciding this by lang.Name() rather than a new resolve.Language predicate
+// keeps the distinction where the rest of this package already draws similar
+// ones (isMultiDeclaratorLang in attribute.go): a hint string is internal/
+// diff's own concern, not something the resolver needs to expose.
+func unanchorableHint(path string) string {
+	if lang, ok := resolve.ForExtension(filepath.Ext(path)); ok && lang.Name() == "markdown" {
+		return "-> use --sym " + path + ":@toplevel or --file " + path
+	}
+	return "-> use --file " + path
 }
