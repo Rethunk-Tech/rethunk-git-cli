@@ -6,7 +6,6 @@ import (
 	"errors"
 	"path/filepath"
 	"slices"
-	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
@@ -69,7 +68,7 @@ func (fp *filePlan) classify(ctx context.Context, sess *lsp.Session, root, ancho
 		return op, bytes.Equal(workBytes, headBytes), tsOnly, nil
 
 	case workRes != nil && headRes == nil:
-		workRes = fp.escalateToContainer(workRes)
+		workRes, isNestedMember := fp.escalateToContainer(workRes)
 		pos, seq := fp.insertionPoint(workRes)
 		tsOnly, err = fp.crossCheck(ctx, sess, root, workRes)
 		if err != nil {
@@ -80,6 +79,12 @@ func (fp *filePlan) classify(ctx context.Context, sess *lsp.Session, root, ancho
 			start: pos,
 			seq:   seq,
 			text:  insertionText(fp.workSrc, workRes.Extent),
+			// A structurally nested member only sits flush against its
+			// siblings when the language's own convention keeps it that
+			// way (resolve.MembersSitFlush) -- Python requires a blank line
+			// between class methods even though they are just as nested as
+			// a Go struct field or a TypeScript class method.
+			member: isNestedMember && resolve.MembersSitFlush(fp.lang),
 		}
 		return op, false, tsOnly, nil
 
@@ -162,33 +167,47 @@ func lineStart(src []byte, off uint) uint {
 // class HEAD does not have without bringing the class.
 //
 // Nesting is tested structurally, by extent containment, rather than by the
-// mere presence of a container name. Go's receiver container is a sibling of
-// its methods, not their parent: staging `(*A).Get` must never drag in the
-// `type A struct` declaration, and does not, because A's extent does not
-// enclose Get's.
-func (fp *filePlan) escalateToContainer(member *resolve.Resolution) *resolve.Resolution {
-	dot := strings.LastIndexByte(member.Anchor, '.')
-	if dot <= 0 {
-		return member
+// mere presence of a container name: resolve.Resolution.Container is set for
+// a Go receiver method too, and a receiver is a sibling of its methods, not
+// their parent -- staging `(*A).Get` must never drag in the `type A struct`
+// declaration, and does not, because A's extent does not enclose Get's.
+//
+// isMember reports whether member names a symbol structurally nested inside
+// its container -- a struct field, interface method, or class/namespace
+// method, as opposed to a Go receiver method merely named with a container
+// prefix while sitting beside it. Only a true nested member being spliced
+// next to siblings that are already there wants spliceInsert's flush
+// treatment (no blank line, TODO.md § Known limitations); a sibling method
+// and a whole freshly-escalated container are both ordinary top-level
+// insertions and keep their blank-line padding.
+func (fp *filePlan) escalateToContainer(member *resolve.Resolution) (res *resolve.Resolution, isMember bool) {
+	if member.Container == "" {
+		return member, false
 	}
-	container := member.Anchor[:dot]
+	container := member.Container
 
-	// Already in HEAD: the ordinary insertion path can find a sibling
-	// member to splice against, inside the container that is already there.
-	if fp.headExists {
-		if _, err := fp.headFile.Resolve(container); err == nil {
-			return member
-		}
-	}
 	outer, err := fp.workFile.Resolve(container)
 	if err != nil {
-		return member
+		return member, false
 	}
 	if outer.Extent.Start > member.Extent.Start || member.Extent.End > outer.Extent.End {
-		return member // a sibling, not a parent -- Go's receiver container
+		return member, false // a sibling, not a parent -- Go's receiver container
 	}
+
+	// Already in HEAD: the ordinary insertion path finds a sibling member
+	// inside the container that is already there, and the new member sits
+	// flush against it -- exactly as it already does in the worktree.
+	if fp.headExists {
+		if _, err := fp.headFile.Resolve(container); err == nil {
+			return member, true
+		}
+	}
+
+	// The container itself is also new: there is no way to add a member to
+	// one HEAD does not have, so the whole container is staged instead --
+	// a top-level insertion, not a member.
 	fp.escalated = append(fp.escalated, member.Anchor+" -> "+container)
-	return outer
+	return outer, false
 }
 
 // insertionPoint implements design.md's nearest-existing-sibling rule:

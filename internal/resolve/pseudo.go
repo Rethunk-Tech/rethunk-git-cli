@@ -136,6 +136,29 @@ func ExtendThroughOwnedSeparator(lang Language, src []byte, ext Extent, limit ui
 	return Extent{Start: ext.Start, End: end}
 }
 
+// MembersSitFlush reports whether lang's own convention keeps sibling
+// container members -- struct fields, interface methods, class methods --
+// adjacent with no blank line between them, the way gofmt leaves Go struct
+// fields and interface methods and prettier leaves TypeScript class methods:
+// neither tool inserts or requires a separator there, so whatever the
+// worktree already has is "flush" as far as either is concerned.
+//
+// Python is the opposite case: PEP 8 requires exactly one blank line between
+// method definitions inside a class body (linters enforce it as E301), and
+// a Python class's only addressable member kind is a method (lang_python.go
+// never descends into plain attribute assignments) -- so a newly spliced-in
+// Python method is treated as an ordinary top-level-shaped boundary, not a
+// flush one, or the synthesized blob would drop a blank line every Python
+// style guide expects there.
+func MembersSitFlush(lang Language) bool {
+	switch lang.Name() {
+	case "go", "typescript", "tsx":
+		return true
+	default:
+		return false
+	}
+}
+
 // toplevelExtent spans every addressable declaration's full extent (leading
 // doc comments included). This excludes header and import material by
 // construction: a Language's Declarations never returns entries for those.

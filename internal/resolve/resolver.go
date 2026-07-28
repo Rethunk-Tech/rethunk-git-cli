@@ -19,6 +19,15 @@ type Resolution struct {
 	DeclOnly Extent
 	Anchor   string
 	Pseudo   bool
+
+	// Container is the enclosing symbol's bare name when this Resolution
+	// names a struct field, interface method, receiver method, or class/
+	// namespace member -- empty for a top-level declaration and for every
+	// pseudo-anchor. internal/synth's insertion path uses it to decide
+	// whether a newly spliced-in symbol gets top-level blank-line padding
+	// or sits flush against its siblings, the way container members already
+	// sit in the worktree (TODO.md § Known limitations).
+	Container string
 }
 
 // File is one source parsed once and held open, so a caller with several
@@ -66,7 +75,7 @@ func (f *File) Resolve(anchor string) (*Resolution, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Resolution{Extent: sym.Full, DeclOnly: sym.DeclOnly, Anchor: sym.Qualified}, nil
+	return &Resolution{Extent: sym.Full, DeclOnly: sym.DeclOnly, Anchor: sym.Qualified, Container: sym.Decl.Container}, nil
 }
 
 // DeclOrder returns the anchor rgit emits for each declaration, in source

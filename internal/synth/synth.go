@@ -42,6 +42,16 @@ type editOp struct {
 	end   uint
 	text  []byte
 	seq   int // worktree declaration order; meaningful for insertions only
+
+	// member is true when an editInsert names a container member (a struct
+	// field, interface method, or class/namespace method) rather than a
+	// top-level declaration. Container members sit flush against their
+	// siblings in idiomatic source -- no blank line between them -- so
+	// spliceInsert must not pad one in, or the synthesized blob is
+	// semantically right but never byte-identical to the worktree (TODO.md
+	// § Known limitations). Zero value is false, so every existing
+	// top-level insertion keeps its blank-line padding unchanged.
+	member bool
 }
 
 // applyEdits synthesizes the final blob for one file: head with every op
@@ -63,7 +73,7 @@ func applyEdits(head []byte, ops []editOp) []byte {
 		case editDelete:
 			out = spliceExcise(out, op.start, op.end)
 		case editInsert:
-			out = spliceInsert(out, op.start, op.text)
+			out = spliceInsert(out, op.start, op.text, op.member)
 		}
 	}
 	return out
@@ -156,11 +166,15 @@ func mergeInsertTies(ops []editOp) []editOp {
 	for _, start := range order {
 		group := groups[start]
 		slices.SortStableFunc(group, func(a, b editOp) int { return cmp.Compare(a.seq, b.seq) })
+		// Every op in one group was resolved against the same insertion
+		// point in the same file, so they share one container context (or
+		// lack of one) -- the first op's flag speaks for the whole group.
+		member := group[0].member
 		text := group[0].text
 		for _, g := range group[1:] {
-			text = joinWithBlankLine(text, g.text)
+			text = joinWithSeparator(text, g.text, member)
 		}
-		merged = append(merged, editOp{kind: editInsert, start: start, text: text})
+		merged = append(merged, editOp{kind: editInsert, start: start, text: text, member: member})
 	}
 	return merged
 }
@@ -205,16 +219,23 @@ func spliceExcise(out []byte, start, end uint) []byte {
 }
 
 // spliceInsert splices text in at start, with no HEAD extent to replace.
-// It normalizes the blank-line boundary on both sides of the insertion
-// (design.md: "boundary padding normalizes newlines between spliced
-// regions only") but never manufactures a trailing newline where none
-// existed: when start lands at true end-of-file (out[start:] is empty),
-// the result's own trailing newline mirrors out's, not a forced default.
-func spliceInsert(out []byte, start uint, text []byte) []byte {
+// It normalizes the boundary on both sides of the insertion (design.md:
+// "boundary padding normalizes newlines between spliced regions only") but
+// never manufactures a trailing newline where none existed: when start
+// lands at true end-of-file (out[start:] is empty), the result's own
+// trailing newline mirrors out's, not a forced default.
+//
+// member selects which boundary a top-level declaration and a container
+// member each structurally require: a blank line between two top-level
+// declarations, but exactly one newline between two members of the same
+// struct, interface, or class -- padding one in there is not "normalizing
+// spacing", it is producing a blob that never matches the worktree it was
+// supposed to reproduce (TODO.md § Known limitations).
+func spliceInsert(out []byte, start uint, text []byte, member bool) []byte {
 	before := out[:start]
 	after := out[start:]
 
-	mid := joinWithBlankLine(before, text)
+	mid := joinWithSeparator(before, text, member)
 	// Both empty and newlines-only mean end-of-file: nothing follows the
 	// insertion but the file's own terminator. Appending after the last
 	// symbol lands in the newlines-only case, since HEAD's trailing
@@ -226,15 +247,15 @@ func spliceInsert(out []byte, start uint, text []byte) []byte {
 		}
 		return mid
 	}
-	return joinWithBlankLine(mid, after)
+	return joinWithSeparator(mid, after, member)
 }
 
-// joinWithBlankLine concatenates a and b with exactly one blank line
-// between them, trimming any newlines a already trails or b already
-// leads so repeated splices cannot accumulate extra blank lines. An empty
-// side contributes no separator -- joining onto nothing is not a
-// boundary.
-func joinWithBlankLine(a, b []byte) []byte {
+// joinWithSeparator concatenates a and b, trimming any newlines a already
+// trails or b already leads so repeated splices cannot accumulate extra
+// blank lines, then rejoining with exactly one blank line (member false) or
+// exactly one newline (member true). An empty side contributes no
+// separator -- joining onto nothing is not a boundary.
+func joinWithSeparator(a, b []byte, member bool) []byte {
 	a = bytes.TrimRight(a, "\n")
 	b = bytes.TrimLeft(b, "\n")
 	switch {
@@ -243,9 +264,13 @@ func joinWithBlankLine(a, b []byte) []byte {
 	case len(b) == 0:
 		return append([]byte(nil), a...)
 	default:
-		out := make([]byte, 0, len(a)+2+len(b))
+		sep := "\n\n"
+		if member {
+			sep = "\n"
+		}
+		out := make([]byte, 0, len(a)+len(sep)+len(b))
 		out = append(out, a...)
-		out = append(out, '\n', '\n')
+		out = append(out, sep...)
 		out = append(out, b...)
 		return out
 	}

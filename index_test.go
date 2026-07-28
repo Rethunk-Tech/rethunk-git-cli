@@ -13,6 +13,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -689,6 +690,124 @@ func TestStage_DeletedSymbolExcisedFromBlob(t *testing.T) {
 	qt.Assert(t, qt.StringContains(got, "func C() {}"))
 
 	mustParseGo(t, "deletion", got)
+}
+
+// TestStage_ContainerMemberInsertIsByteIdenticalToWorktree pins the fix for
+// TODO.md § Known limitations' "a symbol inserted into an existing container
+// gains a blank line on each side": a Go struct field, a Go interface
+// method, and a TypeScript class method all sit flush against their
+// siblings in idiomatic source, with no blank line between them, so staging
+// a newly added one must not pad one in -- the committed blob has to be
+// byte-identical to the worktree, or the file still reads as modified right
+// after the commit that was supposed to capture it.
+//
+// Python is deliberately the odd one out here (resolve.MembersSitFlush):
+// PEP 8 requires a blank line between method definitions inside a class,
+// so a Python class method keeps the ordinary top-level-shaped padding
+// instead -- proven by its own subtest expecting that blank line to survive.
+func TestStage_ContainerMemberInsertIsByteIdenticalToWorktree(t *testing.T) {
+	t.Run("go struct field", func(t *testing.T) {
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "p.go", "package main\n\ntype Point struct {\n\tX int\n\tY int\n}\n")
+		commitAll(t, dir, "chore: initial p.go")
+
+		work := "package main\n\ntype Point struct {\n\tX int\n\tY int\n\tZ int\n}\n"
+		writeFile(t, dir, "p.go", work)
+
+		mustStage(t, repo, dir, synth.AnchorTarget("p.go", "Point.Z"))
+
+		got := indexBlob(t, repo, "p.go")
+		mustParseGo(t, "new struct field", got)
+		qt.Assert(t, qt.Equals(got, work))
+	})
+
+	t.Run("go interface method", func(t *testing.T) {
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "i.go", "package main\n\ntype Doer interface {\n\tDo()\n}\n")
+		commitAll(t, dir, "chore: initial i.go")
+
+		work := "package main\n\ntype Doer interface {\n\tDo()\n\tRedo()\n}\n"
+		writeFile(t, dir, "i.go", work)
+
+		mustStage(t, repo, dir, synth.AnchorTarget("i.go", "Doer.Redo"))
+
+		got := indexBlob(t, repo, "i.go")
+		mustParseGo(t, "new interface method", got)
+		qt.Assert(t, qt.Equals(got, work))
+	})
+
+	t.Run("typescript class method", func(t *testing.T) {
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "svc.ts", "export class Svc {\n  login(): number { return 1; }\n}\n")
+		commitAll(t, dir, "chore: initial svc.ts")
+
+		work := "export class Svc {\n  login(): number { return 1; }\n  logout(): number { return 2; }\n}\n"
+		writeFile(t, dir, "svc.ts", work)
+
+		mustStage(t, repo, dir, synth.AnchorTarget("svc.ts", "Svc.logout"))
+
+		got := indexBlob(t, repo, "svc.ts")
+		qt.Assert(t, qt.Equals(got, work))
+	})
+
+	t.Run("python class method keeps its PEP 8 blank line, not flush", func(t *testing.T) {
+		dir, repo := newSynthRepo(t)
+		writeFile(t, dir, "svc.py", "class Svc:\n    def login(self):\n        return 1\n")
+		commitAll(t, dir, "chore: initial svc.py")
+
+		// A blank line between methods, matching PEP 8 -- unlike the three
+		// flush cases above, this one is the byte-identical result BECAUSE
+		// the separator is preserved, not suppressed.
+		work := "class Svc:\n    def login(self):\n        return 1\n\n    def logout(self):\n        return 2\n"
+		writeFile(t, dir, "svc.py", work)
+
+		mustStage(t, repo, dir, synth.AnchorTarget("svc.py", "Svc.logout"))
+
+		got := indexBlob(t, repo, "svc.py")
+		qt.Assert(t, qt.Equals(got, work))
+	})
+
+	t.Run("no newline at EOF is not invented by a member insert", func(t *testing.T) {
+		// AGENTS.md: EOF newline is inherited, never normalized. A container
+		// that is itself the last thing in the file must not gain a
+		// trailing newline it never had just because one of its members was
+		// spliced in.
+		dir, repo := newSynthRepo(t)
+		head := "package main\n\ntype Point struct {\n\tX int\n}" // deliberately no trailing \n
+		writeFile(t, dir, "p.go", head)
+		commitAll(t, dir, "chore: initial p.go")
+
+		work := "package main\n\ntype Point struct {\n\tX int\n\tY int\n}" // still no trailing \n
+		writeFile(t, dir, "p.go", work)
+
+		mustStage(t, repo, dir, synth.AnchorTarget("p.go", "Point.Y"))
+
+		got := indexBlob(t, repo, "p.go")
+		qt.Assert(t, qt.Equals(got, work))
+		qt.Assert(t, qt.IsFalse(len(got) > 0 && got[len(got)-1] == '\n'))
+	})
+}
+
+// TestStage_SiblingReceiverMethodKeepsBlankLinePadding is the regression
+// guard for the fix above: a Go receiver method is container-QUALIFIED
+// (resolve.Resolution.Container is set) but not container-NESTED -- it is a
+// top-level declaration beside its receiver type, not inside it -- and must
+// keep the ordinary blank-line separation a new top-level declaration gets.
+// Getting this wrong would splice a brand new method flush against
+// whatever the nearest existing declaration is.
+func TestStage_SiblingReceiverMethodKeepsBlankLinePadding(t *testing.T) {
+	dir, repo := newSynthRepo(t)
+	writeFile(t, dir, "a.go", "package main\n\ntype A struct{}\n\nfunc Seed() {}\n")
+	commitAll(t, dir, "chore: initial a.go")
+
+	work := "package main\n\ntype A struct{}\n\nfunc (a *A) Get() int { return 1 }\n\nfunc Seed() {}\n"
+	writeFile(t, dir, "a.go", work)
+
+	mustStage(t, repo, dir, synth.AnchorTarget("a.go", "A.Get"))
+
+	got := indexBlob(t, repo, "a.go")
+	mustParseGo(t, "new Go receiver method", got)
+	qt.Assert(t, qt.Equals(got, work))
 }
 
 // TestPlanStage_PreambleRowsAppearInResults pins the fix for a --dry-run
