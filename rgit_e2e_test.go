@@ -1088,6 +1088,8 @@ func TestOutput_OrderedByPathThenPosition(t *testing.T) {
 	qt.Assert(t, qt.IsTrue(iZebra >= 0 && iZebra < iApple && iApple < iB && iB < iC))
 }
 
+// --- help --------------------------------------------------------------
+
 func TestHelp_TopLevelExitsZeroOnEverySpelling(t *testing.T) {
 	// specs/design.md:231 measured "--help tokens" per flag library as a
 	// selection criterion, but nothing ever wired the flag up: bare
@@ -1150,6 +1152,8 @@ func TestHelp_SubcommandExitsZeroAndDoesNotLeakPflag(t *testing.T) {
 		}
 	}
 }
+
+// --- commit --amend ------------------------------------------------------
 
 func TestCommit_AmendWithNoMessageReusesHeadSubject(t *testing.T) {
 	// rgit never opens an editor (docs/USAGE.md: commit.template is
