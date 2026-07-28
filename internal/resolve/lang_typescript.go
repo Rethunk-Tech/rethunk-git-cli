@@ -30,12 +30,23 @@ func (l *tsFamily) IsComment(kind string) bool { return kind == "comment" }
 // the whole block the way Go's import_declaration does.
 func (l *tsFamily) ImportKinds() []string { return []string{"import_statement"} }
 
-// HeaderKinds resolved to hash_bang_line by parsing a fixture that opens with
-// "#!/usr/bin/env node" and printing the root's named children: hash_bang_line
-// appears as the first child when present, and nothing else in the grammar
-// can precede code as a preamble (TypeScript has no package clause). Verified
-// against both LanguageTypescript and LanguageTSX; the shape is identical.
-func (l *tsFamily) HeaderKinds() []string { return []string{"hash_bang_line"} }
+// HeaderKinds is hash_bang_line plus comment, matching Python: TypeScript has
+// no package clause, so a licence/copyright block opening a file with no
+// shebang is an ordinary "comment" node like any other, the same shape
+// Python's own header comment parses as (lang_python.go). hash_bang_line
+// appears as the first child when present — verified by parsing a fixture
+// that opens with "#!/usr/bin/env node" and printing the root's named
+// children, against both LanguageTypescript and LanguageTSX; the shape is
+// identical.
+//
+// Including "comment" cannot make @header swallow a documented first
+// declaration's doc comment: the core resolver bounds the header run at
+// @toplevel's start (headerExtent's limit, resolvePseudo in resolver.go),
+// and that start already extends backward over any comment attributed to the
+// first declaration by the same blank-line rule every symbol's doc comment
+// uses (docStart, extent.go) — the mechanism this reuses rather than
+// duplicating, per docs/ANCHORS.md's blank-line rule.
+func (l *tsFamily) HeaderKinds() []string { return []string{"hash_bang_line", "comment"} }
 
 // Declarations walks the top-level (program) children. The trap this exists
 // to avoid: an exported symbol is not a top-level function_declaration, it is
