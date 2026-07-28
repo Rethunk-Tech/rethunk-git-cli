@@ -407,6 +407,11 @@ type CommitOptions struct {
 	// passthrough, no rgit-owned semantics.
 	Author string
 	Date   string
+	// ResetAuthor forwards --reset-author: take the author identity from
+	// the committer rather than carrying the original forward. git rejects
+	// it outside --amend and --fixup=amend: itself, so rgit forwards it
+	// rather than policing the combination.
+	ResetAuthor bool
 	// GPGSign is --gpg-sign, bare or with a key id. GPGSignKeyID holds the
 	// key id when one was given; empty means bare --gpg-sign (git signs
 	// with the configured default key). NoGPGSign is --no-gpg-sign,
@@ -462,6 +467,9 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 	}
 	if opts.Date != "" {
 		args = append(args, "--date="+opts.Date)
+	}
+	if opts.ResetAuthor {
+		args = append(args, "--reset-author")
 	}
 	if opts.GPGSign {
 		if opts.GPGSignKeyID != "" {

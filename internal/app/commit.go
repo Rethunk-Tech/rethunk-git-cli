@@ -19,23 +19,26 @@ import (
 // commitFlags mirrors the `rgit commit` flag surface in docs/USAGE.md §
 // Flags.
 type commitFlags struct {
-	messages   []string
-	msgFile    string
-	signoff    bool
-	trailers   []string
-	amend      bool
-	allowEmpty bool
-	push       bool
-	dryRun     bool
-	noVerify   bool
-	fixup      string
-	squash     string
-	author     string
-	date       string
-	gpgSignKey string // "" = not given; gpgSignBare = bare --gpg-sign; else the key id
-	noGPGSign  bool
-	syms       []string
-	files      []string
+	messages    []string
+	msgFile     string
+	signoff     bool
+	trailers    []string
+	amend       bool
+	allowEmpty  bool
+	push        bool
+	dryRun      bool
+	noVerify    bool
+	fixup       string
+	squash      string
+	author      string
+	date        string
+	resetAuthor bool
+	gpgSignKey  string // "" = not given; gpgSignBare = bare --gpg-sign; else the key id
+	noGPGSign   bool
+	porcelain   bool
+	quiet       bool
+	syms        []string
+	files       []string
 }
 
 // gpgSignBare is commitFlags.gpgSignKey's NoOptDefVal sentinel for a bare
@@ -63,6 +66,9 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 	fs.StringVar(&f.squash, "squash", "", "autosquash squash for <commit>")
 	fs.StringVar(&f.author, "author", "", "override the commit author")
 	fs.StringVar(&f.date, "date", "", "override the commit date")
+	fs.BoolVar(&f.resetAuthor, "reset-author", false, "take the author identity from the committer (with --amend)")
+	fs.BoolVar(&f.porcelain, "porcelain", false, "list staged targets as stable tab-separated records")
+	fs.BoolVarP(&f.quiet, "quiet", "q", false, "suppress the commit summary and target listing")
 	// git's -S accepts an optional attached key id (-Skeyid); pflag's
 	// shorthand parser resolves an optional-value flag's default before it
 	// checks for an attached value, so -Skeyid misparses as a chain of
@@ -88,6 +94,13 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 	}
 	if f.dryRun && f.push {
 		fmt.Fprintln(stderr, "rgit: --dry-run and --push are mutually exclusive")
+		return exitcode.InvalidUsage
+	}
+	// Asking for machine-readable output and for no output is a
+	// contradiction, and silently letting one win would leave a script
+	// parsing an empty stream that it cannot tell from "nothing staged".
+	if f.porcelain && f.quiet {
+		fmt.Fprintln(stderr, "rgit: --porcelain and --quiet are mutually exclusive")
 		return exitcode.InvalidUsage
 	}
 	// --amend, --fixup, and --squash each generate their own message when
@@ -186,8 +199,16 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 		// It still has to say what it resolved. A preview that prints
 		// nothing and exits 0 is indistinguishable from one that found
 		// nothing, which is the opposite of what a preview is for.
-		fmt.Fprintln(stdout, "dry run: nothing written, nothing staged. Would commit:")
-		writeTargetListing(stdout, plan.Results())
+		if f.porcelain {
+			// No preamble: the records are the whole output, so a caller
+			// can read them without stripping a human sentence first.
+			writeTargetRecords(stdout, plan.Results())
+			return exitcode.Success
+		}
+		if !f.quiet {
+			fmt.Fprintln(stdout, "dry run: nothing written, nothing staged. Would commit:")
+			writeTargetListing(stdout, plan.Results())
+		}
 		return exitcode.Success
 	}
 
@@ -209,6 +230,7 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 		Squash:       f.squash,
 		Author:       f.author,
 		Date:         f.date,
+		ResetAuthor:  f.resetAuthor,
 		GPGSign:      f.gpgSignKey != "",
 		GPGSignKeyID: gpgSignKeyID(f.gpgSignKey),
 		NoGPGSign:    f.noGPGSign,
@@ -238,15 +260,28 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.GitFailure
 	}
-	// git's own summary -- branch, new SHA, and the changed/insertion/
-	// deletion counts. Relaying it verbatim is what stops a caller having to
-	// run `git show` afterwards just to find out what landed.
-	_, _ = stdout.Write(res.Stdout)
+	switch {
+	case f.porcelain:
+		// git's own --porcelain replaces its human summary rather than
+		// adding to it, and the same rule applies here: relaying the
+		// summary would leave a caller parsing records interleaved with
+		// prose. The SHA is still one `git rev-parse HEAD` away.
+		writeTargetRecords(stdout, plan.Results())
+	case f.quiet:
+		// Nothing on stdout. Hook output and every warning above still
+		// went to stderr -- git's own -q suppresses the summary, not
+		// diagnostics.
+	default:
+		// git's own summary -- branch, new SHA, and the changed/insertion/
+		// deletion counts. Relaying it verbatim is what stops a caller
+		// having to run `git show` afterwards just to find out what landed.
+		_, _ = stdout.Write(res.Stdout)
 
-	// Then the part git cannot report: which symbols went in, and by how
-	// much. Same listing and same order as --dry-run, so a preview and the
-	// commit it previews are comparable line for line.
-	writeTargetListing(stdout, plan.Results())
+		// Then the part git cannot report: which symbols went in, and by
+		// how much. Same listing and same order as --dry-run, so a preview
+		// and the commit it previews are comparable line for line.
+		writeTargetListing(stdout, plan.Results())
+	}
 
 	if f.push {
 		// A push failure does not roll back the commit that preceded it
@@ -380,6 +415,32 @@ func commitTargets(root, prefix string, classified []cli.Classification, files, 
 		}
 	}
 	return targets, nil
+}
+
+// writeTargetRecords is writeTargetListing's machine-readable form:
+// FILE<TAB>SYMBOL<TAB>ADDED<TAB>DELETED, one record per staged target, no
+// header and no alignment padding. SYMBOL is empty for a pathspec target,
+// matching how `rgit diff --porcelain` leaves the column empty for a row
+// that owns no anchor.
+//
+// There is no STATUS column, unlike diff's records: an unchanged target is
+// already omitted here (it got its own stderr warning and nothing was
+// staged for it), so every record this writes would carry the same value.
+func writeTargetRecords(stdout io.Writer, results []synth.TargetResult) {
+	for _, r := range results {
+		if r.Outcome == synth.Unchanged {
+			continue
+		}
+		symbol := ""
+		if r.Target.Pathspec == "" {
+			symbol = r.Target.Symbol.Anchor
+		}
+		path := r.Target.Pathspec
+		if path == "" {
+			path = r.Target.Symbol.Path
+		}
+		fmt.Fprintf(stdout, "%s\t%s\t%d\t%d\n", path, symbol, r.Added, r.Deleted)
+	}
 }
 
 // writeTargetListing prints one aligned line per staged target with its

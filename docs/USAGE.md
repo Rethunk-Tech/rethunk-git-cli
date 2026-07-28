@@ -159,6 +159,9 @@ a help request — see § Exit codes.
 | `--squash <commit>` | Autosquash squash for `<commit>`. Same message rule as `--fixup`. |
 | `--author <author>` | Override the commit author. Plain forwarding. |
 | `--date <date>` | Override the commit date. Plain forwarding. |
+| `--reset-author` | Take the author identity from the committer instead of carrying the original forward. Plain forwarding; git accepts it only with `--amend` or `--fixup=amend:`, and `rgit` does not police the combination. |
+| `--porcelain` | (`commit`) List staged targets as stable tab-separated records instead of the aligned listing. Replaces `git commit`'s own summary rather than adding to it, exactly as `git commit --porcelain` does. Works with `--dry-run`, which then emits records alone with no preamble. |
+| `-q`, `--quiet` | (`commit`) Suppress the summary and the target listing. stdout is empty; warnings, notices and hook output still go to stderr, as under git's own `-q`. |
 | `--gpg-sign`, `--gpg-sign=<key-id>` | GPG-sign the commit, with the configured default key or an explicit one. **Long form only** — see below. |
 | `--no-gpg-sign` | Do not GPG-sign, overriding `commit.gpgsign=true`. |
 | `--unstaged` | (`diff`) Worktree vs index — git's bare `diff`. |
@@ -185,6 +188,19 @@ output is passed through too. `--dry-run` prints the same listing, so a preview
 and the commit it previews are comparable line for line, and neither needs a
 follow-up `git show` or `rgit diff` to interpret.
 
+`--porcelain` replaces both with stable tab-separated records:
+
+```text
+FILE<TAB>SYMBOL<TAB>ADDED<TAB>DELETED
+auth.go<TAB>ValidateToken<TAB>12<TAB>3
+package.json<TAB><TAB>4<TAB>1
+```
+
+`SYMBOL` is empty for a pathspec target, as in `rgit diff --porcelain`. There
+is no `STATUS` column: an unchanged target is omitted from the listing
+entirely, so every record would carry the same value. The records are
+identical for `--dry-run` and for the commit it previews.
+
 Repeatable `-m` gives subject and body without embedding newlines in one shell
 argument:
 
@@ -196,7 +212,7 @@ before decode. Closes #42." \
 ```
 
 **Invalid combinations:** `--dry-run` + `--push`, `--staged` + `--range`,
-`--staged` + `--unstaged`, `-m` + `-F` → exit 129. Naming one path both as a
+`--staged` + `--unstaged`, `-m` + `-F`, `--porcelain` + `--quiet` → exit 129. Naming one path both as a
 path and as a symbol anchor → exit 5, in whichever spelling: `--file` with
 `--sym`, or the positional forms `greet.go greet.go:A`.
 

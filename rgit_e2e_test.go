@@ -1315,3 +1315,83 @@ func TestCommit_PushWithNoUpstreamNamesTheFix(t *testing.T) {
 	// The commit itself still landed even though the push failed.
 	qt.Assert(t, qt.StringContains(gitIn(t, repo, "cat-file", "-p", "HEAD:auth.go"), "len(tok)"))
 }
+
+func TestCommit_ResetAuthorForwarded(t *testing.T) {
+	// --author sets an identity the amend must then discard: with
+	// --reset-author, git takes the author from the committer, so the
+	// Ada identity written by the first commit must not survive.
+	repo := newTempRepo(t)
+	writeFile(t, repo, "g.go", "package main\n\nfunc G() int { return 1 }\n")
+	first := runRgit(t, repo, "commit",
+		"--author", "Ada Lovelace <ada@example.com>",
+		"-m", "feat(g): add G", "g.go")
+	qt.Assert(t, qt.Equals(first.ExitCode, 0))
+	qt.Assert(t, qt.Equals(gitIn(t, repo, "log", "-1", "--format=%an"), "Ada Lovelace\n"))
+
+	writeFile(t, repo, "g.go", "package main\n\nfunc G() int { return 2 }\n")
+	got := runRgit(t, repo, "commit", "--amend", "--reset-author", "g.go:G")
+
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
+	// newTempRepo's own committer identity, not Ada's.
+	qt.Assert(t, qt.Equals(gitIn(t, repo, "log", "-1", "--format=%an"),
+		gitIn(t, repo, "log", "-1", "--format=%cn")))
+}
+
+func TestCommit_PorcelainEmitsRecords(t *testing.T) {
+	// The machine-readable counterpart to the aligned listing, on both the
+	// preview and the commit it previews -- and the records must agree,
+	// which is the whole reason --dry-run's listing exists.
+	repo := newTempRepo(t)
+	writeFile(t, repo, "g.go", "package main\n\nfunc G() int { return 1 }\n")
+	writeFile(t, repo, "notes.txt", "hello\n")
+
+	dry := runRgit(t, repo, "commit", "--dry-run", "--porcelain",
+		"-m", "feat(g): add G", "g.go:G", "notes.txt")
+	qt.Assert(t, qt.Equals(dry.ExitCode, 0))
+	// No human preamble: records are the entire stdout stream.
+	qt.Assert(t, qt.Equals(strings.Contains(dry.Stdout, "dry run:"), false))
+	// A pathspec target leaves the SYMBOL column empty; an anchor fills it.
+	qt.Assert(t, qt.StringContains(dry.Stdout, "g.go\tG\t"))
+	qt.Assert(t, qt.StringContains(dry.Stdout, "notes.txt\t\t"))
+	for _, line := range strings.Split(strings.TrimRight(dry.Stdout, "\n"), "\n") {
+		if got := len(strings.Split(line, "\t")); got != 4 {
+			t.Errorf("record %q has %d fields; want 4", line, got)
+		}
+	}
+
+	real := runRgit(t, repo, "commit", "--porcelain",
+		"-m", "feat(g): add G", "g.go:G", "notes.txt")
+	qt.Assert(t, qt.Equals(real.ExitCode, 0))
+	qt.Assert(t, qt.Equals(real.Stdout, dry.Stdout))
+	// git's own summary is replaced, not merely appended to, exactly as
+	// git commit --porcelain replaces it.
+	qt.Assert(t, qt.Equals(strings.Contains(real.Stdout, "file changed"), false))
+}
+
+func TestCommit_QuietSuppressesStdoutOnly(t *testing.T) {
+	repo := newTempRepo(t)
+	writeFile(t, repo, "g.go", "package main\n\nfunc G() int { return 1 }\n")
+	// An unchanged second target still has to warn on stderr: -q is git's
+	// own "suppress the summary", not "suppress the diagnostics".
+	runRgit(t, repo, "commit", "-m", "feat(h): add H", "g.go")
+	writeFile(t, repo, "g.go", "package main\n\nfunc G() int { return 2 }\n")
+	writeFile(t, repo, "h.go", "package main\n\nfunc H() {}\n")
+	runRgit(t, repo, "commit", "-m", "feat(h): add H", "h.go")
+
+	got := runRgit(t, repo, "commit", "-q", "-m", "fix(g): bump", "g.go:G", "h.go:H")
+
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
+	qt.Assert(t, qt.Equals(got.Stdout, ""))
+	qt.Assert(t, qt.StringContains(got.Stderr, "has no uncommitted changes"))
+	qt.Assert(t, qt.StringContains(gitIn(t, repo, "cat-file", "-p", "HEAD:g.go"), "return 2"))
+}
+
+func TestCommit_PorcelainAndQuietConflict(t *testing.T) {
+	repo := newTempRepo(t)
+	writeFile(t, repo, "g.go", "package main\n\nfunc G() {}\n")
+
+	got := runRgit(t, repo, "commit", "--porcelain", "-q", "-m", "feat(g): add G", "g.go")
+
+	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.InvalidUsage)))
+	qt.Assert(t, qt.StringContains(got.Stderr, "mutually exclusive"))
+}
