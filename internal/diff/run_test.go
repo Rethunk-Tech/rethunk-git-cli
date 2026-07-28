@@ -501,3 +501,42 @@ func TestAttribute_TopLevelSymbolOwnsOneSeparator(t *testing.T) {
 		})
 	}
 }
+
+// TestRun_ScopeUsageErrorsAreTyped covers the scope contradictions Run
+// detects itself. They must arrive as *UsageError, because internal/app
+// maps that type — and nothing else — to exit 129 rather than to the
+// exit 128 a git-level failure gets; the distinction is what tells a caller
+// whether they mistyped the command or whether git broke.
+func TestRun_ScopeUsageErrorsAreTyped(t *testing.T) {
+	dir, repo := newDiffTestRepo(t)
+
+	for _, tc := range []struct {
+		name string
+		opts Options
+		want string
+	}{{
+		name: "--range with a positional range",
+		opts: Options{RangeFlag: "HEAD~1..HEAD", PositionalRange: "HEAD~2..HEAD"},
+		want: "--range and a positional revision range are mutually exclusive",
+	}, {
+		name: "--staged with a revision range",
+		opts: Options{Staged: true, RangeFlag: "HEAD~1..HEAD"},
+		want: "--staged/--unstaged and a revision range are mutually exclusive",
+	}, {
+		name: "three revisions",
+		opts: Options{Revisions: []string{"HEAD", "HEAD", "HEAD"}},
+		want: "at most two revision arguments are accepted",
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Run(context.Background(), repo, dir, tc.opts)
+
+			var uerr *UsageError
+			if !errors.As(err, &uerr) {
+				t.Fatalf("Run error = %v (%T); want *UsageError", err, err)
+			}
+			if uerr.Error() != tc.want {
+				t.Errorf("Error() = %q; want %q", uerr.Error(), tc.want)
+			}
+		})
+	}
+}

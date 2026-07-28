@@ -2,6 +2,7 @@ package gitx
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -71,5 +72,37 @@ func TestLsFilesStageAndMergeBase(t *testing.T) {
 	}
 	if mbSHA != branch1SHA {
 		t.Errorf("MergeBase SHA = %q; want %q", mbSHA, branch1SHA)
+	}
+}
+
+// TestErrorMessagesNameTheCommand pins what a caller actually reads when
+// something goes wrong. Both types are surfaced verbatim by internal/app's
+// error mapping, so their text is the whole failure report -- and neither
+// was asserted anywhere before, which is how a message can quietly lose the
+// one detail that makes it actionable.
+func TestErrorMessagesNameTheCommand(t *testing.T) {
+	t.Parallel()
+
+	// GitError: git ran and chose a status. The command, the status, and
+	// git's own stderr all have to survive, with the stderr trimmed so the
+	// message stays one line.
+	gerr := &GitError{
+		Args:     []string{"commit", "-m", "x"},
+		ExitCode: 128,
+		Stderr:   []byte("fatal: nothing to commit\n\n"),
+	}
+	if got, want := gerr.Error(), "git commit -m x: exit 128: fatal: nothing to commit"; got != want {
+		t.Errorf("GitError.Error() = %q; want %q", got, want)
+	}
+
+	// ExecError: git never ran. It wraps the cause, so errors.Is/As still
+	// reach it -- callers distinguish "git failed" from "git is missing".
+	cause := os.ErrNotExist
+	eerr := &ExecError{Args: []string{"rev-parse", "HEAD"}, Err: cause}
+	if got, want := eerr.Error(), "git rev-parse HEAD: "+cause.Error(); got != want {
+		t.Errorf("ExecError.Error() = %q; want %q", got, want)
+	}
+	if !errors.Is(eerr, cause) {
+		t.Error("ExecError does not unwrap to its cause")
 	}
 }

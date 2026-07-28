@@ -87,6 +87,12 @@ the same value. Records are identical for `--dry-run` and for the commit it
 previews, and `--porcelain` replaces `git commit`'s own summary rather than
 adding to it — exactly as `git commit --porcelain` does.
 
+Because unchanged targets are omitted, `--porcelain --allow-empty` writes **no
+records at all** while still creating a commit and exiting 0: nothing was
+staged, so there is nothing to report. A caller that needs to distinguish that
+from "no commit happened" should read the exit code, or `git rev-parse HEAD`
+before and after — empty output on its own does not mean nothing was done.
+
 ## Rules both forms obey
 
 `SYMBOL` is empty for every row or record that owns no anchor. A non-empty
