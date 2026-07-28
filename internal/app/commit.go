@@ -147,18 +147,7 @@ func runCommit(args []string, stdout, stderr io.Writer) exitcode.Code {
 		// nothing and exits 0 is indistinguishable from one that found
 		// nothing, which is the opposite of what a preview is for.
 		fmt.Fprintln(stdout, "dry run: nothing written, nothing staged. Would commit:")
-		width := 0
-		for _, r := range plan.Results() {
-			if r.Outcome != synth.Unchanged && len(targetLabel(r.Target)) > width {
-				width = len(targetLabel(r.Target))
-			}
-		}
-		for _, r := range plan.Results() {
-			if r.Outcome == synth.Unchanged {
-				continue
-			}
-			fmt.Fprintf(stdout, "  %-*s  +%d/-%d\n", width, targetLabel(r.Target), r.Added, r.Deleted)
-		}
+		writeTargetListing(stdout, plan.Results())
 		return exitcode.Success
 	}
 
@@ -205,6 +194,11 @@ func runCommit(args []string, stdout, stderr io.Writer) exitcode.Code {
 	// deletion counts. Relaying it verbatim is what stops a caller having to
 	// run `git show` afterwards just to find out what landed.
 	stdout.Write(res.Stdout)
+
+	// Then the part git cannot report: which symbols went in, and by how
+	// much. Same listing and same order as --dry-run, so a preview and the
+	// commit it previews are comparable line for line.
+	writeTargetListing(stdout, plan.Results())
 
 	if f.push {
 		// A push failure does not roll back the commit that preceded it
@@ -316,4 +310,30 @@ func checkPathEscape(root, path string) error {
 		return fmt.Errorf("path %q escapes the repository root", path)
 	}
 	return nil
+}
+
+// writeTargetListing prints one aligned line per staged target with its
+// +N/-M, in the plan's order: alphabetical by path, then ascending by
+// position within each file. Shared by --dry-run and a successful commit so
+// the preview and the real thing are comparable line for line, and so
+// neither has to be re-derived by running `rgit diff` again afterwards.
+//
+// Unchanged targets are omitted; they already got their own warning on
+// stderr and nothing was staged for them.
+func writeTargetListing(stdout io.Writer, results []synth.TargetResult) {
+	width := 0
+	for _, r := range results {
+		if r.Outcome == synth.Unchanged {
+			continue
+		}
+		if n := len(targetLabel(r.Target)); n > width {
+			width = n
+		}
+	}
+	for _, r := range results {
+		if r.Outcome == synth.Unchanged {
+			continue
+		}
+		fmt.Fprintf(stdout, "  %-*s  +%d/-%d\n", width, targetLabel(r.Target), r.Added, r.Deleted)
+	}
 }

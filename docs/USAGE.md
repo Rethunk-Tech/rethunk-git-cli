@@ -133,8 +133,11 @@ with a pathspec (`rgit commit script.sh`); `--sym` cannot express a mode change.
 `commit` requires a message (`-m` or `-F`) and at least one target.
 
 On success it relays `git commit`'s own summary — branch, new SHA, and the
-changed/insertion/deletion counts — so there is no need to run `git show`
-afterwards to find out what landed. Hook output is passed through too.
+changed/insertion/deletion counts — then lists each staged target with its
+`+N/-M`, which git cannot report because git does not know about symbols. Hook
+output is passed through too. `--dry-run` prints the same listing, so a preview
+and the commit it previews are comparable line for line, and neither needs a
+follow-up `git show` or `rgit diff` to interpret.
 
 Repeatable `-m` gives subject and body without embedding newlines in one shell
 argument:

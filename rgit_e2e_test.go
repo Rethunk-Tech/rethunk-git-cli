@@ -653,6 +653,11 @@ func TestCommit_ReportsWhatItCommitted(t *testing.T) {
 	qt.Assert(t, qt.StringContains(got.Stdout, "feat(auth): give A a real value"))
 	qt.Assert(t, qt.StringContains(got.Stdout, "1 file changed"))
 	qt.Assert(t, qt.StringContains(got.Stdout, "insertion"))
+
+	// And the part git cannot report: which symbol went in, and by how
+	// much -- the same listing --dry-run prints, so the two are comparable.
+	qt.Assert(t, qt.StringContains(got.Stdout, "auth.go:A"))
+	qt.Assert(t, qt.Not(qt.StringContains(got.Stdout, "auth.go:B")))
 }
 
 func TestCommit_DryRunPreviewsAndStagesNothing(t *testing.T) {
