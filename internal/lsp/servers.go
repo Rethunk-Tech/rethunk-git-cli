@@ -68,4 +68,18 @@ var servers = map[string]serverSpec{
 		transport: transportStdio,
 		stdioArgs: []string{"--stdio"},
 	},
+	"shell": {
+		name:      "bash-language-server",
+		bin:       "bash-language-server",
+		transport: transportStdio,
+		// Unlike vtsls and pyright-langserver, bash-language-server's stdio
+		// mode needs no separate flag: "start" is stdio, full stop -- its
+		// own docs show no dedicated flag for it. Not installed on this
+		// machine, so this entry degrades to [ts-only] here exactly the
+		// way vtsls and pyright already would if either were absent
+		// (Dial's own comment: an unreachable stdio server is the normal
+		// case, not a failure) -- it has not been exercised against a live
+		// server the way gopls has (specs/design.md's one live cross-check).
+		stdioArgs: []string{"start"},
+	},
 }

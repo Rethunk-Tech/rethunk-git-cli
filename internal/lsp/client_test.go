@@ -22,6 +22,8 @@ func TestLanguageKindFor(t *testing.T) {
 		{"foo.cjs", protocol.LanguageKindJavaScript},
 		{"foo.py", protocol.LanguageKindPython},
 		{"foo.pyi", protocol.LanguageKindPython},
+		{"foo.sh", protocol.LanguageKindShellScript},
+		{"foo.bash", protocol.LanguageKindShellScript},
 		{"foo.unknown", protocol.LanguageKindTypeScript},
 	}
 

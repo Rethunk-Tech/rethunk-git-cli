@@ -173,6 +173,8 @@ func languageKindFor(path string) protocol.LanguageKind {
 		return protocol.LanguageKindJavaScript
 	case ".py", ".pyi":
 		return protocol.LanguageKindPython
+	case ".sh", ".bash":
+		return protocol.LanguageKindShellScript
 	default:
 		return protocol.LanguageKindTypeScript
 	}
