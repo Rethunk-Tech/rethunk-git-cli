@@ -141,9 +141,15 @@ a help request — see § Exit codes.
 | `--trailer TOKEN:VALUE` | Append a trailer (`Refs:`, `Co-authored-by:`). Repeatable, forwarded. |
 | `--amend` | Amend the previous commit. Anchors stage into it as they would a new commit. With neither `-m` nor `-F`, reuses HEAD's message unchanged (`--no-edit`) — `rgit` never opens an editor, so that is the only message an unattended `--amend` can have. Give `-m`/`-F` to replace it as usual. |
 | `--allow-empty` | Permit a commit with no changes. Suppresses exit 11. |
-| `--push` | Push upstream after a successful commit. No rollback on push failure. |
+| `--push` | Push upstream after a successful commit. No rollback on push failure. If the branch has no upstream configured, the exit-8 message names it and the fix (`git push -u origin <branch>`, or `push.autoSetupRemote`) — `rgit` never adds `-u` itself. |
 | `--dry-run` | Preview only. Writes no objects, stages nothing, runs no hooks. Lists each target it resolved with that symbol's `+N/-M`, using the same counts as `rgit diff`. |
 | `--no-verify` | Skip git hooks (standard git meaning). Hooks run by default. |
+| `--fixup <commit>` | Autosquash fixup for `<commit>` (also accepts `amend:<commit>`/`reword:<commit>`, forwarded verbatim). Generates its own subject, so `-m`/`-F` are not required; either still appends as an extra body paragraph rather than conflicting. |
+| `--squash <commit>` | Autosquash squash for `<commit>`. Same message rule as `--fixup`. |
+| `--author <author>` | Override the commit author. Plain forwarding. |
+| `--date <date>` | Override the commit date. Plain forwarding. |
+| `--gpg-sign`, `--gpg-sign=<key-id>` | GPG-sign the commit, with the configured default key or an explicit one. **Long form only** — see below. |
+| `--no-gpg-sign` | Do not GPG-sign, overriding `commit.gpgsign=true`. |
 | `--unstaged` | (`diff`) Worktree vs index — git's bare `diff`. |
 | `--staged`, `--cached` | (`diff`) Index vs `HEAD`. Both spellings. |
 | `--range REVS` | (`diff`) Explicit form of a positional revision range. |
@@ -152,7 +158,14 @@ a help request — see § Exit codes.
 | `--quiet` | (`diff`) Implies `--exit-code` and suppresses output. |
 
 `commit` requires a message (`-m` or `-F`) and at least one target, unless
-`--amend` is given with neither — then it reuses HEAD's message via `--no-edit`.
+`--amend`, `--fixup`, or `--squash` is given with neither — each generates its
+own message (`--amend` reuses HEAD's via `--no-edit`; `--fixup`/`--squash`
+generate `fixup!`/`squash! <subject>`, exactly as plain `git commit` does).
+
+`-S` is not exposed: git's short form takes an *optional* attached key id
+(`-Skeyid`), and pflag's shorthand parser resolves an optional-value flag's
+default before checking for an attached value, so `-Skeyid` would misparse as
+a chain of nonexistent single-letter flags. Use `--gpg-sign=<key-id>`.
 
 On success it relays `git commit`'s own summary — branch, new SHA, and the
 changed/insertion/deletion counts — then lists each staged target with its
@@ -188,8 +201,11 @@ the commit proceeds.
 - Hooks are not policed — a hook may stage paths you did not name, exactly as
   under plain `git commit`. Use `--no-verify` to disable them.
 - Merges and rebases are not special-cased.
-- `commit.cleanup` and `commit.gpgsign` are honoured. `commit.template` is
-  **not** — templates prefill an editor and `rgit` never opens one.
+- `commit.cleanup` and `commit.gpgsign` are honoured as configuration, and
+  `--gpg-sign`/`--no-gpg-sign` override either. `commit.template` is **not**
+  honoured — templates prefill an editor and `rgit` never opens one.
+- `rgit` never adds `--set-upstream` to a push on its own initiative, even for
+  a branch with none configured — see `--push` above.
 
 When stdin is not a terminal, `rgit` sets `GIT_TERMINAL_PROMPT=0` so a
 credential or GPG prompt fails fast instead of hanging.
