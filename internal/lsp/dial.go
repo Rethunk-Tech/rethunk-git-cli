@@ -109,12 +109,18 @@ func trySpawnDaemon(spec serverSpec, sockPath string) {
 		// for the next invocation to claim. The lock is an optimization,
 		// not correctness (specs/design.md).
 		if info, statErr := os.Stat(lockPath); statErr == nil && time.Since(info.ModTime()) > staleLockAge {
-			os.Remove(lockPath)
+			_ = os.Remove(lockPath)
 		}
 		return
 	}
-	defer os.Remove(lockPath)
-	defer lock.Close()
+	defer func() {
+		// Both are best-effort, in this order: close the descriptor, then
+		// unlink. A lock that survives either failure is reclaimed by the
+		// staleLockAge sweep above, which is why the lock can be an
+		// optimization rather than something correctness rests on.
+		_ = lock.Close()
+		_ = os.Remove(lockPath)
+	}()
 
 	cmd := exec.Command(spec.bin, spec.daemonArgs(sockPath)...)
 	cmd.Stdin = nil
