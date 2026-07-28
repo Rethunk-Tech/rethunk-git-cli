@@ -31,16 +31,16 @@ import (
 // specs/design.md ("degraded resolution is normal, not an error"); the
 // caller's job on true is to print "[ts-only]" to stderr and proceed. err is
 // non-nil only for the one real failure: a genuine range disagreement.
-func CrossCheckExtent(ctx context.Context, lang Language, repoRoot, absPath string, src []byte, res *Resolution, isDeletion bool) (degraded bool, err error) {
+func CrossCheckExtent(ctx context.Context, sess *lsp.Session, lang Language, repoRoot, absPath string, src []byte, res *Resolution, isDeletion bool) (degraded bool, err error) {
 	if res.Pseudo || isDeletion {
 		return true, nil
 	}
 
-	client, deg := lsp.Dial(ctx, lang.Name(), repoRoot)
+	// The session owns the client and closes it once per invocation.
+	client, deg := sess.Dial(ctx, lang.Name(), repoRoot)
 	if deg {
 		return true, nil
 	}
-	defer client.Close()
 
 	symbols, err := client.DocumentSymbols(ctx, absPath, src)
 	if err != nil {

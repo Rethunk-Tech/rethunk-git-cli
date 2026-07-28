@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
@@ -23,7 +24,7 @@ import (
 // degraded to tree-sitter-only for this anchor because no live language
 // server answered in time -- normal, not an error (specs/design.md), but
 // worth the caller announcing once on stderr.
-func (fp *filePlan) classify(ctx context.Context, root, anchor string) (op editOp, unchanged, tsOnly bool, err error) {
+func (fp *filePlan) classify(ctx context.Context, sess *lsp.Session, root, anchor string) (op editOp, unchanged, tsOnly bool, err error) {
 	var workRes, headRes *resolve.Resolution
 	var workErr, headErr error
 	if fp.workExists {
@@ -53,7 +54,7 @@ func (fp *filePlan) classify(ctx context.Context, root, anchor string) (op editO
 	case workRes != nil && headRes != nil:
 		workBytes := fp.workSrc[workRes.Extent.Start:workRes.Extent.End]
 		headBytes := fp.headSrc[headRes.Extent.Start:headRes.Extent.End]
-		tsOnly, err = fp.crossCheck(ctx, root, workRes)
+		tsOnly, err = fp.crossCheck(ctx, sess, root, workRes)
 		if err != nil {
 			return editOp{}, false, false, err
 		}
@@ -67,7 +68,7 @@ func (fp *filePlan) classify(ctx context.Context, root, anchor string) (op editO
 
 	case workRes != nil && headRes == nil:
 		pos, seq := fp.insertionPoint(workRes.Anchor)
-		tsOnly, err = fp.crossCheck(ctx, root, workRes)
+		tsOnly, err = fp.crossCheck(ctx, sess, root, workRes)
 		if err != nil {
 			return editOp{}, false, false, err
 		}
@@ -99,12 +100,12 @@ func (fp *filePlan) classify(ctx context.Context, root, anchor string) (op editO
 // resolve.CrossCheckExtent also treats res.Pseudo as a safety net --
 // docs/ANCHORS.md documents the exemption as the caller's rule to know,
 // not something to rely on a callee catching.
-func (fp *filePlan) crossCheck(ctx context.Context, root string, res *resolve.Resolution) (tsOnly bool, err error) {
+func (fp *filePlan) crossCheck(ctx context.Context, sess *lsp.Session, root string, res *resolve.Resolution) (tsOnly bool, err error) {
 	if res.Pseudo {
 		return false, nil
 	}
 	absPath := filepath.Join(root, fp.path)
-	degraded, cerr := resolve.CrossCheckExtent(ctx, fp.lang, root, absPath, fp.workSrc, res, false)
+	degraded, cerr := resolve.CrossCheckExtent(ctx, sess, fp.lang, root, absPath, fp.workSrc, res, false)
 	if cerr != nil {
 		return false, cerr
 	}

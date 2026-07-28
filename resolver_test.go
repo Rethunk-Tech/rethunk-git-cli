@@ -773,21 +773,24 @@ func ValidateToken(t string) error {
 	lang := resolverGoLang(t)
 	ctx := context.Background()
 
-	// The first Dial almost certainly finds no daemon and spawns one
-	// without waiting for it (specs/design.md: "never block on a cold
-	// server"); give it a beat to come up, mirroring two rgit invocations
-	// moments apart rather than one that blocks.
-	_, _ = resolve.CrossCheckExtent(ctx, lang, dir, path, src, res, false)
+	// A fresh session per attempt, deliberately: a session remembers a
+	// language that degraded and will not redial it, so reusing one here
+	// would pin the first cold result forever. Separate sessions model
+	// what this actually simulates -- successive rgit invocations, the
+	// first spawning a daemon without waiting for it (specs/design.md:
+	// "never block on a cold server").
+	attempt := func(r *resolve.Resolution) (bool, error) {
+		sess := lsp.NewSession()
+		defer sess.Close()
+		return resolve.CrossCheckExtent(ctx, sess, lang, dir, path, src, r, false)
+	}
 
-	// Poll rather than sleep a fixed 1.5s: a daemon that is already warm
-	// answers on the first retry, and this test was otherwise the single
-	// largest contributor to the suite's runtime.
 	var (
 		degraded = true
 		err      error
 	)
 	for deadline := time.Now().Add(3 * time.Second); ; {
-		degraded, err = resolve.CrossCheckExtent(ctx, lang, dir, path, src, res, false)
+		degraded, err = attempt(res)
 		if !degraded || time.Now().After(deadline) {
 			break
 		}
@@ -803,7 +806,7 @@ func ValidateToken(t string) error {
 	// test above.
 	mismatched := *res
 	mismatched.DeclOnly.End -= 5
-	_, mismatchErr := resolve.CrossCheckExtent(ctx, lang, dir, path, src, &mismatched, false)
+	_, mismatchErr := attempt(&mismatched)
 	qt.Assert(t, qt.IsNotNil(mismatchErr))
 	var rerr *resolve.ResolveError
 	qt.Assert(t, qt.ErrorAs(mismatchErr, &rerr))

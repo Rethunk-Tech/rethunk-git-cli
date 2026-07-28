@@ -12,6 +12,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/diff"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/util"
 )
@@ -152,6 +153,9 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 	plan := &stagePlan{}
 	byPath := map[string]*filePlan{}
 
+	sess := lsp.NewSession()
+	defer sess.Close()
+
 	for _, t := range targets {
 		if t.Pathspec != "" {
 			// Pathspec magic (leading ":") is a pattern, not a path --
@@ -198,7 +202,7 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 			plan.files = append(plan.files, fp)
 		}
 
-		op, unchanged, tsOnly, err := fp.classify(ctx, root, t.Symbol.Anchor)
+		op, unchanged, tsOnly, err := fp.classify(ctx, sess, root, t.Symbol.Anchor)
 		if err != nil {
 			return nil, err
 		}
