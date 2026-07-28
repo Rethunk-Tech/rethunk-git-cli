@@ -7,6 +7,7 @@ import (
 	tsts "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 
 	tsmd "github.com/tree-sitter-grammars/tree-sitter-markdown/bindings/go"
+	tsbash "github.com/tree-sitter/tree-sitter-bash/bindings/go"
 )
 
 // The compiled grammars, in one place so each adapter calls a constructor
@@ -36,3 +37,7 @@ func tsxGrammar() *ts.Language { return ts.NewLanguage(tsts.LanguageTSX()) }
 // exists to avoid pulling the inline grammar in on purpose; see design.md §
 // Dependencies for what that is actually measured to cost.
 func markdownGrammar() *ts.Language { return ts.NewLanguage(tsmd.Language()) }
+
+// bashGrammar parses .sh and .bash. Not .zsh: tree-sitter-bash is a POSIX/Bash
+// grammar and mis-parses zsh-only syntax (lang_shell.go).
+func bashGrammar() *ts.Language { return ts.NewLanguage(tsbash.Language()) }

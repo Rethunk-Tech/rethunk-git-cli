@@ -8,6 +8,7 @@ require (
 	github.com/spf13/pflag v1.0.10
 	github.com/tree-sitter-grammars/tree-sitter-markdown v0.5.1
 	github.com/tree-sitter/go-tree-sitter v0.25.0
+	github.com/tree-sitter/tree-sitter-bash v0.25.1
 	github.com/tree-sitter/tree-sitter-go v0.25.0
 	github.com/tree-sitter/tree-sitter-python v0.25.0
 	github.com/tree-sitter/tree-sitter-typescript v0.23.2
