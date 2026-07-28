@@ -144,11 +144,18 @@ binary or non-parseable files. Name the path instead. Behaviour per kind:
 
 ## Language support
 
-v1 vendors four grammars: **Go, TypeScript/JavaScript** (including TSX/JSX),
-**Python**, and **Markdown** (`.md`, `.markdown`) — headings and their
-sections only; Markdown's inline constructs (emphasis, links, code spans) are
-not parsed and have nothing to address. Anything else → exit 9 on a symbol
-anchor; name the path.
+v1 vendors five grammars: **Go, TypeScript/JavaScript** (including TSX/JSX),
+**Python**, **Markdown** (`.md`, `.markdown` — headings and their sections
+only; inline constructs such as emphasis, links, and code spans are not
+parsed and have nothing to address), and **Shell** (`.sh`, `.bash` —
+functions and top-level variable assignments; shell has no containers, so a
+redefined function disambiguates by ordinal the same way two same-named Go
+functions would).
+
+The language-server cross-check exists only for Go, TypeScript, and Python
+([`docs/INSTALL.md#language-servers`](INSTALL.md#language-servers)); Markdown
+and Shell resolve with tree-sitter alone, always in `[ts-only]` mode. Anything
+else → exit 9 on a symbol anchor; name the path.
 
 The grammars deferred to v2 are listed in [`../TODO.md`](../TODO.md).
 
