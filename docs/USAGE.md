@@ -84,7 +84,10 @@ would `rgit commit` pick up". Narrower scopes use git's own flag names:
 | Revision range | positional or `--range` | `git diff A..B` / `A...B` |
 
 `--sym` and `--file` filter output to specific targets; when filtered by
-`--sym`, `(unanchorable)` hunks in that file are omitted.
+`--sym`, `(unanchorable)` hunks in that file are omitted. Filtering matches the
+anchor's resolved canonical form, so a gopls-style `(*A).Get` or a heading's
+raw text filters correctly even though `rgit diff` itself only ever emits the
+canonical spelling.
 
 On a repository with no commits yet there is no `HEAD` to compare against, and
 `git diff HEAD` fails outright. The default scope falls back to the empty tree,

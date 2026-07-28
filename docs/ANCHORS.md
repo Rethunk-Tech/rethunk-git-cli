@@ -113,7 +113,12 @@ Regions no symbol owns:
 
 `@header` plus `@imports` is enough to make a synthesized new file compile,
 which is why both are staged automatically for an untracked file (announced on
-stderr).
+stderr). `@header` resolves to nothing when a file opens directly with code —
+no shebang, no licence or module comment. That is correct, not a bug, but a
+caller auto-staging `@header` for an untracked file must tolerate its absence.
+A leading comment block resolves in every supported language; one attached to
+the first declaration by the blank-line rule (see § What an extent covers)
+stays with that declaration instead.
 
 `@imports` spans the whole import block, including any grouping comments
 *between* imports — Go has one `import_declaration`, while TypeScript and
@@ -124,10 +129,10 @@ not to the block.
 Markdown has no import concept, so `@imports` resolves to nothing there — the
 same degraded-but-not-an-error result `@header` already gives a TypeScript
 file with no shebang. `@header` is YAML/TOML frontmatter (`---`/`+++`) when
-present. `@toplevel` spans every heading section, first through last — the
-whole document body once frontmatter is set aside. A file's lede (any content
-between frontmatter and its first heading) is presently reachable only by
-naming the path, not by either pseudo-anchor.
+present. `@toplevel` spans every heading section, first through last, plus a
+file's lede — any content between frontmatter and its first heading — so the
+whole document body is reachable through one pseudo-anchor or the other once
+frontmatter is set aside.
 
 ## Paths that anchors cannot address
 
