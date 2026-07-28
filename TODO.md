@@ -50,35 +50,34 @@ Future work only. Decisions already made live in
 
 Ordered by measured demand across the repositories `rgit` is actually run
 against, the same way the v1 three were chosen (`specs/design.md` § Grammar
-scope). Percentages are the share of 51 surveyed repositories containing that
-language. Config and data files stage by path meanwhile, which is what a
-lockfile or a version bump wants regardless.
+scope). Config and data files stage by path meanwhile, which is what a lockfile
+or a version bump wants regardless.
 
-- [ ] Markdown heading anchors (`docs/USAGE.md:diff-scope`) — **100%**, the
-      only language present in every repository surveyed. The grammar's
-      `section` node nests natively, so container qualification
+- [ ] Markdown heading anchors (`docs/USAGE.md:diff-scope`) — the most widely
+      present language surveyed, and the only one in every repository. The
+      grammar's `section` node nests natively, so container qualification
       (`install.options` vs `usage.options`) falls out of the parse tree, and
       `fenced_code_block` keeps a `#` inside a code fence from reading as a
       heading. Emit slugs, accept raw heading text on input.
-- [ ] Shell function anchors (`deploy.sh:cleanup`) — **45%**. `function_definition`
-      covers both `foo() {}` and `function foo {}`, the namespace is flat so
-      existing ordinals handle redefinition, and heredoc bodies are real nodes.
-      Temper expectations: only 46% of surveyed shell *lines* sit inside a
-      function and 55% of shell files define none at all, well under the
+- [ ] Shell function anchors (`deploy.sh:cleanup`). `function_definition` covers
+      both `foo() {}` and `function foo {}`, the namespace is flat so existing
+      ordinals handle redefinition, and heredoc bodies are real nodes.
+      Temper expectations: fewer than half of surveyed shell *lines* sit inside
+      a function and most shell files define none at all — well under the
       91%-inside-a-symbol-body figure that justified the v1 grammars. The value
       is concentrated in library-style scripts, not spread across all shell.
-- [ ] YAML key-path anchors (`ci.yml:jobs.build`) — **49%**. Editing one CI job
-      is a genuine unit, but YAML is whitespace-sensitive and the synthesis
-      path's indentation handling is exactly where bugs have hidden before.
-- [ ] CSS/SCSS selector anchors (`.button-primary`, `@media`) — **37%**.
-- [ ] JSON/TOML key-path anchors (`server.port`) — **66%** / **33%**. Breadth
-      overstates the value: most of it is `package.json`, tsconfig, and
-      lockfiles, which want whole-path staging anyway.
-- [ ] SQL — **23%**. Schema and function definitions benefit; migrations are
-      append-only new files, where symbol granularity adds nothing.
-- [ ] HTML element anchors (`div#app`) — **29%**.
-- [ ] Rust, C, C++ — **0%**. Speculative: no surveyed repository contains any.
-      Worth doing if that changes, but not ahead of the languages above.
+- [ ] YAML key-path anchors (`ci.yml:jobs.build`). Editing one CI job is a
+      genuine unit, but YAML is whitespace-sensitive and the synthesis path's
+      indentation handling is exactly where bugs have hidden before.
+- [ ] CSS/SCSS selector anchors (`.button-primary`, `@media`).
+- [ ] JSON/TOML key-path anchors (`server.port`). Breadth overstates the value:
+      most of it is `package.json`, tsconfig, and lockfiles, which want
+      whole-path staging anyway.
+- [ ] SQL. Schema and function definitions benefit; migrations are append-only
+      new files, where symbol granularity adds nothing.
+- [ ] HTML element anchors (`div#app`).
+- [ ] Rust, C, C++. Speculative: no surveyed repository contains any. Worth
+      doing if that changes, but not ahead of the languages above.
 
 Two pieces of shared plumbing the next grammar needs, whichever it is:
 
@@ -89,9 +88,9 @@ Two pieces of shared plumbing the next grammar needs, whichever it is:
       optional `ImportMatcher` interface the core resolver type-asserts, with
       the existing three adapters falling back to `ImportKinds`, covers both.
 - [ ] Language lookup is keyed on file extension, so an extensionless script
-      with a `#!` line resolves nothing. 11% of surveyed shell scripts have no
-      extension. A `ForPath` variant that sniffs the shebang would fix it, but
-      it changes a registry contract every grammar shares.
+      with a `#!` line resolves nothing — a minority of shell scripts, but not
+      a negligible one. A `ForPath` variant that sniffs the shebang would fix
+      it, but it changes a registry contract every grammar shares.
 
 ## Deferred features
 
