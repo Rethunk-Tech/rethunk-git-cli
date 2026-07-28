@@ -68,6 +68,25 @@ type Language interface {
 	HeaderKinds() []string
 }
 
+// nodeText is n's own source text.
+func nodeText(src []byte, n *ts.Node) string {
+	return string(src[n.StartByte():n.EndByte()])
+}
+
+// namedDecl builds a Declaration staged as extent but named from nameHost's
+// "name" field. The two nodes differ whenever a grammar wraps the thing that
+// carries the name -- a TypeScript export_statement around a function, a
+// Python decorated_definition around a def -- and every adapter needs that
+// same rule, so it lives here rather than once per grammar. Pass the same
+// node twice when nothing wraps it.
+func namedDecl(src []byte, extent, nameHost *ts.Node) (Declaration, bool) {
+	name := nameHost.ChildByFieldName("name")
+	if name == nil {
+		return Declaration{}, false
+	}
+	return Declaration{Node: extent, Bare: nodeText(src, name)}, true
+}
+
 // registered holds every adapter, keyed by file extension. Adapters add
 // themselves from an init function in their own file so that adding a grammar
 // touches exactly one file and no shared registry.

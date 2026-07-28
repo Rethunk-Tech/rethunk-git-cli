@@ -78,13 +78,13 @@ func (l *tsFamily) Declarations(src []byte, root *ts.Node) []Declaration {
 func declarationFor(outer, target *ts.Node, src []byte) (Declaration, bool) {
 	switch target.Kind() {
 	case "function_declaration":
-		return named(outer, target, src)
+		return namedDecl(src, outer, target)
 	case "class_declaration":
-		return named(outer, target, src)
+		return namedDecl(src, outer, target)
 	case "type_alias_declaration":
-		return named(outer, target, src)
+		return namedDecl(src, outer, target)
 	case "interface_declaration":
-		return named(outer, target, src)
+		return namedDecl(src, outer, target)
 	case "lexical_declaration":
 		// const/let bindings — including const-bound arrow functions and
 		// function expressions, which the language server reports no
@@ -94,27 +94,13 @@ func declarationFor(outer, target *ts.Node, src []byte) (Declaration, bool) {
 		for j := uint(0); j < target.NamedChildCount(); j++ {
 			vd := target.NamedChild(j)
 			if vd != nil && vd.Kind() == "variable_declarator" {
-				return named(outer, vd, src)
+				return namedDecl(src, outer, vd)
 			}
 		}
 		return Declaration{}, false
 	default:
 		return Declaration{}, false
 	}
-}
-
-// named reads target's "name" field as Bare. Top-level declarations only are
-// in scope for v1 (matching the Go adapter), so Container is always empty —
-// class methods are not enumerated.
-func named(outer, target *ts.Node, src []byte) (Declaration, bool) {
-	nameNode := target.ChildByFieldName("name")
-	if nameNode == nil {
-		return Declaration{}, false
-	}
-	return Declaration{
-		Node: outer,
-		Bare: string(src[nameNode.StartByte():nameNode.EndByte()]),
-	}, true
 }
 
 // newTypeScriptLanguage claims .ts, .mts, .cts.

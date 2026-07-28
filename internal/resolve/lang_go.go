@@ -55,7 +55,7 @@ func goDeclarations(node *ts.Node, src []byte) []Declaration {
 			return []Declaration{d}
 		}
 	case "function_declaration":
-		if d, ok := goNamedDeclaration(node, src); ok {
+		if d, ok := namedDecl(src, node, node); ok {
 			return []Declaration{d}
 		}
 	case "const_declaration":
@@ -66,14 +66,6 @@ func goDeclarations(node *ts.Node, src []byte) []Declaration {
 		return goSpecDeclarations(node, src)
 	}
 	return nil
-}
-
-func goNamedDeclaration(node *ts.Node, src []byte) (Declaration, bool) {
-	name := node.ChildByFieldName("name")
-	if name == nil {
-		return Declaration{}, false
-	}
-	return Declaration{Node: node, Bare: nodeText(src, name)}, true
 }
 
 // goMethodDeclaration disambiguates by receiver container. It must read the
@@ -138,20 +130,18 @@ func goSpecDeclarations(node *ts.Node, src []byte) []Declaration {
 		return nil
 	}
 	if len(specs) == 1 {
-		name := specs[0].ChildByFieldName("name")
-		if name == nil {
+		d, ok := namedDecl(src, node, specs[0])
+		if !ok {
 			return nil
 		}
-		return []Declaration{{Node: node, Bare: nodeText(src, name)}}
+		return []Declaration{d}
 	}
 
 	out := make([]Declaration, 0, len(specs))
 	for _, spec := range specs {
-		name := spec.ChildByFieldName("name")
-		if name == nil {
-			continue
+		if d, ok := namedDecl(src, spec, spec); ok {
+			out = append(out, d)
 		}
-		out = append(out, Declaration{Node: spec, Bare: nodeText(src, name)})
 	}
 	return out
 }
@@ -172,10 +162,6 @@ func goSpecs(node *ts.Node) []*ts.Node {
 		}
 	}
 	return out
-}
-
-func nodeText(src []byte, n *ts.Node) string {
-	return string(src[n.StartByte():n.EndByte()])
 }
 
 var goImportKinds = []string{"import_declaration"}
