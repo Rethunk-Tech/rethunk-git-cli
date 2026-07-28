@@ -235,6 +235,53 @@ nameless `function_expression` (`export_statement`'s `"value"` field, not
 `"declaration"`) with no name field to read; it stays unaddressable rather than
 invent a spelling that could someday collide with a real identifier.
 
+**Shell does not repeat the v1 case for justifying its own addition, and this
+record says so rather than implying parity.** Shell appears in roughly 45% of
+surveyed repositories — more than any single v1 language — but fewer than half
+of surveyed shell *lines* sit inside a function, and most shell files define
+none at all: a typical script is a flat sequence of top-level commands, not a
+library of callable units. That is well under the 91%-of-added-lines-inside-a-
+symbol-body figure that justified Go/TS/Python. The value shell staging
+delivers is real but concentrated in library-style scripts (`lib.sh`,
+`functions.sh`) that define several functions each, not spread evenly across
+every `.sh` file the way the v1 figure was.
+
+`function_definition` covers both `foo() {}` and `function foo {}` — one
+grammar node for both surface forms, measured against a compiled parse tree
+built from a fixture using each spelling. `variable_assignment`'s `"name"`
+field is `variable_name` for a bare `X=1` (addressable) or `subscript` for an
+indexed `arr[0]=1` (left unaddressable, the same reasoning as Go's shared-name
+field line and Python's subscripted-target skip). There is no shebang node:
+`#!/usr/bin/env bash` parses as an ordinary `comment`, so `HeaderKinds` is
+`["comment"]`, identical to Python, with nothing new to specify. `heredoc_body`
+and `heredoc_content` are real, distinct nodes — measured directly by parsing a
+heredoc whose body text looks like a function definition and confirming it
+never surfaces as a sibling `function_definition` of `program`, so a false
+positive there is structurally impossible rather than merely unobserved.
+Shell's function namespace is flat (no classes, no modules to nest under), so
+`Container` is always empty and a redefined function disambiguates with the
+existing `#N` ordinal, the same as two same-named Go package-level functions
+would.
+
+`@imports` needed the `ImportMatcher` seam (`internal/resolve/lang.go`) before
+shell could describe one at all: `source f.sh` and `. f.sh` both parse as a
+plain `command` node, the same kind used by every other command in the
+script, distinguished only by the text of its own `command_name` field.
+`ImportKinds` has no way to express "a command node whose name is exactly
+`source` or `.`" — returning `"command"` would make `@imports` swallow nearly
+the whole script. `ImportMatcher.IsImport` is consulted first when a Language
+implements it; Go, TypeScript and Python do not, so they take the unchanged
+`ImportKinds` path (verified: their own pseudo-anchor tests pass byte-for-byte
+identical to before the seam was added).
+
+Deliberately excluded: `.zsh`. tree-sitter-bash is a POSIX/Bash grammar, not a
+zsh grammar, and zsh-only syntax produces `ERROR` nodes under it — the same
+reason TSX and TypeScript stay two separate grammars rather than one stretched
+to cover both (above). Shebang-sniffing an extensionless script (`#!/bin/sh`
+with no `.sh` suffix) is deferred, not solved: `ForExtension` is keyed on file
+extension alone, and changing that is a registry-contract change every grammar
+shares, not a shell-specific one.
+
 ## Argument grammar
 
 Symbol anchors need no flag because **all git pathspec magic is leading-colon**
@@ -294,6 +341,7 @@ built.
 | `golang.org/x/term` | v0.45.0 | `IsTerminal`, gating the `GIT_TERMINAL_PROMPT=0` rule |
 | `github.com/go-quicktest/qt` | v1.102.0 | Tests; matches `claude-format-hooks` |
 | `tree-sitter-grammars/tree-sitter-markdown` | v0.5.1 | Markdown sections; import path is `<module>/bindings/go`, block grammar only |
+| `github.com/tree-sitter/tree-sitter-bash` | v0.25.1 | Shell function/variable anchors; import path is `<module>/bindings/go` |
 
 **Markdown earns its place two ways, both verified against the grammar's own
 `node-types.json`, not assumed.** It is the one language present in every
@@ -336,6 +384,34 @@ copy to track by hand, diverging from how every other grammar in this repo is
 consumed) than the measured 768 KB it would save, and not undertaken here
 without that being a deliberate, separate decision.
 
+**Shell's grammar earns its place the same two ways markdown's did, verified
+the same way.** v0.25.1 is both the latest tag on the module proxy and the
+newest one that still ships `bindings/go` — checked directly against that
+tag's own file tree (`bindings/go/binding.go`, package `tree_sitter_bash`,
+exporting `Language()`), not assumed from the version number the way
+markdown's `v0.5.2` regression showed a "latest" tag cannot be trusted to
+mean "still has Go bindings."
+
+**Unlike markdown, there is no unused second grammar bundled in.** Markdown's
+`bindings/go` compiles both the block grammar and a separate, never-called
+inline grammar into one Go package, so `tree_sitter_markdown_inline` and its
+scanner symbols ship regardless (measured with `go tool nm`, recorded above).
+tree-sitter-bash has only one grammar: `bindings/go/binding.go` compiles
+exactly `src/parser.c` and `src/scanner.c`, and `go tool nm` on the built
+binary shows exactly one grammar's worth of `tree_sitter_bash*` symbols, no
+second unreferenced set. The size this dependency adds is the bash grammar
+itself, not waste alongside it — bash's own grammar is simply larger, driven
+by its heredoc/expansion/quoting state machine (`scanner.c`'s external
+scanner), not by anything avoidable.
+
+Measured **+1332 KB (+11.1%)**, `go build -ldflags="-s -w"` before (**12004
+KB**, same commit modulo this one dependency, matching the post-Markdown
+figure below) and after (**13336 KB**) adding `tree-sitter-bash`. This is a
+materially bigger jump than markdown's +768 KB (+6.8%) for the same reason
+noted above: bash's grammar and external scanner are simply larger than
+markdown's block-only grammar, not because anything unused rode along with
+it.
+
 **`go-git` is rejected.** It reimplements git in pure Go and provides none of
 what this design delegates: hook execution, `.gitattributes` filters, git's
 pathspec matching, credential and GPG prompting. Shelling out is the design, not
@@ -355,3 +431,8 @@ dependency) — **+768 KB, +6.8%**. The 11236 KB pre-Markdown figure differs
 from the 11091 KB recorded above because it is a fresh measurement against
 current `main`, not a re-derivation of the original one; the two are from
 different points in the repository's history and are not in tension.
+
+Adding the shell grammar on top of that: **13336 KB** stripped, up from the
+same **12004 KB** — **+1332 KB, +11.1%**, the largest single-grammar jump
+recorded here, for the reason given above (bash's own grammar and scanner are
+simply bigger, not padded with anything unused).
