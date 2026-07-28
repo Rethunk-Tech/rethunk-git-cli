@@ -3,11 +3,12 @@
 // process-exit path routes through one of these.
 //
 // What each status means is specified once, in docs/CODES.md § Exit codes.
-// The trailing comments below are not a second copy of it: they carry only
-// the scope or precondition a name cannot express — which command can
-// produce a code, what distinguishes it from its neighbour, what is already
-// true by the time it is returned. Everything a caller needs beyond that
-// belongs in the table, so the two cannot drift into disagreeing.
+// The comments below are not a second copy of it: each carries only the
+// scope or precondition a name cannot express — which command can produce
+// a code, what distinguishes it from its neighbour, what is already true
+// by the time it is returned. A constant whose name needs no such warning
+// carries no comment. Everything beyond that belongs in the table, so the
+// two cannot drift into disagreeing.
 //
 // Exit 1 is deliberately absent: `rgit diff --exit-code` uses it for "there
 // is something committable", git's own convention, and unlike every status
@@ -19,16 +20,37 @@ package exitcode
 type Code int
 
 const (
-	Success              Code = 0
-	AnchorUnresolvable   Code = 3   // absent from worktree AND HEAD, not merely ambiguous
-	AnchorAmbiguous      Code = 4   // a bare name matched several candidates; they are listed
-	ContradictoryAnchors Code = 5   // one path named as both a pathspec and a symbol anchor
-	ExtentMismatch       Code = 6   // commit only; rgit diff reports the same disagreement as a warning
-	PathRefused          Code = 7   // gitignored and untracked specifically, not any unusable path
-	PushFailed           Code = 8   // the commit already succeeded; only the trailing --push failed
-	UnsupportedLanguage  Code = 9   // symbol anchor on a file with no grammar; naming the path still works
-	SpecialPathRefused   Code = 10  // symlink, gitlink or binary; distinct from PathRefused
-	NothingToCommit      Code = 11  // EVERY named target was unchanged; --allow-empty suppresses it
-	GitFailure           Code = 128 // includes hook rejection and GPG failure, not just git's own faults
-	InvalidUsage         Code = 129
+	Success Code = 0
+
+	// AnchorUnresolvable means absent from worktree AND HEAD, not ambiguous.
+	AnchorUnresolvable Code = 3
+
+	// AnchorAmbiguous means a bare name matched several listed candidates.
+	AnchorAmbiguous Code = 4
+
+	// ContradictoryAnchors means one path named as pathspec and as anchor.
+	ContradictoryAnchors Code = 5
+
+	// ExtentMismatch is commit's alone; rgit diff warns and continues.
+	ExtentMismatch Code = 6
+
+	// PathRefused means gitignored and untracked, not any unusable path.
+	PathRefused Code = 7
+
+	// PushFailed means the commit succeeded and only --push failed.
+	PushFailed Code = 8
+
+	// UnsupportedLanguage means no grammar; naming the path still works.
+	UnsupportedLanguage Code = 9
+
+	// SpecialPathRefused means symlink, gitlink or binary; not PathRefused.
+	SpecialPathRefused Code = 10
+
+	// NothingToCommit means EVERY named target was unchanged, not some.
+	NothingToCommit Code = 11
+
+	// GitFailure includes hook rejection and GPG failure, not only git's.
+	GitFailure Code = 128
+
+	InvalidUsage Code = 129
 )
