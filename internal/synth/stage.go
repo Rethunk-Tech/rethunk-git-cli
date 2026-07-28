@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
@@ -73,6 +74,9 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 
 	for _, t := range targets {
 		if t.Pathspec != "" {
+			if err := checkGitignoreRefusal(ctx, repo, t.Pathspec); err != nil {
+				return nil, err
+			}
 			plan.pathspecs = append(plan.pathspecs, t.Pathspec)
 			continue
 		}
@@ -99,17 +103,26 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 }
 
 // openFilePlan performs every pure read a file's anchors need before any
-// of them can be classified: language lookup, HEAD and worktree content,
-// and (when the worktree has the file) its declaration order for
-// nearest-sibling insertion.
+// of them can be classified: the gitignore/special-path refusal checks,
+// language lookup, HEAD and worktree content, and (when the worktree has
+// the file) its declaration order for nearest-sibling insertion.
 func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*filePlan, error) {
+	if err := checkGitignoreRefusal(ctx, repo, path); err != nil {
+		return nil, err
+	}
+
+	kind, err := classifyPath(ctx, repo, root, path)
+	if err != nil {
+		return nil, err
+	}
+	if err := refusalFor(path, kind); err != nil {
+		return nil, err
+	}
+
 	ext := filepath.Ext(path)
 	lang, ok := resolve.ForExtension(ext)
 	if !ok {
-		// Refined into a typed PathError (exit 9) once special-path and
-		// language refusals land together; see openFilePlan's caller in
-		// the next commit.
-		return nil, fmt.Errorf("synth: %s: no grammar registered for %q", path, ext)
+		return nil, &PathError{Code: exitcode.UnsupportedLanguage, Path: path, Reason: "no grammar registered for " + ext}
 	}
 
 	headSrc, headExists, err := repo.CatFile(ctx, "HEAD", path)
