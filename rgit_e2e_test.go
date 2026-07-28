@@ -1,7 +1,6 @@
 // End-to-end coverage for rgit, per CONTRIBUTING.md's three-file test
-// budget. Covers argument precedence and usage errors (Phase 1), rgit diff
-// rendering (Phase 4), and rgit commit's real execution -- staging through
-// git commit, hooks, and the invariants AGENTS.md pins (Phase 5).
+// budget: argument precedence, usage errors, diff rendering, and commit's
+// real execution through git, hooks, and the invariants AGENTS.md pins.
 //
 // Every case execs the actual built binary against a real temporary git
 // repository — no gitx mocking — so a regression in pflag's interspersed
@@ -220,7 +219,7 @@ func TestInvalidFlagCombinations(t *testing.T) {
 	}
 }
 
-// --- Phase 4: rgit diff execution -------------------------------------
+// --- rgit diff execution ----------------------------------------------
 //
 // These cases build real temporary git repositories with real commits, per
 // this file's own doc comment: the assertions below are about git's
@@ -327,11 +326,8 @@ func TestDiff_DefaultScopePicksUpStagedUnstagedAndUntracked(t *testing.T) {
 }
 
 func TestDiff_UnbornBranchListsEverythingCommittable(t *testing.T) {
-	// A fresh `git init` has no HEAD, so the default scope's `git diff
-	// HEAD` failed outright with exit 128 -- on the one repository state
-	// where "what can I commit?" gets asked most, and the exact command
-	// docs/INSTALL.md § Verify hands a new user. rgit commit already
-	// worked here, so diff could not describe a commit rgit would make.
+	// A fresh `git init` has no HEAD, so the default scope cannot run
+	// `git diff HEAD` -- it compares against the empty tree instead.
 	repo := newTempRepo(t)
 	writeFile(t, repo, "staged.go", "package auth\n\nfunc Staged() int { return 3 }\n")
 	gitIn(t, repo, "add", "--", "staged.go")
@@ -397,8 +393,7 @@ func TestCommit_MultiLanguageSymbolGranularity(t *testing.T) {
 
 func TestCommit_AllTargetsUnchangedExits11(t *testing.T) {
 	// docs/USAGE.md: an unchanged target warns and is skipped; exit is 11
-	// only when EVERY named target turned out unchanged. CONTRIBUTING
-	// credited resolver_test.go with covering this, and nothing did.
+	// only when EVERY named target turned out unchanged.
 	repo := initRepoWithFile(t, "auth.go", authGoV1)
 
 	got := runRgit(t, repo, "commit", "-m", "chore: noop", "auth.go:ValidateToken")
@@ -408,10 +403,8 @@ func TestCommit_AllTargetsUnchangedExits11(t *testing.T) {
 
 func TestCommit_FromSubdirectoryResolvesCWDRelativePaths(t *testing.T) {
 	// git resolves a pathspec relative to the current directory: `git add
-	// a.go` in pkg/deep stages pkg/deep/a.go. rgit tested <root>/a.go
-	// instead, so every argument form failed from a subdirectory -- which
-	// is where people actually work. Output stays root-relative, as git's
-	// own --numstat does.
+	// a.go` in pkg/deep stages pkg/deep/a.go. Output stays root-relative,
+	// as git's own --numstat does.
 	repo := newTempRepo(t)
 	writeFile(t, repo, "pkg/deep/a.go", "package deep\n\nfunc Alpha() int { return 1 }\n")
 	gitIn(t, repo, "add", "-A")
@@ -447,11 +440,10 @@ func TestDiff_RevisionRangeScopes(t *testing.T) {
 }
 
 func TestDiff_MalformedSymAndPathEscapeRejected(t *testing.T) {
-	// diff used to skip a colon-less --sym value silently, leaving the
-	// caller reading an unfiltered diff while believing it was filtered,
-	// and left a path escape to surface as git's own exit 128. commit
-	// rejected both as exit 129; docs/USAGE.md's exit table does not
-	// qualify either to one subcommand.
+	// Both subcommands reject these identically: docs/USAGE.md's exit
+	// table qualifies neither to one of them. Silently dropping a
+	// malformed --sym would leave the caller reading an unfiltered diff
+	// believing it was filtered.
 	repo := initRepoWithFile(t, "auth.go", authGoV1)
 
 	got := runRgit(t, repo, "diff", "--sym", "malformed")
@@ -617,7 +609,7 @@ func B() int {
 	}
 }
 
-// --- Phase 5: rgit commit execution ------------------------------------
+// --- rgit commit execution ---------------------------------------------
 
 // installHook writes an executable git hook, e.g. a pre-commit hook that
 // exits non-zero to exercise AGENTS.md's "a rejected commit leaves staging

@@ -18,15 +18,10 @@ const staleLockAge = time.Minute
 // Dial obtains a Client cross-checking source in lang (a resolve.Language's
 // Name(): "go", "typescript", "tsx", or "python"), rooted at repoRoot.
 //
-// degraded=true (with client=nil) means no live, timely language server was
-// reachable and the caller must proceed in [ts-only] mode rather than treat
-// this as an error — specs/design.md is explicit that this is the normal
-// case, not a failure: no daemon, a cold index, an unsupported language, or
-// (for the two stdio-only servers) simply not having finished starting up
-// within budget all degrade rather than abort the invocation. The one
-// caller in scope for this deliverable is internal/resolve's
-// CrossCheckExtent; see AGENTS.md's Seam protocol for why nothing in
-// internal/app calls this yet.
+// degraded=true (with client=nil) means no live, timely server was reached
+// and the caller proceeds in [ts-only] mode. That is the normal case, not a
+// failure: no daemon, a cold index, an unsupported language, or a stdio
+// server still starting up within budget all degrade rather than abort.
 func Dial(ctx context.Context, lang, repoRoot string) (client *Client, degraded bool) {
 	spec, ok := servers[lang]
 	if !ok {
@@ -108,14 +103,11 @@ func trySpawnDaemon(spec serverSpec, sockPath string) {
 	lockPath := sockPath + ".lock"
 	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
-		// Normally this means another invocation is already spawning the
-		// daemon. But a lock left behind by a process killed before its
-		// deferred Remove would otherwise pin every later invocation to
-		// [ts-only] permanently, with nothing to tell the caller why.
-		// The lock exists only to avoid launching doomed duplicates
-		// (specs/design.md: it is not required for correctness), so one
-		// older than any real spawn is cleared for the next invocation
-		// to claim -- this one still does not wait on a cold server.
+		// Usually another invocation is already spawning. A lock left by
+		// a killed process would otherwise pin every later invocation to
+		// [ts-only] forever, so one older than any real spawn is cleared
+		// for the next invocation to claim. The lock is an optimization,
+		// not correctness (specs/design.md).
 		if info, statErr := os.Stat(lockPath); statErr == nil && time.Since(info.ModTime()) > staleLockAge {
 			os.Remove(lockPath)
 		}

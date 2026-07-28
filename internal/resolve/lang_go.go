@@ -120,24 +120,18 @@ func goReceiverContainer(recv *ts.Node, src []byte) string {
 	return ""
 }
 
-// goSpecWrappedDeclaration handles const/var/type declarations, none of
-// which carry a "name" field of their own — the name lives on the spec
-// node(s) they wrap (const_spec, var_spec or var_spec_list, type_spec or
-// type_alias). A grouped block ("const a = 1\nb = 2") takes the first
-// spec's name -- the same first-spec shortcut used for multi-name specs.
 // goSpecDeclarations addresses each spec of a const/var/type declaration
 // separately when the declaration groups several, and the whole declaration
-// when it holds one.
+// when it holds one. The name lives on the spec node (const_spec, var_spec,
+// type_spec, type_alias), never on the declaration itself.
 //
-// A grouped block that resolved to its first spec alone was measured
-// reporting the wrong symbol: editing Beta in `const ( Alpha = 1; Beta = 2 )`
-// showed up as a change to Alpha, and the anchor round-trip still passed
-// because Alpha does resolve. A label that validates while naming a symbol
-// the caller did not touch is worse than no label.
+// Resolving a grouped block to its first spec alone would report an edit to
+// Beta in `const ( Alpha = 1; Beta = 2 )` as a change to Alpha: a label that
+// validates while naming a symbol the caller never touched.
 //
 // A single-spec declaration keeps the whole node so its extent covers the
-// `const`/`var`/`type` keyword; a grouped spec cannot, since the keyword and
-// parentheses belong to the block rather than to any one spec.
+// keyword; a grouped spec cannot, since the keyword and parentheses belong
+// to the block rather than to any one spec.
 func goSpecDeclarations(node *ts.Node, src []byte) []Declaration {
 	specs := goSpecs(node)
 	if len(specs) == 0 {

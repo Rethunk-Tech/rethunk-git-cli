@@ -25,16 +25,12 @@ func kindSet(kinds []string) map[string]bool {
 // constraint and the package clause, and both belong to @header regardless
 // (docs/ANCHORS.md).
 //
-// The run also stops at limit, where @toplevel begins. Comments are a header
-// kind in both Go and Python, so without that bound a doc comment belonging to
-// the first declaration would be swallowed: @header and @toplevel would each
-// claim the same bytes, and staging @header alone would commit a comment the
-// caller never named.
-//
-// The bound is @toplevel's start rather than the first declaration's, because
-// a declaration can sit inside a top-level node — a spec in a grouped
-// `const (...)` block — leaving the block's own doc comment ahead of it and
-// therefore inside the header run.
+// The run stops at limit, where @toplevel begins. Comments are a header kind
+// in both Go and Python, so without that bound @header would swallow the
+// first declaration's doc comment and both anchors would claim the same
+// bytes. The bound is @toplevel's start rather than the first declaration's,
+// since a declaration can sit inside a top-level node -- a spec in a grouped
+// `const (...)` block -- leaving the block's doc comment ahead of it.
 func headerExtent(lang Language, root *ts.Node, limit uint) (Extent, bool) {
 	kinds := kindSet(lang.HeaderKinds())
 	children := namedChildren(root)
@@ -61,11 +57,9 @@ func headerExtent(lang Language, root *ts.Node, limit uint) (Extent, bool) {
 // anchor must cover the whole run or staging @imports would silently drop
 // everything after the first import.
 //
-// Comments do not break the run. In TypeScript and Python a grouping
+// Comments do not break the run: in TypeScript and Python a grouping
 // comment between two imports ("# stdlib", "// external") is an ordinary
-// named sibling, and treating it as a terminator ended the extent early —
-// staging @imports then reported success while committing only the
-// imports above the first comment.
+// named sibling, and the block a person means by @imports spans it.
 func importsExtent(lang Language, root *ts.Node) (Extent, bool) {
 	kinds := kindSet(lang.ImportKinds())
 	children := namedChildren(root)
@@ -83,9 +77,8 @@ func importsExtent(lang Language, root *ts.Node) (Extent, bool) {
 		if start == -1 {
 			continue
 		}
-		// Interior comments are carried along: end only advances on an
-		// import, so a comment after the last one stays outside the
-		// extent while one between two imports is spanned by it.
+		// end advances only on an import, so an interior comment is
+		// spanned while a trailing one stays outside.
 		if lang.IsComment(c.Kind()) {
 			continue
 		}

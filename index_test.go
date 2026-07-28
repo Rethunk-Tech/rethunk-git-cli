@@ -127,10 +127,9 @@ func TestStage_UnbornBranchInitialCommit(t *testing.T) {
 }
 
 func TestStage_UnbornBranchGitignoredPathRefused(t *testing.T) {
-	// The gitignore refusal consults HEAD so an already-tracked-but-now-
-	// ignored path is let through. On an unborn branch there is no HEAD,
-	// and that lookup surfaced git's "Not a valid object name HEAD" as a
-	// bare exit 128 instead of the documented exit 7.
+	// The gitignore refusal consults HEAD to let an already-tracked path
+	// through; an unborn branch has no HEAD to consult, and must still
+	// produce the documented exit 7.
 	dir, repo := newSynthRepo(t)
 	writeFile(t, dir, ".gitignore", "*.log\n")
 	writeFile(t, dir, "debug.log", "noise\n")
@@ -159,12 +158,10 @@ func TestStage_NoNewlineAtEOFPreserved(t *testing.T) {
 }
 
 func TestStage_AppendedSymbolInheritsEOFNewline(t *testing.T) {
-	// Appending after the file's last symbol lands the insertion point
-	// just BEFORE HEAD's own trailing newline, not at true end-of-file.
-	// That newlines-only tail was routed through the blank-line join,
-	// which trims a leading newline and then sees nothing left -- so the
-	// file's terminator was silently dropped, a byte git tracks
-	// (AGENTS.md: EOF newline inherited, never normalized).
+	// Appending after the last symbol lands the insertion point just
+	// BEFORE HEAD's trailing newline, not at true end-of-file -- the
+	// case where that terminator is easiest to drop (AGENTS.md: EOF
+	// newline inherited, never normalized).
 	dir, repo := newSynthRepo(t)
 	writeFile(t, dir, "tail.go", "package main\n\nfunc A() {}\n")
 	commitAll(t, dir, "chore: initial tail.go")

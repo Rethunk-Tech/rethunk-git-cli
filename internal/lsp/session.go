@@ -3,20 +3,14 @@ package lsp
 import "context"
 
 // Session caches one Client per language for the life of a single rgit
-// invocation.
+// invocation, so the cost of dialling is flat in the number of anchors
+// rather than linear. It matters for the stdio servers: vtsls and pyright
+// have no daemon, so every dial is a subprocess spawn and handshake.
 //
-// Dial is not cheap for the stdio servers: vtsls and pyright have no
-// daemon, so each call spawns a subprocess and handshakes it. Dialling per
-// anchor made a commit cost ~570ms per symbol -- 4.6s for eight of them,
-// almost entirely spawn. One dial per language per invocation makes that
-// cost flat instead of linear.
+// A language that degrades is remembered as degraded rather than redialled
+// -- a server absent for the first anchor has not appeared by the second.
 //
-// A language that degrades once is remembered as degraded: a server that
-// was absent or too slow for the first anchor will not have appeared by
-// the second, and retrying would pay the dial budget again per anchor.
-//
-// Not safe for concurrent use; one invocation resolves its targets in
-// sequence.
+// Not safe for concurrent use; one invocation resolves in sequence.
 type Session struct {
 	clients  map[string]*Client
 	degraded map[string]bool

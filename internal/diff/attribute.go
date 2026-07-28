@@ -133,17 +133,11 @@ func indexRegions(regions []region) map[string]resolve.Extent {
 // on only one side is a pure addition or deletion of that whole extent, so
 // its count is a plain line count, no diff needed.
 //
-// (unanchorable) is computed as the remainder against totalAdded/
-// totalDeleted — git's own numstat totals for the file — rather than by
-// walking a whole-file diff and classifying each hunk by byte-range
-// overlap. This guarantees by construction that the sum of every reported
-// row equals the file's true total change: no hunk can be silently dropped,
-// because "everything not attributed to a named symbol" is defined as
-// exactly what is left after subtracting what was. The only way this
-// remainder could go negative is if isolated per-symbol diffs and git's own
-// whole-file diff algorithm disagree on how to align genuinely ambiguous
-// content (e.g. duplicate lines); that is clamped to zero rather than
-// rendered as a negative count.
+// (unanchorable) is the remainder against git's own numstat totals rather
+// than a hunk-by-hunk classification, which makes "every row sums to the
+// file's true total" true by construction. It clamps at zero: isolated
+// per-symbol diffs and git's whole-file diff can align ambiguous content
+// (duplicate lines, say) differently.
 func attributeSymbols(lang resolve.Language, oldSrc, newSrc []byte, totalAdded, totalDeleted int) ([]Row, error) {
 	oldRegions, err := buildRegions(lang, oldSrc)
 	if err != nil {

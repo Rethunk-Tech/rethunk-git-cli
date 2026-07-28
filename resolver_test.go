@@ -1,9 +1,7 @@
-// Resolver coverage, per CONTRIBUTING.md's three-file test budget. This
-// wave covers the Go grammar adapter only — TypeScript and Python fixtures
-// land once their adapters do. Byte offsets below were pinned by running
-// the resolver against each fixture and reading back the real tree-sitter
-// output (fixture-first discipline, CONTRIBUTING.md § Tests); they are not
-// derived from grammar documentation.
+// Resolver coverage, per CONTRIBUTING.md's three-file test budget. Byte
+// offsets below were pinned by running the resolver against each fixture
+// and reading back real tree-sitter output (fixture-first discipline,
+// CONTRIBUTING.md § Tests); they are not derived from grammar docs.
 package main
 
 import (
@@ -418,9 +416,7 @@ def g():
 
 func TestResolve_ImportsSpanInteriorComments(t *testing.T) {
 	// A grouping comment between two imports is an ordinary named sibling
-	// in TypeScript and Python. Treating it as the end of the run ended
-	// @imports early, so staging it reported success while committing
-	// only the imports above the comment -- silent partial staging.
+	// in TypeScript and Python, and @imports spans it.
 	py := []byte(`import os
 
 # stdlib extras

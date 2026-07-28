@@ -137,13 +137,9 @@ func ResolveScope(ctx context.Context, repo *gitx.Repo, opts Options) (Scope, er
 }
 
 // committableBase is the old side of the default "everything committable"
-// scope. That is HEAD, except on an unborn branch, where HEAD names no
-// commit and `git diff HEAD` fails outright -- so the honest base is the
-// empty tree, against which every tracked path reads as an addition.
-//
-// rgit commit already works on an unborn branch (it writes a root commit),
-// so without this rgit diff could not answer "what would that commit?" for
-// the one repository state where the question is asked most: a fresh one.
+// scope: HEAD, or the empty tree on an unborn branch, where HEAD names no
+// commit and `git diff HEAD` fails outright. Every tracked path then reads
+// as an addition, which is what rgit commit would write as a root commit.
 func committableBase(ctx context.Context, repo *gitx.Repo) (string, error) {
 	if _, ok, err := repo.RevParseVerify(ctx, "HEAD"); err != nil {
 		return "", err

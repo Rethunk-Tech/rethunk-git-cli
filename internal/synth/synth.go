@@ -115,12 +115,10 @@ func spliceReplace(out []byte, start, end uint, text []byte) []byte {
 }
 
 // spliceExcise removes out[start:end] -- a deleted symbol's extent -- and
-// collapses the blank-line gap it leaves. When the excised symbol was the
-// last thing in the file (mod trailing whitespace), collapsing naively
-// would consume HEAD's own
-// trailing newline along with the gap; the branch below restores it
-// separately so deletion never touches EOF newline-or-not, matching every
-// other edit kind.
+// collapses the blank-line gap it leaves. When the excised symbol was last
+// in the file, collapsing naively would take HEAD's own trailing newline
+// with the gap; the second branch restores it separately, so deletion
+// never changes EOF newline-or-not.
 func spliceExcise(out []byte, start, end uint) []byte {
 	after := out[end:]
 	trimmed := bytes.TrimLeft(after, "\n")
@@ -152,13 +150,10 @@ func spliceInsert(out []byte, start uint, text []byte) []byte {
 	after := out[start:]
 
 	mid := joinWithBlankLine(before, text)
-	// after is empty at true end-of-file, and newlines-only when start
-	// lands just past the file's last symbol -- which is the common case
-	// for an append, because HEAD's own trailing newline sits between
-	// that symbol and EOF. Both are end-of-file: nothing follows the
-	// insertion but the file's terminator. Routing the newlines-only case
-	// through joinWithBlankLine instead dropped that terminator, since it
-	// trims b's leading newlines and then sees an empty b.
+	// Both empty and newlines-only mean end-of-file: nothing follows the
+	// insertion but the file's own terminator. Appending after the last
+	// symbol lands in the newlines-only case, since HEAD's trailing
+	// newline sits between that symbol and EOF.
 	if len(bytes.TrimLeft(after, "\n")) == 0 {
 		mid = bytes.TrimRight(mid, "\n")
 		if bytes.HasSuffix(out, []byte("\n")) {

@@ -12,25 +12,18 @@ import (
 )
 
 // CrossCheckExtent verifies res's declaration-only extent against a live
-// language server for absPath, per specs/design.md § Symbol resolution.
-// Tree-sitter has already produced the extent that gets staged (res itself,
-// built by Resolve); this only ever hard-fails on disagreement (exit 6) —
-// it never substitutes the server's range for tree-sitter's, and a language
-// server that cannot be reached in time is not a failure at all.
+// language server. Tree-sitter already produced the extent that gets
+// staged; the server's range is never substituted for it.
 //
-// Callers must not invoke this for deletions — the symbol exists only in
-// HEAD, outside a language server's worktree view, so there is nothing to
-// compare against (docs/ANCHORS.md § Cross-check exemptions). Pseudo-
-// anchors are the other structural exemption from the same section; res.Pseudo
-// is checked here as a safety net so a caller forgetting that rule still
-// degrades cleanly instead of comparing nonsense.
+// Callers must not invoke this for deletions -- the symbol exists only in
+// HEAD, outside the server's worktree view. res.Pseudo is exempt for the
+// same reason and is checked here (docs/ANCHORS.md § Cross-check
+// exemptions).
 //
-// degraded reports whether a comparison happened at all. It is true for an
-// absent or too-slow daemon, an unsupported language, or a symbol the
-// server's own outline does not name — none of these are failures per
-// specs/design.md ("degraded resolution is normal, not an error"); the
-// caller's job on true is to print "[ts-only]" to stderr and proceed. err is
-// non-nil only for the one real failure: a genuine range disagreement.
+// degraded=true means no comparison happened: absent or slow server,
+// unsupported language, or a symbol its outline does not name. None is a
+// failure -- the caller prints "[ts-only]" and proceeds. err is non-nil
+// only for a genuine range disagreement (exit 6).
 func CrossCheckExtent(ctx context.Context, sess *lsp.Session, lang Language, repoRoot, absPath string, src []byte, res *Resolution, isDeletion bool) (degraded bool, err error) {
 	if res.Pseudo || isDeletion {
 		return true, nil
