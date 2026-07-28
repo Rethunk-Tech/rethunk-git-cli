@@ -33,6 +33,21 @@ func mustResolve(t *testing.T, src []byte, anchor string) *resolve.Resolution {
 	return res
 }
 
+// mustResolveExt is the cross-language form: it picks the adapter by file
+// extension, exercising registration as well as resolution.
+func mustResolveExt(t *testing.T, ext string, src []byte, anchor string) string {
+	t.Helper()
+	lang, ok := resolve.ForExtension(ext)
+	if !ok {
+		t.Fatalf("resolve: no adapter registered for %s", ext)
+	}
+	res, err := resolve.Resolve(lang, src, anchor)
+	if err != nil {
+		t.Fatalf("Resolve(%s, %q): %v", ext, anchor, err)
+	}
+	return string(src[res.Extent.Start:res.Extent.End])
+}
+
 func TestResolve_ExtentAndDocAttribution(t *testing.T) {
 	// Ported from spike/test_basic.go's HEAD fixture: a doc comment
 	// directly above ValidateToken, no blank line, must be part of its
@@ -281,6 +296,62 @@ func A() {}
 	qt.Assert(t, qt.Equals(string(documented[docA.Extent.Start:docA.Extent.End]),
 		"// Doc for A.\nfunc A() {}"))
 	qt.Assert(t, qt.IsTrue(docHeader.Extent.End <= docA.Extent.Start))
+}
+
+func TestResolve_TypeScriptAndPython(t *testing.T) {
+	// The two grammars whose node shapes differ from Go in ways that fail
+	// silently rather than loudly. Values below were pinned by running the
+	// resolver against these fixtures and reading back real output.
+
+	ts := []byte(`import {a} from 'a'
+import b from 'b'
+
+/** Doc for F. */
+export function F(): number { return 1 }
+
+export const G = (x: number) => x + 1
+`)
+
+	// An exported symbol is an export_statement wrapping the declaration,
+	// and the extent is the outermost node: naming F means the statement
+	// including its export keyword, not the function buried inside it.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", ts, "F"),
+		"/** Doc for F. */\nexport function F(): number { return 1 }"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", ts, "G"),
+		"export const G = (x: number) => x + 1"))
+
+	// @imports spans N nodes here where Go has exactly one. A Go-shaped
+	// implementation stages only the first import and silently drops the
+	// rest (contracts-waveB.md).
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", ts, "@imports"),
+		"import {a} from 'a'\nimport b from 'b'"))
+
+	// TSX is a separate grammar, not a mode: parsed as TypeScript, the JSX
+	// below would yield ERROR nodes rather than resolving.
+	tsx := []byte(`import React from 'react'
+
+export function App() { return <div/> }
+`)
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".tsx", tsx, "App"),
+		"export function App() { return <div/> }"))
+
+	py := []byte(`import os
+from sys import path
+
+@dec
+def g():
+    return 2
+`)
+
+	// The extent is the decorated_definition, not the function_definition
+	// inside it — decorators are part of the symbol (docs/ANCHORS.md).
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".py", py, "g"),
+		"@dec\ndef g():\n    return 2"))
+
+	// "from x import y" is import_from_statement, a different kind from
+	// import_statement; matching only the latter drops every from-import.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".py", py, "@imports"),
+		"import os\nfrom sys import path"))
 }
 
 func TestResolve_UnsupportedLanguage(t *testing.T) {
