@@ -28,9 +28,21 @@ type commitFlags struct {
 	push       bool
 	dryRun     bool
 	noVerify   bool
+	fixup      string
+	squash     string
+	author     string
+	date       string
+	gpgSignKey string // "" = not given; gpgSignBare = bare --gpg-sign; else the key id
+	noGPGSign  bool
 	syms       []string
 	files      []string
 }
+
+// gpgSignBare is commitFlags.gpgSignKey's NoOptDefVal sentinel for a bare
+// --gpg-sign (no key id): the empty string is already "flag not given" at
+// all, so the sentinel is what lets bare-vs-absent be told apart after
+// Parse. Never a real key id, since no git key id is NUL-prefixed.
+const gpgSignBare = "\x00bare"
 
 func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exitcode.Code {
 	var f commitFlags
@@ -47,6 +59,19 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 	fs.BoolVar(&f.push, "push", false, "push upstream after a successful commit")
 	fs.BoolVar(&f.dryRun, "dry-run", false, "preview only; writes and stages nothing")
 	fs.BoolVar(&f.noVerify, "no-verify", false, "skip git hooks")
+	fs.StringVar(&f.fixup, "fixup", "", "autosquash fixup for <commit> (or amend:<commit>/reword:<commit>)")
+	fs.StringVar(&f.squash, "squash", "", "autosquash squash for <commit>")
+	fs.StringVar(&f.author, "author", "", "override the commit author")
+	fs.StringVar(&f.date, "date", "", "override the commit date")
+	// git's -S accepts an optional attached key id (-Skeyid); pflag's
+	// shorthand parser resolves an optional-value flag's default before it
+	// checks for an attached value, so -Skeyid misparses as a chain of
+	// nonexistent single-letter flags (verified against pflag directly).
+	// Only the long form is exposed here rather than shipping a shorthand
+	// that silently breaks the one form GPG users actually type.
+	fs.StringVar(&f.gpgSignKey, "gpg-sign", "", "GPG-sign the commit; optionally --gpg-sign=<key-id> (no -S; see docs/USAGE.md)")
+	fs.Lookup("gpg-sign").NoOptDefVal = gpgSignBare
+	fs.BoolVar(&f.noGPGSign, "no-gpg-sign", false, "do not GPG-sign, overriding commit.gpgsign")
 
 	help := "usage: rgit commit [flags] [target...]\n\n" +
 		"Stage named targets -- pathspecs and/or FILE:NAME symbol anchors\n" +
@@ -65,12 +90,17 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 		fmt.Fprintln(stderr, "rgit: --dry-run and --push are mutually exclusive")
 		return exitcode.InvalidUsage
 	}
-	// --amend with neither -m nor -F reuses HEAD's message via --no-edit
-	// (docs/USAGE.md: rgit never opens an editor, so that is the only
-	// sensible reading); every other no-message invocation is still a
-	// usage error.
+	// --amend, --fixup, and --squash each generate their own message when
+	// neither -m nor -F is given: --amend reuses HEAD's via --no-edit
+	// (docs/USAGE.md: rgit never opens an editor), and --fixup/--squash
+	// generate "fixup!"/"squash! <original subject>" the same way plain
+	// `git commit` does. Every other no-message invocation is still a
+	// usage error. -m/-F given alongside --fixup or --squash is not a
+	// conflict -- verified against real git: it appends as an extra body
+	// paragraph rather than being rejected or silently dropped.
+	autoMessage := f.amend || f.fixup != "" || f.squash != ""
 	noEdit := f.amend && len(f.messages) == 0 && f.msgFile == ""
-	if len(f.messages) == 0 && f.msgFile == "" && !f.amend {
+	if len(f.messages) == 0 && f.msgFile == "" && !autoMessage {
 		fmt.Fprintln(stderr, "rgit: commit requires a message (-m or -F)")
 		return exitcode.InvalidUsage
 	}
@@ -168,13 +198,20 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 	}
 
 	opts := gitx.CommitOptions{
-		Messages:   f.messages,
-		Signoff:    f.signoff,
-		Trailers:   f.trailers,
-		Amend:      f.amend,
-		AllowEmpty: f.allowEmpty,
-		NoVerify:   f.noVerify,
-		NoEdit:     noEdit,
+		Messages:     f.messages,
+		Signoff:      f.signoff,
+		Trailers:     f.trailers,
+		Amend:        f.amend,
+		AllowEmpty:   f.allowEmpty,
+		NoVerify:     f.noVerify,
+		NoEdit:       noEdit,
+		Fixup:        f.fixup,
+		Squash:       f.squash,
+		Author:       f.author,
+		Date:         f.date,
+		GPGSign:      f.gpgSignKey != "",
+		GPGSignKeyID: gpgSignKeyID(f.gpgSignKey),
+		NoGPGSign:    f.noGPGSign,
 	}
 	if f.msgFile == "-" {
 		data, rerr := io.ReadAll(os.Stdin)
@@ -216,11 +253,33 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 		// (docs/USAGE.md § Flags, AGENTS.md's delegation boundary).
 		if err := repo.Push(ctx); err != nil {
 			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			// gitx.Push's own doc comment explains why this never becomes
+			// an implicit --set-upstream: some push.default settings push
+			// a branch with no upstream configured just fine, so guessing
+			// -u here could fail a push plain `git push` would have
+			// completed. This only adds a concrete, named fix once the
+			// push has already failed for its own reason, and only when
+			// HasUpstream independently confirms there genuinely is none.
+			if hasUpstream, uerr := repo.HasUpstream(ctx); uerr == nil && !hasUpstream {
+				if branch, berr := repo.CurrentBranch(ctx); berr == nil && branch != "" && branch != "HEAD" {
+					fmt.Fprintf(stderr, "rgit: %s has no upstream tracking branch -- try `git push -u origin %s`, or set push.autoSetupRemote to do this for every push\n", branch, branch)
+				}
+			}
 			return exitcode.PushFailed
 		}
 	}
 
 	return exitcode.Success
+}
+
+// gpgSignKeyID strips commitFlags.gpgSignKey's NoOptDefVal sentinel,
+// turning a bare --gpg-sign back into "" (git signs with the configured
+// default key) while leaving an explicit --gpg-sign=<key-id> untouched.
+func gpgSignKeyID(v string) string {
+	if v == gpgSignBare {
+		return ""
+	}
+	return v
 }
 
 // targetPaths splits built targets into the plain pathspecs and the files

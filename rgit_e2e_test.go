@@ -1182,3 +1182,103 @@ func TestCommit_NonAmendWithNoMessageStillRequiresOne(t *testing.T) {
 	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.InvalidUsage)))
 	qt.Assert(t, qt.StringContains(got.Stderr, "commit requires a message"))
 }
+
+func TestCommit_FixupAndSquashGenerateAutosquashMessages(t *testing.T) {
+	repo := initRepoWithFile(t, "g.go", "package main\n\nfunc G() int { return 1 }\n")
+	target := strings.TrimSpace(gitIn(t, repo, "rev-parse", "HEAD"))
+
+	for i, tc := range []struct{ flag, wantPrefix string }{
+		{"--fixup", "fixup! "},
+		{"--squash", "squash! "},
+	} {
+		t.Run(tc.flag, func(t *testing.T) {
+			// Distinct content each iteration -- otherwise the second
+			// subtest's write is a no-op against the first subtest's
+			// already-committed content, and there is nothing to commit.
+			writeFile(t, repo, "g.go", fmt.Sprintf("package main\n\nfunc G() int { return %d }\n", i+2))
+			// Neither -m nor -F: the message requirement must not fire,
+			// same as bare --amend -- git generates the subject itself.
+			got := runRgit(t, repo, "commit", tc.flag+"="+target, "g.go")
+			qt.Assert(t, qt.Equals(got.ExitCode, 0))
+			qt.Assert(t, qt.Equals(gitIn(t, repo, "log", "-1", "--format=%s"), tc.wantPrefix+"init\n"))
+		})
+	}
+}
+
+func TestCommit_FixupWithMessageAppendsRatherThanConflicts(t *testing.T) {
+	// Verified against real git: --fixup plus -m is not the "-m and -F are
+	// mutually exclusive" shape of conflict. git appends -m's text as an
+	// extra body paragraph below the generated "fixup! ..." subject.
+	repo := initRepoWithFile(t, "g.go", "package main\n\nfunc G() int { return 1 }\n")
+	target := strings.TrimSpace(gitIn(t, repo, "rev-parse", "HEAD"))
+
+	writeFile(t, repo, "g.go", "package main\n\nfunc G() int { return 2 }\n")
+	got := runRgit(t, repo, "commit", "--fixup="+target, "-m", "UNIQUE_BODY_MARKER", "g.go")
+
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
+	body := gitIn(t, repo, "log", "-1", "--format=%B")
+	qt.Assert(t, qt.StringContains(body, "fixup! init"))
+	qt.Assert(t, qt.StringContains(body, "UNIQUE_BODY_MARKER"))
+}
+
+func TestCommit_AuthorAndDateForwarded(t *testing.T) {
+	repo := newTempRepo(t)
+	writeFile(t, repo, "g.go", "package main\n\nfunc G() {}\n")
+
+	got := runRgit(t, repo, "commit",
+		"--author", "Ada Lovelace <ada@example.com>",
+		"--date", "2005-04-07T22:13:13",
+		"-m", "feat(g): add G", "g.go")
+
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
+	qt.Assert(t, qt.Equals(gitIn(t, repo, "log", "-1", "--format=%an <%ae>"), "Ada Lovelace <ada@example.com>\n"))
+	qt.Assert(t, qt.Equals(gitIn(t, repo, "log", "-1", "--date=format:%Y-%m-%d", "--format=%ad"), "2005-04-07\n"))
+}
+
+func TestCommit_GPGSignFlagsForwarded(t *testing.T) {
+	// gpg.program pointed at a binary that always fails turns any signing
+	// attempt into a deterministic, fast failure -- proof --gpg-sign (bare
+	// or with a key id) reached git and triggered signing, with no real
+	// GPG setup needed. --no-gpg-sign is checked the other way: it must
+	// override commit.gpgsign=true and still succeed.
+	repo := newTempRepo(t)
+	gitIn(t, repo, "config", "gpg.program", "/bin/false")
+
+	writeFile(t, repo, "a.go", "package main\n\nfunc A() {}\n")
+	unsigned := runRgit(t, repo, "commit", "-m", "feat(a): add A", "a.go")
+	qt.Assert(t, qt.Equals(unsigned.ExitCode, 0))
+
+	writeFile(t, repo, "b.go", "package main\n\nfunc B() {}\n")
+	bare := runRgit(t, repo, "commit", "--gpg-sign", "-m", "feat(b): add B", "b.go")
+	qt.Assert(t, qt.Equals(bare.ExitCode, int(exitcode.GitFailure)))
+	qt.Assert(t, qt.StringContains(bare.Stderr, "sign"))
+
+	keyed := runRgit(t, repo, "commit", "--gpg-sign=DEADBEEF", "-m", "feat(c): add C", "a.go")
+	qt.Assert(t, qt.Equals(keyed.ExitCode, int(exitcode.GitFailure)))
+
+	gitIn(t, repo, "config", "commit.gpgsign", "true")
+	writeFile(t, repo, "d.go", "package main\n\nfunc D() {}\n")
+	noSign := runRgit(t, repo, "commit", "--no-gpg-sign", "-m", "feat(d): add D", "d.go")
+	qt.Assert(t, qt.Equals(noSign.ExitCode, 0))
+}
+
+func TestCommit_PushWithNoUpstreamNamesTheFix(t *testing.T) {
+	// docs/USAGE.md / AGENTS.md's one invariant: rgit does not invent an
+	// implicit `-u` (a push.default=current caller already gets a
+	// successful push with no upstream at all, and pre-empting on that
+	// basis would silently break them -- verified against real git). What
+	// it adds on top of git's own failure is a named, concrete fix.
+	repo := initRepoWithFile(t, "auth.go", authGoV1)
+	remote := t.TempDir()
+	gitIn(t, remote, "init", "-q", "--bare")
+	gitIn(t, repo, "remote", "add", "origin", remote)
+	branch := strings.TrimSpace(gitIn(t, repo, "rev-parse", "--abbrev-ref", "HEAD"))
+
+	writeFile(t, repo, "auth.go", authGoV2)
+	got := runRgit(t, repo, "commit", "--push", "-m", "fix(auth): reject expired", "auth.go:ValidateToken")
+
+	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.PushFailed)))
+	qt.Assert(t, qt.StringContains(got.Stderr, "git push -u origin "+branch))
+	// The commit itself still landed even though the push failed.
+	qt.Assert(t, qt.StringContains(gitIn(t, repo, "cat-file", "-p", "HEAD:auth.go"), "len(tok)"))
+}

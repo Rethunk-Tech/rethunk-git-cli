@@ -138,11 +138,12 @@ var conventionalShapeRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]*(\([^()]+\)
 
 func hasConventionalShape(messages []string) bool {
 	if len(messages) == 0 {
-		// Either -F was used (the message lives in a file the execution
-		// step reads, not something this parse-only phase inspects) or
-		// --amend is reusing HEAD's message via --no-edit (there is no
-		// in-process string at all to check). Neither warns, since neither
-		// has anything here to judge.
+		// -F was used (the message lives in a file the execution step
+		// reads, not something this parse-only phase inspects), or
+		// --amend/--fixup/--squash is generating its own message ("reuse
+		// HEAD's" via --no-edit, or "fixup!"/"squash! <subject>") --
+		// either way there is no in-process string here to judge, so none
+		// of these warn.
 		return true
 	}
 	return conventionalShapeRe.MatchString(messages[0])
