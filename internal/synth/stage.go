@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -62,6 +63,13 @@ type TargetResult struct {
 	// `rgit diff` reports for a file with no addressable symbols.
 	Added   int
 	Deleted int
+
+	// path and start order the results: alphabetical by file, then
+	// ascending by position within it, matching `rgit diff` and `git
+	// status`. Listing targets in the order the caller happened to name
+	// them makes output unstable between runs and awkward to grep.
+	path  string
+	start uint
 }
 
 // filePlan accumulates every resolved edit for one file, plus the source
@@ -173,6 +181,7 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 				Outcome: Staged,
 				Added:   added,
 				Deleted: deleted,
+				path:    t.Pathspec,
 			})
 			continue
 		}
@@ -206,9 +215,12 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 			Outcome: outcome,
 			Added:   added,
 			Deleted: deleted,
+			path:    t.Symbol.Path,
+			start:   op.start,
 		})
 	}
 
+	sortResults(plan.results)
 	return plan, nil
 }
 
@@ -380,4 +392,20 @@ func pathspecLineCounts(ctx context.Context, repo *gitx.Repo, root, pathspec str
 		added += a
 	}
 	return added, deleted
+}
+
+// sortResults orders targets alphabetically by file, then ascending by
+// position within that file, with the anchor name as a final tiebreak so the
+// order is total and every run of an unchanged tree prints the same thing.
+func sortResults(results []TargetResult) {
+	sort.SliceStable(results, func(i, j int) bool {
+		a, b := results[i], results[j]
+		if a.path != b.path {
+			return a.path < b.path
+		}
+		if a.start != b.start {
+			return a.start < b.start
+		}
+		return a.Target.Symbol.Anchor < b.Target.Symbol.Anchor
+	})
 }

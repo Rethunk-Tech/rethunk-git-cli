@@ -97,6 +97,13 @@ logo.png<TAB><TAB>BINARY<TAB>-<TAB>-
 Binary entries use `-` for both counts, matching `git diff --numstat`. Symbol
 labels in both forms match exact `FILE:NAME` syntax for copy-paste.
 
+**Ordering is alphabetical by path, then ascending by position within each
+file** — source order, not alphabetical by symbol, so a file's own structure is
+preserved. `rgit commit --dry-run` lists its targets the same way regardless of
+the order they were named. Output is therefore stable between runs on an
+unchanged tree, and greppable. A file's `(unanchorable)` row sorts last, since
+it covers hunks spread across the file rather than any one position.
+
 A `chmod +x` with no content edit produces no changed symbols, so `rgit diff`
 lists it as a `MODE` entry — the file is never falsely reported clean. Stage it
 with a pathspec (`rgit commit script.sh`); `--sym` cannot express a mode change.

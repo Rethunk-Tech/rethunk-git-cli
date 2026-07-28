@@ -1,6 +1,7 @@
 package diff
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 
@@ -175,21 +176,24 @@ func attributeSymbols(lang resolve.Language, oldSrc, newSrc []byte, totalAdded, 
 			}
 			accAdded += added
 			accDeleted += deleted
-			rows = append(rows, Row{Symbol: name, Status: StatusMod, Added: itoa(added), Deleted: itoa(deleted)})
+			rows = append(rows, Row{Symbol: name, Status: StatusMod, Added: itoa(added), Deleted: itoa(deleted), pos: newExt.Start})
 		case inOld && !inNew:
 			deleted := countLines(string(oldSrc[oldExt.Start:oldExt.End]))
 			if deleted == 0 {
 				return
 			}
 			accDeleted += deleted
-			rows = append(rows, Row{Symbol: name, Status: StatusDeleted, Added: "0", Deleted: itoa(deleted)})
+			// A deleted symbol has no position in the new file, so it sorts
+			// by where it used to be — stable, and close to where a reader
+			// expects to find it.
+			rows = append(rows, Row{Symbol: name, Status: StatusDeleted, Added: "0", Deleted: itoa(deleted), pos: oldExt.Start})
 		case !inOld && inNew:
 			added := countLines(string(newSrc[newExt.Start:newExt.End]))
 			if added == 0 {
 				return
 			}
 			accAdded += added
-			rows = append(rows, Row{Symbol: name, Status: StatusMod, Added: itoa(added), Deleted: "0"})
+			rows = append(rows, Row{Symbol: name, Status: StatusMod, Added: itoa(added), Deleted: "0", pos: newExt.Start})
 		}
 	}
 
@@ -208,6 +212,13 @@ func attributeSymbols(lang resolve.Language, oldSrc, newSrc []byte, totalAdded, 
 	if unDeleted < 0 {
 		unDeleted = 0
 	}
+	// Ascending by position, so the listing reads in file order and is
+	// identical between runs. Sorted before the remainder row is appended:
+	// (unanchorable) is every hunk no symbol owns, spread across the whole
+	// file rather than sitting at one offset, so it has no position to sort
+	// by and belongs last.
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i].pos < rows[j].pos })
+
 	if unAdded > 0 || unDeleted > 0 {
 		rows = append(rows, Row{Status: StatusUnanchorable, Added: itoa(unAdded), Deleted: itoa(unDeleted)})
 	}

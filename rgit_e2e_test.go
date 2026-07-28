@@ -707,3 +707,57 @@ func TestCommit_PathAlreadyStagedAsDeleted(t *testing.T) {
 	qt.Assert(t, qt.StringContains(got.Stdout, "1 deletion"))
 	qt.Assert(t, qt.Not(qt.StringContains(gitIn(t, repo, "ls-files"), "gone.md")))
 }
+
+func TestOutput_OrderedByPathThenPosition(t *testing.T) {
+	// Both listings sort alphabetically by path, then ascending by position
+	// within each file -- the same contract `git status` offers. Output that
+	// followed discovery order put @imports last despite it being the first
+	// thing in the file, and `rgit commit` echoed whatever order the caller
+	// happened to type. Neither is greppable, and neither is stable between
+	// runs on an unchanged tree.
+	src := "package p\n\nimport \"fmt\"\n\nfunc Zebra() int { return 1 }\n\nfunc Apple() int { return 2 }\n\nfunc Mango() int { return 3 }\n"
+	repo := initRepoWithFile(t, "b.go", src)
+	writeFile(t, repo, "a.go", src)
+	writeFile(t, repo, "zsub/c.go", src)
+	gitIn(t, repo, "add", "a.go", "zsub/c.go")
+	gitIn(t, repo, "commit", "-q", "-m", "chore: siblings")
+
+	edited := strings.NewReplacer(
+		"return 1", "return 11",
+		"return 2", "return 22",
+		"return 3", "return 33",
+	).Replace(src)
+	for _, p := range []string{"a.go", "b.go", "zsub/c.go"} {
+		writeFile(t, repo, p, edited)
+	}
+
+	got := runRgit(t, repo, "diff", "--porcelain")
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
+
+	var pairs []string
+	for _, r := range parsePorcelain(t, got.Stdout) {
+		pairs = append(pairs, r.File+":"+r.Symbol)
+	}
+	// Files alphabetical; within each, source order (Zebra at line 5 before
+	// Apple at 7 before Mango at 9) -- deliberately not alphabetical by
+	// symbol, which would reorder the file's own structure.
+	qt.Assert(t, qt.DeepEquals(pairs, []string{
+		"a.go:Zebra", "a.go:Apple", "a.go:Mango",
+		"b.go:Zebra", "b.go:Apple", "b.go:Mango",
+		"zsub/c.go:Zebra", "zsub/c.go:Apple", "zsub/c.go:Mango",
+	}))
+
+	// Identical between runs on an unchanged tree.
+	again := runRgit(t, repo, "diff", "--porcelain")
+	qt.Assert(t, qt.Equals(again.Stdout, got.Stdout))
+
+	// The same order regardless of the order targets were named.
+	dry := runRgit(t, repo, "commit", "--dry-run", "-m", "fix(p): scrambled",
+		"zsub/c.go:Mango", "a.go:Zebra", "b.go:Apple", "a.go:Apple")
+	qt.Assert(t, qt.Equals(dry.ExitCode, 0))
+	iZebra := strings.Index(dry.Stdout, "a.go:Zebra")
+	iApple := strings.Index(dry.Stdout, "a.go:Apple")
+	iB := strings.Index(dry.Stdout, "b.go:Apple")
+	iC := strings.Index(dry.Stdout, "zsub/c.go:Mango")
+	qt.Assert(t, qt.IsTrue(iZebra >= 0 && iZebra < iApple && iApple < iB && iB < iC))
+}

@@ -60,6 +60,13 @@ type Row struct {
 	// first symbol, for the "-> use --sym FILE:NAME or --file FILE" hint.
 	// HintSymbol carries that name.
 	HintSymbol string
+
+	// pos is the row's byte offset in the file, used only to order rows
+	// within that file. Output has to be sorted by path then by position so
+	// it is greppable and identical between runs on an unchanged tree;
+	// emitting rows in the order they happened to be discovered put
+	// @imports last despite it being the first thing in the file.
+	pos uint
 }
 
 // FileReport is every row rgit diff has to say about one file.
