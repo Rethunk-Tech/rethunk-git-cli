@@ -5,6 +5,8 @@ import (
 	tsgo "github.com/tree-sitter/tree-sitter-go/bindings/go"
 	tspy "github.com/tree-sitter/tree-sitter-python/bindings/go"
 	tsts "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
+
+	tsmd "github.com/tree-sitter-grammars/tree-sitter-markdown/bindings/go"
 )
 
 // The compiled grammars, in one place so each adapter calls a constructor
@@ -25,3 +27,12 @@ func typescriptGrammar() *ts.Language { return ts.NewLanguage(tsts.LanguageTypes
 
 // tsxGrammar parses .tsx and .jsx.
 func tsxGrammar() *ts.Language { return ts.NewLanguage(tsts.LanguageTSX()) }
+
+// markdownGrammar parses the block grammar only — headings, sections, and
+// frontmatter never depend on inline parsing (emphasis, links, code spans),
+// so nothing here ever calls tsmd.InlineLanguage. The two grammars ship as
+// one Go package (bindings/go holds markdown.go and markdown_inline.go
+// together, not two importable packages), so this is the only lever that
+// exists to avoid pulling the inline grammar in on purpose; see design.md §
+// Dependencies for what that is actually measured to cost.
+func markdownGrammar() *ts.Language { return ts.NewLanguage(tsmd.Language()) }
