@@ -1,7 +1,6 @@
 package synth
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -142,28 +141,22 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 			// magic pathspec up front the way it refuses a literal
 			// gitignored path. The refusal in docs/ANCHORS.md is about a
 			// caller naming one concrete path, so it only applies there.
-			magic := strings.HasPrefix(t.Pathspec, ":")
-			if !magic {
+			if !strings.HasPrefix(t.Pathspec, ":") {
 				if err := checkGitignoreRefusal(ctx, repo, t.Pathspec); err != nil {
 					return nil, err
 				}
 			}
 			plan.pathspecs = append(plan.pathspecs, t.Pathspec)
 
-			outcome := Staged
-			if !magic {
-				// A magic pathspec is a filter over many files, not one
-				// verifiable target, so it is never reported unchanged --
-				// only a literal path's own status is a meaningful answer.
-				unchanged, err := pathspecUnchanged(ctx, repo, t.Pathspec)
-				if err != nil {
-					return nil, err
-				}
-				if unchanged {
-					outcome = Unchanged
-				}
-			}
-			plan.results = append(plan.results, TargetResult{Target: t, Outcome: outcome})
+			// Pathspec targets are always reported Staged, never Unchanged:
+			// `git status` scoped to a pathspec cannot distinguish "already
+			// clean" from "matches nothing at all", and folding a
+			// nonexistent path into a silent "nothing to commit" warning
+			// would swallow git add's own fatal "did not match any files"
+			// error -- exactly the kind of divergence AGENTS.md's governing
+			// principle forbids. `git add` is left to answer both cases
+			// itself, at apply time, the way plain git would.
+			plan.results = append(plan.results, TargetResult{Target: t, Outcome: Staged})
 			continue
 		}
 
@@ -194,19 +187,6 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 	}
 
 	return plan, nil
-}
-
-// pathspecUnchanged answers docs/USAGE.md's "target has no uncommitted
-// changes" question for a literal pathspec: `git status --porcelain`
-// scoped to exactly that path. An empty result means the path is already
-// clean relative to HEAD (and, for a tracked path, the index) -- staging
-// it would be a real no-op, not merely a low-diff change.
-func pathspecUnchanged(ctx context.Context, repo *gitx.Repo, pathspec string) (bool, error) {
-	out, err := repo.Status(ctx, "--", pathspec)
-	if err != nil {
-		return false, err
-	}
-	return len(bytes.TrimSpace(out)) == 0, nil
 }
 
 // openFilePlan performs every pure read a file's anchors need before any
