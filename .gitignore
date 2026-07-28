@@ -3,6 +3,9 @@
 *.test
 *.out
 
+# orchestration scratch
+.orchestrate/
+
 # spike scratch
 __pycache__/
 *.pyc
