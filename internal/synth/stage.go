@@ -1,12 +1,10 @@
 package synth
 
 import (
-	"bufio"
 	"bytes"
 	"cmp"
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -419,12 +417,12 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 	if !ok {
 		// Extension lookup found nothing; a worktree copy may still carry a
 		// recognizable "#!" interpreter line -- the case an extensionless
-		// git hook or bin/ entry is in. Only the first line is read
-		// (peekShebangLine), not the whole file, so a large or binary file
-		// with no early newline is never slurped just to decide it has no
-		// shebang. A path with no worktree copy at all (peeked == false)
-		// falls straight through to the same refusal as before.
-		if line, peeked := peekShebangLine(filepath.Join(root, path)); peeked {
+		// git hook or bin/ entry is in. resolve.PeekShebangLine bounds the
+		// read to its own first line, so a large or binary file with no
+		// early newline is never slurped just to decide it has no shebang.
+		// A path with no worktree copy at all (peeked == false) falls
+		// straight through to the same refusal as before.
+		if line, peeked := resolve.PeekShebangLine(filepath.Join(root, path)); peeked {
 			lang, ok = resolve.ForPath(path, line)
 		}
 	}
@@ -462,30 +460,6 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 		fp.workOrder = fp.workFile.DeclOrder()
 	}
 	return fp, nil
-}
-
-// shebangPeekBytes bounds how much of a candidate worktree file
-// peekShebangLine will ever read: a real interpreter line is always short,
-// so this is generous headroom for one, not an attempt to capture much more.
-const shebangPeekBytes = 256
-
-// peekShebangLine reads at most shebangPeekBytes from fullPath and returns
-// its first line, for resolve.ForPath's shebang fallback. ok is false when
-// fullPath cannot be opened at all (most commonly: no worktree copy exists,
-// e.g. resolving a symbol that only HEAD holds) -- callers fall back to the
-// same unsupported-language refusal that predates shebang sniffing.
-//
-// The bounded read is deliberate: a binary file, or one with no newline in
-// its opening bytes, must never be read in full just to learn it has no
-// shebang.
-func peekShebangLine(fullPath string) (line []byte, ok bool) {
-	f, err := os.Open(fullPath)
-	if err != nil {
-		return nil, false
-	}
-	defer func() { _ = f.Close() }()
-	raw, _ := bufio.NewReader(io.LimitReader(f, shebangPeekBytes)).ReadString('\n')
-	return []byte(raw), true
 }
 
 // close releases both parse trees. Extents already resolved out of them are

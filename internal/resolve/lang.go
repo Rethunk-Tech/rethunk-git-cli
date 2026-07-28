@@ -7,7 +7,10 @@
 package resolve
 
 import (
+	"bufio"
 	"bytes"
+	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -225,4 +228,32 @@ func shebangInterpreter(content []byte) (string, bool) {
 		interp = filepath.Base(fields[1])
 	}
 	return interp, true
+}
+
+// shebangPeekBytes bounds how much of a candidate file PeekShebangLine will
+// ever read: a real interpreter line is always short, so this is generous
+// headroom for one, not an attempt to capture more.
+const shebangPeekBytes = 256
+
+// PeekShebangLine reads at most shebangPeekBytes from the worktree file at
+// fullPath and returns its first line, for ForPath's shebang fallback. ok is
+// false when fullPath cannot be opened at all -- most commonly, no worktree
+// copy exists there: a path resolved only against HEAD, the index, or an
+// arbitrary revision (most often a file deleted from the worktree). Callers
+// degrade to whatever they did before shebang sniffing existed -- extension
+// lookup is unaffected either way, since it never calls this at all.
+//
+// The bounded read is deliberate and shared by every caller: a binary file,
+// or one with no newline in its opening bytes, must never be read in full
+// just to learn it has no shebang. This is the one place that logic lives;
+// internal/synth and internal/diff both call it rather than each reading
+// their own prefix.
+func PeekShebangLine(fullPath string) ([]byte, bool) {
+	f, err := os.Open(fullPath)
+	if err != nil {
+		return nil, false
+	}
+	defer func() { _ = f.Close() }()
+	raw, _ := bufio.NewReader(io.LimitReader(f, shebangPeekBytes)).ReadString('\n')
+	return []byte(raw), true
 }
