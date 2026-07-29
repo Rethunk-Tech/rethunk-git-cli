@@ -382,8 +382,8 @@ const shebangPeekBytes = 256
 // The bounded read is deliberate and shared by every caller: a binary file,
 // or one with no newline in its opening bytes, must never be read in full
 // just to learn it has no shebang. This is the one place that logic lives;
-// internal/synth and internal/diff both call it rather than each reading
-// their own prefix.
+// internal/synth and internal/diff both reach it through
+// LanguageForWorktreePath below rather than each reading their own prefix.
 func PeekShebangLine(fullPath string) ([]byte, bool) {
 	f, err := os.Open(fullPath)
 	if err != nil {
@@ -410,4 +410,34 @@ func PeekShebangLine(fullPath string) ([]byte, bool) {
 		return nil, false
 	}
 	return []byte(raw), true
+}
+
+// LanguageForWorktreePath resolves relPath's language the way a worktree
+// file gets one anywhere in this codebase: extension lookup first, then a
+// bounded shebang peek of the worktree copy at filepath.Join(root, relPath)
+// when the extension alone matched nothing. It is the three-call sequence
+// internal/synth/stage.go and internal/diff/run.go each used to repeat
+// (ForExtension, then PeekShebangLine, then ForPath) collapsed into one
+// call -- but each of those sites has its own reason the worktree copy the
+// peek needs might not be there (a deletion, a rev-to-rev comparison that
+// never touches the worktree, a since-deleted --sym target), and that
+// reasoning stays at the call site, not here.
+//
+// peeked reports whether a worktree copy was actually found and its first
+// line inspected, independent of ok: a file that peeks clean (no "#!" line,
+// or an unmapped interpreter) still has peeked=true, because a caller
+// building an error message needs to distinguish "checked and found no
+// match" from "nothing there to check" (stage.go's shebangSniffed, and its
+// unsupportedLanguageReason wording, is the reason this is a third return
+// rather than folded into ok).
+func LanguageForWorktreePath(root, relPath string) (lang Language, ok bool, peeked bool) {
+	if lang, ok := ForExtension(filepath.Ext(relPath)); ok {
+		return lang, true, false
+	}
+	line, peeked := PeekShebangLine(filepath.Join(root, relPath))
+	if !peeked {
+		return nil, false, false
+	}
+	lang, ok = ForPath(relPath, line)
+	return lang, ok, true
 }

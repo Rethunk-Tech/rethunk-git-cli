@@ -112,19 +112,14 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusMode, Added: "0", Deleted: "0", ModeNote: note}}}, nil
 	}
 
-	lang, ok := resolve.ForExtension(filepath.Ext(newPath))
-	if !ok {
-		// A worktree copy of newPath may still carry a recognizable "#!"
-		// line -- an extensionless git hook or bin/ entry, resolve.ForPath's
-		// case. There is none to peek for a deletion (newPath no longer
-		// exists in the worktree) or a rev-to-rev comparison that never
-		// touches it; that degrades to the same whole-file row as any other
-		// unsupported extension, deliberately -- not a corner case missed,
-		// see internal/resolve/lang.go's PeekShebangLine.
-		if line, peeked := resolve.PeekShebangLine(filepath.Join(root, newPath)); peeked {
-			lang, ok = resolve.ForPath(newPath, line)
-		}
-	}
+	// A worktree copy of newPath may still carry a recognizable "#!" line --
+	// an extensionless git hook or bin/ entry, resolve.ForPath's case. There
+	// is none to peek for a deletion (newPath no longer exists in the
+	// worktree) or a rev-to-rev comparison that never touches it; that
+	// degrades to the same whole-file row as any other unsupported
+	// extension, deliberately -- not a corner case missed, see
+	// internal/resolve/lang.go's PeekShebangLine.
+	lang, ok, _ := resolve.LanguageForWorktreePath(root, newPath)
 	if !ok {
 		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusNoSymbols, Added: addedStr, Deleted: deletedStr}}}, nil
 	}
@@ -151,7 +146,7 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 	if len(rows) == 0 {
 		return nil, nil
 	}
-	return &FileReport{Path: newPath, Rows: rows}, nil
+	return &FileReport{Path: newPath, Rows: rows, lang: lang.Name()}, nil
 }
 
 // buildUntrackedReport renders a single collapsed row for a file git does
@@ -309,16 +304,11 @@ func validateSyms(ctx context.Context, repo *gitx.Repo, root string, scope Scope
 // the same anchor (internal/resolve.ResolveError), so a missing file and a
 // missing symbol need no separate message shape.
 func validateSym(ctx context.Context, repo *gitx.Repo, root string, scope Scope, s SymRef) (string, error) {
-	lang, ok := resolve.ForExtension(filepath.Ext(s.File))
-	if !ok {
-		// Same worktree-shebang fallback as buildFileReport: a --sym anchor
-		// naming an extensionless script is only resolvable if its worktree
-		// copy is there to peek. A since-deleted or rev-only file has none,
-		// and degrades to the exit-9 refusal below.
-		if line, peeked := resolve.PeekShebangLine(filepath.Join(root, s.File)); peeked {
-			lang, ok = resolve.ForPath(s.File, line)
-		}
-	}
+	// Same worktree-shebang fallback as buildFileReport: a --sym anchor
+	// naming an extensionless script is only resolvable if its worktree
+	// copy is there to peek. A since-deleted or rev-only file has none, and
+	// degrades to the exit-9 refusal below.
+	lang, ok, _ := resolve.LanguageForWorktreePath(root, s.File)
 	if !ok {
 		// No grammar to resolve against at all -- rgit commit's own exit 9
 		// ("unsupported language for a symbol anchor") is the closer match
