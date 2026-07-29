@@ -40,8 +40,14 @@ There are two lanes, and which one a case belongs in is the first decision:
   a gap, not coverage — measure it rather than assuming (see § Coverage).
   `internal/app/app_test.go` covers the whole command surface by calling
   `app.Run` directly with buffers, which is why `internal/app` exists outside
-  `main` at all; `internal/cli/precedence_test.go` covers the six-rule
-  argument table; other packages test their own internals beside them.
+  `main` at all; `internal/app/lanes_test.go` holds the same kind of
+  `app.Run`-driven case for guarantees that also need a real hook, a real
+  index, or forwarded git flags — split into its own file so a concurrent
+  editor of `app_test.go` never collides with it; `internal/cli/precedence_test.go`
+  covers the six-rule argument table; other packages test their own
+  internals beside them. `index_test.go` (below) belongs to this lane too,
+  despite living in `cmd/rgit`: its cases drive `synth.Stage` directly and
+  never touch the built binary, so `-short` does not skip them.
 - **`rgit_e2e_test.go` is the slow lane.** It builds the binary and execs it,
   so `-short` skips the whole file. It earns its place by proving the assembled
   program behaves — argument precedence through a real process, hooks, the
@@ -59,8 +65,8 @@ to the real git binary, like everything else here.
 
 | File | Happy path | Critical edge cases |
 | --- | --- | --- |
-| `rgit_e2e_test.go` | Init repo → edit symbol → `rgit diff` → `rgit commit` → verify HEAD, clean index, hook ran, worktree preserved | Pre-staged sibling file comes along; hook rejection leaves staging intact (exit 128); resolve-all-before-stage leaves index untouched on failure; positional pathspec parity with `--file`; path escape and malformed `--sym` rejection (exit 129); exit 11 when every named target is unchanged; invocation from a subdirectory resolves paths relative to it; unborn branch lists everything committable |
-| `index_test.go` | Single-symbol blob synthesis staged into the real index | Initial commit on an unborn branch, and its gitignore refusal (exit 7); no-newline-at-EOF preserved, and an appended symbol inheriting HEAD's EOF newline; rename staged as two paths yields git's `R100`; pathspec glob and `:(exclude)` pass through; mode-only change surfaces as `MODE`; submodule and symlink staging; `.gitattributes` clean filter (the `--path` requirement) |
+| `rgit_e2e_test.go` | Init repo → edit symbol → `rgit diff` → `rgit commit` → verify HEAD, clean index, hook ran, worktree preserved | Hook rejection leaves staging intact (exit 128, also pinned at the unit level: a real hook is process-level enough to earn both); `--` and leading-colon pathspec magic reaching real `git add`, not just classification; positional pathspec parity with `--file`; path escape and malformed `--sym` rejection (exit 129); invocation from a subdirectory resolves paths relative to it; unborn branch lists everything committable; `--fixup`'s own message-appending with `-m`; `--gpg-sign`/`--no-gpg-sign` and `--push` reaching real git; shell completion driving real bash and zsh; exit codes and help text as an external process observes them |
+| `index_test.go` | Single-symbol blob synthesis staged into the real index | Initial commit on an unborn branch, and its gitignore refusal (exit 7); no-newline-at-EOF preserved, and an appended symbol inheriting HEAD's EOF newline; rename staged as two paths yields git's `R100`; pathspec glob and `:(exclude)` pass through; mode-only change surfaces as `MODE`; submodule and symlink staging; `.gitattributes` clean filter (the `--path` requirement); overlapping/nested anchors coalesce into one extent; a new file's `@header`/`@imports` preamble stages automatically; class/container members (TypeScript, Python) stage without their sibling, and a Go receiver method stays a sibling never escalated into; a member deletion keeps the file parseable across a class's own indentation; YAML nested-key edits round-trip byte-identical; resolve-all-before-staging-any leaves the index untouched on a partial failure; a new symbol's nearest-sibling insertion walks past other new, unstaged siblings; multiple symbols splice in reverse byte-offset order; a container member insert is byte-identical to the worktree, no blank line invented (Python's own PEP 8 line is the deliberate exception); `--dry-run`'s preamble rows agree with git's real numstat |
 | `resolver_test.go` | Tree-sitter extent + doc-comment attribution on a Go fixture | Exit 3 (unresolvable) and its did-you-mean candidates; new-symbol insertion when neighbours are also new; `@header`, `@imports`, and `@toplevel` extents, including imports spanning interior comments; live `gopls` cross-check |
 
 Units run against in-memory tree-sitter. Prefer the real dependency over a
@@ -74,11 +80,13 @@ unreachable, and say at the seam what would catch its drift.
 
 **Write tests before implementation.**
 
-Tests run in parallel — every top-level case in the three files above calls
+Tests run in parallel — every top-level test case in this repo calls
 `t.Parallel()`. A case that needs `t.Setenv` or `t.Chdir` cannot, and must say
 so: `internal/app`'s cases change directory, because `openRepo` resolves the
 repository from the working directory. Everything else builds its own temp
-repository and shares nothing.
+repository, most often via `internal/gittest`, and shares nothing with any
+other case, which is what makes `t.Parallel()` safe to add without auditing
+the whole suite for shared state each time.
 
 ```bash
 go test ./...          # full suite, end-to-end cases included
