@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -197,44 +196,21 @@ func openRepo(ctx context.Context, stderr io.Writer) (root, prefix string, repo 
 	return top, pfx, gitx.New(top), exitcode.Success
 }
 
-// gatedExtensionHint maps an extension whose grammar exists upstream but
-// may be compiled out because it sits behind a build tag, to the tag that
-// would enable it -- currently SQL alone (internal/resolve/lang_sql.go's
-// own rgit_sql tag).
-//
-// This duplicates a fact internal/resolve already knows, and does so only
-// because there is nowhere else to ask it from once the tag is off:
-// resolve.LanguageInfo.Gated (lang.go) can only describe an adapter that IS
-// registered, by that struct's own doc comment -- a build without the tag
-// never registers "sql" at all, so resolve.Languages() has no entry to read
-// Gated off of. The clean fix is a small always-compiled file in
-// internal/resolve, beside lang_sql.go's own gate, that can answer "what
-// might a different build tag enable" even when this one lacks it; that
-// package is outside this worker's fence, so this map is the seam-side
-// stand-in -- see the worker report.
-var gatedExtensionHint = map[string]string{
-	".sql": "rgit_sql",
-}
-
 // unsupportedLanguageHint returns a rebuild suggestion for ext when it is a
 // known gated extension this exact build was not compiled with, or "" when
 // ext is genuinely unsupported (no grammar exists at all, gated or not) or
-// is in fact already compiled in -- the latter check against
-// resolve.Languages() so this can never contradict `rgit languages`, even
-// if gatedExtensionHint above ever drifted from lang_sql.go's own claim.
+// is in fact already compiled in. resolve.GatedTag (internal/resolve/
+// gated.go) owns which extensions are gated and by what tag, and already
+// checks the "already registered" case against its own registry -- this
+// function owns only the user-facing sentence.
 //
 // Both mapStageError (commit.go) and runDiff's own resolve.ResolveError
 // handling (diff.go) call this on an exitcode.UnsupportedLanguage failure,
 // so a .sql anchor gets the same rebuild hint whichever subcommand hit it.
 func unsupportedLanguageHint(ext string) string {
-	tag, known := gatedExtensionHint[ext]
-	if !known {
+	tag, ok := resolve.GatedTag(ext)
+	if !ok {
 		return ""
-	}
-	for _, l := range resolve.Languages() {
-		if slices.Contains(l.Extensions, ext) {
-			return "" // actually compiled in; the failure is something else
-		}
 	}
 	return fmt.Sprintf(" (this build was compiled without -tags %s; installing the tree-sitter CLI and rebuilding would enable it -- see docs/INSTALL.md § SQL support, or run rgit doctor)", tag)
 }
