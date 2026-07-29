@@ -24,8 +24,8 @@ import (
 // unsupported language, or a symbol its outline does not name. None is a
 // failure -- the caller prints "[ts-only]" and proceeds. err is non-nil
 // only for a genuine range disagreement (exit 6).
-func CrossCheckExtent(ctx context.Context, sess *lsp.Session, lang Language, repoRoot, absPath string, src []byte, res *Resolution, isDeletion bool) (degraded bool, err error) {
-	if res.Pseudo || isDeletion {
+func CrossCheckExtent(ctx context.Context, sess *lsp.Session, lang Language, repoRoot, absPath string, src []byte, res *Resolution) (degraded bool, err error) {
+	if res.Pseudo {
 		return true, nil
 	}
 

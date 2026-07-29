@@ -857,7 +857,7 @@ func ValidateToken(t string) error {
 	attempt := func(r *resolve.Resolution) (bool, error) {
 		sess := lsp.NewSession()
 		defer sess.Close()
-		return resolve.CrossCheckExtent(ctx, sess, lang, dir, path, src, r, false)
+		return resolve.CrossCheckExtent(ctx, sess, lang, dir, path, src, r)
 	}
 
 	var (

@@ -138,7 +138,7 @@ func (fp *filePlan) crossCheck(ctx context.Context, sess *lsp.Session, root stri
 		return false, nil
 	}
 	absPath := filepath.Join(root, fp.path)
-	degraded, cerr := resolve.CrossCheckExtent(ctx, sess, fp.lang, root, absPath, fp.workSrc, res, false)
+	degraded, cerr := resolve.CrossCheckExtent(ctx, sess, fp.lang, root, absPath, fp.workSrc, res)
 	if cerr != nil {
 		return false, cerr
 	}
