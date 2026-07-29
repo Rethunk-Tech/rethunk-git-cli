@@ -203,7 +203,7 @@ func TestDialStdio_CloseTearsDownConnectionThenProcess(t *testing.T) {
 	}
 }
 
-// --- finding 1: the managed socket directory must be trusted, not assumed ---
+// --- the managed socket directory must be trusted, not assumed ---
 
 // TestPrivateSocketDir_CreatesPrivateDirectory covers the ordinary case: a
 // fresh, writable base directory gets a 0700 UID-scoped subdirectory
@@ -237,10 +237,9 @@ func TestPrivateSocketDir_CreatesPrivateDirectory(t *testing.T) {
 // TestPrivateSocketDir_RejectsLoosePermissions covers the case a predictable
 // path in a shared directory exists for: someone (or something) already
 // created the expected path with group/other permissions. rgit must not
-// trust it merely because it is a directory it owns -- finding 1 is
-// specifically that permission bits alone are not enough on their own to
-// rule out a planted path, but a directory this loose is rejected before
-// ownership even needs checking.
+// trust it merely because it is a directory it owns: permission bits alone
+// are not enough on their own to rule out a planted path, but a directory
+// this loose is rejected before ownership even needs checking.
 func TestPrivateSocketDir_RejectsLoosePermissions(t *testing.T) {
 	// cannot Parallel because t.Setenv("XDG_RUNTIME_DIR", ...) below
 	base := t.TempDir()
@@ -295,7 +294,7 @@ func TestPrivateSocketDir_RejectsNonDirectory(t *testing.T) {
 // TestPrivateSocketDir_BaseMissingFailsClosed covers the base directory
 // itself being unusable (e.g. $XDG_RUNTIME_DIR pointing nowhere): this must
 // degrade the caller to [ts-only] rather than panic or propagate an error
-// of its own -- the same "fail closed" posture the fix for finding 1 uses
+// of its own -- the same "fail closed" posture privateSocketDir uses
 // throughout.
 func TestPrivateSocketDir_BaseMissingFailsClosed(t *testing.T) {
 	// cannot Parallel because t.Setenv("XDG_RUNTIME_DIR", ...) below
@@ -306,8 +305,8 @@ func TestPrivateSocketDir_BaseMissingFailsClosed(t *testing.T) {
 	}
 }
 
-// --- finding 2: a stale/incompatible managed socket must not pin every
-// future invocation to [ts-only] forever ---
+// --- a stale/incompatible managed socket must not pin every future
+// invocation to [ts-only] forever ---
 
 // TestDialSocket_HandshakeFailureUnlinksManagedSocketAndDegrades covers the
 // bug directly: a listener that accepts but never speaks the handshake (a
@@ -367,9 +366,10 @@ func TestDialSocket_HandshakeFailureUnlinksManagedSocketAndDegrades(t *testing.T
 }
 
 // TestDialSocket_HandshakeFailureLeavesUserSuppliedSocketAlone covers the
-// other half of finding 2's fix: $RGIT_LSP_SOCKET is the caller's own path,
-// not rgit's to manage, so a handshake failure against it must never
-// unlink it -- only the managed default is rgit's to clean up.
+// other half of dialSocket's own unlink-on-handshake-failure fix:
+// $RGIT_LSP_SOCKET is the caller's own path, not rgit's to manage, so a
+// handshake failure against it must never unlink it -- only the managed
+// default is rgit's to clean up.
 func TestDialSocket_HandshakeFailureLeavesUserSuppliedSocketAlone(t *testing.T) {
 	// cannot Parallel because t.Setenv("XDG_RUNTIME_DIR", ...) below
 	t.Setenv("XDG_RUNTIME_DIR", shortTempDir(t))
@@ -404,15 +404,15 @@ func TestDialSocket_HandshakeFailureLeavesUserSuppliedSocketAlone(t *testing.T) 
 	}
 }
 
-// --- finding 10: daemon recovery gaps ---
+// --- daemon recovery gaps ---
 
-// TestUnlinkDeadSocket_RemovesDeadSocketFile covers finding 10a: a unix
-// socket special file left behind by a killed daemon (SetUnlinkOnClose(false)
-// simulates exactly that -- an ordinary Close would already unlink it,
-// masking the case this function exists for) must be removed once nothing
-// answers a connection attempt against it, or a freshly spawned daemon's own
-// net.Listen on the same path fails EADDRINUSE and spawn-on-demand never
-// recovers.
+// TestUnlinkDeadSocket_RemovesDeadSocketFile covers the recovery case
+// directly: a unix socket special file left behind by a killed daemon
+// (SetUnlinkOnClose(false) simulates exactly that -- an ordinary Close
+// would already unlink it, masking the case this function exists for)
+// must be removed once nothing answers a connection attempt against it,
+// or a freshly spawned daemon's own net.Listen on the same path fails
+// EADDRINUSE and spawn-on-demand never recovers.
 func TestUnlinkDeadSocket_RemovesDeadSocketFile(t *testing.T) {
 	// cannot Parallel: asserts a real connect() against a just-closed unix
 	// listener fails fast enough to fall inside unlinkDeadSocket's
@@ -468,14 +468,14 @@ func TestUnlinkDeadSocket_LeavesLiveSocketAlone(t *testing.T) {
 	}
 }
 
-// TestTrySpawnDaemon_StaleLockRetriesAndSpawns covers finding 10b directly:
-// clearing a stale lock must retry the O_EXCL claim once in the same
-// invocation and actually spawn, rather than leaving the spawn to whatever
-// invocation happens to run next. The fake "daemon" is a real, installed
-// shell script so cmd.Start truly execs and runs it -- proven by the marker
-// file it touches -- rather than merely asserting the lock file's own
-// end-state, which looks identical whether or not a spawn actually
-// happened.
+// TestTrySpawnDaemon_StaleLockRetriesAndSpawns covers the retry-and-spawn
+// path directly: clearing a stale lock must retry the O_EXCL claim once in
+// the same invocation and actually spawn, rather than leaving the spawn to
+// whatever invocation happens to run next. The fake "daemon" is a real,
+// installed shell script so cmd.Start truly execs and runs it -- proven by
+// the marker file it touches -- rather than merely asserting the lock
+// file's own end-state, which looks identical whether or not a spawn
+// actually happened.
 func TestTrySpawnDaemon_StaleLockRetriesAndSpawns(t *testing.T) {
 	// cannot Parallel because t.Setenv("PATH", ...) below
 	binDir := t.TempDir()

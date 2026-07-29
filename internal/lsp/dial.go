@@ -69,8 +69,7 @@ func dialSocket(ctx context.Context, spec serverSpec, repoRoot string) (*Client,
 				// clean up, not ours. Removing it lets the next candidate
 				// in this same loop, or trySpawnDaemon below if this was
 				// the last one, reclaim the path instead of every future
-				// invocation staying pinned to a dead listener forever
-				// (finding 2).
+				// invocation staying pinned to a dead listener forever.
 				_ = os.Remove(candidate)
 			}
 			continue
@@ -88,7 +87,7 @@ func dialSocket(ctx context.Context, spec serverSpec, repoRoot string) (*Client,
 // $RGIT_LSP_SOCKET first (an existing socket the caller points at
 // explicitly), then the managed default path -- omitted entirely when
 // hasDefault is false, meaning privateSocketDir could not vouch for a
-// directory to hold it (finding 1).
+// directory to hold it.
 func socketCandidates(defaultPath string, hasDefault bool) []string {
 	candidates := make([]string, 0, 2)
 	if v := os.Getenv("RGIT_LSP_SOCKET"); v != "" {
@@ -122,7 +121,7 @@ func defaultSocketPath(serverName string) (path string, ok bool) {
 // os.TempDir(), and the socket name is otherwise predictable
 // (rgit-<server>.sock), so without this check another user could plant
 // their own listener there and read every file rgit sends it over
-// textDocument/didOpen (finding 1).
+// textDocument/didOpen.
 func privateSocketDir() (dir string, ok bool) {
 	dir = filepath.Join(runtimeDir(), fmt.Sprintf("rgit-%d", os.Getuid()))
 	if err := os.Mkdir(dir, 0o700); err != nil && !os.IsExist(err) {
@@ -178,9 +177,9 @@ func trySpawnDaemon(spec serverSpec, sockPath string) {
 
 	// A dead daemon leaves the unix socket special file behind; a fresh
 	// gopls's own net.Listen on the same path then fails EADDRINUSE, so
-	// spawn-on-demand would otherwise silently never recover (finding
-	// 10a). Only a socket nothing answers is removed -- a live daemon
-	// actually listening there is left alone.
+	// spawn-on-demand would otherwise silently never recover. Only a socket
+	// nothing answers is removed -- a live daemon actually listening there
+	// is left alone.
 	unlinkDeadSocket(sockPath)
 
 	cmd := exec.Command(spec.bin, spec.daemonArgs(sockPath)...)
@@ -203,7 +202,7 @@ func trySpawnDaemon(spec serverSpec, sockPath string) {
 // staleLockAge instead belongs to a process that died before its own
 // deferred cleanup ran. That stale lock is cleared and the claim retried
 // once in the same invocation rather than leaving the actual spawn to
-// whatever invocation happens to run next (finding 10b) -- otherwise the
+// whatever invocation happens to run next -- otherwise the
 // invocation that notices the stale lock is never the one that benefits
 // from clearing it. The lock is an optimization, not correctness
 // (specs/design.md): the worst a lost race over it costs is one extra
