@@ -68,15 +68,18 @@ type RevisionResolver interface {
 }
 
 // UnresolvedArgError is rule 6: none of the applicable rules matched.
-// Tried lists every interpretation that was attempted, in the order
-// tried, so the caller sees why rather than a bare "invalid argument".
+// Tried lists every rule considered, in the order checked, so the caller
+// sees why rather than a bare "invalid argument". "Considered" rather than
+// "attempted" on purpose: rule 2, for instance, is ruled out by a leading-
+// colon prefix check on a, not by actually resolving it as a pathspec and
+// finding it wanting.
 type UnresolvedArgError struct {
 	Arg   string
 	Tried []string
 }
 
 func (e *UnresolvedArgError) Error() string {
-	return fmt.Sprintf("cannot classify %q: tried %s", e.Arg, strings.Join(e.Tried, "; "))
+	return fmt.Sprintf("cannot classify %q: rules considered: %s", e.Arg, strings.Join(e.Tried, "; "))
 }
 
 // ClassifyArgs applies docs/USAGE.md's six-rule precedence table to args,
@@ -91,7 +94,7 @@ func (e *UnresolvedArgError) Error() string {
 //     pathspec.
 //  5. A token that splits at its last ":" into an existing path and a
 //     name is a symbol anchor.
-//  6. Otherwise, an *UnresolvedArgError listing every rule tried.
+//  6. Otherwise, an *UnresolvedArgError listing every rule considered.
 func ClassifyArgs(ctx context.Context, args []string, allowRevisions bool, paths PathChecker, revs RevisionResolver) ([]Classification, error) {
 	out := make([]Classification, 0, len(args))
 	seenDoubleDash := false
