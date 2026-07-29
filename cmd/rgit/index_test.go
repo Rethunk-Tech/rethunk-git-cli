@@ -2,9 +2,7 @@
 // test budget. Every case runs against a real temporary git repository --
 // no gitx mocking -- because these assertions are about git's own
 // behaviour (rename detection, mode changes, clean filters) and a mock
-// cannot be wrong in the same way git is right. Byte-exact expectations
-// were pinned by running the fixtures and reading back real output
-// (fixture-first discipline, CONTRIBUTING.md § Tests).
+// cannot be wrong in the same way git is right.
 package main
 
 import (
@@ -112,12 +110,11 @@ func TestStage_SingleSymbolSynthesizedIntoRealIndex(t *testing.T) {
 
 func TestStage_OverlappingAnchorsCoalesceIntoOneExtent(t *testing.T) {
 	t.Parallel()
-	// Pinned defect: two targets whose extents cover the same bytes were
-	// spliced independently. Every op addresses HEAD's original offsets and
-	// the pass runs in descending start order, so the inner splice shifted
-	// the bytes the outer one's end still pointed at; the outer splice then
-	// landed mid-token and staged "return 100\n}00\n}" -- a blob that does
-	// not parse, committed at exit 0 with nothing on stderr.
+	// Two targets whose extents cover the same bytes must not be spliced
+	// independently. Every op addresses HEAD's original offsets and the
+	// pass runs in descending start order, so an inner splice that shifts
+	// bytes an outer splice's end still points at must not land mid-token
+	// and stage a blob that does not parse.
 	//
 	// docs/ANCHORS.md requires overlapping or nested anchors to merge into a
 	// single contiguous extent. The enclosing extent is already that merged
@@ -169,8 +166,8 @@ func TestStage_OverlappingAnchorsCoalesceIntoOneExtent(t *testing.T) {
 
 	t.Run("the same anchor named twice", func(t *testing.T) {
 		// Degenerate overlap: an extent overlaps itself. Applying the
-		// identical replacement twice cut the wrong bytes the second time
-		// whenever the new text was not the same length as the old.
+		// identical replacement twice must not cut the wrong bytes the
+		// second time when the new text is not the same length as the old.
 		dir, repo := newSynthRepo(t)
 		writeFile(t, dir, "greet.go", head)
 		commitAll(t, dir, "chore: initial greet.go")
@@ -192,9 +189,10 @@ func TestStage_NewFileCarriesHeaderAndImports(t *testing.T) {
 	t.Parallel()
 	// docs/ANCHORS.md: "@header plus @imports is enough to make a synthesized
 	// new file compile, which is why both are staged automatically for an
-	// untracked file". Nothing implemented it, so naming one symbol in a file
-	// absent from HEAD staged a bare declaration -- no package clause, no
-	// imports -- and committed a file that does not parse, at exit 0.
+	// untracked file." Naming one symbol in a file absent from HEAD must
+	// stage the preamble along with it, not a bare declaration -- no
+	// package clause, no imports -- that would commit a file that does not
+	// parse, at exit 0.
 	work := "package main\n\nimport (\n\t\"fmt\"\n\t\"strings\"\n)\n\nfunc Shout(s string) string {\n\treturn strings.ToUpper(fmt.Sprint(s))\n}\n\nfunc Unrelated() {}\n"
 
 	t.Run("staged automatically", func(t *testing.T) {
@@ -218,10 +216,10 @@ func TestStage_NewFileCarriesHeaderAndImports(t *testing.T) {
 	})
 
 	t.Run("naming the header explicitly does not duplicate or reorder it", func(t *testing.T) {
-		// insertionPoint ranked insertions by index in the declaration
-		// table, and a pseudo-anchor has no entry there -- so an explicitly
-		// named @header sorted after every symbol and the package clause
-		// landed at the bottom of the file.
+		// insertionPoint ranks insertions by index in the declaration
+		// table, and a pseudo-anchor has no entry there, so an explicitly
+		// named @header must not sort after every symbol and land the
+		// package clause at the bottom of the file.
 		dir, repo := newSynthRepo(t)
 		writeFile(t, dir, "seed.go", "package main\n\nfunc Seed() {}\n")
 		commitAll(t, dir, "chore: seed")
@@ -255,10 +253,11 @@ func TestStage_NewFileCarriesHeaderAndImports(t *testing.T) {
 
 func TestStage_ClassMemberAnchors(t *testing.T) {
 	t.Parallel()
-	// Go's methods are file-scope, so A.Get always worked. TypeScript and
-	// Python put theirs inside a class body, which v1 never descended into:
-	// the finest addressable unit was the whole class, and in an idiomatic
-	// one-class-per-file module that is the same thing as naming the path.
+	// Go's methods are file-scope, so A.Get always resolves at that
+	// granularity. TypeScript and Python put theirs inside a class body, so
+	// a member must resolve at its own extent too, not merely at the whole
+	// class -- in an idiomatic one-class-per-file module, stopping at the
+	// class would be the same as naming the path.
 	tsHead := "export class Svc {\n  login(): number { return 1; }\n  logout(): number { return 2; }\n}\n"
 	tsWork := "export class Svc {\n  login(): number { return 111; }\n  logout(): number { return 222; }\n}\n"
 	pyHead := "class Svc:\n    def login(self):\n        return 1\n\n    def logout(self):\n        return 2\n"
@@ -338,10 +337,9 @@ func TestStage_ClassMemberAnchors(t *testing.T) {
 
 func TestStage_PythonModuleLevelAssignment(t *testing.T) {
 	t.Parallel()
-	// A module-level "X = 1" is an addressable symbol in the Python adapter,
-	// and nothing exercised it. Subscripted and attribute targets name
-	// nothing addressable and must stay unaddressable rather than resolving
-	// under a bogus symbol.
+	// A module-level "X = 1" is an addressable symbol in the Python adapter.
+	// Subscripted and attribute targets name nothing addressable and must
+	// stay unaddressable rather than resolving under a bogus symbol.
 	dir, repo := newSynthRepo(t)
 	head := "TIMEOUT = 30\nRETRIES = 3\nCONFIG = {}\nCONFIG[\"k\"] = 1\n"
 	writeFile(t, dir, "conf.py", head)
@@ -364,9 +362,9 @@ func TestStage_MemberDeletionKeepsTheFileParseable(t *testing.T) {
 	// spliceExcise collapses the gap a removal leaves by joining what
 	// precedes the cut to what follows it, which assumes the cut starts at a
 	// line boundary. That holds for a top-level declaration in column zero
-	// and not for a class member: the member's own indentation was left
-	// behind and ran into the next member's, producing a Python file that
-	// raised IndentationError and a TypeScript file with a stray brace.
+	// but not for a class member: the member's own indentation must not be
+	// left behind to run into the next member's, producing a Python file
+	// that raises IndentationError or a TypeScript file with a stray brace.
 	t.Run("python", func(t *testing.T) {
 		dir, repo := newSynthRepo(t)
 		writeFile(t, dir, "svc.py", "class Svc:\n    def keep(self):\n        return 1\n\n    def gone(self):\n        return 2\n\n    def also(self):\n        return 3\n")
@@ -407,9 +405,9 @@ func TestStage_MemberDeletionKeepsTheFileParseable(t *testing.T) {
 
 // TestStage_YAMLNestedKeyByteIdenticalRoundTrip pins the acceptance bar
 // TODO.md's own warning set for this grammar: YAML's indentation handling
-// is exactly where synthesis bugs have hidden before (8b8629d), so a
-// nested key's own replace must reproduce the worktree byte-for-byte, not
-// merely "close."
+// is exactly where synthesis bugs are easiest to hide, so a nested key's
+// own replace must reproduce the worktree byte-for-byte, not merely
+// "close."
 func TestStage_YAMLNestedKeyByteIdenticalRoundTrip(t *testing.T) {
 	t.Parallel()
 	head := "name: CI\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: go build ./...\n\n" +
@@ -476,9 +474,8 @@ func TestStage_UnbornBranchInitialCommit(t *testing.T) {
 	// which gitx.CatFile already folds into a plain false).
 	//
 	// Every file is absent from HEAD here, so this is also the new-file case:
-	// the package clause comes along, or the repository's very first commit
-	// holds a Go file that does not compile. This expectation previously
-	// pinned that defect.
+	// the package clause must come along, or the repository's very first
+	// commit holds a Go file that does not compile.
 	dir, repo := newSynthRepo(t)
 	writeFile(t, dir, "new.go", "package main\n\nfunc Hello() string {\n\treturn \"hi\"\n}\n")
 
@@ -704,20 +701,19 @@ func TestStage_NewSymbolInsertsAtNearestSiblingIncludingNewNeighbours(t *testing
 
 func TestStage_NewSiblingAdjacentToModifiedFunctionNotSwallowed(t *testing.T) {
 	t.Parallel()
-	// Pinned defect (production incident, commit f27324f): C is new to HEAD
-	// and its nearest existing sibling in worktree declaration order is A,
-	// which is ALSO being modified in the same commit. insertionPoint
-	// resolves C's insertion point as A's own HEAD extent.End -- "insert
-	// right after A" -- which lands on the exact same byte offset as A's
-	// editReplace op's own end. coalesceOverlaps' swallowedBy treated that
-	// boundary as containment (op.start <= k.end, a closed interval), so it
-	// discarded C's insertion as "already part of A's replacement text" even
-	// though A's replacement text is only A's own body and never contained
-	// C at all. rgit reported C staged (a nonzero line count came out of
-	// opLineCounts, computed independently of coalescing) and exited 0, but
-	// the synthesized blob silently had no definition of C -- only whatever
-	// called it, if anything did. This is a data-integrity bug: a
-	// successful report must match the blob actually written.
+	// Guards against a data-integrity bug: a successful report must match
+	// the blob actually written. C is new to HEAD and its nearest existing
+	// sibling in worktree declaration order is A, which is ALSO being
+	// modified in the same commit. insertionPoint resolves C's insertion
+	// point as A's own HEAD extent.End -- "insert right after A" -- which
+	// lands on the exact same byte offset as A's editReplace op's own end.
+	// coalesceOverlaps' swallowedBy must not treat that boundary as
+	// containment (op.start <= k.end, a closed interval) and discard C's
+	// insertion as "already part of A's replacement text": A's replacement
+	// text is only A's own body and never contains C at all. A report of C
+	// staged (opLineCounts computes its line count independently of
+	// coalescing) must correspond to a synthesized blob that actually
+	// defines C.
 	dir, repo := newSynthRepo(t)
 	head := "package main\n\n// A returns one.\nfunc A() int {\n\treturn 1\n}\n\n// B returns two.\nfunc B() int {\n\treturn 2\n}\n"
 	writeFile(t, dir, "adj.go", head)
@@ -814,14 +810,14 @@ func TestStage_DeletedSymbolExcisedFromBlob(t *testing.T) {
 	mustParseGo(t, "deletion", got)
 }
 
-// TestStage_ContainerMemberInsertIsByteIdenticalToWorktree pins the fix for
-// TODO.md § Known limitations' "a symbol inserted into an existing container
-// gains a blank line on each side": a Go struct field, a Go interface
-// method, and a TypeScript class method all sit flush against their
-// siblings in idiomatic source, with no blank line between them, so staging
-// a newly added one must not pad one in -- the committed blob has to be
-// byte-identical to the worktree, or the file still reads as modified right
-// after the commit that was supposed to capture it.
+// TestStage_ContainerMemberInsertIsByteIdenticalToWorktree guards against a
+// symbol inserted into an existing container gaining a blank line on each
+// side: a Go struct field, a Go interface method, and a TypeScript class
+// method all sit flush against their siblings in idiomatic source, with no
+// blank line between them, so staging a newly added one must not pad one
+// in -- the committed blob has to be byte-identical to the worktree, or
+// the file still reads as modified right after the commit that was
+// supposed to capture it.
 //
 // Python is deliberately the odd one out here (resolve.MembersSitFlush):
 // PEP 8 requires a blank line between method definitions inside a class,
@@ -911,8 +907,8 @@ func TestStage_ContainerMemberInsertIsByteIdenticalToWorktree(t *testing.T) {
 	})
 }
 
-// TestStage_SiblingReceiverMethodKeepsBlankLinePadding is the regression
-// guard for the fix above: a Go receiver method is container-QUALIFIED
+// TestStage_SiblingReceiverMethodKeepsBlankLinePadding is the counterpart
+// guard to the test above: a Go receiver method is container-QUALIFIED
 // (resolve.Resolution.Container is set) but not container-NESTED -- it is a
 // top-level declaration beside its receiver type, not inside it -- and must
 // keep the ordinary blank-line separation a new top-level declaration gets.
@@ -934,13 +930,13 @@ func TestStage_SiblingReceiverMethodKeepsBlankLinePadding(t *testing.T) {
 	qt.Assert(t, qt.Equals(got, work))
 }
 
-// TestPlanStage_PreambleRowsAppearInResults pins the fix for a --dry-run
+// TestPlanStage_PreambleRowsAppearInResults guards against a --dry-run
 // undercount: TestStage_NewFileCarriesHeaderAndImports already proves the
-// @header/@imports preamble is staged for a new file, but before this fix
-// plan.Results() never carried a row for it -- the preamble was announced
-// only on stderr's [notice] line, so a --dry-run preview (which prints
-// nothing but plan.Results()) reported only the named symbol's own count,
-// silently dropping the preamble's.
+// @header/@imports preamble is staged for a new file, and plan.Results()
+// must carry a row for it too -- not merely announce it on stderr's
+// [notice] line -- or a --dry-run preview (which prints nothing but
+// plan.Results()) reports only the named symbol's own count, silently
+// dropping the preamble's.
 //
 // The row-level counts here DO sum to git's raw numstat total for the whole
 // file: @header and @imports each absorb their own mandatory trailing
@@ -976,9 +972,9 @@ func TestPlanStage_PreambleRowsAppearInResults(t *testing.T) {
 	// position, then name), and both pseudos happen to share position 0 in a
 	// brand new file, same as the named symbol does.
 	qt.Assert(t, qt.DeepEquals(labels, []string{"new.go:@header", "new.go:@imports", "new.go:Hello"}))
-	// Before this fix, results held only the Hello row; @header and @imports
-	// were staged (proven by TestStage_NewFileCarriesHeaderAndImports) but
-	// invisible to the caller.
+	// @header and @imports must be visible here too, not merely staged
+	// (proven by TestStage_NewFileCarriesHeaderAndImports) while invisible
+	// to the caller.
 	qt.Assert(t, qt.Equals(results[0].Added, 2)) // "package main" + its absorbed blank line
 	qt.Assert(t, qt.Equals(results[1].Added, 2)) // `import "fmt"` + its absorbed blank line
 	qt.Assert(t, qt.Equals(results[2].Added, 3)) // Hello's own 3-line body

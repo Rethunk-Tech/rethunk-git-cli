@@ -43,7 +43,7 @@ func TestResolvePrefix(t *testing.T) {
 	t.Parallel()
 	// Only the flagPrefix branch is a pure transformation; the GOBIN/GOPATH
 	// fallback shells out to `go env` via goEnv and is exercised by hand
-	// instead (see the fixup round's report) rather than mocked here.
+	// instead, rather than mocked here.
 	got, err := resolvePrefix("/custom/prefix")
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(got, "/custom/prefix"))
@@ -97,8 +97,8 @@ func TestInstallBinary(t *testing.T) {
 		qt.Assert(t, qt.Equals(info.Mode().Perm(), os.FileMode(0o755)))
 	})
 
-	// The regression this guards: main's "Installed" vs "Replaced existing
-	// binary at" wording reads directly off this return value.
+	// main's "Installed" vs "Replaced existing binary at" wording reads
+	// directly off this return value.
 	t.Run("existing binary reports replaced and its content is overwritten", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
@@ -146,11 +146,10 @@ func TestSQLCSRCContentHash(t *testing.T) {
 		qt.Assert(t, qt.Equals(h1, h2))
 	})
 
-	// The regression this guards: buildBinary's cache-busting (see
-	// deliverable 1 of the fixup round, "key the SQL build on generated
-	// parser content") only defeats a stale go build cache if this hash
-	// actually changes when csrc/ content does. A hash that stayed constant
-	// across different content would silently bring that bug back.
+	// buildBinary's cache-busting only defeats a stale go build cache if
+	// this hash actually changes when csrc/ content does. A hash that
+	// stayed constant across different content would silently make the
+	// cache-busting a no-op.
 	t.Run("different content changes the hash", func(t *testing.T) {
 		t.Parallel()
 		a := writeCSRC(t, "content A")
@@ -187,8 +186,9 @@ func TestParserABIVersion(t *testing.T) {
 		qt.Assert(t, qt.Equals(abi, 15))
 	})
 
-	// The regression this guards: an outdated tree-sitter CLI emitting ABI
-	// 14 despite tree-sitter.json sitting right next to grammar.js.
+	// An outdated tree-sitter CLI can emit ABI 14 despite tree-sitter.json
+	// sitting right next to grammar.js; catching that is the whole point of
+	// checking LANGUAGE_VERSION directly.
 	t.Run("stale ABI", func(t *testing.T) {
 		t.Parallel()
 		path := write(t, "#define LANGUAGE_VERSION 14\n")

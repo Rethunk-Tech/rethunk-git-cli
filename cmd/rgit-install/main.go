@@ -25,9 +25,9 @@ import (
 )
 
 // sqlGrammarModule is the Go module that publishes the SQL grammar's
-// grammar.js and tree-sitter.json, but not a working parser.c (measured:
-// the module gitignores it at every tag, so its own bindings/go cannot
-// compile). rgit generates that file itself; see generateSQLParser.
+// grammar.js and tree-sitter.json, but not a working parser.c: the module
+// gitignores it at every tag, so its own bindings/go cannot compile. rgit
+// generates that file itself; see generateSQLParser.
 //
 // sqlGrammarVersion is pinned rather than left floating: internal/resolve/
 // sqlgrammar's own binding imports neither this module nor its bindings/go
@@ -38,20 +38,20 @@ import (
 // the module by explicit "module@version" instead of a bare module path
 // (downloadSQLGrammarModule) sidesteps that entirely: `go mod download` and
 // `go list -m` both accept a version-qualified query with no go.mod entry
-// at all, verified against this exact module and version.
+// at all.
 const (
 	sqlGrammarModule  = "github.com/DerekStride/tree-sitter-sql"
 	sqlGrammarVersion = "v0.3.11"
 )
 
-// sqlAdapterPackageName is the package name findSQLAdapter looks for. Matching
-// by name rather than by import content is what changed here: an earlier
-// draft searched go list's own Imports field for a "tree-sitter-sql"
-// substring, on the assumption that whatever package needed generation would
-// import the upstream module's own bindings/go directly. It never will --
-// internal/resolve/sqlgrammar's binding imports only "C" and "unsafe" (see
-// its own doc comment) specifically because that upstream package is the one
-// that cannot compile -- so that check silently matched nothing, forever.
+// sqlAdapterPackageName is the package name findSQLAdapter looks for.
+// Matching by name rather than by import content: a check for a
+// "tree-sitter-sql" substring in go list's own Imports field would assume
+// whatever package needs generation imports the upstream module's own
+// bindings/go directly. It never will -- internal/resolve/sqlgrammar's
+// binding imports only "C" and "unsafe" (see its own doc comment)
+// specifically because that upstream package is the one that cannot
+// compile -- so an import-content check would silently match nothing.
 const sqlAdapterPackageName = "sqlgrammar"
 
 func main() {
@@ -233,8 +233,7 @@ func firstField(s string) string {
 // `go list -tags rgit_sql -json ./...` succeeds here even before generation
 // has ever run: cgo's own #include "csrc/parser.c" is a C-preprocessor
 // directive inside a Go source comment, invisible to `go list`, which only
-// needs the .go file to parse -- verified directly, since this is exactly
-// the state a clean checkout is in.
+// needs the .go file to parse -- exactly the state a clean checkout is in.
 func findSQLAdapter(repoRoot string) (dir string, ok bool) {
 	cmd := exec.Command("go", "list", "-tags", "rgit_sql", "-json", "./...")
 	cmd.Dir = repoRoot
@@ -323,15 +322,14 @@ func downloadSQLGrammarModule(repoRoot string) (string, error) {
 	return dir, nil
 }
 
-// runSQLGeneration is the mechanics measured for this repo: copy grammar.js
-// and tree-sitter.json into a scratch directory (the module cache is
-// read-only, and tree-sitter.json alongside grammar.js is what yields ABI
-// 15 instead of a silent ABI 14), run `tree-sitter generate` there, then
-// copy the result -- plus the module's own scanner.c -- into pkgDir/csrc.
-// The generated C must live in that subdirectory rather than pkgDir itself:
-// measured, putting it directly in the package directory makes cgo compile
-// it and the adapter's #include pull it in again, a duplicate-symbol link
-// error.
+// runSQLGeneration copies grammar.js and tree-sitter.json into a scratch
+// directory (the module cache is read-only, and tree-sitter.json alongside
+// grammar.js is what yields ABI 15 instead of a silent ABI 14), runs
+// `tree-sitter generate` there, then copies the result -- plus the
+// module's own scanner.c -- into pkgDir/csrc. The generated C must live in
+// that subdirectory rather than pkgDir itself: putting it directly in the
+// package directory makes cgo compile it and the adapter's #include pull
+// it in again, a duplicate-symbol link error.
 func runSQLGeneration(modDir, pkgDir string) error {
 	scratch, err := os.MkdirTemp("", "rgit-sql-gen-*")
 	if err != nil {
@@ -493,8 +491,8 @@ func buildBinary(repoRoot string, sql bool, sqlPkgDir, ver string) (bin string, 
 		// generated C reaches the compiler only through a C #include inside
 		// grammar.go's cgo comment, which the go tool never reads as a
 		// build input, so the package's cache key stays keyed on grammar.go
-		// alone (reproduced: a corrupted parser.c with grammar.go untouched
-		// built silently from a stale cached object). CGO_CFLAGS is one of
+		// alone -- a corrupted parser.c with grammar.go untouched would
+		// build silently from a stale cached object. CGO_CFLAGS is one of
 		// the environment variables Go's cache genuinely does key cgo
 		// compiles on, so folding the actual csrc/ content into it -- as an
 		// inert, unreferenced macro -- makes the cache key honestly track

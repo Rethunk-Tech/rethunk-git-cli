@@ -1,7 +1,6 @@
 // Resolver coverage, per CONTRIBUTING.md's three-file test budget. Byte
-// offsets below were pinned by running the resolver against each fixture
-// and reading back real tree-sitter output (fixture-first discipline,
-// CONTRIBUTING.md § Tests); they are not derived from grammar docs.
+// offsets below reflect real tree-sitter output against each fixture, not
+// grammar docs.
 package main
 
 import (
@@ -371,8 +370,7 @@ import "fmt"
 func TestResolve_TypeScriptAndPython(t *testing.T) {
 	t.Parallel()
 	// The two grammars whose node shapes differ from Go in ways that fail
-	// silently rather than loudly. Values below were pinned by running the
-	// resolver against these fixtures and reading back real output.
+	// silently rather than loudly.
 
 	ts := []byte(`import {a} from 'a'
 import b from 'b'
@@ -427,9 +425,10 @@ def g():
 
 func TestResolve_TypeScriptGrammarHoles(t *testing.T) {
 	t.Parallel()
-	// declarationFor used to handle only five node kinds; everything else in
-	// this fixture exited 3 unresolved. One fixture exercises every
-	// newly-addressable shape at once rather than one test per kind.
+	// One fixture exercises every declarationFor node kind at once rather
+	// than one test per kind: enum, abstract class, generator function, var
+	// declaration, namespace, default export, and an ordinary class method
+	// must all resolve, not exit 3 unresolved.
 	src := []byte(`enum Color { Red, Blue }
 abstract class Base { run() { return 1 } }
 function* gen() { yield 1 }
@@ -926,12 +925,13 @@ func ValidateToken(t string) error {
 
 func TestResolve_MembersSharingANameAreOrdinal(t *testing.T) {
 	t.Parallel()
-	// Ordinals used to be assigned only among symbols with no container, so
-	// two members of one class produced the identical qualified name. The
-	// index kept whichever came last, `Box.size` silently resolved to one of
-	// the two, and the other became unaddressable -- with no ambiguity
-	// reported, which is precisely what exit 4 exists to say. A TypeScript
-	// get/set pair is the ordinary case, not a corner.
+	// TestResolve_MembersSharingANameAreOrdinal guards against two members
+	// of one class producing the identical qualified name: without an
+	// ordinal assigned among a container's own members, `Box.size` would
+	// resolve silently to whichever one the index kept last, and the other
+	// would become unaddressable with no ambiguity reported -- exactly what
+	// exit 4 exists to say. A TypeScript get/set pair is the ordinary case,
+	// not a corner.
 	src := []byte("export class Box {\n  get size(): number { return 1; }\n  set size(n: number) { }\n  only(): number { return 3; }\n}\n")
 
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".ts", src, "Box.size#1"), "get size(): number { return 1; }"))
@@ -963,10 +963,11 @@ func TestResolve_SameNamedContainersDoNotMergeMembers(t *testing.T) {
 
 func TestResolve_TypeScriptMultiDeclarator(t *testing.T) {
 	t.Parallel()
-	// A multi-declarator statement -- `const a = 1, b = 2` -- used to
-	// address only the first declarator. A change to b reported as a
-	// change to a: a label that validates while naming a symbol nobody
-	// touched, the same defect goSpecDeclarations closed for Go's grouped
+	// Each declarator in a multi-declarator statement -- `const a = 1, b =
+	// 2` -- must resolve to its own extent, not just the first: resolving
+	// only the first declarator would report a change to b as a change to
+	// a, a label that validates while naming a symbol nobody touched --
+	// the same defect goSpecDeclarations guards against for Go's grouped
 	// const/var/type blocks.
 	src := []byte(`const a = 1, b = 2;
 var m = 1, n = 2;
@@ -1096,8 +1097,7 @@ Second Usage options.
 	// heading -- not "first heading through end of document", which is what
 	// the shared declaration-span formula every other language uses would
 	// otherwise compute here (sectionDeclarations names no declaration for
-	// the lede). Before this fix the lede was reachable only by naming the
-	// path.
+	// the lede).
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".md", src, "@toplevel"),
 		"\nLede paragraph before any heading.\n\n"))
 
@@ -1111,11 +1111,10 @@ Second Usage options.
 		"# Diff Scope\n\nSome intro.\n\n```bash\n# not a heading, inside a fence\necho hi\n```\n\n"+
 			"Setext Title\n============\n\nBody after the setext heading.\n"))
 
-	// A setext heading is addressable by its own slug, but -- measured
-	// against a compiled parse tree -- unlike an atx heading it never opens
-	// its own section, so its extent is the heading line alone, not a
-	// header-plus-body span: the following paragraph belongs to the
-	// enclosing "diff-scope" section instead.
+	// A setext heading is addressable by its own slug, but unlike an atx
+	// heading it never opens its own section, so its extent is the heading
+	// line alone, not a header-plus-body span: the following paragraph
+	// belongs to the enclosing "diff-scope" section instead.
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".md", src2, "diff-scope.setext-title"),
 		"Setext Title\n============\n"))
 
@@ -1123,8 +1122,8 @@ Second Usage options.
 	// input, the same way it accepts gopls's "(*A).Get" spelling -- whether
 	// or not that text contains a space. A single-word heading's raw text
 	// ("Install") must resolve exactly like a multi-word one ("Diff Scope");
-	// gating the fallback on a literal space made the single-word case
-	// unresolvable for no reason a caller could act on.
+	// gating the fallback on a literal space would make the single-word
+	// case unresolvable for no reason a caller could act on.
 	lang2, ok := resolve.ForExtension(".md")
 	qt.Assert(t, qt.IsTrue(ok))
 	res, err := resolve.Resolve(lang2, src2, "Diff Scope")
@@ -1152,10 +1151,7 @@ func TestResolve_YAML(t *testing.T) {
 	t.Parallel()
 	// A realistic GitHub Actions workflow: several jobs, nested steps, a
 	// block scalar `run: |`, a flow sequence, and a comment sitting between
-	// the end of a nested job and the next, more shallowly indented one --
-	// byte extents pinned by running the resolver against this exact
-	// fixture, not derived from the grammar's docs (CONTRIBUTING.md §
-	// Tests).
+	// the end of a nested job and the next, more shallowly indented one.
 	src := []byte(`# leading header comment
 
 name: CI
@@ -1209,8 +1205,8 @@ jobs:
 	// "test:"'s leading trivia: tree-sitter-yaml's own external scanner
 	// grafts a comment preceding a multi-level dedent onto whichever block
 	// was still open when it consumed the comment token, regardless of the
-	// comment's own written column (lang_yaml.go's trimTrailingComment) --
-	// measured directly, not assumed. "jobs.build" excludes it (trimmed off
+	// comment's own written column (lang_yaml.go's trimTrailingComment).
+	// "jobs.build" excludes it (trimmed off
 	// its trailing edge, so an edit to "build" alone never silently carries
 	// a comment written for its neighbour), and "jobs.test" never had it as
 	// a real sibling to begin with, so neither key's own extent claims it.
@@ -1359,11 +1355,10 @@ func TestResolve_YAMLNoTopLevelMapping(t *testing.T) {
 func TestResolve_YAMLKeyShapes(t *testing.T) {
 	t.Parallel()
 	// The explicit "?" key's own value is a nested block mapping ("a: 1\n
-	// b: 2"), not a scalar -- measured against a compiled parse tree: its
-	// key field is a "block_node", not the ordinary "flow_node" every plain
-	// or quoted key parses as, so it is left unaddressable rather than
-	// resolved to an invented spelling. "plain" is unaffected by its
-	// refused sibling.
+	// b: 2"), not a scalar: its key field is a "block_node", not the
+	// ordinary "flow_node" every plain or quoted key parses as, so it is
+	// left unaddressable rather than resolved to an invented spelling.
+	// "plain" is unaffected by its refused sibling.
 	src := []byte("'single quoted': ok\n" +
 		"?\n  a: 1\n  b: 2\n: value\n" +
 		"plain: fine\n")
@@ -1383,9 +1378,7 @@ func TestResolve_Shell(t *testing.T) {
 	t.Parallel()
 	// Both function forms, a top-level var, source lines in two spellings, a
 	// heredoc whose body only looks like a function definition, and a
-	// redefinition -- byte extents pinned by running the resolver against
-	// this exact fixture, not derived from the grammar's docs
-	// (CONTRIBUTING.md § Tests).
+	// redefinition.
 	src := []byte(`#!/usr/bin/env bash
 source ./lib.sh
 . ./other.sh
@@ -1457,9 +1450,7 @@ func TestResolve_CSS(t *testing.T) {
 	t.Parallel()
 	// A realistic small stylesheet: a leading comment, three selector
 	// shapes, an @import, an @media block whose nested rule is not itself
-	// addressable, and a generic at-rule with no prelude -- byte extents
-	// pinned by running the resolver against this exact fixture, not
-	// derived from the grammar's docs (CONTRIBUTING.md § Tests).
+	// addressable, and a generic at-rule with no prelude.
 	src := []byte(`/* Global styles */
 
 @import "reset.css";
@@ -1672,9 +1663,7 @@ func TestResolve_JSON(t *testing.T) {
 	t.Parallel()
 	// A realistic config-shaped document: a nested object (container
 	// qualification), an array (a leaf, never descended), and a top-level
-	// scalar -- byte extents pinned by running the resolver against this
-	// exact fixture, not derived from the grammar's docs (CONTRIBUTING.md §
-	// Tests).
+	// scalar.
 	src := []byte(`{
   "name": "example",
   "server": {
@@ -1731,9 +1720,7 @@ func TestResolve_TOML(t *testing.T) {
 	// A realistic config file: a leading comment, a bare top-level pair, a
 	// "[table]" whose members include one separated from its neighbour by
 	// an own-line comment, and an array of tables ("[[servers]]") whose two
-	// elements share one header spelling -- byte extents pinned by running
-	// the resolver against this exact fixture, not derived from the
-	// grammar's docs (CONTRIBUTING.md § Tests).
+	// elements share one header spelling.
 	src := []byte(`# leading comment
 
 title = "example"
@@ -1763,9 +1750,9 @@ name = "b"
 
 	// Naming a table claims the whole table, header through its last
 	// member -- including the blank line before the next section header,
-	// which the grammar attributes to the table node itself (measured:
-	// "table"'s own EndByte reaches the byte immediately before "[[servers]]"
-	// starts, not the end of "host"'s own line).
+	// which the grammar attributes to the table node itself: "table"'s own
+	// EndByte reaches the byte immediately before "[[servers]]" starts, not
+	// the end of "host"'s own line.
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "server"),
 		"[server]\nport = 8080\n\n# comment for host\nhost = \"localhost\"\n\n"))
 

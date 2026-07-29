@@ -95,9 +95,8 @@ func TestInstallCommand(t *testing.T) {
 			wantArgs: []string{"add", "-g", "pyright"},
 		},
 		{
-			// The regression this guards: taplo built via `cargo install
-			// taplo-cli` alone has no LSP support at all -- extraArgs must
-			// reach the invocation.
+			// taplo built via `cargo install taplo-cli` alone has no LSP
+			// support at all -- extraArgs must reach the invocation.
 			name:     "cargo carries extraArgs",
 			job:      installJob{manager: managerCargo, pkg: "taplo-cli", extraArgs: []string{"--locked", "--features", "lsp"}},
 			wantName: "cargo",
@@ -122,9 +121,8 @@ func TestDirOnPATH(t *testing.T) {
 	qt.Assert(t, qt.IsTrue(dirOnPATH("/home/x/.local/bin", path)))
 	qt.Assert(t, qt.IsTrue(dirOnPATH("/home/x/.local/bin/", path))) // trailing slash still matches, cleaned
 
-	// The regression this guards: cargo wrote taplo to ~/.cargo/bin on
-	// 2026-07-28 while that directory was absent from PATH, and nothing
-	// caught it.
+	// cargo can write taplo to ~/.cargo/bin while that directory is absent
+	// from PATH; dirOnPATH is what catches it.
 	qt.Assert(t, qt.IsFalse(dirOnPATH("/home/x/.cargo/bin", path)))
 }
 

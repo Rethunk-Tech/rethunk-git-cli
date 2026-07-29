@@ -38,13 +38,13 @@ func main() {
 // resolveVersion returns what rgit --version should report. The ldflags
 // value wins whenever `make build`/`make install`/cmd/rgit-install set one
 // (Makefile:12-14, cmd/rgit-install/main.go's ldflags helper) -- this never
-// overrides it, so those two paths report exactly what they report today.
+// overrides it, so those two paths report exactly what they already report.
 //
 // Absent that, `go build`/`go install ./cmd/rgit` still get something truthful
 // instead of the bare "dev" default: runtime/debug.ReadBuildInfo exposes the
 // same VCS data the go tool embeds automatically from within a git checkout
-// (measured: `go version -m` on a plain build shows vcs.revision, vcs.time,
-// and vcs.modified populated with no ldflags at all). Only vcs.revision and
+// (`go version -m` on a plain build shows vcs.revision, vcs.time, and
+// vcs.modified populated with no ldflags at all). Only vcs.revision and
 // vcs.modified are used here -- vcs.time adds nothing git describe doesn't
 // already convey via the revision itself.
 //

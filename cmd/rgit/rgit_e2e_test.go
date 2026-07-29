@@ -71,10 +71,10 @@ func buildRgit() (bin string, cleanup func(), err error) {
 	cleanup = func() { _ = os.RemoveAll(dir) }
 
 	bin = filepath.Join(dir, "rgit")
-	// Not -race. Measured: race-instrumenting the cgo tree-sitter parse path
-	// costs 24x per invocation (1.05s against 0.044s), which across this
-	// file's invocations is minutes rather than seconds -- and it buys
-	// almost nothing, since a single rgit invocation resolves in sequence
+	// Not -race: race-instrumenting the cgo tree-sitter parse path costs
+	// 24x per invocation (1.05s against 0.044s), which across this file's
+	// invocations is minutes rather than seconds -- and it buys almost
+	// nothing, since a single rgit invocation resolves in sequence
 	// (lsp.Session: "not safe for concurrent use"). The concurrency worth
 	// checking is the jsonrpc2 read goroutine and the daemon spawn lock,
 	// both in-process: `go test -race ./...` reaches them and this does not.
@@ -141,12 +141,11 @@ func runRgit(t *testing.T, repoDir string, args ...string) rgitResult {
 
 func TestCommit_InterspersedFlagAfterPositional(t *testing.T) {
 	t.Parallel()
-	// Pinned defect: stdlib flag and ff/ffcli stop parsing at the first
-	// positional, so this exact argv shape would silently yield zero
-	// messages and two targets ("auth.go:Foo", "msg"), failing with
-	// exit 129 ("commit requires a message"). pflag's interspersed
-	// parsing must read one message and one target instead, letting the
-	// commit actually succeed.
+	// stdlib flag and ff/ffcli stop parsing at the first positional, so
+	// this exact argv shape would silently yield zero messages and two
+	// targets ("auth.go:Foo", "msg"), failing with exit 129 ("commit
+	// requires a message"). pflag's interspersed parsing must read one
+	// message and one target instead, letting the commit actually succeed.
 	repo := newTempRepo(t)
 	writeFile(t, repo, "auth.go", "package main\n\nfunc Foo() {}\n")
 
@@ -158,9 +157,9 @@ func TestCommit_InterspersedFlagAfterPositional(t *testing.T) {
 
 func TestCommit_ColonInFilenameIsPathspec(t *testing.T) {
 	t.Parallel()
-	// "src/notes:draft.md" is a legal tracked path (design.md measured
-	// git accepting it). Rule 4's existing-path check must claim it
-	// whole, before rule 5 gets a chance to split it into a bogus
+	// "src/notes:draft.md" is a legal tracked path -- git accepts it as a
+	// plain path (specs/design.md). Rule 4's existing-path check must
+	// claim it whole, before rule 5 gets a chance to split it into a bogus
 	// FILE:NAME anchor at the interior colon.
 	repo := newTempRepo(t)
 	writeFile(t, repo, "src/notes:draft.md", "draft\n")
@@ -260,16 +259,15 @@ func TestInvalidFlagCombinations(t *testing.T) {
 
 func TestContradictoryPathAndAnchor(t *testing.T) {
 	t.Parallel()
-	// Pinned defect: the check ran on flag values only, so the positional
-	// spelling fell straight through it. Both targets were then built, and
-	// apply() ran `git add greet.go` before overwriting that same index
-	// entry with a blob synthesized from HEAD plus one extent -- silently
-	// dropping every other worktree change in the file the caller had just
-	// asked for by path, while the listing still reported the whole path's
-	// line counts.
+	// This must be caught regardless of spelling -- flag or positional --
+	// not merely on flag values: apply() runs `git add greet.go` and then
+	// overwrites that same index entry with a blob synthesized from HEAD
+	// plus one extent, silently dropping every other worktree change in
+	// the file the caller asked for by path, while the listing still
+	// reports the whole path's line counts.
 	//
 	// docs/CODES.md § Exit codes assigns 5 to naming a path both ways; the
-	// spelling used to say it cannot change the answer.
+	// spelling must not change the answer.
 	setup := func(t *testing.T) string {
 		t.Helper()
 		repo := newTempRepo(t)
@@ -307,9 +305,9 @@ func TestContradictoryPathAndAnchor(t *testing.T) {
 
 func TestCommit_AnnouncesPreambleAndOrdinalAnchors(t *testing.T) {
 	t.Parallel()
-	// docs/ANCHORS.md documents both announcements: the new-file preamble is
-	// "announced on stderr", and an ordinal is a last resort that "warns and
-	// suggests qualification". Both were silent.
+	// docs/ANCHORS.md documents both announcements: the new-file preamble
+	// must be "announced on stderr", and an ordinal, a last resort, must
+	// "warn and suggest qualification".
 	t.Run("new-file preamble is announced", func(t *testing.T) {
 		repo := newTempRepo(t)
 		writeFile(t, repo, "new.go", "package main\n\nimport \"fmt\"\n\nfunc Hi() { fmt.Println(\"hi\") }\n")
@@ -346,12 +344,13 @@ func TestCommit_AnnouncesPreambleAndOrdinalAnchors(t *testing.T) {
 
 func TestDiff_CrossCheckReportsWithoutGating(t *testing.T) {
 	t.Parallel()
-	// The cross-check ran only on the commit path, so rgit diff could emit
-	// an anchor rgit commit then refused with exit 6 -- the closed loop held
-	// syntactically and not semantically. Diff reports rather than gates: a
-	// disagreement is worth knowing while reading the diff, but a read-only
-	// command must not fail on one, and a server that is absent, slow or
-	// silent about a symbol stays the normal case.
+	// The cross-check must run on the diff path too, not only commit's:
+	// rgit diff must never emit an anchor rgit commit then refuses with
+	// exit 6, or the closed loop holds only syntactically, not
+	// semantically. Diff reports rather than gates: a disagreement is
+	// worth knowing while reading the diff, but a read-only command must
+	// not fail on one, and a server that is absent, slow or silent about a
+	// symbol stays the normal case.
 	repo := newTempRepo(t)
 	writeFile(t, repo, "go.mod", "module x\n\ngo 1.21\n")
 	writeFile(t, repo, "a.go", "package x\n\n// Doc for A.\nfunc A() int {\n\treturn 1\n}\n")
@@ -370,8 +369,8 @@ func TestDiff_CrossCheckReportsWithoutGating(t *testing.T) {
 
 func TestDocumentedPathsWithoutOtherCoverage(t *testing.T) {
 	t.Parallel()
-	// Each of these is specified in docs/USAGE.md and was reachable only
-	// through paths no other case exercised.
+	// Each of these is specified in docs/USAGE.md; the case is here because
+	// no other test exercises the path that reaches it.
 	commitOne := func(t *testing.T, repo string) {
 		t.Helper()
 		gitIn(t, repo, "add", "-A")
@@ -1097,9 +1096,10 @@ func TestCommit_DryRunPreviewsAndStagesNothing(t *testing.T) {
 	qt.Assert(t, qt.IsTrue(ok))
 	qt.Assert(t, qt.StringContains(got.Stdout, "+"+row.Added+"/-"+row.Deleted))
 
-	// A whole-path target reports counts too. Labelling it "(path)" and
-	// leaving the numbers out made the preview inconsistent with the diff
-	// for exactly the targets a caller is least able to eyeball.
+	// A whole-path target must report counts too, not a "(path)" label
+	// with the numbers left out -- that would make the preview
+	// inconsistent with the diff for exactly the targets a caller is
+	// least able to eyeball.
 	writeFile(t, repo, "notes.md", "one\ntwo\n")
 	pathGot := runRgit(t, repo, "commit", "--dry-run", "notes.md", "-m", "docs: preview a path")
 	qt.Assert(t, qt.Equals(pathGot.ExitCode, 0))
@@ -1117,7 +1117,7 @@ func TestCommit_PathAlreadyStagedAsDeleted(t *testing.T) {
 	// After `git rm`, the path matches nothing in the worktree and nothing
 	// in the index, so `git add` rejects it as a bad pathspec. Naming
 	// something already staged exactly as asked is not an error -- the
-	// commit includes it either way -- and failing made `rgit commit <path>`
+	// commit includes it either way -- or `rgit commit <path>` would be
 	// unusable after a `git rm`.
 	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
 	writeFile(t, repo, "gone.md", "bye\n")
@@ -1134,11 +1134,11 @@ func TestCommit_PathAlreadyStagedAsDeleted(t *testing.T) {
 func TestOutput_OrderedByPathThenPosition(t *testing.T) {
 	t.Parallel()
 	// Both listings sort alphabetically by path, then ascending by position
-	// within each file -- the same contract `git status` offers. Output that
-	// followed discovery order put @imports last despite it being the first
-	// thing in the file, and `rgit commit` echoed whatever order the caller
-	// happened to type. Neither is greppable, and neither is stable between
-	// runs on an unchanged tree.
+	// within each file -- the same contract `git status` offers. Discovery
+	// order would put @imports last despite it being the first thing in
+	// the file, and echoing whatever order the caller happened to type
+	// would be neither greppable nor stable between runs on an unchanged
+	// tree.
 	src := "package p\n\nimport \"fmt\"\n\nfunc Zebra() int { return 1 }\n\nfunc Apple() int { return 2 }\n\nfunc Mango() int { return 3 }\n"
 	repo := initRepoWithFile(t, "b.go", src)
 	writeFile(t, repo, "a.go", src)
@@ -1190,11 +1190,10 @@ func TestOutput_OrderedByPathThenPosition(t *testing.T) {
 
 func TestHelp_TopLevelExitsZeroOnEverySpelling(t *testing.T) {
 	t.Parallel()
-	// specs/design.md:231 measured "--help tokens" per flag library as a
-	// selection criterion, but nothing ever wired the flag up: bare
-	// "--help", "-h", and "help" all fell into the unknown-command branch
-	// (exit 129). All three now print the same top-level help to stdout
-	// and exit 0.
+	// specs/design.md:231 counts "--help tokens" per flag library as a
+	// selection criterion; all three spellings -- bare "--help", "-h", and
+	// "help" -- must print the same top-level help to stdout and exit 0,
+	// not fall into the unknown-command branch (exit 129).
 	repo := newTempRepo(t)
 	for _, spelling := range []string{"--help", "-h", "help"} {
 		t.Run(spelling, func(t *testing.T) {
@@ -1227,16 +1226,17 @@ func TestHelp_BareInvocationStillExitsInvalidUsage(t *testing.T) {
 
 func TestHelp_SubcommandExitsZeroAndDoesNotLeakPflag(t *testing.T) {
 	t.Parallel()
-	// Before: pflag's ContinueOnError returned pflag.ErrHelp from Parse,
-	// which fell into the generic parse-failure branch and printed the
-	// library's own internal error string -- "rgit: pflag: help requested"
-	// -- to stderr at exit 129. errors.Is(err, pflag.ErrHelp) now routes
-	// -h/--help to the subcommand's own help on stdout at exit 0 instead.
+	// -h/--help must route to the subcommand's own help on stdout at exit
+	// 0: pflag's ContinueOnError returns pflag.ErrHelp from Parse, and that
+	// must be caught via errors.Is(err, pflag.ErrHelp) rather than falling
+	// into the generic parse-failure branch, which would print pflag's own
+	// internal error string ("rgit: pflag: help requested") to stderr at
+	// exit 129.
 	//
 	// Both subcommands are covered here rather than in two near-identical
-	// tests: diff was the one that kept leaking after commit was fixed,
-	// because each subcommand wires its own help text separately and
-	// nothing structural stops one from being missed again.
+	// tests: each subcommand wires its own help text separately, so
+	// nothing structural stops one from missing this wiring while the
+	// other has it.
 	repo := newTempRepo(t)
 	// wantFlag is a flag unique to that subcommand, proving the help came
 	// from its own FlagSet rather than the other's.
@@ -1316,9 +1316,9 @@ func TestCommit_FixupAndSquashGenerateAutosquashMessages(t *testing.T) {
 
 func TestCommit_FixupWithMessageAppendsRatherThanConflicts(t *testing.T) {
 	t.Parallel()
-	// Verified against real git: --fixup plus -m is not the "-m and -F are
-	// mutually exclusive" shape of conflict. git appends -m's text as an
-	// extra body paragraph below the generated "fixup! ..." subject.
+	// --fixup plus -m is not the "-m and -F are mutually exclusive" shape
+	// of conflict: git appends -m's text as an extra body paragraph below
+	// the generated "fixup! ..." subject.
 	repo := initRepoWithFile(t, "g.go", "package main\n\nfunc G() int { return 1 }\n")
 	target := strings.TrimSpace(gitIn(t, repo, "rev-parse", "HEAD"))
 
@@ -1379,8 +1379,8 @@ func TestCommit_PushWithNoUpstreamNamesTheFix(t *testing.T) {
 	// docs/USAGE.md / AGENTS.md's one invariant: rgit does not invent an
 	// implicit `-u` (a push.default=current caller already gets a
 	// successful push with no upstream at all, and pre-empting on that
-	// basis would silently break them -- verified against real git). What
-	// it adds on top of git's own failure is a named, concrete fix.
+	// basis would silently break them). What it adds on top of git's own
+	// failure is a named, concrete fix.
 	repo := initRepoWithFile(t, "auth.go", authGoV1)
 	remote := t.TempDir()
 	gitIn(t, remote, "init", "-q", "--bare")
@@ -1534,10 +1534,10 @@ func shellQuoteAll(words []string) string {
 	return strings.Join(quoted, " ")
 }
 
-// TestCompletion_BashCompletesSymbolsFromPorcelain is the dynamic half the
-// TODO entry was actually about: completing the token after "FILE:" has to
-// name a symbol `rgit commit` will really accept, for a file with more than
-// one candidate and a worktree that has not been committed yet.
+// TestCompletion_BashCompletesSymbolsFromPorcelain is the dynamic half of
+// shell completion coverage: completing the token after "FILE:" has to
+// name a symbol `rgit commit` will really accept, for a file with more
+// than one candidate and a worktree that has not been committed yet.
 func TestCompletion_BashCompletesSymbolsFromPorcelain(t *testing.T) {
 	t.Parallel()
 	repo := initRepoWithFile(t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")

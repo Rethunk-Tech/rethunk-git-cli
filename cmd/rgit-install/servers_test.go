@@ -91,9 +91,9 @@ func TestFormatServerStatus(t *testing.T) {
 			want: "gopls                        found at /usr/bin/gopls",
 		},
 		{
-			// The regression this guards: a naive presence check would have
-			// reported this line identically to the capable case above,
-			// which is exactly how npm's featureless taplo went unnoticed.
+			// A naive presence check would report this line identically to
+			// the capable case above -- exactly the gap that lets a
+			// featureless install (e.g. npm's taplo) go unnoticed.
 			name: "found but not capable explains why",
 			st: serverStatus{
 				entry:     serverEntry{bin: "taplo", manager: managerCargo},

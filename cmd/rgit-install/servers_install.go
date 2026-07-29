@@ -51,9 +51,9 @@ func buildInstallJobs(catalog []serverEntry) []installJob {
 	return jobs
 }
 
-// selectNPMManager prefers bun over npm when both are on PATH, matching the
-// operator's own "bun/npm" ordering; npm is the fallback for hosts without
-// bun. lookPath is injected for the same reason detectServers takes one.
+// selectNPMManager prefers bun over npm when both are on PATH; npm is the
+// fallback for hosts without bun. lookPath is injected for the same reason
+// detectServers takes one.
 func selectNPMManager(lookPath func(string) (string, error)) (cmd string, ok bool) {
 	if _, err := lookPath("bun"); err == nil {
 		return "bun", true
@@ -68,13 +68,12 @@ func selectNPMManager(lookPath func(string) (string, error)) (cmd string, ok boo
 // invocation. All three forms are naturally idempotent with no extra flag:
 // `go install pkg@latest`, `npm install -g pkg`, and `bun add -g pkg` all
 // re-resolve to the latest published version and update in place if it
-// changed (verified: `bun add -g --dry-run` against an already-installed
-// package resolves and reports the current version, not an error). cargo's
-// own docs state it reinstalls whenever the resolved version, binary set,
-// or --features differ from what's already there -- which is exactly what
-// fixes the taplo LSP-feature bug at the source rather than only detecting
-// it: requesting --features lsp here makes a previously-featureless taplo
-// install look stale to cargo and get rebuilt.
+// changed (`bun add -g --dry-run` against an already-installed package
+// resolves and reports the current version, not an error). cargo's own
+// docs state it reinstalls whenever the resolved version, binary set, or
+// --features differ from what's already there, so requesting --features
+// lsp here makes a featureless taplo install look stale to cargo and get
+// rebuilt with LSP support.
 func installCommand(job installJob, useBun bool) (name string, args []string) {
 	switch job.manager {
 	case managerGo:
@@ -93,9 +92,9 @@ func installCommand(job installJob, useBun bool) (name string, args []string) {
 
 // dirOnPATH reports whether dir appears, after cleaning, as one of pathEnv's
 // entries. This is the check behind the loud PATH warning: `cargo install`
-// wrote a correctly-built taplo to ~/.cargo/bin on 2026-07-28 while that
-// directory was not on PATH, and the install reported success anyway --
-// nothing surfaced the gap until this existed.
+// can write a correctly-built taplo to ~/.cargo/bin while that directory is
+// not on PATH, reporting success even though nothing that shells out
+// (rgit included) can reach the binary.
 func dirOnPATH(dir, pathEnv string) bool {
 	dir = filepath.Clean(dir)
 	for _, p := range filepath.SplitList(pathEnv) {

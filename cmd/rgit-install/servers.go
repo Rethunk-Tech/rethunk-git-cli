@@ -14,8 +14,8 @@ import (
 
 // manager identifies which package manager installs/updates a server.
 // managerNone means no package manager exists for it at all -- marksman
-// ships GitHub release binaries only, out of scope per the operator's own
-// decision not to teach this installer HTTP fetching for one server.
+// ships GitHub release binaries only, out of scope for this installer to
+// fetch over HTTP for one server.
 type manager int
 
 const (
@@ -30,16 +30,13 @@ const (
 //
 // This catalog is hardcoded rather than driven from internal/lsp/servers.go
 // at runtime: every field there (serverSpec, the servers map itself) is
-// unexported, so nothing in that package is importable from outside it, and
-// it is under active edit as new grammars land (verified live against its
-// current contents on 2026-07-28: only go/typescript/tsx/python/shell are
-// wired so far). Keeping this list in sync with internal/lsp/servers.go and
+// unexported, so nothing in that package is importable from outside it.
+// Keeping this list in sync with internal/lsp/servers.go and
 // docs/INSTALL.md's Language servers table is a manual coupling this
 // comment exists to flag, not to hide -- there is no exported surface to
-// drive it from instead. The five entries below beyond those currently
-// wired (yaml, json, css, taplo, marksman) match docs/INSTALL.md's and the
-// operator's own reference list for servers the newer tree-sitter grammars
-// (css, json, toml -- see this repo's go.mod) will need cross-checked next.
+// drive it from instead. taplo is the one entry below with no counterpart
+// in internal/lsp/servers.go yet: TOML cross-check support (see this
+// repo's go.mod) will need it wired there next.
 type serverEntry struct {
 	// name mirrors internal/lsp/servers.go's own "name" field where a
 	// counterpart already exists there.
@@ -54,15 +51,15 @@ type serverEntry struct {
 	pkg string
 	// extraArgs are flags beyond the bare package name. taplo needs
 	// exactly this: `cargo install taplo-cli` alone builds without LSP
-	// support (npm's own @taplo/cli 0.9.0 has none at all, which is the
-	// bug this whole feature exists to catch and fix at the source).
+	// support (npm's own @taplo/cli 0.9.0 has none at all -- the
+	// capability gap taploCapability below exists to catch).
 	extraArgs []string
 	// unmanagedHint is what to print instead of installing when manager is
 	// managerNone -- the command a user would run by hand.
 	unmanagedHint string
 	// capability, if set, checks the binary is not merely present but
-	// actually usable. Presence proved nothing for taplo on 2026-07-28: an
-	// npm-installed binary answered fine on PATH while speaking no LSP.
+	// actually usable. Presence proves nothing for taplo: an npm-installed
+	// binary answers fine on PATH while speaking no LSP.
 	capability func(bin string) (ok bool, detail string)
 }
 
@@ -131,9 +128,8 @@ var serverCatalog = []serverEntry{
 // taploCapability runs `taplo lsp --help` and treats a clean exit as proof
 // the binary understands the "lsp" subcommand at all. npm's @taplo/cli
 // 0.9.0 has no such subcommand and exits nonzero for it; a cargo build with
-// --features lsp prints its own help and exits 0 -- verified directly
-// against both on 2026-07-28, which is the exact presence-vs-capability gap
-// this function closes.
+// --features lsp prints its own help and exits 0 -- the exact
+// presence-vs-capability gap this function closes.
 func taploCapability(bin string) (ok bool, detail string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

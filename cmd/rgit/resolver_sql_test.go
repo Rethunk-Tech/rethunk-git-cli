@@ -4,9 +4,7 @@
 // grammar's own generated C (internal/resolve/sqlgrammar): this suite can
 // only run after `tree-sitter generate` has produced csrc/, so it has no
 // business in the default `go test ./...`/`-short` lane a clean checkout
-// runs (CONTRIBUTING.md § Tests). Byte offsets and node-shape claims below
-// were pinned by running the resolver against these exact fixtures and
-// reading back real tree-sitter output, not derived from grammar.js.
+// runs (CONTRIBUTING.md § Tests).
 package main
 
 import (
@@ -57,8 +55,8 @@ CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
 
 	// A CREATE INDEX statement is named by create_index's own "column"
 	// field, which -- despite the name -- holds the index's own identifier,
-	// not one of the columns it indexes (lang_sql.go's own comment records
-	// the same measurement).
+	// not one of the columns it indexes (lang_sql.go documents the same
+	// field shape).
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".sql", src, "idx_users_name"),
 		"CREATE INDEX idx_users_name ON users (name)"))
 
@@ -135,8 +133,7 @@ func TestResolve_SQLAnonymousIndexUnaddressable(t *testing.T) {
 	t.Parallel()
 	// "CREATE INDEX ON t (c)" is legal SQL -- Postgres synthesizes a name --
 	// but create_index has no "column" field at all when none is written,
-	// measured, and this adapter does not guess at the name Postgres would
-	// assign.
+	// and this adapter does not guess at the name Postgres would assign.
 	src := []byte("CREATE INDEX ON t (c);\n")
 	lang, ok := resolve.ForExtension(".sql")
 	qt.Assert(t, qt.IsTrue(ok))
