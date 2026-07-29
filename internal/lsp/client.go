@@ -118,11 +118,24 @@ func (c *Client) DocumentSymbols(ctx context.Context, path string, src []byte) (
 	ctx, cancel := context.WithTimeout(ctx, QueryDeadline)
 	defer cancel()
 
+	langID, ok := languageKindFor(path)
+	if !ok {
+		// resolve.ForExtension has already gated which extensions reach
+		// here in practice, but a newly registered grammar can land
+		// without this switch being updated for it -- nine grammars ship
+		// today and more are planned, so "unreachable" is a claim with a
+		// shelf life. Erroring degrades this query cleanly (the same
+		// path a crashed or absent server already takes) instead of
+		// sending a fabricated languageId a real server would answer
+		// nonsensically for.
+		return nil, fmt.Errorf("lsp: documentSymbol %s: no LSP languageId for this extension", path)
+	}
+
 	docURI := uri.File(path)
 	if err := c.server.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
 		TextDocument: protocol.TextDocumentItem{
 			URI:        docURI,
-			LanguageID: languageKindFor(path),
+			LanguageID: langID,
 			Version:    1,
 			Text:       string(src),
 		},
@@ -250,33 +263,37 @@ func flattenFlat(syms []protocol.SymbolInformation) []Symbol {
 }
 
 // languageKindFor maps a file extension to the LSP languageId didOpen
-// requires. resolve.ForExtension has already gated which extensions reach
-// here, so the fallback is unreachable in practice, not a real case.
-func languageKindFor(path string) protocol.LanguageKind {
+// requires. ok=false means this package has no mapping for path's
+// extension. resolve.ForExtension has already gated which extensions reach
+// here in practice, so this should never fire today -- but a newly
+// registered grammar reaching Dial without a matching case here must not
+// silently didOpen as some other language a real server would then answer
+// nonsensically for; the caller degrades instead.
+func languageKindFor(path string) (kind protocol.LanguageKind, ok bool) {
 	switch filepath.Ext(path) {
 	case ".go":
-		return protocol.LanguageKindGo
+		return protocol.LanguageKindGo, true
 	case ".ts", ".mts", ".cts":
-		return protocol.LanguageKindTypeScript
+		return protocol.LanguageKindTypeScript, true
 	case ".tsx":
-		return protocol.LanguageKindTypeScriptReact
+		return protocol.LanguageKindTypeScriptReact, true
 	case ".jsx":
-		return protocol.LanguageKindJavaScriptReact
+		return protocol.LanguageKindJavaScriptReact, true
 	case ".js", ".mjs", ".cjs":
-		return protocol.LanguageKindJavaScript
+		return protocol.LanguageKindJavaScript, true
 	case ".py", ".pyi":
-		return protocol.LanguageKindPython
+		return protocol.LanguageKindPython, true
 	case ".sh", ".bash":
-		return protocol.LanguageKindShellScript
+		return protocol.LanguageKindShellScript, true
 	case ".yaml", ".yml":
-		return protocol.LanguageKindYAML
+		return protocol.LanguageKindYAML, true
 	case ".json":
-		return protocol.LanguageKindJSON
+		return protocol.LanguageKindJSON, true
 	case ".css":
-		return protocol.LanguageKindCSS
+		return protocol.LanguageKindCSS, true
 	case ".md", ".markdown":
-		return protocol.LanguageKindMarkdown
+		return protocol.LanguageKindMarkdown, true
 	default:
-		return protocol.LanguageKindTypeScript
+		return "", false
 	}
 }

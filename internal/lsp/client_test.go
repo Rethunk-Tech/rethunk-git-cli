@@ -69,35 +69,41 @@ func TestNewClient_ClosesConnExactlyOnceOnHandshakeFailure(t *testing.T) {
 
 func TestLanguageKindFor(t *testing.T) {
 	tests := []struct {
-		path string
-		want protocol.LanguageKind
+		path   string
+		want   protocol.LanguageKind
+		wantOK bool
 	}{
-		{"foo.go", protocol.LanguageKindGo},
-		{"foo.ts", protocol.LanguageKindTypeScript},
-		{"foo.mts", protocol.LanguageKindTypeScript},
-		{"foo.cts", protocol.LanguageKindTypeScript},
-		{"foo.tsx", protocol.LanguageKindTypeScriptReact},
-		{"foo.jsx", protocol.LanguageKindJavaScriptReact},
-		{"foo.js", protocol.LanguageKindJavaScript},
-		{"foo.mjs", protocol.LanguageKindJavaScript},
-		{"foo.cjs", protocol.LanguageKindJavaScript},
-		{"foo.py", protocol.LanguageKindPython},
-		{"foo.pyi", protocol.LanguageKindPython},
-		{"foo.sh", protocol.LanguageKindShellScript},
-		{"foo.bash", protocol.LanguageKindShellScript},
-		{"foo.yaml", protocol.LanguageKindYAML},
-		{"foo.yml", protocol.LanguageKindYAML},
-		{"foo.json", protocol.LanguageKindJSON},
-		{"foo.css", protocol.LanguageKindCSS},
-		{"foo.md", protocol.LanguageKindMarkdown},
-		{"foo.markdown", protocol.LanguageKindMarkdown},
-		{"foo.unknown", protocol.LanguageKindTypeScript},
+		{"foo.go", protocol.LanguageKindGo, true},
+		{"foo.ts", protocol.LanguageKindTypeScript, true},
+		{"foo.mts", protocol.LanguageKindTypeScript, true},
+		{"foo.cts", protocol.LanguageKindTypeScript, true},
+		{"foo.tsx", protocol.LanguageKindTypeScriptReact, true},
+		{"foo.jsx", protocol.LanguageKindJavaScriptReact, true},
+		{"foo.js", protocol.LanguageKindJavaScript, true},
+		{"foo.mjs", protocol.LanguageKindJavaScript, true},
+		{"foo.cjs", protocol.LanguageKindJavaScript, true},
+		{"foo.py", protocol.LanguageKindPython, true},
+		{"foo.pyi", protocol.LanguageKindPython, true},
+		{"foo.sh", protocol.LanguageKindShellScript, true},
+		{"foo.bash", protocol.LanguageKindShellScript, true},
+		{"foo.yaml", protocol.LanguageKindYAML, true},
+		{"foo.yml", protocol.LanguageKindYAML, true},
+		{"foo.json", protocol.LanguageKindJSON, true},
+		{"foo.css", protocol.LanguageKindCSS, true},
+		{"foo.md", protocol.LanguageKindMarkdown, true},
+		{"foo.markdown", protocol.LanguageKindMarkdown, true},
+		// A-27: an extension with no mapping must report ok=false, never
+		// a silent wrong default -- there was previously no test pinning
+		// this because the old default (LanguageKindTypeScript) always
+		// "succeeded", which is exactly the bug.
+		{"foo.unknown", "", false},
+		{"foo", "", false},
 	}
 
 	for _, tt := range tests {
-		got := languageKindFor(tt.path)
-		if got != tt.want {
-			t.Errorf("languageKindFor(%q) = %q; want %q", tt.path, got, tt.want)
+		got, ok := languageKindFor(tt.path)
+		if got != tt.want || ok != tt.wantOK {
+			t.Errorf("languageKindFor(%q) = (%q, %v); want (%q, %v)", tt.path, got, ok, tt.want, tt.wantOK)
 		}
 	}
 }
