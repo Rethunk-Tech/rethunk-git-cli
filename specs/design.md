@@ -84,9 +84,9 @@ process-spawn latency. A language server, when reachable, cross-checks.
 2. **Spawn on demand** if no socket is live, completing the *current*
    invocation in `[ts-only]` mode rather than blocking on a cold index.
    Guarded by an `O_EXCL` lock beside the socket.
-3. **Cross-check** tree-sitter's **declaration-only** extent (doc-comment and
-   attribute prefix stripped) against the LSP `range`. Any mismatch is a hard
-   fail — print both ranges and stage nothing.
+3. **Cross-check** tree-sitter's **declaration-only** extent (the doc-comment
+   prefix stripped; a decorator or an `export` keyword is not) against the LSP
+   `range`. Any mismatch is a hard fail — print both ranges and stage nothing.
 4. **Degrade** to tree-sitter alone on timeout or a still-indexing server,
    announced with `[ts-only]` on stderr.
 
@@ -377,11 +377,25 @@ adapter's container members already use — so `internal/synth`'s existing
 `lineStart`/`insertionText` machinery (`classify.go`, `8b8629d`) handles a
 YAML member's indentation with no YAML-specific code in that package at all.
 
-**No language-server cross-check.** No entry was added to
-`internal/lsp/servers.go`'s `servers` map — YAML has no dominant, universally
-installed language server the way `gopls`/`vtsls`/`pyright` are, and there was
-no measured need strong enough to justify probing for a fourth stdio process
-sight unseen; YAML always resolves in `[ts-only]` mode, the same as Markdown.
+**No language-server cross-check — superseded.** At the time this section was
+written, no entry existed in `internal/lsp/servers.go`'s `servers` map: YAML
+had no dominant, universally installed language server the way
+`gopls`/`vtsls`/`pyright` are, and there was no measured need strong enough to
+justify probing for a fourth stdio process sight unseen, so YAML resolved in
+`[ts-only]` mode, the same as Markdown.
+
+The later v2 survey (§ Cross-check survey: the six v2 grammars) revisited that
+call and found `yaml-language-server` reports `documentSymbol` ranges matching
+`declOnlyExtent` byte-for-byte, including the doc-comment-exclusion case
+`gopls` was already held to. The entry was added (`7ad2d4b`), with one
+normalization on top: its range for a nested container consistently extends
+one line past its own last real content, through a blank line separating it
+from the next sibling at the same level — tree-sitter-yaml's own node never
+does. `trimTrailingBlankLines` narrows every wired server's reported range
+back to its own last non-blank line uniformly, not special-cased to YAML, so a
+genuine content disagreement still fails (`e5120ab`). YAML now cross-checks
+like any other wired grammar; only TOML and SQL still resolve in `[ts-only]`
+permanently.
 
 **CSS was next in the v2 backlog by measured demand order (TODO.md), not
 re-surveyed independently — it was already first in that list.** Every node
@@ -683,11 +697,12 @@ cost or even the ~7.2s cgo compile of the generated C (`go build -tags
 rgit_sql ./internal/resolve/sqlgrammar/...`, this machine) — both paid once
 per checkout, not per `rgit` invocation.
 
-**No language-server cross-check**, the same reasoning YAML's own entry in
-this record already gives: there is no single dominant SQL language server
-the way `gopls`/`vtsls`/`pyright` are for their languages, and no measured
-need strong enough to justify probing for a fifth stdio process sight
-unseen. `.sql` always resolves in `[ts-only]` mode.
+**No language-server cross-check at this point in the survey:** there is no
+single dominant SQL language server the way `gopls`/`vtsls`/`pyright` are for
+their languages, and no measured need strong enough to justify probing for a
+fifth stdio process sight unseen. `.sql` resolves in `[ts-only]` mode — unlike
+YAML's own entry above, which the later v2 survey revisited, the same survey
+(§ Cross-check survey: the six v2 grammars) found this still holds for SQL.
 
 ### Cross-check survey: the six v2 grammars
 
