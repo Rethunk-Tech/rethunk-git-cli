@@ -117,12 +117,20 @@ before and after — empty output on its own does not mean nothing was done.
 NAME<TAB>EXTENSIONS<TAB>GATED
 css<TAB>.css<TAB>0
 go<TAB>.go<TAB>0
+json<TAB>.json<TAB>0
+markdown<TAB>.md .markdown<TAB>0
+python<TAB>.py .pyi<TAB>0
+shell<TAB>.sh .bash<TAB>0
 sql<TAB>.sql<TAB>1
+toml<TAB>.toml<TAB>0
+tsx<TAB>.tsx .jsx .js .mjs .cjs<TAB>0
 typescript<TAB>.ts .mts .cts<TAB>0
+yaml<TAB>.yaml .yml<TAB>0
 ```
 
-One record per grammar compiled into this binary, sorted alphabetically by
-`NAME`. `EXTENSIONS` is every extension the grammar claims, leading dot
+Sampled from a `-tags rgit_sql` build; a plain build has no `sql` row (see
+[`INSTALL.md`](INSTALL.md#sql-support)). One record per grammar compiled into
+this binary, sorted alphabetically by `NAME`. `EXTENSIONS` is every extension the grammar claims, leading dot
 included on each, joined with a single space — unambiguous, since a real
 extension is always `.something` and never itself contains whitespace.
 `GATED` is `1` when the grammar exists in this binary only because a build

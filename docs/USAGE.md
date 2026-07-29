@@ -141,14 +141,18 @@ $ rgit languages
 css           .css
 go            .go
 json          .json
-markdown      .md
-python        .py
-shell         .sh
-sql           .sql   (build-tag gated)
+markdown      .md .markdown
+python        .py .pyi
+shell         .sh .bash
+sql           .sql                    (build-tag gated)
 toml          .toml
+tsx           .tsx .jsx .js .mjs .cjs
 typescript    .ts .mts .cts
 yaml          .yaml .yml
 ```
+
+This sample is from a `-tags rgit_sql` build; a plain `go build`/`go install`
+omits the `sql` row entirely (see [`INSTALL.md`](INSTALL.md#sql-support)).
 
 A `.sql` anchor on a binary built without `rgit_sql` still fails with exit 9
 ("no grammar registered"), the same as any genuinely unsupported language —
