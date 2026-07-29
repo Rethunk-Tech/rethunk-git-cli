@@ -437,15 +437,14 @@ func (fp *filePlan) addPreamble(named map[string]bool) (pairs []preambleOp) {
 }
 
 // isOrdinalAnchor reports whether anchor uses docs/ANCHORS.md's positional
-// "Bare#N" form. No identifier in a supported grammar contains "#", so a
-// suffix that parses as a number is unambiguous.
+// "Bare#N" form. resolve.ParseOrdinal is the one parse of this shape now --
+// this used to carry its own copy (n > 0, non-empty bare), which happened to
+// already match the rule crosscheck.go's own former splitOrdinal did not
+// enforce; extracting resolve.ParseOrdinal picked this file's stricter rule
+// as the canonical one, so converting here is behavior-identical.
 func isOrdinalAnchor(anchor string) bool {
-	bare, ordinal, ok := strings.Cut(anchor, "#")
-	if !ok || bare == "" {
-		return false
-	}
-	n, err := strconv.Atoi(ordinal)
-	return err == nil && n > 0
+	_, _, ok := resolve.ParseOrdinal(anchor)
+	return ok
 }
 
 // openFilePlan performs every pure read a file's anchors need before any
