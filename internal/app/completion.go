@@ -51,11 +51,11 @@ func runCompletion(args []string, stdout, stderr io.Writer) exitcode.Code {
 // the live pflag.FlagSet because the completion script is a standalone text
 // blob with no Go runtime behind it once emitted -- keep this in sync with
 // diff.go and commit.go's own flag registration by hand.
-const rgitDiffFlags = "--unstaged --staged --cached --range --porcelain --exit-code --quiet --sym --file --help"
+const rgitDiffFlags = "--unstaged --staged --cached --range --porcelain --exit-code --quiet --sym --file -h --help"
 
 const rgitCommitFlags = "-m --message -F --message-file -s --signoff --trailer --amend --allow-empty --push " +
 	"--dry-run --no-verify --fixup --squash --author --date --reset-author --porcelain -q --quiet " +
-	"-S --gpg-sign --no-gpg-sign --sym --file --help"
+	"-S --gpg-sign --no-gpg-sign --sym --file -h --help"
 
 // bashCompletionScript is emitted verbatim by `rgit completion bash`. The
 // one dynamic piece -- symbol names after "FILE:" -- shells back out to
@@ -83,7 +83,7 @@ _rgit_completion() {
     cmd="${COMP_WORDS[1]}"
 
     if [[ $COMP_CWORD -eq 1 ]]; then
-        COMPREPLY=( $(compgen -W "diff commit completion help --help --version" -- "$cur") )
+        COMPREPLY=( $(compgen -W "diff commit completion help -h --help --version" -- "$cur") )
         return 0
     fi
 
@@ -140,7 +140,7 @@ _rgit() {
     cmd="${words[2]}"
 
     if (( CURRENT == 2 )); then
-        compadd -- diff commit completion help --help --version
+        compadd -- diff commit completion help -h --help --version
         return
     fi
 
