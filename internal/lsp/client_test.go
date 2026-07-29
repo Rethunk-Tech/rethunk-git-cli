@@ -17,13 +17,6 @@ type countingRWC struct {
 	closes atomic.Int32
 }
 
-// countingRWC wraps a net.Conn to count Close calls, so a test can assert
-// exactly who closed it rather than merely that it eventually got closed.
-type countingRWC struct {
-	net.Conn
-	closes atomic.Int32
-}
-
 func (c *countingRWC) Close() error {
 	c.closes.Add(1)
 	return c.Conn.Close()
