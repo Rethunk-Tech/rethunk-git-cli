@@ -1084,6 +1084,10 @@ func TestHelp_SubcommandExitsZeroAndDoesNotLeakPflag(t *testing.T) {
 // --gpg-sign/--no-gpg-sign, the --porcelain and -q output modes, and a clearer
 // --push-with-no-upstream message. Each is specified in docs/USAGE.md § Flags;
 // what earns a test here is a flag rgit does more with than hand to git.
+// --amend, --fixup/--squash's own autosquash-message generation, plain
+// --author/--date forwarding, and --reset-author are all pinned at the unit
+// level instead (internal/app/lanes_test.go), since app.Run shells out to
+// the same real git these e2e cases would.
 
 func TestCommit_FixupWithMessageAppendsRatherThanConflicts(t *testing.T) {
 	t.Parallel()
