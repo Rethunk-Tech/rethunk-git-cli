@@ -42,11 +42,11 @@ func CrossCheckExtent(ctx context.Context, sess *lsp.Session, lang Language, rep
 		return true, nil
 	}
 
-	found, cmpErr := MatchAndCompare(src, res, symbols)
-	if !found {
-		return true, nil
+	degraded, mismatches := crossCheckVerdict(src, []*Resolution{res}, symbols)
+	if len(mismatches) > 0 {
+		return degraded, mismatches[0]
 	}
-	return false, cmpErr
+	return degraded, nil
 }
 
 // CrossCheckExtents verifies a whole file's worth of resolutions against a
@@ -59,12 +59,13 @@ func CrossCheckExtent(ctx context.Context, sess *lsp.Session, lang Language, rep
 // degraded=true means no comparison happened at all, exactly as for the
 // single-anchor form -- including when the server answered but its outline
 // omitted at least one of list's own non-pseudo resolutions, aligning this
-// batch form with CrossCheckExtent's per-anchor found=false case above
-// (:45-47), which also degrades rather than treating "not named" as
-// verified. mismatches holds one error per resolution whose range the
-// server disagreed with; a resolution the server does not name at all is
-// not a mismatch (specs/design.md's fourth exemption), but still marks the
-// batch as degraded.
+// batch form with CrossCheckExtent's own found=false case, which also
+// degrades rather than treating "not named" as verified: both go through
+// the shared crossCheckVerdict below, so they cannot disagree about it.
+// mismatches holds one error per resolution whose range the server
+// disagreed with; a resolution the server does not name at all is not a
+// mismatch (specs/design.md's fourth exemption), but still marks the batch
+// as degraded.
 func CrossCheckExtents(ctx context.Context, sess *lsp.Session, lang Language, repoRoot, absPath string, src []byte, list []*Resolution) (degraded bool, mismatches []error) {
 	if len(list) == 0 {
 		return true, nil
@@ -78,11 +79,41 @@ func CrossCheckExtents(ctx context.Context, sess *lsp.Session, lang Language, re
 		return true, nil
 	}
 
+	return crossCheckVerdict(src, list, symbols)
+}
+
+// crossCheckVerdict evaluates every non-nil, non-pseudo resolution in list
+// against symbols -- a document-symbol table already fetched once, by
+// either caller -- and reports the same (degraded, mismatches) shape
+// CrossCheckExtents returns directly and CrossCheckExtent derives its own
+// two-value return from for a single-resolution list.
+//
+// This is the one piece of logic factored out specifically so the
+// per-anchor and batch forms cannot independently drift on what "not
+// found" or "a mismatch" means for identical input: both dial, check
+// res.Pseudo or an empty list, and fetch symbols entirely on their own,
+// but neither decides a verdict without coming through here. LOW9's own
+// parity table (crosscheck_test.go) drives this directly with a shared
+// mock symbol list, which is the closest a mock can get to proving the two
+// public forms agree without a live dial.
+func crossCheckVerdict(src []byte, list []*Resolution, symbols []lsp.Symbol) (degraded bool, mismatches []error) {
+	// evaluated tracks whether any resolution actually reached
+	// MatchAndCompare. A list that is non-empty but every entry nil or
+	// Pseudo (a file whose only cross-checked resolution is @imports, say)
+	// must still degrade -- allFound's own zero value is vacuously true
+	// when the loop below never runs a real comparison, which used to
+	// report false positives: "not degraded, no mismatches" when zero
+	// comparisons actually happened. CrossCheckExtent's own res.Pseudo
+	// pre-check already treats a single pseudo resolution as degraded
+	// before ever reaching here; this is the batch form's equivalent for
+	// a list that turns out to hold nothing else.
+	evaluated := false
 	allFound := true
 	for _, res := range list {
 		if res == nil || res.Pseudo {
 			continue
 		}
+		evaluated = true
 		found, cerr := MatchAndCompare(src, res, symbols)
 		if !found {
 			allFound = false
@@ -91,6 +122,9 @@ func CrossCheckExtents(ctx context.Context, sess *lsp.Session, lang Language, re
 		if cerr != nil {
 			mismatches = append(mismatches, cerr)
 		}
+	}
+	if !evaluated {
+		return true, nil
 	}
 	return !allFound, mismatches
 }
