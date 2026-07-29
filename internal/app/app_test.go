@@ -441,3 +441,54 @@ func TestRun_GPGSignShorthandReachesGit(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))
 	qt.Assert(t, qt.StringContains(stderr, "sign"))
 }
+
+// TestRun_PathspecListsEveryFileItStages pins the reported bug: naming a
+// directory listed one aggregate row for the pathspec, so a caller could
+// see that something under it moved but not what. `rgit diff` already broke
+// the same change down per file, and the two are supposed to agree.
+//
+// Each row also has to match git's own numstat for that file, since the
+// aggregate it replaced did.
+func TestRun_PathspecListsEveryFileItStages(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "apps/svc/one.go", "package svc\n\nfunc One() int {\n\treturn 1\n}\n")
+	writeAppFile(t, dir, "apps/svc/notes.txt", "x\n")
+	gittest.Commit(t, dir, "chore: fixture")
+
+	writeAppFile(t, dir, "apps/svc/one.go", "package svc\n\nfunc One() int {\n\treturn 111\n}\n")
+	writeAppFile(t, dir, "apps/svc/notes.txt", "x\ny\nz\n")
+	// An untracked file under the same directory is staged by the same
+	// pathspec, so it belongs in the listing too.
+	writeAppFile(t, dir, "apps/svc/two.go", "package svc\n\nfunc Two() int {\n\treturn 2\n}\n")
+
+	stdout, _, code := runApp(t, "commit", "--dry-run", "--porcelain", "-m", "chore: svc", "apps/svc")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+
+	got := map[string]string{}
+	for line := range strings.SplitSeq(strings.TrimRight(stdout, "\n"), "\n") {
+		f := strings.Split(line, "\t")
+		qt.Assert(t, qt.Equals(len(f), 4))
+		got[f[0]] = f[2] + "/" + f[3]
+	}
+	want := map[string]string{
+		"apps/svc/one.go":    "1/1",
+		"apps/svc/notes.txt": "2/0",
+		"apps/svc/two.go":    "5/0", // untracked: every line is an addition
+	}
+	qt.Assert(t, qt.DeepEquals(got, want))
+}
+
+// TestRun_PathspecMatchingNothingStillListsItself keeps git's own answer
+// reachable: a pathspec that matches no file must not vanish from the
+// listing, because `git add` is what reports "did not match any files" and
+// it only gets the chance if the target is still staged.
+func TestRun_PathspecMatchingNothingStillListsItself(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "kept/keep.txt", "x\n")
+	gittest.Commit(t, dir, "chore: fixture")
+
+	stdout, _, code := runApp(t, "commit", "--dry-run", "--porcelain", "-m", "chore: none", "kept")
+
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(stdout, "kept\t\t0\t0"))
+}

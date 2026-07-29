@@ -81,6 +81,17 @@ auth.go<TAB>ValidateToken<TAB>12<TAB>3
 package.json<TAB><TAB>4<TAB>1
 ```
 
+**A pathspec produces one record per file it stages, not one for the
+pathspec.** Naming a directory stages everything under it, so `rgit commit
+apps/auth` lists `apps/auth/a.go`, `apps/auth/b.go` and so on, each with its
+own counts — the same breakdown `rgit diff` gives, rather than a single total
+that says something moved without saying what. Untracked files under that
+pathspec are listed too, since `git add` stages them as well, and a renamed
+file is listed at its new path. A binary file is listed with zero counts: it is
+being staged, and git reports no line counts for it. A pathspec that matches
+nothing keeps one record naming the pathspec itself, so `git add`'s own "did
+not match any files" is still what answers for it.
+
 There is no `STATUS` column: an unchanged target is omitted from the listing
 entirely (it gets its own stderr warning instead), so every record would carry
 the same value. Records are identical for `--dry-run` and for the commit it

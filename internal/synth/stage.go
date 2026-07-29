@@ -68,11 +68,18 @@ type TargetResult struct {
 	Added   int
 	Deleted int
 
-	// path and start order the results: alphabetical by file, then
+	// Path is the file this row reports on, and the label a caller sees.
+	// For a symbol anchor it is the anchored file. For a pathspec it is
+	// one of the files that pathspec stages -- a directory or glob
+	// produces one result per file, so a listing breaks down the same way
+	// `rgit diff` does rather than collapsing to a single total nobody can
+	// act on. It falls back to the pathspec itself when nothing matched.
+	//
+	// Path and start order the results: alphabetical by file, then
 	// ascending by position within it, matching `rgit diff` and `git
 	// status`. Listing targets in the order the caller happened to name
 	// them makes output unstable between runs and awkward to grep.
-	path  string
+	Path  string
 	start uint
 }
 
@@ -225,14 +232,31 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 			// error -- exactly the kind of divergence AGENTS.md's governing
 			// principle forbids. `git add` is left to answer both cases
 			// itself, at apply time, the way plain git would.
-			added, deleted := pathspecLineCounts(ctx, repo, root, t.Pathspec)
-			plan.results = append(plan.results, TargetResult{
-				Target:  t,
-				Outcome: Staged,
-				Added:   added,
-				Deleted: deleted,
-				path:    t.Pathspec,
-			})
+			// One row per file, not one per pathspec: naming a directory
+			// stages every file under it, and a single summed total says
+			// nothing about which. `rgit diff` already breaks the same
+			// change down this way, and the two are supposed to agree.
+			files := pathspecFileCounts(ctx, repo, root, t.Pathspec)
+			if len(files) == 0 {
+				// Nothing matched, or nothing changed. Keep one row naming
+				// the pathspec as given: it is still being staged, and the
+				// "did not match any files" answer is git add's to give.
+				plan.results = append(plan.results, TargetResult{
+					Target:  t,
+					Outcome: Staged,
+					Path:    t.Pathspec,
+				})
+				continue
+			}
+			for _, pf := range files {
+				plan.results = append(plan.results, TargetResult{
+					Target:  t,
+					Outcome: Staged,
+					Added:   pf.added,
+					Deleted: pf.deleted,
+					Path:    pf.path,
+				})
+			}
 			continue
 		}
 
@@ -272,7 +296,7 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 			Outcome: outcome,
 			Added:   added,
 			Deleted: deleted,
-			path:    t.Symbol.Path,
+			Path:    t.Symbol.Path,
 			start:   op.start,
 		})
 	}
@@ -286,7 +310,7 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 				Outcome: Staged,
 				Added:   added,
 				Deleted: deleted,
-				path:    fp.path,
+				Path:    fp.path,
 				start:   po.op.start,
 			})
 		}
@@ -571,47 +595,65 @@ func opLineCounts(fp *filePlan, op editOp) (added, deleted int) {
 	return added, deleted
 }
 
-// pathspecLineCounts totals a whole pathspec's change, so a --dry-run preview
-// reports the same +N/-M for a path target that `rgit diff` does. Scoped to
-// HEAD rather than the index because that is what rgit commit would pick up:
-// staged and unstaged together.
+// pathFile is one file a pathspec stages, with its own line counts.
+type pathFile struct {
+	path           string
+	added, deleted int
+}
+
+// pathspecFileCounts reports every file a pathspec stages and what each one
+// changes, so a listing breaks the pathspec down the way `rgit diff` does
+// instead of collapsing it to one total. Scoped to HEAD rather than the
+// index because that is what rgit commit picks up: staged and unstaged
+// together.
 //
-// A numstat against HEAD says nothing about a file git does not track yet, so
-// an untracked path falls back to counting its lines as pure additions --
-// which is how `rgit diff` reports an UNTRACKED row.
-func pathspecLineCounts(ctx context.Context, repo *gitx.Repo, root, pathspec string) (added, deleted int) {
+// A numstat against HEAD says nothing about a file git does not track yet,
+// so untracked files are collected separately and counted as pure additions
+// -- which is how `rgit diff` reports an UNTRACKED row. Both are included:
+// a directory can hold tracked edits and brand new files at once, and
+// `git add` stages both.
+//
+// A binary file is listed with zero counts rather than omitted. It is being
+// staged, so leaving it out of the listing would be the more misleading of
+// the two answers; git writes "-" for its numstat counts and there are no
+// lines to report.
+func pathspecFileCounts(ctx context.Context, repo *gitx.Repo, root, pathspec string) []pathFile {
+	var out []pathFile
+	seen := map[string]bool{}
+
 	if entries, err := repo.DiffNumstat(ctx, "HEAD", "--", pathspec); err == nil {
 		for _, e := range entries {
-			// git writes "-" for both counts on a binary file; there are no
-			// lines to report and nothing to sum.
-			if e.Added == "-" || e.Deleted == "-" {
+			_, newPath := diff.NumstatPath(e.Path)
+			if seen[newPath] {
 				continue
 			}
+			seen[newPath] = true
 			a, aerr := strconv.Atoi(e.Added)
 			d, derr := strconv.Atoi(e.Deleted)
-			if aerr == nil && derr == nil {
-				added += a
-				deleted += d
+			if aerr != nil || derr != nil {
+				a, d = 0, 0 // binary: git wrote "-" for both
 			}
+			out = append(out, pathFile{path: newPath, added: a, deleted: d})
 		}
-	}
-	if added != 0 || deleted != 0 {
-		return added, deleted
 	}
 
 	others, err := repo.LsFilesOthers(ctx, "--", pathspec)
 	if err != nil {
-		return added, deleted
+		return out
 	}
 	for _, rel := range others {
+		if seen[rel] {
+			continue
+		}
+		seen[rel] = true
 		content, rerr := os.ReadFile(filepath.Join(root, rel))
 		if rerr != nil {
 			continue
 		}
 		a, _ := diff.LineCounts(nil, content)
-		added += a
+		out = append(out, pathFile{path: rel, added: a})
 	}
-	return added, deleted
+	return out
 }
 
 // sortResults orders targets alphabetically by file, then ascending by
@@ -620,7 +662,7 @@ func pathspecLineCounts(ctx context.Context, repo *gitx.Repo, root, pathspec str
 func sortResults(results []TargetResult) {
 	slices.SortStableFunc(results, func(a, b TargetResult) int {
 		return cmp.Or(
-			cmp.Compare(a.path, b.path),
+			cmp.Compare(a.Path, b.Path),
 			cmp.Compare(a.start, b.start),
 			cmp.Compare(a.Target.Symbol.Anchor, b.Target.Symbol.Anchor),
 		)

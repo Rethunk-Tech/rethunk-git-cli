@@ -50,7 +50,7 @@ func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Repo
 
 	report := &Report{}
 	for _, e := range entries {
-		oldPath, newPath := numstatPath(e.Path)
+		oldPath, newPath := NumstatPath(e.Path)
 		fr, ferr := buildFileReport(ctx, repo, root, scope, oldPath, newPath, e.Added, e.Deleted, sess, report)
 		if ferr != nil {
 			return nil, ferr
@@ -204,11 +204,16 @@ func formatModeNote(oldMode string, oldFound bool, newMode string, newFound bool
 	return o + "->" + n
 }
 
-// numstatPath parses gitx.NumstatEntry.Path, which may carry git's own
+// NumstatPath parses gitx.NumstatEntry.Path, which may carry git's own
 // rename shorthand — a full "old => new" or a common-prefix
 // "dir/{old => new}" form — into the two paths content resolution needs.
 // For a non-rename entry, old and new are identical.
-func numstatPath(raw string) (oldPath, newPath string) {
+//
+// Exported because internal/synth reads the same numstat output when it
+// breaks a pathspec target into per-file rows, and a second parser for
+// git's shorthand would be free to disagree about which path a rename
+// lands on.
+func NumstatPath(raw string) (oldPath, newPath string) {
 	if braceStart := strings.Index(raw, "{"); braceStart >= 0 {
 		if braceEnd := strings.Index(raw[braceStart:], "}"); braceEnd >= 0 {
 			braceEnd += braceStart

@@ -364,10 +364,21 @@ func targetPaths(targets []synth.Target) (paths, anchorFiles []string) {
 	return paths, anchorFiles
 }
 
+// resultLabel renders one staged row: "FILE:NAME" for a symbol anchor, and
+// for a pathspec the individual file that row reports on -- a directory or
+// glob produces one row per file it stages, so the label has to name the
+// file rather than repeat the pathspec. Both match exact copy-paste syntax,
+// the same as rgit diff's own labels.
+func resultLabel(r synth.TargetResult) string {
+	if r.Target.Pathspec != "" {
+		return r.Path
+	}
+	return targetLabel(r.Target)
+}
+
 // targetLabel renders a synth.Target the way docs/USAGE.md's warning
 // example does: "FILE:NAME" for a symbol anchor, the bare pathspec
-// otherwise -- matching exact copy-paste syntax, same as rgit diff's own
-// anchor labels.
+// otherwise.
 func targetLabel(t synth.Target) string {
 	if t.Pathspec != "" {
 		return t.Pathspec
@@ -469,11 +480,7 @@ func writeTargetRecords(stdout io.Writer, results []synth.TargetResult) {
 		if r.Target.Pathspec == "" {
 			symbol = r.Target.Symbol.Anchor
 		}
-		path := r.Target.Pathspec
-		if path == "" {
-			path = r.Target.Symbol.Path
-		}
-		fmt.Fprintf(stdout, "%s\t%s\t%d\t%d\n", path, symbol, r.Added, r.Deleted)
+		fmt.Fprintf(stdout, "%s\t%s\t%d\t%d\n", r.Path, symbol, r.Added, r.Deleted)
 	}
 }
 
@@ -491,7 +498,7 @@ func writeTargetListing(stdout io.Writer, results []synth.TargetResult) {
 		if r.Outcome == synth.Unchanged {
 			continue
 		}
-		if n := len(targetLabel(r.Target)); n > width {
+		if n := len(resultLabel(r)); n > width {
 			width = n
 		}
 	}
@@ -499,6 +506,6 @@ func writeTargetListing(stdout io.Writer, results []synth.TargetResult) {
 		if r.Outcome == synth.Unchanged {
 			continue
 		}
-		fmt.Fprintf(stdout, "  %-*s  +%d/-%d\n", width, targetLabel(r.Target), r.Added, r.Deleted)
+		fmt.Fprintf(stdout, "  %-*s  +%d/-%d\n", width, resultLabel(r), r.Added, r.Deleted)
 	}
 }
