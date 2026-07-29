@@ -538,8 +538,19 @@ func (fp *filePlan) close() {
 	fp.workFile.Close()
 }
 
-// apply is the plan's only side-effecting step: pathspecs delegate to
-// `git add`, and every file's synthesized blob is written and staged.
+// apply is the plan's only side-effecting step: pathspecs delegate to one
+// `git add` call, and every file's synthesized blob is written and staged
+// through its own hash-object + update-index pair. PlanStage already
+// resolved every target before apply ever runs -- resolution is a pure
+// read, so a resolution failure never reaches here -- but an I/O error
+// inside this loop (a full disk, a permission race) can still leave an
+// earlier file's blob staged while a later one fails. That is inherited
+// git behaviour, not a gap: this loop is N independent git invocations,
+// each durable the instant it returns, the same as a caller running the
+// equivalent hash-object/update-index sequence by hand would get
+// (specs/design.md § Blob synthesis measures both halves of this against
+// real git). A caller wanting the index back exactly as it was already has
+// `git reset` for it.
 func (p *stagePlan) apply(ctx context.Context, repo *gitx.Repo, root string) error {
 	if len(p.pathspecs) > 0 {
 		if err := repo.Add(ctx, p.pathspecs...); err != nil {

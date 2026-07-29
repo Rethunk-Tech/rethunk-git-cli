@@ -70,6 +70,22 @@ symbol deletion from a deleted file — it falls back to `git ls-tree HEAD`.
 failure leaves the index exactly as found. The caller never ran `git add`;
 nothing should have moved.
 
+**A mid-`apply` I/O failure can leave a mixed-target commit half-staged, and
+that is inherited, not invented.** Once resolution succeeds, `apply` stages
+pathspecs through one `git add --` call, then stages each synthesized blob
+through its own `hash-object` + `update-index` pair, one file at a time. The
+pathspec call is atomic — measured against real git: `git add -- a b c`
+staged nothing at all, not even the two readable files, when the third
+pathspec named a `chmod 000` file git could not open. But the per-file synth
+loop is not one call; it is N independent git invocations, so a later
+file's I/O failure (a full disk, a permission race) does not roll back an
+earlier file's already-durable `update-index`. Measured the same way: two
+sequential `git add` calls, the second naming a path that does not exist,
+left the first file's staged entry untouched afterward. That is exactly the
+shape `apply`'s own loop has — nothing here fabricates a transaction git
+itself does not offer; a caller who wants the index back exactly as it was
+already has `git reset` for it.
+
 **Concurrency** needs no handling: two `rgit` runs contend on `.git/index`
 exactly as two `git add` runs do, and git's `index.lock` arbitrates.
 
