@@ -50,7 +50,7 @@ type commitFlags struct {
 // It cannot be a registered shorthand: pflag resolves an optional-value
 // flag's NoOptDefVal before checking for an attached value, so -SDEADBEEF
 // parses as a chain of nonexistent single-letter flags rather than as a key
-// id (verified against pflag directly; specs/design.md § CLI handling).
+// id (specs/design.md § CLI handling).
 //
 // The rewrite follows getopt's rule, which is git's: for a short option
 // taking an optional argument, the rest of the token IS the argument. -Ss
@@ -87,8 +87,8 @@ func expandGPGSignShorthand(args []string) []string {
 //
 // It has to be printable. pflag renders a string flag's NoOptDefVal
 // straight into the usage line as [="<value>"], so a NUL-prefixed sentinel
-// -- the obvious choice for "can never be a real key id" -- put a raw
-// control byte in `rgit commit --help` and broke the column alignment for
+// -- the obvious choice for "can never be a real key id" -- would put a raw
+// control byte in `rgit commit --help` and break the column alignment for
 // every flag after it. This reads correctly there instead, and the angle
 // brackets keep it out of the space of real GPG key ids just as well.
 const gpgSignBare = "<default-key>"
@@ -151,8 +151,8 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 	// generate "fixup!"/"squash! <original subject>" the same way plain
 	// `git commit` does. Every other no-message invocation is still a
 	// usage error. -m/-F given alongside --fixup or --squash is not a
-	// conflict -- verified against real git: it appends as an extra body
-	// paragraph rather than being rejected or silently dropped.
+	// conflict: git appends it as an extra body paragraph rather than
+	// rejecting or silently dropping it.
 	autoMessage := f.amend || f.fixup != "" || f.squash != ""
 	noEdit := f.amend && len(f.messages) == 0 && f.msgFile == ""
 	if len(f.messages) == 0 && f.msgFile == "" && !autoMessage {

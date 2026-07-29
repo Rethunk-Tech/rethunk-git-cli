@@ -402,8 +402,8 @@ func TestRun_DiffFromSubdirectory(t *testing.T) {
 //
 // The rule is getopt's, which is git's: for a short option taking an
 // optional argument, whatever follows in the same token IS the argument.
-// So -Ss means the key "s", not "sign plus signoff" -- verified against
-// git, and the reason this cannot be a general shorthand-chain expansion.
+// So -Ss means the key "s", not "sign plus signoff" -- the reason this
+// cannot be a general shorthand-chain expansion.
 func TestExpandGPGSignShorthand(t *testing.T) {
 	t.Parallel()
 
@@ -493,16 +493,17 @@ func TestRun_PushFailureReportsUpstreamHint(t *testing.T) {
 	// it -- it already landed by the time Push is even attempted.
 	qt.Assert(t, qt.StringContains(stdout, "a.go:A"))
 	qt.Assert(t, qt.StringContains(gitOut(t, dir, "cat-file", "-p", "HEAD:a.go"), "return 111"))
-	// The concrete, named fix commit.go's own doc comment promises: branch
-	// "main" (gittest.New forces it) and the exact command to run.
+	// The concrete, named suggestion commit.go's own doc comment promises:
+	// branch "main" (gittest.New forces it) and the exact command to run.
 	qt.Assert(t, qt.StringContains(stderr, "main has no upstream tracking branch"))
 	qt.Assert(t, qt.StringContains(stderr, "git push -u origin main"))
 }
 
-// TestRun_PathspecListsEveryFileItStages pins the reported bug: naming a
-// directory listed one aggregate row for the pathspec, so a caller could
-// see that something under it moved but not what. `rgit diff` already broke
-// the same change down per file, and the two are supposed to agree.
+// TestRun_PathspecListsEveryFileItStages asserts a pathspec naming a
+// directory lists one row per file it stages, not one aggregate row for
+// the whole pathspec, so a caller can see what moved under it, not merely
+// that something did. `rgit diff` already breaks the same change down per
+// file, and the two are supposed to agree.
 //
 // Each row also has to match git's own numstat for that file, since the
 // aggregate it replaced did.
@@ -725,9 +726,9 @@ func TestRun_DoctorHelpAndUsage(t *testing.T) {
 	qt.Assert(t, qt.Not(qt.Equals(stderr, "")))
 }
 
-// TestRun_VersionReportsGrammars pins deliverable 3a: the first line stays
+// TestRun_VersionReportsGrammars pins the first line staying
 // byte-identical to what scripts and cmd/rgit-install already parse, and a
-// second line reports optional/gated grammars -- present or explicitly
+// second line reporting optional/gated grammars -- present or explicitly
 // "none", so a caller can tell a SQL-enabled binary from a plain one
 // without a separate `rgit languages` call. Which word that second line
 // carries is build-specific (languages_sql_test.go, languages_nosql_test.go).
@@ -741,10 +742,10 @@ func TestRun_VersionReportsGrammars(t *testing.T) {
 	qt.Assert(t, qt.StringContains(stdout, "optional grammars:"))
 }
 
-// TestRun_UnsupportedLanguageGetsNoRebuildHint pins the negative case for
-// deliverable 3b: a language this resolver has never supported (no grammar
-// exists at all, gated or otherwise) gets the plain exit-9 refusal with no
-// rebuild suggestion -- unlike a genuinely gated miss (languages_sql_test.go,
+// TestRun_UnsupportedLanguageGetsNoRebuildHint pins the negative case: a
+// language this resolver has never supported (no grammar exists at all,
+// gated or otherwise) gets the plain exit-9 refusal with no rebuild
+// suggestion -- unlike a genuinely gated miss (languages_sql_test.go,
 // languages_nosql_test.go), which does. True regardless of -tags rgit_sql,
 // so it belongs in the untagged file rather than either build-specific one.
 func TestRun_UnsupportedLanguageGetsNoRebuildHint(t *testing.T) {

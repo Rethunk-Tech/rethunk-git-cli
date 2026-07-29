@@ -2,9 +2,9 @@
 
 // Coverage for a binary built WITH the SQL grammar (-tags rgit_sql).
 // languages_nosql_test.go is this file's mirror for a plain build; between
-// the two, deliverable 3's whole point -- that the same binary can answer
-// "what do you support" two different ways -- gets a regression in
-// whichever lane a change actually breaks it in, per CONTRIBUTING.md.
+// the two, a change that breaks the same binary's ability to answer "what
+// do you support" two different ways must fail in whichever lane it
+// actually breaks it in, per CONTRIBUTING.md.
 package app
 
 import (
@@ -55,10 +55,10 @@ func TestRun_DoctorListsSQLWhenTagged(t *testing.T) {
 	qt.Assert(t, qt.StringContains(stdout, "sql"))
 }
 
-// TestRun_SQLAnchorWithTagResolvesNormally pins deliverable 3b's positive
-// case: with the grammar actually compiled in, an unresolved .sql anchor
-// fails as an ordinary AnchorUnresolvable (exit 3) -- never the gated-miss
-// exit 9 the untagged build produces for the identical anchor
+// TestRun_SQLAnchorWithTagResolvesNormally pins the positive case: with the
+// grammar actually compiled in, an unresolved .sql anchor fails as an
+// ordinary AnchorUnresolvable (exit 3) -- never the gated-miss exit 9 the
+// untagged build produces for the identical anchor
 // (languages_nosql_test.go) -- and carries no rebuild hint, since there is
 // nothing left to rebuild for.
 func TestRun_SQLAnchorWithTagResolvesNormally(t *testing.T) {

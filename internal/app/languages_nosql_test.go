@@ -51,12 +51,12 @@ func TestRun_DoctorOmitsSQLWithoutTag(t *testing.T) {
 	qt.Assert(t, qt.Not(qt.StringContains(stdout, "sql")))
 }
 
-// TestRun_SQLAnchorWithoutTagHintsRebuild pins deliverable 3b's negative
-// case: a binary built without rgit_sql still fails a .sql anchor with the
-// same generic "no grammar registered" exit 9 every unsupported language
-// gets (TestRun_UnsupportedLanguageGetsNoRebuildHint in app_test.go covers
-// that shared refusal), but the message also names the build tag and
-// points at the fix -- unlike a language this resolver has never supported.
+// TestRun_SQLAnchorWithoutTagHintsRebuild pins the negative case: a binary
+// built without rgit_sql still fails a .sql anchor with the same generic
+// "no grammar registered" exit 9 every unsupported language gets
+// (TestRun_UnsupportedLanguageGetsNoRebuildHint in app_test.go covers that
+// shared refusal), but the message also names the build tag and points at
+// the rebuild -- unlike a language this resolver has never supported.
 func TestRun_SQLAnchorWithoutTagHintsRebuild(t *testing.T) {
 	dir := chdirTempRepo(t)
 	writeAppFile(t, dir, "q.sql", "SELECT 1;\n")

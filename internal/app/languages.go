@@ -6,7 +6,7 @@
 // install time when the tree-sitter CLI is on PATH (docs/INSTALL.md § SQL
 // support), so the same binary can legitimately answer "what do you
 // support" two different ways -- this makes the answer runtime-accurate
-// instead of the hand-maintained prose that has already gone stale twice.
+// rather than relying on hand-maintained prose that can drift.
 package app
 
 import (
@@ -108,8 +108,8 @@ func renderLanguagesPorcelain(langs []resolve.LanguageInfo) string {
 }
 
 // gatedLanguageNames returns the Name of every registered adapter that is
-// present only because a build tag selected it -- currently "sql" alone
-// when built with -tags rgit_sql, empty otherwise. Shared by `rgit
+// present only because a build tag selected it -- "sql" alone when built
+// with -tags rgit_sql, empty otherwise. Shared by `rgit
 // --version` (app.go) and `rgit doctor` (doctor.go) so the three surfaces
 // -- languages, doctor, and --version -- can never disagree about which
 // grammars are gated in this exact binary.
