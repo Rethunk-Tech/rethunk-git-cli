@@ -54,6 +54,16 @@ Notable changes to `rgit`. The format follows
   already listed.
 - The unresolved-argument diagnostic says "rules considered" — it listed
   pathspec magic as tried even when a leading colon had ruled it out.
+- SQL parser generation no longer deletes the previous `csrc/` before the
+  replacement is safely in place; a failed finalize restores it rather than
+  leaving neither.
+- `rgit-install -with-servers` exits non-zero when a managed server fails,
+  instead of reporting `FAILED` and exiting 0, and each install is bounded by
+  a timeout rather than running unbounded against a hung registry.
+- TypeScript and TSX no longer rebuild their tree-sitter language on every
+  parse; every other adapter already cached it once at registration.
+- `PeekShebangLine` no longer reports success for an empty file or a genuine
+  read error, where any successful open used to be treated as sufficient.
 
 - The install docs named `~/.local/bin/rgit` as the uninstall target, which
   the default install never writes to — it targets `$GOBIN`, else
