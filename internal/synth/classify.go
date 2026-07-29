@@ -154,7 +154,7 @@ func insertionText(src []byte, ext resolve.Extent) []byte {
 // that need it: an insertion carries it, and a deletion takes it away.
 //
 // A top-level declaration begins in column zero, so this returns off
-// unchanged and neither operation behaves differently than before.
+// unchanged.
 func lineStart(src []byte, off uint) uint {
 	start := uint(bytes.LastIndexByte(src[:off], '\n') + 1)
 	if len(bytes.TrimLeft(src[start:off], " \t")) != 0 {

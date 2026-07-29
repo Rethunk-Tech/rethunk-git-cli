@@ -136,8 +136,7 @@ func (o editOp) span() uint {
 //
 // A non-insertion op (editReplace or editDelete) is a genuine HEAD range, so
 // two of those overlap exactly when the ordinary half-open interval test
-// says so -- that math is unchanged from before this function grew insertion
-// awareness.
+// says so.
 //
 // An insertion is different: op.start is a splice POSITION into HEAD's
 // bytes (AGENTS.md's descending-offset splice pass), computed as the
@@ -150,11 +149,8 @@ func (o editOp) span() uint {
 // nesting says the kept op already carries this insertion's text: the
 // insertion's own WORKTREE extent (wstart/wend) falling inside the kept
 // op's own worktree extent, which is what its replacement text is actually
-// drawn from. An editDelete has no worktree extent (wend stays 0) and so
-// never contains an insertion; this was silently true before too, since a
-// deleted symbol's worktree bytes don't exist to test against, but now it
-// is what the zero-value check verifies instead of accidental HEAD-space
-// arithmetic.
+// drawn from. An editDelete has no worktree extent (wend stays 0), so the
+// zero-value check alone is enough to say it never contains an insertion.
 func swallowedBy(kept []editOp, op editOp) bool {
 	for _, k := range kept {
 		if k.kind == editInsert {
