@@ -126,6 +126,27 @@ func (y *yamlLanguage) ImportKinds() []string { return nil }
 // "---" when either is present).
 func (y *yamlLanguage) HeaderKinds() []string { return []string{"comment"} }
 
+// OwnsTrailingSeparator is false: unlike gofmt for Go, no YAML formatter
+// enforces a deterministic blank line after a header comment run -- the
+// same "author's own blank lines are preserved, not normalized" reasoning
+// that makes Prettier and Black answer false too -- so there is no
+// tool-enforced separator to claim as structurally part of @header.
+func (y *yamlLanguage) OwnsTrailingSeparator() bool { return false }
+
+// MembersSitFlush is false: unlike gofmt or Prettier, no YAML formatter
+// enforces either convention deterministically, so there is no tool-backed
+// flush convention to match the way there is for Go and TypeScript -- the
+// same reasoning Python answers false for, though for a different
+// underlying cause (Python has an enforced convention, just the opposite
+// one; YAML has none at all). This only governs a brand-new nested key
+// being inserted, not the byte-identical replace/delete path a committed
+// key already takes.
+func (y *yamlLanguage) MembersSitFlush() bool { return false }
+
+// AllowsRawHeadingFallback is false: YAML has no heading concept for the
+// fallback to apply to.
+func (y *yamlLanguage) AllowsRawHeadingFallback() bool { return false }
+
 // Declarations addresses top-level keys of a single-document YAML stream,
 // container-qualified one level in for a nested mapping -- the same
 // nearest-ancestor-only rule lang_markdown.go's sectionDeclarations already

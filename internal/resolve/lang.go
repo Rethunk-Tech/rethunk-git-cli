@@ -81,6 +81,35 @@ type Language interface {
 	// HeaderKinds lists the node kinds belonging to @header — shebang,
 	// build tags, copyright, package clause.
 	HeaderKinds() []string
+
+	// OwnsTrailingSeparator reports whether lang's own formatting convention
+	// deterministically inserts exactly one blank line after @header or
+	// @imports, so that blank line is as much part of the region as its own
+	// trailing newline (ExtendThroughOwnedSeparator, pseudo.go). gofmt is
+	// the only formatter among this resolver's languages that makes this
+	// guarantee unconditionally; every other adapter answers false, but must
+	// still say so explicitly, with a comment giving the reason -- this used
+	// to be a bare `lang.Name() == "go"` equality check, so CSS, JSON, TOML,
+	// and SQL landed on "false" by falling through an equality nobody wrote
+	// for them, not by a considered answer (specs/design.md).
+	OwnsTrailingSeparator() bool
+
+	// MembersSitFlush reports whether lang's own convention keeps sibling
+	// container members (struct fields, interface methods, class methods)
+	// adjacent with no blank line between them, so a newly spliced-in member
+	// (classify.go's escalateToContainer) is inserted flush rather than with
+	// blank-line padding. This used to be a `lang.Name()` switch naming only
+	// "go", "typescript", and "tsx"; every other adapter answered false by
+	// falling through the switch's default case, not by a considered answer.
+	MembersSitFlush() bool
+
+	// AllowsRawHeadingFallback reports whether an anchor that fails to
+	// resolve as a slug should be retried as raw heading text
+	// (rawHeadingFallback, index.go) -- true only for markdown, where a
+	// caller may paste a heading's own title rather than rgit's emitted
+	// slug. This used to be a bare `lang.Name() == "markdown"` equality
+	// check (index.go).
+	AllowsRawHeadingFallback() bool
 }
 
 // ImportMatcher is an optional refinement of Language for a grammar whose

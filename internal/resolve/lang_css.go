@@ -48,6 +48,27 @@ func (c *cssLanguage) HeaderKinds() []string { return []string{"comment"} }
 // Markdown, which have no import concept at all.
 func (c *cssLanguage) ImportKinds() []string { return []string{"import_statement"} }
 
+// OwnsTrailingSeparator is false: no CSS formatting convention -- Prettier's
+// CSS printer included -- inserts a deterministic blank line after a
+// leading comment block or an @import run the way gofmt does for Go, so
+// whatever blank line, if any, follows one is the author's own spacing, not
+// a structural part of @header/@imports.
+func (c *cssLanguage) OwnsTrailingSeparator() bool { return false }
+
+// MembersSitFlush is false: no CSS formatting convention enforces either a
+// flush or a spaced boundary between sibling declarations deterministically
+// -- the same "no tool-backed convention to match" reasoning YAML answers
+// false for -- so a newly spliced-in member is treated as an ordinary
+// top-level-shaped boundary, keeping whatever blank line the author would
+// have written by hand. Currently unreached in practice (Declarations sets
+// no Container today), but stated explicitly rather than left to whichever
+// future change makes it reachable to discover by omission.
+func (c *cssLanguage) MembersSitFlush() bool { return false }
+
+// AllowsRawHeadingFallback is false: CSS has no heading concept for the
+// fallback to apply to.
+func (c *cssLanguage) AllowsRawHeadingFallback() bool { return false }
+
 // Declarations walks the stylesheet root's own named children. "comment" and
 // "import_statement" are deliberately excluded here even though a leading
 // run of the latter is real content: an @import is reachable only through

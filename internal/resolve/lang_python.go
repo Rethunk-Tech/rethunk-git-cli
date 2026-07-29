@@ -40,6 +40,26 @@ func (p *pythonLanguage) HeaderKinds() []string {
 	return []string{"comment"}
 }
 
+// OwnsTrailingSeparator is false: Black preserves whatever blank-line count
+// the author wrote after a header or import block rather than inserting one
+// deterministically the way gofmt does, so claiming that blank line as
+// structurally part of @header/@imports would misattribute a byte the
+// region does not own.
+func (p *pythonLanguage) OwnsTrailingSeparator() bool { return false }
+
+// MembersSitFlush is false: PEP 8 requires exactly one blank line between
+// method definitions inside a class body (linters enforce it as E301), and
+// a Python class's only addressable member kind is a method (classMembers
+// never descends into plain attribute assignments) -- so a newly
+// spliced-in method is treated as an ordinary top-level-shaped boundary,
+// not a flush one, or the synthesized blob would drop a blank line every
+// Python style guide expects there.
+func (p *pythonLanguage) MembersSitFlush() bool { return false }
+
+// AllowsRawHeadingFallback is false: Python has no heading concept for the
+// fallback to apply to.
+func (p *pythonLanguage) AllowsRawHeadingFallback() bool { return false }
+
 // Declarations walks only the root's named children — v1 addresses top-level
 // symbols; class bodies are not descended into, matching the Go and
 // TypeScript adapters.

@@ -43,6 +43,24 @@ func (j *jsonLanguage) HeaderKinds() []string { return nil }
 // YAML, and TOML already give.
 func (j *jsonLanguage) ImportKinds() []string { return nil }
 
+// OwnsTrailingSeparator is false: HeaderKinds is already nil, so @header
+// never matches anything for JSON and this is unreached in practice.
+// Answered explicitly anyway rather than left to fall through a switch by
+// omission.
+func (j *jsonLanguage) OwnsTrailingSeparator() bool { return false }
+
+// MembersSitFlush is false: JSON has no formatting convention -- deterministic
+// or otherwise -- for blank lines between object members at all; authored
+// JSON essentially never carries one either way, so there is no tool-backed
+// convention to match the way there is for Go and TypeScript, the same "no
+// convention to match" default YAML and Python (for their own, different
+// reasons) also land on.
+func (j *jsonLanguage) MembersSitFlush() bool { return false }
+
+// AllowsRawHeadingFallback is false: JSON has no heading concept for the
+// fallback to apply to.
+func (j *jsonLanguage) AllowsRawHeadingFallback() bool { return false }
+
 // Declarations addresses a top-level object's own key paths,
 // container-qualified one level in for a nested object -- the same
 // nearest-ancestor-only rule lang_yaml.go's mappingDeclarations already

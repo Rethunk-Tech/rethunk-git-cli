@@ -48,6 +48,23 @@ func (l *tsFamily) ImportKinds() []string { return []string{"import_statement"} 
 // duplicating, per docs/ANCHORS.md's blank-line rule.
 func (l *tsFamily) HeaderKinds() []string { return []string{"hash_bang_line", "comment"} }
 
+// OwnsTrailingSeparator is false: Prettier preserves whatever blank-line
+// count the author wrote after a header or import block rather than
+// inserting one deterministically the way gofmt does, so claiming that
+// blank line as structurally part of @header/@imports would misattribute a
+// byte the region does not own.
+func (l *tsFamily) OwnsTrailingSeparator() bool { return false }
+
+// MembersSitFlush is true: Prettier leaves class methods and fields exactly
+// as spaced as the author wrote them, inserting no separator and requiring
+// none, the same as gofmt for Go -- true for both TypeScript and TSX, since
+// this method is shared by both registrations (tsFamily's own doc comment).
+func (l *tsFamily) MembersSitFlush() bool { return true }
+
+// AllowsRawHeadingFallback is false: TypeScript has no heading concept for
+// the fallback to apply to.
+func (l *tsFamily) AllowsRawHeadingFallback() bool { return false }
+
 // Declarations walks the top-level (program) children. The trap this exists
 // to avoid: an exported symbol is not a top-level function_declaration, it is
 // an export_statement wrapping one. Verified against a compiled parse tree —

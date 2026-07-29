@@ -261,3 +261,19 @@ func (g *goLanguage) ImportKinds() []string { return goImportKinds }
 var goHeaderKinds = []string{"comment", "package_clause"}
 
 func (g *goLanguage) HeaderKinds() []string { return goHeaderKinds }
+
+// OwnsTrailingSeparator is true: gofmt inserts exactly one blank line after
+// the package clause and after the import block, unconditionally, so in a
+// gofmt'd file that blank line is as much "part of the header" as the
+// package clause's own trailing newline (pseudo.go's Language method doc).
+func (g *goLanguage) OwnsTrailingSeparator() bool { return true }
+
+// MembersSitFlush is true: gofmt leaves struct fields and interface methods
+// exactly as spaced as the author wrote them, inserting no separator and
+// requiring none, so whatever the worktree already has is "flush" as far as
+// gofmt is concerned.
+func (g *goLanguage) MembersSitFlush() bool { return true }
+
+// AllowsRawHeadingFallback is false: Go has no heading concept for the
+// fallback to apply to.
+func (g *goLanguage) AllowsRawHeadingFallback() bool { return false }

@@ -58,6 +58,29 @@ func (l *sqlLanguage) HeaderKinds() []string { return []string{"comment", "margi
 // JSON, and Markdown already give.
 func (l *sqlLanguage) ImportKinds() []string { return nil }
 
+// OwnsTrailingSeparator is false: no SQL formatting convention this
+// resolver relies on inserts a deterministic blank line after a leading
+// comment run, so whatever blank line, if any, follows one is the author's
+// own spacing, not a structural part of @header.
+func (l *sqlLanguage) OwnsTrailingSeparator() bool { return false }
+
+// MembersSitFlush is false, though effectively unreachable in the common
+// case: the only Container this adapter sets is a schema qualifying a
+// table/view/function/index/type name (sqlObjectReferenceDeclaration), and
+// escalateToContainer (classify.go) only treats a member's Container as a
+// true nesting when the container's own name resolves to a declaration
+// that structurally encloses it -- a schema name is not itself a declared,
+// resolvable symbol in this grammar (Declarations names no "schema" kind),
+// so that path never fires, the same way a Go receiver's container is "a
+// sibling of its methods, not their parent" (escalateToContainer's own doc
+// comment). Answered explicitly anyway rather than left to fall through a
+// switch by omission.
+func (l *sqlLanguage) MembersSitFlush() bool { return false }
+
+// AllowsRawHeadingFallback is false: SQL has no heading concept for the
+// fallback to apply to.
+func (l *sqlLanguage) AllowsRawHeadingFallback() bool { return false }
+
 // Declarations walks the program root's own named children. A "comment" or
 // "marginalia" node sits as a program-level sibling of "statement" nodes,
 // not nested inside one -- measured -- so both are skipped here the same

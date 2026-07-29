@@ -39,6 +39,24 @@ func (l *tomlLanguage) HeaderKinds() []string { return []string{"comment"} }
 // already give.
 func (l *tomlLanguage) ImportKinds() []string { return nil }
 
+// OwnsTrailingSeparator is false: no TOML formatting convention -- there is
+// no widely-adopted formatter for this grammar analogous to gofmt -- inserts
+// a deterministic blank line after a leading comment run, so whatever blank
+// line, if any, follows one is the author's own spacing, not a structural
+// part of @header.
+func (l *tomlLanguage) OwnsTrailingSeparator() bool { return false }
+
+// MembersSitFlush is false: no TOML formatting convention enforces either a
+// flush or a spaced boundary between table entries deterministically, the
+// same "no tool-backed convention to match" reasoning YAML and JSON answer
+// false for, so a newly spliced-in table member is treated as an ordinary
+// top-level-shaped boundary.
+func (l *tomlLanguage) MembersSitFlush() bool { return false }
+
+// AllowsRawHeadingFallback is false: TOML has no heading concept for the
+// fallback to apply to.
+func (l *tomlLanguage) AllowsRawHeadingFallback() bool { return false }
+
 // Declarations walks the document root's own named children. A bare
 // top-level pair (no enclosing "[table]") gets an empty Container; a
 // "table"/"table_array_element" is itself addressable by its own header key

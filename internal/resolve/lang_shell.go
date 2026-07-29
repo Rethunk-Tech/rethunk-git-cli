@@ -73,6 +73,24 @@ func (s *shellLanguage) IsImport(src []byte, n *ts.Node) bool {
 // new to specify.
 func (s *shellLanguage) HeaderKinds() []string { return []string{"comment"} }
 
+// OwnsTrailingSeparator is false: no shell formatter this resolver treats as
+// authoritative the way gofmt is for Go enforces a deterministic blank line
+// after a header comment run, so whatever separates it from the first
+// statement is the author's own spacing, not a structural part of @header.
+func (s *shellLanguage) OwnsTrailingSeparator() bool { return false }
+
+// MembersSitFlush is false, though effectively unreachable: shell has no
+// containers at all (Declarations' own doc comment -- function namespace is
+// flat, nothing sets Container), so classify.go's escalateToContainer path
+// that consults this never fires for a shell file. Answered explicitly
+// anyway, the same discipline ImportKinds above already follows for a
+// method that exists only to satisfy the interface.
+func (s *shellLanguage) MembersSitFlush() bool { return false }
+
+// AllowsRawHeadingFallback is false: shell has no heading concept for the
+// fallback to apply to.
+func (s *shellLanguage) AllowsRawHeadingFallback() bool { return false }
+
 // Declarations walks the root's own named children -- program's children are
 // exactly the hidden `_statement` supertype, measured against
 // src/node-types.json, so there is no wrapping node to unwrap the way

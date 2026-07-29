@@ -109,23 +109,21 @@ func importPredicate(lang Language, src []byte) func(*ts.Node) bool {
 	return func(n *ts.Node) bool { return kinds[n.Kind()] }
 }
 
-// OwnsTrailingSeparator reports whether lang's own formatting convention
-// treats the blank line following its @header or @imports region as
-// belonging to that region, rather than as free-floating whitespace between
-// two otherwise unrelated fragments. gofmt inserts exactly one there
-// unconditionally for Go -- after the package clause and after the import
-// block -- so in a gofmt'd file that blank line is as much "part of the
-// header" as the package clause's own trailing newline is.
+// OwnsTrailingSeparator reports lang's own answer (Language.
+// OwnsTrailingSeparator) to whether its formatting convention treats the
+// blank line following its @header or @imports region as belonging to that
+// region, rather than as free-floating whitespace between two otherwise
+// unrelated fragments. gofmt inserts exactly one there unconditionally for
+// Go -- after the package clause and after the import block -- so in a
+// gofmt'd file that blank line is as much "part of the header" as the
+// package clause's own trailing newline is.
 //
-// Prettier and Black carry no equivalent rule: both preserve whatever
-// blank-line count the author wrote rather than inserting one
-// deterministically, so guessing a mandatory separator into either would
-// misattribute a byte
-// the region does not structurally own. Only Go claims it, so this is
-// decided here, once, per language, rather than assumed universally by
-// whichever caller needs the answer.
+// Kept as a free function, rather than inlining lang.OwnsTrailingSeparator()
+// at each call site, only so ExtendThroughOwnedSeparator below and every
+// external caller keep the same call shape they had before this became an
+// interface method.
 func OwnsTrailingSeparator(lang Language) bool {
-	return lang.Name() == "go"
+	return lang.OwnsTrailingSeparator()
 }
 
 // ExtendThroughOwnedSeparator widens ext's End through the whitespace
@@ -156,12 +154,13 @@ func ExtendThroughOwnedSeparator(lang Language, src []byte, ext Extent, limit ui
 	return Extent{Start: ext.Start, End: end}
 }
 
-// MembersSitFlush reports whether lang's own convention keeps sibling
-// container members -- struct fields, interface methods, class methods --
-// adjacent with no blank line between them, the way gofmt leaves Go struct
-// fields and interface methods and prettier leaves TypeScript class methods:
-// neither tool inserts or requires a separator there, so whatever the
-// worktree already has is "flush" as far as either is concerned.
+// MembersSitFlush reports lang's own answer (Language.MembersSitFlush) to
+// whether its convention keeps sibling container members -- struct fields,
+// interface methods, class methods -- adjacent with no blank line between
+// them, the way gofmt leaves Go struct fields and interface methods and
+// prettier leaves TypeScript class methods: neither tool inserts or requires
+// a separator there, so whatever the worktree already has is "flush" as far
+// as either is concerned.
 //
 // Python is the opposite case: PEP 8 requires exactly one blank line between
 // method definitions inside a class body (linters enforce it as E301), and
@@ -171,21 +170,14 @@ func ExtendThroughOwnedSeparator(lang Language, src []byte, ext Extent, limit ui
 // flush one, or the synthesized blob would drop a blank line every Python
 // style guide expects there.
 //
-// YAML defaults to the Python side of this for a different reason: unlike
-// gofmt or prettier, no YAML formatter enforces either convention
-// deterministically (the same "author's own blank lines are preserved, not
-// normalized" reasoning OwnsTrailingSeparator already gives for Prettier and
-// Black), so there is no tool-enforced flush convention to match the way
-// there is for Go and TypeScript. This only governs a brand-new nested key
-// being inserted, not the byte-identical replace/delete path a committed
-// key already takes.
+// This only governs a brand-new nested member being inserted, not the
+// byte-identical replace/delete path a committed member already takes.
+//
+// Kept as a free function for the same reason OwnsTrailingSeparator is: so
+// classify.go's call site keeps the shape it had before this became an
+// interface method.
 func MembersSitFlush(lang Language) bool {
-	switch lang.Name() {
-	case "go", "typescript", "tsx":
-		return true
-	default:
-		return false
-	}
+	return lang.MembersSitFlush()
 }
 
 // toplevelExtent spans every addressable declaration's full extent (leading
@@ -202,9 +194,24 @@ func MembersSitFlush(lang Language) bool {
 // declaration span -- because sectionDeclarations never returns an entry for
 // the lede, so this formula would otherwise compute "first heading through
 // end of document", the opposite of the decided design (lang_markdown.go's
-// mdLanguage.toplevelExtent). Dispatched via a type assertion rather than a
-// new Language method, so this function stays the one implementation Go,
-// TypeScript, and Python actually run, unchanged.
+// mdLanguage.toplevelExtent).
+//
+// Deliberately still dispatched via a type assertion rather than a Language
+// method, unlike OwnsTrailingSeparator/MembersSitFlush/
+// AllowsRawHeadingFallback above: those three are booleans an adapter states
+// once and the shared caller branches on, so a missing case is silently
+// wrong (the defect this file's other three methods were promoted to fix).
+// toplevelExtent is not a flag to branch on -- it is the whole computation,
+// needing idx, root, and src together -- so making it a Language method
+// would force every adapter to either carry this exact 15-line formula
+// itself (duplicated nine times, with no shared source of truth to catch
+// the copies drifting apart) or call back into a package-level default
+// anyway, which is what the type assertion already does more directly. A
+// future grammar shaped like Markdown's -- @toplevel meaning something
+// structurally different from "span of declarations" -- gets exactly the
+// same override seam this one type assertion already provides; there being
+// only one such grammar so far is not a coincidence to design around
+// preemptively.
 func toplevelExtent(lang Language, src []byte, root *ts.Node, idx *index) (Extent, bool) {
 	if md, ok := lang.(*mdLanguage); ok {
 		return md.toplevelExtent(src, root, idx)

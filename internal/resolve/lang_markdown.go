@@ -47,6 +47,27 @@ func (m *mdLanguage) ImportKinds() []string { return nil }
 // most one of the two metadata kinds, never both.
 func (m *mdLanguage) HeaderKinds() []string { return []string{"minus_metadata", "plus_metadata"} }
 
+// OwnsTrailingSeparator is false: no markdown formatter this resolver
+// treats as authoritative enforces a deterministic blank line after
+// frontmatter, so whatever separates it from the lede is the author's own
+// spacing, not a structural part of @header.
+func (m *mdLanguage) OwnsTrailingSeparator() bool { return false }
+
+// MembersSitFlush is false: no markdown convention enforces either a flush
+// or a spaced boundary between sibling headings deterministically, the same
+// "no tool-backed convention to match" reasoning YAML, JSON, and TOML
+// answer false for, so a newly spliced-in section is treated as an
+// ordinary top-level-shaped boundary.
+func (m *mdLanguage) MembersSitFlush() bool { return false }
+
+// AllowsRawHeadingFallback is true: a caller may paste a heading's own raw
+// title -- copied straight out of the rendered document or an editor
+// outline -- rather than rgit's own emitted slug, and rawHeadingFallback
+// (index.go) exists specifically to accept that. Markdown is the only
+// grammar with a heading concept at all, so it is the only adapter that
+// answers true.
+func (m *mdLanguage) AllowsRawHeadingFallback() bool { return true }
+
 // Declarations walks document's top-level "section" children. Measured
 // against a compiled parse tree: every heading, and all of its content down
 // to arbitrary depth, lives inside some section — document itself never

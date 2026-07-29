@@ -72,14 +72,15 @@ type index struct {
 	// differ, so both indexes must exist.
 	byBare map[string][]*Symbol
 
-	// allowRawHeading gates rawHeadingFallback. It is set true only for the
-	// markdown adapter (buildIndex), never inferred from the anchor text
-	// itself: the fallback's raw-text-to-slug rewrite is a markdown-only
-	// accommodation (docs/ANCHORS.md), and gating on the language that was
-	// already selected by the file's extension is the only test that can
-	// never produce a false positive for Go/TS/Python — unlike gating on
-	// whether the anchor text merely contains a space, which excludes every
-	// single-word heading for no reason tied to cross-language safety.
+	// allowRawHeading gates rawHeadingFallback, set from the language's own
+	// Language.AllowsRawHeadingFallback answer (buildIndex) rather than
+	// inferred from the anchor text itself: the fallback's raw-text-to-slug
+	// rewrite is a markdown-only accommodation (docs/ANCHORS.md), and gating
+	// on the language that was already selected by the file's extension is
+	// the only test that can never produce a false positive for Go/TS/Python
+	// — unlike gating on whether the anchor text merely contains a space,
+	// which excludes every single-word heading for no reason tied to
+	// cross-language safety.
 	allowRawHeading bool
 }
 
@@ -102,7 +103,7 @@ func buildIndex(lang Language, src []byte, root *ts.Node) *index {
 		order:           syms,
 		byQualified:     make(map[string]*Symbol, len(syms)),
 		byBare:          make(map[string][]*Symbol, len(syms)),
-		allowRawHeading: lang.Name() == "markdown",
+		allowRawHeading: lang.AllowsRawHeadingFallback(),
 	}
 	for _, s := range syms {
 		idx.byQualified[s.Qualified] = s
