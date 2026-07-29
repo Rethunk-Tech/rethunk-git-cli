@@ -1003,6 +1003,54 @@ func TestStage_SiblingReceiverMethodKeepsBlankLinePadding(t *testing.T) {
 	qt.Assert(t, qt.Equals(got, work))
 }
 
+// TestStage_HTMLElementByID exercises the pipeline TODO.md's own div#app
+// example motivates: resolving a tag-qualified id anchor through a real git
+// index, nested inside another element, alongside a sibling void element
+// whose own trailing content tree-sitter-html's external scanner is measured
+// absorbing (specs/design.md § Grammar scope) -- proving that quirk never
+// crosses into a neighbour's own staged bytes.
+func TestStage_HTMLElementByID(t *testing.T) {
+	t.Parallel()
+	head := "<!DOCTYPE html>\n<html>\n<body>\n<div id=\"app\">\n  <section id=\"content\">v1</section>\n  <input id=\"field\" type=\"text\">\n</div>\n</body>\n</html>\n"
+
+	t.Run("nested element by id", func(t *testing.T) {
+		t.Parallel()
+		dir, repo := gittest.New(t)
+		gittest.Write(t, dir, "index.html", head)
+		gittest.Commit(t, dir, "chore: initial index.html")
+
+		work := strings.Replace(head, "v1", "v2", 1)
+		gittest.Write(t, dir, "index.html", work)
+
+		mustStage(t, repo, dir, synth.AnchorTarget("index.html", "section#content"))
+
+		got := indexBlob(t, repo, "index.html")
+		qt.Assert(t, qt.Equals(got, work))
+	})
+
+	t.Run("void element boundary is not absorbed into a neighbour", func(t *testing.T) {
+		t.Parallel()
+		dir, repo := gittest.New(t)
+		gittest.Write(t, dir, "index.html", head)
+		gittest.Commit(t, dir, "chore: initial index.html")
+
+		// Only the void input's own attribute changes; section#content's
+		// own "v1" text must survive untouched even though input#field's
+		// own node, measured directly, absorbs the trailing "\n" up to
+		// </div> (specs/design.md) -- left alone as the grammar's own
+		// honest boundary, the same way TOML's trailing-blank-line
+		// absorption already is, rather than trimmed.
+		work := strings.Replace(head, `type="text"`, `type="email"`, 1)
+		gittest.Write(t, dir, "index.html", work)
+
+		mustStage(t, repo, dir, synth.AnchorTarget("index.html", "input#field"))
+
+		got := indexBlob(t, repo, "index.html")
+		qt.Assert(t, qt.Equals(got, work))
+		qt.Assert(t, qt.StringContains(got, ">v1<"))
+	})
+}
+
 // TestPlanStage_PreambleRowsAppearInResults guards against a --dry-run
 // undercount: TestStage_NewFileCarriesHeaderAndImports already proves the
 // @header/@imports preamble is staged for a new file, and plan.Results()
