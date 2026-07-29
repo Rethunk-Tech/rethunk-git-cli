@@ -398,6 +398,26 @@ func runSQLGeneration(modDir, pkgDir string) error {
 	return nil
 }
 
+// parserABIVersion reads the ABI a generated parser.c declares by scanning
+// its `#define LANGUAGE_VERSION N` line -- the cheap, direct check for what
+// tree-sitter.json is supposed to guarantee (see runSQLGeneration).
+func parserABIVersion(path string) (int, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	const marker = "#define LANGUAGE_VERSION "
+	i := bytes.Index(data, []byte(marker))
+	if i < 0 {
+		return 0, fmt.Errorf("no LANGUAGE_VERSION define found")
+	}
+	rest := data[i+len(marker):]
+	if end := bytes.IndexByte(rest, '\n'); end >= 0 {
+		rest = rest[:end]
+	}
+	return strconv.Atoi(strings.TrimSpace(string(rest)))
+}
+
 func copyFile(src, dst string) error {
 	data, err := os.ReadFile(src)
 	if err != nil {
