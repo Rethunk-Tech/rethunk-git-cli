@@ -293,9 +293,8 @@ script, distinguished only by the text of its own `command_name` field.
 `ImportKinds` has no way to express "a command node whose name is exactly
 `source` or `.`" — returning `"command"` would make `@imports` swallow nearly
 the whole script. `ImportMatcher.IsImport` is consulted first when a Language
-implements it; Go, TypeScript and Python do not, so they take the unchanged
-`ImportKinds` path (verified: their own pseudo-anchor tests pass byte-for-byte
-identical to before the seam was added).
+implements it; Go, TypeScript and Python do not, so they take the plain
+`ImportKinds` path, verified byte-for-byte by their own pseudo-anchor tests.
 
 Deliberately excluded: `.zsh`. tree-sitter-bash is a POSIX/Bash grammar, not a
 zsh grammar, and zsh-only syntax produces `ERROR` nodes under it — the same

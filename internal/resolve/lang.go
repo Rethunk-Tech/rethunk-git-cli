@@ -130,9 +130,9 @@ type Language interface {
 // make @imports span nearly every line of a script, silently.
 //
 // importsExtent (pseudo.go) type-asserts for this and consults it first when
-// present; a Language that does not implement it falls back to ImportKinds
-// exactly as before, so Go, TypeScript and Python — none of which need
-// per-node text inspection to recognize an import — are unaffected.
+// present; a Language that does not implement it falls back to ImportKinds,
+// so Go, TypeScript and Python — none of which need per-node text
+// inspection to recognize an import — never take this path.
 type ImportMatcher interface {
 	// IsImport reports whether n, one of root's own named children, is an
 	// import. src is the whole file, passed for the same reason
