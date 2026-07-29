@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -326,7 +327,7 @@ func runSQLGeneration(modDir, pkgDir string) error {
 	if err != nil {
 		return fmt.Errorf("scratch dir: %w", err)
 	}
-	defer os.RemoveAll(scratch)
+	defer func() { _ = os.RemoveAll(scratch) }()
 
 	if err := copyFile(filepath.Join(modDir, "grammar.js"), filepath.Join(scratch, "grammar.js")); err != nil {
 		return err
@@ -343,21 +344,56 @@ func runSQLGeneration(modDir, pkgDir string) error {
 		return fmt.Errorf("tree-sitter generate: %w: %s", err, stderr.String())
 	}
 
-	treeSitterDir := filepath.Join(pkgDir, "csrc", "tree_sitter")
+	// tree-sitter.json alongside grammar.js is what is supposed to yield ABI
+	// 15; an outdated CLI can still silently emit ABI 14 anyway (that's the
+	// exact failure mode tree-sitter.json exists to prevent), which would
+	// otherwise surface only much later as a confusing cgo/link error. Check
+	// the thing that actually matters -- the LANGUAGE_VERSION the generated
+	// parser.c itself declares -- before anything downstream trusts it.
+	generatedParser := filepath.Join(scratch, "src", "parser.c")
+	abi, err := parserABIVersion(generatedParser)
+	if err != nil {
+		return fmt.Errorf("read generated parser.c: %w", err)
+	}
+	if abi != 15 {
+		return fmt.Errorf("generated parser.c is ABI %d, want 15 -- tree-sitter CLI may be outdated", abi)
+	}
+
+	// Staged as a sibling of the real csrc/ (same filesystem as pkgDir,
+	// unlike the scratch dir above which may be on tmpfs) so the finishing
+	// os.Rename is atomic. Nothing under csrc/ itself is touched until every
+	// file below has copied cleanly: a failed copy here leaves any existing
+	// csrc/ from a prior successful generation exactly as it was, rather
+	// than a half-overwritten one a later run would build on top of.
+	staging := filepath.Join(pkgDir, "csrc.tmp")
+	if err := os.RemoveAll(staging); err != nil {
+		return fmt.Errorf("clear stale staging dir: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(staging) }()
+
+	treeSitterDir := filepath.Join(staging, "tree_sitter")
 	if err := os.MkdirAll(treeSitterDir, 0o755); err != nil {
 		return err
 	}
 	copies := [][2]string{
-		{filepath.Join(scratch, "src", "parser.c"), filepath.Join(pkgDir, "csrc", "parser.c")},
+		{generatedParser, filepath.Join(staging, "parser.c")},
 		{filepath.Join(scratch, "src", "tree_sitter", "parser.h"), filepath.Join(treeSitterDir, "parser.h")},
 		{filepath.Join(scratch, "src", "tree_sitter", "array.h"), filepath.Join(treeSitterDir, "array.h")},
 		{filepath.Join(scratch, "src", "tree_sitter", "alloc.h"), filepath.Join(treeSitterDir, "alloc.h")},
-		{filepath.Join(modDir, "src", "scanner.c"), filepath.Join(pkgDir, "csrc", "scanner.c")},
+		{filepath.Join(modDir, "src", "scanner.c"), filepath.Join(staging, "scanner.c")},
 	}
 	for _, c := range copies {
 		if err := copyFile(c[0], c[1]); err != nil {
 			return fmt.Errorf("copy %s: %w", filepath.Base(c[0]), err)
 		}
+	}
+
+	final := filepath.Join(pkgDir, "csrc")
+	if err := os.RemoveAll(final); err != nil {
+		return fmt.Errorf("remove stale %s: %w", final, err)
+	}
+	if err := os.Rename(staging, final); err != nil {
+		return fmt.Errorf("finalize %s: %w", final, err)
 	}
 	return nil
 }

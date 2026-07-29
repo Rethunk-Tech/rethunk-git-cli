@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	qt "github.com/go-quicktest/qt"
@@ -35,4 +37,40 @@ func TestRelTo(t *testing.T) {
 	qt.Assert(t, qt.Equals(relTo("/repo", "/repo/internal/resolve/sql"), "internal/resolve/sql"))
 	// A path outside root falls back to itself rather than erroring.
 	qt.Assert(t, qt.Equals(relTo("/repo", "relative/path"), "relative/path"))
+}
+
+func TestParserABIVersion(t *testing.T) {
+	t.Parallel()
+
+	write := func(t *testing.T, content string) string {
+		t.Helper()
+		path := filepath.Join(t.TempDir(), "parser.c")
+		qt.Assert(t, qt.IsNil(os.WriteFile(path, []byte(content), 0o644)))
+		return path
+	}
+
+	t.Run("found", func(t *testing.T) {
+		t.Parallel()
+		path := write(t, "#define LANGUAGE_VERSION 15\n#define STATE_COUNT 4\n")
+		abi, err := parserABIVersion(path)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(abi, 15))
+	})
+
+	// The regression this guards: an outdated tree-sitter CLI emitting ABI
+	// 14 despite tree-sitter.json sitting right next to grammar.js.
+	t.Run("stale ABI", func(t *testing.T) {
+		t.Parallel()
+		path := write(t, "#define LANGUAGE_VERSION 14\n")
+		abi, err := parserABIVersion(path)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(abi, 14))
+	})
+
+	t.Run("no define", func(t *testing.T) {
+		t.Parallel()
+		path := write(t, "// nothing useful here\n")
+		_, err := parserABIVersion(path)
+		qt.Assert(t, qt.IsNotNil(err))
+	})
 }
