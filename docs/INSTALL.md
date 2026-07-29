@@ -60,6 +60,33 @@ Everything else is git's own configuration, honoured because `git commit` does
 the committing. Which settings that covers, and the one exception, is in
 [`USAGE.md`](USAGE.md#behaviour-inherited-from-git).
 
+## Shell completion
+
+What `rgit completion bash|zsh` completes, and how the dynamic part works, is
+documented in [`USAGE.md`](USAGE.md#shell-completion).
+
+**Load once per session:**
+
+```bash
+source <(rgit completion bash)   # bash
+source <(rgit completion zsh)    # zsh, after compinit has run
+```
+
+**Persist across sessions:**
+
+```bash
+# bash
+rgit completion bash > /etc/bash_completion.d/rgit                       # system-wide
+rgit completion bash > ~/.local/share/bash-completion/completions/rgit   # per-user
+
+# zsh -- write it anywhere already on $fpath, then start a new shell
+rgit completion zsh > "$fpath[1]/_rgit"
+```
+
+zsh's `compdef` needs `compinit` to already have run, so `autoload -Uz
+compinit && compinit` must come first in `.zshrc` — the standard
+precondition for any zsh completion, not one of `rgit`'s own.
+
 ## Verify
 
 ```bash

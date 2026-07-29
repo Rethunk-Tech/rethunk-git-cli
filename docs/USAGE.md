@@ -119,6 +119,20 @@ a help request — see § Exit codes.
 stamped at build time (`-ldflags "-X main.version=vX.Y.Z"`) and reads `dev` in
 a build that did not set one.
 
+## Shell completion
+
+`rgit completion bash` and `rgit completion zsh` print a completion script
+for that shell to stdout; nothing else is written. It completes subcommands,
+each subcommand's own flags, plain file paths, and — the useful part —
+symbol names after `FILE:`, by shelling back out to `rgit diff --porcelain`
+and matching its `SYMBOL` column against `FILE` (record shape:
+[`CODES.md`](CODES.md#output-records)). If that call fails for any reason —
+the working directory is not a repository, `rgit` is not on `PATH`, anything
+— completion offers nothing rather than printing to the prompt.
+
+An unrecognized or missing shell argument is a usage error, same table as
+everywhere else. Install instructions: [`INSTALL.md`](INSTALL.md#shell-completion).
+
 ## Flags
 
 | Flag | Behavior |
