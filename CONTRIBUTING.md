@@ -111,6 +111,11 @@ go test -short ./...   # unit lane: skips the built binary and the live server
 go test -race ./...    # the concurrency that matters: jsonrpc2, the spawn lock
 ```
 
+CI's own race job scopes to `./internal/lsp/...` rather than `./...` —
+jsonrpc2 and the spawn lock live there, and racing every other package on
+every push was not worth the extra minutes. Run `-race ./...` locally
+before touching concurrent code anywhere else in the tree.
+
 ### Coverage
 
 Always pass `-coverpkg=./...`: much of this suite drives code from another

@@ -75,7 +75,7 @@ fallback has to test the value rather than the exit status.
 | --- | --- |
 | `build` | `go build` the host binary to `./rgit` |
 | `install` | Build and install via `cmd/rgit-install` (`PREFIX=` to override) |
-| `test`, `test-short`, `test-race` | The three lanes [`CONTRIBUTING.md`](../CONTRIBUTING.md#tests) documents |
+| `test`, `test-short`, `test-race` | Three `go test` invocations: full suite, unit lane alone (`-short`), full suite raced. `test`/`test-short` are the two lanes [`CONTRIBUTING.md`](../CONTRIBUTING.md#tests) documents; `test-race` is a separate concern, not a third lane |
 | `cover`, `cover-short` | Coverage with `-coverpkg=./...`, as `CONTRIBUTING.md` requires |
 | `fix-diff`, `fix` | `go fix` preview and apply |
 | `cross` | Cross-compile linux/amd64, linux/arm64, windows/amd64 into `dist/`, with SQL when the tree-sitter CLI is present |
