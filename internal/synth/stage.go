@@ -118,6 +118,14 @@ type stagePlan struct {
 	preamble  []string
 	ordinals  []string
 	escalated []string
+
+	// countWarnings holds one message per pathspec whose --dry-run line
+	// counts could not be fully computed. The commit itself does not
+	// depend on them -- apply stages a pathspec via plain `git add`
+	// regardless -- so a counting failure never fails the plan; it would
+	// only make a preview understate its own totals with nothing to say
+	// so, which is what this exists to prevent.
+	countWarnings []string
 }
 
 // Plan is a resolved, not-yet-applied Stage. Every target has been
@@ -158,6 +166,14 @@ func (p *Plan) Ordinals() []string { return p.plan.ordinals }
 // that does not exist yet. The caller announces it; staging more than was
 // named is not something to do quietly.
 func (p *Plan) Escalated() []string { return p.plan.escalated }
+
+// CountingWarnings lists one message per pathspec whose --dry-run line
+// counts could not be fully computed. The commit itself is unaffected --
+// Apply stages a pathspec via plain `git add` regardless of whether its
+// preview counted correctly -- so this never changes the outcome; it is
+// only the caller's chance to say a preview's totals may be short rather
+// than presenting them as exact.
+func (p *Plan) CountingWarnings() []string { return p.plan.countWarnings }
 
 // Apply performs Plan's only side-effecting step: staging pathspecs via
 // `git add` and writing + staging every file's synthesized blob.
@@ -630,29 +646,37 @@ type pathFile struct {
 // staged, so leaving it out of the listing would be the more misleading of
 // the two answers; git writes "-" for its numstat counts and there are no
 // lines to report.
-func pathspecFileCounts(ctx context.Context, repo *gitx.Repo, root, pathspec string) []pathFile {
-	var out []pathFile
+//
+// warnings holds one message per query that failed outright -- neither
+// query's failure changes what gets staged, since Apply stages pathspec via
+// plain `git add` regardless of whether this preview could count it, but a
+// preview built on a partial answer must say so rather than presenting an
+// understated total as if it were exact.
+func pathspecFileCounts(ctx context.Context, repo *gitx.Repo, root, pathspec string) (out []pathFile, warnings []string) {
 	seen := map[string]bool{}
 
-	if entries, err := repo.DiffNumstat(ctx, "HEAD", "--", pathspec); err == nil {
-		for _, e := range entries {
-			_, newPath := diff.NumstatPath(e.Path)
-			if seen[newPath] {
-				continue
-			}
-			seen[newPath] = true
-			a, aerr := strconv.Atoi(e.Added)
-			d, derr := strconv.Atoi(e.Deleted)
-			if aerr != nil || derr != nil {
-				a, d = 0, 0 // binary: git wrote "-" for both
-			}
-			out = append(out, pathFile{path: newPath, added: a, deleted: d})
+	entries, err := repo.DiffNumstat(ctx, "HEAD", "--", pathspec)
+	if err != nil {
+		warnings = append(warnings, fmt.Sprintf("%s: tracked line counts unavailable: %v", pathspec, err))
+	}
+	for _, e := range entries {
+		_, newPath := diff.NumstatPath(e.Path)
+		if seen[newPath] {
+			continue
 		}
+		seen[newPath] = true
+		a, aerr := strconv.Atoi(e.Added)
+		d, derr := strconv.Atoi(e.Deleted)
+		if aerr != nil || derr != nil {
+			a, d = 0, 0 // binary: git wrote "-" for both
+		}
+		out = append(out, pathFile{path: newPath, added: a, deleted: d})
 	}
 
 	others, err := repo.LsFilesOthers(ctx, "--", pathspec)
 	if err != nil {
-		return out
+		warnings = append(warnings, fmt.Sprintf("%s: untracked file counts unavailable: %v", pathspec, err))
+		return out, warnings
 	}
 	for _, rel := range others {
 		if seen[rel] {
@@ -666,7 +690,7 @@ func pathspecFileCounts(ctx context.Context, repo *gitx.Repo, root, pathspec str
 		a, _ := diff.LineCounts(nil, content)
 		out = append(out, pathFile{path: rel, added: a})
 	}
-	return out
+	return out, warnings
 }
 
 // sortResults orders targets alphabetically by file, then ascending by
