@@ -9,14 +9,13 @@ package app
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
@@ -63,80 +62,21 @@ func runBlame(ctx context.Context, args []string, stdout, stderr io.Writer) exit
 		return exitcode.InvalidUsage
 	}
 
-	root, prefix, repo, code := openRepo(ctx, stderr)
-	if code != exitcode.Success {
-		return code
-	}
-
-	// Reused rather than hand-parsed: the six-rule precedence table
-	// (internal/cli) is what already decides pathspec vs. anchor for
-	// commit and diff, and a bare pathspec here (an existing path with no
-	// name after it) must be refused the same way rather than silently
-	// misread as an anchor with an empty name.
-	checker := cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}
-	classified, err := cli.ClassifyArgs(ctx, []string{positional}, false, checker, cli.GitRevisionResolver{Repo: repo})
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return exitcode.InvalidUsage
-	}
-	if len(classified) == 0 {
-		// A bare "--" is consumed whole by rule 1 (everything after "--" is
-		// a pathspec, always) and classifies to nothing -- the same refusal
-		// as no positional at all, not a classified[0] panic.
-		fmt.Fprintln(stderr, "rgit: blame requires a FILE:SYMBOL anchor")
-		fmt.Fprint(stderr, blameHelp)
-		return exitcode.InvalidUsage
-	}
-	c := classified[0]
-	if c.Kind != cli.KindAnchor {
-		fmt.Fprintln(stderr, "rgit: blame requires a FILE:SYMBOL anchor, not a plain path")
-		fmt.Fprint(stderr, blameHelp)
-		return exitcode.InvalidUsage
-	}
-
-	file, err := repoPath(root, prefix, c.Anchor.File)
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return exitcode.InvalidUsage
-	}
-
-	lang, ok := resolve.ForExtension(filepath.Ext(file))
-	if !ok {
-		// Same worktree-shebang fallback as internal/diff's validateSym:
-		// an extensionless script only resolves if its worktree copy is
-		// there to peek a shebang from.
-		if line, peeked := resolve.PeekShebangLine(filepath.Join(root, file)); peeked {
-			lang, ok = resolve.ForPath(file, line)
-		}
-	}
-	if !ok {
-		rerr := &resolve.ResolveError{Code: exitcode.UnsupportedLanguage, Anchor: c.Anchor.Name}
-		fmt.Fprintf(stderr, "rgit: %s\n", rerr.Error()+unsupportedLanguageHint(filepath.Ext(file)))
-		return rerr.Code
-	}
-
 	// Blame operates on the worktree file, not HEAD: there is nothing to
 	// resolve or blame in a revision this command never names.
-	src, err := os.ReadFile(filepath.Join(root, file))
-	if err != nil {
-		if os.IsNotExist(err) {
-			rerr := &resolve.ResolveError{Code: exitcode.AnchorUnresolvable, Anchor: c.Anchor.Name}
-			fmt.Fprintf(stderr, "rgit: %s (%q no longer exists in the worktree)\n", rerr.Error(), file)
-			return rerr.Code
-		}
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return exitcode.GitFailure
-	}
-
-	res, err := resolve.Resolve(lang, src, c.Anchor.Name)
-	if err != nil {
-		var rerr *resolve.ResolveError
-		if errors.As(err, &rerr) {
-			fmt.Fprintf(stderr, "rgit: %s\n", rerr.Error())
-			return rerr.Code
-		}
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return exitcode.GitFailure
+	repo, file, src, res, code := resolveAnchorExtent(ctx, stderr, positional, "blame", blameHelp,
+		func(_ context.Context, _ *gitx.Repo, root, file string) ([]byte, string, bool, error) {
+			src, err := os.ReadFile(filepath.Join(root, file))
+			if err != nil {
+				if os.IsNotExist(err) {
+					return nil, "no longer exists in the worktree", false, nil
+				}
+				return nil, "", false, err
+			}
+			return src, "", true, nil
+		})
+	if code != exitcode.Success {
+		return code
 	}
 
 	start, end := lineRange(src, res.Extent)

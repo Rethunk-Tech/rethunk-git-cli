@@ -196,6 +196,110 @@ func openRepo(ctx context.Context, stderr io.Writer) (root, prefix string, repo 
 	return top, pfx, probe.Reroot(top), exitcode.Success
 }
 
+// anchorSourceFunc fetches the blob resolveAnchorExtent resolves an
+// anchor's extent against. blame's reads the worktree copy at root/file;
+// log's reads HEAD's own blob via git cat-file -- the one place the two
+// commands genuinely differ (docs/USAGE.md: blame resolves the worktree,
+// log resolves HEAD). ok is false when there is nothing to resolve against
+// (a deleted worktree file, a file with no HEAD history); notFoundDetail is
+// then the parenthetical resolveAnchorExtent appends to the
+// AnchorUnresolvable message it emits itself ("no longer exists in the
+// worktree", "has no HEAD history").
+type anchorSourceFunc func(ctx context.Context, repo *gitx.Repo, root, file string) (src []byte, notFoundDetail string, ok bool, err error)
+
+// resolveAnchorExtent is the wiring blame.go and log.go otherwise duplicate
+// in full: open the repo, classify positional through the six-rule table,
+// require it land on a FILE:SYMBOL anchor (cli.KindAnchor), resolve the
+// file's language (with the same worktree-shebang fallback internal/diff's
+// own validateSym uses), fetch source via fetchSource, and resolve the
+// anchor's extent against it.
+//
+// cmdName and help supply each command's own "<cmdName> requires a
+// FILE:SYMBOL anchor[, not a plain path]" wording and usage text -- kept
+// distinct per caller on purpose; homogenising user-facing strings across
+// commands is a separate call this helper does not make.
+//
+// On success code is exitcode.Success and repo, file, src, res are all
+// populated; otherwise every refusal has already been written to stderr
+// and the caller must return code immediately.
+func resolveAnchorExtent(ctx context.Context, stderr io.Writer, positional, cmdName, help string, fetchSource anchorSourceFunc) (repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, code exitcode.Code) {
+	root, prefix, repo, code := openRepo(ctx, stderr)
+	if code != exitcode.Success {
+		return nil, "", nil, nil, code
+	}
+
+	// Reused rather than hand-parsed: the six-rule precedence table
+	// (internal/cli) is what already decides pathspec vs. anchor for
+	// commit and diff, and a bare pathspec here (an existing path with no
+	// name after it) must be refused the same way rather than silently
+	// misread as an anchor with an empty name.
+	checker := cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}
+	classified, err := cli.ClassifyArgs(ctx, []string{positional}, false, checker, cli.GitRevisionResolver{Repo: repo})
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return nil, "", nil, nil, exitcode.InvalidUsage
+	}
+	if len(classified) == 0 {
+		// A bare "--" is consumed whole by rule 1 (everything after "--" is
+		// a pathspec, always) and classifies to nothing -- the same refusal
+		// as no positional at all, not a classified[0] panic.
+		fmt.Fprintf(stderr, "rgit: %s requires a FILE:SYMBOL anchor\n", cmdName)
+		fmt.Fprint(stderr, help)
+		return nil, "", nil, nil, exitcode.InvalidUsage
+	}
+	c := classified[0]
+	if c.Kind != cli.KindAnchor {
+		fmt.Fprintf(stderr, "rgit: %s requires a FILE:SYMBOL anchor, not a plain path\n", cmdName)
+		fmt.Fprint(stderr, help)
+		return nil, "", nil, nil, exitcode.InvalidUsage
+	}
+
+	file, err = repoPath(root, prefix, c.Anchor.File)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return nil, "", nil, nil, exitcode.InvalidUsage
+	}
+
+	lang, ok := resolve.ForExtension(filepath.Ext(file))
+	if !ok {
+		// Same worktree-shebang fallback as internal/diff's validateSym: an
+		// extensionless script only resolves if its worktree copy is there
+		// to peek a shebang line from.
+		if line, peeked := resolve.PeekShebangLine(filepath.Join(root, file)); peeked {
+			lang, ok = resolve.ForPath(file, line)
+		}
+	}
+	if !ok {
+		rerr := &resolve.ResolveError{Code: exitcode.UnsupportedLanguage, Anchor: c.Anchor.Name}
+		fmt.Fprintf(stderr, "rgit: %s\n", rerr.Error()+unsupportedLanguageHint(filepath.Ext(file)))
+		return nil, "", nil, nil, rerr.Code
+	}
+
+	src, notFoundDetail, ok, err := fetchSource(ctx, repo, root, file)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return nil, "", nil, nil, exitcode.GitFailure
+	}
+	if !ok {
+		rerr := &resolve.ResolveError{Code: exitcode.AnchorUnresolvable, Anchor: c.Anchor.Name}
+		fmt.Fprintf(stderr, "rgit: %s (%q %s)\n", rerr.Error(), file, notFoundDetail)
+		return nil, "", nil, nil, rerr.Code
+	}
+
+	res, err = resolve.Resolve(lang, src, c.Anchor.Name)
+	if err != nil {
+		var rerr *resolve.ResolveError
+		if errors.As(err, &rerr) {
+			fmt.Fprintf(stderr, "rgit: %s\n", rerr.Error())
+			return nil, "", nil, nil, rerr.Code
+		}
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return nil, "", nil, nil, exitcode.GitFailure
+	}
+
+	return repo, file, src, res, exitcode.Success
+}
+
 // unsupportedLanguageHint returns a rebuild suggestion for ext when it is a
 // known gated extension this exact build was not compiled with, or "" when
 // ext is genuinely unsupported (no grammar exists at all, gated or not) or

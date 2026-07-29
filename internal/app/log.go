@@ -13,14 +13,11 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 )
 
 const logHelp = `usage: rgit log FILE:SYMBOL [--porcelain | -p|--patch]
@@ -83,86 +80,24 @@ func runLog(ctx context.Context, args []string, stdout, stderr io.Writer) exitco
 		return exitcode.InvalidUsage
 	}
 
-	root, prefix, repo, code := openRepo(ctx, stderr)
-	if code != exitcode.Success {
-		return code
-	}
-
-	// Reused rather than hand-parsed, the same reason blame.go gives: the
-	// six-rule precedence table (internal/cli) is what already decides
-	// pathspec vs. anchor for commit and diff, and a bare pathspec here must
-	// be refused the same way rather than silently misread as an anchor
-	// with an empty name.
-	checker := cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}
-	classified, err := cli.ClassifyArgs(ctx, []string{positional}, false, checker, cli.GitRevisionResolver{Repo: repo})
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return exitcode.InvalidUsage
-	}
-	if len(classified) == 0 {
-		// A bare "--" is consumed whole by rule 1 (everything after "--" is
-		// a pathspec, always) and classifies to nothing -- the same refusal
-		// as no positional at all, not a classified[0] panic.
-		fmt.Fprintln(stderr, "rgit: log requires a FILE:SYMBOL anchor")
-		fmt.Fprint(stderr, logHelp)
-		return exitcode.InvalidUsage
-	}
-	c := classified[0]
-	if c.Kind != cli.KindAnchor {
-		fmt.Fprintln(stderr, "rgit: log requires a FILE:SYMBOL anchor, not a plain path")
-		fmt.Fprint(stderr, logHelp)
-		return exitcode.InvalidUsage
-	}
-
-	file, err := repoPath(root, prefix, c.Anchor.File)
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return exitcode.InvalidUsage
-	}
-
-	lang, ok := resolve.ForExtension(filepath.Ext(file))
-	if !ok {
-		// Same worktree-shebang fallback as blame.go's validateSym-adjacent
-		// check: an extensionless script only resolves if its worktree copy
-		// is there to peek a shebang line from. A file already deleted from
-		// the worktree (TestRun_LogSurvivesWorktreeDeletion) degrades to the
-		// plain "no grammar" refusal here, the same gap diff and commit
-		// already accept for the identical reason.
-		if line, peeked := resolve.PeekShebangLine(filepath.Join(root, file)); peeked {
-			lang, ok = resolve.ForPath(file, line)
-		}
-	}
-	if !ok {
-		rerr := &resolve.ResolveError{Code: exitcode.UnsupportedLanguage, Anchor: c.Anchor.Name}
-		fmt.Fprintf(stderr, "rgit: %s\n", rerr.Error()+unsupportedLanguageHint(filepath.Ext(file)))
-		return rerr.Code
-	}
-
 	// History is a question about what HEAD (and its ancestors) already
 	// committed, never about an uncommitted worktree edit -- resolving
 	// against HEAD's own blob is what keeps the derived line range
 	// meaningful to `git log -L`, which walks HEAD's own history and knows
 	// nothing about the worktree at all (specs/design.md § Commands).
-	head, exists, err := repo.CatFile(ctx, "HEAD", file)
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return exitcode.GitFailure
-	}
-	if !exists {
-		rerr := &resolve.ResolveError{Code: exitcode.AnchorUnresolvable, Anchor: c.Anchor.Name}
-		fmt.Fprintf(stderr, "rgit: %s (%q has no HEAD history)\n", rerr.Error(), file)
-		return rerr.Code
-	}
-
-	res, err := resolve.Resolve(lang, head, c.Anchor.Name)
-	if err != nil {
-		var rerr *resolve.ResolveError
-		if errors.As(err, &rerr) {
-			fmt.Fprintf(stderr, "rgit: %s\n", rerr.Error())
-			return rerr.Code
-		}
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return exitcode.GitFailure
+	repo, file, head, res, code := resolveAnchorExtent(ctx, stderr, positional, "log", logHelp,
+		func(ctx context.Context, repo *gitx.Repo, _, file string) ([]byte, string, bool, error) {
+			head, exists, err := repo.CatFile(ctx, "HEAD", file)
+			if err != nil {
+				return nil, "", false, err
+			}
+			if !exists {
+				return nil, "has no HEAD history", false, nil
+			}
+			return head, "", true, nil
+		})
+	if code != exitcode.Success {
+		return code
 	}
 
 	start, end := lineRange(head, res.Extent)
