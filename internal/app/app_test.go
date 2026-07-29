@@ -714,10 +714,35 @@ func TestRun_Doctor(t *testing.T) {
 	stdout, stderr, code := runApp(t, "doctor")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
-	qt.Assert(t, qt.StringContains(stdout, "[ok] git"))
+	qt.Assert(t, qt.StringContains(stdout, "[ok]"))
+	qt.Assert(t, qt.StringContains(stdout, "git"))
 	qt.Assert(t, qt.StringContains(stdout, "Language servers"))
 	qt.Assert(t, qt.StringContains(stdout, "Grammars compiled in"))
 	qt.Assert(t, qt.StringContains(stdout, "go"))
+
+	// Every resolved row's path starts at the same column, across the
+	// Environment and Language servers sections both -- doctor measures one
+	// width over the two rather than letting each align only against
+	// itself. The byte-exact line shape, including the ok/MISSING status
+	// padding, is pinned in internal/prereq's own test; what this adds is
+	// that doctor shares a single width across sections.
+	//
+	// Only found tools are compared: a MISSING row's detail is a prose note,
+	// not a path, so " /" would not locate its column. git is always found
+	// here, and every language server present on the machine joins it.
+	var cols []int
+	for line := range strings.SplitSeq(stdout, "\n") {
+		if !strings.HasPrefix(line, "  [ok]") {
+			continue
+		}
+		if i := strings.Index(line, " /"); i >= 0 {
+			cols = append(cols, i+1)
+		}
+	}
+	qt.Assert(t, qt.IsTrue(len(cols) >= 1))
+	for _, c := range cols[1:] {
+		qt.Assert(t, qt.Equals(c, cols[0]))
+	}
 }
 
 // TestRun_DoctorMissingGitIsFatal pins the one check doctor treats as fatal:

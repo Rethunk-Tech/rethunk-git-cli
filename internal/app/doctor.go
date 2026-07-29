@@ -12,6 +12,7 @@ package app
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
@@ -44,17 +45,28 @@ func runDoctor(args []string, stdout, stderr io.Writer) exitcode.Code {
 		return exitcode.InvalidUsage
 	}
 
-	fmt.Fprintln(stdout, "Environment:")
 	essential, fatal := runEnvironmentChecks()
+
+	servers := make([]prereq.Check, 0, len(lsp.Servers()))
+	for _, s := range lsp.Servers() {
+		label := s.Bin + " (" + strings.Join(s.Languages, ", ") + ")"
+		servers = append(servers, prereq.LookPath(label, s.Bin, "not on PATH -- see docs/INSTALL.md § Language servers"))
+	}
+
+	// One width across both sections, not one per section: the language
+	// server names are far longer than git's, and measuring separately
+	// would leave the report's two blocks with detail columns that do not
+	// line up with each other.
+	width := prereq.Width(append(slices.Clip(essential), servers...)...)
+
+	fmt.Fprintln(stdout, "Environment:")
 	for _, c := range essential {
-		prereq.Print(stdout, c)
+		prereq.Print(stdout, width, c)
 	}
 
 	fmt.Fprintln(stdout, "\nLanguage servers (optional -- a missing one falls back to [ts-only]; install with docs/INSTALL.md § Language servers):")
-	for _, s := range lsp.Servers() {
-		label := s.Bin + " (" + strings.Join(s.Languages, ", ") + ")"
-		c := prereq.LookPath(label, s.Bin, "not on PATH -- see docs/INSTALL.md § Language servers")
-		prereq.Print(stdout, c)
+	for _, c := range servers {
+		prereq.Print(stdout, width, c)
 	}
 
 	fmt.Fprintln(stdout, "\nGrammars compiled in:")

@@ -75,8 +75,9 @@ func main() {
 
 	fmt.Println("Checking prerequisites...")
 	checks, fatal := runPrereqChecks()
+	width := prereq.Width(checks...)
 	for _, c := range checks {
-		prereq.Print(os.Stdout, c)
+		prereq.Print(os.Stdout, width, c)
 	}
 	if fatal != nil {
 		fatalf("%v", fatal)

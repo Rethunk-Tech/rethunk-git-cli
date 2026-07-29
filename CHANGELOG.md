@@ -4,6 +4,15 @@ Notable changes to `rgit`. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `rgit doctor` aligns its detail column across both report sections. A
+  language-server label longer than the old fixed 24-character field pushed
+  its own path out of line, and `[ok]` / `MISSING` being different widths
+  shifted the name column by status. Both are padded now.
+
 ## [1.0.0] — 2026-07-28
 
 First public release.
