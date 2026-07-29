@@ -61,8 +61,8 @@ type Client struct {
 // go.lsp.dev/protocol's union-aware codec) and completes the
 // initialize/initialized handshake against root, a filesystem path used to
 // build the workspace root URI. handshakeCtx bounds only the handshake
-// calls, not the connection's lifetime — see the comment on the internal
-// connCtx use in Dial for why those must not share a context.
+// calls, not the connection's lifetime — see the background-context
+// comment a few lines below for why those must not share a context.
 //
 // Exported so tests can drive a fake server over an in-memory pipe without
 // going through Dial's socket-probe/spawn machinery; production callers use
