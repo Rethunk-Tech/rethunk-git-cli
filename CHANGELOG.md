@@ -8,6 +8,10 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `SECURITY.md`, a tag-driven release workflow that publishes cross-built
+  binaries with their `SHA256SUMS`, and grouped Dependabot updates for Go
+  modules and Actions.
+
 - `make cross` now builds SQL support into every cross target when the build
   host has the tree-sitter CLI, rather than always producing SQL-less
   binaries. Generation runs once via `cmd/rgit-install -generate-only`; the

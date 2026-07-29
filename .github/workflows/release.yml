@@ -1,0 +1,66 @@
+name: Release
+
+# Tag-driven: pushing a vX.Y.Z tag builds the cross matrix and publishes it.
+# Nothing here runs on an ordinary push, so a release is always a deliberate
+# act rather than a side effect of landing on main.
+on:
+  push:
+    tags: ["v*"]
+
+# Read by default; only the publishing job widens to contents: write, and
+# only far enough to create a release.
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      # fetch-depth: 0 because the Makefile stamps the binary from
+      # `git describe --tags`, which reports a bare vX.Y.Z only when the tag
+      # and its history are both present. A shallow checkout would ship
+      # binaries versioned as a bare SHA.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      # zig is the single cross-compilation toolchain `make cross` drives;
+      # rgit links tree-sitter through cgo, so CGO_ENABLED=0 is not an
+      # option and every target needs a real C compiler
+      # (docs/INSTALL.md § Cross builds).
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+
+      # The tree-sitter CLI is what lets the release carry SQL support: the
+      # grammar module ships no usable parser.c, so `make cross` generates
+      # one via cmd/rgit-install. Without this step every artifact would
+      # still build, just SQL-less (docs/INSTALL.md § SQL support).
+      - run: npm install -g tree-sitter-cli
+
+      - run: make cross
+
+      # Fail loudly rather than publishing a release whose binaries quietly
+      # lack the grammar this workflow installed a toolchain for.
+      - name: verify the linux/amd64 artifact carries SQL
+        run: |
+          bin=$(find dist -name '*-linux-amd64' -type f)
+          chmod +x "$bin"
+          "$bin" --version
+          "$bin" languages | grep -q '^sql' || {
+            echo "::error::release artifact has no sql grammar"; exit 1;
+          }
+
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes

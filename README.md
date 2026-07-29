@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![status](https://img.shields.io/badge/status-v1-brightgreen)](specs/design.md)
+[![version](https://img.shields.io/badge/version-v1.0.0-brightgreen)](CHANGELOG.md)
 [![go](https://img.shields.io/badge/go-1.26%2B-00ADD8)](https://go.dev)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -56,6 +56,7 @@ Start with [HUMANS.md](HUMANS.md) to run it, or
 | [AGENTS.md](AGENTS.md) | Internals, invariants, delegation boundary |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Commits, tests, dependency policy |
 | [CHANGELOG.md](CHANGELOG.md) | What changed in each release |
+| [SECURITY.md](SECURITY.md) | Reporting a vulnerability, and what is in scope |
 | [specs/design.md](specs/design.md) | Design record and the measurements behind it |
 | [TODO.md](TODO.md) | Backlog |
 

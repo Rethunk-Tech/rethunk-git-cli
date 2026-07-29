@@ -33,6 +33,13 @@ work, and documentation edits do not earn one.
 Entries say what changed and link to the reference that documents it. They do
 not restate it: the tiered layout below is what keeps one authority per fact.
 
+Cutting a release: tag `vX.Y.Z`, which
+[`.github/workflows/release.yml`](.github/workflows/release.yml) turns into a
+GitHub release with the cross-built binaries and their `SHA256SUMS`. Move the
+unreleased entries under the new version heading, and bump the README's
+version badge — it is a static shield, so nothing else catches it going
+stale.
+
 ## Tests
 
 **Least tests, highest coverage. The suite stays under 30s** (ideally under

@@ -1,0 +1,28 @@
+version: 2
+
+# Grouped so a week's updates arrive as one PR per ecosystem rather than one
+# per module: this repo pins eleven tree-sitter grammars that release in step
+# with each other, and eleven separate PRs for one upstream bump is noise.
+#
+# Note that github.com/DerekStride/tree-sitter-sql is deliberately absent
+# from go.mod (specs/design.md § Grammar scope, SQL) and so is invisible to
+# dependabot. Its pin lives in cmd/rgit-install's own sqlGrammarVersion and
+# has to be bumped by hand.
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - "*"
