@@ -1019,7 +1019,7 @@ built.
 | `github.com/aymanbagabas/go-udiff` | v0.4.1 | Per-symbol `+N/-M` counts in-process, no fork/exec per anchor |
 | `golang.org/x/term` | v0.45.0 | `IsTerminal`, gating the `GIT_TERMINAL_PROMPT=0` rule |
 | `github.com/go-quicktest/qt` | v1.102.0 | Tests; matches `claude-format-hooks` |
-| `tree-sitter-grammars/tree-sitter-markdown` | v0.5.1 | Markdown sections; import path is `<module>/bindings/go`, block grammar only |
+| `tree-sitter-grammars/tree-sitter-markdown` | v0.5.1, pinned | Markdown sections; import path is `<module>/bindings/go`, block grammar only — pinned because `v0.5.2` dropped Go bindings from the module entirely (below, "YAML's grammar is checked the same way"), so nothing newer is even installable |
 | `github.com/tree-sitter/tree-sitter-bash` | v0.25.1 | Shell function/variable anchors; import path is `<module>/bindings/go` |
 | `github.com/tree-sitter-grammars/tree-sitter-yaml` | v0.7.2 | YAML key-path anchors; import path is `<module>/bindings/go` |
 | `github.com/tree-sitter/tree-sitter-css` | v0.25.0 | CSS selector/at-rule anchors; import path is `<module>/bindings/go` |
