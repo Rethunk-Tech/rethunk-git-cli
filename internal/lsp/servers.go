@@ -23,7 +23,9 @@ const (
 // serverSpec is everything Dial needs to reach one language's server.
 type serverSpec struct {
 	// name identifies the server in the socket filename
-	// ($XDG_RUNTIME_DIR/rgit-<name>.sock) and in [ts-only] diagnostics.
+	// (rgit-<uid>/rgit-<name>.sock, built by defaultSocketPath from the
+	// private directory privateSocketDir vouches for — dial.go) and in
+	// [ts-only] diagnostics.
 	name string
 	// bin is the binary Dial looks up on PATH.
 	bin       string

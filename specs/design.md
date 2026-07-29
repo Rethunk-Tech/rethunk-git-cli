@@ -78,9 +78,9 @@ exactly as two `git add` runs do, and git's `index.lock` arbitrates.
 Tree-sitter is the primary resolver: it computes extents immediately with no
 process-spawn latency. A language server, when reachable, cross-checks.
 
-1. **Probe** an existing daemon socket — `$RGIT_LSP_SOCKET`, then
-   `$XDG_RUNTIME_DIR/rgit-<server>.sock`. Dial budget **150ms**, query deadline
-   **2s**.
+1. **Probe** an existing daemon socket — `$RGIT_LSP_SOCKET`, then the managed
+   default at `rgit-<uid>/rgit-<server>.sock` inside `$XDG_RUNTIME_DIR`. Dial
+   budget **150ms**, query deadline **2s**.
 2. **Spawn on demand** if no socket is live, completing the *current*
    invocation in `[ts-only]` mode rather than blocking on a cold index.
    Guarded by an `O_EXCL` lock beside the socket.
@@ -89,6 +89,22 @@ process-spawn latency. A language server, when reachable, cross-checks.
    `range`. Any mismatch is a hard fail — print both ranges and stage nothing.
 4. **Degrade** to tree-sitter alone on timeout or a still-indexing server,
    announced with `[ts-only]` on stderr.
+
+**The managed default path is trusted only after its directory is verified,
+not because of its name.** `$XDG_RUNTIME_DIR` falls back to a world-writable
+`os.TempDir()` when unset, and `rgit-<server>.sock` is itself a predictable
+name — a path with the right shape is not evidence it is safe to dial or
+spawn into. Before every dial or spawn against the managed default, `rgit`
+creates (or re-verifies) a `0700` subdirectory scoped to the caller's UID
+(`rgit-<uid>/`) and `Lstat`s it fresh: still owned by the current user, still
+an actual directory rather than a symlink, and carrying no group/other
+permission bits. Any check failing degrades to `[ts-only]` rather than
+trusting the path — the alternative is a predictable path in a shared,
+world-writable temp directory that another user on the same multi-user host
+could pre-create, planting a listener that then reads every file `rgit`
+sends it over `textDocument/didOpen`. A caller-supplied `$RGIT_LSP_SOCKET` is
+exempt from this check: it is the caller's own path to manage, not one
+`rgit` need vouch for.
 
 **Spawn-on-demand is load-bearing.** A socket-only design was measured finding
 **no sockets and no running language servers**: editors spawn `gopls` over
@@ -137,13 +153,16 @@ listener). Neither tool's `--socket` takes a path, so even the outbound mode
 has no unix-socket form to standardize on with `gopls`.
 
 **Consequence: two transports behind one `Dial` interface, not one.** `gopls`
-alone gets the probe → spawn → degrade sequence above, at
-`$XDG_RUNTIME_DIR/rgit-gopls.sock`. `vtsls` and `pyright-langserver` get a
-one-shot stdio subprocess (`--stdio`, their default and only listen-free mode)
+alone gets the probe → spawn → degrade sequence above, at the managed default
+`rgit-<uid>/rgit-gopls.sock`. Every other wired server — `vtsls`,
+`pyright-langserver`, `bash-language-server`, `yaml-language-server`,
+`vscode-json-language-server`, `vscode-css-language-server`, and `marksman` —
+gets a one-shot stdio subprocess (each one's own default and only
+listen-free mode: `--stdio`, `start`, or `server` depending on the binary)
 spawned fresh per query, bounded by dial budget + query deadline end to end,
 and killed on close rather than left running — there is no persistent daemon
-for either to reuse, so pretending otherwise would just be a subprocess rgit
-forgets to clean up.
+for any of them to reuse, so pretending otherwise would just be a subprocess
+rgit forgets to clean up.
 
 **The query deadline is 2s, and a warm `gopls` alone would justify far less.**
 That daemon answers in single-digit milliseconds; the stdio servers do not.
