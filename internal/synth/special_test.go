@@ -35,6 +35,7 @@ func commitSpecial(t *testing.T, dir string, paths ...string) {
 // path, then removes it from the worktree only, leaving HEAD's tree entry
 // (the classification source) intact.
 func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("symlink deleted from the worktree classifies via HEAD's 120000 entry", func(t *testing.T) {

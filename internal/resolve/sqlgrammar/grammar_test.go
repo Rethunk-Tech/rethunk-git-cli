@@ -16,6 +16,7 @@ import (
 // (CONTRIBUTING.md § Tests) -- the lang_sql.go adapter's own tests carry the
 // node-shape assertions; this is only "does the binding itself work".
 func TestLanguage_Parses(t *testing.T) {
+	t.Parallel()
 	lang := ts.NewLanguage(Language())
 	if lang == nil {
 		t.Fatal("ts.NewLanguage(Language()) returned nil")

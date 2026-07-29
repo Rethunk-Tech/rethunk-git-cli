@@ -7,6 +7,7 @@ import (
 )
 
 func TestLooksBinary(t *testing.T) {
+	t.Parallel()
 	textData := []byte("hello world\nthis is plain text")
 	if LooksBinary(textData) {
 		t.Errorf("expected false for text data")
