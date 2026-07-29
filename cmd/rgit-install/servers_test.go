@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	qt "github.com/go-quicktest/qt"
 
@@ -208,6 +209,56 @@ func fakeTaplo(t *testing.T, exitCode int) string {
 	return path
 }
 
+// mustTaploCapable retries taploCapability a bounded number of times when it
+// unexpectedly reports incapable, to absorb a real, measured Linux race
+// rather than mask a genuine regression.
+//
+// fork() duplicates a process's entire file descriptor table before
+// execve() replaces it, so an unrelated goroutine's own fork (a parallel
+// subtest doing this same write-then-exec pattern, another test in this
+// package invoking a real binary, or -- the condition this actually
+// surfaced under -- another `go build`/`go test` hammering this same
+// checkout concurrently) can hold bin's freshly-written, already-closed
+// file open just long enough that the kernel reports ETXTBSY ("text file
+// busy") to this goroutine's own exec, even though bin's own os.WriteFile
+// (fakeTaplo) already returned before this ever runs.
+//
+// Reproduced directly, not assumed: `go test -race -count=15` under heavy
+// concurrent build/test load (three background `go build ./...`/`go test
+// ./...` loops plus CPU load) failed intermittently, and a throwaway
+// instrumented run -- taploCapability's own return shape does not expose
+// the underlying error -- captured the raw cause as exactly
+// `fork/exec .../taplo: text file busy`, never a data race `-race` itself
+// flagged (this is a kernel-level exec race, not a Go memory race, and
+// candidate explanations involving PATH or a shared temp dir were ruled
+// out first: taploCapability takes bin as a full path and never consults
+// PATH, and every subtest's fakeTaplo path comes from its own t.TempDir()).
+//
+// Only the "lsp subcommand present" subtest below needs this: the other
+// two already expect ok=false, which is exactly what an ETXTBSY-induced
+// failure also produces, so they cannot distinguish the race from their own
+// expected outcome. taploCapability has no other source of nondeterminism
+// against a script that deterministically exits 0 -- a real regression in
+// it would fail every attempt, not just some.
+//
+// Production code is deliberately untouched: manageServers
+// (servers_install.go) never runs a capability check against a binary this
+// same process just wrote -- detectServers runs exactly once, before any
+// install job -- so this is a test-harness-only hazard, not one
+// taploCapability itself needs to defend against.
+func mustTaploCapable(t *testing.T, bin string) (ok bool, detail string) {
+	t.Helper()
+	const attempts = 5
+	for i := 0; i < attempts; i++ {
+		ok, detail = taploCapability(bin)
+		if ok {
+			return ok, detail
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return ok, detail
+}
+
 // TestTaploCapability is the presence-vs-capability regression this whole
 // feature exists for: a taplo that answers on PATH is not necessarily one
 // that speaks LSP, and a wrong answer here would silently report a server
@@ -217,7 +268,7 @@ func TestTaploCapability(t *testing.T) {
 
 	t.Run("lsp subcommand present -- a real cargo build", func(t *testing.T) {
 		t.Parallel()
-		ok, detail := taploCapability(fakeTaplo(t, 0))
+		ok, detail := mustTaploCapable(t, fakeTaplo(t, 0))
 		qt.Assert(t, qt.IsTrue(ok))
 		qt.Assert(t, qt.Equals(detail, ""))
 	})
