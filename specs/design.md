@@ -689,6 +689,85 @@ the way `gopls`/`vtsls`/`pyright` are for their languages, and no measured
 need strong enough to justify probing for a fifth stdio process sight
 unseen. `.sql` always resolves in `[ts-only]` mode.
 
+### Cross-check survey: the six v2 grammars, revisited
+
+`[ts-only]` went from an edge case (one of five grammars uncovered) to the
+majority outcome (six of eleven) once Markdown, YAML, CSS, JSON, TOML, and
+SQL shipped. Each was re-checked against this machine for a real candidate
+server, on the same terms as the gopls/vtsls/pyright/bash-language-server
+survey above: is one installed, what does it speak, and — the load-bearing
+question — do its ranges land on the same declaration-only basis
+`internal/resolve`'s `declOnlyExtent` already produces (`node.StartByte()`..
+`node.EndByte()`, no doc-comment prefix), so a real disagreement means a real
+extent bug rather than a transport artifact.
+
+| Grammar | Server checked | On this machine | Verdict |
+| --- | --- | --- | --- |
+| TOML | `taplo lsp stdio` | Installed, LSP unusable (measured) | Not wired |
+| YAML | `yaml-language-server` | Not installed | Not wired |
+| JSON, CSS | `vscode-langservers-extracted` | Not installed | Not wired |
+| Markdown | `marksman` | Not installed | Not wired |
+| SQL | none maintained | `sqlfluff` installed, no LSP surface | Not wired |
+
+**TOML: the only candidate actually present, and it fails before range
+semantics are even reachable.** `taplo` 0.9.0 is installed
+(`~/.bun/bin/taplo`, via the `@taplo/cli` npm package, bun-managed). Its
+`--help` advertises `lsp stdio`/`lsp tcp` subcommands, so it looked like a
+real candidate. Measured directly two ways: running `taplo lsp stdio` by
+hand against a piped stdin immediately prints
+`ERROR operation failed error=the LSP is not part of this build, please
+consult the documentation about enabling the functionality` and exits; and
+dialling it through this package's own `NewClient` over the same stdio
+transport `vtsls`/`pyright-langserver` use gets `EOF` on the `initialize`
+response, in 0.38s wall time (dominated by process spawn and immediate exit,
+not indexing). This build's `taplo` was compiled without the `lsp` Cargo
+feature. Getting a build with it enabled would mean reinstalling the binary,
+which this survey does not do — installing anything, even at user scope, is
+out of bounds for measuring what is already on the machine. Range semantics
+were never reached, so there is nothing to compare against
+`declOnlyExtent`; TOML stays `[ts-only]` on the evidence that the one
+installed candidate cannot complete a handshake, not on an assumption about
+what its ranges would look like if it could.
+
+**YAML, JSON, CSS, Markdown: no candidate present at all.** `which`,
+`npm ls -g`, `brew list`, `pipx list`, `gem list`, `~/.cargo/bin`, `~/go/bin`,
+and `~/.local/bin` were all checked; none carries
+`yaml-language-server`, any of the `vscode-langservers-extracted` binaries
+(`vscode-json-language-server`, `vscode-css-language-server`), or
+`marksman`. All four are `npm install -g`-obtainable without sudo (user
+prefix or a project-local install both work) — see the exact addition this
+worker would make to `docs/INSTALL.md` if asked, reported alongside this
+record rather than made directly (that file belongs to a concurrent change
+this session). None was measured because none was installed, and installing
+one to find out was explicitly out of scope; the honest result is
+"unmeasured, not wired" rather than a guess either way.
+
+**SQL: a maintained, installed tool exists, but it is not a symbol
+server.** `sqlfluff` (`~/.local/bin/sqlfluff`) is installed. Its own
+`--help` lists exactly `dialects`, `fix`, `format`, `lint`, `parse`,
+`render`, `rules`, `version` — no `lsp` subcommand — and
+`pip show sqlfluff-lsp` reports no such package exists. `sqlfluff` is a
+linter/formatter that operates on whole files, not a `textDocument/
+documentSymbol` provider, confirming the pattern this record already
+expected: SQL's mature tooling is query-execution- and linting-shaped, not
+symbol-outline-shaped. No maintained SQL LSP was found installed on this
+machine (`sqls`, `sql-language-server` also absent from every location
+checked above). This is the negative result the survey brief called out as
+acceptable on its own terms — the same "no single dominant server" reasoning
+already recorded for SQL above, now backed by an actual tool inventory
+rather than an assumption.
+
+**Net: nothing new qualifies for `internal/lsp/servers.go`.** The transport
+survey never reached the range-semantics question for five of six grammars
+because nothing was there to dial, and reached it for the sixth only to find
+the one installed binary cannot complete an LSP handshake at all. Wiring any
+of the six on documentation alone — assuming a hypothetical install's ranges
+would match `declOnlyExtent` — is exactly the class of defect
+`CONTRIBUTING.md` warns against: a double for a dependency that was never
+actually dialled. `docs/ANCHORS.md`'s language-support table already
+documents Markdown/YAML/CSS/JSON/TOML/SQL as permanently `[ts-only]`; that
+stays accurate after this survey rather than becoming stale.
+
 ## Argument grammar
 
 Symbol anchors need no flag because **all git pathspec magic is leading-colon**
