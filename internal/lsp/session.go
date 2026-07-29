@@ -23,9 +23,19 @@ func NewSession() *Session {
 // Dial returns a cached client for lang, dialling one on first use. It
 // mirrors the package-level Dial's contract: degraded=true with a nil
 // client means no live server, which callers treat as normal.
+//
+// A nil *Session always degrades without dialling anything. This is not
+// merely nil-safety: internal/diff/run.go sets sess to nil for exactly one
+// reason -- a revision-to-revision diff has no worktree for a language
+// server to view, so it skips the cross-check entirely -- and every
+// production caller already guards on that nil before calling Dial at all.
+// Falling through to the package-level Dial here instead would hand back a
+// live client (a subprocess, for the stdio servers) that this call's own
+// nil receiver proves nobody holds a Session to Close, leaking it for the
+// life of the daemon or process (finding 33).
 func (s *Session) Dial(ctx context.Context, lang, repoRoot string) (*Client, bool) {
 	if s == nil {
-		return Dial(ctx, lang, repoRoot)
+		return nil, true
 	}
 	if s.degraded[lang] {
 		return nil, true
