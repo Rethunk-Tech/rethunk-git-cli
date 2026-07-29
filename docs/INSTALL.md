@@ -78,7 +78,7 @@ fallback has to test the value rather than the exit status.
 | `test`, `test-short`, `test-race` | The three lanes [`CONTRIBUTING.md`](../CONTRIBUTING.md#tests) documents |
 | `cover`, `cover-short` | Coverage with `-coverpkg=./...`, as `CONTRIBUTING.md` requires |
 | `fix-diff`, `fix` | `go fix` preview and apply |
-| `cross` | Cross-compile linux/amd64, linux/arm64, windows/amd64 into `dist/` |
+| `cross` | Cross-compile linux/amd64, linux/arm64, windows/amd64 into `dist/`, with SQL when the tree-sitter CLI is present |
 | `clean` | Remove build outputs |
 
 ## Cross builds
@@ -106,14 +106,19 @@ CoreFoundation` from an actual macOS SDK — building with `-tags
 netgo,osusergo` does not clear it. Build darwin binaries on a Mac, or in CI
 with a macOS runner; it is deliberately not in `make cross`'s default matrix.
 
-**Cross binaries never carry SQL support.** `make cross` does not pass
-`-tags rgit_sql` and does not generate the SQL parser, unlike `make install`
-(see [SQL support](#sql-support) below). That is deliberate, not an
-oversight: generation needs the tree-sitter CLI on the build host and a
-~17 MB `parser.c` compile per target, which does not fit a cross matrix the
-way it fits a single local `make install`. `.sql` anchors resolve as any
-other unsupported language does (exit 9, `docs/ANCHORS.md`) in every `dist/`
-binary; every other language is unaffected.
+**Cross binaries carry SQL when the build host can generate the parser.**
+`make cross` runs generation once through `cmd/rgit-install -generate-only`,
+then passes `-tags rgit_sql` to every target. Generation is
+host-independent — it turns `grammar.js` into C a single time — so the only
+per-target cost is compiling that C, measured at ~6–7s each with `zig cc`
+(a full three-target `make cross` from a clean tree, generation included,
+measures ~28s).
+
+Without the tree-sitter CLI on the build host, nothing is generated and
+every target builds SQL-less instead of failing — the same fallback
+`make install` makes. `.sql` anchors then resolve as any other unsupported
+language does (exit 9, `docs/ANCHORS.md`); every other language is
+unaffected either way.
 
 ## SQL support
 

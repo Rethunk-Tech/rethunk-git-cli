@@ -6,6 +6,13 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `make cross` now builds SQL support into every cross target when the build
+  host has the tree-sitter CLI, rather than always producing SQL-less
+  binaries. Generation runs once via `cmd/rgit-install -generate-only`; the
+  per-target cost is only compiling the generated C, ~6–7s each.
+
 ### Fixed
 
 - The install docs named `~/.local/bin/rgit` as the uninstall target, which

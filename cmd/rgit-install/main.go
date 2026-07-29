@@ -66,6 +66,7 @@ func main() {
 	dryRun := flag.Bool("dry-run", false, "print what would happen without building or installing")
 	prefixFlag := flag.String("prefix", "", "install directory (default: $GOBIN, else $(go env GOPATH)/bin)")
 	withServers := flag.Bool("with-servers", false, "also install/update the language servers rgit's LSP cross-check can use (shells out to go install/npm|bun/cargo; see docs/INSTALL.md)")
+	generateOnly := flag.Bool("generate-only", false, "generate the SQL parser if the tree-sitter CLI allows, then exit without building or installing (what `make cross` calls, so parser generation stays in this one place)")
 	flag.Parse()
 
 	repoRoot, err := resolveRepoRoot()
@@ -93,6 +94,17 @@ func main() {
 		fmt.Println(" ", msg)
 	} else {
 		fmt.Println("No SQL adapter package present yet; building without SQL support.")
+	}
+
+	// -generate-only exists so `make cross` can produce the parser without
+	// also building or installing a host binary it has no use for. Placed
+	// after generation and before everything else, so the flag does exactly
+	// what it says: the parser, then nothing. A caller without the
+	// tree-sitter CLI still exits 0 here -- generateSQLParser already
+	// reported why, and cross builds fall back to no SQL the same way
+	// `make install` does.
+	if *generateOnly {
+		return
 	}
 
 	// Independent of rgit's own build/install below -- runs before the

@@ -19,11 +19,17 @@ endif
 
 ZIG ?= zig
 
+# Lazily evaluated, so it re-checks after the sql-parser target below has
+# had its chance to generate. A host without the tree-sitter CLI simply
+# leaves csrc/ absent and every cross target builds without SQL, the same
+# fallback `make install` already promises.
+SQL_TAGS = $(if $(wildcard $(SQL_CSRC)/parser.c),-tags rgit_sql,)
+
 .DEFAULT_GOAL := help
 
 .PHONY: help build install test test-short test-race cover cover-short \
-        fix-diff fix lint clean cross cross-linux-amd64 cross-linux-arm64 \
-        cross-windows-amd64
+        fix-diff fix lint clean sql-parser cross cross-linux-amd64 \
+        cross-linux-arm64 cross-windows-amd64
 
 help:
 	@echo "rgit build targets:"
@@ -37,7 +43,7 @@ help:
 	@echo "  fix-diff           go fix -diff ./...        (preview; read before applying)"
 	@echo "  fix                go fix ./... twice        (fixes can unlock fixes)"
 	@echo "  lint               golangci-lint run ./...   (.golangci.yml)"
-	@echo "  cross              cross-compile linux/amd64, linux/arm64, windows/amd64 into dist/, versioned, plus SHA256SUMS"
+	@echo "  cross              cross-compile linux/amd64, linux/arm64, windows/amd64 into dist/, versioned, with SQL when generatable, plus SHA256SUMS"
 	@echo "  clean              remove build outputs, including a generated SQL parser tree"
 
 build:
@@ -91,18 +97,25 @@ clean:
 # they need a macOS SDK zig cannot supply (net's use in go.lsp.dev/jsonrpc2
 # pulls in `resolv`/CoreFoundation at link time); see docs/INSTALL.md.
 #
-# None of the three targets below passes -tags rgit_sql or generates the SQL
-# parser -- deliberate, not a gap to close: generation needs the tree-sitter
-# CLI on the build host plus a ~17 MB parser.c compile per target, unlike
-# `make install`'s single local build. Every dist/ binary is SQL-less; see
-# docs/INSTALL.md#cross-builds before "fixing" that.
+# Cross binaries carry SQL when the build host can generate the parser.
+# Generation is host-independent -- it emits C once, from grammar.js -- so
+# the per-target cost is only compiling that C, measured at ~6-7s per target
+# with zig cc. The sql-parser prerequisite below delegates generation to
+# cmd/rgit-install, keeping -tags rgit_sql and generation in one place
+# (AGENTS.md § Delegation boundary). Without the tree-sitter CLI, SQL_TAGS
+# is empty and every target builds SQL-less rather than failing.
 #
 # Filenames carry CROSS_VERSION so a second `make cross` at a different tag
 # cannot silently overwrite the previous run's artifacts, and SHA256SUMS
 # below is regenerated per run (not appended across runs) so it always
 # describes exactly what dist/ holds right now, not a mix of tags -- these
 # artifacts are produced one full run at a time.
-cross: cross-linux-amd64 cross-linux-arm64 cross-windows-amd64
+# Delegated rather than inlined: `tree-sitter generate` is invoked in
+# exactly one place in this repo, and that place is cmd/rgit-install.
+sql-parser:
+	go run ./cmd/rgit-install -generate-only
+
+cross: sql-parser cross-linux-amd64 cross-linux-arm64 cross-windows-amd64
 	$(need-sha256sum)
 	cd $(DIST) && sha256sum \
 		rgit-$(CROSS_VERSION)-linux-amd64 \
@@ -129,16 +142,16 @@ cross-linux-amd64:
 	$(need-zig)
 	mkdir -p $(DIST)
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 CC="$(ZIG) cc -target x86_64-linux-gnu" \
-		go build -ldflags "$(LDFLAGS)" -o $(DIST)/rgit-$(CROSS_VERSION)-linux-amd64 ./cmd/rgit
+		go build $(SQL_TAGS) -ldflags "$(LDFLAGS)" -o $(DIST)/rgit-$(CROSS_VERSION)-linux-amd64 ./cmd/rgit
 
 cross-linux-arm64:
 	$(need-zig)
 	mkdir -p $(DIST)
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC="$(ZIG) cc -target aarch64-linux-gnu" \
-		go build -ldflags "$(LDFLAGS)" -o $(DIST)/rgit-$(CROSS_VERSION)-linux-arm64 ./cmd/rgit
+		go build $(SQL_TAGS) -ldflags "$(LDFLAGS)" -o $(DIST)/rgit-$(CROSS_VERSION)-linux-arm64 ./cmd/rgit
 
 cross-windows-amd64:
 	$(need-zig)
 	mkdir -p $(DIST)
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC="$(ZIG) cc -target x86_64-windows-gnu" \
-		go build -ldflags "$(LDFLAGS)" -o $(DIST)/rgit-$(CROSS_VERSION)-windows-amd64.exe ./cmd/rgit
+		go build $(SQL_TAGS) -ldflags "$(LDFLAGS)" -o $(DIST)/rgit-$(CROSS_VERSION)-windows-amd64.exe ./cmd/rgit
