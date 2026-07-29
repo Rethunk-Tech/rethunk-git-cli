@@ -655,6 +655,49 @@ func TestRun_LanguagesHelpAndUsage(t *testing.T) {
 	qt.Assert(t, qt.Not(qt.Equals(stderr, "")))
 }
 
+// TestRun_Doctor covers the happy path: every section prints, and a real
+// test environment always has git on PATH, so the essential check passes
+// regardless of which optional tools happen to be installed.
+func TestRun_Doctor(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	stdout, stderr, code := runApp(t, "doctor")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.StringContains(stdout, "[ok] git"))
+	qt.Assert(t, qt.StringContains(stdout, "Language servers"))
+	qt.Assert(t, qt.StringContains(stdout, "Grammars compiled in"))
+	qt.Assert(t, qt.StringContains(stdout, "go"))
+}
+
+// TestRun_DoctorMissingGitIsFatal pins the one check doctor treats as fatal:
+// git is what rgit shells out to for everything, so its absence is the
+// "genuinely cannot function" case docs/CODES.md's exit 128 covers -- unlike
+// a missing language server or the tree-sitter CLI, both informational.
+func TestRun_DoctorMissingGitIsFatal(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("PATH", t.TempDir()) // a PATH with nothing on it, git included
+
+	_, stderr, code := runApp(t, "doctor")
+	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))
+	qt.Assert(t, qt.StringContains(stderr, "git"))
+}
+
+// TestRun_DoctorHelpAndUsage mirrors TestRun_LanguagesHelpAndUsage for the
+// same two non-listing paths.
+func TestRun_DoctorHelpAndUsage(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	stdout, _, code := runApp(t, "doctor", "--help")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(stdout, "usage: rgit doctor"))
+
+	stdout, stderr, code := runApp(t, "doctor", "extra")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.Equals(stdout, ""))
+	qt.Assert(t, qt.Not(qt.Equals(stderr, "")))
+}
+
 // TestRun_HelpIsPlainText guards a defect that only shows up when something
 // reads the output rather than a person skimming it: pflag renders a string
 // flag's NoOptDefVal into the usage line as [="<value>"], so --gpg-sign's
