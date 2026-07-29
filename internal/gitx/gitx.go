@@ -346,23 +346,31 @@ func (r *Repo) DiffNumstat(ctx context.Context, extra ...string) ([]NumstatEntry
 	if err != nil {
 		return nil, err
 	}
-	return parseNumstat(out), nil
+	return parseNumstat(out)
 }
 
-func parseNumstat(out []byte) []NumstatEntry {
+// parseNumstat fails loudly on a line that does not split into exactly
+// three tab-separated fields -- the same posture internal/diff takes on a
+// numstat count that fails to parse as an integer -- rather than dropping
+// it: a caller computing a total from a silently shortened list would
+// underreport it with nothing to say why. SplitN's 3-way split already
+// tolerates the one legitimate irregularity in a path field, git's own
+// "{old => new}" rename shorthand, since that shorthand contains no tab of
+// its own.
+func parseNumstat(out []byte) ([]NumstatEntry, error) {
 	trimmed := strings.TrimRight(string(out), "\n")
 	if trimmed == "" {
-		return nil
+		return nil, nil
 	}
 	entries := make([]NumstatEntry, 0, strings.Count(trimmed, "\n")+1)
 	for line := range strings.SplitSeq(trimmed, "\n") {
 		parts := strings.SplitN(line, "\t", 3)
 		if len(parts) != 3 {
-			continue
+			return nil, fmt.Errorf("gitx: malformed numstat line %q", line)
 		}
 		entries = append(entries, NumstatEntry{Added: parts[0], Deleted: parts[1], Path: parts[2]})
 	}
-	return entries
+	return entries, nil
 }
 
 // CheckIgnore answers whether path is gitignored, via `git check-ignore
