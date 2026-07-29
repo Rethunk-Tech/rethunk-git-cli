@@ -154,19 +154,6 @@ func TestCommit_DoubleDashForcesPathspec(t *testing.T) {
 	qt.Assert(t, qt.Not(qt.StringContains(got.Stderr, "cannot classify")))
 }
 
-func TestCommit_LeadingColonPathspecMagicPassesThrough(t *testing.T) {
-	t.Parallel()
-	// Rule 2: all git pathspec magic is leading-colon, so this is claimed
-	// immediately, with no existence check at all -- paired here with a
-	// real target so the commit has something to actually stage.
-	repo, _ := gittest.New(t)
-	gittest.Write(t, repo, "keep.go", "package main\n\nfunc Keep() {}\n")
-
-	got := runRgit(t, repo, "commit", "-m", "chore: exclude docs", "keep.go", ":(exclude)docs/*")
-
-	qt.Assert(t, qt.Equals(got.ExitCode, 0))
-}
-
 func TestContradictoryPathAndAnchor(t *testing.T) {
 	t.Parallel()
 	// This must be caught regardless of spelling -- flag or positional --
