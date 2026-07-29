@@ -21,10 +21,7 @@ func sqlGrammar() *ts.Language { return ts.NewLanguage(sqlgrammar.Language()) }
 
 // sqlLanguage adapts the tree-sitter SQL grammar
 // (github.com/DerekStride/tree-sitter-sql, generated at build/install time --
-// see cmd/rgit-install/main.go and specs/design.md § Dependencies). Every
-// node shape below was measured against a compiled parse tree, not read
-// from grammar.js -- the same discipline every other adapter in this
-// resolver follows.
+// see cmd/rgit-install/main.go and specs/design.md § Dependencies).
 type sqlLanguage struct {
 	lang *ts.Language
 }
@@ -40,8 +37,8 @@ func (l *sqlLanguage) Extensions() []string { return []string{".sql"} }
 func (l *sqlLanguage) TSLanguage() *ts.Language { return l.lang }
 
 // IsComment: a line comment ("-- ...") parses as "comment"; a block comment
-// ("/* ... */") parses as "marginalia" -- a distinct node kind, not the same
-// kind spelled two ways, measured directly by parsing one of each.
+// ("/* ... */") parses as "marginalia" -- a distinct node kind, not the
+// same kind spelled two ways.
 func (l *sqlLanguage) IsComment(kind string) bool {
 	return kind == "comment" || kind == "marginalia"
 }
@@ -53,9 +50,9 @@ func (l *sqlLanguage) IsComment(kind string) bool {
 func (l *sqlLanguage) HeaderKinds() []string { return []string{"comment", "marginalia"} }
 
 // ImportKinds returns nil: this grammar has no include/import statement of
-// any kind -- measured against every top-level statement kind it parses,
-// none shaped like one -- the same degraded-but-not-an-error answer TOML,
-// JSON, and Markdown already give.
+// any kind -- none of its top-level statement kinds are shaped like one --
+// the same degraded-but-not-an-error answer TOML, JSON, and Markdown
+// already give.
 func (l *sqlLanguage) ImportKinds() []string { return nil }
 
 // OwnsTrailingSeparator is false: no SQL formatting convention this
@@ -88,14 +85,14 @@ func (l *sqlLanguage) buildTagGated() bool { return true }
 
 // Declarations walks the program root's own named children. A "comment" or
 // "marginalia" node sits as a program-level sibling of "statement" nodes,
-// not nested inside one -- measured -- so both are skipped here the same
-// way lang_css.go skips "comment" among rule_set's own siblings; the core
-// resolver's doc-comment attribution (docStart) walks PrevNamedSibling from
-// the "statement" wrapper itself and finds them there regardless.
+// not nested inside one, so both are skipped here the same way lang_css.go
+// skips "comment" among rule_set's own siblings; the core resolver's
+// doc-comment attribution (docStart) walks PrevNamedSibling from the
+// "statement" wrapper itself and finds them there regardless.
 //
 // Every top-level "statement" node wraps exactly one inner statement node,
-// measured across every kind handled below (and every one this resolver
-// leaves unaddressed). Declarations reports the "statement" wrapper itself
+// across every kind handled below and every one this resolver leaves
+// unaddressed. Declarations reports the "statement" wrapper itself
 // as Node, not the inner node -- the same "outermost node is what a caller
 // means" rule TypeScript's export_statement and Python's
 // decorated_definition already follow -- so a caller naming a table also
@@ -105,8 +102,8 @@ func (l *sqlLanguage) buildTagGated() bool { return true }
 // Only CREATE TABLE/VIEW/FUNCTION/INDEX/TRIGGER/TYPE are addressable. DROP,
 // ALTER, INSERT, SELECT, and CREATE SCHEMA all parse but declare no
 // persistent named object the way the six covered kinds do; CREATE DOMAIN
-// does not even parse under this grammar version (measured: it produces an
-// ERROR node). None of the excluded kinds clears the "named nested
+// does not even parse under this grammar version (it produces an ERROR
+// node). None of the excluded kinds clears the "named nested
 // declarations do not clear the bar" reasoning specs/design.md § Grammar
 // scope already applies elsewhere in this resolver -- closed as not worth
 // building for v1, not deferred.
@@ -141,22 +138,21 @@ func sqlDeclarationFor(src []byte, stmt, inner *ts.Node) (Declaration, bool) {
 }
 
 // sqlObjectReferenceDeclaration names a CREATE TABLE/VIEW/FUNCTION/TRIGGER/
-// TYPE statement by its first "object_reference" child's own "name" field.
-// Measured as the first "object_reference"-kind child in every one of the
-// five statement kinds above -- positional rather than a field on the
+// TYPE statement by its first "object_reference" child's own "name" field --
+// the first "object_reference"-kind child in every one of the five
+// statement kinds above -- positional rather than a field on the
 // statement itself, since tree-sitter-sql declares no field naming that
 // child directly (CREATE TRIGGER's own statement carries three
 // object_reference children -- its own name, the table it fires on, the
-// function it calls -- and the trigger's own name is measured to always be
-// the first).
+// function it calls -- and the trigger's own name is always the first).
 //
 // A schema-qualified name ("s.t") carries the schema as object_reference's
 // own "schema" field, present only when written in the source; it is read
 // as Container, the same one-level qualification a Go receiver type or a
 // TOML table header already gives, so both "schema.sql:s.t" and the bare
 // "t" (when unambiguous) resolve. CREATE TRIGGER never carries a schema
-// field on its own name -- measured, and correct: Postgres does not allow
-// a schema-qualified trigger name -- so a trigger's Container is always
+// field on its own name -- correctly, since Postgres does not allow a
+// schema-qualified trigger name -- so a trigger's Container is always
 // empty; two same-named triggers in one file (legal when they fire on
 // different tables, a real gap this adapter does not close) disambiguate
 // with the existing #N ordinal, the same as two same-named Go functions.
@@ -191,14 +187,14 @@ func sqlObjectReferenceDeclaration(src []byte, stmt, inner *ts.Node) (Declaratio
 }
 
 // sqlIndexDeclaration names a CREATE INDEX statement by create_index's own
-// "column" field -- measured, and not a copy error in this comment: despite
-// the field's name, it holds the index's own identifier ("myidx" in
-// "CREATE INDEX myidx ON t (col1, col2)"), a different field from the
-// "column" field each entry inside the statement's own "index_fields"
-// carries for the columns actually being indexed. An anonymous index
-// ("CREATE INDEX ON t (c)", legal SQL -- Postgres synthesizes a name) has
-// no "column" field on create_index at all, measured, and is left
-// unaddressable rather than guessing at the name Postgres would assign.
+// "column" field -- not a copy error in this comment: despite the field's
+// name, it holds the index's own identifier ("myidx" in "CREATE INDEX
+// myidx ON t (col1, col2)"), a different field from the "column" field each
+// entry inside the statement's own "index_fields" carries for the columns
+// actually being indexed. An anonymous index ("CREATE INDEX ON t (c)",
+// legal SQL -- Postgres synthesizes a name) has no "column" field on
+// create_index at all, and is left unaddressable rather than guessing at
+// the name Postgres would assign.
 func sqlIndexDeclaration(src []byte, stmt, inner *ts.Node) (Declaration, bool) {
 	name := inner.ChildByFieldName("column")
 	if name == nil {

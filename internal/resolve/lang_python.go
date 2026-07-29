@@ -4,9 +4,7 @@ import ts "github.com/tree-sitter/go-tree-sitter"
 
 func init() { register(newPythonLanguage()) }
 
-// pythonLanguage adapts the tree-sitter Python grammar. The node shapes
-// this file encodes were measured against a compiled parse tree, not
-// guessed from documentation.
+// pythonLanguage adapts the tree-sitter Python grammar.
 type pythonLanguage struct {
 	lang *ts.Language
 }
@@ -32,9 +30,8 @@ func (p *pythonLanguage) ImportKinds() []string {
 
 func (p *pythonLanguage) HeaderKinds() []string {
 	// Python has no package_clause. A shebang or encoding declaration parses
-	// as an ordinary "comment" node (verified by parsing a file starting with
-	// "#!/usr/bin/env python3" and dumping the root's named children), so
-	// "comment" is the header kind: the core's leading run from byte 0 stops
+	// as an ordinary "comment" node, so "comment" is the header kind: the
+	// core's leading run from byte 0 stops
 	// at the first non-comment node regardless, so this never swallows a doc
 	// comment sitting elsewhere in the file.
 	return []string{"comment"}
@@ -101,9 +98,9 @@ func classBody(node *ts.Node) *ts.Node {
 
 // classMembers enumerates a class body's methods, container-qualified, so
 // `svc.py:UserService.login` addresses one method rather than the whole
-// class. Measured shape: class_definition's "body" is a block whose named
-// children are function_definition, or decorated_definition wrapping one --
-// the same two forms declarationFor already handles at module level.
+// class. class_definition's "body" is a block whose named children are
+// function_definition, or decorated_definition wrapping one -- the same two
+// forms declarationFor already handles at module level.
 func (p *pythonLanguage) classMembers(class *ts.Node, container string, src []byte) []Declaration {
 	body := class.ChildByFieldName("body")
 	if body == nil {

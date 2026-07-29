@@ -6,18 +6,15 @@ import (
 
 func init() { register(newYAMLLanguage()) }
 
-// yamlLanguage adapts the tree-sitter YAML grammar. Every node shape below
-// was measured against a compiled parse tree (a scratch binary parsing real
-// fixtures), not assumed from the grammar's grammar.js or its README --
-// exactly the discipline lang_shell.go and lang_markdown.go already follow.
+// yamlLanguage adapts the tree-sitter YAML grammar.
 //
 // YAML is whitespace-sensitive in a way none of the other five grammars
-// are (TODO.md's own warning before this was built): a mis-spliced block
-// silently changes the document's meaning rather than failing to parse, and
-// a block scalar's (`|`, `>`) body text carries leading whitespace that is
-// part of its value, not incidental formatting. Two measured facts are what
-// make staging safe here regardless: a block_mapping_pair's own extent
-// starts at its key's first byte, never at the line's indentation -- the
+// are (TODO.md's own warning): a mis-spliced block silently changes the
+// document's meaning rather than failing to parse, and a block scalar's
+// (`|`, `>`) body text carries leading whitespace that is part of its
+// value, not incidental formatting. Two facts make staging safe here
+// regardless: a block_mapping_pair's own extent starts at its key's first
+// byte, never at the line's indentation -- the
 // same convention every other adapter's container members already use, so
 // internal/synth's existing lineStart/insertionText machinery (classify.go)
 // handles YAML's indentation with no YAML-specific code -- and a
@@ -45,10 +42,10 @@ func (y *yamlLanguage) IsComment(kind string) bool { return kind == "comment" }
 // (extent.go). tree-sitter-yaml's external scanner grafts a comment sitting
 // between the end of a nested value and the next, more shallowly indented
 // sibling onto the deepest block still open when it consumed the comment
-// token -- measured directly, against v0.7.2, with a comment written at the
-// SAME column as the following (shallower) key: it still nests several
-// levels deep inside the previous key's own last list item rather than
-// becoming that key's sibling. Left alone, every container-qualified
+// token -- even a comment written at the SAME column as the following
+// (shallower) key still nests several levels deep inside the previous
+// key's own last list item rather than becoming that key's sibling. Left
+// alone, every container-qualified
 // extent that happens to precede such a comment would silently absorb
 // content that was written to describe its successor, not itself.
 //
@@ -113,12 +110,12 @@ func (y *yamlLanguage) trimTrailingComment(src []byte, node *ts.Node) uint {
 // Markdown already gives (lang_markdown.go).
 func (y *yamlLanguage) ImportKinds() []string { return nil }
 
-// HeaderKinds is "comment" alone. Measured against a compiled parse tree: a
-// leading top-of-file comment run parses as one or more "comment" nodes that
-// are siblings of "document" directly under the root "stream" node -- never
-// nested inside "document" the way a %YAML or %TAG directive is -- so it is
-// visible to headerExtent's walk over root's own children with nothing
-// YAML-specific to add. Directives and the "---" document-start marker sit
+// HeaderKinds is "comment" alone. A leading top-of-file comment run parses
+// as one or more "comment" nodes that are siblings of "document" directly
+// under the root "stream" node -- never nested inside "document" the way a
+// %YAML or %TAG directive is -- so it is visible to headerExtent's walk
+// over root's own children with nothing YAML-specific to add. Directives
+// and the "---" document-start marker sit
 // one level down, inside "document" itself, and are not part of @header;
 // they are still preserved byte-for-byte as part of whichever pseudo- or
 // real anchor's extent happens to contain them (@toplevel's widening reaches
@@ -159,10 +156,9 @@ func (y *yamlLanguage) AllowsRawHeadingFallback() bool { return false }
 // A multi-document stream (more than one "---"-separated "document" under
 // "stream") returns nil -- nothing addressable -- rather than guessing which
 // document a bare key path means, or inventing a document-index qualifier
-// nothing else in this resolver has a syntax for. Measured against a
-// compiled parse tree: each "---" starts a new "document" node, sibling to
-// the one before it, so detecting more than one is a direct child-kind
-// count, not a heuristic.
+// nothing else in this resolver has a syntax for. Each "---" starts a new
+// "document" node, sibling to the one before it, so detecting more than one
+// is a direct child-kind count, not a heuristic.
 func (y *yamlLanguage) Declarations(src []byte, root *ts.Node) []Declaration {
 	doc, ok := soleDocument(root)
 	if !ok {
@@ -198,12 +194,11 @@ func soleDocument(root *ts.Node) (*ts.Node, bool) {
 
 // topBlockMapping finds doc's own top-level "block_mapping", skipping past
 // any directive nodes (%YAML, %TAG) and an anchor/tag modifier that can
-// precede it. Measured against a compiled parse tree: an anchored top-level
-// mapping (`&all\nkey: value`) parses as a "block_node" whose named children
-// are the "anchor" node and the "block_mapping" node as siblings, in that
-// order -- the anchor is never a wrapper around the mapping, so this only
-// ever needs to look one level for a "block_mapping" among a "block_node"'s
-// own children, never recurse.
+// precede it. An anchored top-level mapping (`&all\nkey: value`) parses as
+// a "block_node" whose named children are the "anchor" node and the
+// "block_mapping" node as siblings, in that order -- the anchor is never a
+// wrapper around the mapping, so this only ever needs to look one level for
+// a "block_mapping" among a "block_node"'s own children, never recurse.
 //
 // A document whose top-level content is a scalar ("flow_node"), a sequence
 // ("block_sequence"), or a flow-style mapping ("flow_node" wrapping
@@ -233,8 +228,8 @@ func blockMappingIn(blockNode *ts.Node) (*ts.Node, bool) {
 }
 
 // mappingDeclarations walks mapping's own "block_mapping_pair" children --
-// "comment" nodes are real siblings at this level too (measured: a comment
-// between two keys parses as an ordinary named child of the enclosing
+// "comment" nodes are real siblings at this level too (a comment between
+// two keys parses as an ordinary named child of the enclosing
 // "block_mapping", not as a leading-trivia attribute of the pair after it)
 // and are skipped here because they carry no key of their own; the shared
 // docStart machinery (extent.go) still attaches one to the pair
@@ -290,19 +285,18 @@ func nestedMapping(value *ts.Node) (*ts.Node, bool) {
 
 // yamlKeyName reads a block_mapping_pair's own key field as a bare name, or
 // reports ok=false for a key shape this resolver does not turn into a
-// symbol. key is nil for the rare explicit-key form's own edge cases and
-// nil-checked defensively even though every fixture this grammar was
-// measured against produced one.
+// symbol. key is nil for the rare explicit-key form's own edge cases and is
+// nil-checked defensively.
 //
-// The ordinary case -- measured against a compiled parse tree -- is key
-// being a "flow_node" wrapping exactly one further named child: "plain_scalar"
-// for an unquoted key (`jobs`, `on`, even a YAML-1.1-boolean-looking bare
-// word like `on` -- the grammar never resolves it to a boolean node kind,
-// only its literal text), or "double_quote_scalar"/"single_quote_scalar" for
-// a quoted one, whose surrounding quote byte is stripped from Bare -- a
-// best-effort unwrap, not full YAML unescaping, since an escape sequence in
-// a mapping key is not a shape this resolver measured any real demand for.
-// Anything else -- a key that is itself a "block_node" (an explicit `?`
+// The ordinary case is key being a "flow_node" wrapping exactly one further
+// named child: "plain_scalar" for an unquoted key (`jobs`, `on`, even a
+// YAML-1.1-boolean-looking bare word like `on` -- the grammar never
+// resolves it to a boolean node kind, only its literal text), or
+// "double_quote_scalar"/"single_quote_scalar" for a quoted one, whose
+// surrounding quote byte is stripped from Bare -- a best-effort unwrap, not
+// full YAML unescaping, since an escape sequence in a mapping key is not a
+// shape this resolver has real demand for. Anything else -- a key that is
+// itself a "block_node" (an explicit `?`
 // key whose own value is a multi-line mapping or sequence, rather than a
 // plain scalar), or a flow_node with more than one named child (an
 // anchor/tag decorating a key, essentially unseen in practice) -- is left

@@ -4,13 +4,12 @@ import ts "github.com/tree-sitter/go-tree-sitter"
 
 func init() { register(newTOMLLanguage()) }
 
-// tomlLanguage adapts the tree-sitter TOML grammar. Node shapes were
-// measured against a compiled parse tree, not assumed from grammar.js.
+// tomlLanguage adapts the tree-sitter TOML grammar.
 //
-// Like CSS and YAML, this grammar declares no fields at all (measured
-// against node-types.json: "document", "pair", "table", and
-// "table_array_element" all report an empty "fields" object) -- every shape
-// below is read by node kind and position.
+// Like CSS and YAML, this grammar declares no fields at all -- "document",
+// "pair", "table", and "table_array_element" all report an empty "fields"
+// object in node-types.json -- every shape below is read by node kind and
+// position.
 type tomlLanguage struct {
 	lang *ts.Language
 }
@@ -89,8 +88,8 @@ func (l *tomlLanguage) Declarations(src []byte, root *ts.Node) []Declaration {
 // tomlTableDeclarations reports a "table"/"table_array_element" node's own
 // header as a Declaration (Bare is the header key's own text, Container
 // empty since a table is only ever a root-level construct in this grammar
-// -- measured: document's own children are exactly pair/table/
-// table_array_element, with no nesting), then walks its remaining named
+// -- document's own children are exactly pair/table/table_array_element,
+// with no nesting), then walks its remaining named
 // children -- "pair" entries qualified by that header text, "comment"
 // skipped -- to address its members. A second table sharing one header's
 // literal text (two "[[servers]]" elements is the ordinary case, not a
@@ -140,8 +139,8 @@ func tomlPairDeclaration(src []byte, pair *ts.Node, container string) (Declarati
 }
 
 // tomlKeyName reads a key node -- "bare_key", "dotted_key", or
-// "quoted_key", the three kinds measured as a pair's or a table header's own
-// first named child -- as a Bare-ready string. A quoted key's surrounding
+// "quoted_key", the three kinds a pair's or a table header's own first
+// named child can be -- as a Bare-ready string. A quoted key's surrounding
 // quote byte is stripped, a best-effort unwrap matching lang_yaml.go's own
 // quoted-key handling, not full TOML string-escape decoding.
 func tomlKeyName(src []byte, key *ts.Node) (string, bool) {

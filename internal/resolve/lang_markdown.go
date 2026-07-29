@@ -41,10 +41,10 @@ func (m *mdLanguage) IsComment(kind string) bool { return false }
 // shell-generation grammar will need; it is deliberately not added here.
 func (m *mdLanguage) ImportKinds() []string { return nil }
 
-// HeaderKinds is frontmatter only. Measured against a compiled parse tree:
-// document's own children are exactly minus_metadata (YAML "---" fencing),
-// plus_metadata (TOML "+++" fencing), and section — a file opens with at
-// most one of the two metadata kinds, never both.
+// HeaderKinds is frontmatter only. Document's own children are exactly
+// minus_metadata (YAML "---" fencing), plus_metadata (TOML "+++" fencing),
+// and section — a file opens with at most one of the two metadata kinds,
+// never both.
 func (m *mdLanguage) HeaderKinds() []string { return []string{"minus_metadata", "plus_metadata"} }
 
 // OwnsTrailingSeparator is false: no markdown formatter this resolver
@@ -68,9 +68,9 @@ func (m *mdLanguage) MembersSitFlush() bool { return false }
 // answers true.
 func (m *mdLanguage) AllowsRawHeadingFallback() bool { return true }
 
-// Declarations walks document's top-level "section" children. Measured
-// against a compiled parse tree: every heading, and all of its content down
-// to arbitrary depth, lives inside some section — document itself never
+// Declarations walks document's top-level "section" children. Every
+// heading, and all of its content down to arbitrary depth, lives inside
+// some section — document itself never
 // holds a bare heading or paragraph as a direct child. A leading run of
 // content with no heading above it (the lede) is itself wrapped in a
 // section, never a sibling of one: an atx_heading always opens a brand new
@@ -115,9 +115,9 @@ func sectionDeclarations(sec *ts.Node, container string, src []byte) []Declarati
 		case "section":
 			out = append(out, sectionDeclarations(&child, slug, src)...)
 		case "setext_heading":
-			// Measured against a compiled parse tree: unlike an
-			// atx_heading, a setext_heading never opens its own nested
-			// section — whatever text follows it stays a further sibling
+			// Unlike an atx_heading, a setext_heading never opens its own
+			// nested section — whatever text follows it stays a further
+			// sibling
 			// inside the SAME enclosing section, not grouped under the
 			// heading the way an atx-opened section groups its body.
 			// Reproducing that grouping by hand would be exactly the
@@ -134,10 +134,10 @@ func sectionDeclarations(sec *ts.Node, container string, src []byte) []Declarati
 }
 
 // atxHeadingOf returns sec's own opening heading, or nil for the headerless
-// lede section. Measured against a compiled parse tree: whenever a section
-// has a heading at all, it is always exactly the section's first named
-// child — an atx_heading is what caused the section to begin in the first
-// place, so it can never appear anywhere else in one.
+// lede section. Whenever a section has a heading at all, it is always
+// exactly the section's first named child — an atx_heading is what caused
+// the section to begin in the first place, so it can never appear anywhere
+// else in one.
 func atxHeadingOf(sec *ts.Node) *ts.Node {
 	if sec.NamedChildCount() == 0 {
 		return nil
@@ -150,9 +150,9 @@ func atxHeadingOf(sec *ts.Node) *ts.Node {
 }
 
 // headingText reads an atx_heading's or setext_heading's own title text.
-// Both carry it under a "heading_content" field, measured against a
-// compiled parse tree, but at a different depth: atx_heading's field is the
-// "inline" node directly, while setext_heading's is a "paragraph" wrapping
+// Both carry it under a "heading_content" field, but at a different depth:
+// atx_heading's field is the "inline" node directly, while setext_heading's
+// is a "paragraph" wrapping
 // one (a setext heading's title is grammatically a whole paragraph line,
 // not its own node kind). Only the block grammar is loaded (grammars.go),
 // so "inline" is an opaque leaf here — there is no emphasis/link/code-span

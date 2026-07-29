@@ -17,9 +17,9 @@
 package sqlgrammar
 
 // The generated C must live in csrc/, a subdirectory of this package, not
-// beside this file: measured, a .c file placed directly in the package
-// directory is compiled once by cgo's own file-globbing and pulled in a
-// second time by the #include below, producing "multiple definition of
+// beside this file: a .c file placed directly in the package directory is
+// compiled once by cgo's own file-globbing and pulled in a second time by
+// the #include below, producing "multiple definition of
 // 'tree_sitter_sql'" at link time. -I${SRCDIR}/csrc lets csrc/parser.c
 // #include "tree_sitter/parser.h" (copied alongside it by generateSQLParser)
 // the same way the grammar's own source tree lays it out.

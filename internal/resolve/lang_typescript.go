@@ -6,8 +6,8 @@ import ts "github.com/tree-sitter/go-tree-sitter"
 // two disagree on whether a leading `<` opens a type assertion or a JSX
 // element, so a .tsx file parsed as TypeScript yields ERROR nodes on the
 // first JSX expression (see grammars.go). Both share the same declaration
-// shapes otherwise — verified against a compiled parse tree, not assumed —
-// so the walk below is written once and reused by both registrations.
+// shapes otherwise, so the walk below is written once and reused by both
+// registrations.
 
 // tsFamily implements Language for both the TypeScript and TSX grammars. The
 // two differ only in TSLanguage and Extensions.
@@ -34,10 +34,8 @@ func (l *tsFamily) ImportKinds() []string { return []string{"import_statement"} 
 // no package clause, so a licence/copyright block opening a file with no
 // shebang is an ordinary "comment" node like any other, the same shape
 // Python's own header comment parses as (lang_python.go). hash_bang_line
-// appears as the first child when present — verified by parsing a fixture
-// that opens with "#!/usr/bin/env node" and printing the root's named
-// children, against both LanguageTypescript and LanguageTSX; the shape is
-// identical.
+// appears as the first child when present, identically for both
+// LanguageTypescript and LanguageTSX.
 //
 // Including "comment" cannot make @header swallow a documented first
 // declaration's doc comment: the core resolver bounds the header run at
@@ -67,10 +65,9 @@ func (l *tsFamily) AllowsRawHeadingFallback() bool { return false }
 
 // Declarations walks the top-level (program) children. The trap this exists
 // to avoid: an exported symbol is not a top-level function_declaration, it is
-// an export_statement wrapping one. Verified against a compiled parse tree —
-// export_statement always exposes the wrapped node via the "declaration"
-// field, including "export default class C", where a naive implementation
-// might expect "value" instead.
+// an export_statement wrapping one. export_statement always exposes the
+// wrapped node via the "declaration" field, including "export default class
+// C", where a naive implementation might expect "value" instead.
 func (l *tsFamily) Declarations(src []byte, root *ts.Node) []Declaration {
 	var decls []Declaration
 	n := root.NamedChildCount()
@@ -93,10 +90,9 @@ func (l *tsFamily) Declarations(src []byte, root *ts.Node) []Declaration {
 		case "expression_statement":
 			// A bare (non-exported) `namespace N { ... }` parses as an
 			// expression_statement wrapping internal_module, not as the
-			// internal_module directly — measured against a compiled parse
-			// tree (`export namespace N {}` instead wraps it in
-			// export_statement, handled by the case above). Only this one
-			// wrapped shape is unwrapped here; an ordinary expression
+			// internal_module directly (`export namespace N {}` instead
+			// wraps it in export_statement, handled by the case above). Only
+			// this one wrapped shape is unwrapped here; an ordinary expression
 			// statement like `foo();` has no name and must keep falling
 			// through to declarationFor's default case.
 			if only := onlyNamedChild(outer); only != nil &&
@@ -135,18 +131,17 @@ func onlyNamedChild(n *ts.Node) *ts.Node {
 // one-class-per-file module is the class, which for staging purposes is the
 // same thing as naming the path. It is shared by class_declaration and
 // abstract_class_declaration, which both hold their body under a "body"
-// field of kind class_body — measured against a compiled parse tree, the two
-// declarations are otherwise unrelated node kinds with no common parent, but
-// this function only ever looks at the shape the field points to.
+// field of kind class_body — the two declarations are otherwise unrelated
+// node kinds with no common parent, but this function only ever looks at the
+// shape the field points to.
 //
-// Shapes measured against a compiled parse tree, not assumed: class_body
-// holds method_definition (ordinary methods, statics and accessors alike)
-// and public_field_definition, each carrying its own "name" field. Signature-
-// only members with no body (method_signature, abstract_method_signature —
-// legal inside an abstract class) fall through the switch below and stay
-// unaddressable, same as interface_declaration's members today. The extent
-// is the member node, so a doc comment above it is attributed by the same
-// blank-line rule as any other declaration.
+// class_body holds method_definition (ordinary methods, statics and
+// accessors alike) and public_field_definition, each carrying its own
+// "name" field. Signature-only members with no body (method_signature,
+// abstract_method_signature — legal inside an abstract class) fall through
+// the switch below and stay unaddressable, same as interface_declaration's
+// members. The extent is the member node, so a doc comment above it is
+// attributed by the same blank-line rule as any other declaration.
 func classMembers(class *ts.Node, container string, src []byte) []Declaration {
 	body := class.ChildByFieldName("body")
 	if body == nil {
@@ -189,9 +184,9 @@ func declarationFor(outer, target *ts.Node, src []byte) []Declaration {
 	case "interface_declaration":
 		return declOne(namedDecl(src, outer, target))
 	case "abstract_class_declaration":
-		// name field "type_identifier", same as class_declaration — measured
-		// against a compiled parse tree. Members are enumerated by the
-		// Declarations loop, exactly as for class_declaration.
+		// name field "type_identifier", same as class_declaration. Members
+		// are enumerated by the Declarations loop, exactly as for
+		// class_declaration.
 		return declOne(namedDecl(src, outer, target))
 	case "enum_declaration":
 		// name field "identifier"; body is enum_body. Members (Color.Red)
@@ -200,23 +195,21 @@ func declarationFor(outer, target *ts.Node, src []byte) []Declaration {
 		// into below.
 		return declOne(namedDecl(src, outer, target))
 	case "generator_function_declaration":
-		// Same shape as function_declaration but a distinct grammar kind —
-		// measured against a compiled parse tree, not assumed.
+		// Same shape as function_declaration but a distinct grammar kind.
 		return declOne(namedDecl(src, outer, target))
 	case "lexical_declaration", "variable_declaration":
 		// const/let (lexical_declaration) and var (variable_declaration) —
-		// two distinct node kinds for what reads like one construct,
-		// measured against a compiled parse tree, both wrapping one or more
-		// variable_declarator children with no field name of their own.
-		// Each declarator is addressed individually, the same fix
-		// goSpecDeclarations applies to Go's grouped const/var/type blocks.
+		// two distinct node kinds for what reads like one construct, both
+		// wrapping one or more variable_declarator children with no field
+		// name of their own. Each declarator is addressed individually, the
+		// same fix goSpecDeclarations applies to Go's grouped const/var/type
+		// blocks.
 		return lexicalDeclarations(outer, target, src)
 	case "internal_module", "module":
 		// TypeScript spells the common `namespace N {}` internal_module, and
 		// the rarer ambient `module "pkg" {}` form module — both carry a
-		// "name" field and an optional "body" field, measured against a
-		// compiled parse tree. Members are enumerated by the Declarations
-		// loop via moduleMembers.
+		// "name" field and an optional "body" field. Members are enumerated
+		// by the Declarations loop via moduleMembers.
 		return declOne(namedDecl(src, outer, target))
 	case "function_expression":
 		// Deliberately unaddressable, not merely unhandled: this is what
@@ -285,11 +278,11 @@ func lexicalDeclarations(outer, target *ts.Node, src []byte) []Declaration {
 // otherwise.
 //
 // A destructuring declarator's "name" field is object_pattern or
-// array_pattern instead — measured against a compiled parse tree parsing
-// `const {x, y} = obj` and `const [p, q] = arr` — with no single name to
-// read. `const {a, b} = obj` binds two names to one right-hand side; there is
-// no way to give `a` its own extent without `b`'s (and obj's) text coming
-// along too, the same principle as Go's shared `A, B int` field line
+// array_pattern instead (`const {x, y} = obj`, `const [p, q] = arr`), with
+// no single name to read. `const {a, b} = obj` binds two names to one
+// right-hand side; there is no way to give `a` its own extent without `b`'s
+// (and obj's) text coming along too, the same principle as Go's shared
+// `A, B int` field line
 // (goStructFields). Reporting (unanchorable) here is a deliberate choice,
 // not a missing case — inventing a name from the pattern's own text (e.g.
 // "{x, y}") would resolve to an anchor that drags every sibling binding's
@@ -306,9 +299,9 @@ func identifierDecl(src []byte, extent, vd *ts.Node) (Declaration, bool) {
 // container-qualified, so `ns.ts:N.inner` addresses one function inside
 // `namespace N { ... }` instead of collapsing to the whole namespace.
 //
-// Measured against a compiled parse tree: internal_module's (and module's)
-// "body" field is a statement_block whose named children are either the
-// declaration directly — an unexported member, `namespace N { function
+// internal_module's (and module's) "body" field is a statement_block whose
+// named children are either the declaration directly — an unexported
+// member, `namespace N { function
 // inner() {} }` — or an export_statement wrapping one, `namespace N { export
 // function inner() {} }`. Both are exactly the two shapes declarationFor
 // already resolves at the top level, so this reuses it rather than

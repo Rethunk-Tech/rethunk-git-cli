@@ -149,10 +149,10 @@ func assignQualifiedNames(syms []*Symbol) {
 // The ordinal rule counts these, not bare names, so it reaches inside a
 // container as well as beside one. Two members of one class can share a name
 // -- a TypeScript get/set pair is the ordinary case, not a corner -- and
-// before this they produced the identical qualified name, so the index kept
-// whichever came last and `Box.size` silently resolved to one of the two
-// with no ambiguity reported. Two classes of the same name in one file
-// collided the same way, one member set overwriting the other.
+// counting only bare names would let two same-named container members (or
+// two same-named classes in one file) collide on one qualified name,
+// silently keeping whichever the index visited last with no ambiguity
+// reported.
 func containerQualified(s *Symbol) string {
 	if s.Decl.Container == "" {
 		return s.Decl.Bare
@@ -187,7 +187,7 @@ func normalizeAnchorInput(anchor string) string {
 // heading's raw text ("Install") is exactly as valid a copy-paste source as
 // a multi-word one ("Diff Scope"); gating on the presence of a space made
 // the single-word case unreachable by its own text for no reason a caller
-// could act on. Scoping this to markdown is now the caller's job
+// could act on. Scoping this to markdown is the caller's job
 // (idx.allowRawHeading), not this function's -- see resolve for why that
 // gate is safe to relax.
 func rawHeadingFallback(anchor string) (string, bool) {

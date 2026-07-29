@@ -157,11 +157,11 @@ func goSpecDeclarations(node *ts.Node, src []byte) []Declaration {
 
 // goContainerMembers reaches one level into a type_spec's underlying type:
 // a struct's fields (S.Field) or an interface's methods (I.Do), container-
-// qualified by the type's own name. Measured against a compiled parse tree:
-// type_spec's "type" field holds the struct_type or interface_type directly,
-// not a further wrapper node. Any other underlying type — an alias, a named
-// slice or map, a defined basic type — has no members to reach, and yields
-// nil rather than descending into something that isn't a container.
+// qualified by the type's own name. type_spec's "type" field holds the
+// struct_type or interface_type directly, not a further wrapper node. Any
+// other underlying type — an alias, a named slice or map, a defined basic
+// type — has no members to reach, and yields nil rather than descending
+// into something that isn't a container.
 func goContainerMembers(spec *ts.Node, container string, src []byte) []Declaration {
 	typ := spec.ChildByFieldName("type")
 	if typ == nil {
@@ -178,11 +178,11 @@ func goContainerMembers(spec *ts.Node, container string, src []byte) []Declarati
 }
 
 // goStructFields enumerates a struct_type's own fields, container-qualified.
-// Measured against a compiled parse tree: struct_type's sole child is a
-// field_declaration_list, and each field_declaration carries its name(s) as
-// field_identifier children rather than in a single-valued "name" field —
-// field_declaration.name is itself multiple, because "A, B int" is one
-// field_declaration sharing a type between two names.
+// struct_type's sole child is a field_declaration_list, and each
+// field_declaration carries its name(s) as field_identifier children rather
+// than in a single-valued "name" field — field_declaration.name is itself
+// multiple, because "A, B int" is one field_declaration sharing a type
+// between two names.
 //
 // A field_declaration with exactly one name is addressed the ordinary way.
 // Zero names means an embedded/anonymous field (`Anon` with no identifier of
@@ -217,12 +217,11 @@ func goStructFields(structType *ts.Node, container string, src []byte) []Declara
 }
 
 // goInterfaceMethods enumerates an interface_type's own method elements,
-// container-qualified. Measured against a compiled parse tree: interface_type
-// holds method_elem (an ordinary method) and type_elem (an embedded interface
-// or a type-set constraint term) directly as children, with no wrapping
-// list. type_elem names no method of its own and is skipped; method_elem
-// carries exactly one name in its "name" field, so namedDecl applies
-// unchanged.
+// container-qualified. interface_type holds method_elem (an ordinary
+// method) and type_elem (an embedded interface or a type-set constraint
+// term) directly as children, with no wrapping list. type_elem names no
+// method of its own and is skipped; method_elem carries exactly one name in
+// its "name" field, so namedDecl applies unchanged.
 func goInterfaceMethods(interfaceType *ts.Node, container string, src []byte) []Declaration {
 	var out []Declaration
 	for _, elem := range namedChildren(interfaceType) {

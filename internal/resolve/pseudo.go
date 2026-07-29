@@ -119,9 +119,8 @@ func importPredicate(lang Language, src []byte) func(*ts.Node) bool {
 // package clause's own trailing newline is.
 //
 // Kept as a free function, rather than inlining lang.OwnsTrailingSeparator()
-// at each call site, only so ExtendThroughOwnedSeparator below and every
-// external caller keep the same call shape they had before this became an
-// interface method.
+// at each call site, so ExtendThroughOwnedSeparator below and every
+// external caller share one call shape.
 func OwnsTrailingSeparator(lang Language) bool {
 	return lang.OwnsTrailingSeparator()
 }
@@ -174,8 +173,7 @@ func ExtendThroughOwnedSeparator(lang Language, src []byte, ext Extent, limit ui
 // byte-identical replace/delete path a committed member already takes.
 //
 // Kept as a free function for the same reason OwnsTrailingSeparator is: so
-// classify.go's call site keeps the shape it had before this became an
-// interface method.
+// classify.go's call site shares that same call shape.
 func MembersSitFlush(lang Language) bool {
 	return lang.MembersSitFlush()
 }
@@ -200,13 +198,13 @@ func MembersSitFlush(lang Language) bool {
 // method, unlike OwnsTrailingSeparator/MembersSitFlush/
 // AllowsRawHeadingFallback above: those three are booleans an adapter states
 // once and the shared caller branches on, so a missing case is silently
-// wrong (the defect this file's other three methods were promoted to fix).
-// toplevelExtent is not a flag to branch on -- it is the whole computation,
-// needing idx, root, and src together -- so making it a Language method
-// would force every adapter to either carry this exact 15-line formula
-// itself (duplicated nine times, with no shared source of truth to catch
-// the copies drifting apart) or call back into a package-level default
-// anyway, which is what the type assertion already does more directly. A
+// wrong. toplevelExtent is not a flag to branch on -- it is the whole
+// computation, needing idx, root, and src together -- so making it a
+// Language method would force every adapter to either carry this exact
+// 15-line formula itself (duplicated nine times, with no shared source of
+// truth to catch the copies drifting apart) or call back into a
+// package-level default anyway, which is what the type assertion already
+// does more directly. A
 // future grammar shaped like Markdown's -- @toplevel meaning something
 // structurally different from "span of declarations" -- gets exactly the
 // same override seam this one type assertion already provides; there being

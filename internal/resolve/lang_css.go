@@ -8,16 +8,13 @@ import (
 
 func init() { register(newCSSLanguage()) }
 
-// cssLanguage adapts the tree-sitter CSS grammar. Every node shape below was
-// measured against a compiled parse tree, not read from grammar.js -- the
-// same discipline lang_shell.go and lang_yaml.go already follow.
-//
-// tree-sitter-css declares no fields at all (measured against
-// src/node-types.json: rule_set, at_rule, media_statement, declaration,
-// import_statement all report an empty "fields" object), unlike Go, Python,
-// or JSON -- every shape below is read by node kind and position, the same
-// way lang_shell.go and lang_yaml.go's block_mapping_pair positional lookups
-// already are for their own field-less constructs.
+// cssLanguage adapts the tree-sitter CSS grammar. tree-sitter-css declares
+// no fields at all -- rule_set, at_rule, media_statement, declaration, and
+// import_statement all report an empty "fields" object in node-types.json,
+// unlike Go, Python, or JSON -- so every shape below is read by node kind
+// and position, the same way lang_shell.go and lang_yaml.go's
+// block_mapping_pair positional lookups already are for their own
+// field-less constructs.
 type cssLanguage struct {
 	lang *ts.Language
 }
@@ -40,9 +37,9 @@ func (c *cssLanguage) IsComment(kind string) bool { return kind == "comment" }
 func (c *cssLanguage) HeaderKinds() []string { return []string{"comment"} }
 
 // ImportKinds names "import_statement" directly: @import is a real,
-// unambiguous node kind in this grammar (measured: "@import \"foo.css\";"
-// parses as import_statement, distinct from every other statement kind), so
-// -- unlike shell's `source` command, which shares its node kind with every
+// unambiguous node kind in this grammar ("@import \"foo.css\";" parses as
+// import_statement, distinct from every other statement kind), so -- unlike
+// shell's `source` command, which shares its node kind with every
 // other command -- CSS needs no ImportMatcher seam. @imports is therefore
 // meaningful here, not a degraded nil the way it is for JSON, TOML, YAML, and
 // Markdown, which have no import concept at all.
@@ -76,16 +73,15 @@ func (c *cssLanguage) AllowsRawHeadingFallback() bool { return false }
 // material, or @header/@imports/@toplevel would claim overlapping bytes.
 //
 // A rule_set's own block is descended into for further, natively nested
-// rule_sets (ruleSetDeclarations below) -- CSS Nesting, mainstream now and
-// measured directly against tree-sitter-css v0.25.0: `.parent { .child {}
-// }` parses .child's rule_set as a direct named child of .parent's own
-// "block", sibling to its declaration nodes. A rule_set nested inside an
-// @media/@supports/@keyframes block, by contrast, is still not descended
-// into and gets no anchor of its own: that is a different, deliberate
-// non-descent rule (docs/ANCHORS.md), unaffected by this one -- an at-rule
-// is never itself walked for nested rule_sets, whether it appears at the
-// top level or, per the CSS Nesting spec, inside another rule_set's own
-// block (measured: this grammar does allow that shape too, e.g. `.a {
+// rule_sets (ruleSetDeclarations below) -- CSS Nesting, mainstream now:
+// `.parent { .child {} }` parses .child's rule_set as a direct named child
+// of .parent's own "block", sibling to its declaration nodes. A rule_set
+// nested inside an @media/@supports/@keyframes block, by contrast, is still
+// not descended into and gets no anchor of its own: that is a different,
+// deliberate non-descent rule (docs/ANCHORS.md), unaffected by this one --
+// an at-rule is never itself walked for nested rule_sets, whether it
+// appears at the top level or, per the CSS Nesting spec, inside another
+// rule_set's own block (this grammar allows that shape too, e.g. `.a {
 // @media (...) { .b {} } }` -- .b's own rule_set is a grandchild of .a's
 // block, once removed through the media_statement, and is left just as
 // undescended as any other at-rule content).
@@ -156,11 +152,10 @@ func (c *cssLanguage) ruleSetDeclarations(src []byte, node *ts.Node, container s
 
 // ruleSetDeclaration reads a rule_set's own "selectors" child as Bare,
 // verbatim -- ".button-primary", "#app", "div", or a comma list like
-// ".a, .b" all stage as written, per the brief's own instruction that a
-// selector's bare name is its selector text. rule_set has no fields
-// (measured), so "selectors" is found by scanning for that node kind rather
-// than a field lookup, the same way cssAtRuleName below locates the body of
-// an at-rule without one.
+// ".a, .b" all stage as written, since a selector's bare name is its
+// selector text. rule_set has no fields, so "selectors" is found by
+// scanning for that node kind rather than a field lookup, the same way
+// cssAtRuleName below locates the body of an at-rule without one.
 func (c *cssLanguage) ruleSetDeclaration(src []byte, node *ts.Node, container string) (Declaration, bool) {
 	for _, child := range namedChildren(node) {
 		if child.Kind() == "selectors" {
@@ -176,23 +171,22 @@ func (c *cssLanguage) ruleSetDeclaration(src []byte, node *ts.Node, container st
 
 // cssAtRuleName names an at-rule-shaped statement by its full prelude --
 // keyword through whatever precedes its body -- rather than the bare
-// keyword alone. The bare keyword was rejected: measured against a file with
-// two "@media (...)" blocks, "@media" alone would collide on every at-rule
-// of the same kind in one file, where the prelude ("@media (max-width:
-// 600px)") is what actually distinguishes them; a generic at_rule with no
-// prelude at all (bare "@font-face") still degrades to the keyword alone,
-// which is exactly the shape a caller would expect to type.
+// keyword alone. The bare keyword was rejected: with two "@media (...)"
+// blocks in one file, "@media" alone would collide on every at-rule of the
+// same kind, where the prelude ("@media (max-width: 600px)") is what
+// actually distinguishes them; a generic at_rule with no prelude at all
+// (bare "@font-face") still degrades to the keyword alone, which is exactly
+// the shape a caller would expect to type.
 //
 // The last named child is the body when it is one of "block" (media_
-// statement, supports_statement, at_rule, scope_statement -- measured: all
-// four keep it as their own final named child) or "keyframe_block_list"
-// (keyframes_statement's distinct body kind, measured separately since it is
-// not itself called "block"); the name is everything before that child's own
-// start byte. A body-less statement (charset_statement, import_statement,
-// namespace_statement -- none of these ever have a block, measured) instead
-// ends at the statement's own end byte, which includes the trailing ";" the
-// trailing TrimRight below strips along with the whitespace either shape can
-// leave behind.
+// statement, supports_statement, at_rule, scope_statement all keep it as
+// their own final named child) or "keyframe_block_list" (keyframes_
+// statement's distinct body kind, not itself called "block"); the name is
+// everything before that child's own start byte. A body-less statement
+// (charset_statement, import_statement, namespace_statement -- none of
+// these ever have a block) instead ends at the statement's own end byte,
+// which includes the trailing ";" the trailing TrimRight below strips along
+// with the whitespace either shape can leave behind.
 func cssAtRuleName(src []byte, node *ts.Node) string {
 	end := node.EndByte()
 	if body := cssBodyChild(node); body != nil {
