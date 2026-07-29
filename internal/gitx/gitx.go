@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"golang.org/x/term"
@@ -686,6 +687,56 @@ func (r *Repo) Blame(ctx context.Context, path string, start, end int, extra ...
 func (r *Repo) LogLineRange(ctx context.Context, path string, start, end int, extra ...string) ([]byte, error) {
 	args := append([]string{"log", fmt.Sprintf("-L%d,%d:%s", start, end, path)}, extra...)
 	return r.checked(ctx, args...)
+}
+
+// CommitSummary is one commit's hash and subject, as RecentCommits reports
+// it -- deliberately nothing more: rgit context (internal/app/context.go)
+// is the sole caller, and it has no use for anything `git log --format`
+// could add beyond the two fields its own record shape carries.
+type CommitSummary struct {
+	Hash    string
+	Subject string
+}
+
+// RecentCommits returns the last limit commits reachable from HEAD, newest
+// first, hash and subject only, via `git log -n limit --no-patch
+// --format=%H%x09%s`. Bounding by count is git's own -n flag, not a slice
+// on rgit's side after the fact -- git never produces more than limit
+// commits to begin with.
+//
+// An unborn branch (no commit yet) reports no commits at all rather than a
+// *GitError: RevParseVerify's own HEAD check is tried first, the same
+// "unborn branch is a normal state" convention internal/diff's
+// committableBase already applies, rather than pattern-matching `git log`'s
+// own fatal-error text for the same fact.
+func (r *Repo) RecentCommits(ctx context.Context, limit int) ([]CommitSummary, error) {
+	if _, ok, err := r.RevParseVerify(ctx, "HEAD"); err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, nil
+	}
+	out, err := r.checked(ctx, "log", "-n", strconv.Itoa(limit), "--no-patch", "--format=%H%x09%s")
+	if err != nil {
+		return nil, err
+	}
+	return parseCommitSummaries(out), nil
+}
+
+// parseCommitSummaries splits RecentCommits' own "%H%x09%s" format, one
+// commit per line -- a plain tab-cut, the same shape parseNumstat already
+// applies to a different git format string.
+func parseCommitSummaries(out []byte) []CommitSummary {
+	trimmed := strings.TrimRight(string(out), "\n")
+	if trimmed == "" {
+		return nil
+	}
+	lines := strings.Split(trimmed, "\n")
+	summaries := make([]CommitSummary, 0, len(lines))
+	for _, line := range lines {
+		hash, subject, _ := strings.Cut(line, "\t")
+		summaries = append(summaries, CommitSummary{Hash: hash, Subject: subject})
+	}
+	return summaries
 }
 
 // MergeBase resolves the merge base of a and b via `git merge-base`, needed

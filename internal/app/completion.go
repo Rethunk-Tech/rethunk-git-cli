@@ -50,7 +50,7 @@ func runCompletion(args []string, stdout, stderr io.Writer) exitcode.Code {
 // checks it against topLevelHelp's own Commands section, generated at
 // test time rather than copied, so a new subcommand missing here fails
 // the suite instead of only being missing from a shell's tab completion.
-const rgitSubcommands = "diff commit blame log languages doctor completion help -h --help --version"
+const rgitSubcommands = "diff commit blame log context languages doctor completion help -h --help --version"
 
 // rgitDiffFlags and rgitCommitFlags are the static parts of completion:
 // each subcommand's own flag surface, mirroring docs/USAGE.md § Flags plus
@@ -69,19 +69,20 @@ const rgitCommitFlags = "-m --message -F --message-file -s --signoff --trailer -
 	"-S --gpg-sign --no-gpg-sign --sym --file -h --help"
 
 // rgitLanguagesFlags, rgitDoctorFlags, rgitCompletionFlags, rgitBlameFlags,
-// and rgitLogFlags are the same kind of static mirror as rgitDiffFlags/
-// rgitCommitFlags above, for the subcommands small enough that
-// languages.go, doctor.go, blame.go, log.go, and this file parse their own
-// args by hand rather than building a pflag.FlagSet -- completion
-// previously offered none of them at all, since neither shell script's
-// case statement had an entry for these commands. TestCompletionFlags_
-// MatchLiveFlagSets checks all of them against their own --help output the
-// same way.
+// rgitLogFlags, and rgitContextFlags are the same kind of static mirror as
+// rgitDiffFlags/rgitCommitFlags above, for the subcommands small enough
+// that languages.go, doctor.go, blame.go, log.go, context.go, and this
+// file parse their own args by hand rather than building a pflag.FlagSet
+// -- completion previously offered none of them at all, since neither
+// shell script's case statement had an entry for these commands.
+// TestCompletionFlags_MatchLiveFlagSets checks all of them against their
+// own --help output the same way.
 const rgitLanguagesFlags = "--porcelain -h --help"
 const rgitDoctorFlags = "-h --help"
 const rgitCompletionFlags = "-h --help"
 const rgitBlameFlags = "--porcelain -h --help"
 const rgitLogFlags = "--porcelain -p --patch -h --help"
+const rgitContextFlags = "-h --help"
 
 // bashCompletionScript is emitted verbatim by `rgit completion bash`. The
 // one dynamic piece -- symbol names after "FILE:" -- shells back out to
@@ -99,6 +100,7 @@ _rgit_diff_flags="` + rgitDiffFlags + `"
 _rgit_commit_flags="` + rgitCommitFlags + `"
 _rgit_blame_flags="` + rgitBlameFlags + `"
 _rgit_log_flags="` + rgitLogFlags + `"
+_rgit_context_flags="` + rgitContextFlags + `"
 _rgit_languages_flags="` + rgitLanguagesFlags + `"
 _rgit_doctor_flags="` + rgitDoctorFlags + `"
 _rgit_completion_flags="` + rgitCompletionFlags + `"
@@ -124,6 +126,7 @@ _rgit_completion() {
         commit) flags="$_rgit_commit_flags" ;;
         blame) flags="$_rgit_blame_flags" ;;
         log) flags="$_rgit_log_flags" ;;
+        context) flags="$_rgit_context_flags" ;;
         languages) flags="$_rgit_languages_flags" ;;
         doctor) flags="$_rgit_doctor_flags" ;;
         completion)
@@ -167,6 +170,7 @@ _rgit_diff_flags=(` + rgitDiffFlags + `)
 _rgit_commit_flags=(` + rgitCommitFlags + `)
 _rgit_blame_flags=(` + rgitBlameFlags + `)
 _rgit_log_flags=(` + rgitLogFlags + `)
+_rgit_context_flags=(` + rgitContextFlags + `)
 _rgit_languages_flags=(` + rgitLanguagesFlags + `)
 _rgit_doctor_flags=(` + rgitDoctorFlags + `)
 _rgit_completion_flags=(` + rgitCompletionFlags + `)
@@ -191,6 +195,7 @@ _rgit() {
         commit) flags=("${_rgit_commit_flags[@]}") ;;
         blame) flags=("${_rgit_blame_flags[@]}") ;;
         log) flags=("${_rgit_log_flags[@]}") ;;
+        context) flags=("${_rgit_context_flags[@]}") ;;
         languages) flags=("${_rgit_languages_flags[@]}") ;;
         doctor) flags=("${_rgit_doctor_flags[@]}") ;;
         completion)

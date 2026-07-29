@@ -8,6 +8,15 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit context`, one-call repository orientation for an agent's first
+  turn: recent commit subjects, then the same per-file, per-symbol
+  diffstat `rgit diff` itself reports for everything committable, as a
+  single fixed-shape `C`/`F`/`X` record stream. Pure read composition over
+  `internal/gitx` and `internal/diff` — no new resolution or attribution
+  machinery, and no flags beyond `--help`: the shape is fixed and capped
+  at 16 KiB, truncated with a trailing `X` record rather than growing
+  without bound. See [`docs/USAGE.md`](docs/USAGE.md#context).
+
 - `rgit log FILE:SYMBOL`, patch-free history of one symbol: one
   `HASH<TAB>SUBJECT`-shaped record per commit that touched its current
   extent, newest first. Reuses anchor resolution and `git log -L`, which

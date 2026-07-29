@@ -22,8 +22,9 @@ Underneath, `rgit` is `git add <pathspec> && git commit` at symbol granularity
 and nothing more. Hooks run, filters apply, pre-staged work comes along, trailers
 and signing work — because git does all of it. Two staging commands
 (`diff`, `commit`), `blame` bounded to a symbol's own extent, `log` for its
-patch-free history, plus meta subcommands (`languages`, `doctor`,
-`completion`); everything else stays plain `git`.
+patch-free history, `context` for one-call repository orientation, plus
+meta subcommands (`languages`, `doctor`, `completion`); everything else
+stays plain `git`.
 
 Start with [HUMANS.md](HUMANS.md) to run it, or
 [docs/INSTALL.md](docs/INSTALL.md) to build it.

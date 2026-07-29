@@ -11,7 +11,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 )
 
-const usageLine = "usage: rgit [--version] <diff|commit|blame|log|languages|doctor|completion> [flags] [target...]"
+const usageLine = "usage: rgit [--version] <diff|commit|blame|log|context|languages|doctor|completion> [flags] [target...]"
 
 // tsOnlyNotice is what rgit diff and rgit commit both print when no live
 // language server was reached in time. docs/INSTALL.md § Verify tells the
@@ -34,6 +34,7 @@ Commands:
   commit      Stage named targets and commit them
   blame       Blame bounded to one symbol's own extent
   log         Patch-free history of one symbol
+  context     One-call repository orientation, as a record stream
   languages   List grammars compiled into this binary
   doctor      Report environment health (language servers, grammars, git)
   completion  Print a shell completion script (bash, zsh)
@@ -82,6 +83,8 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 		return runBlame(ctx, args[1:], stdout, stderr)
 	case "log":
 		return runLog(ctx, args[1:], stdout, stderr)
+	case "context":
+		return runContext(ctx, args[1:], stdout, stderr)
 	case "languages":
 		return runLanguages(args[1:], stdout, stderr)
 	case "doctor":

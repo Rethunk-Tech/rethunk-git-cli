@@ -1094,6 +1094,58 @@ for a caller to paste elsewhere) — the same "abbreviated for humans, full and
 stable for machines" split every other rgit command's two output modes
 already draw.
 
+### `rgit context`: one `diffpkg.Run` call, one new `git log -n` primitive, no second attribution path
+
+TODO.md holds this command to one question: does its record stream save an
+LLM the tokens `status` + `diff --stat` + `diff` + `log`, run separately,
+already charge? Held literally to "pure read composition ... no new
+resolution machinery":
+
+- **The diff half is the existing default scope, not a new query.**
+  `internal/diff.Run(ctx, repo, root, Options{})` is byte-for-byte what a
+  bare `rgit diff` already computes — staged + unstaged vs `HEAD`, plus
+  untracked, symbol-attributed. `context.go` calls it once and renders it
+  through `RenderPorcelain`, the same function `rgit diff --porcelain`
+  itself calls, then re-tags each line with a leading `F` — reusing the
+  rendering verbatim rather than walking `report.Files` a second time,
+  which could silently drift from what `rgit diff --porcelain` emits for
+  the identical report.
+- **The commit half is one new primitive, not new machinery**: `gitx.
+  RecentCommits` is `git log -n 20 --no-patch --format='%H%x09%s'` —
+  git's own delegated job (AGENTS.md § Delegation boundary), the same
+  shape `log.go`'s own default/`--porcelain` split already established for
+  a different line range. Bounding by count is `-n` itself, not a slice
+  applied to an over-fetched result afterward.
+
+**A staged-vs-unstaged split was considered and rejected as a second
+`diffpkg.Run` call for a marginal signal the default scope's own `STATUS`
+column mostly already carries** (`UNTRACKED` vs `MOD`/`DELETED`/`MODE`/
+`BINARY` already distinguishes "never committed" from "changed since
+`HEAD`"). A second call would double the git subprocess cost for the one
+bit it does not carry — whether a `MOD` row is specifically in the index —
+which the token case this command exists to serve does not need on the
+very first turn. Left out on the "cheap or stop and report" instruction
+this command was built under, not overlooked.
+
+**Byte budget: 16 KiB, chosen relative to this repository's own measured
+diffs, not picked arbitrarily.** `rgit diff --porcelain` on this
+repository's own ordinary multi-file commits measured well under 2 KiB;
+16 KiB is roughly 8× that — generous enough that the common case (a
+handful of recent commits plus an in-progress change) never brushes it,
+while still bounding the worst case (a bulk rename or a vendored dependency
+bump touching hundreds of files) to a fixed cost instead of one that scales
+with repository size, which is the whole point of a budget rather than an
+aspiration. **Commits are bounded by input** (`-n 20`, so git itself never
+over-produces); **the diff section, which has no equivalent git-side flag
+that also respects rgit's own symbol attribution, is truncated after
+assembly instead** — `buildContextStream` (`context.go`) walks the already-
+bounded commit records first, then the diff records, stopping the instant
+the next record would cross the budget, and appends exactly one `X`
+record naming how many were withheld. Truncating by whole records, never
+mid-line, keeps every emitted line parseable; commits sort first
+specifically so a truncation, when it happens, only ever costs diff rows,
+never the smaller and arguably more load-bearing commit history.
+
 ## Argument grammar
 
 Symbol anchors need no flag because **all git pathspec magic is leading-colon**

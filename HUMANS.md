@@ -31,9 +31,13 @@ instead of the whole file.
 `rgit log FILE:SYMBOL` shows that symbol's own history — one line per
 touching commit, patch-free unless you ask for one with `-p`.
 
+`rgit context` is one-call orientation for a fresh session: recent commits,
+plus the same per-symbol diffstat `rgit diff` reports, as a single record
+stream — instead of a status, a diffstat, a diff, and a log call separately.
+
 Everything else stays plain `git`. `rgit` has two staging commands — plus
-`blame`, `log`, `languages`, `doctor`, and `completion` for everything around
-them — and no opinions about the rest of your workflow.
+`blame`, `log`, `context`, `languages`, `doctor`, and `completion` for
+everything around them — and no opinions about the rest of your workflow.
 
 Commands and flags are in [`docs/USAGE.md`](docs/USAGE.md); anchor syntax is
 in [`docs/ANCHORS.md`](docs/ANCHORS.md); exit codes and the `--porcelain`

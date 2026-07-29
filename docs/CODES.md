@@ -64,6 +64,13 @@ stages or commits anything either, so the same 1, 5, 6, 7, 8, 10, and 11
 exclusions apply, and a failure past resolution is `git log`'s own exit,
 folded into 128.
 
+### `context` has no anchor to resolve at all
+
+`rgit context` names no symbol, so 3, 4, and 9 never apply either. It never
+stages or commits anything, so the same 1, 5, 6, 7, 8, 10, and 11 exclusions
+as `blame` and `log` hold. A failure reaching `git log` or `git diff`
+underneath it is folded into 128, same as everywhere else.
+
 ## Output records
 
 `diff`, `commit`, and `languages` emit plain text only. `--porcelain`
@@ -169,6 +176,34 @@ Not a new record shape: `--porcelain` passes straight through to git's own
 format — rewrapping it in a second, rgit-specific shape would be exactly the
 kind of duplication this file exists to avoid, for a fact git already
 establishes on its own.
+
+### `rgit context`
+
+Unlike every other command in this file, `rgit context` has no aligned
+human default to alternate with: its one output shape is always this
+tab-separated record stream, no header, no `--porcelain` flag to ask for it
+— TODO.md's own guardrail against a flag surface here at all.
+
+```text
+C<TAB>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2<TAB>fix(auth): reject expired tokens
+C<TAB>9e8f7d6c5b4a9e8f7d6c5b4a9e8f7d6c5b4a9e8f<TAB>feat(auth): add ValidateToken
+F<TAB>auth.go<TAB>ValidateToken<TAB>MOD<TAB>12<TAB>3
+F<TAB>newfile.go<TAB><TAB>UNTRACKED<TAB>15<TAB>0
+X<TAB>TRUNCATED<TAB>3
+```
+
+Three record types, distinguished by the first field:
+
+| Type | Fields after the type tag | Means |
+| --- | --- | --- |
+| `C` | `HASH`, `SUBJECT` | One recent commit, newest first, bounded to the last 20 |
+| `F` | `FILE`, `SYMBOL`, `STATUS`, `ADDED`, `DELETED` | One `rgit diff --porcelain` row, identical fields — `STATUS` is the same six tokens § Output records defines above |
+| `X` | `TRUNCATED`, `COUNT` | At most one, always last: `COUNT` records were withheld to hold the 16 KiB byte budget |
+
+`C` records always precede `F` records, and an `X` record — when present —
+is always the last line. See [`USAGE.md`](USAGE.md#context) for the byte
+budget and [`../specs/design.md`](../specs/design.md#commands) for why it is
+16 KiB and what happens at the boundary.
 
 ### `rgit log --porcelain`
 
