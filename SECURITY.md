@@ -33,6 +33,21 @@ are ones where it writes something the caller did not name:
   this boundary — as it is for `git` itself.
 - **Language servers and the tree-sitter CLI.** Both are optional external
   programs you install; `rgit` shells out to them and trusts them the way
-  any editor does.
+  any editor does. That trust does not extend to the path `rgit` reaches
+  `gopls`'s daemon socket at: a predictable name inside a shared,
+  world-writable temp directory could be pre-created by another user on a
+  multi-user host, so before every dial or spawn `rgit` creates (or
+  re-verifies) a private, UID-scoped, `0700` subdirectory, `Lstat`s it to
+  reject a planted symlink outright rather than follow it, and confirms it
+  is still owned by the current user; any check failing degrades to
+  `[ts-only]` instead of trusting the path
+  (`internal/lsp/dial.go`'s `privateSocketDir`). On Windows there is no UID
+  to scope by (`os.Getuid` returns `-1`, so the directory is literally named
+  `rgit--1`) and no ownership check to make: the per-user temp directory is
+  already ACL-restricted to its owner by the platform, so the shared,
+  world-writable temp directory this defends against on Unix has no
+  equivalent there to defend against. A caller-supplied `$RGIT_LSP_SOCKET`
+  is exempt from all of this — it is the caller's own path to manage, not
+  one `rgit` need vouch for.
 - **A wrong extent that stages too little.** That is a correctness bug —
   please file it as an ordinary issue.
