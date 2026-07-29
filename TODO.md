@@ -15,8 +15,8 @@ constructs no anchor reaches — are documented in
       each non-final region absorbing its own trailing gap sums exactly, since
       the final region's missing trailing newline offsets the file's own EOF
       terminator — but adopting it would change the general insertion path used
-      by every commit, not just the new-file preamble. Deferred as a much larger
-      blast radius than the bug that motivated it. Go is the only language
+      by every commit, not just the new-file preamble — a far larger blast
+      radius than the new-file case it would improve. Go is the only language
       positioned to benefit: `OwnsTrailingSeparator` is an explicit `Language`
       method every adapter answers, and only Go answers true, because no other
       grammar here has a formatter-enforced blank-line convention to hang it on.

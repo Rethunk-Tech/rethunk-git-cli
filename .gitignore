@@ -10,6 +10,3 @@
 # the upstream module's own gitignored source) -- never committed.
 /internal/resolve/sqlgrammar/csrc/
 
-# orchestration scratch
-.orchestrate/
-

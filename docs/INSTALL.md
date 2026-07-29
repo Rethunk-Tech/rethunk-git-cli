@@ -171,8 +171,8 @@ go run ./cmd/rgit-install -dry-run -with-servers   # preview only -- nothing run
 ```
 
 `-with-servers` is opt-in and off by default: a plain `rgit-install` never
-touches anything beyond this repo's own build, exactly as before. Passed, it
-additionally installs or updates every server it knows how to manage, by
+touches anything beyond this repo's own build. Passed, it additionally
+installs or updates every server it knows how to manage, by
 shelling out to that ecosystem's own package manager rather than fetching
 release binaries itself:
 
@@ -186,10 +186,9 @@ release binaries itself:
 | `vscode-json-language-server`, `vscode-css-language-server` | npm/bun | `npm install -g vscode-langservers-extracted` (one package, both binaries) |
 | `taplo` | cargo | `cargo install taplo-cli --locked --features lsp` |
 
-`yaml-language-server`, `vscode-json-language-server`, and
-`vscode-css-language-server` now match the table above — YAML, JSON, and CSS
-are wired the same as the original four. `taplo` is the one row here that
-`rgit` never dials for its own cross-check: TOML stays `[ts-only]`
+Every row above except `taplo` is a server `rgit` dials for its own
+cross-check, matching the table in [Language servers](#language-servers).
+`taplo` is the exception: TOML stays `[ts-only]`
 permanently, on measured range disagreement rather than availability (see
 [Language servers](#language-servers) above) — `-with-servers` still manages
 `taplo` since other tooling can use it, but installing it will not turn on a

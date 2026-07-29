@@ -54,14 +54,13 @@ There are two lanes, and which one a case belongs in is the first decision:
   index, exit codes as a caller observes them — not by being the only thing
   that proves a behaviour at all.
 
-The three files below, beside `main.go` in [`cmd/rgit`](cmd/rgit), remain the
+The three files below, beside `main.go` in [`cmd/rgit`](cmd/rgit), are the
 home for the design's validated cases; a case one of them covers must not be
 lost when it is refactored.
 
 Temporary repositories come from [`internal/gittest`](internal/gittest/gittest.go)
-rather than being hand-rolled per package — four packages had grown a
-byte-identical copy of the same fifteen lines before it existed. It shells out
-to the real git binary, like everything else here.
+rather than being hand-rolled per package. It shells out to the real git
+binary, like everything else here.
 
 | File | Happy path | Critical edge cases |
 | --- | --- | --- |
@@ -170,14 +169,12 @@ Two repo conventions that are easy to undo by accident:
 - **An `@-reference` in `AGENTS.md` is a budget line, not a link.** `CLAUDE.md`
   symlinks to `AGENTS.md`, so every `@path` there is pulled into *every* agent
   session whether or not the change touches that file — @-referencing all eight
-  docs cost ~17k tokens a session to save a `Read` that most sessions never
-  needed. Only `@CONTRIBUTING.md` keeps one, because its test and coverage rules
-  bind changes that would not think to look them up. Everything else is a
-  markdown link, which also renders properly for humans; add a new `@-ref` only
-  by arguing the same way.
+  docs costs ~17k tokens a session to save a `Read` most sessions never need.
+  Only `@CONTRIBUTING.md` keeps one, because its test and coverage rules bind
+  changes that would not think to look them up. Everything else is a markdown
+  link, which also renders properly for humans; add a new `@-ref` only by
+  arguing the same way.
 
-Lint before opening a PR that touches any `.md`:
-
-```bash
-python3 ~/.claude/skills/doc-audit/scripts/doc-audit.py
-```
+Maintainers additionally run a doc linter over any `.md` change; its
+per-repo exemptions live in [`.doc-audit.json`](.doc-audit.json), which
+records why each one is granted.

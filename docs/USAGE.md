@@ -97,7 +97,7 @@ the same question in a fresh `git init` that it does anywhere else, and
 
 ## Output
 
-Plain text only in v1. The default is the aligned layout shown above;
+Plain text only. The default is the aligned layout shown above;
 `--porcelain` replaces it with stable tab-separated records.
 
 **The record layouts, the `STATUS` tokens, and the ordering guarantee are

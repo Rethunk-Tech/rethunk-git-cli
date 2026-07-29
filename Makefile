@@ -100,9 +100,8 @@ clean:
 # Filenames carry CROSS_VERSION so a second `make cross` at a different tag
 # cannot silently overwrite the previous run's artifacts, and SHA256SUMS
 # below is regenerated per run (not appended across runs) so it always
-# describes exactly what dist/ holds right now, not a mix of old and new
-# tags -- the simpler of the two options and the one that matches how these
-# artifacts are actually produced, one full run at a time.
+# describes exactly what dist/ holds right now, not a mix of tags -- these
+# artifacts are produced one full run at a time.
 cross: cross-linux-amd64 cross-linux-arm64 cross-windows-amd64
 	$(need-sha256sum)
 	cd $(DIST) && sha256sum \
