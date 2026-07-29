@@ -35,8 +35,7 @@ func New(t *testing.T) (dir string, repo *gitx.Repo) {
 	t.Helper()
 	dir = t.TempDir()
 
-	Git(t, dir, "init", "-q")
-	Git(t, dir, "checkout", "-q", "-B", "main")
+	Git(t, dir, "init", "-q", "-b", "main")
 	Git(t, dir, "config", "user.email", "rgit-test@example.com")
 	Git(t, dir, "config", "user.name", "rgit Test")
 
