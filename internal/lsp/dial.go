@@ -165,7 +165,11 @@ func dialStdio(ctx context.Context, spec serverSpec, repoRoot string) (*Client, 
 	if err := cmd.Start(); err != nil {
 		return nil, true
 	}
-	kill := func() error {
+	// killAndReap is cleanup after the connection is already down, never
+	// the first step: Kill on an already-exited process is a harmless
+	// no-op (its error is intentionally discarded), and Wait reaps the
+	// process so it does not linger as a zombie.
+	killAndReap := func() error {
 		_ = cmd.Process.Kill()
 		return cmd.Wait()
 	}
@@ -174,13 +178,34 @@ func dialStdio(ctx context.Context, spec serverSpec, repoRoot string) (*Client, 
 	defer cancel()
 	client, err := NewClient(handshakeCtx, pipeRWC{stdout, stdin}, repoRoot)
 	if err != nil {
-		_ = kill()
+		// NewClient already closed the connection (and, through it, the
+		// pipes -- client.go's own close-on-error) on this path; only the
+		// process itself still needs cleaning up.
+		_ = killAndReap()
 		return nil, true
 	}
 	// This is a one-shot subprocess dedicated to this query -- unlike the
 	// socket daemon case, nothing will ever reuse it, so closing the
-	// client means killing it.
-	client.closeFn = kill
+	// client means shutting the whole thing down, not merely
+	// disconnecting from a daemon that outlives this process.
+	//
+	// Order matters: closing the connection first lets jsonrpc2's own
+	// read goroutine and pipeRWC.Close's EOF-then-close sequence shut
+	// down cleanly and gives the subprocess a chance to exit on its own;
+	// killing first races SIGKILL against that same read, which can
+	// surface as a spurious protocol error instead of a clean shutdown.
+	// killAndReap afterward is insurance, not the primary shutdown path,
+	// and reaps whatever the close left behind -- nothing will reuse this
+	// process either way, so an already-exited one is not a problem to
+	// solve, only a Wait() to perform.
+	client.closeFn = func() error {
+		connErr := client.conn.Close()
+		waitErr := killAndReap()
+		if connErr != nil {
+			return connErr
+		}
+		return waitErr
+	}
 	return client, false
 }
 

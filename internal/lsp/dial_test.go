@@ -1,7 +1,9 @@
 package lsp
 
 import (
+	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -111,5 +113,58 @@ func TestTrySpawnDaemon_StartFailureIsToleratedSilently(t *testing.T) {
 	// of whether the spawn it guarded actually succeeded.
 	if _, err := os.Stat(sockPath + ".lock"); !os.IsNotExist(err) {
 		t.Errorf("lock file = %v; want removed even though Start() failed", err)
+	}
+}
+
+// TestDialStdio_CloseTearsDownConnectionThenProcess pins A-11: closing a
+// stdio client must close the connection -- letting jsonrpc2's own read
+// goroutine and the pipe's EOF-then-close sequence shut down cleanly --
+// before killing the subprocess, not merely kill the process out from
+// under a connection that was never closed at all. A query issued after
+// Close is the observable proof the connection actually came down, not
+// just the process: the original bug left both the jsonrpc2.Conn and the
+// pipes open forever, since the kill-only closeFn touched neither.
+//
+// Runs against a real, installed stdio server (CONTRIBUTING.md's "prefer
+// the real dependency over a double" rule -- a fake transport would only
+// prove this package calls its own mock correctly) and is exactly the
+// concurrency go test -race exists for: jsonrpc2's own read goroutine is
+// still live when Close begins tearing the connection down.
+func TestDialStdio_CloseTearsDownConnectionThenProcess(t *testing.T) {
+	if testing.Short() {
+		t.Skip("live language-server dial skipped under -short")
+	}
+	const bin = "bash-language-server"
+	if _, err := exec.LookPath(bin); err != nil {
+		t.Skipf("%s not on PATH", bin)
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fixture.sh")
+	src := []byte("foo() {\n  echo hi\n}\n")
+	if err := os.WriteFile(path, src, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	client, degraded := Dial(ctx, "shell", dir)
+	if degraded {
+		t.Fatal("Dial degraded with bash-language-server on PATH")
+	}
+	if _, err := client.DocumentSymbols(ctx, path, src); err != nil {
+		t.Fatalf("DocumentSymbols before Close: %v", err)
+	}
+
+	// Close's own return is not asserted nil: killAndReap always sends
+	// SIGKILL as insurance even after a clean conn.Close-triggered exit,
+	// so cmd.Wait() legitimately reports "signal: killed" -- unchanged
+	// from this package's prior behaviour and not what this test is
+	// pinning. What matters is that the connection came down.
+	_ = client.Close()
+
+	if _, err := client.DocumentSymbols(ctx, path, src); err == nil {
+		t.Error("DocumentSymbols after Close = nil error; want one -- the connection should already be closed")
 	}
 }
