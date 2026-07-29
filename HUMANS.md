@@ -48,7 +48,8 @@ measured to establish each is in
 
 Anchors need a parsed syntax tree, so they are refused on binaries, symlinks,
 submodules, and languages without a grammar (Go, TypeScript/JavaScript, Python,
-Markdown, Shell, and YAML have one). A `chmod +x` with no content change has
+Markdown, Shell, YAML, CSS, JSON, and TOML have one; SQL does too, but only in
+a build with the `rgit_sql` tag). A `chmod +x` with no content change has
 nothing to name either. In every case, name the path instead — `rgit commit
 package.json` works fine, and `rgit diff` never reports such a file as clean.
 
