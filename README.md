@@ -34,8 +34,9 @@ Start with [HUMANS.md](HUMANS.md) to run it, or
 - **Bare positionals** — `rgit commit -m "…" auth.go:Validate package.json` mixes
   symbols and paths, accepts every git pathspec form, and needs no flags.
 - **Closed loop** — `rgit diff` emits exactly the anchors `rgit commit` consumes.
-- **Verified extents** — tree-sitter resolves, a language server cross-checks, and
-  a mismatch is a hard failure rather than a silent wrong commit.
+- **Verified extents** — tree-sitter resolves, a language server cross-checks;
+  `commit` hard-fails on a mismatch, `diff` reports it as a warning
+  ([docs/CODES.md](docs/CODES.md#exit-6-is-commits-alone)).
 - **Git semantics throughout** — git's exit codes, git's pathspecs, git's hooks
   and config. Divergence is treated as a bug.
 - **Go, TypeScript/JavaScript, Python, Markdown, Shell, YAML, CSS, JSON,
