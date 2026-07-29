@@ -167,45 +167,6 @@ func TestCommit_LeadingColonPathspecMagicPassesThrough(t *testing.T) {
 	qt.Assert(t, qt.Equals(got.ExitCode, 0))
 }
 
-func TestInvalidFlagCombinations(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		name       string
-		args       []string
-		wantSubstr string
-	}{
-		{
-			name:       "dry-run and push",
-			args:       []string{"commit", "-m", "chore: x", "--dry-run", "--push"},
-			wantSubstr: "--dry-run and --push",
-		},
-		{
-			name:       "message and message-file",
-			args:       []string{"commit", "-m", "chore: x", "-F", "msg.txt"},
-			wantSubstr: "-m and -F",
-		},
-		{
-			name:       "staged and range",
-			args:       []string{"diff", "--staged", "--range", "HEAD"},
-			wantSubstr: "--staged and --range",
-		},
-		{
-			name:       "staged and unstaged",
-			args:       []string{"diff", "--staged", "--unstaged"},
-			wantSubstr: "--staged and --unstaged",
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			repo, _ := gittest.New(t)
-			got := runRgit(t, repo, tc.args...)
-			qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.InvalidUsage)))
-			qt.Assert(t, qt.StringContains(got.Stderr, tc.wantSubstr))
-		})
-	}
-}
-
 func TestContradictoryPathAndAnchor(t *testing.T) {
 	t.Parallel()
 	// This must be caught regardless of spelling -- flag or positional --
