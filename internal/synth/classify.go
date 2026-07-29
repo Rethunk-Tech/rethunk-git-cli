@@ -60,10 +60,12 @@ func (fp *filePlan) classify(ctx context.Context, sess *lsp.Session, root, ancho
 			return editOp{}, false, false, err
 		}
 		op = editOp{
-			kind:  editReplace,
-			start: headRes.Extent.Start,
-			end:   headRes.Extent.End,
-			text:  append([]byte(nil), workBytes...),
+			kind:   editReplace,
+			start:  headRes.Extent.Start,
+			end:    headRes.Extent.End,
+			text:   append([]byte(nil), workBytes...),
+			wstart: workRes.Extent.Start,
+			wend:   workRes.Extent.End,
 		}
 		return op, bytes.Equal(workBytes, headBytes), tsOnly, nil
 
@@ -75,10 +77,12 @@ func (fp *filePlan) classify(ctx context.Context, sess *lsp.Session, root, ancho
 			return editOp{}, false, false, err
 		}
 		op = editOp{
-			kind:  editInsert,
-			start: pos,
-			seq:   seq,
-			text:  insertionText(fp.workSrc, workRes.Extent),
+			kind:   editInsert,
+			start:  pos,
+			seq:    seq,
+			text:   insertionText(fp.workSrc, workRes.Extent),
+			wstart: workRes.Extent.Start,
+			wend:   workRes.Extent.End,
 			// A structurally nested member only sits flush against its
 			// siblings when the language's own convention keeps it that
 			// way (resolve.MembersSitFlush) -- Python requires a blank line

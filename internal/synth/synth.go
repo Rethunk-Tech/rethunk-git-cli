@@ -43,6 +43,18 @@ type editOp struct {
 	text  []byte
 	seq   int // worktree declaration order; meaningful for insertions only
 
+	// wstart/wend are the anchor's own resolved extent in WORKTREE byte
+	// space -- distinct from start/end, which are HEAD splice coordinates.
+	// swallowedBy needs both: an insertion's start is a splice position
+	// that can coincide with another op's HEAD boundary by pure adjacency
+	// (a sibling replaced right next to one newly inserted), which is not
+	// the same thing as that op's replacement text already containing the
+	// insertion. Only wstart/wend answer that -- they are zero (unset,
+	// meaningfully absent) for editDelete, which has no worktree extent to
+	// carry.
+	wstart uint
+	wend   uint
+
 	// member is true when an editInsert names a container member (a struct
 	// field, interface method, or class/namespace method) rather than a
 	// top-level declaration. Container members sit flush against their
@@ -120,17 +132,37 @@ func (o editOp) span() uint {
 }
 
 // swallowedBy reports whether op is already covered by an op that survived
-// ranking. An insertion counts as covered when its point lies anywhere in
-// [start,end], the closed interval: a new symbol appended at the very end
-// of an enclosing extent is part of that extent's worktree text too, so
-// splicing it in again would duplicate it.
+// ranking.
+//
+// A non-insertion op (editReplace or editDelete) is a genuine HEAD range, so
+// two of those overlap exactly when the ordinary half-open interval test
+// says so -- that math is unchanged from before this function grew insertion
+// awareness.
+//
+// An insertion is different: op.start is a splice POSITION into HEAD's
+// bytes (AGENTS.md's descending-offset splice pass), computed as the
+// nearest-existing-sibling's own HEAD boundary (specs/design.md). That
+// position can coincide exactly with another kept op's HEAD start or end by
+// pure adjacency -- a sibling being replaced right next to a brand new
+// symbol inserted immediately after it -- without that kept op's
+// replacement text containing the insertion at all: a replaced sibling's
+// text is only its own new body, never what comes after it. Only a genuine
+// nesting says the kept op already carries this insertion's text: the
+// insertion's own WORKTREE extent (wstart/wend) falling inside the kept
+// op's own worktree extent, which is what its replacement text is actually
+// drawn from. An editDelete has no worktree extent (wend stays 0) and so
+// never contains an insertion; this was silently true before too, since a
+// deleted symbol's worktree bytes don't exist to test against, but now it
+// is what the zero-value check verifies instead of accidental HEAD-space
+// arithmetic.
 func swallowedBy(kept []editOp, op editOp) bool {
 	for _, k := range kept {
 		if k.kind == editInsert {
 			continue
 		}
 		if op.kind == editInsert {
-			if op.start >= k.start && op.start <= k.end {
+			if k.kind == editReplace && op.wend > op.wstart &&
+				op.wstart >= k.wstart && op.wend <= k.wend {
 				return true
 			}
 			continue
