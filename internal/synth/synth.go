@@ -151,9 +151,23 @@ func (o editOp) span() uint {
 // op's own worktree extent, which is what its replacement text is actually
 // drawn from. An editDelete has no worktree extent (wend stays 0), so the
 // zero-value check alone is enough to say it never contains an insertion.
+//
+// Two insertions can also name the identical worktree extent rather than
+// merely sit at the same splice position: a member of a container absent
+// from HEAD widens to the whole container (escalateToContainer, classify.go),
+// which resolves to the exact same Resolution a direct anchor on the
+// container itself would -- same wstart, same wend, same text. That is one
+// declaration named twice, not two declarations that happen to land
+// together, so it must collapse to a single kept op rather than reach
+// mergeInsertTies, which concatenates same-position insertions on the
+// assumption that they are distinct.
 func swallowedBy(kept []editOp, op editOp) bool {
 	for _, k := range kept {
 		if k.kind == editInsert {
+			if op.kind == editInsert && op.wend > op.wstart &&
+				op.wstart == k.wstart && op.wend == k.wend {
+				return true
+			}
 			continue
 		}
 		if op.kind == editInsert {

@@ -892,6 +892,93 @@ func TestStage_ContainerMemberInsertIsByteIdenticalToWorktree(t *testing.T) {
 	})
 }
 
+// TestStage_WidenedMemberDoesNotDuplicateItsNewContainer guards against a
+// data-integrity bug: naming a brand new container and one of its own
+// members in the same commit must synthesize the container exactly once.
+// escalateToContainer widens the member's op to the whole container (a
+// struct field cannot be inserted alone into a type HEAD does not have),
+// which resolves to the identical worktree extent the container's own
+// anchor already produced -- two ops addressing the same bytes, not two
+// distinct insertions that merely land at the same point. Only the latter
+// case is what mergeInsertTies exists to concatenate.
+func TestStage_WidenedMemberDoesNotDuplicateItsNewContainer(t *testing.T) {
+	t.Parallel()
+
+	t.Run("member widened to its container is not spliced twice", func(t *testing.T) {
+		dir, repo := gittest.New(t)
+		gittest.Write(t, dir, "p.go", "package p\n\nfunc E() int { return 1 }\n")
+		gittest.Commit(t, dir, "chore: initial p.go")
+
+		work := "package p\n\nfunc E() int { return 1 }\n\ntype T struct {\n\ta int\n}\n"
+		gittest.Write(t, dir, "p.go", work)
+
+		mustStage(t, repo, dir, synth.AnchorTarget("p.go", "T"), synth.AnchorTarget("p.go", "T.a"))
+
+		got := indexBlob(t, repo, "p.go")
+		mustParseGo(t, "widened member beside its new container", got)
+		qt.Assert(t, qt.Equals(strings.Count(got, "type T struct"), 1))
+		qt.Assert(t, qt.Equals(got, work))
+	})
+
+	t.Run("naming order does not matter", func(t *testing.T) {
+		dir, repo := gittest.New(t)
+		gittest.Write(t, dir, "p.go", "package p\n\nfunc E() int { return 1 }\n")
+		gittest.Commit(t, dir, "chore: initial p.go")
+
+		work := "package p\n\nfunc E() int { return 1 }\n\ntype T struct {\n\ta int\n}\n"
+		gittest.Write(t, dir, "p.go", work)
+
+		// The member named first this time, container second.
+		mustStage(t, repo, dir, synth.AnchorTarget("p.go", "T.a"), synth.AnchorTarget("p.go", "T"))
+
+		got := indexBlob(t, repo, "p.go")
+		mustParseGo(t, "widened member named before its container", got)
+		qt.Assert(t, qt.Equals(strings.Count(got, "type T struct"), 1))
+		qt.Assert(t, qt.Equals(got, work))
+	})
+
+	t.Run("three members of one new container still dedupe to one", func(t *testing.T) {
+		dir, repo := gittest.New(t)
+		gittest.Write(t, dir, "p.go", "package p\n\nfunc E() int { return 1 }\n")
+		gittest.Commit(t, dir, "chore: initial p.go")
+
+		work := "package p\n\nfunc E() int { return 1 }\n\ntype T struct {\n\ta int\n\tb int\n\tc int\n}\n"
+		gittest.Write(t, dir, "p.go", work)
+
+		mustStage(t, repo, dir,
+			synth.AnchorTarget("p.go", "T"),
+			synth.AnchorTarget("p.go", "T.a"),
+			synth.AnchorTarget("p.go", "T.b"),
+			synth.AnchorTarget("p.go", "T.c"))
+
+		got := indexBlob(t, repo, "p.go")
+		mustParseGo(t, "three widened members beside their new container", got)
+		qt.Assert(t, qt.Equals(strings.Count(got, "type T struct"), 1))
+		qt.Assert(t, qt.Equals(got, work))
+	})
+
+	t.Run("two different new containers stay independent", func(t *testing.T) {
+		dir, repo := gittest.New(t)
+		gittest.Write(t, dir, "p.go", "package p\n\nfunc E() int { return 1 }\n")
+		gittest.Commit(t, dir, "chore: initial p.go")
+
+		work := "package p\n\nfunc E() int { return 1 }\n\ntype T struct {\n\ta int\n}\n\ntype U struct {\n\tb int\n}\n"
+		gittest.Write(t, dir, "p.go", work)
+
+		mustStage(t, repo, dir,
+			synth.AnchorTarget("p.go", "T"),
+			synth.AnchorTarget("p.go", "T.a"),
+			synth.AnchorTarget("p.go", "U"),
+			synth.AnchorTarget("p.go", "U.b"))
+
+		got := indexBlob(t, repo, "p.go")
+		mustParseGo(t, "two new containers each with a widened member", got)
+		qt.Assert(t, qt.Equals(strings.Count(got, "type T struct"), 1))
+		qt.Assert(t, qt.Equals(strings.Count(got, "type U struct"), 1))
+		qt.Assert(t, qt.Equals(got, work))
+	})
+}
+
 // TestStage_SiblingReceiverMethodKeepsBlankLinePadding is the counterpart
 // guard to the test above: a Go receiver method is container-QUALIFIED
 // (resolve.Resolution.Container is set) but not container-NESTED -- it is a
