@@ -430,20 +430,14 @@ func crossCheckFile(ctx context.Context, sess *lsp.Session, lang resolve.Languag
 }
 
 // crossCheckOutcome turns CrossCheckExtents' (degraded, mismatches) pair
-// into what crossCheckFile reports. Factored out from crossCheckFile so
-// this decision is testable without a live language server: degraded and
-// mismatches are orthogonal signals a batch can carry at once -- a file
-// can simultaneously be partly unverifiable (some declaration absent from
-// the server's own outline) and contain a genuine disagreement on a
-// declaration the server DID name -- so both have to surface. Regression:
-// an earlier version returned bare (degraded, nil) whenever degraded was
-// true, discarding any mismatches alongside it. That was only ever safe
-// while CrossCheckExtents could not produce that combination at all --
-// 8a560aa made it possible (degraded now also fires per not-found
-// declaration, not only per absent server) without updating this clause,
-// so a file where nine of ten declarations verify clean and the tenth
-// genuinely disagrees reported [ts-only] and silently dropped the real
-// mismatch.
+// into what crossCheckFile reports. It is separate from crossCheckFile so
+// the decision is testable without a live language server.
+//
+// degraded and mismatches are orthogonal: a file can simultaneously be
+// partly unverifiable (a declaration absent from the server's outline) and
+// carry a genuine disagreement on a declaration the server did name. Both
+// must surface -- suppressing a mismatch because the batch was also
+// degraded loses the one signal the user needs.
 func crossCheckOutcome(path string, degraded bool, mismatches []error) (bool, []string) {
 	if len(mismatches) == 0 {
 		return degraded, nil
