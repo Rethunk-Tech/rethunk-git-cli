@@ -113,6 +113,17 @@ func (fp *filePlan) classify(ctx context.Context, sess *lsp.Session, root, ancho
 		}, false, false, nil
 
 	default:
+		// Both sides came back nil, which can only be an AnchorUnresolvable
+		// ResolveError -- a hard error or an ambiguity would already have
+		// returned above. workErr and headErr carry the "did you mean"
+		// Candidates idx.suggest computed; a fresh ResolveError here would
+		// silently drop them, leaving the caller with a bare exit 3.
+		if rerr, ok := asResolveError(workErr); ok {
+			return editOp{}, false, false, rerr
+		}
+		if rerr, ok := asResolveError(headErr); ok {
+			return editOp{}, false, false, rerr
+		}
 		return editOp{}, false, false, &resolve.ResolveError{Code: exitcode.AnchorUnresolvable, Anchor: anchor}
 	}
 }
@@ -257,6 +268,14 @@ func (fp *filePlan) insertionPoint(res *resolve.Resolution) (pos uint, seq int) 
 func isResolveError(err error) bool {
 	var rerr *resolve.ResolveError
 	return errors.As(err, &rerr)
+}
+
+func asResolveError(err error) (*resolve.ResolveError, bool) {
+	var rerr *resolve.ResolveError
+	if errors.As(err, &rerr) {
+		return rerr, true
+	}
+	return nil, false
 }
 
 func asAmbiguous(err error) (*resolve.ResolveError, bool) {
