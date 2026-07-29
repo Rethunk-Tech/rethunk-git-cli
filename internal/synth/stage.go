@@ -198,8 +198,17 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 	// does not stage a second copy of one they asked for themselves.
 	named := map[string]map[string]bool{}
 
-	sess := lsp.NewSession()
-	defer sess.Close()
+	// sess is created lazily, on the first symbol target: a pathspec-only
+	// commit never resolves an anchor, so it never needs a language server.
+	// lsp.Session's own Dial and Close are both nil-receiver safe, so a
+	// plan that never assigns sess still cleans up correctly, and a dial
+	// failure partway through a multi-target plan still closes whatever
+	// was already cached before returning.
+	var sess *lsp.Session
+	// A closure, not defer sess.Close(): the latter binds the receiver at
+	// this defer statement, which is nil here -- a symbol target reassigns
+	// sess below, and the deferred call must see that assignment.
+	defer func() { sess.Close() }()
 	// The trees are needed only while resolving; apply works from the byte
 	// offsets and text the plan already holds.
 	defer func() {
@@ -236,7 +245,8 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 			// stages every file under it, and a single summed total says
 			// nothing about which. `rgit diff` already breaks the same
 			// change down this way, and the two are supposed to agree.
-			files := pathspecFileCounts(ctx, repo, root, t.Pathspec)
+			files, warnings := pathspecFileCounts(ctx, repo, root, t.Pathspec)
+			plan.countWarnings = append(plan.countWarnings, warnings...)
 			if len(files) == 0 {
 				// Nothing matched, or nothing changed. Keep one row naming
 				// the pathspec as given: it is still being staged, and the
@@ -271,6 +281,9 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 			plan.files = append(plan.files, fp)
 		}
 
+		if sess == nil {
+			sess = lsp.NewSession()
+		}
 		op, unchanged, tsOnly, err := fp.classify(ctx, sess, root, t.Symbol.Anchor)
 		if err != nil {
 			return nil, err
