@@ -3,6 +3,7 @@ package diff
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -312,8 +313,13 @@ func validateSym(ctx context.Context, repo *gitx.Repo, root string, scope Scope,
 	if !ok {
 		// No grammar to resolve against at all -- rgit commit's own exit 9
 		// ("unsupported language for a symbol anchor") is the closer match
-		// than pretending the name might resolve.
-		return "", &resolve.ResolveError{Code: exitcode.UnsupportedLanguage, Anchor: s.Name}
+		// than pretending the name might resolve. Path is set here (and
+		// below) so runDiff (internal/app/diff.go) can recover the failed
+		// anchor's own file straight from the error, rather than matching
+		// ResolveError.Anchor's bare name back against its own --sym list --
+		// the fragile lookup that broke whenever two files shared a bare
+		// symbol name (resolve.ResolveError's own doc comment).
+		return "", &resolve.ResolveError{Code: exitcode.UnsupportedLanguage, Anchor: s.Name, Path: s.File}
 	}
 
 	src, exists, err := scope.New.read(ctx, repo, root, s.File)
@@ -329,6 +335,15 @@ func validateSym(ctx context.Context, repo *gitx.Repo, root string, scope Scope,
 
 	res, err := resolve.Resolve(lang, src, s.Name)
 	if err != nil {
+		// resolve.Resolve's own *ResolveError construction sites have no
+		// path argument to attach one from; validateSym is the one place
+		// that path is in scope for this particular failure, so it is
+		// filled in here rather than left for every caller of Resolve to
+		// do without.
+		var rerr *resolve.ResolveError
+		if errors.As(err, &rerr) {
+			rerr.Path = s.File
+		}
 		return "", err
 	}
 	return res.Anchor, nil

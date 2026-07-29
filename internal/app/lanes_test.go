@@ -184,13 +184,13 @@ func TestRun_DiffUntrackedFileAndModeChange(t *testing.T) {
 }
 
 // TestRun_DiffUnsupportedLanguageSymReachesExtLookup closes internal/app's
-// own gap: diff.go's extForFailedSym (the file-extension recovery
-// unsupportedLanguageHint needs, since resolve.ResolveError carries only the
-// bare anchor name) was reachable only by building and execing the binary.
-// main.rs is genuinely unsupported, gated or otherwise, so no hint is
-// expected here -- TestRun_UnsupportedLanguageGetsNoRebuildHint in
-// app_test.go already pins that half on the commit path; this pins that
-// runDiff's own error handling reaches the same lookup without one.
+// own gap: diff.go's extForFailedSym (the file-extension lookup
+// unsupportedLanguageHint needs, read off resolve.ResolveError's own Path
+// field) was reachable only by building and execing the binary. main.rs is
+// genuinely unsupported, gated or otherwise, so no hint is expected here --
+// TestRun_UnsupportedLanguageGetsNoRebuildHint in app_test.go already pins
+// that half on the commit path; this pins that runDiff's own error handling
+// reaches the same lookup without one.
 func TestRun_DiffUnsupportedLanguageSymReachesExtLookup(t *testing.T) {
 	dir := chdirTempRepo(t)
 	writeAppFile(t, dir, "main.rs", "fn main() {}\n")

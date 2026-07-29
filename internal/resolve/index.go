@@ -19,6 +19,28 @@ type ResolveError struct {
 	Anchor     string
 	Candidates []string
 
+	// Path is the file the anchor was resolved against, for a caller that
+	// has no other way to recover it once this error has propagated past
+	// whoever had it in scope. It is optional and populated by exactly one
+	// caller today -- internal/diff/run.go's validateSym, which sets it
+	// both on the *ResolveError it constructs directly (no grammar for the
+	// file) and, by backfilling it after the fact, on the one
+	// resolve.Resolve itself returns (Resolve takes no path argument, so it
+	// cannot set this field on construction). validateSym does this because
+	// its own caller (internal/app/diff.go's runDiff) has no other way to
+	// learn which file a failed --sym/bare-anchor filter named --
+	// ResolveError.Anchor carries only the bare symbol name, and
+	// diffpkg.SymRef pairs are not otherwise recoverable from the error
+	// alone.
+	//
+	// Every other construction site in this package, and in internal/synth
+	// and internal/app, leaves Path empty deliberately: those callers either
+	// have no path to attach (resolve.Resolve's own internal failures, with
+	// no caller yet needing one back) or already hold the path in a local
+	// variable and have no need to fish it back out of the error. Callers
+	// must not assume Path is populated just because the field exists.
+	Path string
+
 	// TreeSitterRange and LSPRange are set only for Code ==
 	// exitcode.ExtentMismatch: both sides of a cross-check disagreement, as
 	// 1-based "Lstart..Lend" strings, so the caller can print both without

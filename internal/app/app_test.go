@@ -24,6 +24,7 @@ import (
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
 // runApp invokes the command surface exactly as main does and returns what
@@ -426,6 +427,47 @@ func TestRun_DiffFromSubdirectory(t *testing.T) {
 // optional argument, whatever follows in the same token IS the argument.
 // So -Ss means the key "s", not "sign plus signoff" -- the reason this
 // cannot be a general shorthand-chain expansion.
+// TestExtForFailedSym pins the lookup directly against
+// *resolve.ResolveError's own Path field, now that validateSym
+// (internal/diff/run.go) populates it: two ResolveErrors naming the
+// identical bare anchor but different Paths must resolve to their own
+// file's extension, the exact collision the prior allSyms-name-matching
+// implementation could not tell apart.
+func TestExtForFailedSym(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name    string
+		rerr    *resolve.ResolveError
+		wantExt string
+		wantOK  bool
+	}{
+		{
+			name:    "path present",
+			rerr:    &resolve.ResolveError{Code: exitcode.UnsupportedLanguage, Anchor: "Shared", Path: "a.sql"},
+			wantExt: ".sql",
+			wantOK:  true,
+		},
+		{
+			name:    "a different file sharing the same bare anchor name",
+			rerr:    &resolve.ResolveError{Code: exitcode.UnsupportedLanguage, Anchor: "Shared", Path: "b.sql"},
+			wantExt: ".sql",
+			wantOK:  true,
+		},
+		{
+			name:   "no path set",
+			rerr:   &resolve.ResolveError{Code: exitcode.UnsupportedLanguage, Anchor: "Shared"},
+			wantOK: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ext, ok := extForFailedSym(tc.rerr)
+			qt.Assert(t, qt.Equals(ok, tc.wantOK))
+			qt.Assert(t, qt.Equals(ext, tc.wantExt))
+		})
+	}
+}
+
 func TestExpandGPGSignShorthand(t *testing.T) {
 	t.Parallel()
 

@@ -160,12 +160,12 @@ func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) exitc
 			msg := rerr.Error()
 			if rerr.Code == exitcode.UnsupportedLanguage {
 				// Unlike synth.PathError (commit.go's mapStageError),
-				// ResolveError carries only the bare anchor name, not the
-				// file it was resolved against -- validateSym (internal/
-				// diff/run.go) never attaches one. Recover it from the
-				// same allSyms list this function already built, matching
-				// on the identical Name a caller would have typed.
-				if ext, ok := extForFailedSym(allSyms, rerr.Anchor); ok {
+				// ResolveError does not always carry the file the anchor
+				// resolved against -- but validateSym (internal/diff/run.go)
+				// attaches it via Path for this exact failure, so it is read
+				// straight off the error rather than recovered by matching
+				// the failed anchor's bare name back against allSyms.
+				if ext, ok := extForFailedSym(rerr); ok {
 					msg += unsupportedLanguageHint(ext)
 				}
 			}
@@ -223,18 +223,20 @@ func symRefsFromFlag(syms []string) ([]diffpkg.SymRef, error) {
 	return out, nil
 }
 
-// extForFailedSym finds the file extension of the sym in syms whose Name
-// matches anchor, for unsupportedLanguageHint's benefit -- see this
-// function's one call site in runDiff for why ResolveError alone cannot
-// answer this. Best-effort: two files sharing a bare symbol name would
-// resolve to whichever comes first, but the hint text itself only changes
-// for one extension (.sql) today, so a mismatch here could only ever
-// produce an absent hint, never a wrong one for a different gated language.
-func extForFailedSym(syms []diffpkg.SymRef, anchor string) (string, bool) {
-	for _, s := range syms {
-		if s.Name == anchor {
-			return filepath.Ext(s.File), true
-		}
+// extForFailedSym returns the file extension of a failed *resolve.
+// ResolveError's own Path, for unsupportedLanguageHint's benefit.
+// internal/diff/run.go's validateSym populates Path on this exact error
+// (Code == exitcode.UnsupportedLanguage) precisely so this never has to
+// recover the file by matching the failed anchor's bare name back against
+// the --sym list, which is what this function used to do: two files
+// sharing a bare symbol name resolved to whichever came first in that
+// list. Path empty (ok=false) should not happen on this error, since
+// validateSym always sets it before returning, but a caller with no other
+// site to attach one from is still an honest "no hint" rather than a
+// panic.
+func extForFailedSym(rerr *resolve.ResolveError) (string, bool) {
+	if rerr.Path == "" {
+		return "", false
 	}
-	return "", false
+	return filepath.Ext(rerr.Path), true
 }
