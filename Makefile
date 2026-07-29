@@ -3,9 +3,10 @@
 # test lane covers and why -coverpkg=./... is mandatory; this just runs the
 # commands it documents.
 
-BINARY  := rgit
-DIST    := dist
-VERSION := $(shell git describe --tags --always --dirty 2>/dev/null)
+BINARY        := rgit
+DIST          := dist
+SQL_CSRC      := internal/resolve/sqlgrammar/csrc
+VERSION       := $(shell git describe --tags --always --dirty 2>/dev/null)
 
 LDFLAGS := -s -w
 ifneq ($(VERSION),)
@@ -32,7 +33,7 @@ help:
 	@echo "  fix-diff           go fix -diff ./...        (preview; read before applying)"
 	@echo "  fix                go fix ./... twice        (fixes can unlock fixes)"
 	@echo "  cross              cross-compile linux/amd64, linux/arm64, windows/amd64 into dist/"
-	@echo "  clean              remove build outputs"
+	@echo "  clean              remove build outputs, including a generated SQL parser tree"
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/rgit
@@ -69,7 +70,7 @@ fix:
 
 clean:
 	rm -f $(BINARY) coverage.out short.out
-	rm -rf $(DIST)
+	rm -rf $(DIST) $(SQL_CSRC)
 
 # rgit links tree-sitter through cgo, so CGO_ENABLED=0 is not an option and
 # every cross target needs a matching C toolchain. Measured on this repo:
