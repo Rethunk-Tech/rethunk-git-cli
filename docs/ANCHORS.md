@@ -208,11 +208,26 @@ file are the ordinary case, not a corner, and only the prelude tells them
 apart; an at-rule with no prelude at all (`@font-face { ... }`) degrades to
 the bare keyword. Nested rules inside an `@media`/`@supports`/`@keyframes`
 block are not descended into and have no anchor of their own — naming the
-enclosing at-rule stages the whole block. `@import` is a real, distinct node
-kind, so `@imports` is meaningful for CSS, unlike Markdown, YAML, JSON, or
-TOML — but an `@import` is reachable only through `@imports`, never as a
-bare anchor of its own, the same way a Go file's imports are invisible to
-its own `Declarations`.
+enclosing at-rule stages the whole block. This is a different case from
+native CSS Nesting, covered next, and unaffected by it: an at-rule is never
+walked for nested rule sets, whether the at-rule sits at the top level or
+inside another rule's own block. `@import` is a real, distinct node kind, so
+`@imports` is meaningful for CSS, unlike Markdown, YAML, JSON, or TOML — but
+an `@import` is reachable only through `@imports`, never as a bare anchor of
+its own, the same way a Go file's imports are invisible to its own
+`Declarations`.
+
+A rule directly nested inside another rule's own block — native CSS Nesting,
+`.parent { .child { ... } }` — **is** addressable, unlike the at-rule case
+above: naming `.child` alone works when it is unambiguous, and its qualified
+form is `.parent .child`, joined with a literal space rather than the `.`
+every other language's own container qualification uses, because that space
+is the descendant combinator CSS itself would use to flatten the same
+nesting (`.parent .child { ... }` means the same thing written flat). Nesting
+three levels deep qualifies by the immediate parent only, the same
+one-level rule a YAML or JSON key nested three deep already follows: a rule
+inside `.mid` inside `.outer` is addressed as `.mid .inner`, never the full
+`.outer .mid .inner` chain.
 
 **A generic at-rule can be spelled anything, including a pseudo-anchor's own
 name** — CSS reserves no at-rule keywords, so `styles.css:@header` is legal

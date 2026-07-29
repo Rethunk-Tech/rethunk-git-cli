@@ -56,13 +56,11 @@ func (c *cssLanguage) ImportKinds() []string { return []string{"import_statement
 func (c *cssLanguage) OwnsTrailingSeparator() bool { return false }
 
 // MembersSitFlush is false: no CSS formatting convention enforces either a
-// flush or a spaced boundary between sibling declarations deterministically
-// -- the same "no tool-backed convention to match" reasoning YAML answers
-// false for -- so a newly spliced-in member is treated as an ordinary
-// top-level-shaped boundary, keeping whatever blank line the author would
-// have written by hand. Currently unreached in practice (Declarations sets
-// no Container today), but stated explicitly rather than left to whichever
-// future change makes it reachable to discover by omission.
+// flush or a spaced boundary between a nested rule and its siblings
+// deterministically -- the same "no tool-backed convention to match"
+// reasoning YAML answers false for -- so a newly spliced-in nested rule
+// (Declarations below) is treated as an ordinary top-level-shaped boundary,
+// keeping whatever blank line the author would have written by hand.
 func (c *cssLanguage) MembersSitFlush() bool { return false }
 
 // AllowsRawHeadingFallback is false: CSS has no heading concept for the
@@ -77,15 +75,28 @@ func (c *cssLanguage) AllowsRawHeadingFallback() bool { return false }
 // Language's Declarations must never return entries for header or import
 // material, or @header/@imports/@toplevel would claim overlapping bytes.
 //
-// Nested rule sets inside an @media/@supports/@keyframes block are not
-// descended into and get no anchor of their own: the same "named nested
-// declarations do not clear the bar" reasoning specs/design.md § Grammar
-// scope already applied to Go/TypeScript/Python's anonymous function
-// literals and closed as not worth building for v1.
+// A rule_set's own block is descended into for further, natively nested
+// rule_sets (ruleSetDeclarations below) -- CSS Nesting, mainstream now and
+// measured directly against tree-sitter-css v0.25.0: `.parent { .child {}
+// }` parses .child's rule_set as a direct named child of .parent's own
+// "block", sibling to its declaration nodes. A rule_set nested inside an
+// @media/@supports/@keyframes block, by contrast, is still not descended
+// into and gets no anchor of its own: that is a different, deliberate
+// non-descent rule (docs/ANCHORS.md), unaffected by this one -- an at-rule
+// is never itself walked for nested rule_sets, whether it appears at the
+// top level or, per the CSS Nesting spec, inside another rule_set's own
+// block (measured: this grammar does allow that shape too, e.g. `.a {
+// @media (...) { .b {} } }` -- .b's own rule_set is a grandchild of .a's
+// block, once removed through the media_statement, and is left just as
+// undescended as any other at-rule content).
 func (c *cssLanguage) Declarations(src []byte, root *ts.Node) []Declaration {
 	var decls []Declaration
 	for _, child := range namedChildren(root) {
 		node := child
+		if node.Kind() == "rule_set" {
+			decls = append(decls, c.ruleSetDeclarations(src, &node, "")...)
+			continue
+		}
 		if d, ok := c.declarationFor(src, &node); ok {
 			decls = append(decls, d)
 		}
@@ -95,8 +106,6 @@ func (c *cssLanguage) Declarations(src []byte, root *ts.Node) []Declaration {
 
 func (c *cssLanguage) declarationFor(src []byte, node *ts.Node) (Declaration, bool) {
 	switch node.Kind() {
-	case "rule_set":
-		return c.ruleSetDeclaration(src, node)
 	case "media_statement", "supports_statement", "keyframes_statement",
 		"at_rule", "charset_statement", "namespace_statement", "scope_statement":
 		return Declaration{Node: node, Bare: cssAtRuleName(src, node)}, true
@@ -105,9 +114,44 @@ func (c *cssLanguage) declarationFor(src []byte, node *ts.Node) (Declaration, bo
 		// top-level "declaration" node (a bare property with no rule
 		// around it -- invalid CSS the grammar nonetheless tolerates) both
 		// fall through here: neither has a name a caller could usefully
-		// type as an anchor.
+		// type as an anchor. "rule_set" is handled by Declarations directly
+		// (ruleSetDeclarations), not here, since it alone needs to recurse.
 		return Declaration{}, false
 	}
+}
+
+// ruleSetDeclarations reports node's own Declaration -- container-qualified
+// by the immediately enclosing rule_set's own selector text, empty at the
+// top level -- plus, recursively, one Declaration per rule_set natively
+// nested directly in its own block, to whatever depth the worktree actually
+// nests them. Qualification is one level only, the same nearest-ancestor
+// rule lang_yaml.go's mappingDeclarations and lang_json.go's
+// objectDeclarations already use for their own nested containers:
+// Declaration carries one Container field, not a full path, so a rule
+// nested three deep is qualified by its immediate parent's own bare
+// selector text alone.
+//
+// Sep is set to " " (Declaration.Sep's own doc comment): CSS Nesting
+// flattens via the descendant combinator, a literal space -- `.parent {
+// .child {} }` means what `.parent .child { }` means -- so the qualified
+// anchor a caller types back is ".parent .child", not the dot-joined
+// "parent.child" every other adapter's own convention produces.
+func (c *cssLanguage) ruleSetDeclarations(src []byte, node *ts.Node, container string) []Declaration {
+	d, ok := c.ruleSetDeclaration(src, node, container)
+	if !ok {
+		return nil
+	}
+	out := []Declaration{d}
+	if block := cssBodyChild(node); block != nil {
+		for _, child := range namedChildren(block) {
+			if child.Kind() != "rule_set" {
+				continue
+			}
+			nested := child
+			out = append(out, c.ruleSetDeclarations(src, &nested, d.Bare)...)
+		}
+	}
+	return out
 }
 
 // ruleSetDeclaration reads a rule_set's own "selectors" child as Bare,
@@ -117,10 +161,14 @@ func (c *cssLanguage) declarationFor(src []byte, node *ts.Node) (Declaration, bo
 // (measured), so "selectors" is found by scanning for that node kind rather
 // than a field lookup, the same way cssAtRuleName below locates the body of
 // an at-rule without one.
-func (c *cssLanguage) ruleSetDeclaration(src []byte, node *ts.Node) (Declaration, bool) {
+func (c *cssLanguage) ruleSetDeclaration(src []byte, node *ts.Node, container string) (Declaration, bool) {
 	for _, child := range namedChildren(node) {
 		if child.Kind() == "selectors" {
-			return Declaration{Node: node, Bare: nodeText(src, &child)}, true
+			sep := ""
+			if container != "" {
+				sep = " "
+			}
+			return Declaration{Node: node, Bare: nodeText(src, &child), Container: container, Sep: sep}, true
 		}
 	}
 	return Declaration{}, false

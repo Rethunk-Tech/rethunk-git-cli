@@ -142,7 +142,9 @@ func assignQualifiedNames(syms []*Symbol) {
 }
 
 // containerQualified is a symbol's name before ordinals are applied:
-// Container.Bare where there is a container, the bare name otherwise.
+// Container<Sep>Bare where there is a container, the bare name otherwise.
+// Sep is "." unless the declaration overrides it (Declaration.Sep's own doc
+// comment -- CSS Nesting is the one adapter that does).
 //
 // The ordinal rule counts these, not bare names, so it reaches inside a
 // container as well as beside one. Two members of one class can share a name
@@ -155,7 +157,11 @@ func containerQualified(s *Symbol) string {
 	if s.Decl.Container == "" {
 		return s.Decl.Bare
 	}
-	return s.Decl.Container + "." + s.Decl.Bare
+	sep := s.Decl.Sep
+	if sep == "" {
+		sep = "."
+	}
+	return s.Decl.Container + sep + s.Decl.Bare
 }
 
 // normalizeAnchorInput rewrites gopls's receiver spelling, "(*A).Get" or

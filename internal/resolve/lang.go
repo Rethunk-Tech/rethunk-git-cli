@@ -42,6 +42,19 @@ type Declaration struct {
 	// Container qualifies Bare when the language nests the symbol, e.g. the
 	// receiver type "A" for Go's (a *A) Get. Empty when there is none.
 	Container string
+
+	// Sep overrides containerQualified's (index.go) default "." join
+	// between Container and Bare, for the rare adapter whose own
+	// qualified-name convention is not a dot. CSS Nesting is the one case:
+	// nesting flattens via the descendant combinator, a literal space
+	// (`.parent { .child {} }` means what `.parent .child { }` means), so a
+	// dot-joined qualifier ("parent.child") would not correspond to
+	// anything a CSS author could paste back into a stylesheet, unlike
+	// every other adapter's own dot-joined convention (Go/TypeScript/Python
+	// member access, TOML's and SQL's own dotted-path syntax). Empty (the
+	// zero value every other adapter already leaves it at) keeps today's
+	// "." unchanged.
+	Sep string
 }
 
 // Language adapts one tree-sitter grammar. An implementation reports which

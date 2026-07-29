@@ -1539,6 +1539,69 @@ div {
 	qt.Assert(t, qt.IsFalse(ok))
 }
 
+// TestResolve_CSSNestedRuleSets pins native CSS Nesting (tree-sitter-css
+// v0.25.0): a rule_set directly inside another rule_set's own block is now
+// addressable, qualified by its immediate parent's own selector text
+// through a literal space -- the descendant combinator CSS itself would use
+// to flatten the same nesting -- not the dot every other adapter's own
+// Container convention joins with. This is a different construct from the
+// @media/@supports/@keyframes case TestResolve_CSS already pins as
+// deliberately non-descended, and does not change that: an at-rule
+// encountered while descending a rule_set's block (or a rule_set found
+// inside an at-rule's own block) stays exactly as undescended as before.
+func TestResolve_CSSNestedRuleSets(t *testing.T) {
+	t.Parallel()
+	src := []byte(`.parent {
+  color: red;
+
+  .child {
+    color: blue;
+  }
+}
+
+.outer {
+  .mid {
+    .inner {
+      color: purple;
+    }
+  }
+}
+
+.wrap {
+  @media (max-width: 600px) {
+    .leaf {
+      color: green;
+    }
+  }
+}
+`)
+
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", src, ".child"), ".child {\n    color: blue;\n  }"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", src, ".parent .child"), ".child {\n    color: blue;\n  }"))
+	// Naming the parent still claims the nested rule along with it.
+	qt.Assert(t, qt.StringContains(mustResolveExt(t, ".css", src, ".parent"), ".child"))
+
+	// Nesting three deep qualifies by the immediate parent only, the same
+	// one-level rule lang_yaml.go and lang_json.go already apply: ".inner"
+	// resolves unambiguously on its own, and its qualified form names ".mid",
+	// never the full ".outer .mid .inner" chain.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", src, ".inner"), ".inner {\n      color: purple;\n    }"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", src, ".mid .inner"), ".inner {\n      color: purple;\n    }"))
+	lang, ok := resolve.ForExtension(".css")
+	qt.Assert(t, qt.IsTrue(ok))
+	_, err := resolve.Resolve(lang, src, ".outer .mid .inner")
+	qt.Assert(t, qt.IsNotNil(err))
+
+	// A rule_set nested inside an @media block inside a rule_set is still
+	// not addressable at all: at-rule non-descent applies regardless of
+	// what encloses the at-rule, or what the at-rule itself encloses.
+	_, err = resolve.Resolve(lang, src, ".leaf")
+	qt.Assert(t, qt.IsNotNil(err))
+	var unresolvable *resolve.ResolveError
+	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
+	qt.Assert(t, qt.Equals(unresolvable.Code, exitcode.AnchorUnresolvable))
+}
+
 // TestResolve_CSSPseudoAnchorShadowsAtRule pins the deliberate sharp edge
 // docs/ANCHORS.md documents: an at-rule spelled like a pseudo-anchor
 // ("@header") never resolves as itself, because Resolve checks
