@@ -111,8 +111,15 @@ func main() {
 	// dry-run early return too, so `-dry-run -with-servers` previews both.
 	// A plain rgit-install (flag unset) never calls this, so its existing
 	// behavior is unchanged (the opt-in decision docs/INSTALL.md records).
+	//
+	// serversOK is checked at the very end of main, after rgit's own
+	// build/install -- a language server failing to install is no reason
+	// to withhold the rgit binary this command exists to produce, but the
+	// process must still exit nonzero so automation driving -with-servers
+	// can tell a partial run from a clean one (finding 11).
+	serversOK := true
 	if *withServers {
-		manageServers(*dryRun, os.Stdout, exec.LookPath)
+		serversOK = manageServers(*dryRun, os.Stdout, exec.LookPath)
 	}
 
 	ver := gitVersion(repoRoot)
@@ -160,6 +167,10 @@ func main() {
 		action = "Replaced existing binary at"
 	}
 	fmt.Printf("%s %s (version %s)\n", action, dest, versionOrDev(ver))
+
+	if !serversOK {
+		fatalf("one or more language servers failed to install/update -- see FAILED lines above")
+	}
 }
 
 // fatalf never returns -- os.Exit skips this test binary the same way it
@@ -414,8 +425,8 @@ func downloadSQLGrammarModule(repoRoot string) (string, error) {
 // runs ~27s -- far past this package's whole test budget for one function.
 // The two parts that could silently drift both already have their own
 // direct checks downstream of this function: parserABIVersion (tested)
-// catches a stale-ABI CLI, and the finishing os.Rename either lands cleanly
-// or leaves the prior csrc/ untouched, never a half-written one. What would
+// catches a stale-ABI CLI, and finalize (below) either lands the new csrc/
+// cleanly or restores the prior one, never leaving neither. What would
 // catch drift in the mechanics here specifically: run `go run
 // ./cmd/rgit-install` by hand with the tree-sitter CLI on PATH and confirm
 // "generated the SQL parser into .../csrc (ABI 15)" prints, then `go build
@@ -459,10 +470,12 @@ func runSQLGeneration(modDir, pkgDir string) error {
 
 	// Staged as a sibling of the real csrc/ (same filesystem as pkgDir,
 	// unlike the scratch dir above which may be on tmpfs) so the finishing
-	// os.Rename is atomic. Nothing under csrc/ itself is touched until every
-	// file below has copied cleanly: a failed copy here leaves any existing
-	// csrc/ from a prior successful generation exactly as it was, rather
-	// than a half-overwritten one a later run would build on top of.
+	// os.Rename is atomic. Nothing under csrc/ itself is touched during
+	// copying: a failed copy here leaves any existing csrc/ from a prior
+	// successful generation exactly as it was, rather than a
+	// half-overwritten one a later run would build on top of. Finalizing
+	// below (moving the prior csrc/ aside rather than deleting it first)
+	// extends that same guarantee through the swap itself.
 	staging := filepath.Join(pkgDir, "csrc.tmp")
 	if err := os.RemoveAll(staging); err != nil {
 		return fmt.Errorf("clear stale staging dir: %w", err)
@@ -486,12 +499,49 @@ func runSQLGeneration(modDir, pkgDir string) error {
 		}
 	}
 
-	final := filepath.Join(pkgDir, "csrc")
-	if err := os.RemoveAll(final); err != nil {
-		return fmt.Errorf("remove stale %s: %w", final, err)
+	return finalizeGenerated(staging, filepath.Join(pkgDir, "csrc"))
+}
+
+// finalizeGenerated swaps staging into place at final without ever leaving
+// neither a working nor a prior-good directory there: an existing final is
+// moved aside to final+".old" (same filesystem, so the move is a rename,
+// not a copy) rather than removed outright, so a failure partway through
+// still has something to restore. If the finishing rename itself fails,
+// final.old is renamed back to final before returning the error -- the
+// previous version of this function called os.RemoveAll(final) before
+// os.Rename(staging, final), so a rename failure (or the process dying
+// between the two calls) left a repository with no csrc/ at all, even
+// though a perfectly good one existed a moment earlier (finding 9).
+func finalizeGenerated(staging, final string) error {
+	old := final + ".old"
+	// A leftover from a prior failed finalize would otherwise block the
+	// rename below (a non-empty directory cannot be renamed onto).
+	// Best-effort: if this fails, the rename immediately after reports the
+	// real problem.
+	_ = os.RemoveAll(old)
+
+	hadFinal := false
+	if _, err := os.Lstat(final); err == nil {
+		hadFinal = true
+		if err := os.Rename(final, old); err != nil {
+			return fmt.Errorf("move existing %s aside: %w", final, err)
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("stat %s: %w", final, err)
 	}
+
 	if err := os.Rename(staging, final); err != nil {
+		if hadFinal {
+			// Restore exactly what was there before finalize started --
+			// the whole point of moving it aside instead of deleting it.
+			if restoreErr := os.Rename(old, final); restoreErr != nil {
+				return fmt.Errorf("finalize %s: %w (restoring prior version also failed: %v -- it is preserved at %s)", final, err, restoreErr, old)
+			}
+		}
 		return fmt.Errorf("finalize %s: %w", final, err)
+	}
+	if hadFinal {
+		_ = os.RemoveAll(old)
 	}
 	return nil
 }
@@ -691,6 +741,11 @@ func installBinary(bin, dest string) (replaced bool, err error) {
 		return replaced, err
 	}
 	if err := os.Rename(tmp, dest); err != nil {
+		// A failed rename must not leave the temp file behind: the next
+		// install attempt writes the same tmp path again, and a caller
+		// investigating a failed install should not find a stray
+		// executable-mode file that Rename simply never got to remove.
+		_ = os.Remove(tmp)
 		return replaced, err
 	}
 	return replaced, nil

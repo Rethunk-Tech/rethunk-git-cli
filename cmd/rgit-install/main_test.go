@@ -371,6 +371,93 @@ func TestInstallBinary(t *testing.T) {
 		_, err := installBinary(filepath.Join(dir, "nope"), filepath.Join(dir, "dest"))
 		qt.Assert(t, qt.IsNotNil(err))
 	})
+
+	// A directory at dest makes os.Rename(tmp, dest) fail (EISDIR/ENOTDIR,
+	// depending on platform) without needing to simulate a permissions
+	// failure. Before this fix, the ".tmp" file installBinary writes just
+	// above the failed rename was left behind forever.
+	t.Run("rename failure cleans up its own tmp file", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		bin := filepath.Join(dir, "built")
+		qt.Assert(t, qt.IsNil(os.WriteFile(bin, []byte("binary content"), 0o644)))
+		dest := filepath.Join(dir, "dest")
+		qt.Assert(t, qt.IsNil(os.MkdirAll(dest, 0o755)))
+
+		_, err := installBinary(bin, dest)
+		qt.Assert(t, qt.IsNotNil(err))
+
+		_, statErr := os.Stat(dest + ".tmp")
+		qt.Assert(t, qt.IsTrue(os.IsNotExist(statErr)))
+	})
+}
+
+// finalizeGenerated is runSQLGeneration's own finishing swap, factored out
+// so its atomicity (finding 9) is testable without a real tree-sitter CLI:
+// the two directories it moves between don't care what generated them.
+func TestFinalizeGenerated(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no prior final: staging becomes final", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		final := filepath.Join(dir, "csrc")
+		staging := filepath.Join(dir, "csrc.tmp")
+		qt.Assert(t, qt.IsNil(os.MkdirAll(staging, 0o755)))
+		qt.Assert(t, qt.IsNil(os.WriteFile(filepath.Join(staging, "new.txt"), []byte("new"), 0o644)))
+
+		qt.Assert(t, qt.IsNil(finalizeGenerated(staging, final)))
+
+		got, err := os.ReadFile(filepath.Join(final, "new.txt"))
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(string(got), "new"))
+	})
+
+	t.Run("prior final replaced on success, .old cleaned up", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		final := filepath.Join(dir, "csrc")
+		qt.Assert(t, qt.IsNil(os.MkdirAll(final, 0o755)))
+		qt.Assert(t, qt.IsNil(os.WriteFile(filepath.Join(final, "old.txt"), []byte("old"), 0o644)))
+
+		staging := filepath.Join(dir, "csrc.tmp")
+		qt.Assert(t, qt.IsNil(os.MkdirAll(staging, 0o755)))
+		qt.Assert(t, qt.IsNil(os.WriteFile(filepath.Join(staging, "new.txt"), []byte("new"), 0o644)))
+
+		qt.Assert(t, qt.IsNil(finalizeGenerated(staging, final)))
+
+		_, err := os.Stat(filepath.Join(final, "old.txt"))
+		qt.Assert(t, qt.IsTrue(os.IsNotExist(err)))
+		got, err := os.ReadFile(filepath.Join(final, "new.txt"))
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(string(got), "new"))
+		_, err = os.Stat(final + ".old")
+		qt.Assert(t, qt.IsTrue(os.IsNotExist(err)))
+	})
+
+	// The regression finding 9 is about: a failure finalizing must restore
+	// the prior csrc/ exactly, not delete it and then fail with nothing to
+	// build from. staging pointing nowhere is a deterministic way to make
+	// the finishing os.Rename fail without touching permissions.
+	t.Run("prior final restored when the finishing rename fails", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		final := filepath.Join(dir, "csrc")
+		qt.Assert(t, qt.IsNil(os.MkdirAll(final, 0o755)))
+		marker := filepath.Join(final, "marker.txt")
+		qt.Assert(t, qt.IsNil(os.WriteFile(marker, []byte("prior generation"), 0o644)))
+
+		staging := filepath.Join(dir, "csrc.tmp-never-created")
+
+		err := finalizeGenerated(staging, final)
+		qt.Assert(t, qt.IsNotNil(err))
+
+		got, rerr := os.ReadFile(marker)
+		qt.Assert(t, qt.IsNil(rerr))
+		qt.Assert(t, qt.Equals(string(got), "prior generation"))
+		_, statErr := os.Stat(final + ".old")
+		qt.Assert(t, qt.IsTrue(os.IsNotExist(statErr)))
+	})
 }
 
 func TestSQLCSRCContentHash(t *testing.T) {
