@@ -3,7 +3,6 @@ package synth
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -24,16 +23,8 @@ func newSpecialTestRepo(t *testing.T) (dir string, repo *gitx.Repo) {
 func commitSpecial(t *testing.T, dir string, paths ...string) {
 	t.Helper()
 	args := append([]string{"add"}, paths...)
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git add: %v: %s", err, out)
-	}
-	cmd = exec.Command("git", "commit", "-q", "-m", "chore: commit special path")
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git commit: %v: %s", err, out)
-	}
+	gittest.Git(t, dir, args...)
+	gittest.Git(t, dir, "commit", "-q", "-m", "chore: commit special path")
 }
 
 // TestClassifyPath_HeadOnlyBranches covers classifyPath's HEAD-tree fallback
@@ -75,21 +66,14 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 		if err := os.MkdirAll(subDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		subRun := func(args ...string) {
-			cmd := exec.Command("git", args...)
-			cmd.Dir = subDir
-			if out, err := cmd.CombinedOutput(); err != nil {
-				t.Fatalf("git %v: %v: %s", args, err, out)
-			}
-		}
-		subRun("init", "-q")
-		subRun("config", "user.email", "sub@example.com")
-		subRun("config", "user.name", "Sub")
+		gittest.Git(t, subDir, "init", "-q")
+		gittest.Git(t, subDir, "config", "user.email", "sub@example.com")
+		gittest.Git(t, subDir, "config", "user.name", "Sub")
 		if err := os.WriteFile(filepath.Join(subDir, "x.txt"), []byte("x\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		subRun("add", "x.txt")
-		subRun("commit", "-q", "-m", "chore: sub commit")
+		gittest.Git(t, subDir, "add", "x.txt")
+		gittest.Git(t, subDir, "commit", "-q", "-m", "chore: sub commit")
 
 		commitSpecial(t, dir, "sub")
 
