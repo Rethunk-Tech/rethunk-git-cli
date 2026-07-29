@@ -173,8 +173,8 @@ Tree-sitter alone, no LSP comparison: pseudo-anchors (servers do not report
 import blocks as document symbols), deletions (the symbol exists only in HEAD,
 outside the server's worktree view), and any degraded or absent daemon.
 
-A fourth case surfaced during implementation, not anticipated when the three
-above were written: the daemon answers, but its own `documentSymbol` outline
+A fourth case surfaced during implementation, beyond the three above: the
+daemon answers, but its own `documentSymbol` outline
 simply does not name the anchor being checked (a symbol kind the server
 doesn't surface, or a container shape rgit's name normalization doesn't
 recognize). That is not the same claim as "the extents disagree" — there is
@@ -718,7 +718,7 @@ extent bug rather than a transport artifact.
 
 A first pass found none of the candidates installed except a `taplo` build
 with its LSP feature compiled out — recorded further down, since it turned
-out to matter. The operator then installed
+out to matter. Real binaries were then installed:
 `yaml-language-server`, `vscode-json-language-server`,
 `vscode-css-language-server` (all three via the `vscode-langservers-
 extracted`/bun toolchain), `marksman`, `vscode-markdown-language-server`,
@@ -1144,8 +1144,7 @@ own grammar and external scanner (indentation/flow-context tracking) are
 simply smaller than either. The 13360 KB baseline is itself measured fresh
 immediately beforehand rather than reused from the 13336 KB recorded above for
 the post-Markdown-and-Shell figure; the ~24 KB gap between the two is ordinary
-toolchain/dependency drift accumulated since that record was written, not
-anything this dependency introduced.
+toolchain/dependency drift, not anything this dependency introduced.
 
 **`go-git` is rejected.** It reimplements git in pure Go and provides none of
 what this design delegates: hook execution, `.gitattributes` filters, git's
