@@ -43,12 +43,12 @@ Full reference: docs/USAGE.md
 func Run(ctx context.Context, version string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	if len(args) == 0 {
 		// Bare `git` prints its own full help to stdout at exit 1 -- but
-		// rgit has exactly two subcommands and no useful no-op mode, and
-		// every other usage error in exitcode's table (missing message, no
-		// target, a path escape, ...) is already pinned to exit 129. Naming
-		// no command is the same kind of usage error: there is nothing to
-		// dispatch, so it keeps rgit's own uniform convention rather than
-		// adopting git's top-level-dispatcher-only quirk.
+		// rgit has no useful no-op mode, and every other usage error in
+		// exitcode's table (missing message, no target, a path escape, ...)
+		// is already pinned to exit 129. Naming no command is the same kind
+		// of usage error: there is nothing to dispatch, so it keeps rgit's
+		// own uniform convention rather than adopting git's
+		// top-level-dispatcher-only quirk.
 		fmt.Fprintln(stderr, usageLine)
 		return exitcode.InvalidUsage
 	}
