@@ -6,6 +6,79 @@ import (
 	"testing"
 )
 
+// TestPeekShebangLine covers finding 24: a successful os.Open must not be
+// enough on its own to report ok=true -- a non-EOF read error or a
+// zero-byte read both mean there is no line to report, the same as a
+// failed Open.
+func TestPeekShebangLine(t *testing.T) {
+	t.Parallel()
+
+	t.Run("ordinary shebang line", func(t *testing.T) {
+		t.Parallel()
+		path := filepath.Join(t.TempDir(), "script.sh")
+		if err := os.WriteFile(path, []byte("#!/bin/sh\necho hi\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		line, ok := PeekShebangLine(path)
+		if !ok {
+			t.Fatal("PeekShebangLine() ok = false; want true")
+		}
+		if string(line) != "#!/bin/sh\n" {
+			t.Errorf("line = %q; want %q", line, "#!/bin/sh\n")
+		}
+	})
+
+	// No newline within shebangPeekBytes (or the whole file, for one
+	// shorter than that): ReadString reports io.EOF, which must still be
+	// treated as a legitimate partial read, not an error.
+	t.Run("no newline in the peeked window", func(t *testing.T) {
+		t.Parallel()
+		path := filepath.Join(t.TempDir(), "noeol")
+		if err := os.WriteFile(path, []byte("#!/bin/sh"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		line, ok := PeekShebangLine(path)
+		if !ok {
+			t.Fatal("PeekShebangLine() ok = false; want true for a short, newline-less file")
+		}
+		if string(line) != "#!/bin/sh" {
+			t.Errorf("line = %q; want %q", line, "#!/bin/sh")
+		}
+	})
+
+	// Before finding 24's fix, a successful os.Open on a zero-byte file
+	// still reported ok=true with an empty line -- indistinguishable from
+	// a genuine (if shebang-less) first line to a caller that only checks
+	// the bool.
+	t.Run("empty file reports ok=false", func(t *testing.T) {
+		t.Parallel()
+		path := filepath.Join(t.TempDir(), "empty")
+		if err := os.WriteFile(path, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := PeekShebangLine(path); ok {
+			t.Error("PeekShebangLine() ok = true for an empty file; want false")
+		}
+	})
+
+	t.Run("missing file", func(t *testing.T) {
+		t.Parallel()
+		if _, ok := PeekShebangLine(filepath.Join(t.TempDir(), "does-not-exist")); ok {
+			t.Error("PeekShebangLine() ok = true for a missing file; want false")
+		}
+	})
+
+	// A directory's os.Open succeeds; its Read does not (EISDIR). Before
+	// finding 24's fix, that non-EOF read error was silently discarded and
+	// this still reported ok=true.
+	t.Run("directory reports ok=false", func(t *testing.T) {
+		t.Parallel()
+		if _, ok := PeekShebangLine(t.TempDir()); ok {
+			t.Error("PeekShebangLine() ok = true for a directory; want false")
+		}
+	})
+}
+
 // TestParseOrdinal covers finding 23's merged parsing rule: docs/ANCHORS.md's
 // positional "Bare#N" form requires a non-empty bare name and a strictly
 // positive N, unifying what crosscheck.go's old splitOrdinal (neither

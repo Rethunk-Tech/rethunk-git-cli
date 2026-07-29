@@ -9,6 +9,7 @@ package resolve
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -368,6 +369,24 @@ func PeekShebangLine(fullPath string) ([]byte, bool) {
 		return nil, false
 	}
 	defer func() { _ = f.Close() }()
-	raw, _ := bufio.NewReader(io.LimitReader(f, shebangPeekBytes)).ReadString('\n')
+
+	raw, err := bufio.NewReader(io.LimitReader(f, shebangPeekBytes)).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		// Running out of bytes within the peek window (or the whole file,
+		// for one shorter than shebangPeekBytes) is expected and not an
+		// error worth reporting -- io.EOF is exactly what ReadString
+		// returns for both. Anything else (fullPath naming a directory,
+		// whose Open succeeds but whose Read does not, and other genuine
+		// I/O failures) means fullPath cannot be trusted the same way a
+		// failed os.Open above cannot.
+		return nil, false
+	}
+	if len(raw) == 0 {
+		// Nothing was actually read -- an empty file, most commonly.
+		// Reporting ok=true here would let a zero-byte read look
+		// identical to a genuine (if shebang-less) first line to every
+		// caller that only checks the bool.
+		return nil, false
+	}
 	return []byte(raw), true
 }
