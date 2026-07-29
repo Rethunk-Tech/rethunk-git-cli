@@ -6,12 +6,23 @@ import (
 	"testing"
 
 	qt "github.com/go-quicktest/qt"
+
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/prereq"
 )
 
-// The subprocess-driving functions (build, install, generation) are exercised
-// by hand against a real toolchain rather than mocked here -- CONTRIBUTING.md
-// prefers the real dependency over a double, and there is no meaningful
-// double for "does `go build` succeed." These are the pure helpers left over.
+// Most subprocess-driving functions here are pure past their one shell-out,
+// with that shell-out either injected (a lookPath func) or pulled out into
+// its own tested step -- CONTRIBUTING.md's "test the pure logic" boundary,
+// the same one servers_test.go and servers_install_test.go already draw.
+// git and the go toolchain are hard requirements of this repo (CONTRIBUTING.md,
+// internal/gittest), so calling them for real in a test is the real
+// dependency, not a double, and stays fast because both commands are cheap.
+//
+// The exceptions -- runSQLGeneration, downloadSQLGrammarModule, and
+// buildBinary's actual `go build` -- need the network or a multi-second real
+// compile; each carries its own doc comment saying what would catch drift
+// there instead of a test.
 
 func TestLdflags(t *testing.T) {
 	t.Parallel()
@@ -37,6 +48,244 @@ func TestRelTo(t *testing.T) {
 	qt.Assert(t, qt.Equals(relTo("/repo", "/repo/internal/resolve/sql"), "internal/resolve/sql"))
 	// A path outside root falls back to itself rather than erroring.
 	qt.Assert(t, qt.Equals(relTo("/repo", "relative/path"), "relative/path"))
+}
+
+func TestFatalMessage(t *testing.T) {
+	t.Parallel()
+	qt.Assert(t, qt.Equals(fatalMessage("build failed: %v", "boom"), "rgit-install: build failed: boom\n"))
+	qt.Assert(t, qt.Equals(fatalMessage("no args here"), "rgit-install: no args here\n"))
+}
+
+func TestParseGOMODOutput(t *testing.T) {
+	t.Parallel()
+
+	t.Run("ordinary path", func(t *testing.T) {
+		t.Parallel()
+		got, err := parseGOMODOutput("/repo/go.mod\n")
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(got, "/repo"))
+	})
+
+	t.Run("empty output means no module", func(t *testing.T) {
+		t.Parallel()
+		_, err := parseGOMODOutput("\n")
+		qt.Assert(t, qt.IsNotNil(err))
+	})
+
+	// `go env GOMOD` prints os.DevNull, not an empty string, outside any
+	// module -- the case this test pins so a future reader does not "fix"
+	// away the os.DevNull check as dead code.
+	t.Run("devnull means no module", func(t *testing.T) {
+		t.Parallel()
+		_, err := parseGOMODOutput(os.DevNull + "\n")
+		qt.Assert(t, qt.IsNotNil(err))
+	})
+}
+
+func TestResolveRepoRoot(t *testing.T) {
+	t.Parallel()
+	// Run from within this checkout, so this is the real dependency
+	// (`go env GOMOD`) rather than a double -- go is CONTRIBUTING.md's own
+	// hard requirement, and this call is fast (no build, no network).
+	got, err := resolveRepoRoot()
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsTrue(filepath.IsAbs(got)))
+	if _, statErr := os.Stat(filepath.Join(got, "go.mod")); statErr != nil {
+		t.Fatalf("resolveRepoRoot returned %q, which has no go.mod: %v", got, statErr)
+	}
+}
+
+func TestPrereqFatal(t *testing.T) {
+	t.Parallel()
+
+	ok := prereq.Check{OK: true}
+	failed := prereq.Check{OK: false}
+
+	tests := []struct {
+		name                                 string
+		goCheck, gitCheck, cgoCheck, ccCheck prereq.Check
+		wantNil                              bool
+		wantContains                         string
+	}{
+		{"all pass", ok, ok, ok, ok, true, ""},
+		{"go missing", failed, ok, ok, ok, false, "go"},
+		{"git missing", ok, failed, ok, ok, false, "git"},
+		{"cgo disabled", ok, ok, prereq.Check{OK: false, Detail: "0"}, ok, false, "cgo"},
+		{"C compiler missing", ok, ok, ok, failed, false, "C compiler"},
+		// Regression this guards: with go AND git both missing, the caller
+		// must see one root cause, not whichever error happened to be
+		// constructed last -- go's own message, since it is checked first.
+		{"go and git both missing reports go first", failed, failed, ok, ok, false, "go not found"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := prereqFatal(tt.goCheck, tt.gitCheck, tt.cgoCheck, tt.ccCheck, "gcc")
+			if tt.wantNil {
+				qt.Assert(t, qt.IsNil(err))
+				return
+			}
+			qt.Assert(t, qt.IsNotNil(err))
+			qt.Assert(t, qt.StringContains(err.Error(), tt.wantContains))
+		})
+	}
+}
+
+func TestRunPrereqChecks(t *testing.T) {
+	t.Parallel()
+	// Real toolchain, run from within this checkout: go, git, and cgo are
+	// all hard requirements to even build this repo (AGENTS.md's delegation
+	// boundary, CONTRIBUTING.md's cgo note), so this environment always
+	// passes all four fatal checks -- pinning that the orchestration itself
+	// (five checks, in this order, no fatal when the environment is sound)
+	// stays wired correctly, not any one check's own probing logic.
+	checks, fatal := runPrereqChecks()
+	qt.Assert(t, qt.IsNil(fatal))
+	qt.Assert(t, qt.HasLen(checks, 5))
+
+	names := make([]string, len(checks))
+	for i, c := range checks {
+		names[i] = c.Name
+		qt.Assert(t, qt.IsTrue(c.OK), qt.Commentf("check %q failed in a real dev/CI environment", c.Name))
+	}
+	// go, git, and the C compiler carry a fixed name; CGO_ENABLED and
+	// tree-sitter CLI's names are also fixed (the C compiler's alone
+	// interpolates $CC, so it is checked by prefix).
+	qt.Assert(t, qt.SliceContains(names, "go toolchain"))
+	qt.Assert(t, qt.SliceContains(names, "git"))
+	qt.Assert(t, qt.SliceContains(names, "CGO_ENABLED"))
+	qt.Assert(t, qt.SliceContains(names, "tree-sitter CLI"))
+}
+
+func TestGoEnv(t *testing.T) {
+	t.Parallel()
+	// Real toolchain: GOPATH is always non-empty once `go env` has a
+	// default to fall back to, so this is a safe, fast check against the
+	// real dependency rather than a double for "does `go env` succeed."
+	qt.Assert(t, qt.Not(qt.Equals(goEnv("GOPATH"), "")))
+
+	// `go env` prints an empty line for an unrecognized name rather than
+	// erroring -- goEnv's TrimSpace-of-empty-output path, pinned so a
+	// future reader knows this returns "", not an error.
+	qt.Assert(t, qt.Equals(goEnv("RGIT_INSTALL_NOT_A_REAL_GO_ENV_VAR"), ""))
+}
+
+func TestParseSQLAdapterListing(t *testing.T) {
+	t.Parallel()
+
+	// go list -json ./... streams concatenated JSON objects, not an array.
+	const adapterFound = `{"Dir":"/repo/internal/resolve/sqlgrammar","Name":"sqlgrammar","CgoFiles":["grammar.go"]}
+{"Dir":"/repo/internal/resolve","Name":"resolve","CgoFiles":[]}`
+
+	t.Run("adapter present with cgo files", func(t *testing.T) {
+		t.Parallel()
+		dir, ok := parseSQLAdapterListing([]byte(adapterFound))
+		qt.Assert(t, qt.IsTrue(ok))
+		qt.Assert(t, qt.Equals(dir, "/repo/internal/resolve/sqlgrammar"))
+	})
+
+	// The regression this guards: findSQLAdapter's own doc comment records
+	// that matching by name alone once matched an unrelated package that
+	// merely shared it -- len(CgoFiles) > 0 is what tells the cgo binding
+	// apart from a same-named non-cgo package.
+	t.Run("name matches but no cgo files -- not the adapter", func(t *testing.T) {
+		t.Parallel()
+		const noCgo = `{"Dir":"/repo/somewhere","Name":"sqlgrammar","CgoFiles":[]}`
+		_, ok := parseSQLAdapterListing([]byte(noCgo))
+		qt.Assert(t, qt.IsFalse(ok))
+	})
+
+	t.Run("adapter absent", func(t *testing.T) {
+		t.Parallel()
+		const noAdapter = `{"Dir":"/repo/internal/app","Name":"app","CgoFiles":[]}`
+		_, ok := parseSQLAdapterListing([]byte(noAdapter))
+		qt.Assert(t, qt.IsFalse(ok))
+	})
+
+	t.Run("malformed JSON", func(t *testing.T) {
+		t.Parallel()
+		_, ok := parseSQLAdapterListing([]byte("not json"))
+		qt.Assert(t, qt.IsFalse(ok))
+	})
+}
+
+func TestFindSQLAdapter(t *testing.T) {
+	t.Parallel()
+	// Real toolchain, real repo: internal/resolve/sqlgrammar genuinely is
+	// the SQL adapter package in this checkout, so this proves
+	// findSQLAdapter's own `go list` invocation and its delegation to
+	// parseSQLAdapterListing (tested above in isolation) actually wire
+	// together end to end, not just that the parsing logic alone is right.
+	repoRoot, err := resolveRepoRoot()
+	qt.Assert(t, qt.IsNil(err))
+
+	dir, ok := findSQLAdapter(repoRoot)
+	qt.Assert(t, qt.IsTrue(ok))
+	qt.Assert(t, qt.StringContains(dir, filepath.Join("internal", "resolve", "sqlgrammar")))
+}
+
+func TestFindSQLAdapterOutsideAModule(t *testing.T) {
+	t.Parallel()
+	// `go list` itself fails outside a module -- findSQLAdapter's other
+	// return path, not exercised by the happy-path case above.
+	_, ok := findSQLAdapter(t.TempDir())
+	qt.Assert(t, qt.IsFalse(ok))
+}
+
+func TestGenerateSQLParserWith(t *testing.T) {
+	t.Parallel()
+	// The one branch reachable without the network or a real tree-sitter
+	// CLI: not found on PATH at all, the common case on a machine that
+	// never opted into SQL support. Everything past this needs both for
+	// real -- see generateSQLParser's own doc comment.
+	ok, msg := generateSQLParserWith("/repo", "/repo/internal/resolve/sqlgrammar", false,
+		func(string) (string, error) { return "", os.ErrNotExist })
+	qt.Assert(t, qt.IsFalse(ok))
+	qt.Assert(t, qt.StringContains(msg, "tree-sitter CLI not found on PATH"))
+}
+
+func TestBuildArgs(t *testing.T) {
+	t.Parallel()
+
+	t.Run("without SQL", func(t *testing.T) {
+		t.Parallel()
+		got := buildArgs("/tmp/rgit", false, "v1.2.3")
+		qt.Assert(t, qt.DeepEquals(got, []string{"build", "-ldflags", "-s -w -X main.version=v1.2.3", "-o", "/tmp/rgit", "./cmd/rgit"}))
+	})
+
+	// The regression this guards: -tags rgit_sql must land between -o's
+	// value and the package path, not appended after it (go build parses
+	// flags positionally -- a misplaced -tags silently becomes a package
+	// argument instead of a flag).
+	t.Run("with SQL, -tags lands before the package path", func(t *testing.T) {
+		t.Parallel()
+		got := buildArgs("/tmp/rgit", true, "")
+		qt.Assert(t, qt.DeepEquals(got, []string{"build", "-ldflags", "-s -w", "-o", "/tmp/rgit", "-tags", "rgit_sql", "./cmd/rgit"}))
+	})
+}
+
+func TestGitVersion(t *testing.T) {
+	t.Parallel()
+
+	dir, _ := gittest.New(t)
+	gittest.Write(t, dir, "f.txt", "one\n")
+	gittest.Commit(t, dir, "initial")
+	gittest.Git(t, dir, "tag", "v1.2.3")
+
+	qt.Assert(t, qt.Equals(gitVersion(dir), "v1.2.3"))
+
+	// git describe's own "-dirty" suffix -- the exact spelling
+	// cmd/rgit/main.go's resolveVersion and the Makefile's cross-build
+	// filenames both already match against; a change here would silently
+	// desync all three.
+	gittest.Write(t, dir, "f.txt", "one\nmodified\n")
+	qt.Assert(t, qt.Equals(gitVersion(dir), "v1.2.3-dirty"))
+}
+
+func TestGitVersionNotARepo(t *testing.T) {
+	t.Parallel()
+	qt.Assert(t, qt.Equals(gitVersion(t.TempDir()), ""))
 }
 
 func TestResolvePrefix(t *testing.T) {

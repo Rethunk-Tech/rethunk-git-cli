@@ -157,9 +157,14 @@ func managerBinDir(m manager, useBun bool) (string, error) {
 // manager, warning loudly per entry when the manager's bin dir is not on
 // PATH. dryRun prints each command instead of running it -- generateSQLParser
 // draws the same distinction for the SQL path.
-func manageServers(dryRun bool, stdout io.Writer) {
+//
+// lookPath is injected (production passes exec.LookPath, main.go's only
+// caller) so both the detection report and the per-job skip branches --
+// "neither bun nor npm", "cargo not on PATH" -- are testable against a fake
+// PATH state with dryRun:true, never touching a real package manager.
+func manageServers(dryRun bool, stdout io.Writer, lookPath func(string) (string, error)) {
 	fmt.Fprintln(stdout, "Language servers:")
-	for _, s := range detectServers(serverCatalog, exec.LookPath) {
+	for _, s := range detectServers(serverCatalog, lookPath) {
 		fmt.Fprintln(stdout, "  "+formatServerStatus(s))
 	}
 
@@ -168,7 +173,7 @@ func manageServers(dryRun bool, stdout io.Writer) {
 		return
 	}
 
-	npmCmd, npmOK := selectNPMManager(exec.LookPath)
+	npmCmd, npmOK := selectNPMManager(lookPath)
 	fmt.Fprintln(stdout, "Installing/updating:")
 	for _, job := range jobs {
 		label := strings.Join(job.provides, ", ")
@@ -178,7 +183,7 @@ func manageServers(dryRun bool, stdout io.Writer) {
 			continue
 		}
 		if job.manager == managerCargo {
-			if _, err := exec.LookPath("cargo"); err != nil {
+			if _, err := lookPath("cargo"); err != nil {
 				fmt.Fprintf(stdout, "  skip %s: cargo not on PATH\n", label)
 				continue
 			}

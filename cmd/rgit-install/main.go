@@ -54,6 +54,14 @@ const (
 // compile -- so an import-content check would silently match nothing.
 const sqlAdapterPackageName = "sqlgrammar"
 
+// main itself has no test: it wires together every function above (each
+// already tested or, where it cannot be, carrying its own doc comment
+// saying why) around flag.Parse's global os.Args and fatalf's os.Exit,
+// neither of which is worth a subprocess re-exec harness just to reach.
+// What would catch drift in the wiring itself: `go run ./cmd/rgit-install
+// -dry-run` (no side effects) and `go run ./cmd/rgit-install -dry-run
+// -with-servers` (also covers the flag added alongside this one), both run
+// by hand as part of validating any change here.
 func main() {
 	dryRun := flag.Bool("dry-run", false, "print what would happen without building or installing")
 	prefixFlag := flag.String("prefix", "", "install directory (default: $GOBIN, else $(go env GOPATH)/bin)")
@@ -91,7 +99,7 @@ func main() {
 	// A plain rgit-install (flag unset) never calls this, so its existing
 	// behavior is unchanged (the opt-in decision docs/INSTALL.md records).
 	if *withServers {
-		manageServers(*dryRun, os.Stdout)
+		manageServers(*dryRun, os.Stdout, exec.LookPath)
 	}
 
 	ver := gitVersion(repoRoot)
@@ -141,9 +149,20 @@ func main() {
 	fmt.Printf("%s %s (version %s)\n", action, dest, versionOrDev(ver))
 }
 
+// fatalf never returns -- os.Exit skips this test binary the same way it
+// would skip any caller, so only fatalMessage (the part with a return value)
+// is covered directly; a subprocess re-exec harness to catch the exit code
+// itself would be pure ceremony for a two-line wrapper with no branch to
+// get wrong.
 func fatalf(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "rgit-install: "+format+"\n", args...)
+	fmt.Fprint(os.Stderr, fatalMessage(format, args...))
 	os.Exit(1)
+}
+
+// fatalMessage is fatalf's formatting half, split out so it is testable
+// without also triggering os.Exit.
+func fatalMessage(format string, args ...any) string {
+	return fmt.Sprintf("rgit-install: "+format+"\n", args...)
 }
 
 // resolveRepoRoot finds the module root by asking the go tool rather than
@@ -155,7 +174,17 @@ func resolveRepoRoot() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("go env GOMOD: %w", err)
 	}
-	gomod := strings.TrimSpace(string(out))
+	return parseGOMODOutput(string(out))
+}
+
+// parseGOMODOutput is `go env GOMOD`'s output turned into a repo root, split
+// out from resolveRepoRoot so the parsing -- trimming, and recognizing the
+// "not in a module" cases -- is testable without shelling out to go for
+// real. `go env GOMOD` prints os.DevNull, not an empty string, when run
+// outside any module; both are checked because nothing in the go toolchain
+// documents that as guaranteed forever.
+func parseGOMODOutput(out string) (string, error) {
+	gomod := strings.TrimSpace(out)
 	if gomod == "" || gomod == os.DevNull {
 		return "", fmt.Errorf("not inside a Go module -- run from within the rgit checkout")
 	}
@@ -172,37 +201,46 @@ func resolveRepoRoot() (string, error) {
 // mechanism internal/app's doctor does -- see that package's doc comment
 // for why the check *list* still isn't shared: doctor reports run-time
 // facts, this reports build-time ones too (go toolchain, CGO_ENABLED, a C
-// compiler) that would be meaningless for an already-built rgit.
+// compiler) that would be meaningless for an already-built rgit. Which
+// check wins when more than one fails is prereqFatal's job, split out so
+// that ordering is testable without shelling out to go/exec.LookPath for
+// real five times per test.
 func runPrereqChecks() (checks []prereq.Check, fatal error) {
 	goCheck := prereq.LookPath("go toolchain", "go", "")
-	checks = append(checks, goCheck)
-	if !goCheck.OK {
-		fatal = fmt.Errorf("go not found on PATH")
-	}
-
 	gitCheck := prereq.LookPath("git", "git", "")
-	checks = append(checks, gitCheck)
-	if !gitCheck.OK && fatal == nil {
-		fatal = fmt.Errorf("git not found on PATH")
-	}
 
 	cgo := goEnv("CGO_ENABLED")
-	checks = append(checks, prereq.Check{Name: "CGO_ENABLED", OK: cgo == "1", Detail: cgo})
-	if cgo != "1" && fatal == nil {
-		fatal = fmt.Errorf("cgo is disabled (CGO_ENABLED=%s) -- rgit links tree-sitter through cgo and cannot build without it", cgo)
-	}
+	cgoCheck := prereq.Check{Name: "CGO_ENABLED", OK: cgo == "1", Detail: cgo}
 
 	cc := goEnv("CC")
 	ccCheck := prereq.LookPath("C compiler ("+cc+")", firstField(cc), "")
-	checks = append(checks, ccCheck)
-	if !ccCheck.OK && fatal == nil {
-		fatal = fmt.Errorf("no %q C compiler found on PATH", cc)
-	}
 
 	tsCheck := prereq.LookPath("tree-sitter CLI", "tree-sitter", "optional -- needed only to generate the SQL parser")
-	checks = append(checks, tsCheck)
 
+	checks = []prereq.Check{goCheck, gitCheck, cgoCheck, ccCheck, tsCheck}
+	fatal = prereqFatal(goCheck, gitCheck, cgoCheck, ccCheck, cc)
 	return checks, fatal
+}
+
+// prereqFatal decides which failing check aborts the install and with what
+// message. go, git, cgo, and the C compiler are each fatal on their own;
+// first-failure-wins ordering matches runPrereqChecks' own historical
+// sequence, so a caller with several things missing at once sees the same
+// single root cause it always has rather than a message that shuffles
+// depending on which check happened to run last.
+func prereqFatal(goCheck, gitCheck, cgoCheck, ccCheck prereq.Check, cc string) error {
+	switch {
+	case !goCheck.OK:
+		return fmt.Errorf("go not found on PATH")
+	case !gitCheck.OK:
+		return fmt.Errorf("git not found on PATH")
+	case !cgoCheck.OK:
+		return fmt.Errorf("cgo is disabled (CGO_ENABLED=%s) -- rgit links tree-sitter through cgo and cannot build without it", cgoCheck.Detail)
+	case !ccCheck.OK:
+		return fmt.Errorf("no %q C compiler found on PATH", cc)
+	default:
+		return nil
+	}
 }
 
 func goEnv(name string) string {
@@ -241,6 +279,15 @@ func findSQLAdapter(repoRoot string) (dir string, ok bool) {
 	if err != nil {
 		return "", false
 	}
+	return parseSQLAdapterListing(out)
+}
+
+// parseSQLAdapterListing scans `go list -json ./...`'s own output -- a
+// stream of concatenated JSON objects, not an array -- for the SQL adapter
+// package. Split out from findSQLAdapter so the matching rule (name, plus a
+// non-empty CgoFiles) is testable against a synthetic listing instead of a
+// real `go list` run.
+func parseSQLAdapterListing(out []byte) (dir string, ok bool) {
 	dec := json.NewDecoder(bytes.NewReader(out))
 	for dec.More() {
 		var pkg struct {
@@ -264,8 +311,19 @@ func findSQLAdapter(repoRoot string) (dir string, ok bool) {
 // all fall back to reporting why and continuing without SQL -- the
 // pre-decided call that a user without the tree-sitter CLI still gets a
 // working rgit.
+//
+// lookPath is the one seam worth injecting here: it makes the fast,
+// no-network "tree-sitter isn't installed" path -- the common case on a
+// machine that never opted into SQL support -- testable without a real CLI.
+// Everything past it (downloadSQLGrammarModule, runSQLGeneration) needs the
+// network and the tree-sitter CLI for real; see those functions' own doc
+// comments for why that part stays exercised by hand rather than mocked.
 func generateSQLParser(repoRoot, pkgDir string, dryRun bool) (ok bool, msg string) {
-	if _, err := exec.LookPath("tree-sitter"); err != nil {
+	return generateSQLParserWith(repoRoot, pkgDir, dryRun, exec.LookPath)
+}
+
+func generateSQLParserWith(repoRoot, pkgDir string, dryRun bool, lookPath func(string) (string, error)) (ok bool, msg string) {
+	if _, err := lookPath("tree-sitter"); err != nil {
 		return false, "tree-sitter CLI not found on PATH -- installing rgit without SQL support"
 	}
 	modDir, err := downloadSQLGrammarModule(repoRoot)
@@ -298,6 +356,16 @@ func generateSQLParser(repoRoot, pkgDir string, dryRun bool) (ok bool, msg strin
 // byte-for-byte unchanged, and a subsequent `go list -m -f {{.Dir}}
 // <path>@<version>` then resolves the same cache directory `go env
 // GOMODCACHE` would.
+//
+// No test seam here: the only two things worth asserting -- "it downloads
+// the pinned version" and "it resolves the module cache path" -- both
+// require the real network and the real module proxy, which is exactly what
+// CONTRIBUTING.md's "prefer the real dependency over a double" already rules
+// out mocking. What would catch drift: `go run ./cmd/rgit-install` by hand
+// with the tree-sitter CLI on PATH -- a broken download surfaces immediately
+// as "not resolvable" in generateSQLParser's own message, and ci.yml's own
+// top comment records that this is deliberately the only place SQL
+// generation ever runs, so nothing else in CI exercises it either.
 func downloadSQLGrammarModule(repoRoot string) (string, error) {
 	versioned := sqlGrammarModule + "@" + sqlGrammarVersion
 
@@ -330,6 +398,17 @@ func downloadSQLGrammarModule(repoRoot string) (string, error) {
 // that subdirectory rather than pkgDir itself: putting it directly in the
 // package directory makes cgo compile it and the adapter's #include pull
 // it in again, a duplicate-symbol link error.
+//
+// No test seam: this needs the real tree-sitter CLI, and a real generation
+// runs ~27s -- far past this package's whole test budget for one function.
+// The two parts that could silently drift both already have their own
+// direct checks downstream of this function: parserABIVersion (tested)
+// catches a stale-ABI CLI, and the finishing os.Rename either lands cleanly
+// or leaves the prior csrc/ untouched, never a half-written one. What would
+// catch drift in the mechanics here specifically: run `go run
+// ./cmd/rgit-install` by hand with the tree-sitter CLI on PATH and confirm
+// "generated the SQL parser into .../csrc (ABI 15)" prints, then `go build
+// -tags rgit_sql ./cmd/rgit` to prove the result actually compiles.
 func runSQLGeneration(modDir, pkgDir string) error {
 	scratch, err := os.MkdirTemp("", "rgit-sql-gen-*")
 	if err != nil {
@@ -467,9 +546,30 @@ func ldflags(ver string) string {
 	return f
 }
 
+// buildArgs constructs the `go build` argv, split out from buildBinary so
+// the flag wiring -- ldflags always present, -tags rgit_sql only when sql is
+// requested, in that order -- is testable without a real, multi-second
+// compile.
+func buildArgs(bin string, sql bool, ver string) []string {
+	args := []string{"build", "-ldflags", ldflags(ver), "-o", bin}
+	if sql {
+		args = append(args, "-tags", "rgit_sql")
+	}
+	return append(args, "./cmd/rgit")
+}
+
 // buildBinary builds ./cmd/rgit into a fresh temp directory rather than
 // straight to the install prefix, so a build failure never leaves a
 // half-written binary at the destination.
+//
+// No test seam past buildArgs: a real invocation compiles this repo's own
+// cgo-linked binary, multiple seconds even from a warm cache -- far over
+// this package's test budget, and every e2e case elsewhere in this repo
+// already proves `go build ./cmd/rgit` itself works. What would catch drift
+// specifically in the CGO_CFLAGS cache-busting below: touch a file under
+// sqlPkgDir/csrc, rebuild with -tags rgit_sql, and confirm the change is
+// reflected rather than silently served from a stale cached object -- the
+// exact regression sqlCSRCContentHash (tested) exists to prevent.
 func buildBinary(repoRoot string, sql bool, sqlPkgDir, ver string) (bin string, cleanup func(), err error) {
 	dir, err := os.MkdirTemp("", "rgit-install-build-*")
 	if err != nil {
@@ -478,13 +578,7 @@ func buildBinary(repoRoot string, sql bool, sqlPkgDir, ver string) (bin string, 
 	cleanup = func() { _ = os.RemoveAll(dir) }
 
 	bin = filepath.Join(dir, "rgit")
-	args := []string{"build", "-ldflags", ldflags(ver), "-o", bin}
-	if sql {
-		args = append(args, "-tags", "rgit_sql")
-	}
-	args = append(args, "./cmd/rgit")
-
-	cmd := exec.Command("go", args...)
+	cmd := exec.Command("go", buildArgs(bin, sql, ver)...)
 	cmd.Dir = repoRoot
 	if sql {
 		// Go's build cache does not otherwise notice csrc/ changing: the

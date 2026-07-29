@@ -1,11 +1,14 @@
-// Detection and capability-reporting coverage. taploCapability itself shells
-// out to a real binary and is exercised by hand, the same boundary
-// main_test.go draws around resolvePrefix's GOBIN/GOPATH fallback -- these
-// tests inject fakes instead.
+// Detection and capability-reporting coverage. detectServers and
+// formatServerStatus take fakes; taploCapability instead gets a real fake
+// binary (a tiny shell script) on disk and is run for real, since it is
+// taplo's own exit code that matters -- a Go-level double for "did the
+// subprocess exit 0" would just restate the function under test.
 package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	qt "github.com/go-quicktest/qt"
@@ -142,4 +145,46 @@ func TestServerCatalog(t *testing.T) {
 	qt.Assert(t, qt.IsNotNil(taplo))
 	qt.Assert(t, qt.DeepEquals(taplo.extraArgs, []string{"--locked", "--features", "lsp"}))
 	qt.Assert(t, qt.IsNotNil(taplo.capability))
+}
+
+// fakeTaplo writes a tiny script at a controlled path that behaves like
+// `taplo lsp --help` would -- exiting 0 (a cargo build with --features lsp)
+// or nonzero (npm's featureless @taplo/cli, which has no "lsp" subcommand
+// at all). taploCapability is called with this path directly, so no PATH
+// manipulation is needed.
+func fakeTaplo(t *testing.T, exitCode int) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "taplo")
+	script := fmt.Sprintf("#!/bin/sh\nexit %d\n", exitCode)
+	qt.Assert(t, qt.IsNil(os.WriteFile(path, []byte(script), 0o755)))
+	return path
+}
+
+// TestTaploCapability is the presence-vs-capability regression this whole
+// feature exists for: a taplo that answers on PATH is not necessarily one
+// that speaks LSP, and a wrong answer here would silently report a server
+// as usable when it is not.
+func TestTaploCapability(t *testing.T) {
+	t.Parallel()
+
+	t.Run("lsp subcommand present -- a real cargo build", func(t *testing.T) {
+		t.Parallel()
+		ok, detail := taploCapability(fakeTaplo(t, 0))
+		qt.Assert(t, qt.IsTrue(ok))
+		qt.Assert(t, qt.Equals(detail, ""))
+	})
+
+	t.Run("no lsp subcommand -- npm's @taplo/cli shape", func(t *testing.T) {
+		t.Parallel()
+		ok, detail := taploCapability(fakeTaplo(t, 1))
+		qt.Assert(t, qt.IsFalse(ok))
+		qt.Assert(t, qt.StringContains(detail, `no "lsp" subcommand`))
+	})
+
+	t.Run("binary does not exist at all", func(t *testing.T) {
+		t.Parallel()
+		ok, detail := taploCapability(filepath.Join(t.TempDir(), "does-not-exist"))
+		qt.Assert(t, qt.IsFalse(ok))
+		qt.Assert(t, qt.StringContains(detail, `no "lsp" subcommand`))
+	})
 }

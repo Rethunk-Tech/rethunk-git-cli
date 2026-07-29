@@ -1,11 +1,14 @@
 // Install/update coverage: the manager-selection table, command
 // construction per ecosystem, PATH-reachability detection, and warning
-// formatting -- CONTRIBUTING.md's "test the pure logic" boundary. Nothing
-// here shells out to a real package manager; manageServers itself (which
-// does) is exercised by hand with -dry-run instead.
+// formatting -- CONTRIBUTING.md's "test the pure logic" boundary.
+// manageServers itself takes an injected lookPath (servers_install.go), so
+// its wiring and skip branches are tested here too with dryRun:true, which
+// never runs a real command; only a non-dry-run job's actual
+// exec.Command(...).Run() stays untested, exercised by hand instead.
 package main
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
@@ -151,5 +154,49 @@ func TestManagerBinDirCargo(t *testing.T) {
 		got, err := managerBinDir(managerCargo, false)
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Satisfies(got, func(s string) bool { return strings.HasSuffix(s, "/.cargo/bin") }))
+	})
+}
+
+func TestManageServersDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nothing on PATH", func(t *testing.T) {
+		t.Parallel()
+		var buf bytes.Buffer
+		manageServers(true, &buf, fakeLookPath(nil))
+		out := buf.String()
+
+		qt.Assert(t, qt.StringContains(out, "Language servers:"))
+		qt.Assert(t, qt.StringContains(out, "not found"))
+		qt.Assert(t, qt.StringContains(out, "skip"))
+		qt.Assert(t, qt.StringContains(out, "neither bun nor npm on PATH"))
+		qt.Assert(t, qt.StringContains(out, "cargo not on PATH"))
+		// dryRun:true never reaches cmd.Run() for any job -- a "FAILED"
+		// line here would mean the dry-run guard stopped guarding.
+		qt.Assert(t, qt.Not(qt.StringContains(out, "FAILED")))
+	})
+
+	t.Run("every manager on PATH", func(t *testing.T) {
+		t.Parallel()
+		lookPath := fakeLookPath(map[string]string{
+			"gopls": "/x/gopls", "vtsls": "/x/vtsls", "pyright-langserver": "/x/pyright-langserver",
+			"bash-language-server": "/x/bls", "yaml-language-server": "/x/yls",
+			"vscode-json-language-server": "/x/json", "vscode-css-language-server": "/x/css",
+			"marksman": "/x/marksman", "taplo": "/x/taplo",
+			"bun": "/x/bun", "npm": "/x/npm", "cargo": "/x/cargo",
+		})
+		var buf bytes.Buffer
+		manageServers(true, &buf, lookPath)
+		out := buf.String()
+
+		qt.Assert(t, qt.StringContains(out, "found at /x/gopls"))
+		qt.Assert(t, qt.StringContains(out, "go install golang.org/x/tools/gopls@latest"))
+		// bun is preferred over npm when both are on PATH (selectNPMManager).
+		qt.Assert(t, qt.StringContains(out, "bun add -g"))
+		qt.Assert(t, qt.Not(qt.StringContains(out, "npm install")))
+		qt.Assert(t, qt.StringContains(out, "cargo install taplo-cli --locked --features lsp"))
+		// Nothing is skipped once every manager answers.
+		qt.Assert(t, qt.Not(qt.StringContains(out, "skip")))
+		qt.Assert(t, qt.Not(qt.StringContains(out, "FAILED")))
 	})
 }
