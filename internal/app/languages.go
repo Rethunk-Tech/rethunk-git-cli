@@ -109,10 +109,9 @@ func renderLanguagesPorcelain(langs []resolve.LanguageInfo) string {
 
 // gatedLanguageNames returns the Name of every registered adapter that is
 // present only because a build tag selected it -- "sql" alone when built
-// with -tags rgit_sql, empty otherwise. Shared by `rgit
-// --version` (app.go) and `rgit doctor` (doctor.go) so the three surfaces
-// -- languages, doctor, and --version -- can never disagree about which
-// grammars are gated in this exact binary.
+// with -tags rgit_sql, empty otherwise. Used by `rgit --version` (app.go)
+// so it can never disagree with `rgit languages` about which grammars are
+// gated in this exact binary.
 func gatedLanguageNames() []string {
 	var names []string
 	for _, l := range resolve.Languages() {

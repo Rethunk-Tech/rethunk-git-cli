@@ -116,7 +116,7 @@ type SymRef struct {
 }
 
 // Options is runDiff's fully-classified input: flags plus the buckets
-// cli.ClassifyArgs's positionals sorted into (see Bucket in classify.go).
+// cli.ClassifyArgs's positionals sorted into (see BucketClassified in classify.go).
 type Options struct {
 	Staged   bool
 	Unstaged bool
