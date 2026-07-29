@@ -44,13 +44,24 @@ func runCompletion(args []string, stdout, stderr io.Writer) exitcode.Code {
 	}
 }
 
+// rgitSubcommands is the completion script's first-word candidate list:
+// every subcommand app.go's Run dispatches, plus its own top-level
+// aliases and flags. completion_test.go's TestCompletionSubcommands
+// checks it against topLevelHelp's own Commands section, generated at
+// test time rather than copied, so a new subcommand missing here fails
+// the suite instead of only being missing from a shell's tab completion.
+const rgitSubcommands = "diff commit languages doctor completion help -h --help --version"
+
 // rgitDiffFlags and rgitCommitFlags are the static parts of completion:
 // each subcommand's own flag surface, mirroring docs/USAGE.md § Flags plus
 // the --sym/--file pair every subcommand shares (internal/app/shared.go's
-// newTargetFlagSet). They are duplicated here rather than introspected from
-// the live pflag.FlagSet because the completion script is a standalone text
-// blob with no Go runtime behind it once emitted -- keep this in sync with
-// diff.go and commit.go's own flag registration by hand.
+// newTargetFlagSet). They are duplicated here rather than introspected at
+// runtime because the completion script is a standalone text blob with no
+// Go runtime behind it once emitted -- but completion_test.go's
+// TestCompletionFlags_MatchLiveFlagSets drives each command's own --help
+// output (pflag's own FlagUsages rendering of the live FlagSet, not a
+// second hand copy) and fails the suite the moment either list drifts from
+// what diff.go or commit.go actually registers.
 const rgitDiffFlags = "--unstaged --staged --cached --range --porcelain --exit-code --quiet --sym --file -h --help"
 
 const rgitCommitFlags = "-m --message -F --message-file -s --signoff --trailer --amend --allow-empty --push " +
@@ -83,7 +94,7 @@ _rgit_completion() {
     cmd="${COMP_WORDS[1]}"
 
     if [[ $COMP_CWORD -eq 1 ]]; then
-        COMPREPLY=( $(compgen -W "diff commit completion help -h --help --version" -- "$cur") )
+        COMPREPLY=( $(compgen -W "` + rgitSubcommands + `" -- "$cur") )
         return 0
     fi
 
@@ -140,7 +151,7 @@ _rgit() {
     cmd="${words[2]}"
 
     if (( CURRENT == 2 )); then
-        compadd -- diff commit completion help -h --help --version
+        compadd -- ` + rgitSubcommands + `
         return
     fi
 
