@@ -52,6 +52,13 @@ Notable changes to `rgit`. The format follows
   signals an internal resolver inconsistency, never a legitimate input.
   It now fails loudly instead of mis-reporting that file's rows with
   nothing to say why.
+- `rgit diff` no longer claims a language server verified extents it never
+  compared. A file whose only cross-checked resolutions are pseudo-anchors
+  — one whose sole anchor is `@imports`, say — reported a completed
+  cross-check and suppressed `[ts-only]`, while `rgit commit`'s per-anchor
+  form already degraded on the identical input. Both now answer through one
+  shared verdict, so the two cannot disagree. See
+  [`docs/CODES.md`](docs/CODES.md).
 - A stale or incompatible language-server socket no longer pins every later
   invocation to `[ts-only]`: a managed socket that fails the handshake is
   unlinked and the next candidate tried. Spawn-on-demand also unlinks a dead
