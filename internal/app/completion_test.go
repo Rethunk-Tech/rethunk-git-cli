@@ -23,6 +23,7 @@ import (
 // none of which is a row in Commands:, since they are not dispatched the
 // same way a subcommand is).
 func TestCompletionSubcommands(t *testing.T) {
+	t.Parallel()
 	documented := subcommandNamesFromHelp(t, topLevelHelp)
 	if len(documented) == 0 {
 		t.Fatal("could not parse any subcommand names out of topLevelHelp -- did its Commands: section move or change shape?")
@@ -91,6 +92,7 @@ var flagTokenRe = regexp.MustCompile(`(?m)^\s*(?:-(\w), )?--([\w-]+)`)
 // --gpg-sign by expandGPGSignShorthand before Parse ever sees it
 // (commit.go), so it is not a registered shorthand either.
 func TestCompletionFlags_MatchLiveFlagSets(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		stdout   string
