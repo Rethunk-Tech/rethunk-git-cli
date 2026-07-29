@@ -13,18 +13,98 @@ today; it rises whenever a dependency raises its own.
 
 ## Build
 
+Three ways to get a binary, in order of how much they do for you:
+
+**`make install`** builds and installs in one step, wrapping
+[`cmd/rgit-install`](../cmd/rgit-install) — it checks prerequisites, generates
+the SQL parser when it can (see [SQL support](#sql-support)), builds,
+installs, and reports each step:
+
 ```bash
-go build -ldflags="-s -w" -o rgit .
+make install                     # to $GOBIN, or $(go env GOPATH)/bin
+make install PREFIX=~/.local/bin
+```
+
+Run the installer directly for its own flags, including a preview that
+changes nothing:
+
+```bash
+go run ./cmd/rgit-install -dry-run
+go run ./cmd/rgit-install -prefix ~/.local/bin
+```
+
+**`make build`** builds `./rgit` for the host only, no install step.
+
+**Plain `go build`** needs no `make`:
+
+```bash
+go build -ldflags="-s -w" -o rgit ./cmd/rgit
 ```
 
 The binary is ~11 MB stripped; what accounts for that is recorded in
 [`specs/design.md`](../specs/design.md#dependencies).
 
-Install it anywhere on `PATH`:
+Install any of the above onto `PATH` yourself if you didn't use `make install`:
 
 ```bash
 install -m 0755 rgit ~/.local/bin/rgit
 ```
+
+## Makefile targets
+
+`make help` — the default target — lists them all; the ones worth knowing:
+
+| Target | Does |
+| --- | --- |
+| `build` | `go build` the host binary to `./rgit` |
+| `install` | Build and install via `cmd/rgit-install` (`PREFIX=` to override) |
+| `test`, `test-short`, `test-race` | The three lanes [`CONTRIBUTING.md`](../CONTRIBUTING.md#tests) documents |
+| `cover`, `cover-short` | Coverage with `-coverpkg=./...`, as `CONTRIBUTING.md` requires |
+| `fix-diff`, `fix` | `go fix` preview and apply |
+| `cross` | Cross-compile linux/amd64, linux/arm64, windows/amd64 into `dist/` |
+| `clean` | Remove build outputs |
+
+## Cross builds
+
+`rgit` links tree-sitter through cgo, so `CGO_ENABLED=0` is not an option —
+every cross target needs a matching C toolchain. Measured from a Linux host
+with [zig](https://ziglang.org) as the single cross-compilation tool:
+
+| Target | Works | `CC` |
+| --- | --- | --- |
+| linux/amd64 | yes | `zig cc -target x86_64-linux-gnu` |
+| linux/arm64 | yes | `zig cc -target aarch64-linux-gnu` |
+| windows/amd64 | yes | `zig cc -target x86_64-windows-gnu` |
+| darwin/amd64, darwin/arm64 | **no** | needs a macOS SDK |
+
+```bash
+make cross                 # all three working targets, into dist/
+make cross-linux-arm64     # a single target
+```
+
+darwin fails at link time with `unable to find dynamic system library
+'resolv'`: `net` is a real dependency (`go.lsp.dev/jsonrpc2` uses it for the
+`gopls` socket), and linking it needs `-lresolv` and `-framework
+CoreFoundation` from an actual macOS SDK — building with `-tags
+netgo,osusergo` does not clear it. Build darwin binaries on a Mac, or in CI
+with a macOS runner; it is deliberately not in `make cross`'s default matrix.
+
+## SQL support
+
+SQL is a second grammar behind the `rgit_sql` build tag: a plain `go build
+./...` or `go install ./cmd/rgit` builds and works identically without it.
+Its parser has no pre-built Go bindings — the grammar module gitignores its
+own `parser.c` at every tag — so `rgit` generates that file at build time
+instead of vendoring it: `tree-sitter generate` turns the module's
+`grammar.js` into a working `parser.c`, which is copied into the SQL
+adapter package's `csrc/` subdirectory. That directory is gitignored and
+never committed; it regenerates on demand.
+
+`cmd/rgit-install` does this automatically once the SQL adapter package
+exists and the [tree-sitter CLI](https://github.com/tree-sitter/tree-sitter)
+is on `PATH` — a JS runtime is also needed, since grammar files are
+JavaScript. Without the CLI, the installer installs `rgit` without SQL
+support and says so plainly rather than failing.
 
 ## Language servers
 

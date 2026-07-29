@@ -44,8 +44,9 @@ There are two lanes, and which one a case belongs in is the first decision:
   index, exit codes as a caller observes them — not by being the only thing
   that proves a behaviour at all.
 
-The three top-level files below remain the home for the design's validated
-cases; a case one of them covers must not be lost when it is refactored.
+The three files below, beside `main.go` in [`cmd/rgit`](cmd/rgit), remain the
+home for the design's validated cases; a case one of them covers must not be
+lost when it is refactored.
 
 Temporary repositories come from [`internal/gittest`](internal/gittest/gittest.go)
 rather than being hand-rolled per package — four packages had grown a
