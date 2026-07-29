@@ -119,7 +119,7 @@ func dirOnPATH(dir, pathEnv string) bool {
 	return false
 }
 
-// formatPathWarning is decision 4's loud warning: installed, but unreachable.
+// formatPathWarning is the loud warning for "installed, but unreachable".
 func formatPathWarning(servers, dir string) string {
 	return fmt.Sprintf(
 		"WARNING: %s installed to %s, which is not on PATH -- the binary exists but nothing that shells out (rgit included) can reach it. Add %s to PATH.",
