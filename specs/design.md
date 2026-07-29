@@ -1012,9 +1012,14 @@ exit code (Cobra hardcodes 1, Kong exits 80). A full framework stays rejected:
 below the bar set in `claude-format-hooks`. pflag is a flag parser, not a
 framework — one dependency bought for a measured, specific defect.
 
-No shell completion in v1: `rgit` is primarily agent-invoked, and the genuinely
-useful completion (symbols after `auth.go:`) is a dynamic function shelling out
-to `rgit diff --porcelain`, hand-written under any option.
+**No shell completion in v1 — superseded.** The original scope argued `rgit` is
+primarily agent-invoked, and that the genuinely useful completion (symbols after
+`auth.go:`) is a dynamic function shelling out to `rgit diff --porcelain`,
+hand-written under any option. That reasoning held; only the scope call changed.
+`rgit completion bash|zsh` now ships, implemented exactly as predicted — a
+hand-written script whose symbol completion parses `--porcelain` output, with no
+framework and no new dependency. The porcelain format is a machine contract with
+a shipped in-repo consumer as a result ([`docs/CODES.md`](../docs/CODES.md)).
 
 ## Dependencies
 
