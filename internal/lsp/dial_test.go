@@ -234,6 +234,31 @@ func TestPrivateSocketDir_CreatesPrivateDirectory(t *testing.T) {
 	}
 }
 
+// TestRuntimeDir_EmptyXDGFallsBackToTempDir covers runtimeDir's os.TempDir()
+// fallback branch: every other case in this file sets XDG_RUNTIME_DIR to its
+// own temp dir, so that branch never actually runs otherwise. An empty
+// (unset) XDG_RUNTIME_DIR must resolve the managed socket directory under
+// the same place os.TempDir() reports, not silently build every socket path
+// relative to "" (the process's own current directory).
+//
+// This exercises the real, shared os.TempDir() rather than an isolated
+// t.TempDir() -- the one thing this branch is actually for -- so the
+// directory it creates there is removed afterward rather than left behind.
+func TestRuntimeDir_EmptyXDGFallsBackToTempDir(t *testing.T) {
+	// cannot Parallel because t.Setenv("XDG_RUNTIME_DIR", ...) below
+	t.Setenv("XDG_RUNTIME_DIR", "")
+
+	dir, ok := privateSocketDir()
+	if !ok {
+		t.Fatal("privateSocketDir() ok = false; want true under the os.TempDir() fallback")
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+
+	if got, want := filepath.Dir(dir), filepath.Clean(os.TempDir()); got != want {
+		t.Errorf("privateSocketDir() parent = %q; want os.TempDir() %q", got, want)
+	}
+}
+
 // TestPrivateSocketDir_RejectsLoosePermissions covers the case a predictable
 // path in a shared directory exists for: someone (or something) already
 // created the expected path with group/other permissions. rgit must not
