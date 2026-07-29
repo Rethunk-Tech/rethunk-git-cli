@@ -66,7 +66,8 @@ func TestRun_SQLAnchorWithoutTagHintsRebuild(t *testing.T) {
 	_, stderr, code := runApp(t, "commit", "-m", "feat(x): y", "q.sql:Anything")
 
 	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
-	qt.Assert(t, qt.StringContains(stderr, "no grammar registered for .sql"))
+	qt.Assert(t, qt.StringContains(stderr, "no grammar registered for q.sql"))
+	qt.Assert(t, qt.StringContains(stderr, `extension ".sql"`))
 	qt.Assert(t, qt.StringContains(stderr, "rgit_sql"))
 	qt.Assert(t, qt.StringContains(stderr, "docs/INSTALL.md"))
 }

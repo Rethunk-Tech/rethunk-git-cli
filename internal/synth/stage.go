@@ -467,6 +467,7 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 
 	ext := filepath.Ext(path)
 	lang, ok := resolve.ForExtension(ext)
+	shebangSniffed := false
 	if !ok {
 		// Extension lookup found nothing; a worktree copy may still carry a
 		// recognizable "#!" interpreter line -- the case an extensionless
@@ -476,11 +477,12 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 		// A path with no worktree copy at all (peeked == false) falls
 		// straight through to the same refusal as before.
 		if line, peeked := resolve.PeekShebangLine(filepath.Join(root, path)); peeked {
+			shebangSniffed = true
 			lang, ok = resolve.ForPath(path, line)
 		}
 	}
 	if !ok {
-		return nil, &PathError{Code: exitcode.UnsupportedLanguage, Path: path, Reason: "no grammar registered for " + ext}
+		return nil, &PathError{Code: exitcode.UnsupportedLanguage, Path: path, Reason: unsupportedLanguageReason(path, ext, shebangSniffed)}
 	}
 
 	headSrc, headExists, err := repo.CatFile(ctx, "HEAD", path)
@@ -513,6 +515,20 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 		fp.workOrder = fp.workFile.DeclOrder()
 	}
 	return fp, nil
+}
+
+// unsupportedLanguageReason builds openFilePlan's exit-9 PathError message.
+// An extensionless path (a git hook, a bin/ entry) or an unmapped shebang
+// leaves ext == "", which the old "no grammar registered for " + ext
+// message rendered as a dangling "... for " with no sign that shebang
+// sniffing was even attempted -- this names the path plainly and says
+// which of the two lookups actually ran.
+func unsupportedLanguageReason(path, ext string, shebangSniffed bool) string {
+	shebang := "no worktree file to sniff a shebang from"
+	if shebangSniffed {
+		shebang = "shebang unmapped"
+	}
+	return fmt.Sprintf("no grammar registered for %s (extension %q, %s)", path, ext, shebang)
 }
 
 // close releases both parse trees. Extents already resolved out of them are

@@ -802,7 +802,8 @@ func TestRun_UnsupportedLanguageGetsNoRebuildHint(t *testing.T) {
 	_, stderr, code := runApp(t, "commit", "-m", "feat(x): y", "main.rs:main")
 
 	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
-	qt.Assert(t, qt.StringContains(stderr, "no grammar registered for .rs"))
+	qt.Assert(t, qt.StringContains(stderr, "no grammar registered for main.rs"))
+	qt.Assert(t, qt.StringContains(stderr, `extension ".rs"`))
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "rgit_sql")))
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "rebuild")))
 }
