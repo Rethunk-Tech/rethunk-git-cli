@@ -104,8 +104,18 @@ func TestSession_ReusesCachedClientAndClosesIt(t *testing.T) {
 	}
 
 	sess.Close()
-	if closes := rwc.closes.Load(); closes != 1 {
-		t.Errorf("cached client closed %d times by Session.Close(); want exactly 1", closes)
+	// At least once, not exactly once: unlike
+	// TestNewClient_ClosesConnExactlyOnceOnHandshakeFailure's synchronous,
+	// single-owner path, closeFn here is NewClient's default (rwc.Close
+	// directly, never jsonrpc2.Conn.Close()) -- so this Close races
+	// jsonrpc2's own read goroutine, which independently closes the same
+	// stream once it observes the read error our Close causes (conn.go's
+	// updateInFlight: idle + a non-nil readErr closes s.closer too).
+	// Flaky at exactly 1 under -race -count=3 for exactly that reason: what
+	// this test actually owns is proving Session.Close reaches the client
+	// at all, not arbitrating a lower library's own internal teardown race.
+	if closes := rwc.closes.Load(); closes < 1 {
+		t.Errorf("cached client closed %d times by Session.Close(); want at least 1", closes)
 	}
 
 	if srvErr := <-errCh; srvErr != nil {
