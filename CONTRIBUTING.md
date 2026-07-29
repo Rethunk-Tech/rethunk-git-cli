@@ -120,6 +120,18 @@ produces rather than committing it blind: the rewrites are correct but
 occasionally clumsy, and a mechanical `a, b := before, after` is worth
 collapsing by hand.
 
+## Linting
+
+```bash
+make lint   # golangci-lint run ./...
+```
+
+[`.golangci.yml`](.golangci.yml) keeps the default linter set (errcheck,
+govet, ineffassign, staticcheck, unused) with one deliberate tuning: an
+errcheck exemption for the `fmt.Fprint*` calls that report an outcome to the
+caller's own stdout/stderr, where a second failure has nowhere to go. The
+reasoning is recorded there rather than repeated here.
+
 ## Dependencies
 
 Binary size and dependency count are not constraints — but every dependency

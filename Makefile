@@ -18,7 +18,7 @@ ZIG ?= zig
 .DEFAULT_GOAL := help
 
 .PHONY: help build install test test-short test-race cover cover-short \
-        fix-diff fix clean cross cross-linux-amd64 cross-linux-arm64 \
+        fix-diff fix lint clean cross cross-linux-amd64 cross-linux-arm64 \
         cross-windows-amd64
 
 help:
@@ -32,6 +32,7 @@ help:
 	@echo "  cover-short        coverage for the -short lane"
 	@echo "  fix-diff           go fix -diff ./...        (preview; read before applying)"
 	@echo "  fix                go fix ./... twice        (fixes can unlock fixes)"
+	@echo "  lint               golangci-lint run ./...   (.golangci.yml)"
 	@echo "  cross              cross-compile linux/amd64, linux/arm64, windows/amd64 into dist/"
 	@echo "  clean              remove build outputs, including a generated SQL parser tree"
 
@@ -67,6 +68,13 @@ fix-diff:
 fix:
 	go fix ./...
 	go fix ./...
+
+lint:
+	@command -v golangci-lint >/dev/null 2>&1 || { \
+		echo "lint needs golangci-lint on PATH (https://golangci-lint.run/welcome/install/)"; \
+		exit 1; \
+	}
+	golangci-lint run ./...
 
 clean:
 	rm -f $(BINARY) coverage.out short.out

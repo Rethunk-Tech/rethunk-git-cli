@@ -182,7 +182,7 @@ func runPrereqChecks() (checks []prereqCheck, fatal error) {
 	ccPath, ccErr := exec.LookPath(firstField(cc))
 	checks = append(checks, prereqCheck{"C compiler (" + cc + ")", ccErr == nil, ccPath})
 	if ccErr != nil && fatal == nil {
-		fatal = fmt.Errorf("C compiler %q not found on PATH", cc)
+		fatal = fmt.Errorf("no %q C compiler found on PATH", cc)
 	}
 
 	tsPath, tsErr := exec.LookPath("tree-sitter")
