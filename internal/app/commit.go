@@ -175,7 +175,7 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 		return code
 	}
 
-	classified, err := cli.ClassifyArgs(restoreDoubleDash(fs), false, cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo, Ctx: ctx}, cli.GitRevisionResolver{Repo: repo, Ctx: ctx})
+	classified, err := cli.ClassifyArgs(ctx, restoreDoubleDash(fs), false, cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}, cli.GitRevisionResolver{Repo: repo})
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.InvalidUsage

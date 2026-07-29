@@ -24,7 +24,7 @@ import (
 //	a.go                 committed, exists at HEAD and in the worktree
 //	src/notes:draft.md   a legal path that itself contains a colon
 //	gone.go              committed, then deleted from the worktree
-func newClassifyRepo(t *testing.T) (root string, checker GitPathChecker, revs GitRevisionResolver) {
+func newClassifyRepo(t *testing.T) (root string, checker GitPathChecker, revs GitRevisionResolver, ctx context.Context) {
 	t.Helper()
 	root, repo := gittest.New(t)
 
@@ -36,8 +36,7 @@ func newClassifyRepo(t *testing.T) (root string, checker GitPathChecker, revs Gi
 		t.Fatal(err)
 	}
 
-	ctx := context.Background()
-	return root, GitPathChecker{Root: root, Repo: repo, Ctx: ctx}, GitRevisionResolver{Repo: repo, Ctx: ctx}
+	return root, GitPathChecker{Root: root, Repo: repo}, GitRevisionResolver{Repo: repo}, context.Background()
 }
 
 // TestClassifyArgs_PrecedenceTable walks docs/USAGE.md § Argument shape's
@@ -46,7 +45,7 @@ func newClassifyRepo(t *testing.T) (root string, checker GitPathChecker, revs Gi
 // since several tokens satisfy more than one test.
 func TestClassifyArgs_PrecedenceTable(t *testing.T) {
 	t.Parallel()
-	_, checker, revs := newClassifyRepo(t)
+	_, checker, revs, ctx := newClassifyRepo(t)
 
 	for _, tc := range []struct {
 		name           string
@@ -95,7 +94,7 @@ func TestClassifyArgs_PrecedenceTable(t *testing.T) {
 		want: []Classification{{Kind: KindAnchor, Anchor: Anchor{File: "gone.go", Name: "Gone"}}},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := ClassifyArgs(tc.args, tc.allowRevisions, checker, revs)
+			got, err := ClassifyArgs(ctx, tc.args, tc.allowRevisions, checker, revs)
 			qt.Assert(t, qt.IsNil(err))
 			qt.Assert(t, qt.DeepEquals(got, tc.want))
 		})
@@ -107,9 +106,9 @@ func TestClassifyArgs_PrecedenceTable(t *testing.T) {
 // was actually applied -- and only those, since rule 3 is diff-only.
 func TestClassifyArgs_Rule6ListsWhatItTried(t *testing.T) {
 	t.Parallel()
-	_, checker, revs := newClassifyRepo(t)
+	_, checker, revs, ctx := newClassifyRepo(t)
 
-	_, err := ClassifyArgs([]string{"nosuch.go:Nope"}, true, checker, revs)
+	_, err := ClassifyArgs(ctx, []string{"nosuch.go:Nope"}, true, checker, revs)
 
 	var uerr *UnresolvedArgError
 	qt.Assert(t, qt.IsTrue(errors.As(err, &uerr)))
@@ -123,7 +122,7 @@ func TestClassifyArgs_Rule6ListsWhatItTried(t *testing.T) {
 
 	// Without revisions the rule-3 line must be absent rather than merely
 	// unmatched: a commit invocation never consulted rev-parse at all.
-	_, err = ClassifyArgs([]string{"nosuch.go:Nope"}, false, checker, revs)
+	_, err = ClassifyArgs(ctx, []string{"nosuch.go:Nope"}, false, checker, revs)
 	qt.Assert(t, qt.IsTrue(errors.As(err, &uerr)))
 	qt.Assert(t, qt.Equals(len(uerr.Tried), 3))
 
@@ -132,7 +131,7 @@ func TestClassifyArgs_Rule6ListsWhatItTried(t *testing.T) {
 	// `rgit commit HEAD:a.go` cannot be one -- rule 5 splits it at the last
 	// colon and finds no path named "HEAD" to anchor against, so it is
 	// refused rather than quietly staging something.
-	_, err = ClassifyArgs([]string{"HEAD:a.go"}, false, checker, revs)
+	_, err = ClassifyArgs(ctx, []string{"HEAD:a.go"}, false, checker, revs)
 	qt.Assert(t, qt.IsTrue(errors.As(err, &uerr)))
 	qt.Assert(t, qt.Equals(uerr.Arg, "HEAD:a.go"))
 }

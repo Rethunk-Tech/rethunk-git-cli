@@ -76,15 +76,15 @@ func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) exitc
 		return code
 	}
 
-	checker := cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo, Ctx: ctx}
+	checker := cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}
 
-	rangeToken, rest, err := diffpkg.ExtractRangeToken(restoreDoubleDash(fs), checker)
+	rangeToken, rest, err := diffpkg.ExtractRangeToken(ctx, restoreDoubleDash(fs), checker)
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.InvalidUsage
 	}
 
-	classified, err := cli.ClassifyArgs(rest, true, checker, cli.GitRevisionResolver{Repo: repo, Ctx: ctx})
+	classified, err := cli.ClassifyArgs(ctx, rest, true, checker, cli.GitRevisionResolver{Repo: repo})
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.InvalidUsage

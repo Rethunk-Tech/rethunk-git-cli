@@ -56,7 +56,7 @@ type Classification struct {
 // PathChecker answers rule 4 and rule 5's "exists in the worktree or at
 // HEAD" test.
 type PathChecker interface {
-	ExistsInWorktreeOrHEAD(path string) (bool, error)
+	ExistsInWorktreeOrHEAD(ctx context.Context, path string) (bool, error)
 }
 
 // RevisionResolver answers rule 3's "resolves via git rev-parse --verify"
@@ -64,7 +64,7 @@ type PathChecker interface {
 // ranges (A..B, A...B), since git's own rev-parse syntax accepts all
 // three forms.
 type RevisionResolver interface {
-	ResolvesAsRevision(token string) (bool, error)
+	ResolvesAsRevision(ctx context.Context, token string) (bool, error)
 }
 
 // UnresolvedArgError is rule 6: none of the applicable rules matched.
@@ -92,7 +92,7 @@ func (e *UnresolvedArgError) Error() string {
 //  5. A token that splits at its last ":" into an existing path and a
 //     name is a symbol anchor.
 //  6. Otherwise, an *UnresolvedArgError listing every rule tried.
-func ClassifyArgs(args []string, allowRevisions bool, paths PathChecker, revs RevisionResolver) ([]Classification, error) {
+func ClassifyArgs(ctx context.Context, args []string, allowRevisions bool, paths PathChecker, revs RevisionResolver) ([]Classification, error) {
 	out := make([]Classification, 0, len(args))
 	seenDoubleDash := false
 	for _, a := range args {
@@ -104,7 +104,7 @@ func ClassifyArgs(args []string, allowRevisions bool, paths PathChecker, revs Re
 			out = append(out, Classification{Kind: KindPathspec, Pathspec: a})
 			continue
 		}
-		c, err := classifyOne(a, allowRevisions, paths, revs)
+		c, err := classifyOne(ctx, a, allowRevisions, paths, revs)
 		if err != nil {
 			return nil, err
 		}
@@ -113,7 +113,7 @@ func ClassifyArgs(args []string, allowRevisions bool, paths PathChecker, revs Re
 	return out, nil
 }
 
-func classifyOne(a string, allowRevisions bool, paths PathChecker, revs RevisionResolver) (Classification, error) {
+func classifyOne(ctx context.Context, a string, allowRevisions bool, paths PathChecker, revs RevisionResolver) (Classification, error) {
 	var tried []string
 
 	// Rule 2. All git pathspec magic is leading-colon, so this alone
@@ -128,7 +128,7 @@ func classifyOne(a string, allowRevisions bool, paths PathChecker, revs Revision
 	// "HEAD~1:f.go" resolves as a blob reference rather than failing the
 	// path-existence check and falling through to rule 5.
 	if allowRevisions {
-		ok, err := revs.ResolvesAsRevision(a)
+		ok, err := revs.ResolvesAsRevision(ctx, a)
 		if err != nil {
 			return Classification{}, err
 		}
@@ -144,7 +144,7 @@ func classifyOne(a string, allowRevisions bool, paths PathChecker, revs Revision
 	// Rule 4. An existing-path check beats a colon-split so that a
 	// tracked file like "src/notes:draft.md" is claimed here rather than
 	// being split into a bogus anchor by rule 5.
-	exists, err := paths.ExistsInWorktreeOrHEAD(a)
+	exists, err := paths.ExistsInWorktreeOrHEAD(ctx, a)
 	if err != nil {
 		return Classification{}, err
 	}
@@ -158,7 +158,7 @@ func classifyOne(a string, allowRevisions bool, paths PathChecker, revs Revision
 	// yields the right file/name split.
 	if idx := strings.LastIndexByte(a, ':'); idx > 0 && idx < len(a)-1 {
 		file, name := a[:idx], a[idx+1:]
-		fileExists, ferr := paths.ExistsInWorktreeOrHEAD(file)
+		fileExists, ferr := paths.ExistsInWorktreeOrHEAD(ctx, file)
 		if ferr != nil {
 			return Classification{}, ferr
 		}
@@ -195,10 +195,9 @@ type GitPathChecker struct {
 	Root   string
 	Prefix string
 	Repo   *gitx.Repo
-	Ctx    context.Context
 }
 
-func (c GitPathChecker) ExistsInWorktreeOrHEAD(path string) (bool, error) {
+func (c GitPathChecker) ExistsInWorktreeOrHEAD(ctx context.Context, path string) (bool, error) {
 	rel := PrefixPath(c.Prefix, path)
 	if _, err := os.Stat(filepath.Join(c.Root, rel)); err == nil {
 		return true, nil
@@ -206,7 +205,7 @@ func (c GitPathChecker) ExistsInWorktreeOrHEAD(path string) (bool, error) {
 		return false, err
 	}
 
-	_, found, err := c.Repo.LsTreeTolerant(c.Ctx, "HEAD", rel)
+	_, found, err := c.Repo.LsTreeTolerant(ctx, "HEAD", rel)
 	if err != nil {
 		return false, err
 	}
@@ -216,10 +215,9 @@ func (c GitPathChecker) ExistsInWorktreeOrHEAD(path string) (bool, error) {
 // GitRevisionResolver is the real RevisionResolver, backed by gitx.
 type GitRevisionResolver struct {
 	Repo *gitx.Repo
-	Ctx  context.Context
 }
 
-func (r GitRevisionResolver) ResolvesAsRevision(token string) (bool, error) {
-	_, ok, err := r.Repo.RevParseVerify(r.Ctx, token)
+func (r GitRevisionResolver) ResolvesAsRevision(ctx context.Context, token string) (bool, error) {
+	_, ok, err := r.Repo.RevParseVerify(ctx, token)
 	return ok, err
 }

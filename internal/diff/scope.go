@@ -183,7 +183,7 @@ func resolveRangeScope(ctx context.Context, repo *gitx.Repo, rangeToken string) 
 // a range: git forbids ".." in ref names, but a legitimate relative
 // pathspec like "../shared/util.go" also contains "..", and path existence
 // must win over the heuristic.
-func ExtractRangeToken(args []string, paths cli.PathChecker) (token string, rest []string, err error) {
+func ExtractRangeToken(ctx context.Context, args []string, paths cli.PathChecker) (token string, rest []string, err error) {
 	dashAt := -1
 	for i, a := range args {
 		if a == "--" {
@@ -202,7 +202,7 @@ func ExtractRangeToken(args []string, paths cli.PathChecker) (token string, rest
 		if strings.HasPrefix(a, ":") || !strings.Contains(a, "..") {
 			continue
 		}
-		exists, perr := paths.ExistsInWorktreeOrHEAD(a)
+		exists, perr := paths.ExistsInWorktreeOrHEAD(ctx, a)
 		if perr != nil {
 			return "", nil, perr
 		}
