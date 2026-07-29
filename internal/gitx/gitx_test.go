@@ -199,6 +199,34 @@ func TestBlame_Porcelain(t *testing.T) {
 	}
 }
 
+// TestLogLineRange_RejectsColonInPath pins LogLineRange's own refusal
+// (LogLineRange's doc comment): git log's "-L<range>:<path>" argument joins
+// the range and the path with ':' and has no escape for one inside path, and
+// -- measured directly against this repo's own git -- log flatly refuses
+// the one alternative shape that would sidestep it ("-L<range>:<path> --
+// <pathspec>" is "fatal: -L<range>:<file> cannot be used with pathspec"), so
+// there is no safe way to run the command at all for such a path. A colon
+// must be refused before the argument is ever built, not discovered from
+// git's own exit status.
+func TestLogLineRange_RejectsColonInPath(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	ctx := context.Background()
+
+	gittest.Write(t, dir, "weird:file.txt", "one\ntwo\n")
+	gittest.Commit(t, dir, "chore: add weird:file.txt")
+
+	_, err := repo.LogLineRange(ctx, "weird:file.txt", 1, 1)
+
+	var perr *gitx.LineRangePathError
+	if !errors.As(err, &perr) {
+		t.Fatalf("LogLineRange error = %v (%T); want *gitx.LineRangePathError", err, err)
+	}
+	if perr.Path != "weird:file.txt" {
+		t.Errorf("LineRangePathError.Path = %q; want %q", perr.Path, "weird:file.txt")
+	}
+}
+
 // TestErrorMessagesNameTheCommand pins what a caller actually reads when
 // something goes wrong. Both types are surfaced verbatim by internal/app's
 // error mapping, so their text is the whole failure report -- and an

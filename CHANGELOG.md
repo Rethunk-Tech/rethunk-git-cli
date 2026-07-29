@@ -75,6 +75,12 @@ Notable changes to `rgit`. The format follows
 
 ### Fixed
 
+- `rgit log FILE:SYMBOL` refuses a path containing `:` instead of embedding
+  it into `git log`'s own `-L<range>:<path>` argument, which joins the two
+  with `:` and has no way to escape one inside `path` -- and, measured
+  directly, `git log` refuses the one alternative shape that would avoid
+  it (`-L<range>:<path> -- <pathspec>` is a hard error, unlike `blame`'s own
+  `-L`, which keeps the range and the path separate).
 - Staging a brand new member of a container whose own name is ambiguous no
   longer falls back to an ordinary insertion. Blob synthesis's container-
   widening step used to treat every resolution failure alike, so a member

@@ -684,9 +684,37 @@ func (r *Repo) Blame(ctx context.Context, path string, start, end int, extra ...
 // for rgit to re-resolve on its own side. Like Blame, there is no "normal
 // negative answer" of its own -- an invalid range or a path git cannot walk
 // is a genuine failure -- so any non-zero exit is a *GitError.
+//
+// Unlike Blame, path cannot be moved after a "--" separator: measured
+// directly (a temp repo, a path containing ':', `git log -L1,2:path --
+// path`), `git log` refuses that shape outright --
+// "fatal: -L<range>:<file> cannot be used with pathspec" -- so the range
+// and the path are unavoidably one argument, joined by ':' with no escape
+// for a literal ':' inside path. The git version this was measured against
+// (2.55.0) happens to split on the first ':' after the numeric range and
+// treats everything past it as the literal path verbatim, even one holding
+// further colons -- but that splitting rule is documented nowhere, is free
+// to differ across git versions or reimplementations, and a caller has no
+// way to escape a path that sits on the wrong side of a future change to
+// it. Rather than trust that undocumented behaviour indefinitely, a path
+// containing ':' is refused up front, before it is ever embedded.
 func (r *Repo) LogLineRange(ctx context.Context, path string, start, end int, extra ...string) ([]byte, error) {
+	if strings.Contains(path, ":") {
+		return nil, &LineRangePathError{Path: path}
+	}
 	args := append([]string{"log", fmt.Sprintf("-L%d,%d:%s", start, end, path)}, extra...)
 	return r.checked(ctx, args...)
+}
+
+// LineRangePathError means LogLineRange refused a path containing ':' --
+// see LogLineRange's own doc comment for why embedding it is not safe to
+// rely on.
+type LineRangePathError struct {
+	Path string
+}
+
+func (e *LineRangePathError) Error() string {
+	return fmt.Sprintf("gitx: %q: cannot be used with LogLineRange -- git log's own -L<range>:<path> argument joins the two with ':' and has no way to escape one inside path", e.Path)
 }
 
 // CommitSummary is one commit's hash and subject, as RecentCommits reports
