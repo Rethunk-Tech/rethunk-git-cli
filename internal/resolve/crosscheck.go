@@ -57,9 +57,14 @@ func CrossCheckExtent(ctx context.Context, sess *lsp.Session, lang Language, rep
 // server in the middle of the fast path.
 //
 // degraded=true means no comparison happened at all, exactly as for the
-// single-anchor form. mismatches holds one error per resolution whose range
-// the server disagreed with; a resolution the server does not name at all is
-// not a mismatch (specs/design.md's fourth exemption).
+// single-anchor form -- including when the server answered but its outline
+// omitted at least one of list's own non-pseudo resolutions, aligning this
+// batch form with CrossCheckExtent's per-anchor found=false case above
+// (:45-47), which also degrades rather than treating "not named" as
+// verified. mismatches holds one error per resolution whose range the
+// server disagreed with; a resolution the server does not name at all is
+// not a mismatch (specs/design.md's fourth exemption), but still marks the
+// batch as degraded.
 func CrossCheckExtents(ctx context.Context, sess *lsp.Session, lang Language, repoRoot, absPath string, src []byte, list []*Resolution) (degraded bool, mismatches []error) {
 	if len(list) == 0 {
 		return true, nil
@@ -73,15 +78,21 @@ func CrossCheckExtents(ctx context.Context, sess *lsp.Session, lang Language, re
 		return true, nil
 	}
 
+	allFound := true
 	for _, res := range list {
 		if res == nil || res.Pseudo {
 			continue
 		}
-		if _, cerr := MatchAndCompare(src, res, symbols); cerr != nil {
+		found, cerr := MatchAndCompare(src, res, symbols)
+		if !found {
+			allFound = false
+			continue
+		}
+		if cerr != nil {
 			mismatches = append(mismatches, cerr)
 		}
 	}
-	return false, mismatches
+	return !allFound, mismatches
 }
 
 // MatchAndCompare is CrossCheckExtent's comparison, factored out so it can
