@@ -1,10 +1,71 @@
 package lsp
 
 import (
+	"context"
+	"net"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"go.lsp.dev/protocol"
 )
+
+// countingRWC wraps a net.Conn to count Close calls, so a test can assert
+// exactly who closed it rather than merely that it eventually got closed.
+type countingRWC struct {
+	net.Conn
+	closes atomic.Int32
+}
+
+// countingRWC wraps a net.Conn to count Close calls, so a test can assert
+// exactly who closed it rather than merely that it eventually got closed.
+type countingRWC struct {
+	net.Conn
+	closes atomic.Int32
+}
+
+func (c *countingRWC) Close() error {
+	c.closes.Add(1)
+	return c.Conn.Close()
+}
+
+// TestNewClient_ClosesConnExactlyOnceOnHandshakeFailure pins A-25's chosen
+// single owner: NewClient closes the connection on a handshake failure
+// (Initialize/Initialized erroring), and closes it exactly once. Callers
+// (dial.go's dialSocket and dialStdio) must not close it again on this
+// path -- dialSocket's own former redundant close is what A-25 found and
+// removed. An expired context against an unresponsive peer forces
+// Initialize to fail fast without depending on any real server.
+func TestNewClient_ClosesConnExactlyOnceOnHandshakeFailure(t *testing.T) {
+	clientConn, serverConn := net.Pipe()
+	defer func() { _ = serverConn.Close() }()
+	rwc := &countingRWC{Conn: clientConn}
+
+	// net.Pipe is unbuffered and synchronous: the client's own Initialize
+	// write would block forever with nothing on the other end to read it,
+	// masking the handshake-context-expiry path this test wants to
+	// exercise. Draining reads (and discarding them, never writing a
+	// response) unblocks the write while still starving Initialize of a
+	// reply, so it fails via ctx expiry rather than hanging.
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			if _, err := serverConn.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	if _, err := NewClient(ctx, rwc, t.TempDir()); err == nil {
+		t.Fatal("NewClient against an unresponsive peer with an expired context = nil error; want one")
+	}
+	if got := rwc.closes.Load(); got != 1 {
+		t.Errorf("rwc.Close called %d times; want exactly 1", got)
+	}
+}
 
 func TestLanguageKindFor(t *testing.T) {
 	tests := []struct {

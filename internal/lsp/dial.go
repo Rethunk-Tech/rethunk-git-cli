@@ -55,7 +55,11 @@ func dialSocket(ctx context.Context, spec serverSpec, repoRoot string) (*Client,
 			// A socket answered but the handshake failed -- a stale or
 			// incompatible daemon. Degrade rather than hard-fail: nothing
 			// about this is the caller's problem to fix mid-commit.
-			_ = conn.Close()
+			// NewClient owns close-on-handshake-failure (client.go: its
+			// own Initialize/Initialized error paths already close the
+			// jsonrpc2.Conn it wraps around conn, which in turn closes
+			// conn itself) -- closing conn again here would double-close
+			// the same net.Conn.
 			return nil, true
 		}
 		return client, false
