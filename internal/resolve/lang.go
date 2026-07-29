@@ -91,6 +91,11 @@ type Language interface {
 	// f.sh` is an ordinary "command" node, the same kind as every other
 	// command) should instead implement ImportMatcher, which importsExtent
 	// consults first.
+	//
+	// nil is a legitimate answer for a grammar with no import concept at
+	// all, not merely one absent from a particular file -- defaultLanguage
+	// (lang_default.go) supplies exactly that for every adapter that has
+	// nothing more specific to say.
 	ImportKinds() []string
 
 	// HeaderKinds lists the node kinds belonging to @header — shebang,
@@ -119,7 +124,8 @@ type Language interface {
 	// resolve as a slug should be retried as raw heading text
 	// (rawHeadingFallback, index.go) -- true only for markdown, where a
 	// caller may paste a heading's own title rather than rgit's emitted
-	// slug.
+	// slug. defaultLanguage (lang_default.go) answers false for every
+	// adapter that does not override it.
 	AllowsRawHeadingFallback() bool
 }
 

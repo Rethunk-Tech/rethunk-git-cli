@@ -15,6 +15,7 @@ func init() { register(newMarkdownLanguage()) }
 // unparsed "inline" node text rather than a further parse tree — see
 // headingText.
 type mdLanguage struct {
+	defaultLanguage
 	lang *ts.Language
 }
 
@@ -34,12 +35,12 @@ func (m *mdLanguage) TSLanguage() *ts.Language { return m.lang }
 // heading the way one applies to a Go func or a TS class.
 func (m *mdLanguage) IsComment(kind string) bool { return false }
 
-// ImportKinds is empty: markdown has nothing that plays the role of an
-// import, so @imports resolves to nothing — the same degraded-but-not-an-
-// error result @header already gives a TypeScript file with no shebang
-// (docs/ANCHORS.md). A richer ImportMatcher contract is what a later
-// shell-generation grammar will need; it is deliberately not added here.
-func (m *mdLanguage) ImportKinds() []string { return nil }
+// ImportKinds is inherited from defaultLanguage: markdown has nothing that
+// plays the role of an import, so @imports resolves to nothing — the same
+// degraded-but-not-an-error result @header already gives a TypeScript file
+// with no shebang (docs/ANCHORS.md). A richer ImportMatcher contract, the
+// way lang_shell.go implements one, is what a later shell-generation
+// grammar will need; it is deliberately not added here.
 
 // HeaderKinds is frontmatter only. Document's own children are exactly
 // minus_metadata (YAML "---" fencing), plus_metadata (TOML "+++" fencing),

@@ -23,6 +23,7 @@ func sqlGrammar() *ts.Language { return ts.NewLanguage(sqlgrammar.Language()) }
 // (github.com/DerekStride/tree-sitter-sql, generated at build/install time --
 // see cmd/rgit-install/main.go and specs/design.md § Dependencies).
 type sqlLanguage struct {
+	defaultLanguage
 	lang *ts.Language
 }
 
@@ -49,11 +50,10 @@ func (l *sqlLanguage) IsComment(kind string) bool {
 // other comment-fronted grammar in this resolver already uses.
 func (l *sqlLanguage) HeaderKinds() []string { return []string{"comment", "marginalia"} }
 
-// ImportKinds returns nil: this grammar has no include/import statement of
-// any kind -- none of its top-level statement kinds are shaped like one --
-// the same degraded-but-not-an-error answer TOML, JSON, and Markdown
-// already give.
-func (l *sqlLanguage) ImportKinds() []string { return nil }
+// ImportKinds is inherited from defaultLanguage: this grammar has no
+// include/import statement of any kind -- none of its top-level statement
+// kinds are shaped like one -- the same degraded-but-not-an-error answer
+// TOML, JSON, and Markdown also give.
 
 // OwnsTrailingSeparator is false: no SQL formatting convention this
 // resolver relies on inserts a deterministic blank line after a leading
@@ -74,9 +74,8 @@ func (l *sqlLanguage) OwnsTrailingSeparator() bool { return false }
 // switch by omission.
 func (l *sqlLanguage) MembersSitFlush() bool { return false }
 
-// AllowsRawHeadingFallback is false: SQL has no heading concept for the
-// fallback to apply to.
-func (l *sqlLanguage) AllowsRawHeadingFallback() bool { return false }
+// AllowsRawHeadingFallback is inherited from defaultLanguage: SQL has no
+// heading concept for the fallback to apply to.
 
 // buildTagGated implements the buildTagGated seam (lang.go). This file
 // itself carries the rgit_sql tag, so any build where this method exists to

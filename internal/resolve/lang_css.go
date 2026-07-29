@@ -16,6 +16,7 @@ func init() { register(newCSSLanguage()) }
 // block_mapping_pair positional lookups already are for their own
 // field-less constructs.
 type cssLanguage struct {
+	defaultLanguage
 	lang *ts.Language
 }
 
@@ -60,9 +61,8 @@ func (c *cssLanguage) OwnsTrailingSeparator() bool { return false }
 // keeping whatever blank line the author would have written by hand.
 func (c *cssLanguage) MembersSitFlush() bool { return false }
 
-// AllowsRawHeadingFallback is false: CSS has no heading concept for the
-// fallback to apply to.
-func (c *cssLanguage) AllowsRawHeadingFallback() bool { return false }
+// AllowsRawHeadingFallback is inherited from defaultLanguage: CSS has no
+// heading concept for the fallback to apply to.
 
 // Declarations walks the stylesheet root's own named children. "comment" and
 // "import_statement" are deliberately excluded here even though a leading

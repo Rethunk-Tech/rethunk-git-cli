@@ -15,6 +15,7 @@ func init() { register(newShellLanguage()) }
 // lang_typescript.go keeps TSX and TypeScript as two grammars rather than
 // stretching one over both.
 type shellLanguage struct {
+	defaultLanguage
 	lang *ts.Language
 }
 
@@ -83,9 +84,8 @@ func (s *shellLanguage) OwnsTrailingSeparator() bool { return false }
 // method that exists only to satisfy the interface.
 func (s *shellLanguage) MembersSitFlush() bool { return false }
 
-// AllowsRawHeadingFallback is false: shell has no heading concept for the
-// fallback to apply to.
-func (s *shellLanguage) AllowsRawHeadingFallback() bool { return false }
+// AllowsRawHeadingFallback is inherited from defaultLanguage: shell has no
+// heading concept for the fallback to apply to.
 
 // Declarations walks the root's own named children -- program's children
 // are exactly the hidden `_statement` supertype (src/node-types.json), so

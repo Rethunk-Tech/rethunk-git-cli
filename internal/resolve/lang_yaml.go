@@ -23,6 +23,7 @@ func init() { register(newYAMLLanguage()) }
 // never requires reasoning about the scalar's own internal indentation at
 // all.
 type yamlLanguage struct {
+	defaultLanguage
 	lang *ts.Language
 }
 
@@ -104,11 +105,11 @@ func (y *yamlLanguage) trimTrailingComment(src []byte, node *ts.Node) uint {
 	}
 }
 
-// ImportKinds is unused: YAML has nothing that plays the role of an import
-// -- there is no include/source directive in the grammar itself -- so
-// @imports resolves to nothing, the same degraded-but-not-an-error answer
-// Markdown already gives (lang_markdown.go).
-func (y *yamlLanguage) ImportKinds() []string { return nil }
+// ImportKinds is inherited from defaultLanguage: YAML has nothing that
+// plays the role of an import -- there is no include/source directive in
+// the grammar itself -- so @imports resolves to nothing, the same
+// degraded-but-not-an-error answer Markdown already gives
+// (lang_markdown.go).
 
 // HeaderKinds is "comment" alone. A leading top-of-file comment run parses
 // as one or more "comment" nodes that are siblings of "document" directly
@@ -140,9 +141,8 @@ func (y *yamlLanguage) OwnsTrailingSeparator() bool { return false }
 // key already takes.
 func (y *yamlLanguage) MembersSitFlush() bool { return false }
 
-// AllowsRawHeadingFallback is false: YAML has no heading concept for the
-// fallback to apply to.
-func (y *yamlLanguage) AllowsRawHeadingFallback() bool { return false }
+// AllowsRawHeadingFallback is inherited from defaultLanguage: YAML has no
+// heading concept for the fallback to apply to.
 
 // Declarations addresses top-level keys of a single-document YAML stream,
 // container-qualified one level in for a nested mapping -- the same

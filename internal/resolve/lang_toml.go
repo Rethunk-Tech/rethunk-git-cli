@@ -11,6 +11,7 @@ func init() { register(newTOMLLanguage()) }
 // object in node-types.json -- every shape below is read by node kind and
 // position.
 type tomlLanguage struct {
+	defaultLanguage
 	lang *ts.Language
 }
 
@@ -33,10 +34,9 @@ func (l *tomlLanguage) IsComment(kind string) bool { return kind == "comment" }
 // can claim -- TOML has no shebang or package-clause equivalent.
 func (l *tomlLanguage) HeaderKinds() []string { return []string{"comment"} }
 
-// ImportKinds returns nil: TOML has no include/import directive of any
-// kind, the same degraded-but-not-an-error answer Markdown, YAML, and JSON
-// already give.
-func (l *tomlLanguage) ImportKinds() []string { return nil }
+// ImportKinds is inherited from defaultLanguage: TOML has no include/import
+// directive of any kind, the same degraded-but-not-an-error answer
+// Markdown, YAML, and JSON also give.
 
 // OwnsTrailingSeparator is false: no TOML formatting convention -- there is
 // no widely-adopted formatter for this grammar analogous to gofmt -- inserts
@@ -52,9 +52,8 @@ func (l *tomlLanguage) OwnsTrailingSeparator() bool { return false }
 // top-level-shaped boundary.
 func (l *tomlLanguage) MembersSitFlush() bool { return false }
 
-// AllowsRawHeadingFallback is false: TOML has no heading concept for the
-// fallback to apply to.
-func (l *tomlLanguage) AllowsRawHeadingFallback() bool { return false }
+// AllowsRawHeadingFallback is inherited from defaultLanguage: TOML has no
+// heading concept for the fallback to apply to.
 
 // Declarations walks the document root's own named children. A bare
 // top-level pair (no enclosing "[table]") gets an empty Container; a

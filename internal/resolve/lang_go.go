@@ -9,6 +9,7 @@ import (
 func init() { register(newGoLanguage()) }
 
 type goLanguage struct {
+	defaultLanguage
 	lang *ts.Language
 }
 
@@ -273,6 +274,5 @@ func (g *goLanguage) OwnsTrailingSeparator() bool { return true }
 // gofmt is concerned.
 func (g *goLanguage) MembersSitFlush() bool { return true }
 
-// AllowsRawHeadingFallback is false: Go has no heading concept for the
-// fallback to apply to.
-func (g *goLanguage) AllowsRawHeadingFallback() bool { return false }
+// AllowsRawHeadingFallback is inherited from defaultLanguage: Go has no
+// heading concept for the fallback to apply to.

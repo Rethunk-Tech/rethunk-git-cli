@@ -6,6 +6,7 @@ func init() { register(newPythonLanguage()) }
 
 // pythonLanguage adapts the tree-sitter Python grammar.
 type pythonLanguage struct {
+	defaultLanguage
 	lang *ts.Language
 }
 
@@ -53,9 +54,8 @@ func (p *pythonLanguage) OwnsTrailingSeparator() bool { return false }
 // Python style guide expects there.
 func (p *pythonLanguage) MembersSitFlush() bool { return false }
 
-// AllowsRawHeadingFallback is false: Python has no heading concept for the
-// fallback to apply to.
-func (p *pythonLanguage) AllowsRawHeadingFallback() bool { return false }
+// AllowsRawHeadingFallback is inherited from defaultLanguage: Python has no
+// heading concept for the fallback to apply to.
 
 // Declarations walks only the root's named children: top-level symbols
 // alone, with class bodies never descended into, matching the Go and

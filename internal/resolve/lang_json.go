@@ -11,6 +11,7 @@ func init() { register(newJSONLanguage()) }
 // so, unusually among this resolver's adapters, jsonKeyName and
 // objectDeclarations below read fields rather than scanning by position.
 type jsonLanguage struct {
+	defaultLanguage
 	lang *ts.Language
 }
 
@@ -35,10 +36,9 @@ func (j *jsonLanguage) IsComment(string) bool { return false }
 // directly rather than leaving a reader to infer it from an empty result.
 func (j *jsonLanguage) HeaderKinds() []string { return nil }
 
-// ImportKinds returns nil for the same reason: JSON has no include/import
-// directive of any kind, the same degraded-but-not-an-error answer Markdown,
-// YAML, and TOML already give.
-func (j *jsonLanguage) ImportKinds() []string { return nil }
+// ImportKinds is inherited from defaultLanguage for the same reason: JSON
+// has no include/import directive of any kind, the same
+// degraded-but-not-an-error answer Markdown, YAML, and TOML also give.
 
 // OwnsTrailingSeparator is false: HeaderKinds is already nil, so @header
 // never matches anything for JSON and this is unreached in practice.
@@ -54,9 +54,8 @@ func (j *jsonLanguage) OwnsTrailingSeparator() bool { return false }
 // reasons) also land on.
 func (j *jsonLanguage) MembersSitFlush() bool { return false }
 
-// AllowsRawHeadingFallback is false: JSON has no heading concept for the
-// fallback to apply to.
-func (j *jsonLanguage) AllowsRawHeadingFallback() bool { return false }
+// AllowsRawHeadingFallback is inherited from defaultLanguage: JSON has no
+// heading concept for the fallback to apply to.
 
 // Declarations addresses a top-level object's own key paths,
 // container-qualified one level in for a nested object -- the same

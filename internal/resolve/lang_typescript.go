@@ -16,6 +16,7 @@ import ts "github.com/tree-sitter/go-tree-sitter"
 // way (e.g. goLanguage in lang_go.go); ts.NewLanguage wraps the grammar's C
 // symbol table, which does not change between parses of the same language.
 type tsFamily struct {
+	defaultLanguage
 	name string
 	exts []string
 	lang *ts.Language
@@ -63,9 +64,8 @@ func (l *tsFamily) OwnsTrailingSeparator() bool { return false }
 // this method is shared by both registrations (tsFamily's own doc comment).
 func (l *tsFamily) MembersSitFlush() bool { return true }
 
-// AllowsRawHeadingFallback is false: TypeScript has no heading concept for
-// the fallback to apply to.
-func (l *tsFamily) AllowsRawHeadingFallback() bool { return false }
+// AllowsRawHeadingFallback is inherited from defaultLanguage: TypeScript
+// has no heading concept for the fallback to apply to.
 
 // Declarations walks the top-level (program) children. The trap this exists
 // to avoid: an exported symbol is not a top-level function_declaration, it is
