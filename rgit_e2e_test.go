@@ -1479,3 +1479,187 @@ func TestCommit_PorcelainAndQuietConflict(t *testing.T) {
 	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.InvalidUsage)))
 	qt.Assert(t, qt.StringContains(got.Stderr, "mutually exclusive"))
 }
+
+// --- shell completion ---------------------------------------------------
+//
+// internal/app/completion_test.go-equivalent coverage (in app_test.go)
+// proves the emitted script parses and contains the right pieces; it
+// cannot prove the dynamic half actually works, because that half is awk
+// and compgen text with no Go behind it once emitted. This is the one
+// thing only a real shell process running the real binary can show: that
+// "auth.go:" really does complete to the real, live symbol names
+// `rgit diff --porcelain` reports for that file -- a gap CONTRIBUTING.md
+// says to measure rather than assume.
+
+// runBashCompletion sources bashScript, then simulates typing
+// "rgit <words...>" with the cursor on the final word and prints one
+// candidate per line -- the same shape `complete`'s COMPREPLY protocol
+// uses, without needing an interactive terminal to drive it.
+func runBashCompletion(t *testing.T, repo, bashScript string, words ...string) []string {
+	t.Helper()
+	bashPath, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not on PATH")
+	}
+
+	compWords := append([]string{"rgit"}, words...)
+	driver := bashScript + "\n" +
+		"COMP_WORDS=(" + shellQuoteAll(compWords) + ")\n" +
+		"COMP_CWORD=" + fmt.Sprint(len(compWords)-1) + "\n" +
+		"_rgit_completion\n" +
+		`printf '%s\n' "${COMPREPLY[@]}"` + "\n"
+
+	cmd := exec.Command(bashPath, "-c", driver)
+	cmd.Dir = repo
+	cmd.Env = append(os.Environ(), "PATH="+filepath.Dir(rgitBin)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash completion driver: %v: %s", err, out)
+	}
+	trimmed := strings.TrimRight(string(out), "\n")
+	if trimmed == "" {
+		return nil
+	}
+	return strings.Split(trimmed, "\n")
+}
+
+// shellQuoteAll renders words as a bash array literal's contents, single
+// quoting each so a word containing "$" or ":" is not reinterpreted by the
+// driver script that assigns them into COMP_WORDS.
+func shellQuoteAll(words []string) string {
+	quoted := make([]string, len(words))
+	for i, w := range words {
+		quoted[i] = "'" + strings.ReplaceAll(w, "'", `'\''`) + "'"
+	}
+	return strings.Join(quoted, " ")
+}
+
+// TestCompletion_BashCompletesSymbolsFromPorcelain is the dynamic half the
+// TODO entry was actually about: completing the token after "FILE:" has to
+// name a symbol `rgit commit` will really accept, for a file with more than
+// one candidate and a worktree that has not been committed yet.
+func TestCompletion_BashCompletesSymbolsFromPorcelain(t *testing.T) {
+	t.Parallel()
+	repo := initRepoWithFile(t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	writeFile(t, repo, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
+
+	script := runRgit(t, repo, "completion", "bash")
+	qt.Assert(t, qt.Equals(script.ExitCode, 0))
+
+	got := runBashCompletion(t, repo, script.Stdout, "commit", "a.go:")
+	qt.Assert(t, qt.DeepEquals(got, []string{"a.go:A", "a.go:B"}))
+
+	// A prefix after the colon narrows the same way any other compgen -W
+	// match does.
+	got = runBashCompletion(t, repo, script.Stdout, "commit", "a.go:A")
+	qt.Assert(t, qt.DeepEquals(got, []string{"a.go:A"}))
+}
+
+// TestCompletion_BashDegradesSilentlyOutsideARepo pins the failure mode
+// docs/USAGE.md § Shell completion promises: a cwd with no repository (so
+// `rgit diff --porcelain` itself exits non-zero) must not put anything on
+// the completion prompt, and the driver above would surface a bash error
+// as a non-empty, non-candidate line if the function leaked one.
+func TestCompletion_BashDegradesSilentlyOutsideARepo(t *testing.T) {
+	t.Parallel()
+	notARepo := t.TempDir()
+
+	// completion itself needs no repository; any cwd fetches the script.
+	script := runRgit(t, notARepo, "completion", "bash")
+	qt.Assert(t, qt.Equals(script.ExitCode, 0))
+
+	got := runBashCompletion(t, notARepo, script.Stdout, "commit", "a.go:")
+	qt.Assert(t, qt.Equals(len(got), 0))
+}
+
+// zshCompaddStub replaces zsh's real compadd, which only records candidates
+// into the surrounding completion widget's state, with one that prints
+// them -- there is no interactive completion widget here to record into.
+// It reimplements just the two calling conventions _rgit's zsh script
+// uses: a bare "compadd -- word..." and a prefixed "compadd -P p -- word...".
+// The widget's own automatic filtering of those candidates against what is
+// already typed (zsh's usual job, done without an explicit "-- $cur" the
+// way bash's compgen needs) is exactly what this stub cannot reproduce
+// outside a real completion context, so these tests assert the candidate
+// set _rgit_symbols/compadd would offer, not the narrowed-by-what-you-typed
+// subset a live Tab press shows -- the bash tests above already cover that
+// narrowing, and the two scripts share the identical _rgit_symbols body.
+const zshCompaddStub = `compadd() {
+  local prefix=""
+  local -a args
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -P) prefix="$2"; shift 2 ;;
+      --) shift; args+=("$@"); break ;;
+      *) args+=("$1"); shift ;;
+    esac
+  done
+  local a
+  for a in "${args[@]}"; do
+    print -r -- "${prefix}${a}"
+  done
+}
+`
+
+// runZshCompletion is runBashCompletion's zsh counterpart: it sources
+// zshScript under zshCompaddStub, sets words/CURRENT the way zsh's own
+// completion frontend would, and calls _rgit directly -- -f skips rc files
+// so the result depends only on what rgit emitted.
+func runZshCompletion(t *testing.T, repo, zshScript string, words ...string) []string {
+	t.Helper()
+	zshPath, err := exec.LookPath("zsh")
+	if err != nil {
+		t.Skip("zsh not on PATH")
+	}
+
+	compWords := append([]string{"rgit"}, words...)
+	driver := zshCompaddStub + zshScript + "\n" +
+		"words=(" + shellQuoteAll(compWords) + ")\n" +
+		"CURRENT=" + fmt.Sprint(len(compWords)) + "\n" +
+		"_rgit\n"
+
+	cmd := exec.Command(zshPath, "-f", "-c", driver)
+	cmd.Dir = repo
+	cmd.Env = append(os.Environ(), "PATH="+filepath.Dir(rgitBin)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("zsh completion driver: %v: %s", err, out)
+	}
+	trimmed := strings.TrimRight(string(out), "\n")
+	if trimmed == "" {
+		return nil
+	}
+	return strings.Split(trimmed, "\n")
+}
+
+// TestCompletion_ZshCompletesSymbolsFromPorcelain is
+// TestCompletion_BashCompletesSymbolsFromPorcelain's zsh counterpart: the
+// two scripts share an identical _rgit_symbols body, so this pins that the
+// zsh half of the emitted pair reads and prefixes the same porcelain
+// output correctly, not just that it parses.
+func TestCompletion_ZshCompletesSymbolsFromPorcelain(t *testing.T) {
+	t.Parallel()
+	repo := initRepoWithFile(t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	writeFile(t, repo, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
+
+	script := runRgit(t, repo, "completion", "zsh")
+	qt.Assert(t, qt.Equals(script.ExitCode, 0))
+
+	got := runZshCompletion(t, repo, script.Stdout, "commit", "a.go:")
+	qt.Assert(t, qt.DeepEquals(got, []string{"a.go:A", "a.go:B"}))
+}
+
+// TestCompletion_ZshDegradesSilentlyOutsideARepo is the zsh half of
+// TestCompletion_BashDegradesSilentlyOutsideARepo: `rgit diff --porcelain`
+// failing outside a repository must still leave compadd with nothing to
+// add, not an error on the prompt.
+func TestCompletion_ZshDegradesSilentlyOutsideARepo(t *testing.T) {
+	t.Parallel()
+	notARepo := t.TempDir()
+
+	script := runRgit(t, notARepo, "completion", "zsh")
+	qt.Assert(t, qt.Equals(script.ExitCode, 0))
+
+	got := runZshCompletion(t, notARepo, script.Stdout, "commit", "a.go:")
+	qt.Assert(t, qt.Equals(len(got), 0))
+}
