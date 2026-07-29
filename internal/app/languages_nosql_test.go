@@ -14,60 +14,65 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
 )
 
-// TestRun_LanguagesOmitsSQLWithoutTag pins `rgit languages` and `rgit
-// --version`'s agreement when the tag is off: neither may claim SQL is
-// compiled in, and --version says so explicitly rather than by omission.
-func TestRun_LanguagesOmitsSQLWithoutTag(t *testing.T) {
-	t.Chdir(t.TempDir())
+// TestRun_LanguagesAndDoctorOmitSQLWithoutTag pins the one build-specific
+// guarantee across every rendering of resolve.Languages() this binary
+// exposes: without -tags rgit_sql, nothing may claim SQL is compiled in --
+// not `rgit languages`'s plain or --porcelain output, not `rgit doctor`'s
+// grammar section (which reuses the identical data), and not `rgit
+// --version`'s own summary line, which says so explicitly rather than by
+// omission. The negative case (an actual .sql anchor) still fails with the
+// same generic "no grammar registered" exit 9 every unsupported language
+// gets (TestRun_UnsupportedLanguageGetsNoRebuildHint in app_test.go covers
+// that shared refusal), but the message also names the build tag and
+// points at the rebuild -- unlike a language this resolver has never
+// supported at all.
+//
+// Each subtest is sequential, not parallel: several call t.Chdir, which
+// forbids it.
+func TestRun_LanguagesAndDoctorOmitSQLWithoutTag(t *testing.T) {
+	t.Run("languages and --version agree", func(t *testing.T) {
+		t.Chdir(t.TempDir())
 
-	stdout, _, code := runApp(t, "languages")
-	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	qt.Assert(t, qt.Not(qt.StringContains(stdout, "sql")))
+		stdout, _, code := runApp(t, "languages")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "sql")))
 
-	version, _, code := runApp(t, "--version")
-	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	qt.Assert(t, qt.StringContains(version, "optional grammars: none compiled in"))
-}
+		version, _, code := runApp(t, "--version")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.StringContains(version, "optional grammars: none compiled in"))
+	})
 
-// TestRun_LanguagesPorcelainOmitsSQLWithoutTag pins the GATED column's
-// build-specific half: without the grammar compiled in, there is no "sql"
-// record at all -- not one with GATED "0", which would wrongly claim the
-// grammar exists but happens not to be gated.
-func TestRun_LanguagesPorcelainOmitsSQLWithoutTag(t *testing.T) {
-	t.Chdir(t.TempDir())
+	// Without the grammar compiled in, there is no "sql" record at all --
+	// not one with GATED "0", which would wrongly claim the grammar exists
+	// but happens not to be gated.
+	t.Run("languages --porcelain", func(t *testing.T) {
+		t.Chdir(t.TempDir())
 
-	stdout, _, code := runApp(t, "languages", "--porcelain")
-	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	qt.Assert(t, qt.Not(qt.StringContains(stdout, "sql\t")))
-}
+		stdout, _, code := runApp(t, "languages", "--porcelain")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "sql\t")))
+	})
 
-// TestRun_DoctorOmitsSQLWithoutTag is doctor's own agreement with the
-// above: its grammar section reuses the identical resolve.Languages() data.
-func TestRun_DoctorOmitsSQLWithoutTag(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Run("doctor", func(t *testing.T) {
+		t.Chdir(t.TempDir())
 
-	stdout, _, code := runApp(t, "doctor")
-	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	qt.Assert(t, qt.Not(qt.StringContains(stdout, "sql")))
-}
+		stdout, _, code := runApp(t, "doctor")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "sql")))
+	})
 
-// TestRun_SQLAnchorWithoutTagHintsRebuild pins the negative case: a binary
-// built without rgit_sql still fails a .sql anchor with the same generic
-// "no grammar registered" exit 9 every unsupported language gets
-// (TestRun_UnsupportedLanguageGetsNoRebuildHint in app_test.go covers that
-// shared refusal), but the message also names the build tag and points at
-// the rebuild -- unlike a language this resolver has never supported.
-func TestRun_SQLAnchorWithoutTagHintsRebuild(t *testing.T) {
-	dir := chdirTempRepo(t)
-	writeAppFile(t, dir, "q.sql", "SELECT 1;\n")
-	gittest.Commit(t, dir, "chore: add sql fixture")
-	writeAppFile(t, dir, "q.sql", "SELECT 2;\n")
+	t.Run("sql anchor still refused, with a rebuild hint", func(t *testing.T) {
+		dir := chdirTempRepo(t)
+		writeAppFile(t, dir, "q.sql", "SELECT 1;\n")
+		gittest.Commit(t, dir, "chore: add sql fixture")
+		writeAppFile(t, dir, "q.sql", "SELECT 2;\n")
 
-	_, stderr, code := runApp(t, "commit", "-m", "feat(x): y", "q.sql:Anything")
+		_, stderr, code := runApp(t, "commit", "-m", "feat(x): y", "q.sql:Anything")
 
-	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
-	qt.Assert(t, qt.StringContains(stderr, "no grammar registered for q.sql"))
-	qt.Assert(t, qt.StringContains(stderr, `extension ".sql"`))
-	qt.Assert(t, qt.StringContains(stderr, "rgit_sql"))
-	qt.Assert(t, qt.StringContains(stderr, "docs/INSTALL.md"))
+		qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
+		qt.Assert(t, qt.StringContains(stderr, "no grammar registered for q.sql"))
+		qt.Assert(t, qt.StringContains(stderr, `extension ".sql"`))
+		qt.Assert(t, qt.StringContains(stderr, "rgit_sql"))
+		qt.Assert(t, qt.StringContains(stderr, "docs/INSTALL.md"))
+	})
 }
