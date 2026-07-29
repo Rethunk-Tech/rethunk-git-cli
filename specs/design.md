@@ -689,11 +689,11 @@ the way `gopls`/`vtsls`/`pyright` are for their languages, and no measured
 need strong enough to justify probing for a fifth stdio process sight
 unseen. `.sql` always resolves in `[ts-only]` mode.
 
-### Cross-check survey: the six v2 grammars, revisited
+### Cross-check survey: the six v2 grammars
 
 `[ts-only]` went from an edge case (one of five grammars uncovered) to the
 majority outcome (six of eleven) once Markdown, YAML, CSS, JSON, TOML, and
-SQL shipped. Each was re-checked against this machine for a real candidate
+SQL shipped. Each was checked against this machine for a real candidate
 server, on the same terms as the gopls/vtsls/pyright/bash-language-server
 survey above: is one installed, what does it speak, and — the load-bearing
 question — do its ranges land on the same declaration-only basis
@@ -701,72 +701,193 @@ question — do its ranges land on the same declaration-only basis
 `node.EndByte()`, no doc-comment prefix), so a real disagreement means a real
 extent bug rather than a transport artifact.
 
-| Grammar | Server checked | On this machine | Verdict |
-| --- | --- | --- | --- |
-| TOML | `taplo lsp stdio` | Installed, LSP unusable (measured) | Not wired |
-| YAML | `yaml-language-server` | Not installed | Not wired |
-| JSON, CSS | `vscode-langservers-extracted` | Not installed | Not wired |
-| Markdown | `marksman` | Not installed | Not wired |
-| SQL | none maintained | `sqlfluff` installed, no LSP surface | Not wired |
+A first pass found none of the candidates installed except a `taplo` build
+with its LSP feature compiled out — recorded further down, since it turned
+out to matter. The operator then installed
+`yaml-language-server`, `vscode-json-language-server`,
+`vscode-css-language-server` (all three via the `vscode-langservers-
+extracted`/bun toolchain), `marksman`, `vscode-markdown-language-server`,
+and a `taplo` rebuilt with its `lsp` feature enabled. Every measurement
+below is against those real, installed binaries — nothing here is inferred
+from a server's own docs.
 
-**TOML: the only candidate actually present, and it fails before range
-semantics are even reachable.** `taplo` 0.9.0 is installed
-(`~/.bun/bin/taplo`, via the `@taplo/cli` npm package, bun-managed). Its
-`--help` advertises `lsp stdio`/`lsp tcp` subcommands, so it looked like a
-real candidate. Measured directly two ways: running `taplo lsp stdio` by
-hand against a piped stdin immediately prints
-`ERROR operation failed error=the LSP is not part of this build, please
-consult the documentation about enabling the functionality` and exits; and
-dialling it through this package's own `NewClient` over the same stdio
-transport `vtsls`/`pyright-langserver` use gets `EOF` on the `initialize`
-response, in 0.38s wall time (dominated by process spawn and immediate exit,
-not indexing). This build's `taplo` was compiled without the `lsp` Cargo
-feature. Getting a build with it enabled would mean reinstalling the binary,
-which this survey does not do — installing anything, even at user scope, is
-out of bounds for measuring what is already on the machine. Range semantics
-were never reached, so there is nothing to compare against
-`declOnlyExtent`; TOML stays `[ts-only]` on the evidence that the one
-installed candidate cannot complete a handshake, not on an assumption about
-what its ranges would look like if it could.
+| Grammar | Server | Transport | Cold dial+handshake | Cold `documentSymbol` | Warm `documentSymbol` | Ranges vs `declOnlyExtent` | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| YAML | `yaml-language-server` | stdio | 145ms | 5.1ms | 0.4ms | Exact match, every case measured | **Wired** |
+| JSON | `vscode-json-language-server` | stdio | 79ms | 2.4ms | 0.3ms | Exact match | **Wired** |
+| CSS | `vscode-css-language-server` | stdio | 104ms | 4.6ms | 0.5ms | Exact match | **Wired** |
+| Markdown | `marksman` | stdio | 570ms | 78–115ms | 2.5–4.1ms | Exact match | **Wired** |
+| Markdown | `vscode-markdown-language-server` | stdio | — | — | — | Crashes on startup (measured) | Not wired |
+| TOML | `taplo` 0.10.0 | stdio | 3.9ms | 0.5–1.0ms | 0.2–0.4ms | Real disagreement on nested tables (measured) | Not wired |
+| SQL | none maintained | — | — | — | — | `sqlfluff` installed, no LSP surface | Not wired |
 
-**YAML, JSON, CSS, Markdown: no candidate present at all.** `which`,
-`npm ls -g`, `brew list`, `pipx list`, `gem list`, `~/.cargo/bin`, `~/go/bin`,
-and `~/.local/bin` were all checked; none carries
-`yaml-language-server`, any of the `vscode-langservers-extracted` binaries
-(`vscode-json-language-server`, `vscode-css-language-server`), or
-`marksman`. All four are `npm install -g`-obtainable without sudo (user
-prefix or a project-local install both work) — see the exact addition this
-worker would make to `docs/INSTALL.md` if asked, reported alongside this
-record rather than made directly (that file belongs to a concurrent change
-this session). None was measured because none was installed, and installing
-one to find out was explicitly out of scope; the honest result is
-"unmeasured, not wired" rather than a guess either way.
+Method for the four that passed: a fixture per grammar exercising a nested
+container (so both a leaf declaration and a declaration whose own extent
+encloses another get compared) and, where the grammar has comment syntax, a
+leading comment with **no** blank line before the symbol — the doc-comment-
+exclusion case gopls was already held to (`ValidateToken` above). Each
+grammar's own tree was parsed directly with the same `go-tree-sitter` +
+grammar-binding packages `internal/resolve` imports, outside this
+repository (to stay off `internal/resolve`, out of this survey's own fence)
+but against the exact same module versions, and each `Declaration.Node`'s
+`StartByte()`/`EndByte()` was converted to a 0-based line the same way
+`crosscheck.go`'s own `lineOf` does, to get the real declOnly line range to
+compare the server's own reported range against — not a hand count, which
+turned out to be wrong once (below).
 
-**SQL: a maintained, installed tool exists, but it is not a symbol
-server.** `sqlfluff` (`~/.local/bin/sqlfluff`) is installed. Its own
-`--help` lists exactly `dialects`, `fix`, `format`, `lint`, `parse`,
-`render`, `rules`, `version` — no `lsp` subcommand — and
-`pip show sqlfluff-lsp` reports no such package exists. `sqlfluff` is a
-linter/formatter that operates on whole files, not a `textDocument/
-documentSymbol` provider, confirming the pattern this record already
-expected: SQL's mature tooling is query-execution- and linting-shaped, not
-symbol-outline-shaped. No maintained SQL LSP was found installed on this
-machine (`sqls`, `sql-language-server` also absent from every location
-checked above). This is the negative result the survey brief called out as
-acceptable on its own terms — the same "no single dominant server" reasoning
-already recorded for SQL above, now backed by an actual tool inventory
-rather than an assumption.
+**YAML: exact match on every case, including the container that encloses
+another.** `yaml-language-server` on
 
-**Net: nothing new qualifies for `internal/lsp/servers.go`.** The transport
-survey never reached the range-semantics question for five of six grammars
-because nothing was there to dial, and reached it for the sixth only to find
-the one installed binary cannot complete an LSP handshake at all. Wiring any
-of the six on documentation alone — assuming a hypothetical install's ranges
-would match `declOnlyExtent` — is exactly the class of defect
-`CONTRIBUTING.md` warns against: a double for a dependency that was never
-actually dialled. `docs/ANCHORS.md`'s language-support table already
-documents Markdown/YAML/CSS/JSON/TOML/SQL as permanently `[ts-only]`; that
-stays accurate after this survey rather than becoming stale.
+```yaml
+# comment
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+```
+
+reported `jobs` L1..L6, `build` L2..L6 (its own value nests `runs-on` and
+`steps`), `runs-on` L3..L3, `steps` L4..L6 — identical to
+`declOnlyExtent` on tree-sitter-yaml's own parse of the same fixture in
+every case. The leading `# comment` (no blank line before `jobs:`) was
+correctly excluded from `jobs`'s own range, the same doc-comment-exclusion
+behaviour already verified for gopls. `steps`'s single list item surfaced
+as its own numbered symbol (`"0"`) with `run` nested under it — extra
+symbols `rgit` never queries, since sequence items are not addressable
+(`docs/ANCHORS.md`), and harmless: `matchLSPSymbol` only ever looks up
+names `rgit`'s own resolver produced.
+
+**JSON and CSS: exact match, and CSS's own doc-comment case passed too.**
+`vscode-json-language-server` on a nested `{"server": {"host": ..., "port":
+...}}` fixture reported `server` L1..L4, `host` L2..L2, `port` L3..L3,
+matching `declOnlyExtent` exactly (JSON has no comment syntax, so there is
+no doc-comment case to check). `vscode-css-language-server` on
+
+```css
+/* comment */
+.button {
+  color: red;
+}
+
+@media (max-width: 600px) {
+  .button { color: blue; }
+}
+```
+
+reported `.button` L1..L3 (the leading, blank-line-less `/* comment */`
+correctly excluded) and `@media (max-width: 600px)` L5..L7, both exact
+matches; the nested `.button` inside the `@media` block is not addressable
+by `rgit` at all (`docs/ANCHORS.md`), so its own reported range was not
+compared against anything.
+
+**Markdown: `marksman` matches exactly, because tree-sitter-markdown's own
+`section` nodes are already hierarchical the same way `marksman`'s outline
+is.** On
+
+```markdown
+# Title
+
+## Setup
+
+Some text.
+
+### Options
+
+More text.
+```
+
+`marksman` reported `Title` L0..L9, `Setup` L2..L9, `Options` L6..L9 —
+exact matches, each parent's range correctly enclosing its subsections, the
+same nesting `docs/ANCHORS.md` already documents ("a Markdown heading's
+extent is the whole section it opens ... subsections included"). This is
+why Markdown's own cross-check needed no normalization the way TOML's does
+below: tree-sitter's own node already nests the way the server's own range
+does, rather than modelling siblings the server reports as parent/child.
+
+**`vscode-markdown-language-server` crashes on startup on this machine —
+measured, not assumed, and not chased further once `marksman` had already
+passed cleanly.** `vscode-markdown-language-server --stdio` exits
+immediately with `SyntaxError: The requested module 'vscode-uri' does not
+provide an export named 'default'`, an ESM/CJS interop break between its
+own bundled `vscode-markdown-languageservice` dependency and the installed
+`vscode-uri` version under Node.js v26.5.0. Not wired — not because
+Markdown lacks a compatible server (`marksman` already fills that role),
+but because this specific binary does not run here at all.
+
+**TOML: `taplo` now completes the LSP handshake (the earlier build's own
+missing feature is fixed), but its ranges genuinely disagree with
+`declOnlyExtent` on the ordinary case of a nested table — the exact false-
+positive risk this survey exists to catch, not a normalization gap.** On
+
+```toml
+# leading comment for server table
+[server]
+host = "localhost"
+port = 8080
+
+[server.tls]
+enabled = true
+cert = "a.pem"
+```
+
+`taplo` reports `server` as L1..L7 — the *entire* file from `[server]`
+through `cert`'s own line — because `taplo` understands TOML's dotted-table
+semantics and treats `[server.tls]` as a logical child of `server`.
+tree-sitter-toml does not: measured directly against a compiled parse tree,
+`document`'s only allowed children are `pair`/`table`/`table_array_element`
+as flat siblings (already recorded above, § the TOML grammar-scope entry),
+so `server`'s own node spans only L1..L5 — the header through the blank
+line before the next header begins, not through the next table's own
+content. `taplo`'s `server` range is objectively wider than the anchor
+`rgit` would ever stage for it. Cross-checking `server` against `taplo`
+would hard-fail (exit 6) on a correct, unmodified extent, on every TOML file
+with a dotted-nested table — the ordinary organizing pattern the format
+exists to support, not a corner case.
+
+A second, independent disagreement surfaced on `server.tls` itself (the
+*last* declaration in the file): `taplo` reports it as L5..L7, ending at the
+last real character of `cert = "a.pem"`; tree-sitter's own node reaches
+L5..L8, one line further, because `table`'s `EndByte()` measured as
+reaching all the way to the file's own trailing newline when nothing
+follows it (the same "table absorbs the trailing blank line before the next
+header" behaviour already recorded above — with no next header, it absorbs
+through EOF instead). Two independent, measured mismatches, not one; TOML
+stays `[ts-only]`.
+
+**A load-bearing client-side fix, made in this package, was needed before
+any of the above could even be measured.** `taplo` sends a server-initiated
+`workspace/configuration` request immediately after `initialized` and
+waits on it; `internal/lsp`'s `Client` was built on
+`protocol.UnimplementedClient{}`, whose own `Configuration` method returns
+an error. `taplo` treats that error as "no configuration available" and
+silently excludes every document from then on — `DocumentSymbols` returned
+successfully, with zero symbols, no error at all, until this was diagnosed
+with a raw-protocol probe outside this repository showing a
+`"this document has been excluded"` diagnostic that appeared only while
+`workspace/configuration` was left unanswered. `client.go`'s new
+`configClient` type answers it with one empty settings object per requested
+item — `rgit` has no configuration to report, so an empty object is not a
+guess, just the minimum reply a server that insists on an answer needs to
+stop excluding the file it was just told to open. `gopls`/`vtsls`/
+`pyright`/`bash-language-server` never send this request, so the change is
+inert for all four already-wired servers — verified by the unchanged
+passing state of every existing `internal/lsp` test after adding it.
+
+**SQL: unchanged from the availability-only pass — still nothing installed
+that speaks `documentSymbol`.** `sqlfluff` (`~/.local/bin/sqlfluff`)
+remains the only SQL tool present; its own `--help` lists `dialects`,
+`fix`, `format`, `lint`, `parse`, `render`, `rules`, `version` and no `lsp`
+subcommand, and `pip show sqlfluff-lsp` still reports no such package.
+`sqls` and `sql-language-server` remain absent from every location checked
+in the first pass. `.sql` stays `[ts-only]`.
+
+**Net: YAML, JSON, CSS, and Markdown (via `marksman`) are wired; TOML and
+SQL are not, on measured range disagreement and measured unavailability
+respectively, not on a documentation assumption either way.**
+`[ts-only]` is no longer the majority outcome: 9 of 11 grammars now
+cross-check against a live server (Go, TypeScript, TSX, Python, Shell,
+YAML, JSON, CSS, Markdown), leaving TOML and SQL permanently `[ts-only]`.
 
 ## Argument grammar
 
