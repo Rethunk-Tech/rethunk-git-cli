@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// TestPeekShebangLine covers finding 24: a successful os.Open must not be
-// enough on its own to report ok=true -- a non-EOF read error or a
+// TestPeekShebangLine covers the guarantee: a successful os.Open must not
+// be enough on its own to report ok=true -- a non-EOF read error or a
 // zero-byte read both mean there is no line to report, the same as a
 // failed Open.
 func TestPeekShebangLine(t *testing.T) {
@@ -46,10 +46,10 @@ func TestPeekShebangLine(t *testing.T) {
 		}
 	})
 
-	// Before finding 24's fix, a successful os.Open on a zero-byte file
-	// still reported ok=true with an empty line -- indistinguishable from
-	// a genuine (if shebang-less) first line to a caller that only checks
-	// the bool.
+	// Before PeekShebangLine's own fix, a successful os.Open on a zero-byte
+	// file still reported ok=true with an empty line -- indistinguishable
+	// from a genuine (if shebang-less) first line to a caller that only
+	// checks the bool.
 	t.Run("empty file reports ok=false", func(t *testing.T) {
 		t.Parallel()
 		path := filepath.Join(t.TempDir(), "empty")
@@ -69,8 +69,8 @@ func TestPeekShebangLine(t *testing.T) {
 	})
 
 	// A directory's os.Open succeeds; its Read does not (EISDIR). Before
-	// finding 24's fix, that non-EOF read error was silently discarded and
-	// this still reported ok=true.
+	// PeekShebangLine's own fix, that non-EOF read error was silently
+	// discarded and this still reported ok=true.
 	t.Run("directory reports ok=false", func(t *testing.T) {
 		t.Parallel()
 		if _, ok := PeekShebangLine(t.TempDir()); ok {
@@ -112,7 +112,7 @@ func TestStripQuotes(t *testing.T) {
 	}
 }
 
-// TestParseOrdinal covers finding 23's merged parsing rule: docs/ANCHORS.md's
+// TestParseOrdinal covers ParseOrdinal's merged parsing rule: docs/ANCHORS.md's
 // positional "Bare#N" form requires a non-empty bare name and a strictly
 // positive N, unifying what crosscheck.go's old splitOrdinal (neither
 // check) and internal/synth/stage.go's isOrdinalAnchor (both checks) used
@@ -150,12 +150,12 @@ func TestParseOrdinal(t *testing.T) {
 	}
 }
 
-// TestTSFamily_CachesLanguage covers finding 5: TSLanguage() must return
-// the same *ts.Language on every call rather than invoking ts.NewLanguage
-// again -- go-tree-sitter's own NewLanguage allocates a fresh *Language
-// struct on every call even though the underlying grammar table is the
-// same static data, so two calls returning identical pointers is only true
-// once the value is actually cached rather than recomputed.
+// TestTSFamily_CachesLanguage covers the guarantee: TSLanguage() must
+// return the same *ts.Language on every call rather than invoking
+// ts.NewLanguage again -- go-tree-sitter's own NewLanguage allocates a
+// fresh *Language struct on every call even though the underlying grammar
+// table is the same static data, so two calls returning identical pointers
+// is only true once the value is actually cached rather than recomputed.
 func TestTSFamily_CachesLanguage(t *testing.T) {
 	t.Parallel()
 
