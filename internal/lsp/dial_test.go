@@ -2,12 +2,30 @@ package lsp
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 )
+
+// shortTempDir returns a fresh, short-named temp directory, cleaned up when
+// t completes. Unlike t.TempDir(), its name does not embed the calling
+// test's own name -- needed wherever a path built from it is bound as a
+// unix socket, which is capped at ~108 bytes (sun_path) on Linux and can
+// overflow once a long test name and privateSocketDir's own "rgit-<uid>"
+// subdirectory are both appended to it.
+func shortTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "rgit-lsp-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
+}
 
 // noopDaemonArgs is a serverSpec.daemonArgs for a test spec whose "daemon"
 // never actually needs to listen on sockPath -- trySpawnDaemon never waits
@@ -166,5 +184,298 @@ func TestDialStdio_CloseTearsDownConnectionThenProcess(t *testing.T) {
 
 	if _, err := client.DocumentSymbols(ctx, path, src); err == nil {
 		t.Error("DocumentSymbols after Close = nil error; want one -- the connection should already be closed")
+	}
+}
+
+// --- finding 1: the managed socket directory must be trusted, not assumed ---
+
+// TestPrivateSocketDir_CreatesPrivateDirectory covers the ordinary case: a
+// fresh, writable base directory gets a 0700 UID-scoped subdirectory
+// created under it, and a second call against the same base is idempotent
+// (returns the same path, still trusted).
+func TestPrivateSocketDir_CreatesPrivateDirectory(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+
+	dir, ok := privateSocketDir()
+	if !ok {
+		t.Fatal("privateSocketDir() ok = false; want true for a fresh, owned base directory")
+	}
+	info, err := os.Lstat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.IsDir() {
+		t.Error("privateSocketDir() did not create a directory")
+	}
+	if perm := info.Mode().Perm(); perm != 0o700 {
+		t.Errorf("privateSocketDir() mode = %o; want 0700", perm)
+	}
+
+	dir2, ok2 := privateSocketDir()
+	if !ok2 || dir2 != dir {
+		t.Errorf("privateSocketDir() second call = (%q, %v); want (%q, true)", dir2, ok2, dir)
+	}
+}
+
+// TestPrivateSocketDir_RejectsLoosePermissions covers the case a predictable
+// path in a shared directory exists for: someone (or something) already
+// created the expected path with group/other permissions. rgit must not
+// trust it merely because it is a directory it owns -- finding 1 is
+// specifically that permission bits alone are not enough on their own to
+// rule out a planted path, but a directory this loose is rejected before
+// ownership even needs checking.
+func TestPrivateSocketDir_RejectsLoosePermissions(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", base)
+	dir := filepath.Join(base, fmt.Sprintf("rgit-%d", os.Getuid()))
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := privateSocketDir(); ok {
+		t.Error("privateSocketDir() ok = true for a group/other-accessible directory; want false")
+	}
+}
+
+// TestPrivateSocketDir_RejectsSymlink covers a symlink planted at the exact
+// expected path: it must be rejected outright, never followed, regardless
+// of what it points at or that path's own permissions.
+func TestPrivateSocketDir_RejectsSymlink(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", base)
+	dir := filepath.Join(base, fmt.Sprintf("rgit-%d", os.Getuid()))
+	realDir := filepath.Join(base, "elsewhere")
+	if err := os.Mkdir(realDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(realDir, dir); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := privateSocketDir(); ok {
+		t.Error("privateSocketDir() ok = true for a symlink at the expected path; want false")
+	}
+}
+
+// TestPrivateSocketDir_RejectsNonDirectory covers a plain file occupying the
+// expected path.
+func TestPrivateSocketDir_RejectsNonDirectory(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", base)
+	dir := filepath.Join(base, fmt.Sprintf("rgit-%d", os.Getuid()))
+	if err := os.WriteFile(dir, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := privateSocketDir(); ok {
+		t.Error("privateSocketDir() ok = true for a plain file at the expected path; want false")
+	}
+}
+
+// TestPrivateSocketDir_BaseMissingFailsClosed covers the base directory
+// itself being unusable (e.g. $XDG_RUNTIME_DIR pointing nowhere): this must
+// degrade the caller to [ts-only] rather than panic or propagate an error
+// of its own -- the same "fail closed" posture the fix for finding 1 uses
+// throughout.
+func TestPrivateSocketDir_BaseMissingFailsClosed(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", filepath.Join(t.TempDir(), "does-not-exist"))
+
+	if _, ok := privateSocketDir(); ok {
+		t.Error("privateSocketDir() ok = true with a missing base directory; want false (fail closed)")
+	}
+}
+
+// --- finding 2: a stale/incompatible managed socket must not pin every
+// future invocation to [ts-only] forever ---
+
+// TestDialSocket_HandshakeFailureUnlinksManagedSocketAndDegrades covers the
+// bug directly: a listener that accepts but never speaks the handshake (a
+// stale or incompatible daemon's shape) must be unlinked once this
+// invocation gives up on it, so the very next invocation can reclaim the
+// path via spawn-on-demand instead of finding the same dead listener
+// forever.
+func TestDialSocket_HandshakeFailureUnlinksManagedSocketAndDegrades(t *testing.T) {
+	// A unix socket path is capped at ~108 bytes (sun_path) on Linux --
+	// t.TempDir() embeds this test's own (long) name in the path, which
+	// combined with privateSocketDir's own "rgit-<uid>" subdirectory
+	// overflows that limit. A short, manually-cleaned temp dir keeps the
+	// path realistic (this is exactly how short $XDG_RUNTIME_DIR normally
+	// is, e.g. /run/user/1000).
+	base := shortTempDir(t)
+	t.Setenv("XDG_RUNTIME_DIR", base)
+
+	spec := serverSpec{name: "test-handshake-fail", bin: "rgit-lsp-test-binary-does-not-exist", daemonArgs: noopDaemonArgs}
+
+	sockPath, ok := defaultSocketPath(spec.name)
+	if !ok {
+		t.Fatal("defaultSocketPath() ok = false; want true for a fresh, owned temp dir")
+	}
+
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = ln.Close() }()
+	go func() {
+		for {
+			conn, aerr := ln.Accept()
+			if aerr != nil {
+				return
+			}
+			// Close immediately without ever speaking the handshake --
+			// exactly a stale or incompatible listener's shape.
+			_ = conn.Close()
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	client, degraded := dialSocket(ctx, spec, t.TempDir())
+	if client != nil {
+		t.Error("dialSocket() client != nil; want nil after a handshake failure")
+	}
+	if !degraded {
+		t.Error("dialSocket() degraded = false; want true after a handshake failure")
+	}
+
+	if _, err := os.Stat(sockPath); !os.IsNotExist(err) {
+		t.Errorf("managed socket file = %v; want removed after its handshake failed", err)
+	}
+}
+
+// TestDialSocket_HandshakeFailureLeavesUserSuppliedSocketAlone covers the
+// other half of finding 2's fix: $RGIT_LSP_SOCKET is the caller's own path,
+// not rgit's to manage, so a handshake failure against it must never
+// unlink it -- only the managed default is rgit's to clean up.
+func TestDialSocket_HandshakeFailureLeavesUserSuppliedSocketAlone(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", shortTempDir(t))
+
+	sockPath := filepath.Join(shortTempDir(t), "user-supplied.sock")
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = ln.Close() }()
+	go func() {
+		for {
+			conn, aerr := ln.Accept()
+			if aerr != nil {
+				return
+			}
+			_ = conn.Close()
+		}
+	}()
+	t.Setenv("RGIT_LSP_SOCKET", sockPath)
+
+	spec := serverSpec{name: "test-user-socket", bin: "rgit-lsp-test-binary-does-not-exist", daemonArgs: noopDaemonArgs}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	if _, degraded := dialSocket(ctx, spec, t.TempDir()); !degraded {
+		t.Error("dialSocket() degraded = false; want true")
+	}
+
+	if _, err := os.Stat(sockPath); err != nil {
+		t.Errorf("user-supplied socket file = %v; want left in place, not rgit's to remove", err)
+	}
+}
+
+// --- finding 10: daemon recovery gaps ---
+
+// TestUnlinkDeadSocket_RemovesDeadSocketFile covers finding 10a: a unix
+// socket special file left behind by a killed daemon (SetUnlinkOnClose(false)
+// simulates exactly that -- an ordinary Close would already unlink it,
+// masking the case this function exists for) must be removed once nothing
+// answers a connection attempt against it, or a freshly spawned daemon's own
+// net.Listen on the same path fails EADDRINUSE and spawn-on-demand never
+// recovers.
+func TestUnlinkDeadSocket_RemovesDeadSocketFile(t *testing.T) {
+	sockPath := filepath.Join(shortTempDir(t), "rgit-test.sock")
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unixLn, ok := ln.(*net.UnixListener); ok {
+		unixLn.SetUnlinkOnClose(false)
+	}
+	if err := ln.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	unlinkDeadSocket(sockPath)
+
+	if _, err := os.Stat(sockPath); !os.IsNotExist(err) {
+		t.Errorf("socket file = %v; want removed once nothing answers it", err)
+	}
+}
+
+// TestUnlinkDeadSocket_LeavesLiveSocketAlone is the other side: a socket a
+// live daemon is actually listening on must never be unlinked out from
+// under it.
+func TestUnlinkDeadSocket_LeavesLiveSocketAlone(t *testing.T) {
+	sockPath := filepath.Join(shortTempDir(t), "rgit-test.sock")
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = ln.Close() }()
+	go func() {
+		for {
+			conn, aerr := ln.Accept()
+			if aerr != nil {
+				return
+			}
+			_ = conn.Close()
+		}
+	}()
+
+	unlinkDeadSocket(sockPath)
+
+	if _, err := os.Stat(sockPath); err != nil {
+		t.Errorf("socket file = %v; want left in place -- something is listening", err)
+	}
+}
+
+// TestTrySpawnDaemon_StaleLockRetriesAndSpawns covers finding 10b directly:
+// clearing a stale lock must retry the O_EXCL claim once in the same
+// invocation and actually spawn, rather than leaving the spawn to whatever
+// invocation happens to run next. The fake "daemon" is a real, installed
+// shell script so cmd.Start truly execs and runs it -- proven by the marker
+// file it touches -- rather than merely asserting the lock file's own
+// end-state, which looks identical whether or not a spawn actually
+// happened.
+func TestTrySpawnDaemon_StaleLockRetriesAndSpawns(t *testing.T) {
+	binDir := t.TempDir()
+	marker := filepath.Join(t.TempDir(), "spawned")
+	fakeBin := filepath.Join(binDir, "rgit-test-marker-bin")
+	script := "#!/bin/sh\ntouch \"" + marker + "\"\n"
+	if err := os.WriteFile(fakeBin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	sockPath := filepath.Join(t.TempDir(), "rgit-test.sock")
+	lockPath := sockPath + ".lock"
+	if err := os.WriteFile(lockPath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	staleTime := time.Now().Add(-2 * staleLockAge)
+	if err := os.Chtimes(lockPath, staleTime, staleTime); err != nil {
+		t.Fatal(err)
+	}
+
+	spec := serverSpec{name: "test", bin: "rgit-test-marker-bin", daemonArgs: noopDaemonArgs}
+	trySpawnDaemon(spec, sockPath)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err := os.Stat(marker); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("marker file never appeared; want the stale-lock retry to have spawned the daemon")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

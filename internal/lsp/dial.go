@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -39,9 +40,11 @@ func Dial(ctx context.Context, lang, repoRoot string) (client *Client, degraded 
 // DialBudget; if neither answers, spawn a daemon for a future invocation to
 // find and degrade this one to [ts-only] rather than wait for it.
 func dialSocket(ctx context.Context, spec serverSpec, repoRoot string) (*Client, bool) {
-	sockPath := defaultSocketPath(spec.name)
+	sockPath, managedOK := defaultSocketPath(spec.name)
 
-	for _, candidate := range socketCandidates(sockPath) {
+	for _, candidate := range socketCandidates(sockPath, managedOK) {
+		managed := managedOK && candidate == sockPath
+
 		dialer := net.Dialer{Timeout: DialBudget}
 		conn, err := dialer.DialContext(ctx, "unix", candidate)
 		if err != nil {
@@ -60,28 +63,83 @@ func dialSocket(ctx context.Context, spec serverSpec, repoRoot string) (*Client,
 			// jsonrpc2.Conn it wraps around conn, which in turn closes
 			// conn itself) -- closing conn again here would double-close
 			// the same net.Conn.
-			return nil, true
+			if managed {
+				// Only a path rgit itself manages is safe to unlink -- a
+				// user-supplied $RGIT_LSP_SOCKET is the caller's own to
+				// clean up, not ours. Removing it lets the next candidate
+				// in this same loop, or trySpawnDaemon below if this was
+				// the last one, reclaim the path instead of every future
+				// invocation staying pinned to a dead listener forever
+				// (finding 2).
+				_ = os.Remove(candidate)
+			}
+			continue
 		}
 		return client, false
 	}
 
-	trySpawnDaemon(spec, sockPath)
+	if managedOK {
+		trySpawnDaemon(spec, sockPath)
+	}
 	return nil, true
 }
 
 // socketCandidates returns the probe order from specs/design.md:
 // $RGIT_LSP_SOCKET first (an existing socket the caller points at
-// explicitly), then the default path.
-func socketCandidates(defaultPath string) []string {
+// explicitly), then the managed default path -- omitted entirely when
+// hasDefault is false, meaning privateSocketDir could not vouch for a
+// directory to hold it (finding 1).
+func socketCandidates(defaultPath string, hasDefault bool) []string {
 	candidates := make([]string, 0, 2)
 	if v := os.Getenv("RGIT_LSP_SOCKET"); v != "" {
 		candidates = append(candidates, v)
 	}
-	return append(candidates, defaultPath)
+	if hasDefault {
+		candidates = append(candidates, defaultPath)
+	}
+	return candidates
 }
 
-func defaultSocketPath(serverName string) string {
-	return filepath.Join(runtimeDir(), "rgit-"+serverName+".sock")
+// defaultSocketPath returns the managed socket path for serverName inside a
+// directory this process can trust. ok=false means no such directory is
+// available -- the caller must not dial or spawn into the managed default
+// at all, only $RGIT_LSP_SOCKET if the caller supplied one.
+func defaultSocketPath(serverName string) (path string, ok bool) {
+	dir, ok := privateSocketDir()
+	if !ok {
+		return "", false
+	}
+	return filepath.Join(dir, "rgit-"+serverName+".sock"), true
+}
+
+// privateSocketDir returns a UID-scoped, 0700 subdirectory of runtimeDir()
+// to hold the managed gopls socket and its spawn lock, creating it if
+// absent. ok=false means the directory could not be trusted -- owned by
+// someone else, not actually a directory, a symlink, or more permissive
+// than 0700 -- and the caller must fail closed to [ts-only] rather than
+// dial or spawn into a path another user on a multi-user host could have
+// pre-created: runtimeDir() typically falls back to a world-writable
+// os.TempDir(), and the socket name is otherwise predictable
+// (rgit-<server>.sock), so without this check another user could plant
+// their own listener there and read every file rgit sends it over
+// textDocument/didOpen (finding 1).
+func privateSocketDir() (dir string, ok bool) {
+	dir = filepath.Join(runtimeDir(), fmt.Sprintf("rgit-%d", os.Getuid()))
+	if err := os.Mkdir(dir, 0o700); err != nil && !os.IsExist(err) {
+		return "", false
+	}
+
+	// Lstat, not Stat: a symlink at this exact path -- planted by another
+	// user pointing somewhere they control -- must be rejected outright,
+	// never followed.
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return "", false
+	}
+	if !info.Mode().IsDir() || info.Mode().Perm()&0o077 != 0 || !sameOwner(info) {
+		return "", false
+	}
+	return dir, true
 }
 
 func runtimeDir() string {
@@ -104,27 +162,26 @@ func trySpawnDaemon(spec serverSpec, sockPath string) {
 		return
 	}
 
-	lockPath := sockPath + ".lock"
-	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-	if err != nil {
-		// Usually another invocation is already spawning. A lock left by
-		// a killed process would otherwise pin every later invocation to
-		// [ts-only] forever, so one older than any real spawn is cleared
-		// for the next invocation to claim. The lock is an optimization,
-		// not correctness (specs/design.md).
-		if info, statErr := os.Stat(lockPath); statErr == nil && time.Since(info.ModTime()) > staleLockAge {
-			_ = os.Remove(lockPath)
-		}
+	lock, ok := acquireSpawnLock(sockPath)
+	if !ok {
 		return
 	}
 	defer func() {
 		// Both are best-effort, in this order: close the descriptor, then
-		// unlink. A lock that survives either failure is reclaimed by the
-		// staleLockAge sweep above, which is why the lock can be an
-		// optimization rather than something correctness rests on.
+		// unlink. A lock that survives either failure is reclaimed by
+		// acquireSpawnLock's own staleLockAge sweep, which is why the lock
+		// can be an optimization rather than something correctness rests
+		// on.
 		_ = lock.Close()
-		_ = os.Remove(lockPath)
+		_ = os.Remove(sockPath + ".lock")
 	}()
+
+	// A dead daemon leaves the unix socket special file behind; a fresh
+	// gopls's own net.Listen on the same path then fails EADDRINUSE, so
+	// spawn-on-demand would otherwise silently never recover (finding
+	// 10a). Only a socket nothing answers is removed -- a live daemon
+	// actually listening there is left alone.
+	unlinkDeadSocket(sockPath)
 
 	cmd := exec.Command(spec.bin, spec.daemonArgs(sockPath)...)
 	cmd.Stdin = nil
@@ -139,6 +196,51 @@ func trySpawnDaemon(spec serverSpec, sockPath string) {
 	// Detach: the daemon outlives this process by design, so there is
 	// nothing here to Wait() on.
 	_ = cmd.Process.Release()
+}
+
+// acquireSpawnLock claims the O_EXCL lock beside sockPath. A lock already
+// held usually means another invocation is mid-spawn; one older than
+// staleLockAge instead belongs to a process that died before its own
+// deferred cleanup ran. That stale lock is cleared and the claim retried
+// once in the same invocation rather than leaving the actual spawn to
+// whatever invocation happens to run next (finding 10b) -- otherwise the
+// invocation that notices the stale lock is never the one that benefits
+// from clearing it. The lock is an optimization, not correctness
+// (specs/design.md): the worst a lost race over it costs is one extra
+// doomed gopls process and its stderr noise.
+func acquireSpawnLock(sockPath string) (*os.File, bool) {
+	lockPath := sockPath + ".lock"
+	for range 2 {
+		lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if err == nil {
+			return lock, true
+		}
+		info, statErr := os.Stat(lockPath)
+		if statErr != nil || time.Since(info.ModTime()) <= staleLockAge {
+			return nil, false
+		}
+		_ = os.Remove(lockPath)
+	}
+	return nil, false
+}
+
+// unlinkDeadSocket removes a leftover unix socket special file at sockPath
+// so a freshly spawned daemon's own net.Listen does not fail EADDRINUSE
+// against it. It is only ever called from inside trySpawnDaemon's spawn
+// lock, so the short dial here costs nothing and keeps this function
+// correct standalone rather than relying on some earlier caller having
+// already proven the path dead. A live daemon actually listening at
+// sockPath answers the dial and is left alone.
+func unlinkDeadSocket(sockPath string) {
+	if _, err := os.Stat(sockPath); err != nil {
+		return
+	}
+	conn, err := (&net.Dialer{Timeout: DialBudget}).DialContext(context.Background(), "unix", sockPath)
+	if err != nil {
+		_ = os.Remove(sockPath)
+		return
+	}
+	_ = conn.Close()
 }
 
 // dialStdio spawns spec's server fresh: vtsls and pyright have no
