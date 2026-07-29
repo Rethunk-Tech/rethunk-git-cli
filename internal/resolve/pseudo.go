@@ -109,7 +109,7 @@ func importPredicate(lang Language, src []byte) func(*ts.Node) bool {
 	return func(n *ts.Node) bool { return kinds[n.Kind()] }
 }
 
-// OwnsTrailingSeparator reports lang's own answer (Language.
+// ownsTrailingSeparator reports lang's own answer (Language.
 // OwnsTrailingSeparator) to whether its formatting convention treats the
 // blank line following its @header or @imports region as belonging to that
 // region, rather than as free-floating whitespace between two otherwise
@@ -118,16 +118,16 @@ func importPredicate(lang Language, src []byte) func(*ts.Node) bool {
 // gofmt'd file that blank line is as much "part of the header" as the
 // package clause's own trailing newline is.
 //
-// Kept as a free function, rather than inlining lang.OwnsTrailingSeparator()
-// at each call site, so ExtendThroughOwnedSeparator below and every
-// external caller share one call shape.
-func OwnsTrailingSeparator(lang Language) bool {
+// Unexported: ExtendThroughOwnedSeparator below is its only caller, and
+// nothing outside this package needs the indirection -- a caller wanting
+// lang's own answer can call lang.OwnsTrailingSeparator() directly.
+func ownsTrailingSeparator(lang Language) bool {
 	return lang.OwnsTrailingSeparator()
 }
 
 // ExtendThroughOwnedSeparator widens ext's End through the whitespace
 // immediately following it, up to limit, when lang's convention makes that
-// whitespace part of the region itself (OwnsTrailingSeparator) -- otherwise
+// whitespace part of the region itself (ownsTrailingSeparator) -- otherwise
 // ext is returned unchanged.
 //
 // This is deliberately not built into headerExtent/importsExtent themselves:
@@ -138,7 +138,7 @@ func OwnsTrailingSeparator(lang Language) bool {
 // new-file preamble staging, where @header and @imports are the only things
 // that will ever get their own row for that boundary at all.
 func ExtendThroughOwnedSeparator(lang Language, src []byte, ext Extent, limit uint) Extent {
-	if !OwnsTrailingSeparator(lang) {
+	if !ownsTrailingSeparator(lang) {
 		return ext
 	}
 	end := ext.End
