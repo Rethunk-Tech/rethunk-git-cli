@@ -1,5 +1,7 @@
-# Go
+# Go. Both binaries land here when built without -o, which `go build ./...`
+# does by default.
 /rgit
+/rgit-install
 /dist/
 *.test
 *.out
