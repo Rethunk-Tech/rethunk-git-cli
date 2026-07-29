@@ -758,6 +758,75 @@ symbols `rgit` never queries, since sequence items are not addressable
 (`docs/ANCHORS.md`), and harmless: `matchLSPSymbol` only ever looks up
 names `rgit`'s own resolver produced.
 
+**A real gap in that fixture surfaced only once measured against
+`cmd/rgit/index_test.go`'s own pre-existing
+`TestStage_YAMLNestedKeyByteIdenticalRoundTrip`, which this survey's own
+fixtures never exercised: a nested key whose subtree is directly followed
+by a blank-line-separated sibling at the same level.** That test's own
+fixture stages `jobs.build` in a file where `build`'s own steps end with a
+block scalar (`run: |`) and a blank line separates `build` from its sibling
+`test`; the cross-check hard-failed with `tree-sitter L4..L9,
+language-server L4..L10` (1-based) — `yaml-language-server` one line past
+tree-sitter. Measured directly, both by re-parsing the exact fixture with
+the same `go-tree-sitter` + `tree-sitter-yaml` packages used above and by
+querying `yaml-language-server` for it directly: `build`'s own
+`block_mapping_pair` node ends at line 8 (0-based), the last real line of
+its own content; the server reports line 9, the blank separator line before
+`test:` begins.
+
+**Proven not block-scalar-specific before deciding how to fix it — the
+same fixture with plain scalars in place of the block scalar reproduces
+the identical one-line-past-content mismatch**, `build` at tree-sitter
+line 7 vs. server line 8, ruling out "a defensible different idea of where
+a block scalar ends" (the taplo-shaped explanation this would have been
+if it were narrower) in favour of a general, mechanical convention
+difference: `yaml-language-server`'s own range for a nested container
+consistently extends through **one** trailing blank line separating it
+from a following sibling at the same level; tree-sitter-yaml's own node
+never does, stopping at its own last real content line. This is the same
+*shape* of difference doc-comment stripping already normalizes (one side
+includes a well-defined, content-free byte span the other does not) — not
+the same *category* as taplo's dotted-table mismatch, which claimed a
+neighbour's real, addressable content, not blank padding.
+
+**Fix, kept inside `internal/lsp` rather than touching
+`internal/resolve`'s extents (which stay authoritative and unmoved):**
+`client.go`'s new `trimTrailingBlankLines` pulls every symbol's own
+`EndLine` back past wholly-blank trailing lines within its own range,
+applied uniformly to every symbol from every wired server inside
+`DocumentSymbols` itself, not special-cased to YAML. It can only ever
+narrow a reported range toward its own `StartLine`, never grow one, and it
+stops the instant it reaches a non-blank line — a genuine content-level
+disagreement (a server claiming real neighbouring content) is untouched
+and still fails. One case had to be measured and guarded against
+explicitly: the very last line `bytes.Split` produces is never trimmed,
+because a symbol with no following sibling was already measured (the
+`jobs`-only fixture above) extending through the file's own trailing
+newline all the way to that final element on **both** sides — trimming it
+would have undone an already-correct match and manufactured a new
+mismatch on every last declaration in a file. An earlier version of this
+fix did exactly that, caught by re-running the block/plain-scalar repro
+above against the file's own `test` job (the last declaration) before
+this landed. Re-verified after the fix: `TestStage_YAMLNestedKeyByte
+IdenticalRoundTrip` passes in full, including its previously-failing
+`jobs.build` case.
+
+**JSON, CSS, and Markdown were re-checked against this exact hazard, not
+assumed safe by association.** A JSON/CSS fixture with a blank-line-
+separated sibling container (`{"server": {...}},\n\n"other": 1}` /
+`.a {...}\n\n.b {...}`) produced no mismatch in either grammar, because
+both are brace-delimited: a container's own node closes on its own `}`,
+strictly before any blank line that might follow it, so the ambiguity
+YAML's indentation-based nesting creates never arises structurally. A
+Markdown fixture with two sibling `##` sections separated by a blank line
+(`## Setup` / blank / body / blank / `## Next`) showed `marksman`
+reporting `Setup`'s own range as extending through that same blank
+separator — but tree-sitter-markdown's own `section` node was measured
+doing exactly the same thing (a section's own `EndByte()` reaches the next
+section's own start byte, blank separator included), so the two already
+agreed before `trimTrailingBlankLines` ever ran, and the normalization was
+a no-op for Markdown, not a rescue.
+
 **JSON and CSS: exact match, and CSS's own doc-comment case passed too.**
 `vscode-json-language-server` on a nested `{"server": {"host": ..., "port":
 ...}}` fixture reported `server` L1..L4, `host` L2..L2, `port` L3..L3,
