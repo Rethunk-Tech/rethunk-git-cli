@@ -15,6 +15,7 @@ import (
 // out into its own row, so suggesting it as an alternative would point at a
 // region that overlaps, rather than covers, the gap.
 func TestRowHint_UnanchorableSuggestsToplevelOnlyForMarkdown(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		path string
 		want string
@@ -40,6 +41,7 @@ func TestRowHint_UnanchorableSuggestsToplevelOnlyForMarkdown(t *testing.T) {
 // back to --file-only silently if a future change routes rows through a
 // different path than rowHint.
 func TestRenderText_MarkdownUnanchorableRowPointsAtToplevel(t *testing.T) {
+	t.Parallel()
 	report := &Report{Files: []FileReport{
 		{Path: "README.md", Rows: []Row{{Status: StatusUnanchorable, Added: "2", Deleted: "1"}}},
 	}}

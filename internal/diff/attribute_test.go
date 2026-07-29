@@ -7,6 +7,7 @@ import (
 )
 
 func TestTopLevelComma(t *testing.T) {
+	t.Parallel()
 	// want is the byte index of the separating comma, or -1 for none. The
 	// commas inside strings, calls, and brackets below are all decoys.
 	tests := []struct {
@@ -33,6 +34,7 @@ func TestTopLevelComma(t *testing.T) {
 }
 
 func TestNarrowMultiDeclarator(t *testing.T) {
+	t.Parallel()
 	src := []byte("const a = 1, b = 2")
 	ext := resolve.Extent{Start: 0, End: uint(len(src))}
 	got := narrowMultiDeclarator(src, ext)
@@ -50,6 +52,7 @@ func TestNarrowMultiDeclarator(t *testing.T) {
 // setext heading itself, must attribute to the enclosing section, not fall
 // all the way to (unanchorable).
 func TestAttributeSymbols_MarkdownSectionOwnParagraphSurvivesNestedSetext(t *testing.T) {
+	t.Parallel()
 	lang, ok := resolve.ForExtension(".md")
 	if !ok {
 		t.Fatal("resolve: no adapter registered for .md")

@@ -45,6 +45,7 @@ func newClassifyRepo(t *testing.T) (root string, checker GitPathChecker, revs Gi
 // has to win over the ones below it -- the ordering is the whole design,
 // since several tokens satisfy more than one test.
 func TestClassifyArgs_PrecedenceTable(t *testing.T) {
+	t.Parallel()
 	_, checker, revs := newClassifyRepo(t)
 
 	for _, tc := range []struct {
@@ -105,6 +106,7 @@ func TestClassifyArgs_PrecedenceTable(t *testing.T) {
 // say why a token was rejected, so the message has to name each rule that
 // was actually applied -- and only those, since rule 3 is diff-only.
 func TestClassifyArgs_Rule6ListsWhatItTried(t *testing.T) {
+	t.Parallel()
 	_, checker, revs := newClassifyRepo(t)
 
 	_, err := ClassifyArgs([]string{"nosuch.go:Nope"}, true, checker, revs)
