@@ -23,15 +23,10 @@ import (
 func newDiffTestRepo(t *testing.T) (dir string, repo *gitx.Repo) {
 	t.Helper()
 	dir, repo = gittest.New(t)
-	writeDiffFile(t, dir, "b.py", "def existing():\n    return 1\n")
+	gittest.Write(t, dir, "b.py", "def existing():\n    return 1\n")
 	gittest.Git(t, dir, "add", "b.py")
 	gittest.Git(t, dir, "commit", "-q", "-m", "chore: initial b.py")
 	return dir, repo
-}
-
-func writeDiffFile(t *testing.T, dir, relPath, content string) {
-	t.Helper()
-	gittest.Write(t, dir, relPath, content)
 }
 
 // assertUnresolvable is the shape every --sym failure in this file shares:
@@ -63,7 +58,7 @@ func TestRun_UnresolvableSymReturnsResolveError(t *testing.T) {
 	dir, repo := newDiffTestRepo(t)
 	// b.py has an uncommitted change, so a silent empty result would be
 	// easy to mistake for success.
-	writeDiffFile(t, dir, "b.py", "def existing():\n    return 2\n")
+	gittest.Write(t, dir, "b.py", "def existing():\n    return 2\n")
 
 	_, err := Run(context.Background(), repo, dir, Options{
 		Syms: []SymRef{{File: "b.py", Name: "doesNotExist"}},
@@ -171,12 +166,12 @@ func TestValidateSym_PrefersNewSideThenFallsBackToOld(t *testing.T) {
 func TestRun_ExtensionlessShebangEnumeratesSymbols(t *testing.T) {
 	t.Parallel()
 	dir, repo := newDiffTestRepo(t)
-	writeDiffFile(t, dir, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v1\n}\n\nbar() {\n  echo bar\n}\n")
+	gittest.Write(t, dir, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v1\n}\n\nbar() {\n  echo bar\n}\n")
 	gittest.Git(t, dir, "add", "pre-commit")
 	gittest.Git(t, dir, "commit", "-q", "-m", "add pre-commit")
 
 	// Edit foo only; bar stays clean and must not appear as a row.
-	writeDiffFile(t, dir, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v2\n}\n\nbar() {\n  echo bar\n}\n")
+	gittest.Write(t, dir, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v2\n}\n\nbar() {\n  echo bar\n}\n")
 
 	report, err := Run(context.Background(), repo, dir, Options{})
 	if err != nil {
@@ -253,8 +248,8 @@ func TestRun_SymFilterMatchesAnyAcceptedAliasSpelling(t *testing.T) {
 	t.Parallel()
 	dir, repo := newDiffTestRepo(t)
 
-	writeDiffFile(t, dir, "a.go", "package p\n\ntype A struct{}\n\nfunc (a *A) Get() int { return 1 }\n")
-	writeDiffFile(t, dir, "doc.md", "# Diff Scope\n\nOriginal.\n")
+	gittest.Write(t, dir, "a.go", "package p\n\ntype A struct{}\n\nfunc (a *A) Get() int { return 1 }\n")
+	gittest.Write(t, dir, "doc.md", "# Diff Scope\n\nOriginal.\n")
 	runGit := func(args ...string) {
 		t.Helper()
 		cmd := exec.Command("git", args...)
@@ -266,8 +261,8 @@ func TestRun_SymFilterMatchesAnyAcceptedAliasSpelling(t *testing.T) {
 	runGit("add", "a.go", "doc.md")
 	runGit("commit", "-q", "-m", "chore: add a.go and doc.md")
 
-	writeDiffFile(t, dir, "a.go", "package p\n\ntype A struct{}\n\nfunc (a *A) Get() int { return 2 }\n")
-	writeDiffFile(t, dir, "doc.md", "# Diff Scope\n\nEdited.\n")
+	gittest.Write(t, dir, "a.go", "package p\n\ntype A struct{}\n\nfunc (a *A) Get() int { return 2 }\n")
+	gittest.Write(t, dir, "doc.md", "# Diff Scope\n\nEdited.\n")
 
 	for _, tt := range []struct {
 		name string
@@ -368,7 +363,7 @@ func pathWithGitOnly(t *testing.T) string {
 // whenever no language server was reached to check a file's extents.
 func TestRun_DegradedCrossCheckSetsTSOnly(t *testing.T) {
 	dir, repo := newDiffTestRepo(t)
-	writeDiffFile(t, dir, "b.py", "def existing():\n    return 2\n")
+	gittest.Write(t, dir, "b.py", "def existing():\n    return 2\n")
 	t.Setenv("PATH", pathWithGitOnly(t))
 
 	report, err := Run(context.Background(), repo, dir, Options{})
@@ -411,7 +406,7 @@ func TestRun_NoResolvableDeclarationsIsNotDegraded(t *testing.T) {
 	// [ts-only] for a file that never had a symbol to verify.
 	t.Setenv("PATH", pathWithGitOnly(t))
 	// A Python file holding only a comment: parses, but declares nothing.
-	writeDiffFile(t, dir, "empty.py", "# no declarations here\n")
+	gittest.Write(t, dir, "empty.py", "# no declarations here\n")
 	cmd := exec.Command("git", "add", "empty.py")
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
