@@ -14,6 +14,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	diffpkg "github.com/Rethunk-Tech/rethunk-git-cli/internal/diff"
@@ -138,18 +139,40 @@ func runContext(ctx context.Context, args []string, stdout, stderr io.Writer) ex
 // runContext so the truncation boundary is unit-testable against a small
 // budget, without building a repository large enough to exceed the real
 // one.
+//
+// The X record itself counts against budget. Appending it unconditionally
+// after a budget-bounded loop, without reserving room for it first, could
+// push the total past budget -- exactly the kind of gap that breaks the
+// "capped at 16 KiB" contract this stream's own help text and
+// docs/USAGE.md state as a hard limit, not a soft target.
 func buildContextStream(records []string, budget int) string {
+	total := 0
+	for _, rec := range records {
+		total += len(rec)
+	}
+	if total <= budget {
+		// Nothing is ever withheld, so no X record is appended and there is
+		// nothing to reserve room for.
+		return strings.Join(records, "")
+	}
+
+	// At least one record will be withheld below, so the loop must stop
+	// short of budget by however much the trailing "X\tTRUNCATED\t<n>\n"
+	// record itself will cost. That cost is computed, not guessed: 12
+	// literal bytes plus however many digits len(records) itself needs (the
+	// worst case, every record omitted) plus the trailing newline.
+	reserve := len("X\tTRUNCATED\t") + len(strconv.Itoa(len(records))) + 1
+	limit := budget - reserve
+
 	var buf strings.Builder
 	kept := 0
 	for _, rec := range records {
-		if buf.Len()+len(rec) > budget {
+		if buf.Len()+len(rec) > limit {
 			break
 		}
 		buf.WriteString(rec)
 		kept++
 	}
-	if omitted := len(records) - kept; omitted > 0 {
-		fmt.Fprintf(&buf, "X\tTRUNCATED\t%d\n", omitted)
-	}
+	fmt.Fprintf(&buf, "X\tTRUNCATED\t%d\n", len(records)-kept)
 	return buf.String()
 }

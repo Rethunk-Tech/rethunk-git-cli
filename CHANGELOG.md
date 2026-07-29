@@ -165,6 +165,14 @@ Notable changes to `rgit`. The format follows
   for an unrecognized argument is now the same shape across `blame`, `log`,
   `languages`, and `doctor` — `rgit: <command>: unrecognized argument
   %q` — where each previously used its own phrasing.
+- `rgit context`'s output stream can no longer exceed its documented 16 KiB
+  cap. The trailing `X\tTRUNCATED\t<n>` record was appended unconditionally
+  after the budget-bounded loop, so its own bytes could push the total past
+  budget; the budget check now reserves room for that record up front.
+- Shell completion's symbol lookup after `FILE:` no longer fires for
+  `rgit context`, `languages`, `doctor`, or `completion` — none of which
+  takes a `FILE:SYMBOL` target — and is limited to `diff`, `commit`,
+  `blame`, and `log`, the commands that actually accept one.
 
 ## [1.0.0] — 2026-07-28
 

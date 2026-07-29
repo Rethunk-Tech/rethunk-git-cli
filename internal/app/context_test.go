@@ -114,9 +114,27 @@ func TestBuildContextStream(t *testing.T) {
 	})
 
 	t.Run("budget exceeded keeps only what fits and appends one marker", func(t *testing.T) {
-		records := []string{"12345\n", "12345\n", "12345\n"} // 6 bytes each
-		got := buildContextStream(records, 13)               // room for two, not three
-		qt.Assert(t, qt.Equals(got, "12345\n12345\nX\tTRUNCATED\t1\n"))
+		records := []string{"12345\n", "12345\n", "12345\n", "12345\n", "12345\n"} // 6 bytes each, 30 total
+		got := buildContextStream(records, 26)                                     // room for two records plus the X line, not three
+		qt.Assert(t, qt.Equals(got, "12345\n12345\nX\tTRUNCATED\t3\n"))
+	})
+
+	// TestBuildContextStream/"the X record itself never pushes the stream
+	// past budget" is the regression pin: the trailing X record used to be
+	// appended unconditionally after the budget-bounded loop, so its own
+	// bytes could push the total past budget -- breaking the "capped at 16
+	// KiB" contract runContext's own help text states as a hard limit. A
+	// budget just past what the record content alone needs, but too tight
+	// to also fit the marker alongside any of it, must still shed every
+	// record rather than let the marker overrun budget.
+	t.Run("the X record itself never pushes the stream past budget", func(t *testing.T) {
+		records := []string{"12345\n", "12345\n", "12345\n"} // 6 bytes each, 18 total
+		const budget = 17                                    // less than the 18-byte total; the old code appended the
+		// X line unconditionally here and overran budget by nearly 2x (26
+		// bytes for a 17-byte budget)
+		got := buildContextStream(records, budget)
+		qt.Assert(t, qt.IsTrue(len(got) <= budget))
+		qt.Assert(t, qt.Equals(got, "X\tTRUNCATED\t3\n"))
 	})
 
 	t.Run("no records is the empty string", func(t *testing.T) {
