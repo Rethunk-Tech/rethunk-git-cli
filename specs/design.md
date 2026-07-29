@@ -86,6 +86,28 @@ shape `apply`'s own loop has — nothing here fabricates a transaction git
 itself does not offer; a caller who wants the index back exactly as it was
 already has `git reset` for it.
 
+**An all-`Unchanged` file is still re-staged, deliberately.** `PlanStage`
+never drops an op just because its target turned out byte-identical between
+`HEAD` and the worktree; `apply` still runs its hash-object + update-index
+pair even when every op in that file is one. Stripping those ops looked
+like a free win — same synthesized blob either way, one fewer round trip —
+but `git add path` has no "skip if identical" case of its own: naming a
+path re-stages its current bytes unconditionally, whether or not anything
+about it changed. Skipping only the all-`Unchanged` file would special-case
+rgit away from that behaviour rather than toward it, and would change what
+happens to a path that already has different content staged from outside
+the invocation (a manual `git add` run before `rgit commit`): today, naming
+any anchor in a path collapses its index entry back to `HEAD` plus the
+named anchors regardless of outcome, the same as every other target
+combination; skipping the all-`Unchanged` case would carve out the one
+content-dependent exception to that. Verified before deciding, not assumed:
+`Plan.Results()` — which the exit-11 "every named target is unchanged"
+rule and `--dry-run`'s own preview both read — is built once per target in
+`planStage` and never touched by `apply`'s loop, so this was never a choice
+between correctness and speed; it was purely whether to diverge from git's
+own re-stage-unconditionally rule for one specific case, and the answer is
+no.
+
 **Concurrency** needs no handling: two `rgit` runs contend on `.git/index`
 exactly as two `git add` runs do, and git's `index.lock` arbitrates.
 

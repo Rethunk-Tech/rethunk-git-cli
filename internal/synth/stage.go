@@ -551,6 +551,26 @@ func (fp *filePlan) close() {
 // (specs/design.md § Blob synthesis measures both halves of this against
 // real git). A caller wanting the index back exactly as it was already has
 // `git reset` for it.
+//
+// This loop does not skip a filePlan whose every op turned out Unchanged
+// (synth.Unchanged), even though the resulting blob is then byte-identical
+// to fp.headSrc and the hash-object/update-index pair changes nothing --
+// deliberate, not an oversight. Skipping is safe against Results()/
+// Preamble()/the exit-11 check: those read plan.results, built once per
+// target in planStage and never touched by this loop, so stripping ops
+// here could never make an Unchanged result disappear from what the app
+// layer sees. The reason to leave it alone anyway is AGENTS.md's own
+// invariant: `git add path` re-stages path's current bytes unconditionally
+// whenever a caller names it, whether or not anything actually changed --
+// there is no "skip if identical" case in git's own add, so inventing one
+// here only for the all-Unchanged file would special-case rgit away from
+// the tool it matches, not toward it. It would also change what happens to
+// a path that already has different content staged from outside this
+// invocation (a manual `git add` before running rgit): today, naming any
+// anchor in that path collapses its index entry back to HEAD-plus-named-
+// anchors regardless of Outcome, the same as every other named path;
+// skipping only the all-Unchanged case would carve out a content-dependent
+// exception no other target combination gets.
 func (p *stagePlan) apply(ctx context.Context, repo *gitx.Repo, root string) error {
 	if len(p.pathspecs) > 0 {
 		if err := repo.Add(ctx, p.pathspecs...); err != nil {
