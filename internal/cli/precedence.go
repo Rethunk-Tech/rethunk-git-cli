@@ -1,7 +1,8 @@
-// Package cli implements argument classification shared by rgit's two
-// subcommands: the six-rule precedence table from docs/USAGE.md §
-// Argument shape that decides whether a positional is a pathspec, a
-// revision, or a symbol anchor.
+// Package cli implements argument classification shared by four of rgit's
+// subcommands -- diff, commit, blame, and log (the latter two via
+// internal/app/shared.go's resolveAnchorExtent) -- the six-rule precedence
+// table from docs/USAGE.md § Argument shape that decides whether a
+// positional is a pathspec, a revision, or a symbol anchor.
 package cli
 
 import (

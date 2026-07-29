@@ -49,9 +49,6 @@ const (
 // cross-check. TestServerCatalog_MatchesLSPServers documents this as its
 // one allowed exception rather than silently ignoring it.
 type serverEntry struct {
-	// name mirrors internal/lsp/servers.go's own "name" field where a
-	// counterpart already exists there.
-	name string
 	// bin is the binary rgit looks up on PATH -- and what this installer
 	// checks and installs.
 	bin     string
@@ -80,7 +77,6 @@ type serverEntry struct {
 
 var serverCatalog = []serverEntry{
 	{
-		name:    "gopls",
 		bin:     "gopls",
 		manager: managerGo,
 		// Pinned rather than @latest: reproducibility under a fixed rgit
@@ -90,25 +86,21 @@ var serverCatalog = []serverEntry{
 		pkg: "golang.org/x/tools/gopls@v0.23.0",
 	},
 	{
-		name:    "vtsls",
 		bin:     "vtsls",
 		manager: managerNPM,
 		pkg:     "@vtsls/language-server",
 	},
 	{
-		name:    "pyright",
 		bin:     "pyright-langserver",
 		manager: managerNPM,
 		pkg:     "pyright",
 	},
 	{
-		name:    "bash-language-server",
 		bin:     "bash-language-server",
 		manager: managerNPM,
 		pkg:     "bash-language-server",
 	},
 	{
-		name:    "yaml-language-server",
 		bin:     "yaml-language-server",
 		manager: managerNPM,
 		pkg:     "yaml-language-server",
@@ -117,25 +109,21 @@ var serverCatalog = []serverEntry{
 		// Same npm package as vscode-css-language-server below --
 		// buildInstallJobs (servers_install.go) groups them into one
 		// install, not two.
-		name:    "vscode-json-language-server",
 		bin:     "vscode-json-language-server",
 		manager: managerNPM,
 		pkg:     "vscode-langservers-extracted",
 	},
 	{
-		name:    "vscode-css-language-server",
 		bin:     "vscode-css-language-server",
 		manager: managerNPM,
 		pkg:     "vscode-langservers-extracted",
 	},
 	{
-		name:          "marksman",
 		bin:           "marksman",
 		manager:       managerNone,
 		unmanagedHint: "no package manager publishes it -- download a release binary from https://github.com/artempyanykh/marksman/releases and put it on PATH",
 	},
 	{
-		name:       "taplo",
 		bin:        "taplo",
 		manager:    managerCargo,
 		pkg:        "taplo-cli",

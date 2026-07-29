@@ -30,17 +30,17 @@ func TestDetectServers(t *testing.T) {
 	t.Parallel()
 
 	catalog := []serverEntry{
-		{name: "gopls", bin: "gopls", manager: managerGo},
-		{name: "missing", bin: "does-not-exist", manager: managerNPM},
+		{bin: "gopls", manager: managerGo},
+		{bin: "does-not-exist", manager: managerNPM},
 		{
-			name: "taplo", bin: "taplo", manager: managerCargo,
+			bin: "taplo", manager: managerCargo,
 			capability: func(bin string) (bool, string) {
 				qt.Assert(t, qt.Equals(bin, "/usr/bin/taplo"))
 				return false, "no lsp subcommand"
 			},
 		},
 		{
-			name: "marksman", bin: "marksman", manager: managerNone,
+			bin: "marksman", manager: managerNone,
 			unmanagedHint: "download a release binary",
 		},
 	}
