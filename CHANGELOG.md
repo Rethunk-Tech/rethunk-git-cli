@@ -21,6 +21,13 @@ Notable changes to `rgit`. The format follows
   `completion`, which previously fell through to nothing in both bash and
   zsh even though all three were offered as subcommands.
 
+### Changed
+
+- `rgit-install -with-servers` installs `gopls@v0.23.0` instead of
+  `gopls@latest`, matching the deliberate `tree-sitter-sql` pin: install
+  reproducibility no longer drifts under a fixed rgit release. See
+  [`docs/INSTALL.md`](docs/INSTALL.md#language-servers).
+
 ### Security
 
 - The managed `gopls` socket and its spawn lock now live in a private,
