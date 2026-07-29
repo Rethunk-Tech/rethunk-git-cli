@@ -8,6 +8,15 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit log FILE:SYMBOL`, patch-free history of one symbol: one
+  `HASH<TAB>SUBJECT`-shaped record per commit that touched its current
+  extent, newest first. Reuses anchor resolution and `git log -L`, which
+  re-derives the touched range at each ancestor commit itself — no
+  per-commit re-parse. Patches are opt-in (`-p`/`--patch`), never default,
+  since plain `git log -L` always prints the full patch body. A file
+  renamed since a commit loses its history under the old name. See
+  [`docs/USAGE.md`](docs/USAGE.md#log).
+
 - `rgit blame FILE:SYMBOL`, bounding `git blame` to one symbol's own extent
   instead of the whole file. Reuses anchor resolution and nothing else: an
   unresolvable anchor is exit 3 (or 4/9), never a silently widened

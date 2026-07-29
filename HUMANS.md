@@ -28,9 +28,12 @@ attributes, and body — and leaves every other edit in the file uncommitted.
 `rgit blame FILE:SYMBOL` bounds `git blame` to just that symbol's own lines
 instead of the whole file.
 
+`rgit log FILE:SYMBOL` shows that symbol's own history — one line per
+touching commit, patch-free unless you ask for one with `-p`.
+
 Everything else stays plain `git`. `rgit` has two staging commands — plus
-`blame`, `languages`, `doctor`, and `completion` for everything around them —
-and no opinions about the rest of your workflow.
+`blame`, `log`, `languages`, `doctor`, and `completion` for everything around
+them — and no opinions about the rest of your workflow.
 
 Commands and flags are in [`docs/USAGE.md`](docs/USAGE.md); anchor syntax is
 in [`docs/ANCHORS.md`](docs/ANCHORS.md); exit codes and the `--porcelain`

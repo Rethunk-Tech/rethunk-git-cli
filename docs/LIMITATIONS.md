@@ -67,6 +67,19 @@ Full anchor and qualification rules: [`ANCHORS.md`](ANCHORS.md).
   is SQL-less, the same fallback `make install` makes. Detail:
   [`INSTALL.md`](INSTALL.md#cross-builds).
 
+## History across renames
+
+`rgit log FILE:SYMBOL` runs `git log -L` bounded to the named file, which —
+unlike `git log --follow` — does not track the file across a rename. A
+symbol's history is reachable only under the name its file currently has;
+querying it under a prior name fails at argument classification, the same as
+naming any other path that exists under neither the worktree nor `HEAD`. This
+was a deliberate trade-off, not an oversight: following a rename correctly
+would mean re-resolving the symbol's extent at every commit that could have
+renamed the file, a parse per commit, for a case measurably rarer than the
+plain history lookup this command exists to serve. See
+[`../specs/design.md`](../specs/design.md#commands) for the reasoning.
+
 ## Language-server coverage
 
 The extent cross-check is live for Go, TypeScript/TSX, Python, Shell, YAML,

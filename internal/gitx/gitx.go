@@ -675,6 +675,19 @@ func (r *Repo) Blame(ctx context.Context, path string, start, end int, extra ...
 	return r.checked(ctx, args...)
 }
 
+// LogLineRange runs `git log -L start,end:path`, bounded to the 1-based,
+// inclusive line range [start, end] in path the same way Blame's `-L` is,
+// plus any extra flags/args (e.g. "--no-patch", "--format=...") passed
+// straight through. Git's own -L implementation re-derives the touched
+// range at each ancestor commit by itself -- there is no per-commit extent
+// for rgit to re-resolve on its own side. Like Blame, there is no "normal
+// negative answer" of its own -- an invalid range or a path git cannot walk
+// is a genuine failure -- so any non-zero exit is a *GitError.
+func (r *Repo) LogLineRange(ctx context.Context, path string, start, end int, extra ...string) ([]byte, error) {
+	args := append([]string{"log", fmt.Sprintf("-L%d,%d:%s", start, end, path)}, extra...)
+	return r.checked(ctx, args...)
+}
+
 // MergeBase resolves the merge base of a and b via `git merge-base`, needed
 // for a diff-scope's `A...B` symmetric range: the range's "old" content
 // endpoint is the merge base, not A itself. ok is false when the two

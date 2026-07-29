@@ -54,6 +54,16 @@ language) mean the same thing there. It never stages or commits anything, so
 blame`'s own exit, folded into 128 the same way any other unexpected git
 failure is.
 
+### `log` shares the anchor codes too, resolved against `HEAD`
+
+`rgit log FILE:SYMBOL` resolves its one anchor the same way `blame` does —
+3 (unresolvable), 4 (ambiguous), and 9 (unsupported language) mean the same
+thing — except against `HEAD`'s own blob rather than the worktree, since
+history is a question about what has already been committed. It never
+stages or commits anything either, so the same 1, 5, 6, 7, 8, 10, and 11
+exclusions apply, and a failure past resolution is `git log`'s own exit,
+folded into 128.
+
 ## Output records
 
 `diff`, `commit`, and `languages` emit plain text only. `--porcelain`
@@ -159,6 +169,25 @@ Not a new record shape: `--porcelain` passes straight through to git's own
 format — rewrapping it in a second, rgit-specific shape would be exactly the
 kind of duplication this file exists to avoid, for a fact git already
 establishes on its own.
+
+### `rgit log --porcelain`
+
+```text
+HASH<TAB>SUBJECT
+a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2<TAB>fix(auth): reject expired tokens
+9e8f7d6c5b4a9e8f7d6c5b4a9e8f7d6c5b4a9e8f<TAB>feat(auth): add ValidateToken
+```
+
+One record per commit whose own diff touched the named symbol's current
+extent, newest first — the same ordering `git log`'s own default gives.
+`HASH` is the full commit object id, never abbreviated (unlike the aligned
+default's `<abbrev-hash> <subject>`, which is for a human to read, not to
+paste elsewhere). Patch-free: this is the one record shape in this file that
+is never emitted alongside `-p`/`--patch`, since asking for both would mean
+asking for a record format and a patch dump at once. `rgit log -p` instead
+prints git's own `git log -L` output unmodified, the same "pass through
+git's own format rather than inventing a second one" choice `rgit blame
+--porcelain` already makes.
 
 ## Rules the diff and commit forms obey
 

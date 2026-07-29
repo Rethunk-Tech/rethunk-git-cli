@@ -1029,6 +1029,71 @@ grammars cross-check against a live server (Go, TypeScript, TSX, Python,
 Shell, YAML, JSON, CSS, Markdown), leaving TOML and SQL permanently
 `[ts-only]`.
 
+## Commands
+
+`TODO.md`'s v2 command set (`blame`, `log`, `context`) was accepted against
+one question each: does it save an LLM tokens `git` already charges for?
+Every one is a thin caller over resolution and delegation machinery that
+already exists — none introduces a second attribution path or new
+resolution mechanism, per `AGENTS.md`'s delegation boundary.
+
+### `rgit log`: `git log -L`, resolved once against HEAD — not `--follow` with per-commit re-resolution
+
+Two mechanisms were on the table: drive `git log -L start,end:file` off a
+single anchor resolution, or drive `git log --follow` off a fresh
+tree-sitter re-resolution of the anchor's extent at every commit it touched
+(the only way to track a symbol correctly through a rename).
+
+**`git log -L` was measured to already do the expensive half of the job for
+free.** `git log -L` does not re-run rgit's own resolver at each ancestor
+commit; it re-derives the touched line range at each commit *itself*, as
+part of its own diff engine — confirmed directly: editing a symbol whose
+line position had already shifted between commits still produced the
+correct single-commit-per-touch history with no help from this side, one
+subprocess exec, zero additional parses. `git log --follow` would have paid
+a tree-sitter parse per historical commit to get the one thing `-L` does not
+already do — track the symbol through a **rename** — which is the one case
+`-L` cannot reach at all (measured: `git log -L range:oldname` after a
+`git mv` + commit fails outright with `fatal: There is no path <oldname> in
+the commit`, since `-L`'s own range interpretation never crosses a rename
+boundary).
+
+Chosen: `git log -L`, resolved once. The per-commit re-resolution branch was
+not built, because the cheap branch already delivers the token case
+(`git log -L :func:file`'s flood, bounded to touching commits) for the
+overwhelming majority of history queries — a symbol that has never moved
+file. A renamed file loses its history under the old name
+(`docs/LIMITATIONS.md#history-across-renames`) — an explicit, documented
+gap, not a silent one, and cheaper to accept than to build around given how
+rarely a query needs to survive a rename its own caller does not yet know
+happened.
+
+**The anchor resolves against `HEAD`, not the worktree — unlike `blame`.**
+`git log -L` walks `HEAD`'s own history and has no notion of the worktree at
+all (measured: an uncommitted edit to the file, including one that shifts
+the target symbol's own line numbers, changes nothing about `git log -L`'s
+output for a range computed against `HEAD`). Resolving against the worktree
+instead — the way `blame.go` does, since `blame` genuinely has nothing else
+to blame — would hand `-L` a line range computed against the *wrong*
+revision's line numbers the moment an uncommitted edit shifted anything above
+the symbol, silently pointing history at the wrong lines. A side effect of
+this choice, also measured: a symbol already deleted from the worktree but
+still present in `HEAD` keeps its history reachable, since nothing here ever
+needs to open a worktree file at all.
+
+**Patches are opt-in (`-p`/`--patch`), never default — `--no-patch` measured
+to coexist with `-L`'s own commit-filtering.** Plain `git log -L` always
+shows the patch; that is the one thing `-L` exists to do. `--no-patch`
+suppresses it while leaving `-L`'s own filtering (only commits whose diff
+touched the given range) fully intact — measured directly: `git log -L
+range:file --no-patch --format='%H%x09%s'` on a file with three commits, only
+two of which touched the named range, emitted exactly two records. Default
+output uses `--format='%h %s'` (abbreviated hash, for a human to read);
+`--porcelain` uses `--format='%H%x09%s'` (the full object id, tab-separated,
+for a caller to paste elsewhere) — the same "abbreviated for humans, full and
+stable for machines" split every other rgit command's two output modes
+already draw.
+
 ## Argument grammar
 
 Symbol anchors need no flag because **all git pathspec magic is leading-colon**

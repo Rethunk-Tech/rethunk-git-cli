@@ -608,11 +608,11 @@ func TestRun_Completion(t *testing.T) {
 		qt.Assert(t, qt.StringContains(stdout, "complete -F _rgit_completion rgit"))
 		qt.Assert(t, qt.StringContains(stdout, "rgit diff --porcelain"))
 		// docs/USAGE.md § Help: -h is --help's equivalent at the top level
-		// and on every subcommand -- seven word lists (rgitSubcommands, and
-		// each of diff/commit/blame/languages/doctor/completion's own
-		// flags), so seven occurrences of the pair in the order completion
+		// and on every subcommand -- eight word lists (rgitSubcommands, and
+		// each of diff/commit/blame/log/languages/doctor/completion's own
+		// flags), so eight occurrences of the pair in the order completion
 		// offers them.
-		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 7))
+		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 8))
 		assertShellParses(t, "bash", stdout)
 	})
 
@@ -622,7 +622,7 @@ func TestRun_Completion(t *testing.T) {
 		qt.Assert(t, qt.Equals(stderr, ""))
 		qt.Assert(t, qt.StringContains(stdout, "compdef _rgit rgit"))
 		qt.Assert(t, qt.StringContains(stdout, "rgit diff --porcelain"))
-		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 7))
+		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 8))
 		assertShellParses(t, "zsh", stdout)
 	})
 

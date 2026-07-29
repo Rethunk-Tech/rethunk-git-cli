@@ -132,12 +132,48 @@ output, unmodified — not a second record format rgit invents. The default is
 likewise git's own human-readable blame output, unmodified. See
 [`CODES.md`](CODES.md#output-records).
 
+## Log
+
+```console
+$ rgit log auth.go:ValidateToken
+a1b2c3d fix(auth): reject expired tokens
+9e8f7d6 feat(auth): add ValidateToken
+```
+
+`rgit log FILE:SYMBOL` resolves the anchor exactly like `commit`, `diff
+--sym`, and `blame` do, then runs `git log -L start,end:FILE` bounded to that
+symbol's own extent — one record per commit whose own diff touched it, newest
+first. **Patch-free by default**: plain `git log -L` always prints the full
+patch body for every touching commit, which is precisely the flood this
+command exists to avoid. Pass `-p`/`--patch` to see it anyway — git's own
+`git log -L` output, unmodified, not a second patch format rgit invents.
+
+Unlike `blame`, the anchor is resolved against **`HEAD`, not the worktree**:
+history is a question about what has already been committed, and `git log -L`
+itself walks `HEAD`'s own history with no notion of the worktree at all. This
+also means a symbol already deleted from the worktree, but still present in
+`HEAD`, keeps its history reachable — there is nothing to open on disk, so
+`rgit log` never needs to.
+
+A symbol's history stops at the commit that renamed its file: `git log -L`
+does not follow renames the way `git log --follow` does for a whole file.
+Query it under its current name; see
+[`LIMITATIONS.md`](LIMITATIONS.md#history-across-renames).
+
+An anchor that does not resolve is exit 3 (unresolvable), 4 (ambiguous), or 9
+(unsupported language) — the same codes `blame`, `commit`, and `diff --sym`
+already give the identical anchor. See [`CODES.md`](CODES.md#exit-codes).
+
+`--porcelain` lists stable tab-separated `HASH<TAB>SUBJECT` records instead of
+the aligned `<abbrev-hash> <subject>` default, no header. Mutually exclusive
+with `-p`/`--patch`. See [`CODES.md`](CODES.md#output-records).
+
 ## Help
 
 `rgit --help`, `rgit -h`, and `rgit help` print the top-level command list on
 stdout and exit 0. `rgit diff --help` / `-h` and `rgit commit --help` / `-h`
 print that command's own flags the same way, generated from the flag set itself
-so the two cannot drift. `rgit blame --help`, `rgit languages --help`, `rgit
+so the two cannot drift. `rgit blame --help`, `rgit log --help`, `rgit languages --help`, `rgit
 doctor --help`, and `rgit completion --help` (each also accepting `-h`) print
 their own hand-written usage text instead — surfaces small enough that a
 generated rendering was not worth building. A bare `rgit` (no command at all)
@@ -212,9 +248,10 @@ everywhere else. Install instructions: [`INSTALL.md`](INSTALL.md#shell-completio
 
 `commit` and `diff`'s own flags — the two subcommands with a real flag
 surface. `blame` and `languages` each take only `--porcelain`/`--help` (§
-Blame and § Languages above, [`CODES.md`](CODES.md#output-records)); `doctor`
-and `completion` take no flags beyond `--help`/`-h` (`completion` also takes
-its shell argument).
+Blame and § Languages above, [`CODES.md`](CODES.md#output-records)); `log`
+additionally takes `-p`/`--patch`, mutually exclusive with `--porcelain` (§
+Log above); `doctor` and `completion` take no flags beyond `--help`/`-h`
+(`completion` also takes its shell argument).
 
 | Flag | Behavior |
 | --- | --- |
