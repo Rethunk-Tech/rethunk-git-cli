@@ -490,6 +490,10 @@ func TestAttribute_TopLevelSymbolOwnsOneSeparator(t *testing.T) {
 		wantRows: "[S MOD +1/-0][S.B MOD +1/-0]",
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
+			// Each case builds its own gittest repo under its own t.TempDir()
+			// and touches no shared package state, no t.Setenv, no t.Chdir --
+			// safe to run concurrently with its four siblings.
+			t.Parallel()
 			dir, repo := gittest.New(t)
 			gittest.Write(t, dir, tc.path, tc.head)
 			gittest.Commit(t, dir, "chore: fixture")
