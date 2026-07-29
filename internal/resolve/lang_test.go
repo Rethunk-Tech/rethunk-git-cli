@@ -79,6 +79,39 @@ func TestPeekShebangLine(t *testing.T) {
 	})
 }
 
+// TestStripQuotes covers the helper lang_yaml.go's yamlKeyName and
+// lang_toml.go's tomlKeyName both delegate to (nit 2) instead of each
+// carrying their own copy of the same one-byte-off-each-end trim.
+func TestStripQuotes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		in      string
+		want    string
+		wantOK  bool
+		comment string
+	}{
+		{name: "ordinary double-quoted", in: `"abc"`, want: "abc", wantOK: true},
+		{name: "ordinary single-quoted", in: `'abc'`, want: "abc", wantOK: true},
+		{name: "empty quoted string", in: `""`, want: "", wantOK: true},
+		{name: "single character: too short to have both quotes", in: `"`, wantOK: false},
+		{name: "empty string", in: "", wantOK: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, ok := stripQuotes(tt.in)
+			if ok != tt.wantOK {
+				t.Fatalf("stripQuotes(%q) ok = %v; want %v", tt.in, ok, tt.wantOK)
+			}
+			if ok && got != tt.want {
+				t.Errorf("stripQuotes(%q) = %q; want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestParseOrdinal covers finding 23's merged parsing rule: docs/ANCHORS.md's
 // positional "Bare#N" form requires a non-empty bare name and a strictly
 // positive N, unifying what crosscheck.go's old splitOrdinal (neither

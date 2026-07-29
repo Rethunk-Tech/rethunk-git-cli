@@ -147,6 +147,21 @@ func nodeText(src []byte, n *ts.Node) string {
 	return string(src[n.StartByte():n.EndByte()])
 }
 
+// stripQuotes strips text's own surrounding quote byte -- a best-effort
+// unwrap of a quoted key's source text, not full string-escape decoding,
+// shared by lang_yaml.go's yamlKeyName (double_quote_scalar/
+// single_quote_scalar) and lang_toml.go's tomlKeyName (quoted_key): both
+// read a quoted key's full node text, including its delimiters, and only
+// need the same one-byte-off-each-end trim. ok=false means text is too
+// short to have both an opening and a closing quote to strip -- callers
+// treat that as unaddressable rather than fabricating a name.
+func stripQuotes(text string) (string, bool) {
+	if len(text) < 2 {
+		return "", false
+	}
+	return text[1 : len(text)-1], true
+}
+
 // namedDecl builds a Declaration staged as extent but named from nameHost's
 // "name" field. The two nodes differ whenever a grammar wraps the thing that
 // carries the name -- a TypeScript export_statement around a function, a

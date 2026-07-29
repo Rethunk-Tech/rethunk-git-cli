@@ -148,11 +148,7 @@ func tomlKeyName(src []byte, key *ts.Node) (string, bool) {
 	case "bare_key", "dotted_key":
 		return nodeText(src, key), true
 	case "quoted_key":
-		text := nodeText(src, key)
-		if len(text) < 2 {
-			return "", false
-		}
-		return text[1 : len(text)-1], true
+		return stripQuotes(nodeText(src, key))
 	default:
 		return "", false
 	}

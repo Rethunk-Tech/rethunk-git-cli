@@ -311,13 +311,14 @@ func yamlKeyName(src []byte, key *ts.Node) (string, bool) {
 	}
 	switch children[0].Kind() {
 	case "plain_scalar":
-		return nodeText(src, key), true
+		// Reading the named child directly, not key (the outer flow_node):
+		// identical bytes today, since flow_node wraps exactly this one
+		// child with nothing else inside it, but reading from the node the
+		// comment above actually identifies is what stays correct if a
+		// future grammar version ever puts trivia inside flow_node itself.
+		return nodeText(src, &children[0]), true
 	case "double_quote_scalar", "single_quote_scalar":
-		text := nodeText(src, key)
-		if len(text) < 2 {
-			return "", false
-		}
-		return text[1 : len(text)-1], true
+		return stripQuotes(nodeText(src, key))
 	default:
 		return "", false
 	}
