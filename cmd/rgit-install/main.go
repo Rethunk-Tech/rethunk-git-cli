@@ -516,6 +516,41 @@ func buildBinary(repoRoot string, sql bool, sqlPkgDir, ver string) (bin string, 
 	return bin, cleanup, nil
 }
 
+// sqlCSRCContentHash hashes every file under pkgDir/csrc, in path order, so
+// buildBinary can fold the result into CGO_CFLAGS. See buildBinary for why
+// this exists rather than relying on Go's ordinary dependency tracking.
+func sqlCSRCContentHash(pkgDir string) (string, error) {
+	csrc := filepath.Join(pkgDir, "csrc")
+	var paths []string
+	if err := filepath.WalkDir(csrc, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			paths = append(paths, path)
+		}
+		return nil
+	}); err != nil {
+		return "", err
+	}
+	sort.Strings(paths)
+
+	h := sha256.New()
+	for _, p := range paths {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return "", err
+		}
+		rel, err := filepath.Rel(csrc, p)
+		if err != nil {
+			return "", err
+		}
+		_, _ = io.WriteString(h, rel)
+		_, _ = h.Write(data)
+	}
+	return hex.EncodeToString(h.Sum(nil))[:16], nil
+}
+
 // resolvePrefix follows Go convention: $GOBIN if set, else
 // $(go env GOPATH)/bin. -prefix overrides both.
 func resolvePrefix(flagPrefix string) (string, error) {
