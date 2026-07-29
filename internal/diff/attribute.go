@@ -3,6 +3,7 @@ package diff
 import (
 	"bytes"
 	"cmp"
+	"fmt"
 	"slices"
 	"strconv"
 
@@ -22,12 +23,26 @@ type region struct {
 	ext  resolve.Extent
 }
 
-// buildRegions computes every named region in src. Errors from
-// resolve.Resolve on a name resolve.DeclOrder itself just produced cannot
-// happen in practice — same source, same deterministic computation — but
-// are treated as "no region" rather than propagated, since a missing
-// region only ever downgrades a row to (unanchorable), never mis-attributes
-// one.
+// declResolver is the subset of *resolve.File that resolveRegions needs.
+// The real implementation, *resolve.File, can never actually take the
+// error path resolveRegions guards against (buildRegions' own doc comment
+// explains why: DeclOrder and Resolve are both built from the same index
+// in the same call, so a name DeclOrder emits always hits Resolve's first
+// lookup). That is exactly why this seam exists -- it lets a test double
+// violate the invariant deliberately, something no real resolve.Language
+// can do, to prove the guard fires and propagates rather than silently
+// dropping a region. The assertion below is what would catch this
+// interface drifting from *resolve.File's real signatures: a future
+// rename or signature change on either method fails this file to compile
+// rather than leaving the seam quietly stale.
+type declResolver interface {
+	DeclOrder() []string
+	Resolve(anchor string) (*resolve.Resolution, error)
+}
+
+var _ declResolver = (*resolve.File)(nil)
+
+// buildRegions computes every named region in src.
 func buildRegions(lang resolve.Language, src []byte) ([]region, error) {
 	// One parse for the whole file: this resolves every declaration in it,
 	// and it runs once per side of every comparison.
@@ -36,13 +51,31 @@ func buildRegions(lang resolve.Language, src []byte) ([]region, error) {
 		return nil, err
 	}
 	defer f.Close()
+	return resolveRegions(lang, src, f)
+}
 
+// resolveRegions is buildRegions' own logic, factored out so a test can
+// drive it against a declResolver double instead of a real parsed file.
+//
+// A resolve.Resolve failure on a name resolve.DeclOrder itself just
+// produced is not something a legitimate source file can trigger, so it is
+// propagated rather than swallowed. Both come from the same *resolve.File:
+// DeclOrder returns exactly the Symbol.Qualified strings the index's own
+// byQualified map was populated with, in the same buildIndex call, from the
+// same underlying slice — Resolve's first lookup is a direct hit against
+// that map for any anchor equal to one of its own keys, before byBare or
+// any fallback is ever consulted (internal/resolve/index.go). A failure
+// here means that invariant itself broke — a real bug in the resolver, not
+// an edge case a caller's input can reach — and a silently shrunk region
+// set would mis-report a file's rows with nothing to say why, which is
+// worse than `rgit diff` failing loudly on the file that exposed it.
+func resolveRegions(lang resolve.Language, src []byte, f declResolver) ([]region, error) {
 	names := f.DeclOrder()
 	regions := make([]region, 0, len(names)+2)
 	for _, name := range names {
 		res, rerr := f.Resolve(name)
 		if rerr != nil {
-			continue
+			return nil, fmt.Errorf("resolve: internal inconsistency: %s DeclOrder emitted %q, which Resolve then rejected: %w", lang.Name(), name, rerr)
 		}
 		ext := res.Extent
 		if isMultiDeclaratorLang(lang) {

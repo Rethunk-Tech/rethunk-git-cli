@@ -40,6 +40,11 @@ Notable changes to `rgit`. The format follows
 
 ### Fixed
 
+- `rgit diff` no longer silently shrinks a file's region set when a name
+  `resolve.DeclOrder` emits fails to resolve — a condition that only ever
+  signals an internal resolver inconsistency, never a legitimate input.
+  It now fails loudly instead of mis-reporting that file's rows with
+  nothing to say why.
 - A stale or incompatible language-server socket no longer pins every later
   invocation to `[ts-only]`: a managed socket that fails the handshake is
   unlinked and the next candidate tried. Spawn-on-demand also unlinks a dead

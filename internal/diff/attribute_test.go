@@ -1,10 +1,56 @@
 package diff
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
+
+// fakeDeclResolver is the double resolveRegions' own doc comment names: no
+// real resolve.Language can make DeclOrder emit a name Resolve then
+// rejects (the invariant is enforced inside resolve's own buildIndex,
+// independent of any adapter), so this is the only way to exercise that
+// branch at all. It implements exactly declResolver, nothing more --
+// var _ declResolver = (*resolve.File)(nil) beside the interface is what
+// would catch it drifting from the real type's signatures.
+type fakeDeclResolver struct {
+	names []string
+	err   error
+}
+
+func (f *fakeDeclResolver) DeclOrder() []string { return f.names }
+
+func (f *fakeDeclResolver) Resolve(anchor string) (*resolve.Resolution, error) {
+	return nil, f.err
+}
+
+// TestResolveRegions_DeclOrderNameRejectedByResolveIsAnError guards Task
+// 18's decision: this condition is an internal inconsistency, not a
+// legitimate-input edge case, so it must surface as a loud error rather
+// than silently shrinking the region set (which previously left a row
+// mis-reported with nothing to say why).
+func TestResolveRegions_DeclOrderNameRejectedByResolveIsAnError(t *testing.T) {
+	t.Parallel()
+	lang, ok := resolve.ForExtension(".go")
+	if !ok {
+		t.Fatal("resolve: no adapter registered for .go")
+	}
+
+	fake := &fakeDeclResolver{
+		names: []string{"Foo"},
+		err:   errors.New("boom"),
+	}
+
+	_, err := resolveRegions(lang, nil, fake)
+	if err == nil {
+		t.Fatal("resolveRegions: want an error when Resolve rejects a DeclOrder name, got nil")
+	}
+	if !strings.Contains(err.Error(), "Foo") || !strings.Contains(err.Error(), "internal inconsistency") {
+		t.Errorf("resolveRegions error = %q; want it to name the anchor and call out the inconsistency", err.Error())
+	}
+}
 
 func TestTopLevelComma(t *testing.T) {
 	t.Parallel()
