@@ -8,6 +8,10 @@ Notable changes to `rgit`. The format follows
 
 ### Fixed
 
+- The install docs named `~/.local/bin/rgit` as the uninstall target, which
+  the default install never writes to — it targets `$GOBIN`, else
+  `$(go env GOPATH)/bin`. The stripped-size figure was also stale by six
+  grammars.
 - `rgit doctor` aligns its detail column across both report sections. A
   language-server label longer than the old fixed 24-character field pushed
   its own path out of line, and `[ok]` / `MISSING` being different widths
