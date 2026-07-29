@@ -1027,6 +1027,17 @@ built.
 | `github.com/tree-sitter-grammars/tree-sitter-toml` | v0.7.0 | TOML key-path anchors; import path is `<module>/bindings/go` |
 | `github.com/DerekStride/tree-sitter-sql` | v0.3.11, pinned | SQL schema/function anchors; **not** a `go.mod` requirement — resolved by explicit `module@version` at build time, since nothing imports it (§ Grammar scope, SQL) |
 
+**`gopls` is pinned too, outside this table.** `cmd/rgit-install`'s
+`-with-servers` installed it via `go install golang.org/x/tools/gopls@latest`
+until this release; that float meant two checkouts of the same rgit tag could
+install different `gopls` binaries months apart, purely from when each one
+ran the installer — the same reproducibility argument that pins
+`tree-sitter-sql` above, not a `go.mod` entry because `gopls` is a
+separately-installed binary `rgit` shells out to, never imported. Pinned to
+`v0.23.0`, the tagged release current at the time of this pin
+(`cmd/rgit-install/servers.go`); bumping it is a deliberate edit, not
+something `go get -u` or a bare `@latest` ever does silently.
+
 **Markdown earns its place two ways, both verified against the grammar's own
 `node-types.json`, not assumed.** It is the one language present in every
 repository `rgit` runs against, so a symbol anchor that only ever worked in

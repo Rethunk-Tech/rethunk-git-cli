@@ -150,7 +150,7 @@ cross-check, which catches build-tag, macro, and type-level mismatches.
 
 | Language | Server | Install | How `rgit` runs it |
 | --- | --- | --- | --- |
-| Go | `gopls` | `go install golang.org/x/tools/gopls@latest` | Background daemon, reused |
+| Go | `gopls` | `go install golang.org/x/tools/gopls@v0.23.0` (pinned; `-with-servers` installs this exact tag) | Background daemon, reused |
 | TypeScript/JavaScript | `vtsls` | `npm i -g @vtsls/language-server` | One-shot subprocess per query |
 | Python | `pyright-langserver` | `npm i -g pyright` | One-shot subprocess per query |
 | Shell | `bash-language-server` | `npm i -g bash-language-server` | One-shot subprocess per query |
@@ -194,7 +194,7 @@ release binaries itself:
 
 | Server | Manager | Command |
 | --- | --- | --- |
-| `gopls` | go | `go install golang.org/x/tools/gopls@latest` |
+| `gopls` | go | `go install golang.org/x/tools/gopls@v0.23.0` (pinned; see `cmd/rgit-install/servers.go`) |
 | `vtsls` | npm/bun | `npm install -g @vtsls/language-server` (`bun add -g` when bun is on `PATH`) |
 | `pyright-langserver` | npm/bun | `npm install -g pyright` |
 | `bash-language-server` | npm/bun | `npm install -g bash-language-server` |

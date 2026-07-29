@@ -195,7 +195,7 @@ func TestManageServersDryRun(t *testing.T) {
 		out := buf.String()
 
 		qt.Assert(t, qt.StringContains(out, "found at /x/gopls"))
-		qt.Assert(t, qt.StringContains(out, "go install golang.org/x/tools/gopls@latest"))
+		qt.Assert(t, qt.StringContains(out, "go install golang.org/x/tools/gopls@v0.23.0"))
 		// bun is preferred over npm when both are on PATH (selectNPMManager).
 		qt.Assert(t, qt.StringContains(out, "bun add -g"))
 		qt.Assert(t, qt.Not(qt.StringContains(out, "npm install")))

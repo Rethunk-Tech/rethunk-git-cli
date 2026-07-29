@@ -38,7 +38,15 @@ Cutting a release: tag `vX.Y.Z`, which
 GitHub release with the cross-built binaries and their `SHA256SUMS`. Move the
 unreleased entries under the new version heading, and bump the README's
 version badge — it is a static shield, so nothing else catches it going
-stale.
+stale. Also check `sqlGrammarVersion` in
+[`cmd/rgit-install/main.go`](cmd/rgit-install/main.go) against
+[`tree-sitter-sql`](https://github.com/DerekStride/tree-sitter-sql)'s own
+tags: `@latest` cannot track it, because that module gitignores `parser.c` at
+every tag ([`internal/resolve/sqlgrammar/grammar.go`](internal/resolve/sqlgrammar/grammar.go)),
+so this pin only ever moves by hand and nothing else reminds you to look. If
+a newer tag exists, bump the constant, then `make sql-parser` and `go build
+-tags rgit_sql ./internal/resolve/sqlgrammar/...` to confirm the new grammar
+still generates and compiles before tagging.
 
 ## Tests
 

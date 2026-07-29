@@ -58,7 +58,11 @@ type serverEntry struct {
 	manager manager
 	// pkg is the manager-specific package/module identifier passed to the
 	// install command. Empty when manager is managerNone. For managerGo
-	// this already includes the "@latest" version query go install needs.
+	// this already includes the version query go install needs -- a pinned
+	// tag for gopls (below), matching the deliberate SQL-grammar pin in
+	// cmd/rgit-install/main.go, so a build of this rgit release always
+	// installs the same gopls rather than whatever tag happens to be
+	// tagged "latest" on the day someone runs -with-servers.
 	pkg string
 	// extraArgs are flags beyond the bare package name. taplo needs
 	// exactly this: `cargo install taplo-cli` alone builds without LSP
@@ -79,7 +83,11 @@ var serverCatalog = []serverEntry{
 		name:    "gopls",
 		bin:     "gopls",
 		manager: managerGo,
-		pkg:     "golang.org/x/tools/gopls@latest",
+		// Pinned rather than @latest: reproducibility under a fixed rgit
+		// release, matching the deliberate SQL-grammar pin in
+		// cmd/rgit-install/main.go. Bump deliberately
+		// (specs/design.md § Dependencies), not silently on every install.
+		pkg: "golang.org/x/tools/gopls@v0.23.0",
 	},
 	{
 		name:    "vtsls",
