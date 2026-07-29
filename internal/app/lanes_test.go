@@ -166,3 +166,49 @@ func TestRun_ResetAuthorForwarded(t *testing.T) {
 	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%an"),
 		gitOut(t, dir, "log", "-1", "--format=%cn")))
 }
+
+// TestRun_DiffUntrackedFileAndModeChange closes a coverage gap `rgit diff`
+// had at the unit level: no app.Run case exercised an untracked file
+// (internal/diff's buildUntrackedReport) or a mode-only change read from
+// either the worktree or the index (formatModeNote, and contentSide.mode on
+// indexSide specifically, which only --staged/--unstaged ever select). All
+// four were previously provable only through the e2e binary.
+func TestRun_DiffUntrackedFileAndModeChange(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "untracked.go", "package a\n\nfunc U() int { return 1 }\n")
+
+	if err := os.Chmod(filepath.Join(dir, "a.go"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Default scope: worktree mode against HEAD's, plus the untracked file.
+	stdout, _, code := runApp(t, "diff", "--porcelain")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(stdout, "untracked.go\t\tUNTRACKED\t"))
+	qt.Assert(t, qt.StringContains(stdout, "a.go\t\tMODE\t"))
+
+	// --staged: New is indexSide(), so staging the mode change routes its
+	// own mode() through repo.LsFilesStage rather than a worktree os.Stat.
+	gitOut(t, dir, "add", "a.go")
+	staged, _, code := runApp(t, "diff", "--staged", "--porcelain")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(staged, "a.go\t\tMODE\t"))
+}
+
+// TestRun_DiffUnsupportedLanguageSymReachesExtLookup closes internal/app's
+// own gap: diff.go's extForFailedSym (the file-extension recovery
+// unsupportedLanguageHint needs, since resolve.ResolveError carries only the
+// bare anchor name) was reachable only by building and execing the binary.
+// main.rs is genuinely unsupported, gated or otherwise, so no hint is
+// expected here -- TestRun_UnsupportedLanguageGetsNoRebuildHint in
+// app_test.go already pins that half on the commit path; this pins that
+// runDiff's own error handling reaches the same lookup without one.
+func TestRun_DiffUnsupportedLanguageSymReachesExtLookup(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "main.rs", "fn main() {}\n")
+
+	_, stderr, code := runApp(t, "diff", "--sym", "main.rs:main")
+
+	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
+	qt.Assert(t, qt.Not(qt.StringContains(stderr, "rgit_sql")))
+}
