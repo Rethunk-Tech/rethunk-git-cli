@@ -11,7 +11,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 )
 
-const usageLine = "usage: rgit [--version] <diff|commit> [flags] [target...]"
+const usageLine = "usage: rgit [--version] <diff|commit|completion> [flags] [target...]"
 
 // topLevelHelp is what `rgit --help`, `-h`, and `help` print. Kept to the
 // same budget as a subcommand's own help (specs/design.md:231's "--help
@@ -23,8 +23,9 @@ FILE:NAME anchor (e.g. auth.go:ValidateToken) instead of a whole path, and
 only that symbol's extent is staged.
 
 Commands:
-  diff      Show what is committable: staged, unstaged, and untracked
-  commit    Stage named targets and commit them
+  diff        Show what is committable: staged, unstaged, and untracked
+  commit      Stage named targets and commit them
+  completion  Print a shell completion script (bash, zsh)
 
 Global flags:
   --version    print the version and exit
@@ -61,6 +62,8 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 		return runDiff(ctx, args[1:], stdout, stderr)
 	case "commit":
 		return runCommit(ctx, args[1:], stdout, stderr)
+	case "completion":
+		return runCompletion(args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "rgit: unknown command %q\n", args[0])
 		fmt.Fprintln(stderr, usageLine)
