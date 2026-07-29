@@ -200,6 +200,68 @@ func (r *Repo) CatFile(ctx context.Context, rev, path string) (content []byte, e
 	return res.Stdout, true, nil
 }
 
+// CatFileSample reads at most limit bytes of the blob at rev:path via `git
+// cat-file -p`, for a caller that only needs to sniff a leading sample of
+// content -- classifying a path as binary never inspects more than
+// util.BinarySampleLimit bytes, so materializing an entire, possibly huge,
+// tracked blob into memory just to answer that question is wasted work.
+// Git is still the one reading and decompressing the object; this only
+// stops Go from copying more of its stdout than the caller asked for, so
+// the delegation boundary (AGENTS.md) holds -- nothing here parses a git
+// object itself.
+//
+// exists reports the same "absent from rev" distinction CatFile does: a
+// non-zero exit (bad revision, path not in the tree) is folded into
+// exists=false rather than a *GitError, since both mean "there is nothing
+// at that rev" to this call's caller.
+func (r *Repo) CatFileSample(ctx context.Context, rev, path string, limit int) (sample []byte, exists bool, err error) {
+	args := []string{"cat-file", "-p", rev + ":" + path}
+	full := append([]string{"-C", r.root}, args...)
+	cmd := exec.CommandContext(ctx, "git", full...)
+	cmd.Env = r.env
+
+	stdout, perr := cmd.StdoutPipe()
+	if perr != nil {
+		return nil, false, &ExecError{Args: args, Err: perr}
+	}
+	if serr := cmd.Start(); serr != nil {
+		return nil, false, &ExecError{Args: args, Err: serr}
+	}
+
+	buf := make([]byte, limit)
+	n, rerr := io.ReadFull(stdout, buf)
+	switch {
+	case rerr == nil:
+		// The blob holds at least limit bytes: enough is already known, so
+		// the process is killed rather than drained -- reading the rest of
+		// a multi-gigabyte blob just to let git exit on its own would
+		// defeat the point of sampling it.
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return buf[:n], true, nil
+	case errors.Is(rerr, io.EOF), errors.Is(rerr, io.ErrUnexpectedEOF):
+		// The whole blob fit inside limit (or there was nothing at all);
+		// either way stdout is drained, so Wait needs no draining of its
+		// own to observe the real exit status.
+	default:
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return nil, false, &ExecError{Args: args, Err: rerr}
+	}
+
+	if werr := cmd.Wait(); werr != nil {
+		var exitErr *exec.ExitError
+		if errors.As(werr, &exitErr) {
+			// cat-file exits non-zero uniformly for "bad revision" and
+			// "path does not exist in tree" alike, matching CatFile's own
+			// exists=false convention.
+			return nil, false, nil
+		}
+		return nil, false, &ExecError{Args: args, Err: werr}
+	}
+	return buf[:n], true, nil
+}
+
 // HashObject writes content as a blob via `git hash-object -w --path
 // path --stdin`. --path is mandatory here, not optional: without it,
 // .gitattributes clean filters and LFS normalization are bypassed.

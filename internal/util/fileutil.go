@@ -42,3 +42,23 @@ func LooksBinary(content []byte) bool {
 	n := min(len(content), BinarySampleLimit)
 	return bytes.IndexByte(content[:n], 0) != -1
 }
+
+// LooksBinaryFile applies LooksBinary to path without reading the whole
+// file: only the leading BinarySampleLimit bytes are read, since that is
+// all LooksBinary ever inspects. Classifying a large worktree file (e.g. a
+// symbol anchor's target) has no other reason to touch bytes past that
+// sample.
+func LooksBinaryFile(path string) (bool, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = f.Close() }()
+
+	buf := make([]byte, BinarySampleLimit)
+	n, err := io.ReadFull(f, buf)
+	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+		return false, err
+	}
+	return LooksBinary(buf[:n]), nil
+}

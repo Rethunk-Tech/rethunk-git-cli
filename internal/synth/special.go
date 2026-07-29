@@ -70,11 +70,11 @@ func classifyPath(ctx context.Context, repo *gitx.Repo, root, path string) (path
 	case "160000":
 		return pathGitlink, nil
 	}
-	content, exists, err := repo.CatFile(ctx, "HEAD", path)
+	sample, exists, err := repo.CatFileSample(ctx, "HEAD", path, util.BinarySampleLimit)
 	if err != nil {
 		return pathRegular, err
 	}
-	if exists && util.LooksBinary(content) {
+	if exists && util.LooksBinary(sample) {
 		return pathBinary, nil
 	}
 	return pathRegular, nil
@@ -93,11 +93,11 @@ func classifyWorktreeEntry(full string, info os.FileInfo) (pathKind, error) {
 		// pathspec/anchor split handle it.
 		return pathRegular, nil
 	}
-	content, err := os.ReadFile(full)
+	binary, err := util.LooksBinaryFile(full)
 	if err != nil {
 		return pathRegular, err
 	}
-	if util.LooksBinary(content) {
+	if binary {
 		return pathBinary, nil
 	}
 	return pathRegular, nil
