@@ -23,6 +23,14 @@ import (
 	"strings"
 )
 
+// maxFrameBody bounds a single frame's Content-Length. This package is
+// test-only -- nothing in the production build imports it -- but a mock
+// server double is still a process ReadFrame trusts to report its own body
+// size honestly; a buggy or deliberately hostile one claiming an enormous
+// length should fail the read, not let make([]byte, length) try to
+// allocate it.
+const maxFrameBody = 1 << 20
+
 // ReadFrame reads one LSP header-framed JSON-RPC message (Content-Length,
 // blank line, JSON body) off r. ok=false at a clean EOF between frames --
 // specifically, an io.EOF with no header bytes read yet in this call.
@@ -55,11 +63,26 @@ func ReadFrame(r *bufio.Reader) (msg map[string]any, ok bool, err error) {
 			if convErr != nil {
 				return nil, false, fmt.Errorf("mock lsp server: bad Content-Length %q: %w", line, convErr)
 			}
+			// A negative header value ("Content-Length: -1") parses cleanly
+			// via Atoi and would otherwise collide with length's own -1
+			// sentinel for "no Content-Length header seen at all", reporting
+			// a malformed header as a missing one instead. Rejected here,
+			// distinctly, before it ever reaches that check.
+			if n < 0 {
+				return nil, false, fmt.Errorf("mock lsp server: negative Content-Length %q", line)
+			}
 			length = n
 		}
 	}
 	if length < 0 {
 		return nil, false, fmt.Errorf("mock lsp server: frame missing Content-Length")
+	}
+	// A hostile or merely buggy mock server can claim an arbitrarily large
+	// Content-Length; capped rather than trusted outright so a bad test
+	// double fails loudly instead of running the test process out of
+	// memory trying to allocate the body up front.
+	if length > maxFrameBody {
+		return nil, false, fmt.Errorf("mock lsp server: Content-Length %d exceeds %d-byte test limit", length, maxFrameBody)
 	}
 	body := make([]byte, length)
 	if _, rerr := io.ReadFull(r, body); rerr != nil {

@@ -104,6 +104,41 @@ func TestTrySpawnDaemon_StaleLockIsCleared(t *testing.T) {
 	}
 }
 
+// TestTrySpawnDaemon_SymlinkLockIsNeverAged guards acquireSpawnLock's own
+// Lstat: a lock path is a symlink, never a plain lock file, when another
+// user in this same world-writable-by-default runtime directory has
+// planted one -- privateSocketDir's own doc comment gives the parallel
+// reasoning for the socket path itself. Following it (os.Stat) would read
+// whatever the symlink points at instead of the lock rgit created, so a
+// target backdated past staleLockAge would convince this invocation a
+// live lock is abandoned and worth clearing, exactly the confusion the
+// fix closes: a lock this function cannot vouch for as a regular file is
+// left in place untouched, the same as any other stat failure.
+func TestTrySpawnDaemon_SymlinkLockIsNeverAged(t *testing.T) {
+	t.Parallel()
+	sockPath := filepath.Join(t.TempDir(), "rgit-test.sock")
+	lockPath := sockPath + ".lock"
+
+	target := filepath.Join(t.TempDir(), "old-target")
+	if err := os.WriteFile(target, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	staleTime := time.Now().Add(-2 * staleLockAge)
+	if err := os.Chtimes(target, staleTime, staleTime); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, lockPath); err != nil {
+		t.Fatal(err)
+	}
+
+	spec := serverSpec{name: "test", bin: "true", daemonArgs: noopDaemonArgs}
+	trySpawnDaemon(spec, sockPath)
+
+	if _, err := os.Lstat(lockPath); err != nil {
+		t.Errorf("symlink lock removed (%v); want it left in place untouched", err)
+	}
+}
+
 // TestTrySpawnDaemon_SuccessfulSpawnCleansUpItsOwnLock covers the ordinary
 // path all the way through: lock acquired, process started and detached,
 // lock cleaned up -- so a later invocation is never left believing a spawn

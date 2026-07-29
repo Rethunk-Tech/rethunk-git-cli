@@ -17,7 +17,7 @@ import (
 const staleLockAge = time.Minute
 
 // Dial obtains a Client cross-checking source in lang (a resolve.Language's
-// Name(): "go", "typescript", "tsx", or "python"), rooted at repoRoot.
+// Name(): any key of servers, in servers.go), rooted at repoRoot.
 //
 // degraded=true (with client=nil) means no live, timely server was reached
 // and the caller proceeds in [ts-only] mode. That is the normal case, not a
@@ -255,7 +255,17 @@ func trySpawnDaemon(spec serverSpec, sockPath string) {
 // invocation that notices the stale lock is never the one that benefits
 // from clearing it. The lock is an optimization, not correctness
 // (specs/design.md): the worst a lost race over it costs is one extra
-// doomed gopls process and its stderr noise.
+// doomed gopls process and its stderr noise -- so a lock this function
+// cannot vouch for (below) is simply left in place and treated as held,
+// same as any other stat failure, rather than escalated into a hard error.
+//
+// Lstat, not Stat, and a regular-file check before trusting ModTime -- the
+// same reasoning verifyPrivateDir gives the socket directory itself: this
+// path sits in the same world-writable-by-default runtime directory, and
+// following a symlink another user planted here would read (and age) a
+// file of their choosing instead of the lock rgit itself created, letting
+// a crafted target's mtime convince this invocation a live lock is stale
+// and worth removing out from under whatever actually holds it.
 func acquireSpawnLock(sockPath string) (*os.File, bool) {
 	lockPath := sockPath + ".lock"
 	for range 2 {
@@ -263,8 +273,8 @@ func acquireSpawnLock(sockPath string) (*os.File, bool) {
 		if err == nil {
 			return lock, true
 		}
-		info, statErr := os.Stat(lockPath)
-		if statErr != nil || time.Since(info.ModTime()) <= staleLockAge {
+		info, statErr := os.Lstat(lockPath)
+		if statErr != nil || !info.Mode().IsRegular() || time.Since(info.ModTime()) <= staleLockAge {
 			return nil, false
 		}
 		_ = os.Remove(lockPath)

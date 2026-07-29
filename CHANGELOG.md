@@ -72,6 +72,14 @@ Notable changes to `rgit`. The format follows
   could pre-create it and receive file contents via `didOpen`. A directory
   that fails the check degrades to `[ts-only]`. A caller-supplied
   `$RGIT_LSP_SOCKET` is untouched.
+- The spawn lock's own staleness check now `Lstat`s the lock path and
+  requires a regular file before trusting its mtime, rather than `Stat`ing
+  it (following a symlink). A symlink planted at the lock path in the same
+  world-writable-by-default runtime directory could otherwise point at an
+  old file of another user's choosing, aging the lock artificially and
+  convincing an invocation to clear one still legitimately held. A lock
+  that fails the check is left in place untouched, same as the lock is
+  already treated as best-effort elsewhere.
 
 ### Fixed
 

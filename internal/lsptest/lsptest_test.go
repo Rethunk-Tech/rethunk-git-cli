@@ -2,6 +2,7 @@ package lsptest
 
 import (
 	"bufio"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -70,6 +71,15 @@ func TestReadFrame_EdgeCases(t *testing.T) {
 			wantOK:  false,
 			wantErr: true,
 		},
+		{
+			// "-1" parses cleanly via strconv.Atoi, which would otherwise
+			// collide with length's own -1 sentinel for "no header seen at
+			// all" and misreport this malformed header as a missing one.
+			name:    "negative Content-Length",
+			input:   "Content-Length: -1\r\n\r\n",
+			wantOK:  false,
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -83,5 +93,22 @@ func TestReadFrame_EdgeCases(t *testing.T) {
 				t.Errorf("ReadFrame() err = %v; want error presence = %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// TestReadFrame_ContentLengthOverLimitIsRejected guards maxFrameBody: a mock
+// server double claiming an enormous body size must fail the read instead of
+// letting make([]byte, length) try to allocate it, since this package trusts
+// a test-only stand-in's own header for how much to allocate up front.
+func TestReadFrame_ContentLengthOverLimitIsRejected(t *testing.T) {
+	t.Parallel()
+
+	input := fmt.Sprintf("Content-Length: %d\r\n\r\n", maxFrameBody+1)
+	_, ok, err := ReadFrame(bufio.NewReader(strings.NewReader(input)))
+	if ok {
+		t.Error("ReadFrame() ok = true; want false for a Content-Length over the test limit")
+	}
+	if err == nil {
+		t.Error("ReadFrame() err = nil; want an error rejecting the oversized Content-Length")
 	}
 }
