@@ -624,6 +624,37 @@ func TestRun_Completion(t *testing.T) {
 	}
 }
 
+// TestRun_Languages pins the always-present part of the listing -- the
+// nine grammars every build carries regardless of -tags rgit_sql. Whether
+// "sql" itself appears is build-specific and covered separately
+// (languages_sql_test.go, languages_nosql_test.go), which is exactly why
+// this case avoids asserting either way about it.
+func TestRun_Languages(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	stdout, stderr, code := runApp(t, "languages")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	for _, want := range []string{"go", ".go", "css", ".css", "typescript", ".ts"} {
+		qt.Assert(t, qt.StringContains(stdout, want))
+	}
+}
+
+// TestRun_LanguagesHelpAndUsage covers the two non-listing paths: --help
+// prints and exits 0, and an unexpected argument is the usual usage error.
+func TestRun_LanguagesHelpAndUsage(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	stdout, _, code := runApp(t, "languages", "--help")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(stdout, "usage: rgit languages"))
+
+	stdout, stderr, code := runApp(t, "languages", "extra")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.Equals(stdout, ""))
+	qt.Assert(t, qt.Not(qt.Equals(stderr, "")))
+}
+
 // TestRun_HelpIsPlainText guards a defect that only shows up when something
 // reads the output rather than a person skimming it: pflag renders a string
 // flag's NoOptDefVal into the usage line as [="<value>"], so --gpg-sign's

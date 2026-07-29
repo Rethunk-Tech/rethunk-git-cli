@@ -11,7 +11,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 )
 
-const usageLine = "usage: rgit [--version] <diff|commit|completion> [flags] [target...]"
+const usageLine = "usage: rgit [--version] <diff|commit|languages|completion> [flags] [target...]"
 
 // topLevelHelp is what `rgit --help`, `-h`, and `help` print. Kept to the
 // same budget as a subcommand's own help (specs/design.md:231's "--help
@@ -25,6 +25,7 @@ only that symbol's extent is staged.
 Commands:
   diff        Show what is committable: staged, unstaged, and untracked
   commit      Stage named targets and commit them
+  languages   List grammars compiled into this binary
   completion  Print a shell completion script (bash, zsh)
 
 Global flags:
@@ -62,6 +63,8 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 		return runDiff(ctx, args[1:], stdout, stderr)
 	case "commit":
 		return runCommit(ctx, args[1:], stdout, stderr)
+	case "languages":
+		return runLanguages(args[1:], stdout, stderr)
 	case "completion":
 		return runCompletion(args[1:], stdout, stderr)
 	default:
