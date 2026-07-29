@@ -40,3 +40,36 @@ func TestLanguageKindFor(t *testing.T) {
 		}
 	}
 }
+
+// TestTrimTrailingBlankLines pins the regression cmd/rgit/index_test.go's
+// TestStage_YAMLNestedKeyByteIdenticalRoundTrip caught live: a
+// yaml-language-server range for a nested container consistently extends
+// one line past its own last real content, through a blank line
+// separating it from a following sibling. This is the unit-lane guarantee
+// (CONTRIBUTING.md) -- it must fail without a live server, unlike the
+// server-dial tests in servers_test.go which need one.
+func TestTrimTrailingBlankLines(t *testing.T) {
+	src := []byte("build:\n  a: 1\n\ntest:\n  b: 2\n")
+	// Lines: 0 "build:", 1 "  a: 1", 2 "", 3 "test:", 4 "  b: 2", then a
+	// trailing empty element from the final newline at index 5.
+	tests := []struct {
+		name           string
+		start, end     uint32
+		wantTrimmedEnd uint32
+	}{
+		{"trims the single blank separator before a sibling", 0, 2, 1},
+		{"stops at a non-blank line immediately", 0, 1, 1},
+		{"never trims down to or past its own StartLine", 2, 2, 2},
+		{"never trims the file's own final element (EOF, no sibling follows)", 3, 5, 5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			syms := []Symbol{{Name: "x", StartLine: tt.start, EndLine: tt.end}}
+			trimTrailingBlankLines(src, syms)
+			if syms[0].EndLine != tt.wantTrimmedEnd {
+				t.Errorf("EndLine = %d; want %d", syms[0].EndLine, tt.wantTrimmedEnd)
+			}
+		})
+	}
+}

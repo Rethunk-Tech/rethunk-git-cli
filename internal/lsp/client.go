@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -140,7 +141,53 @@ func (c *Client) DocumentSymbols(ctx context.Context, path string, src []byte) (
 	if err != nil {
 		return nil, fmt.Errorf("lsp: documentSymbol %s: %w", path, err)
 	}
-	return flatten(result), nil
+	syms := flatten(result)
+	trimTrailingBlankLines(src, syms)
+	return syms, nil
+}
+
+// trimTrailingBlankLines pulls each symbol's own EndLine back past any
+// wholly-blank (or whitespace-only) trailing lines within its own range,
+// in place. Measured against yaml-language-server (specs/design.md's
+// cross-check survey, re-measured after cmd/rgit/index_test.go's
+// TestStage_YAMLNestedKeyByteIdenticalRoundTrip caught it): a nested
+// mapping's own reported range consistently extends one line past its own
+// last real content, through the single blank line separating it from a
+// following sibling key at the same level -- proven not block-scalar-
+// specific, since a plain-scalar sibling reproduces it identically.
+// tree-sitter-yaml's own node never does this, stopping at its own last
+// real content line instead.
+//
+// This is the same shape of normalization already applied on the
+// tree-sitter side for a doc-comment prefix (declOnlyExtent strips it
+// before comparing) -- a well-defined, content-free byte category one side
+// includes and the comparison should not penalize -- so it is applied here
+// uniformly, to every symbol from every wired server, not special-cased to
+// YAML: it can only ever narrow a symbol's own reported EndLine toward its
+// StartLine, never grow it, and it stops the instant it reaches a
+// non-blank line, so a genuine content-level disagreement (a server that
+// actually claims a neighbour's real content, the way taplo's dotted
+// sub-table nesting does) is untouched and still fails the cross-check.
+//
+// The very last element bytes.Split produces is deliberately never
+// trimmed: for a symbol with no following sibling, both tree-sitter and
+// the server were already measured extending through the file's own
+// trailing newline all the way to that final (often empty) element --
+// consuming it, not separating anything from a sibling. Trimming it would
+// undo an agreement that was already correct and manufacture a new
+// mismatch on every last declaration in a file, which is exactly the
+// regression a first version of this fix produced before being caught
+// against the plain-scalar "test" case, the file's own last key.
+func trimTrailingBlankLines(src []byte, syms []Symbol) {
+	lines := bytes.Split(src, []byte{'\n'})
+	lastIdx := len(lines) - 1
+	for i := range syms {
+		end := syms[i].EndLine
+		for end > syms[i].StartLine && int(end) < lastIdx && len(bytes.TrimSpace(lines[end])) == 0 {
+			end--
+		}
+		syms[i].EndLine = end
+	}
 }
 
 // flatten normalizes DocumentSymbolResult's two possible shapes —
