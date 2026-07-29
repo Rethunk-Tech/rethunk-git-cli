@@ -80,4 +80,44 @@ var servers = map[string]serverSpec{
 		// removed, the same two directions gopls is checked in.
 		stdioArgs: []string{"start"},
 	},
+	// yaml, json, css, and markdown were added only after their servers'
+	// documentSymbol ranges were measured byte-for-byte against this
+	// resolver's own declOnlyExtent on real fixtures (specs/design.md §
+	// Cross-check survey) -- not on the strength of "it has a --stdio
+	// flag" the way the four above already were. All four matched exactly,
+	// including the doc-comment-exclusion case (a leading comment with no
+	// blank line before the symbol) each of the original four servers was
+	// already held to.
+	"yaml": {
+		name:      "yaml-language-server",
+		bin:       "yaml-language-server",
+		transport: transportStdio,
+		stdioArgs: []string{"--stdio"},
+	},
+	"json": {
+		name:      "vscode-json-language-server",
+		bin:       "vscode-json-language-server",
+		transport: transportStdio,
+		stdioArgs: []string{"--stdio"},
+	},
+	"css": {
+		name:      "vscode-css-language-server",
+		bin:       "vscode-css-language-server",
+		transport: transportStdio,
+		stdioArgs: []string{"--stdio"},
+	},
+	// marksman, not vscode-markdown-language-server: the latter crashes on
+	// startup on this machine (measured -- specs/design.md), an ESM/CJS
+	// interop defect in its own bundled dependency, not a transport
+	// choice. marksman's own daemon-shaped "server" subcommand is not
+	// used; it is dialled the same one-shot stdio way as the other
+	// non-gopls servers here, matching the transport every LSP client
+	// already spawns it with (per marksman's own docs, "server" runs the
+	// LSP on stdio -- there is no separate socket-daemon mode).
+	"markdown": {
+		name:      "marksman",
+		bin:       "marksman",
+		transport: transportStdio,
+		stdioArgs: []string{"server"},
+	},
 }

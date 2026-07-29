@@ -24,6 +24,12 @@ func TestLanguageKindFor(t *testing.T) {
 		{"foo.pyi", protocol.LanguageKindPython},
 		{"foo.sh", protocol.LanguageKindShellScript},
 		{"foo.bash", protocol.LanguageKindShellScript},
+		{"foo.yaml", protocol.LanguageKindYAML},
+		{"foo.yml", protocol.LanguageKindYAML},
+		{"foo.json", protocol.LanguageKindJSON},
+		{"foo.css", protocol.LanguageKindCSS},
+		{"foo.md", protocol.LanguageKindMarkdown},
+		{"foo.markdown", protocol.LanguageKindMarkdown},
 		{"foo.unknown", protocol.LanguageKindTypeScript},
 	}
 
