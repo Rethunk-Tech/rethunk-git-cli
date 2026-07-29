@@ -600,6 +600,13 @@ func resolveMode(ctx context.Context, repo *gitx.Repo, root, path string, workEx
 		return "", err
 	}
 	if !found {
+		// Defensive, and deliberately untested: reaching here means the
+		// path is absent from the worktree AND from HEAD, but the only
+		// caller that passes workExists=false is staging a deletion, which
+		// classify only produces when the symbol resolved against HEAD --
+		// so HEAD had the file. A concurrent rewrite of HEAD between
+		// resolution and staging is the sole way in, which no test can
+		// stage without racing the same window.
 		return "", fmt.Errorf("synth: %s: no HEAD entry to derive mode for a deleted worktree file", path)
 	}
 	return entry.Mode, nil
