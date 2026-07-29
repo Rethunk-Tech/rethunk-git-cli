@@ -809,6 +809,21 @@ func TestRun_UnsupportedLanguageGetsNoRebuildHint(t *testing.T) {
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "rebuild")))
 }
 
+// TestRun_UnclassifiableArgReportsRulesConsidered pins the user-visible
+// surface of cli.UnresolvedArgError: commit.go's mapStageError-adjacent
+// path (its ClassifyArgs call) prints the error verbatim behind "rgit: "
+// at exit 129, so a target rule 6 rejects reads as this and not a bare
+// "invalid argument" -- and pins the "rules considered" wording 7de6deb
+// gave UnresolvedArgError.Error() over the old "tried" framing.
+func TestRun_UnclassifiableArgReportsRulesConsidered(t *testing.T) {
+	chdirTempRepo(t)
+
+	_, stderr, code := runApp(t, "commit", "-m", "feat(x): y", "nosuch.go:Nope")
+
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, `rgit: cannot classify "nosuch.go:Nope": rules considered:`))
+}
+
 // TestRun_HelpIsPlainText guards a defect that only shows up when something
 // reads the output rather than a person skimming it: pflag renders a string
 // flag's NoOptDefVal into the usage line as [="<value>"], so --gpg-sign's

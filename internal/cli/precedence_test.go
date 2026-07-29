@@ -119,6 +119,14 @@ func TestClassifyArgs_Rule6ListsWhatItTried(t *testing.T) {
 		"existing path (worktree or HEAD)",
 		"symbol anchor (existing path + name after last ':')",
 	}))
+	// Error() is what a caller actually reads (internal/app relays it
+	// verbatim behind "rgit: "), so its exact wording is pinned here too --
+	// "rules considered", not "tried", since rule 2 above is ruled out by a
+	// prefix check rather than a real attempt at resolving the token.
+	qt.Assert(t, qt.Equals(uerr.Error(),
+		`cannot classify "nosuch.go:Nope": rules considered: pathspec magic (leading ':'); `+
+			`revision, rev:path, or range (git rev-parse --verify); existing path (worktree or HEAD); `+
+			`symbol anchor (existing path + name after last ':')`))
 
 	// Without revisions the rule-3 line must be absent rather than merely
 	// unmatched: a commit invocation never consulted rev-parse at all.
