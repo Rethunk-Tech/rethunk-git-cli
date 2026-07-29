@@ -17,9 +17,15 @@ import (
 // The compiled grammars, in one place so each adapter calls a constructor
 // rather than importing the C bindings itself.
 //
-// TypeScript reports tree-sitter ABI 14 where Go and Python report 15; the
-// runtime accepts both, so the version skew between the grammar modules is not
-// something adapters need to handle.
+// ABI 14 vs 15 splits across these grammars by upstream release cadence, not
+// by anything rgit chose: TypeScript (v0.23.2) and JSON (v0.24.8) report ABI
+// 14 where Go, Python, and CSS (all v0.25.0) report 15 (measured from each
+// module's own parser.c LANGUAGE_VERSION). go-tree-sitter v0.25.0 accepts
+// both, so the skew is not something adapters need to handle. Checked
+// against the module proxy: both v0.23.2 and v0.24.8 are already each
+// module's newest tagged release, so this is not a lagging pin waiting to
+// be bumped -- it is upstream's own ABI split, and go.mod cannot paper over
+// it by pinning a version that does not exist.
 
 func goGrammar() *ts.Language { return ts.NewLanguage(tsgo.Language()) }
 
