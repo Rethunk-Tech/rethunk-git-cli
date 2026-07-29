@@ -145,7 +145,7 @@ func (c *Client) DocumentSymbols(ctx context.Context, path string, src []byte) (
 	// gopls is a long-lived daemon reused across invocations and anchors
 	// within one invocation re-open the same file, so every didOpen above
 	// must be matched by a didClose here -- otherwise open documents
-	// accumulate in the server for as long as it stays up (finding 8). A
+	// accumulate in the server for as long as it stays up. A
 	// fresh, short-lived context rather than ctx: ctx is already scoped to
 	// this one query and may be at or past QueryDeadline by the time a slow
 	// documentSymbol round trip below returns, which would silently drop

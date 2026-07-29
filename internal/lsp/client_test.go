@@ -188,17 +188,16 @@ func TestTrimTrailingBlankLines(t *testing.T) {
 	}
 }
 
-// --- finding 8: DocumentSymbols must send textDocument/didClose ---
+// --- DocumentSymbols must send textDocument/didClose ---
 //
 // gopls is a long-lived daemon reused across an invocation's whole set of
 // anchors; a didOpen with no matching didClose accumulates open documents
 // in it for as long as it stays up. This is exercised against a minimal
 // in-process mock rather than a live server -- the wire exchange itself
 // (frame the request, decode the reply) is already pinned by
-// TestFlatten_UnknownShapeIsNotOK and friends; what finding 8 needs proven
-// is that this package's own DocumentSymbols emits the matching
-// didClose, which a real server's behaviour cannot demonstrate one way or
-// the other.
+// TestFlatten_UnknownShapeIsNotOK and friends; what remains to prove here
+// is that this package's own DocumentSymbols emits the matching didClose,
+// which a real server's behaviour cannot demonstrate one way or the other.
 
 // didCloseObserver serves one initialize/didOpen/documentSymbol/didClose
 // exchange over conn, recording didOpen and didClose counts and the URI the
@@ -304,7 +303,7 @@ func TestDocumentSymbols_SendsDidClose(t *testing.T) {
 		t.Errorf("didOpens = %d; want 1", observer.didOpens)
 	}
 	if observer.didCloses != 1 {
-		t.Errorf("didCloses = %d; want 1 -- DocumentSymbols must close what it opens (finding 8)", observer.didCloses)
+		t.Errorf("didCloses = %d; want 1 -- DocumentSymbols must close what it opens", observer.didCloses)
 	}
 	wantURI := string(uri.File(path))
 	if observer.closedURI != wantURI {

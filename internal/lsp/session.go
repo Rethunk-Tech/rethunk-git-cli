@@ -32,7 +32,7 @@ func NewSession() *Session {
 // Falling through to the package-level Dial here instead would hand back a
 // live client (a subprocess, for the stdio servers) that this call's own
 // nil receiver proves nobody holds a Session to Close, leaking it for the
-// life of the daemon or process (finding 33).
+// life of the daemon or process.
 func (s *Session) Dial(ctx context.Context, lang, repoRoot string) (*Client, bool) {
 	if s == nil {
 		return nil, true

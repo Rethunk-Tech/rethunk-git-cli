@@ -5,17 +5,17 @@ import (
 	"testing"
 )
 
-// TestSession_NilDialDegradesWithoutDialing pins finding 33: a nil *Session
-// must degrade directly rather than falling through to the package-level
-// Dial. internal/diff/run.go's only production use of a nil Session (a
-// revision-to-revision diff, which has no worktree for a language server to
-// view) already guards every call site on nil before ever reaching this
-// method -- so if this fell through to Dial and Dial actually reached a
-// live server, the returned Client would be owned by nobody able to Close
-// it. "go" is dialled here specifically because it is the one language with
-// a real spawn-on-demand path (dialSocket) that could otherwise leak a
-// daemon; if this regresses to the old fallthrough, this test's own nil
-// Session would successfully dial (or spawn) it.
+// TestSession_NilDialDegradesWithoutDialing pins the guarantee: a nil
+// *Session must degrade directly rather than falling through to the
+// package-level Dial. internal/diff/run.go's only production use of a nil
+// Session (a revision-to-revision diff, which has no worktree for a
+// language server to view) already guards every call site on nil before
+// ever reaching this method -- so if this fell through to Dial and Dial
+// actually reached a live server, the returned Client would be owned by
+// nobody able to Close it. "go" is dialled here specifically because it is
+// the one language with a real spawn-on-demand path (dialSocket) that
+// could otherwise leak a daemon; if this regresses to the old fallthrough,
+// this test's own nil Session would successfully dial (or spawn) it.
 func TestSession_NilDialDegradesWithoutDialing(t *testing.T) {
 	t.Parallel()
 	var sess *Session
