@@ -22,6 +22,17 @@ Conventional commits: `type(scope): subject`.
 - One logical unit per commit.
 - No AI attribution trailers.
 
+## Changelog
+
+[`CHANGELOG.md`](CHANGELOG.md) carries one entry per tagged release, newest
+first, in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) form.
+Add to the unreleased entry in the same commit as the change that earns it —
+a behaviour change, a new grammar, a new flag, an exit code. Refactors, test
+work, and documentation edits do not earn one.
+
+Entries say what changed and link to the reference that documents it. They do
+not restate it: the tiered layout below is what keeps one authority per fact.
+
 ## Tests
 
 **Least tests, highest coverage. The suite stays under 30s** (ideally under

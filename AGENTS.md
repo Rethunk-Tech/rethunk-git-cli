@@ -30,6 +30,7 @@ Read whichever one the change touches; none is loaded for you.
 | [README.md](README.md) | Orientation and the documentation index |
 | [HUMANS.md](HUMANS.md) | Running and using `rgit` — what it does, inherited behaviour, degraded mode |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Process — commit style, test layout, dependency and documentation policy |
+| [CHANGELOG.md](CHANGELOG.md) | Release notes — one entry per tagged version |
 | [specs/design.md](specs/design.md) | Design record — why, mechanisms, and every measurement |
 | [docs/USAGE.md](docs/USAGE.md) | Command surface, argument grammar, flags |
 | [docs/ANCHORS.md](docs/ANCHORS.md) | Anchor syntax, extents, pseudo-anchors, special paths |

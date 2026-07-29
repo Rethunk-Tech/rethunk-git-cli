@@ -55,6 +55,7 @@ Start with [HUMANS.md](HUMANS.md) to run it, or
 | [docs/LIMITATIONS.md](docs/LIMITATIONS.md) | What `rgit` does not do, and why |
 | [AGENTS.md](AGENTS.md) | Internals, invariants, delegation boundary |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Commits, tests, dependency policy |
+| [CHANGELOG.md](CHANGELOG.md) | What changed in each release |
 | [specs/design.md](specs/design.md) | Design record and the measurements behind it |
 | [TODO.md](TODO.md) | Backlog |
 
