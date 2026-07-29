@@ -48,12 +48,48 @@ func TestDial_NewServers(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			// 10s, not 5s: comfortably covers one degraded attempt below
+			// (bounded internally by DialBudget+QueryDeadline, ~2.15s) plus
+			// a second, successful one plus the DocumentSymbols query after
+			// it -- generous because this bounds only how long this test
+			// is willing to wait, never Dial's own DialBudget, which stays
+			// exactly what a real caller gets.
+			//
+			// Every non-gopls server here is a one-shot stdio subprocess
+			// (dialStdio's exec.CommandContext ties the subprocess itself
+			// to this ctx, not just the handshake), so this same ctx has to
+			// stay live through Dial and DocumentSymbols both -- a shorter-
+			// lived context created just to bound the retry below would
+			// kill a successfully dialled server out from under the query
+			// that follows it.
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
+			// Retry once on a degraded Dial before failing. Degrading
+			// within DialBudget is Dial's own designed behaviour under
+			// load (AGENTS.md: "Never block on a cold server"), not a
+			// wiring defect -- every one of these servers is spawned fresh
+			// per query (dialStdio), so losing a single race against a
+			// loaded scheduler is exactly the contention DialBudget exists
+			// to protect a real caller from, not the regression this test
+			// exists to catch. A genuine regression (a broken invocation,
+			// a rejected handshake, wrong initialize params) fails to
+			// connect on every attempt, not just one, so retrying once is
+			// the cheapest way to tell the two apart -- raising DialBudget
+			// itself would only turn a fast flake into a slow one while
+			// leaving the assertion just as environment-dependent.
+			//
+			// Measured, not assumed: this subtest ("markdown") lost the
+			// race while three agents were saturating this same checkout,
+			// marksman taking ~2.2s to fail against a 150ms DialBudget --
+			// contention real enough that a second attempt, moments later,
+			// is a materially different roll, not a rubber stamp.
 			client, degraded := Dial(ctx, tc.lang, dir)
 			if degraded {
-				t.Fatalf("Dial(%q) degraded with %s on PATH", tc.lang, tc.bin)
+				client, degraded = Dial(ctx, tc.lang, dir)
+			}
+			if degraded {
+				t.Fatalf("Dial(%q) degraded twice in a row with %s on PATH", tc.lang, tc.bin)
 			}
 			defer func() { _ = client.Close() }()
 
