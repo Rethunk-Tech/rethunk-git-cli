@@ -724,17 +724,6 @@ func B() int {
 
 // --- rgit commit execution ---------------------------------------------
 
-// installHook writes an executable git hook, e.g. a pre-commit hook that
-// exits non-zero to exercise AGENTS.md's "a rejected commit leaves staging
-// in place" rule.
-func installHook(t *testing.T, repo, name, script string) {
-	t.Helper()
-	path := filepath.Join(repo, ".git", "hooks", name)
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-}
-
 const commitHappyV1 = `package auth
 
 func A() int {
@@ -767,7 +756,7 @@ func TestCommit_HappyPath(t *testing.T) {
 	t.Parallel()
 	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
 	marker := filepath.Join(repo, "hook-ran")
-	installHook(t, repo, "pre-commit", "#!/bin/sh\ntouch \""+marker+"\"\n")
+	gittest.InstallHook(t, repo, "pre-commit", "#!/bin/sh\ntouch \""+marker+"\"\n")
 
 	gittest.Write(t, repo, "auth.go", commitHappyV2)
 
@@ -804,7 +793,7 @@ func TestCommit_HookRejectionLeavesStagingIntact(t *testing.T) {
 	t.Parallel()
 	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
 	gittest.Write(t, repo, "auth.go", commitHappyV2)
-	installHook(t, repo, "pre-commit", "#!/bin/sh\nexit 1\n")
+	gittest.InstallHook(t, repo, "pre-commit", "#!/bin/sh\nexit 1\n")
 
 	got := runRgit(t, repo, "commit", "auth.go:A", "-m", "feat(auth): update A")
 	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.GitFailure)))

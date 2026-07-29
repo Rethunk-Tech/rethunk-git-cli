@@ -23,19 +23,8 @@ import (
 	"github.com/go-quicktest/qt"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
 )
-
-// installHook writes an executable git hook into dir's real .git/hooks --
-// the same mechanism rgit_e2e_test.go's own installHook exercises, needed
-// here because app.Run's git commit is real enough for git to actually run
-// one.
-func installHook(t *testing.T, dir, name, script string) {
-	t.Helper()
-	path := filepath.Join(dir, ".git", "hooks", name)
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-}
 
 // TestRun_InterspersedFlagAfterPositional pins the pflag behaviour stdlib
 // flag and ff/ffcli do not have: a flag arriving after a positional target
@@ -82,7 +71,7 @@ func TestRun_HookRejectionLeavesStagingIntact(t *testing.T) {
 	// staying unstaged is what makes the index-vs-worktree difference below
 	// mean something.
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
-	installHook(t, dir, "pre-commit", "#!/bin/sh\nexit 1\n")
+	gittest.InstallHook(t, dir, "pre-commit", "#!/bin/sh\nexit 1\n")
 
 	_, _, code := runApp(t, "commit", "-m", "feat(a): update A", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))

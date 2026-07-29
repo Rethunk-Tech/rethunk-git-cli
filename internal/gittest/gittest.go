@@ -75,3 +75,15 @@ func Commit(t *testing.T, dir, message string) {
 	Git(t, dir, "add", "-A")
 	Git(t, dir, "commit", "-q", "-m", message)
 }
+
+// InstallHook writes an executable git hook into dir's real .git/hooks --
+// e.g. a pre-commit hook that exits non-zero, to exercise AGENTS.md's "a
+// rejected commit leaves staging in place" rule against a real hook rather
+// than something rgit only believes git does with one.
+func InstallHook(t *testing.T, dir, name, script string) {
+	t.Helper()
+	path := filepath.Join(dir, ".git", "hooks", name)
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
