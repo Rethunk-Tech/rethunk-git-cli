@@ -29,6 +29,10 @@ Conventional commits: `type(scope): subject`.
 path plus the edge cases that have actually bitten — no permutation laundry
 lists.
 
+These gates, plus `golangci-lint`, run in
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) on every push and pull
+request, so this is enforced, not just documented.
+
 There are two lanes, and which one a case belongs in is the first decision:
 
 - **The unit lane is where the guarantee lives.** It runs under `-short`, and
