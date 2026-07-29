@@ -1159,10 +1159,11 @@ Shell, YAML, JSON, CSS, Markdown), leaving TOML and SQL permanently
 ## Commands
 
 `TODO.md`'s v2 command set (`blame`, `log`, `context`) was accepted against
-one question each: does it save an LLM tokens `git` already charges for?
-Every one is a thin caller over resolution and delegation machinery that
-already exists — none introduces a second attribution path or new
-resolution mechanism, per `AGENTS.md`'s delegation boundary.
+one question each: does it save an LLM tokens `git` already charges for? —
+shipped; contract in `docs/USAGE.md`. Every one is a thin caller over
+resolution and delegation machinery that already exists — none introduces
+a second attribution path or new resolution mechanism, per `AGENTS.md`'s
+delegation boundary.
 
 ### `rgit log`: `git log -L`, resolved once against HEAD — not `--follow` with per-commit re-resolution
 

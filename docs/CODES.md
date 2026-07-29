@@ -73,9 +73,10 @@ underneath it is folded into 128, same as everywhere else.
 
 ## Output records
 
-`diff`, `commit`, and `languages` emit plain text only. `--porcelain`
-replaces the aligned human layout with stable tab-separated records, no
-header.
+The record formats defined here are for `--porcelain` output only; a
+command's own default is git's or `rgit`'s aligned human-readable layout
+(`diff`, `commit`, `blame`, `log`, `languages`). `--porcelain` replaces
+that with stable tab-separated records, no header.
 
 This is not a hypothetical contract: `rgit completion`'s own shell completion
 scripts (`internal/app/completion.go`) shell out to `rgit diff --porcelain`

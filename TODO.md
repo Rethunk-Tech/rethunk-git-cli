@@ -33,42 +33,25 @@ or a version bump wants regardless.
 
 ## v2 — commands
 
-Each command below was accepted against one question: does it save an LLM
-tokens that plain `git` already charges? The design for each states the
-mechanism, what it reuses, and the guardrail that keeps it from becoming a
-re-skin of the git command it wraps. Ordered by value-to-cost — `blame`,
-`context`, and `log` are thin wrappers over machinery that already exists;
-`restore` would do real work, which is part of why it stays deferred (see
-its own entry below). Every command in this set stays read-only or
-non-destructive except the one held back for exactly that reason — a
-property of the whole surface, not an accident of which ones shipped
-first. Porcelain record shapes for each belong in
-[`docs/CODES.md`](docs/CODES.md); argument grammar additions in
+`rgit restore FILE:SYMBOL` is the only command left in this set — `blame`,
+`context`, and `log` already shipped (dispatched in `internal/app/app.go`,
+documented in [`docs/USAGE.md`](docs/USAGE.md) and `CHANGELOG.md`
+[Unreleased]), so they no longer belong here. `restore` stays deferred, not
+implemented, because it is the one command in the original set that would
+do real work — rewrite working-tree bytes — rather than wrap read-only
+machinery that already exists; see its own entry below for why that alone
+is reason enough to hold it back. The design record below was accepted
+against the same question every shipped command in this set was held to:
+does it save an LLM tokens `git` already charges? Porcelain record shapes
+belong in [`docs/CODES.md`](docs/CODES.md); argument grammar additions in
 [`docs/USAGE.md`](docs/USAGE.md).
 
-- [ ] `rgit blame FILE:SYMBOL` — blame bounded to a symbol extent.
-      Mechanism: resolve the anchor, pass the extent's line range to
-      `git blame -L start,end -- file`. Reuses anchor resolution and nothing
-      else. Token case: unscoped `git blame` prices the whole file; the
-      extent bounds the output. Guardrail: no whole-file fallback — an
-      unresolvable anchor is exit 3, not a silent widened scope.
-
-- [ ] `rgit context` — one-call repository orientation for an agent's first
-      turn: status entries, per-file diffstat with symbol attribution,
-      recent commit subjects, as a single `--porcelain` record stream.
-      Mechanism: pure read composition over `internal/gitx` and
-      `internal/diff`; no new resolution machinery. Token case: replaces the
-      3–5 subprocess calls (`status`, `diff --stat`, `diff`, `log`) an agent
-      makes before editing, each billed separately. Guardrail: the output
-      shape is fixed and byte-budgeted — no flags that grow it. A command
-      with options becomes `git status` with extra steps.
-
 - [ ] `rgit restore FILE:SYMBOL` — **deferred, not to be implemented for
-      now.** This is the only entry in this set that rewrites working-tree
-      bytes; every other rgit command stays read-only or non-destructive,
-      and holding this one back is what keeps that true of the whole
-      surface rather than an accident of which commands shipped first. The
-      design below stays intact — it is the right contract if a destructive
+      now.** This is the only rgit command that would rewrite working-tree
+      bytes; `blame`, `context`, and `log` already shipped read-only, and
+      holding this one back is what keeps the whole surface non-destructive
+      rather than an accident of which commands shipped first. The design
+      below stays intact — it is the right contract if a destructive
       command is ever accepted deliberately — but it is a design record, not
       a queued task.
       Surgical undo — splice a symbol's
@@ -101,12 +84,3 @@ first. Porcelain record shapes for each belong in
       and a failed splice (extent drift since resolution) leaves the file
       untouched, matching the resolve-before-stage invariant in the
       synthesis path.
-
-- [ ] `rgit log FILE:SYMBOL` — history of one symbol: one record per
-      touching commit (hash, subject), patch-free. Mechanism: drive
-      `git log -L` (or `--follow` with per-commit extent re-resolution,
-      which handles renames and moved symbols better) and emit subjects
-      only. Token case: `git log -L :func:file` emits the full patch body
-      for every hit — the flood this tool exists to prevent. Guardrail:
-      patches are opt-in (`-p`), never default; the default stream is
-      bounded by commit count, not by code size.
