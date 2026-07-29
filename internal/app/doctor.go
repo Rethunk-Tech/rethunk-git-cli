@@ -3,18 +3,18 @@
 // install time, which cmd/rgit-install's own runPrereqChecks already
 // covers for a build from source. Its output shape ("[ok]/MISSING name
 // detail") is matched deliberately, so the two commands read as one tool;
-// the checks themselves are reimplemented here rather than imported,
-// because cmd/rgit-install is package main and cannot be imported, and
-// because doctor's own fatal/informational split differs from the
-// installer's (see runEnvironmentChecks).
+// internal/prereq holds that shared probe-and-format mechanism. The check
+// *list* stays reimplemented here rather than imported, because doctor's
+// own fatal/informational split differs from the installer's (see
+// runEnvironmentChecks).
 package app
 
 import (
 	"fmt"
 	"io"
-	"os/exec"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/prereq"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
@@ -30,13 +30,6 @@ language server or the tree-sitter CLI is informational, since degraded
 
 Full reference: docs/USAGE.md
 `
-
-// doctorCheck is one probed fact, rendered by printCheck.
-type doctorCheck struct {
-	name   string
-	ok     bool
-	detail string
-}
 
 // languageServerCheck is one row of docs/INSTALL.md § Language servers: the
 // binary rgit actually shells out to for that language's cross-check, and
@@ -74,17 +67,13 @@ func runDoctor(args []string, stdout, stderr io.Writer) exitcode.Code {
 	fmt.Fprintln(stdout, "Environment:")
 	essential, fatal := runEnvironmentChecks()
 	for _, c := range essential {
-		printCheck(stdout, c)
+		prereq.Print(stdout, c)
 	}
 
 	fmt.Fprintln(stdout, "\nLanguage servers (optional -- a missing one falls back to [ts-only]):")
 	for _, ls := range languageServers {
-		path, err := exec.LookPath(ls.binary)
-		detail := path
-		if err != nil {
-			detail = "not on PATH -- " + ls.install
-		}
-		printCheck(stdout, doctorCheck{name: ls.binary + " (" + ls.language + ")", ok: err == nil, detail: detail})
+		c := prereq.LookPath(ls.binary+" ("+ls.language+")", ls.binary, "not on PATH -- "+ls.install)
+		prereq.Print(stdout, c)
 	}
 
 	fmt.Fprintln(stdout, "\nGrammars compiled in:")
@@ -95,17 +84,6 @@ func runDoctor(args []string, stdout, stderr io.Writer) exitcode.Code {
 		return exitcode.GitFailure
 	}
 	return exitcode.Success
-}
-
-// printCheck matches cmd/rgit-install's own "  [ok] name   detail" line
-// shape (its main loop's fmt.Printf) so the two commands read as one tool
-// rather than two differently-formatted probes of the same kind of fact.
-func printCheck(w io.Writer, c doctorCheck) {
-	status := "ok"
-	if !c.ok {
-		status = "MISSING"
-	}
-	fmt.Fprintf(w, "  [%s] %-24s %s\n", status, c.name, c.detail)
 }
 
 // runEnvironmentChecks probes what rgit needs to run at all, not to build
@@ -122,31 +100,15 @@ func printCheck(w io.Writer, c doctorCheck) {
 // rebuilding with -tags rgit_sql is the fix for a gated .sql miss, and a
 // caller who just saw that hint should be able to check the one thing
 // standing between them and it without hunting through docs/INSTALL.md.
-func runEnvironmentChecks() (checks []doctorCheck, fatal error) {
-	gitPath, err := exec.LookPath("git")
-	checks = append(checks, doctorCheck{
-		name: "git", ok: err == nil,
-		detail: orNote(gitPath, "not found on PATH -- rgit shells out to git for everything (AGENTS.md)"),
-	})
-	if err != nil {
+func runEnvironmentChecks() (checks []prereq.Check, fatal error) {
+	git := prereq.LookPath("git", "git", "not found on PATH -- rgit shells out to git for everything (AGENTS.md)")
+	checks = append(checks, git)
+	if !git.OK {
 		fatal = fmt.Errorf("git not found on PATH -- rgit cannot function without it")
 	}
 
-	tsPath, tsErr := exec.LookPath("tree-sitter")
-	checks = append(checks, doctorCheck{
-		name: "tree-sitter CLI", ok: tsErr == nil,
-		detail: orNote(tsPath, "optional -- only needed to rebuild with SQL support, see docs/INSTALL.md § SQL support"),
-	})
+	ts := prereq.LookPath("tree-sitter CLI", "tree-sitter", "optional -- only needed to rebuild with SQL support, see docs/INSTALL.md § SQL support")
+	checks = append(checks, ts)
 
 	return checks, fatal
-}
-
-// orNote returns path when non-empty, else note -- exec.LookPath's own
-// two-value failure shape collapsed into the one detail string printCheck
-// wants.
-func orNote(path, note string) string {
-	if path != "" {
-		return path
-	}
-	return note
 }

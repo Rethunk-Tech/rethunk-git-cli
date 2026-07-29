@@ -20,6 +20,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/prereq"
 )
 
 // sqlGrammarModule is the Go module that publishes the SQL grammar's
@@ -66,11 +68,7 @@ func main() {
 	fmt.Println("Checking prerequisites...")
 	checks, fatal := runPrereqChecks()
 	for _, c := range checks {
-		status := "ok"
-		if !c.ok {
-			status = "MISSING"
-		}
-		fmt.Printf("  [%s] %-24s %s\n", status, c.name, c.detail)
+		prereq.Print(os.Stdout, c)
 	}
 	if fatal != nil {
 		fatalf("%v", fatal)
@@ -164,49 +162,45 @@ func resolveRepoRoot() (string, error) {
 	return filepath.Dir(gomod), nil
 }
 
-type prereqCheck struct {
-	name   string
-	ok     bool
-	detail string
-}
-
 // runPrereqChecks verifies what a build needs. go, git, cgo, and a C
 // compiler are fatal -- rgit links tree-sitter through cgo, so none of them
 // is optional (AGENTS.md's delegation boundary: git is shelled out to for
 // everything git already does). tree-sitter and a JS runtime are informational
 // only, since SQL generation degrades gracefully without them.
-func runPrereqChecks() (checks []prereqCheck, fatal error) {
-	goPath, err := exec.LookPath("go")
-	checks = append(checks, prereqCheck{"go toolchain", err == nil, goPath})
-	if err != nil {
+//
+// git and tree-sitter here use the exact same internal/prereq.LookPath
+// mechanism internal/app's doctor does -- see that package's doc comment
+// for why the check *list* still isn't shared: doctor reports run-time
+// facts, this reports build-time ones too (go toolchain, CGO_ENABLED, a C
+// compiler) that would be meaningless for an already-built rgit.
+func runPrereqChecks() (checks []prereq.Check, fatal error) {
+	goCheck := prereq.LookPath("go toolchain", "go", "")
+	checks = append(checks, goCheck)
+	if !goCheck.OK {
 		fatal = fmt.Errorf("go not found on PATH")
 	}
 
-	gitPath, err := exec.LookPath("git")
-	checks = append(checks, prereqCheck{"git", err == nil, gitPath})
-	if err != nil && fatal == nil {
+	gitCheck := prereq.LookPath("git", "git", "")
+	checks = append(checks, gitCheck)
+	if !gitCheck.OK && fatal == nil {
 		fatal = fmt.Errorf("git not found on PATH")
 	}
 
 	cgo := goEnv("CGO_ENABLED")
-	checks = append(checks, prereqCheck{"CGO_ENABLED", cgo == "1", cgo})
+	checks = append(checks, prereq.Check{Name: "CGO_ENABLED", OK: cgo == "1", Detail: cgo})
 	if cgo != "1" && fatal == nil {
 		fatal = fmt.Errorf("cgo is disabled (CGO_ENABLED=%s) -- rgit links tree-sitter through cgo and cannot build without it", cgo)
 	}
 
 	cc := goEnv("CC")
-	ccPath, ccErr := exec.LookPath(firstField(cc))
-	checks = append(checks, prereqCheck{"C compiler (" + cc + ")", ccErr == nil, ccPath})
-	if ccErr != nil && fatal == nil {
+	ccCheck := prereq.LookPath("C compiler ("+cc+")", firstField(cc), "")
+	checks = append(checks, ccCheck)
+	if !ccCheck.OK && fatal == nil {
 		fatal = fmt.Errorf("no %q C compiler found on PATH", cc)
 	}
 
-	tsPath, tsErr := exec.LookPath("tree-sitter")
-	tsDetail := tsPath
-	if tsErr != nil {
-		tsDetail = "optional -- needed only to generate the SQL parser"
-	}
-	checks = append(checks, prereqCheck{"tree-sitter CLI", tsErr == nil, tsDetail})
+	tsCheck := prereq.LookPath("tree-sitter CLI", "tree-sitter", "optional -- needed only to generate the SQL parser")
+	checks = append(checks, tsCheck)
 
 	return checks, fatal
 }
