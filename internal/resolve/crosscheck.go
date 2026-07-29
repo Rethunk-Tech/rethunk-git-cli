@@ -105,7 +105,7 @@ func CrossCheckExtents(ctx context.Context, sess *lsp.Session, lang Language, re
 // CrossCheckExtent's doc on the fourth cross-check exemption); err is
 // non-nil only when a match was found and its range disagreed.
 func MatchAndCompare(src []byte, res *Resolution, symbols []lsp.Symbol) (found bool, err error) {
-	match, ok := matchLSPSymbol(res.Anchor, symbols)
+	match, ok := matchLSPSymbol(res.Anchor, res.Sep, symbols)
 	if !ok {
 		return false, nil
 	}
@@ -150,12 +150,12 @@ func formatRange(start, end uint32) string {
 // name -- so they fall back to matching the Nth same-named symbol in the
 // server's own reported order, which is source order for every grammar
 // rgit supports.
-func matchLSPSymbol(anchor string, symbols []lsp.Symbol) (lsp.Symbol, bool) {
+func matchLSPSymbol(anchor, sep string, symbols []lsp.Symbol) (lsp.Symbol, bool) {
 	bare, ordinal := splitOrdinal(anchor)
 
 	var byBare []lsp.Symbol
 	for _, s := range symbols {
-		qualified := qualifyLSPSymbol(s)
+		qualified := qualifyLSPSymbol(s, sep)
 		if qualified == anchor {
 			return s, true
 		}
@@ -170,9 +170,18 @@ func matchLSPSymbol(anchor string, symbols []lsp.Symbol) (lsp.Symbol, bool) {
 	return lsp.Symbol{}, false
 }
 
-func qualifyLSPSymbol(s lsp.Symbol) string {
+// qualifyLSPSymbol joins s's own Container and Name the same way
+// containerQualified (index.go) joins a Declaration's -- sep verbatim when
+// the resolution supplied one (CSS Nesting's " ", Declaration.Sep's own doc
+// comment), "." otherwise -- so a server-reported symbol qualifies to
+// exactly the string Resolve would have emitted as Anchor for the same
+// declaration.
+func qualifyLSPSymbol(s lsp.Symbol, sep string) string {
 	if s.Container != "" {
-		return s.Container + "." + s.Name
+		if sep == "" {
+			sep = "."
+		}
+		return s.Container + sep + s.Name
 	}
 	return normalizeAnchorInput(s.Name)
 }

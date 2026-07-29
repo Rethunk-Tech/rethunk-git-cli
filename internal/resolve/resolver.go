@@ -28,6 +28,14 @@ type Resolution struct {
 	// or sits flush against its siblings, the way container members already
 	// sit in the worktree (TODO.md § Known limitations).
 	Container string
+
+	// Sep is the join between Container and the bare name in Anchor --
+	// carried over from Declaration.Sep so the LSP cross-check (crosscheck.go's
+	// qualifyLSPSymbol) can qualify a server-reported symbol the same way
+	// Anchor was already qualified (containerQualified, index.go), rather
+	// than assuming every language joins with ".". Empty means the default
+	// ".", the same zero-value convention Declaration.Sep itself uses.
+	Sep string
 }
 
 // File is one source parsed once and held open, so a caller with several
@@ -75,7 +83,7 @@ func (f *File) Resolve(anchor string) (*Resolution, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Resolution{Extent: sym.Full, DeclOnly: sym.DeclOnly, Anchor: sym.Qualified, Container: sym.Decl.Container}, nil
+	return &Resolution{Extent: sym.Full, DeclOnly: sym.DeclOnly, Anchor: sym.Qualified, Container: sym.Decl.Container, Sep: sym.Decl.Sep}, nil
 }
 
 // DeclOrder returns the anchor rgit emits for each declaration, in source
