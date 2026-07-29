@@ -159,6 +159,14 @@ func TestRun_UsageErrors(t *testing.T) {
 		name: "diff: --staged and --unstaged are mutually exclusive",
 		args: []string{"diff", "--staged", "--unstaged"},
 		want: "--staged and --unstaged are mutually exclusive",
+	}, {
+		// A-06: docs/USAGE.md's "Invalid combinations" table already lists
+		// this pair generically (not scoped to commit), but runDiff never
+		// enforced it -- `rgit diff --porcelain --quiet` exited 0 and
+		// printed nothing, indistinguishable from "nothing to commit".
+		name: "diff: --porcelain and --quiet are mutually exclusive",
+		args: []string{"diff", "--porcelain", "--quiet"},
+		want: "--porcelain and --quiet are mutually exclusive",
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, stderr, code := runApp(t, tc.args...)
