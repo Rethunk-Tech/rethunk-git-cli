@@ -144,6 +144,57 @@ sends it over `textDocument/didOpen`. A caller-supplied `$RGIT_LSP_SOCKET` is
 exempt from this check: it is the caller's own path to manage, not one
 `rgit` need vouch for.
 
+**The verify-then-use gap is narrowed, not closed, and that is a deliberate
+choice, not an oversight.** `privateSocketDir`'s check and the dial or spawn
+that follows it are two separate operations, so an attacker able to write
+the *parent* directory (not merely occupy the exact planted-directory path
+the check above already rejects) could in principle swap the directory
+between them. Three options were weighed:
+
+1. Re-verify (fresh `Lstat` + ownership check) immediately before the dial
+   and immediately before the spawn, rather than trusting the one check
+   `defaultSocketPath` performed earlier — cheap, and shrinks the window
+   from "since this invocation started, possibly after a `DialBudget`-bounded
+   probe of an earlier candidate" to "the last few instructions before the
+   syscall." Still technically racy.
+2. Hold an `O_DIRECTORY` file descriptor from the verified check and operate
+   relative to it (the `openat` family), closing the window fully.
+3. Document the residual window and the sticky-`/tmp`/systemd-`$XDG_RUNTIME_DIR`
+   assumption as accepted, with no code change at all.
+
+**Option 1 shipped.** Option 2 was rejected: Go's `net.Dial` for a unix
+socket takes a path string, not a directory-relative descriptor, so closing
+the window fully would mean hand-rolled syscalls with no portable
+expression — and `sameOwner` is already a deliberate no-op on Windows
+(`owner_windows.go`), so the extra complexity would buy real protection on
+one platform and nothing on the other. Option 3 alone was rejected because
+option 1 costs one extra `Lstat` and was already there to take: the
+environments this matters on (a sticky `/tmp`, or a systemd-managed
+`$XDG_RUNTIME_DIR`, both refusing a foreign rename or replace within them)
+already prevent the actual swap today, which is exactly why this is
+hardening a window, not patching a demonstrated exploit — but "usually
+prevented elsewhere" is not the same claim as "cannot happen," and the
+cheap version was worth taking regardless. `dial.go`'s `verifyPrivateDir` is
+the shared check both `privateSocketDir` and the two re-checks call.
+
+**A related, separately-accepted gap: unlinking a managed socket after a
+handshake failure can strand a live daemon, not only a dead one.**
+`dialSocket` unlinks the managed candidate's directory entry when a socket
+answers but the handshake fails, so the next candidate — or a fresh spawn —
+can reclaim the path. That unlink does not stop whatever process is still
+listening on the old inode behind it: if the failure was a genuinely live
+but slow or stuck `gopls` rather than a truly dead one, the respawn binds a
+new inode at the same path and the stranded old process keeps running,
+unreachable, until its own `-listen.timeout` idle shutdown
+(`servers.go`'s `daemonArgs`) reclaims it. A handshake failure this deep
+into `DialBudget+QueryDeadline` is itself strong evidence of a stuck
+process — a healthy `gopls` answers in single-digit milliseconds (measured
+above) — so a shutdown RPC or kill-by-pid was judged out of scope rather
+than genuinely trivial: no server wired into `Dial` exposes either, and
+there is no discovered PID to key a kill on beyond the socket path itself.
+Accepted as best-effort, bounded by the daemon's own idle timeout either
+way.
+
 **Spawn-on-demand is load-bearing.** A socket-only design was measured finding
 **no sockets and no running language servers**: editors spawn `gopls` over
 stdio, so nothing ever creates one. Without spawning, the cross-check is
