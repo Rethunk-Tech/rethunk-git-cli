@@ -163,10 +163,21 @@ _rgit() {
     fi
 
     if [[ "$cur" == *:* ]]; then
-        local file="${cur%:*}" symprefix="${cur##*:}"
-        local -a syms
-        syms=("${(@f)$(_rgit_symbols "$file")}")
-        compadd -P "${file}:" -- "${syms[@]}"
+        local file="${cur%:*}"
+        local out
+        out="$(_rgit_symbols "$file")"
+        # Splitting "" with (f) still yields one empty element, not zero
+        # -- guard it, or a file with no candidates offers a bare "FILE:".
+        # Narrowing candidates against what's already typed after the
+        # colon is compadd's own job here, the same as it already is for
+        # the flag and subcommand lists above -- zsh's completion system
+        # matches added candidates against the current word automatically,
+        # unlike bash's compgen, which needs "-- $cur" to do it explicitly.
+        if [[ -n "$out" ]]; then
+            local -a syms
+            syms=("${(@f)out}")
+            compadd -P "${file}:" -- "${syms[@]}"
+        fi
         return
     fi
 
