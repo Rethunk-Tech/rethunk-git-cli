@@ -492,3 +492,26 @@ func TestRun_PathspecMatchingNothingStillListsItself(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(stdout, "kept\t\t0\t0"))
 }
+
+// TestRun_HelpIsPlainText guards a defect that only shows up when something
+// reads the output rather than a person skimming it: pflag renders a string
+// flag's NoOptDefVal into the usage line as [="<value>"], so --gpg-sign's
+// bare-vs-absent sentinel lands in `rgit commit --help`. A NUL-prefixed
+// sentinel therefore printed a raw control byte, which made grep treat the
+// help as a binary file and knocked the column alignment out for every flag
+// below it.
+func TestRun_HelpIsPlainText(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	for _, args := range [][]string{{"--help"}, {"commit", "--help"}, {"diff", "--help"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			stdout, _, code := runApp(t, args...)
+			qt.Assert(t, qt.Equals(code, exitcode.Success))
+			if i := strings.IndexFunc(stdout, func(r rune) bool {
+				return r < 0x20 && r != '\n' && r != '\t'
+			}); i >= 0 {
+				t.Errorf("help contains control byte %q at offset %d", stdout[i], i)
+			}
+		})
+	}
+}

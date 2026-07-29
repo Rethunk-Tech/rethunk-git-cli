@@ -82,8 +82,15 @@ func expandGPGSignShorthand(args []string) []string {
 // gpgSignBare is commitFlags.gpgSignKey's NoOptDefVal sentinel for a bare
 // --gpg-sign (no key id): the empty string is already "flag not given" at
 // all, so the sentinel is what lets bare-vs-absent be told apart after
-// Parse. Never a real key id, since no git key id is NUL-prefixed.
-const gpgSignBare = "\x00bare"
+// Parse.
+//
+// It has to be printable. pflag renders a string flag's NoOptDefVal
+// straight into the usage line as [="<value>"], so a NUL-prefixed sentinel
+// -- the obvious choice for "can never be a real key id" -- put a raw
+// control byte in `rgit commit --help` and broke the column alignment for
+// every flag after it. This reads correctly there instead, and the angle
+// brackets keep it out of the space of real GPG key ids just as well.
+const gpgSignBare = "<default-key>"
 
 func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exitcode.Code {
 	var f commitFlags
