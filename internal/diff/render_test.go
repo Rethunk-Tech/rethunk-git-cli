@@ -16,37 +16,40 @@ import (
 // region that overlaps, rather than covers, the gap.
 func TestRowHint_UnanchorableSuggestsToplevelOnlyForMarkdown(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		path string
-		want string
-	}{
-		{"README.md", "-> use --sym README.md:@toplevel or --file README.md"},
-		{"docs/USAGE.markdown", "-> use --sym docs/USAGE.markdown:@toplevel or --file docs/USAGE.markdown"},
-		{"auth.go", "-> use --file auth.go"},
-		{"svc.ts", "-> use --file svc.ts"},
-		{"svc.py", "-> use --file svc.py"},
-		{"unknown.rs", "-> use --file unknown.rs"},
-	}
-	for _, tt := range tests {
-		row := Row{Status: StatusUnanchorable, Added: "1", Deleted: "0"}
-		got := rowHint(tt.path, row)
-		if got != tt.want {
-			t.Errorf("rowHint(%q, unanchorable) = %q; want %q", tt.path, got, tt.want)
-		}
-	}
-}
 
-// TestRenderText_MarkdownUnanchorableRowPointsAtToplevel asserts the same
-// guarantee at RenderText's own level, guarding against the hint regressing
-// back to --file-only silently if a future change routes rows through a
-// different path than rowHint.
-func TestRenderText_MarkdownUnanchorableRowPointsAtToplevel(t *testing.T) {
-	t.Parallel()
-	report := &Report{Files: []FileReport{
-		{Path: "README.md", Rows: []Row{{Status: StatusUnanchorable, Added: "2", Deleted: "1"}}},
-	}}
-	out := RenderText(report)
-	if !strings.Contains(out, "--sym README.md:@toplevel") {
-		t.Errorf("RenderText output = %q; want a --sym README.md:@toplevel hint", out)
-	}
+	t.Run("rowHint", func(t *testing.T) {
+		t.Parallel()
+		tests := []struct {
+			path string
+			want string
+		}{
+			{"README.md", "-> use --sym README.md:@toplevel or --file README.md"},
+			{"docs/USAGE.markdown", "-> use --sym docs/USAGE.markdown:@toplevel or --file docs/USAGE.markdown"},
+			{"auth.go", "-> use --file auth.go"},
+			{"svc.ts", "-> use --file svc.ts"},
+			{"svc.py", "-> use --file svc.py"},
+			{"unknown.rs", "-> use --file unknown.rs"},
+		}
+		for _, tt := range tests {
+			row := Row{Status: StatusUnanchorable, Added: "1", Deleted: "0"}
+			got := rowHint(tt.path, row)
+			if got != tt.want {
+				t.Errorf("rowHint(%q, unanchorable) = %q; want %q", tt.path, got, tt.want)
+			}
+		}
+	})
+
+	// RenderText's own level guards against the hint regressing back to
+	// --file-only silently if a future change routes rows through a
+	// different path than rowHint.
+	t.Run("RenderText agrees", func(t *testing.T) {
+		t.Parallel()
+		report := &Report{Files: []FileReport{
+			{Path: "README.md", Rows: []Row{{Status: StatusUnanchorable, Added: "2", Deleted: "1"}}},
+		}}
+		out := RenderText(report)
+		if !strings.Contains(out, "--sym README.md:@toplevel") {
+			t.Errorf("RenderText output = %q; want a --sym README.md:@toplevel hint", out)
+		}
+	})
 }
