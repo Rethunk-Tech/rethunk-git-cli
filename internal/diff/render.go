@@ -3,10 +3,7 @@ package diff
 import (
 	"bytes"
 	"fmt"
-	"path/filepath"
 	"text/tabwriter"
-
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
 // RenderText renders report in the default aligned layout from
@@ -26,7 +23,7 @@ func RenderText(report *Report) string {
 			if i == 0 {
 				file = f.Path
 			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", file, rowLabel(row), rowStatusWord(row), rowCounts(row), rowHint(f.Path, row))
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", file, rowLabel(row), rowStatusWord(row), rowCounts(row), rowHint(f.Path, f.lang, row))
 		}
 	}
 	// Writes go to a bytes.Buffer, which never fails.
@@ -78,11 +75,14 @@ func rowCounts(row Row) string {
 }
 
 // rowHint is the trailing "-> use ..." suggestion docs/USAGE.md's example
-// shows for rows a plain positional can't stage directly.
-func rowHint(path string, row Row) string {
+// shows for rows a plain positional can't stage directly. lang is
+// FileReport.lang -- already resolved by buildFileReport, shebang fallback
+// included, so this never re-derives the language from path's extension
+// alone.
+func rowHint(path, lang string, row Row) string {
 	switch row.Status {
 	case StatusUnanchorable:
-		return unanchorableHint(path)
+		return unanchorableHint(path, lang)
 	case StatusUntracked:
 		if row.HintSymbol != "" {
 			return "-> use --sym " + path + ":" + row.HintSymbol + " or --file " + path
@@ -105,12 +105,19 @@ func rowHint(path string, row Row) string {
 // (unanchorable) row in a Markdown file is always the lede, and always
 // stageable more precisely than the whole path.
 //
-// Deciding this by lang.Name() rather than a new resolve.Language predicate
-// keeps the distinction where the rest of this package already draws similar
-// ones (isMultiDeclaratorLang in attribute.go): a hint string is internal/
-// diff's own concern, not something the resolver needs to expose.
-func unanchorableHint(path string) string {
-	if lang, ok := resolve.ForExtension(filepath.Ext(path)); ok && lang.Name() == "markdown" {
+// Deciding this by lang (FileReport.lang, a resolve.Language's own Name())
+// rather than a new resolve.Language predicate keeps the distinction where
+// the rest of this package already draws similar ones (isMultiDeclaratorLang
+// in attribute.go): a hint string is internal/diff's own concern, not
+// something the resolver needs to expose.
+//
+// lang comes from the caller's FileReport rather than being re-derived here
+// via path's extension: buildFileReport already resolved it with the
+// shebang fallback an extensionless git hook or bin/ entry needs
+// (resolve.LanguageForWorktreePath), and re-deriving from extension alone
+// here would silently disagree with that for such a path.
+func unanchorableHint(path, lang string) string {
+	if lang == "markdown" {
 		return "-> use --sym " + path + ":@toplevel or --file " + path
 	}
 	return "-> use --file " + path

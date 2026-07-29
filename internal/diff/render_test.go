@@ -21,20 +21,21 @@ func TestRowHint_UnanchorableSuggestsToplevelOnlyForMarkdown(t *testing.T) {
 		t.Parallel()
 		tests := []struct {
 			path string
+			lang string
 			want string
 		}{
-			{"README.md", "-> use --sym README.md:@toplevel or --file README.md"},
-			{"docs/USAGE.markdown", "-> use --sym docs/USAGE.markdown:@toplevel or --file docs/USAGE.markdown"},
-			{"auth.go", "-> use --file auth.go"},
-			{"svc.ts", "-> use --file svc.ts"},
-			{"svc.py", "-> use --file svc.py"},
-			{"unknown.rs", "-> use --file unknown.rs"},
+			{"README.md", "markdown", "-> use --sym README.md:@toplevel or --file README.md"},
+			{"docs/USAGE.markdown", "markdown", "-> use --sym docs/USAGE.markdown:@toplevel or --file docs/USAGE.markdown"},
+			{"auth.go", "go", "-> use --file auth.go"},
+			{"svc.ts", "typescript", "-> use --file svc.ts"},
+			{"svc.py", "python", "-> use --file svc.py"},
+			{"unknown.rs", "", "-> use --file unknown.rs"},
 		}
 		for _, tt := range tests {
 			row := Row{Status: StatusUnanchorable, Added: "1", Deleted: "0"}
-			got := rowHint(tt.path, row)
+			got := rowHint(tt.path, tt.lang, row)
 			if got != tt.want {
-				t.Errorf("rowHint(%q, unanchorable) = %q; want %q", tt.path, got, tt.want)
+				t.Errorf("rowHint(%q, %q, unanchorable) = %q; want %q", tt.path, tt.lang, got, tt.want)
 			}
 		}
 	})
@@ -45,7 +46,7 @@ func TestRowHint_UnanchorableSuggestsToplevelOnlyForMarkdown(t *testing.T) {
 	t.Run("RenderText agrees", func(t *testing.T) {
 		t.Parallel()
 		report := &Report{Files: []FileReport{
-			{Path: "README.md", Rows: []Row{{Status: StatusUnanchorable, Added: "2", Deleted: "1"}}},
+			{Path: "README.md", Rows: []Row{{Status: StatusUnanchorable, Added: "2", Deleted: "1"}}, lang: "markdown"},
 		}}
 		out := RenderText(report)
 		if !strings.Contains(out, "--sym README.md:@toplevel") {
