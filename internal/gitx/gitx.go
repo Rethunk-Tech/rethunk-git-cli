@@ -220,6 +220,19 @@ func (r *Repo) CatFileSample(ctx context.Context, rev, path string, limit int) (
 	full := append([]string{"-C", r.root}, args...)
 	cmd := exec.CommandContext(ctx, "git", full...)
 	cmd.Env = r.env
+	// Every other helper in this package buffers stderr through run()'s own
+	// bytes.Buffer; this one builds its *exec.Cmd by hand (it needs
+	// StdoutPipe, which run() does not expose) and left Stderr unset. A nil
+	// Stderr is not actually inherited -- os/exec's own Start (childStderr /
+	// writerDescriptor) connects it to os.DevNull whether or not Run itself
+	// is used, so this was never leaking git's cat-file noise to rgit's own
+	// stderr. It is still worth buffering explicitly: every other exit path
+	// in this package is consistent about it, an explicit buffer means the
+	// content is available rather than silently discarded should a future
+	// error path here ever want to report it, and it avoids a DevNull open
+	// on every call for no benefit.
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 
 	stdout, perr := cmd.StdoutPipe()
 	if perr != nil {
@@ -658,8 +671,12 @@ func (r *Repo) LsFilesStage(ctx context.Context, path string) (mode string, foun
 	if line == "" {
 		return "", false, nil
 	}
+	// git's own shape is "<mode> <sha> <stage>\t<path>" (measured directly),
+	// four fields once strings.Fields splits on the tab too -- never fewer
+	// than 1, so the previous "< 1" check could not fail on a line already
+	// known non-empty and was never reachable.
 	fields := strings.Fields(line)
-	if len(fields) < 1 {
+	if len(fields) < 4 {
 		return "", false, fmt.Errorf("gitx: malformed ls-files --stage line %q", line)
 	}
 	return fields[0], true, nil
@@ -747,24 +764,30 @@ func (r *Repo) RecentCommits(ctx context.Context, limit int) ([]CommitSummary, e
 	if err != nil {
 		return nil, err
 	}
-	return parseCommitSummaries(out), nil
+	return parseCommitSummaries(out)
 }
 
 // parseCommitSummaries splits RecentCommits' own "%H%x09%s" format, one
 // commit per line -- a plain tab-cut, the same shape parseNumstat already
-// applies to a different git format string.
-func parseCommitSummaries(out []byte) []CommitSummary {
+// applies to a different git format string, and held to the same standard:
+// strings.Cut's own found bool must be checked, not discarded, or a line
+// with no tab at all (its whole text becomes "hash" with subject silently
+// empty) is read as a bogus commit instead of the malformed line it is.
+func parseCommitSummaries(out []byte) ([]CommitSummary, error) {
 	trimmed := strings.TrimRight(string(out), "\n")
 	if trimmed == "" {
-		return nil
+		return nil, nil
 	}
 	lines := strings.Split(trimmed, "\n")
 	summaries := make([]CommitSummary, 0, len(lines))
 	for _, line := range lines {
-		hash, subject, _ := strings.Cut(line, "\t")
+		hash, subject, ok := strings.Cut(line, "\t")
+		if !ok {
+			return nil, fmt.Errorf("gitx: malformed log summary line %q", line)
+		}
 		summaries = append(summaries, CommitSummary{Hash: hash, Subject: subject})
 	}
-	return summaries
+	return summaries, nil
 }
 
 // MergeBase resolves the merge base of a and b via `git merge-base`, needed
