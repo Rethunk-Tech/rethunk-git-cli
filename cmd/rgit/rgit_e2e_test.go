@@ -116,36 +116,6 @@ func runRgit(t *testing.T, repoDir string, args ...string) rgitResult {
 	return rgitResult{Stdout: stdout.String(), Stderr: stderr.String(), ExitCode: exitCode}
 }
 
-func TestCommit_InterspersedFlagAfterPositional(t *testing.T) {
-	t.Parallel()
-	// stdlib flag and ff/ffcli stop parsing at the first positional, so
-	// this exact argv shape would silently yield zero messages and two
-	// targets ("auth.go:Foo", "msg"), failing with exit 129 ("commit
-	// requires a message"). pflag's interspersed parsing must read one
-	// message and one target instead, letting the commit actually succeed.
-	repo, _ := gittest.New(t)
-	gittest.Write(t, repo, "auth.go", "package main\n\nfunc Foo() {}\n")
-
-	got := runRgit(t, repo, "commit", "auth.go:Foo", "-m", "msg")
-
-	qt.Assert(t, qt.Equals(got.ExitCode, 0))
-	qt.Assert(t, qt.Not(qt.StringContains(got.Stderr, "requires a message")))
-}
-
-func TestCommit_ColonInFilenameIsPathspec(t *testing.T) {
-	t.Parallel()
-	// "src/notes:draft.md" is a legal tracked path -- git accepts it as a
-	// plain path (specs/design.md). Rule 4's existing-path check must
-	// claim it whole, before rule 5 gets a chance to split it into a bogus
-	// FILE:NAME anchor at the interior colon.
-	repo, _ := gittest.New(t)
-	gittest.Write(t, repo, "src/notes:draft.md", "draft\n")
-
-	got := runRgit(t, repo, "commit", "src/notes:draft.md", "-m", "chore: add draft notes")
-
-	qt.Assert(t, qt.Equals(got.ExitCode, 0))
-}
-
 func TestCommit_DoubleDashForcesPathspec(t *testing.T) {
 	t.Parallel()
 	// Rule 1: everything after "--" is a pathspec, unconditionally — even
@@ -175,24 +145,6 @@ func TestCommit_LeadingColonPathspecMagicPassesThrough(t *testing.T) {
 	got := runRgit(t, repo, "commit", "-m", "chore: exclude docs", "keep.go", ":(exclude)docs/*")
 
 	qt.Assert(t, qt.Equals(got.ExitCode, 0))
-}
-
-func TestCommit_UnresolvableArgumentListsTriedInterpretations(t *testing.T) {
-	t.Parallel()
-	// Rule 6: none of the applicable rules matched. commit passes
-	// allowRevisions=false to ClassifyArgs (rule 3 is diff-only), so the
-	// error must list pathspec-magic, existing-path, and symbol-anchor —
-	// and must not claim a revision interpretation was tried.
-	repo, _ := gittest.New(t)
-
-	got := runRgit(t, repo, "commit", "-m", "chore: bogus target", "totally-bogus-target")
-
-	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.InvalidUsage)))
-	qt.Assert(t, qt.StringContains(got.Stderr, `cannot classify "totally-bogus-target"`))
-	qt.Assert(t, qt.StringContains(got.Stderr, "pathspec magic"))
-	qt.Assert(t, qt.StringContains(got.Stderr, "existing path"))
-	qt.Assert(t, qt.StringContains(got.Stderr, "symbol anchor"))
-	qt.Assert(t, qt.Not(qt.StringContains(got.Stderr, "revision")))
 }
 
 func TestInvalidFlagCombinations(t *testing.T) {
@@ -252,11 +204,13 @@ func TestContradictoryPathAndAnchor(t *testing.T) {
 		return repo
 	}
 
+	// "commit, both positional" is deliberately absent: it is the exact
+	// shape app_test.go's TestRun_CommitExitCodes already pins at the unit
+	// level ("one path named both ways is exit 5").
 	contradictory := []struct {
 		name string
 		args []string
 	}{
-		{"both positional", []string{"commit", "-m", "chore: x", "greet.go", "greet.go:A"}},
 		{"both flags", []string{"commit", "-m", "chore: x", "--file", "greet.go", "--sym", "greet.go:A"}},
 		{"positional path and --sym", []string{"commit", "-m", "chore: x", "greet.go", "--sym", "greet.go:A"}},
 		{"diff, both positional", []string{"diff", "greet.go", "greet.go:A"}},
@@ -344,54 +298,16 @@ func TestDiff_CrossCheckReportsWithoutGating(t *testing.T) {
 	qt.Assert(t, qt.Not(qt.StringContains(got.Stderr, "[warning]")))
 }
 
+// TestDocumentedPathsWithoutOtherCoverage is specified in docs/USAGE.md; it
+// is here because no other test -- e2e or unit -- exercises the path that
+// reaches it: stripping the built binary's own PATH and XDG_RUNTIME_DIR is
+// process-level enough (a real spawn attempt, a real socket probe against a
+// directory with nothing in it) that it does not reduce to an app.Run unit
+// case the way the rest of this file's former "documented paths" table did
+// (diff --exit-code, diff --quiet, a non-conventional message, and a push
+// failure all moved to app_test.go).
 func TestDocumentedPathsWithoutOtherCoverage(t *testing.T) {
 	t.Parallel()
-	// Each of these is specified in docs/USAGE.md; the case is here because
-	// no other test exercises the path that reaches it.
-	commitOne := func(t *testing.T, repo string) {
-		t.Helper()
-		gittest.Git(t, repo, "add", "-A")
-		gittest.Git(t, repo, "-c", "user.email=t@t.t", "-c", "user.name=T", "commit", "-q", "-m", "init")
-	}
-
-	t.Run("diff --exit-code reports 1 when committable", func(t *testing.T) {
-		repo, _ := gittest.New(t)
-		gittest.Write(t, repo, "a.go", "package main\n\nfunc A() int { return 1 }\n")
-		commitOne(t, repo)
-		gittest.Write(t, repo, "a.go", "package main\n\nfunc A() int { return 2 }\n")
-
-		dirty := runRgit(t, repo, "diff", "--exit-code", "--porcelain")
-		qt.Assert(t, qt.Equals(dirty.ExitCode, 1))
-		qt.Assert(t, qt.StringContains(dirty.Stdout, "a.go"))
-
-		// git's own --exit-code convention: 0 once there is nothing to report.
-		commitOne(t, repo)
-		clean := runRgit(t, repo, "diff", "--exit-code", "--porcelain")
-		qt.Assert(t, qt.Equals(clean.ExitCode, 0))
-	})
-
-	t.Run("diff --quiet implies --exit-code and prints nothing", func(t *testing.T) {
-		repo, _ := gittest.New(t)
-		gittest.Write(t, repo, "a.go", "package main\n\nfunc A() int { return 1 }\n")
-		commitOne(t, repo)
-		gittest.Write(t, repo, "a.go", "package main\n\nfunc A() int { return 2 }\n")
-
-		got := runRgit(t, repo, "diff", "--quiet")
-
-		qt.Assert(t, qt.Equals(got.ExitCode, 1))
-		qt.Assert(t, qt.Equals(got.Stdout, ""))
-	})
-
-	t.Run("a non-conventional message warns but still commits", func(t *testing.T) {
-		repo, _ := gittest.New(t)
-		gittest.Write(t, repo, "a.go", "package main\n\nfunc A() {}\n")
-
-		got := runRgit(t, repo, "commit", "-m", "just some words", "a.go:A")
-
-		qt.Assert(t, qt.Equals(got.ExitCode, 0))
-		qt.Assert(t, qt.StringContains(got.Stderr, "type(scope): subject"))
-	})
-
 	t.Run("no reachable language server degrades to ts-only", func(t *testing.T) {
 		// specs/design.md: degraded resolution is normal, announced once, and
 		// never blocks.
@@ -417,19 +333,6 @@ func TestDocumentedPathsWithoutOtherCoverage(t *testing.T) {
 
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.StringContains(stderr.String(), "[ts-only]"))
-	})
-
-	t.Run("push failure is exit 8 and keeps the commit", func(t *testing.T) {
-		// docs/USAGE.md § Flags: a push failure does not roll back the commit
-		// that preceded it. No remote is configured, so the push cannot work.
-		repo, _ := gittest.New(t)
-		gittest.Write(t, repo, "a.go", "package main\n\nfunc A() {}\n")
-
-		got := runRgit(t, repo, "commit", "--push", "-m", "feat(x): a", "a.go:A")
-
-		qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.PushFailed)))
-		// The commit itself landed: HEAD resolves and holds the file.
-		qt.Assert(t, qt.StringContains(gittest.Git(t, repo, "cat-file", "-p", "HEAD:a.go"), "func A()"))
 	})
 }
 
@@ -629,17 +532,6 @@ func TestCommit_ExtensionlessShebangResolvesShellSymbol(t *testing.T) {
 	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.UnsupportedLanguage)))
 }
 
-func TestCommit_AllTargetsUnchangedExits11(t *testing.T) {
-	t.Parallel()
-	// docs/USAGE.md: an unchanged target warns and is skipped; exit is 11
-	// only when EVERY named target turned out unchanged.
-	repo := initRepoWithFile(t, "auth.go", authGoV1)
-
-	got := runRgit(t, repo, "commit", "-m", "chore: noop", "auth.go:ValidateToken")
-	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.NothingToCommit)))
-	qt.Assert(t, qt.StringContains(got.Stderr, "no uncommitted changes"))
-}
-
 func TestCommit_FromSubdirectoryResolvesCWDRelativePaths(t *testing.T) {
 	t.Parallel()
 	// git resolves a pathspec relative to the current directory: `git add
@@ -678,21 +570,6 @@ func TestDiff_RevisionRangeScopes(t *testing.T) {
 			t.Errorf("scope %q reported no change to auth.go: %q", rev, got.Stdout)
 		}
 	}
-}
-
-func TestDiff_MalformedSymAndPathEscapeRejected(t *testing.T) {
-	t.Parallel()
-	// Both subcommands reject these identically: docs/USAGE.md's exit
-	// table qualifies neither to one of them. Silently dropping a
-	// malformed --sym would leave the caller reading an unfiltered diff
-	// believing it was filtered.
-	repo := initRepoWithFile(t, "auth.go", authGoV1)
-
-	got := runRgit(t, repo, "diff", "--sym", "malformed")
-	qt.Assert(t, qt.Equals(got.ExitCode, 129))
-
-	got = runRgit(t, repo, "diff", "--file", "../outside.txt")
-	qt.Assert(t, qt.Equals(got.ExitCode, 129))
 }
 
 func TestDiff_UnstagedScopeExcludesStaged(t *testing.T) {
@@ -934,20 +811,6 @@ func TestCommit_HappyPath(t *testing.T) {
 	}
 }
 
-func TestCommit_PreStagedSiblingFileComesAlong(t *testing.T) {
-	t.Parallel()
-	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
-	gittest.Write(t, repo, "auth.go", commitHappyV2)
-	gittest.Write(t, repo, "sibling.txt", "never named to rgit\n")
-	gittest.Git(t, repo, "add", "--", "sibling.txt")
-
-	got := runRgit(t, repo, "commit", "auth.go:A", "-m", "feat(auth): update A")
-	qt.Assert(t, qt.Equals(got.ExitCode, 0))
-
-	show := gittest.Git(t, repo, "show", "--stat", "HEAD")
-	qt.Assert(t, qt.StringContains(show, "sibling.txt"))
-}
-
 func TestCommit_HookRejectionLeavesStagingIntact(t *testing.T) {
 	t.Parallel()
 	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
@@ -967,20 +830,6 @@ func TestCommit_HookRejectionLeavesStagingIntact(t *testing.T) {
 	qt.Assert(t, qt.StringContains(status, "MM auth.go"))
 }
 
-func TestCommit_ResolveAllBeforeStageLeavesIndexUntouched(t *testing.T) {
-	t.Parallel()
-	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
-	gittest.Write(t, repo, "auth.go", commitHappyV2)
-
-	// "Bogus" resolves nowhere -- the whole batch must fail before A (which
-	// resolves cleanly) is ever staged.
-	got := runRgit(t, repo, "commit", "auth.go:A", "auth.go:Bogus", "-m", "feat(auth): update A")
-	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.AnchorUnresolvable)))
-
-	status := gittest.Git(t, repo, "status", "--porcelain")
-	qt.Assert(t, qt.Equals(status, " M auth.go\n"))
-}
-
 func TestCommit_PositionalPathspecParityWithFileFlag(t *testing.T) {
 	t.Parallel()
 	repoPositional, _ := gittest.New(t)
@@ -994,28 +843,6 @@ func TestCommit_PositionalPathspecParityWithFileFlag(t *testing.T) {
 	qt.Assert(t, qt.Equals(gotFlag.ExitCode, 0))
 
 	qt.Assert(t, qt.Equals(gittest.Git(t, repoPositional, "show", "HEAD:notes.txt"), gittest.Git(t, repoFlag, "show", "HEAD:notes.txt")))
-}
-
-func TestCommit_PathEscapeRejected(t *testing.T) {
-	t.Parallel()
-	parent := t.TempDir()
-	repo := filepath.Join(parent, "repo")
-	if err := os.MkdirAll(repo, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	gittest.Git(t, repo, "init", "-q", ".")
-
-	// A real file just outside the repo root: rule 4's existence check
-	// succeeds, so the token reaches rgit's own target construction --
-	// proving the escape is caught there, not merely that classification
-	// found no interpretation for it at all.
-	if err := os.WriteFile(filepath.Join(parent, "outside.txt"), []byte("nope\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	got := runRgit(t, repo, "commit", "-m", "chore: escape", "../outside.txt")
-	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.InvalidUsage)))
-	qt.Assert(t, qt.StringContains(got.Stderr, "escapes the repository root"))
 }
 
 func TestCommit_ReportsWhatItCommitted(t *testing.T) {
@@ -1223,63 +1050,10 @@ func TestHelp_SubcommandExitsZeroAndDoesNotLeakPflag(t *testing.T) {
 
 // --- commit --amend ------------------------------------------------------
 
-func TestCommit_AmendWithNoMessageReusesHeadSubject(t *testing.T) {
-	t.Parallel()
-	// rgit never opens an editor (docs/USAGE.md: commit.template is
-	// deliberately not honoured), so --amend with neither -m nor -F has
-	// exactly one sensible meaning: `git commit --amend --no-edit`.
-	repo := initRepoWithFile(t, "g.go", "package main\n\nfunc G() int { return 1 }\n")
-	before := gittest.Git(t, repo, "log", "-1", "--format=%s")
-
-	gittest.Write(t, repo, "g.go", "package main\n\nfunc G() int { return 2 }\n")
-	got := runRgit(t, repo, "commit", "--amend", "g.go:G")
-
-	qt.Assert(t, qt.Equals(got.ExitCode, 0))
-	after := gittest.Git(t, repo, "log", "-1", "--format=%s")
-	qt.Assert(t, qt.Equals(after, before))
-	qt.Assert(t, qt.StringContains(gittest.Git(t, repo, "cat-file", "-p", "HEAD:g.go"), "return 2"))
-}
-
-func TestCommit_NonAmendWithNoMessageStillRequiresOne(t *testing.T) {
-	t.Parallel()
-	// The message requirement is suppressed only for --amend; a plain
-	// commit with neither -m nor -F is still exit 129.
-	repo, _ := gittest.New(t)
-	gittest.Write(t, repo, "g.go", "package main\n\nfunc G() {}\n")
-
-	got := runRgit(t, repo, "commit", "g.go")
-
-	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.InvalidUsage)))
-	qt.Assert(t, qt.StringContains(got.Stderr, "commit requires a message"))
-}
-
 // --- Forwarded git flags: --fixup/--squash, --author/--date/--reset-author,
 // --gpg-sign/--no-gpg-sign, the --porcelain and -q output modes, and a clearer
 // --push-with-no-upstream message. Each is specified in docs/USAGE.md § Flags;
 // what earns a test here is a flag rgit does more with than hand to git.
-
-func TestCommit_FixupAndSquashGenerateAutosquashMessages(t *testing.T) {
-	t.Parallel()
-	repo := initRepoWithFile(t, "g.go", "package main\n\nfunc G() int { return 1 }\n")
-	target := strings.TrimSpace(gittest.Git(t, repo, "rev-parse", "HEAD"))
-
-	for i, tc := range []struct{ flag, wantPrefix string }{
-		{"--fixup", "fixup! "},
-		{"--squash", "squash! "},
-	} {
-		t.Run(tc.flag, func(t *testing.T) {
-			// Distinct content each iteration -- otherwise the second
-			// subtest's write is a no-op against the first subtest's
-			// already-committed content, and there is nothing to commit.
-			gittest.Write(t, repo, "g.go", fmt.Sprintf("package main\n\nfunc G() int { return %d }\n", i+2))
-			// Neither -m nor -F: the message requirement must not fire,
-			// same as bare --amend -- git generates the subject itself.
-			got := runRgit(t, repo, "commit", tc.flag+"="+target, "g.go")
-			qt.Assert(t, qt.Equals(got.ExitCode, 0))
-			qt.Assert(t, qt.Equals(gittest.Git(t, repo, "log", "-1", "--format=%s"), tc.wantPrefix+"init\n"))
-		})
-	}
-}
 
 func TestCommit_FixupWithMessageAppendsRatherThanConflicts(t *testing.T) {
 	t.Parallel()
@@ -1296,21 +1070,6 @@ func TestCommit_FixupWithMessageAppendsRatherThanConflicts(t *testing.T) {
 	body := gittest.Git(t, repo, "log", "-1", "--format=%B")
 	qt.Assert(t, qt.StringContains(body, "fixup! init"))
 	qt.Assert(t, qt.StringContains(body, "UNIQUE_BODY_MARKER"))
-}
-
-func TestCommit_AuthorAndDateForwarded(t *testing.T) {
-	t.Parallel()
-	repo, _ := gittest.New(t)
-	gittest.Write(t, repo, "g.go", "package main\n\nfunc G() {}\n")
-
-	got := runRgit(t, repo, "commit",
-		"--author", "Ada Lovelace <ada@example.com>",
-		"--date", "2005-04-07T22:13:13",
-		"-m", "feat(g): add G", "g.go")
-
-	qt.Assert(t, qt.Equals(got.ExitCode, 0))
-	qt.Assert(t, qt.Equals(gittest.Git(t, repo, "log", "-1", "--format=%an <%ae>"), "Ada Lovelace <ada@example.com>\n"))
-	qt.Assert(t, qt.Equals(gittest.Git(t, repo, "log", "-1", "--date=format:%Y-%m-%d", "--format=%ad"), "2005-04-07\n"))
 }
 
 func TestCommit_GPGSignFlagsForwarded(t *testing.T) {
@@ -1363,28 +1122,6 @@ func TestCommit_PushWithNoUpstreamNamesTheFix(t *testing.T) {
 	qt.Assert(t, qt.StringContains(gittest.Git(t, repo, "cat-file", "-p", "HEAD:auth.go"), "len(tok)"))
 }
 
-func TestCommit_ResetAuthorForwarded(t *testing.T) {
-	t.Parallel()
-	// --author sets an identity the amend must then discard: with
-	// --reset-author, git takes the author from the committer, so the
-	// Ada identity written by the first commit must not survive.
-	repo, _ := gittest.New(t)
-	gittest.Write(t, repo, "g.go", "package main\n\nfunc G() int { return 1 }\n")
-	first := runRgit(t, repo, "commit",
-		"--author", "Ada Lovelace <ada@example.com>",
-		"-m", "feat(g): add G", "g.go")
-	qt.Assert(t, qt.Equals(first.ExitCode, 0))
-	qt.Assert(t, qt.Equals(gittest.Git(t, repo, "log", "-1", "--format=%an"), "Ada Lovelace\n"))
-
-	gittest.Write(t, repo, "g.go", "package main\n\nfunc G() int { return 2 }\n")
-	got := runRgit(t, repo, "commit", "--amend", "--reset-author", "g.go:G")
-
-	qt.Assert(t, qt.Equals(got.ExitCode, 0))
-	// gittest.New's own committer identity, not Ada's.
-	qt.Assert(t, qt.Equals(gittest.Git(t, repo, "log", "-1", "--format=%an"),
-		gittest.Git(t, repo, "log", "-1", "--format=%cn")))
-}
-
 func TestCommit_PorcelainEmitsRecords(t *testing.T) {
 	t.Parallel()
 	// The machine-readable counterpart to the aligned listing, on both the
@@ -1415,36 +1152,6 @@ func TestCommit_PorcelainEmitsRecords(t *testing.T) {
 	// git's own summary is replaced, not merely appended to, exactly as
 	// git commit --porcelain replaces it.
 	qt.Assert(t, qt.Equals(strings.Contains(real.Stdout, "file changed"), false))
-}
-
-func TestCommit_QuietSuppressesStdoutOnly(t *testing.T) {
-	t.Parallel()
-	repo, _ := gittest.New(t)
-	gittest.Write(t, repo, "g.go", "package main\n\nfunc G() int { return 1 }\n")
-	// An unchanged second target still has to warn on stderr: -q is git's
-	// own "suppress the summary", not "suppress the diagnostics".
-	runRgit(t, repo, "commit", "-m", "feat(h): add H", "g.go")
-	gittest.Write(t, repo, "g.go", "package main\n\nfunc G() int { return 2 }\n")
-	gittest.Write(t, repo, "h.go", "package main\n\nfunc H() {}\n")
-	runRgit(t, repo, "commit", "-m", "feat(h): add H", "h.go")
-
-	got := runRgit(t, repo, "commit", "-q", "-m", "fix(g): bump", "g.go:G", "h.go:H")
-
-	qt.Assert(t, qt.Equals(got.ExitCode, 0))
-	qt.Assert(t, qt.Equals(got.Stdout, ""))
-	qt.Assert(t, qt.StringContains(got.Stderr, "has no uncommitted changes"))
-	qt.Assert(t, qt.StringContains(gittest.Git(t, repo, "cat-file", "-p", "HEAD:g.go"), "return 2"))
-}
-
-func TestCommit_PorcelainAndQuietConflict(t *testing.T) {
-	t.Parallel()
-	repo, _ := gittest.New(t)
-	gittest.Write(t, repo, "g.go", "package main\n\nfunc G() {}\n")
-
-	got := runRgit(t, repo, "commit", "--porcelain", "-q", "-m", "feat(g): add G", "g.go")
-
-	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.InvalidUsage)))
-	qt.Assert(t, qt.StringContains(got.Stderr, "mutually exclusive"))
 }
 
 // --- shell completion ---------------------------------------------------
