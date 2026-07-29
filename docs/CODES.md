@@ -40,7 +40,7 @@ diff rather than mid-commit.
 
 ### A missing cross-check is never a failure
 
-When no language server is reached, both commands print `[ts-only]` on stderr
+When no language server is reached, both staging commands print `[ts-only]` on stderr
 and proceed — degraded resolution is normal, not an error
 ([`AGENTS.md`](../AGENTS.md#resolution-model)). `rgit diff --quiet` still prints
 it, since `--quiet` suppresses the report on stdout, not diagnostics.

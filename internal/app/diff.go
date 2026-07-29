@@ -178,10 +178,10 @@ func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) exitc
 
 	// Same notice, same wording, and the same stream as rgit commit's own:
 	// docs/INSTALL.md § Verify tells the reader to grep rgit diff's stderr
-	// for it, so the two commands cannot answer "was the cross-check live?"
-	// differently. Printed regardless of --quiet, which suppresses the
-	// report on stdout rather than diagnostics, exactly as the warnings
-	// below already are.
+	// for it, so the two staging commands cannot answer "was the
+	// cross-check live?" differently. Printed regardless of --quiet, which
+	// suppresses the report on stdout rather than diagnostics, exactly as
+	// the warnings below already are.
 	if report.TSOnly {
 		fmt.Fprintln(stderr, "rgit: [ts-only] no live language server reached in time; extents unverified")
 	}
