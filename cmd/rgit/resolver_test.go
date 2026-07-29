@@ -1119,6 +1119,12 @@ Second Usage options.
 		[]string{"install.options", "usage.options#1", "usage.options#2"}))
 }
 
+// TestResolve_YAML covers the grammar's own shapes in one pass: a realistic
+// workflow fixture for nesting/qualification/comment-grafting/pseudo-anchors,
+// then edge shapes a realistic fixture never exercises on its own (anchors/
+// aliases, quoted keys, flow-style leaves, ordinal disambiguation across
+// different grandparents, the no-addressable-mapping refusals, and the key
+// spellings yamlKeyName does and does not turn into a Bare name).
 func TestResolve_YAML(t *testing.T) {
 	t.Parallel()
 	// A realistic GitHub Actions workflow: several jobs, nested steps, a
@@ -1196,11 +1202,12 @@ jobs:
 			"  # a comment between build and test\n  test:\n    needs: build\n"+
 			"    runs-on: ubuntu-latest\n    steps:\n      - run: go test ./...\n"))
 
+	lang, ok := resolve.ForExtension(".yml")
+	qt.Assert(t, qt.IsTrue(ok))
+
 	// Naming a bare sequence item (no such anchor exists to type in the
 	// first place) refuses honestly rather than silently matching something
 	// else.
-	lang, ok := resolve.ForExtension(".yml")
-	qt.Assert(t, qt.IsTrue(ok))
 	_, err := resolve.Resolve(lang, src, "build.steps.0")
 	var unresolvable *resolve.ResolveError
 	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
@@ -1209,17 +1216,14 @@ jobs:
 	// .yaml is claimed too.
 	_, ok = resolve.ForExtension(".yaml")
 	qt.Assert(t, qt.IsTrue(ok))
-}
 
-func TestResolve_YAMLGrammarEdgeShapes(t *testing.T) {
-	t.Parallel()
 	// A second fixture isolates shapes the realistic workflow above never
 	// exercises: a quoted key, an anchor/alias pair riding along verbatim
 	// inside whatever key contains them, a flow-style mapping value left
 	// undescended, and two containers of the same name at different
 	// grandparents colliding the same way lang_markdown.go's two "Options"
 	// headings under different parents already do.
-	src := []byte(`defaults: &defaults
+	edgeShapes := []byte(`defaults: &defaults
   adapter: postgres
 
 development:
@@ -1239,77 +1243,52 @@ b:
 	// "defaults" claims the "&defaults" marker as part of its own value,
 	// and "<<: *defaults" is an ordinary key ("<<") whose value is the
 	// alias, preserved byte-for-byte.
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".yaml", src, "defaults"),
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".yaml", edgeShapes, "defaults"),
 		"defaults: &defaults\n  adapter: postgres"))
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".yaml", src, "development.<<"), "<<: *defaults"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".yaml", edgeShapes, "development.<<"), "<<: *defaults"))
 
 	// A quoted key's surrounding quote byte is stripped from Bare -- a
 	// best-effort unwrap, not full YAML unescaping.
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".yaml", src, "development.quoted key"), `"quoted key": ok`))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".yaml", edgeShapes, "development.quoted key"), `"quoted key": ok`))
 
 	// A flow-style mapping value is a leaf: "development.flow" claims the
 	// whole `{ a: 1, b: 2 }`, but there is no "development.flow.a" to
 	// address -- flow style is never descended into, at any depth.
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".yaml", src, "development.flow"), "flow: { a: 1, b: 2 }"))
-	_, err := resolve.Resolve(mustYAMLLang(t), src, "development.flow.a")
-	var unresolvable *resolve.ResolveError
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".yaml", edgeShapes, "development.flow"), "flow: { a: 1, b: 2 }"))
+	_, err = resolve.Resolve(lang, edgeShapes, "development.flow.a")
 	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
 	qt.Assert(t, qt.Equals(unresolvable.Code, exitcode.AnchorUnresolvable))
 
 	// "a.common" and "b.common" are different containers, so "common.port"
 	// under each collides in qualified name even though the two are nowhere
 	// near each other in the tree -- ordinal disambiguation, not a merge.
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".yaml", src, "common.port#1"), "port: 1"))
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".yaml", src, "common.port#2"), "port: 2"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".yaml", edgeShapes, "common.port#1"), "port: 1"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".yaml", edgeShapes, "common.port#2"), "port: 2"))
 
-	_, err = resolve.Resolve(mustYAMLLang(t), src, "common.port")
+	_, err = resolve.Resolve(lang, edgeShapes, "common.port")
 	var ambigErr *resolve.ResolveError
 	qt.Assert(t, qt.ErrorAs(err, &ambigErr))
 	qt.Assert(t, qt.Equals(ambigErr.Code, exitcode.AnchorAmbiguous))
 	qt.Assert(t, qt.DeepEquals(ambigErr.Candidates, []string{"common.port#1", "common.port#2"}))
-}
 
-func mustYAMLLang(t *testing.T) resolve.Language {
-	t.Helper()
-	lang, ok := resolve.ForExtension(".yaml")
-	if !ok {
-		t.Fatal("resolve: no adapter registered for .yaml")
-	}
-	return lang
-}
-
-// TestResolve_YAMLMultiDocumentUnaddressable pins the deliberate refusal: a
-// "---"-separated multi-document stream has no addressable key at all,
-// rather than guessing which document a bare key path means.
-func TestResolve_YAMLMultiDocumentUnaddressable(t *testing.T) {
-	t.Parallel()
-	src := []byte("name: A\n---\nname: B\n")
-
-	lang, ok := resolve.ForExtension(".yml")
-	qt.Assert(t, qt.IsTrue(ok))
-	_, err := resolve.Resolve(lang, src, "name")
-	var unresolvable *resolve.ResolveError
+	// A "---"-separated multi-document stream has no addressable key at all,
+	// rather than guessing which document a bare key path means.
+	multiDoc := []byte("name: A\n---\nname: B\n")
+	_, err = resolve.Resolve(lang, multiDoc, "name")
 	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
 	qt.Assert(t, qt.Equals(unresolvable.Code, exitcode.AnchorUnresolvable))
-}
 
-// TestResolve_YAMLNoTopLevelMapping covers the other shapes topBlockMapping
-// refuses: a document whose only content is a bare scalar, or a sequence
-// with no mapping anywhere in it, both leave nothing addressable -- there is
-// no key to qualify a Declaration with in either case.
-func TestResolve_YAMLNoTopLevelMapping(t *testing.T) {
-	t.Parallel()
-	lang, ok := resolve.ForExtension(".yml")
-	qt.Assert(t, qt.IsTrue(ok))
-
-	for _, src := range []string{
+	// topBlockMapping refuses two more shapes with nothing addressable at
+	// all: a document whose only content is a bare scalar, or a sequence
+	// with no mapping anywhere in it -- neither has a key to qualify a
+	// Declaration with.
+	for _, noMapping := range []string{
 		"just a scalar\n",
 		"- one\n- two\n",
 		"# only a comment, no document at all\n",
 	} {
-		_, err := resolve.Resolve(lang, []byte(src), "one")
-		var unresolvable *resolve.ResolveError
-		qt.Assert(t, qt.ErrorAs(err, &unresolvable), qt.Commentf("src %q", src))
+		_, err = resolve.Resolve(lang, []byte(noMapping), "one")
+		qt.Assert(t, qt.ErrorAs(err, &unresolvable), qt.Commentf("src %q", noMapping))
 		qt.Assert(t, qt.Equals(unresolvable.Code, exitcode.AnchorUnresolvable))
 	}
 
@@ -1317,31 +1296,21 @@ func TestResolve_YAMLNoTopLevelMapping(t *testing.T) {
 	// doc==nil case), but @header does not depend on there being one.
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".yml", []byte("# only a comment, no document at all\n"), "@header"),
 		"# only a comment, no document at all"))
-}
 
-// TestResolve_YAMLKeyShapes pins the key spellings yamlKeyName does and does
-// not turn into a Bare name: both quote styles, and an explicit "?" key
-// whose own value is a nested block rather than a scalar -- left
-// unaddressable rather than resolved to an invented spelling, the same
-// reasoning Go's shared "A, B int" field line is refused for.
-func TestResolve_YAMLKeyShapes(t *testing.T) {
-	t.Parallel()
-	// The explicit "?" key's own value is a nested block mapping ("a: 1\n
-	// b: 2"), not a scalar: its key field is a "block_node", not the
-	// ordinary "flow_node" every plain or quoted key parses as, so it is
-	// left unaddressable rather than resolved to an invented spelling.
-	// "plain" is unaffected by its refused sibling.
-	src := []byte("'single quoted': ok\n" +
+	// The key spellings yamlKeyName does and does not turn into a Bare
+	// name: both quote styles, and an explicit "?" key whose own value is
+	// a nested block rather than a scalar -- its key field is a
+	// "block_node", not the ordinary "flow_node" every plain or quoted key
+	// parses as, so it is left unaddressable rather than resolved to an
+	// invented spelling. "plain" is unaffected by its refused sibling.
+	keyShapes := []byte("'single quoted': ok\n" +
 		"?\n  a: 1\n  b: 2\n: value\n" +
 		"plain: fine\n")
 
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".yml", src, "single quoted"), "'single quoted': ok"))
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".yml", src, "plain"), "plain: fine"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".yml", keyShapes, "single quoted"), "'single quoted': ok"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".yml", keyShapes, "plain"), "plain: fine"))
 
-	lang, ok := resolve.ForExtension(".yml")
-	qt.Assert(t, qt.IsTrue(ok))
-	_, err := resolve.Resolve(lang, src, "a")
-	var unresolvable *resolve.ResolveError
+	_, err = resolve.Resolve(lang, keyShapes, "a")
 	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
 	qt.Assert(t, qt.Equals(unresolvable.Code, exitcode.AnchorUnresolvable))
 }
@@ -1418,6 +1387,11 @@ foo() {
 	qt.Assert(t, qt.IsFalse(ok))
 }
 
+// TestResolve_CSS covers the grammar's own shapes in one pass: a realistic
+// stylesheet for selectors/at-rules/pseudo-anchors, then edge shapes a
+// realistic fixture never exercises on its own (a comma-joined selector
+// list staging as one anchor, native CSS Nesting, and a real at-rule
+// spelled like a pseudo-anchor never resolving as itself).
 func TestResolve_CSS(t *testing.T) {
 	t.Parallel()
 	// A realistic small stylesheet: a leading comment, three selector
@@ -1500,15 +1474,11 @@ div {
 	qt.Assert(t, qt.IsFalse(ok))
 	_, ok = resolve.ForExtension(".sass")
 	qt.Assert(t, qt.IsFalse(ok))
-}
 
-// TestResolve_CSSCommaSelectorListStagesAsOneAnchor pins docs/ANCHORS.md's
-// claim that a comma-joined selector list stages as one anchor, not two --
-// TestResolve_CSS's own fixture only ever exercises single selectors, so
-// this was a documented guarantee with no test actually driving it.
-func TestResolve_CSSCommaSelectorListStagesAsOneAnchor(t *testing.T) {
-	t.Parallel()
-	src := []byte(`.a, .b {
+	// docs/ANCHORS.md's claim that a comma-joined selector list stages as
+	// one anchor, not two -- the fixture above only ever exercises single
+	// selectors.
+	commaList := []byte(`.a, .b {
   color: red;
 }
 
@@ -1519,34 +1489,28 @@ func TestResolve_CSSCommaSelectorListStagesAsOneAnchor(t *testing.T) {
 
 	// The comma-joined selector's own bare name is its full text, verbatim,
 	// not decomposed into ".a" and ".b" separately.
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", src, ".a, .b"),
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", commaList, ".a, .b"),
 		".a, .b {\n  color: red;\n}"))
 
 	// A lone ".a" elsewhere in the file is its own, unrelated rule -- the
 	// comma list is not reachable through either of its own parts.
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", src, ".a"), ".a {\n  color: blue;\n}"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", commaList, ".a"), ".a {\n  color: blue;\n}"))
 
-	lang, ok := resolve.ForExtension(".css")
-	qt.Assert(t, qt.IsTrue(ok))
-	_, err := resolve.Resolve(lang, src, ".b")
-	var unresolvable *resolve.ResolveError
+	_, err = resolve.Resolve(lang, commaList, ".b")
 	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
 	qt.Assert(t, qt.Equals(unresolvable.Code, exitcode.AnchorUnresolvable))
-}
 
-// TestResolve_CSSNestedRuleSets pins native CSS Nesting (tree-sitter-css
-// v0.25.0): a rule_set directly inside another rule_set's own block is now
-// addressable, qualified by its immediate parent's own selector text
-// through a literal space -- the descendant combinator CSS itself would use
-// to flatten the same nesting -- not the dot every other adapter's own
-// Container convention joins with. This is a different construct from the
-// @media/@supports/@keyframes case TestResolve_CSS already pins as
-// deliberately non-descended, and does not change that: an at-rule
-// encountered while descending a rule_set's block (or a rule_set found
-// inside an at-rule's own block) stays exactly as undescended as before.
-func TestResolve_CSSNestedRuleSets(t *testing.T) {
-	t.Parallel()
-	src := []byte(`.parent {
+	// Native CSS Nesting (tree-sitter-css v0.25.0): a rule_set directly
+	// inside another rule_set's own block is now addressable, qualified by
+	// its immediate parent's own selector text through a literal space --
+	// the descendant combinator CSS itself would use to flatten the same
+	// nesting -- not the dot every other adapter's own Container
+	// convention joins with. This is a different construct from the
+	// @media/@supports/@keyframes case above and does not change that: an
+	// at-rule encountered while descending a rule_set's block (or a
+	// rule_set found inside an at-rule's own block) stays exactly as
+	// undescended as before.
+	nested := []byte(`.parent {
   color: red;
 
   .child {
@@ -1571,41 +1535,35 @@ func TestResolve_CSSNestedRuleSets(t *testing.T) {
 }
 `)
 
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", src, ".child"), ".child {\n    color: blue;\n  }"))
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", src, ".parent .child"), ".child {\n    color: blue;\n  }"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", nested, ".child"), ".child {\n    color: blue;\n  }"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", nested, ".parent .child"), ".child {\n    color: blue;\n  }"))
 	// Naming the parent still claims the nested rule along with it.
-	qt.Assert(t, qt.StringContains(mustResolveExt(t, ".css", src, ".parent"), ".child"))
+	qt.Assert(t, qt.StringContains(mustResolveExt(t, ".css", nested, ".parent"), ".child"))
 
 	// Nesting three deep qualifies by the immediate parent only, the same
 	// one-level rule lang_yaml.go and lang_json.go already apply: ".inner"
 	// resolves unambiguously on its own, and its qualified form names ".mid",
 	// never the full ".outer .mid .inner" chain.
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", src, ".inner"), ".inner {\n      color: purple;\n    }"))
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", src, ".mid .inner"), ".inner {\n      color: purple;\n    }"))
-	lang, ok := resolve.ForExtension(".css")
-	qt.Assert(t, qt.IsTrue(ok))
-	_, err := resolve.Resolve(lang, src, ".outer .mid .inner")
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", nested, ".inner"), ".inner {\n      color: purple;\n    }"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", nested, ".mid .inner"), ".inner {\n      color: purple;\n    }"))
+	_, err = resolve.Resolve(lang, nested, ".outer .mid .inner")
 	qt.Assert(t, qt.IsNotNil(err))
 
 	// A rule_set nested inside an @media block inside a rule_set is still
 	// not addressable at all: at-rule non-descent applies regardless of
 	// what encloses the at-rule, or what the at-rule itself encloses.
-	_, err = resolve.Resolve(lang, src, ".leaf")
+	_, err = resolve.Resolve(lang, nested, ".leaf")
 	qt.Assert(t, qt.IsNotNil(err))
-	var unresolvable *resolve.ResolveError
 	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
 	qt.Assert(t, qt.Equals(unresolvable.Code, exitcode.AnchorUnresolvable))
-}
 
-// TestResolve_CSSPseudoAnchorShadowsAtRule pins the deliberate sharp edge
-// docs/ANCHORS.md documents: an at-rule spelled like a pseudo-anchor
-// ("@header") never resolves as itself, because Resolve checks
-// isPseudoAnchor before it ever consults the symbol index
-// (resolver.go). The colliding at-rule is not merely deprioritized -- it is
-// unreachable by that spelling under any circumstance.
-func TestResolve_CSSPseudoAnchorShadowsAtRule(t *testing.T) {
-	t.Parallel()
-	src := []byte(`/* real header */
+	// The deliberate sharp edge docs/ANCHORS.md documents: an at-rule
+	// spelled like a pseudo-anchor ("@header") never resolves as itself,
+	// because Resolve checks isPseudoAnchor before it ever consults the
+	// symbol index (resolver.go). The colliding at-rule is not merely
+	// deprioritized -- it is unreachable by that spelling under any
+	// circumstance.
+	pseudoShadow := []byte(`/* real header */
 
 .btn {
   color: red;
@@ -1616,17 +1574,15 @@ func TestResolve_CSSPseudoAnchorShadowsAtRule(t *testing.T) {
 }
 `)
 
-	lang, ok := resolve.ForExtension(".css")
-	qt.Assert(t, qt.IsTrue(ok))
-	res, err := resolve.Resolve(lang, src, "@header")
+	res, err := resolve.Resolve(lang, pseudoShadow, "@header")
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.IsTrue(res.Pseudo))
-	qt.Assert(t, qt.Equals(string(src[res.Extent.Start:res.Extent.End]), "/* real header */"))
+	qt.Assert(t, qt.Equals(string(pseudoShadow[res.Extent.Start:res.Extent.End]), "/* real header */"))
 
 	// The colliding at-rule still exists in source order -- DeclOrder lists
 	// it under its own qualified name "@header" -- but that spelling can
 	// never resolve to it: isPseudoAnchor wins first, every time.
-	order, err := resolve.DeclOrder(lang, src)
+	order, err := resolve.DeclOrder(lang, pseudoShadow)
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.DeepEquals(order, []string{".btn", "@header"}))
 }
@@ -1687,6 +1643,11 @@ func TestResolve_JSON(t *testing.T) {
 	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
 }
 
+// TestResolve_TOML covers the grammar's own shapes in one pass: a realistic
+// config file for tables/comments/array-of-tables ambiguity, then edge
+// shapes it never exercises on its own (the key spellings tomlKeyName does
+// and does not turn into a Bare name, and a dotted table header qualifying
+// its members).
 func TestResolve_TOML(t *testing.T) {
 	t.Parallel()
 	// A realistic config file: a leading comment, a bare top-level pair, a
@@ -1751,61 +1712,48 @@ name = "b"
 	// .toml is claimed.
 	_, ok = resolve.ForExtension(".toml")
 	qt.Assert(t, qt.IsTrue(ok))
-}
 
-// TestResolve_TOMLKeyShapes pins the key spellings tomlKeyName does and does
-// not turn into a Bare name, isolated from the realistic fixture above: a
-// quoted key, a dotted pair key left undecomposed, an inline table left
-// undescended, and an array left undescended.
-func TestResolve_TOMLKeyShapes(t *testing.T) {
-	t.Parallel()
-	src := []byte(`"quoted key" = 1
+	// The key spellings tomlKeyName does and does not turn into a Bare
+	// name, isolated from the realistic fixture above: a quoted key, a
+	// dotted pair key left undecomposed, an inline table left undescended,
+	// and an array left undescended.
+	keyShapes := []byte(`"quoted key" = 1
 inline = { a = 1, b = 2 }
 arr = [1, 2, 3]
 dotted.pair = 1
 `)
 
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "quoted key"), `"quoted key" = 1`))
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "inline"), "inline = { a = 1, b = 2 }"))
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "arr"), "arr = [1, 2, 3]"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", keyShapes, "quoted key"), `"quoted key" = 1`))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", keyShapes, "inline"), "inline = { a = 1, b = 2 }"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", keyShapes, "arr"), "arr = [1, 2, 3]"))
 
 	// A dotted pair key is not decomposed into container.bare -- its Bare is
 	// the full dotted spelling, one predictable rule rather than a second
 	// qualification scheme layered on top of the "[table]"-header one.
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "dotted.pair"), "dotted.pair = 1"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", keyShapes, "dotted.pair"), "dotted.pair = 1"))
 
-	lang, ok := resolve.ForExtension(".toml")
-	qt.Assert(t, qt.IsTrue(ok))
-	_, err := resolve.Resolve(lang, src, "inline.a")
-	var unresolvable *resolve.ResolveError
+	_, err = resolve.Resolve(lang, keyShapes, "inline.a")
 	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
 	qt.Assert(t, qt.Equals(unresolvable.Code, exitcode.AnchorUnresolvable))
-}
 
-// TestResolve_TOMLDottedTableHeaderQualifiesMembers pins docs/ANCHORS.md's
-// claim that a dotted table header ("[server.tls]") qualifies its members
-// as "server.tls.<key>", not a further-nested "server.tls.tls.<key>" path --
-// TestResolve_TOML's own fixture only exercises a plain "[server]" header,
-// and TestResolve_TOMLKeyShapes only a root-level dotted pair
-// ("dotted.pair"), so a header's own dotted spelling qualifying its members
-// was a documented guarantee with no test actually driving it.
-func TestResolve_TOMLDottedTableHeaderQualifiesMembers(t *testing.T) {
-	t.Parallel()
-	src := []byte(`[server.tls]
+	// docs/ANCHORS.md's claim that a dotted table header ("[server.tls]")
+	// qualifies its members as "server.tls.<key>", not a further-nested
+	// "server.tls.tls.<key>" path -- the fixtures above only exercise a
+	// plain "[server]" header and a root-level dotted pair
+	// ("dotted.pair"), so a header's own dotted spelling qualifying its
+	// members was a documented guarantee with no test actually driving it.
+	dottedHeader := []byte(`[server.tls]
 cert = "a.pem"
 `)
 
 	// The header's own dotted spelling is the container verbatim -- not
 	// decomposed into "server" containing a nested "tls".
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "server.tls"), "[server.tls]\ncert = \"a.pem\"\n"))
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "server.tls.cert"), `cert = "a.pem"`))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", dottedHeader, "server.tls"), "[server.tls]\ncert = \"a.pem\"\n"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", dottedHeader, "server.tls.cert"), `cert = "a.pem"`))
 	// Unambiguous on its own, the bare member name resolves too.
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "cert"), `cert = "a.pem"`))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", dottedHeader, "cert"), `cert = "a.pem"`))
 
-	lang, ok := resolve.ForExtension(".toml")
-	qt.Assert(t, qt.IsTrue(ok))
-	_, err := resolve.Resolve(lang, src, "server.tls.tls.cert")
-	var unresolvable *resolve.ResolveError
+	_, err = resolve.Resolve(lang, dottedHeader, "server.tls.tls.cert")
 	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
 	qt.Assert(t, qt.Equals(unresolvable.Code, exitcode.AnchorUnresolvable))
 }
