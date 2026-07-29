@@ -236,6 +236,14 @@ invisible.** `cargo install` in particular writes to `$CARGO_HOME/bin`
 each install and warns loudly, by name and directory, rather than reporting
 success and leaving the binary unreachable.
 
+**A failed install is detectable, not just printed.** Each job is bounded
+by a generous timeout so a hung registry or a stalled build cannot block
+`-with-servers` indefinitely, and a `FAILED` line for any job makes the
+whole invocation exit non-zero — `rgit` itself still gets built and
+installed normally (a language server failing is not a reason to withhold
+it), but automation driving `-with-servers` can tell a partial run from a
+clean one instead of reading exit 0 either way.
+
 ## Environment variables
 
 | Variable | Effect |

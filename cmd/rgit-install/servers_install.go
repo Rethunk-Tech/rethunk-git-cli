@@ -5,13 +5,24 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
+
+// installTimeout bounds one job's install-or-update invocation. Generous,
+// not tight like taploCapability's 5s `--help` probe: `cargo install
+// taplo-cli --features lsp` builds from source, and `npm`/`bun` can spend
+// real time resolving a registry, so a budget that fires under normal
+// conditions would turn a slow-but-healthy install into a false failure.
+// It exists only to bound a hung registry or a stalled build -- finite,
+// not fast.
+const installTimeout = 5 * time.Minute
 
 // installJob is one install-or-update invocation, covering every catalog
 // entry that shares its (manager, pkg, extraArgs) -- vscode-json-language-
@@ -162,7 +173,13 @@ func managerBinDir(m manager, useBun bool) (string, error) {
 // caller) so both the detection report and the per-job skip branches --
 // "neither bun nor npm", "cargo not on PATH" -- are testable against a fake
 // PATH state with dryRun:true, never touching a real package manager.
-func manageServers(dryRun bool, stdout io.Writer, lookPath func(string) (string, error)) {
+//
+// ok=false means at least one job's install-or-update actually failed (a
+// skip is not a failure -- there was nothing rgit could have run). Before
+// this, a per-job "FAILED" line was the only signal: the process still
+// exited 0, so automation driving -with-servers could not tell a clean run
+// from a partial one (finding 11).
+func manageServers(dryRun bool, stdout io.Writer, lookPath func(string) (string, error)) (ok bool) {
 	fmt.Fprintln(stdout, "Language servers:")
 	for _, s := range detectServers(serverCatalog, lookPath) {
 		fmt.Fprintln(stdout, "  "+formatServerStatus(s))
@@ -170,9 +187,10 @@ func manageServers(dryRun bool, stdout io.Writer, lookPath func(string) (string,
 
 	jobs := buildInstallJobs(serverCatalog)
 	if len(jobs) == 0 {
-		return
+		return true
 	}
 
+	ok = true
 	npmCmd, npmOK := selectNPMManager(lookPath)
 	fmt.Fprintln(stdout, "Installing/updating:")
 	for _, job := range jobs {
@@ -196,11 +214,8 @@ func manageServers(dryRun bool, stdout io.Writer, lookPath func(string) (string,
 			continue
 		}
 
-		cmd := exec.Command(cmdName, args...)
-		cmd.Stdout = stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			fmt.Fprintf(stdout, "    FAILED: %v\n", err)
+		if !runInstallJob(cmdName, args, stdout) {
+			ok = false
 			continue
 		}
 
@@ -209,4 +224,29 @@ func manageServers(dryRun bool, stdout io.Writer, lookPath func(string) (string,
 			fmt.Fprintln(stdout, "    "+formatPathWarning(label, dir))
 		}
 	}
+	return ok
+}
+
+// runInstallJob runs one job's already-built install-or-update command for
+// real, bounded by installTimeout so a hung registry or stalled build
+// cannot block -with-servers indefinitely (finding 11) the way an
+// unbounded exec.Command previously could. Separated from manageServers'
+// loop so the failure-detection contract itself -- a nonzero exit prints
+// "FAILED" and reports ok=false -- can be pinned deterministically (a
+// command name guaranteed absent from PATH) without ever invoking a real
+// package manager; a genuine install succeeding or failing for real stays
+// exercised by hand, same boundary TestManageServersDryRun's own doc
+// comment already draws.
+func runInstallJob(cmdName string, args []string, stdout io.Writer) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), installTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, cmdName, args...)
+	cmd.Stdout = stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(stdout, "    FAILED: %v\n", err)
+		return false
+	}
+	return true
 }

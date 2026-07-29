@@ -3,8 +3,11 @@
 // formatting -- CONTRIBUTING.md's "test the pure logic" boundary.
 // manageServers itself takes an injected lookPath (servers_install.go), so
 // its wiring and skip branches are tested here too with dryRun:true, which
-// never runs a real command; only a non-dry-run job's actual
-// exec.Command(...).Run() stays untested, exercised by hand instead.
+// never runs a real command. runInstallJob's own failure-detection contract
+// (finding 11: FAILED printed and ok=false on a nonzero exit) is pinned
+// with real, deterministic exec.Command targets ("true", a binary name
+// guaranteed absent from PATH) -- only a real go/npm/cargo/bun install
+// succeeding or failing for real stays untested, exercised by hand instead.
 package main
 
 import (
@@ -163,7 +166,7 @@ func TestManageServersDryRun(t *testing.T) {
 	t.Run("nothing on PATH", func(t *testing.T) {
 		t.Parallel()
 		var buf bytes.Buffer
-		manageServers(true, &buf, fakeLookPath(nil))
+		ok := manageServers(true, &buf, fakeLookPath(nil))
 		out := buf.String()
 
 		qt.Assert(t, qt.StringContains(out, "Language servers:"))
@@ -174,6 +177,8 @@ func TestManageServersDryRun(t *testing.T) {
 		// dryRun:true never reaches cmd.Run() for any job -- a "FAILED"
 		// line here would mean the dry-run guard stopped guarding.
 		qt.Assert(t, qt.Not(qt.StringContains(out, "FAILED")))
+		// A skip is not a failure -- there was nothing rgit could have run.
+		qt.Assert(t, qt.IsTrue(ok))
 	})
 
 	t.Run("every manager on PATH", func(t *testing.T) {
@@ -186,7 +191,7 @@ func TestManageServersDryRun(t *testing.T) {
 			"bun": "/x/bun", "npm": "/x/npm", "cargo": "/x/cargo",
 		})
 		var buf bytes.Buffer
-		manageServers(true, &buf, lookPath)
+		ok := manageServers(true, &buf, lookPath)
 		out := buf.String()
 
 		qt.Assert(t, qt.StringContains(out, "found at /x/gopls"))
@@ -198,5 +203,35 @@ func TestManageServersDryRun(t *testing.T) {
 		// Nothing is skipped once every manager answers.
 		qt.Assert(t, qt.Not(qt.StringContains(out, "skip")))
 		qt.Assert(t, qt.Not(qt.StringContains(out, "FAILED")))
+		qt.Assert(t, qt.IsTrue(ok))
+	})
+}
+
+// TestRunInstallJob covers finding 11's failure-detection contract directly:
+// a nonzero exit must print "FAILED" and report false, a clean exit must
+// report true and print nothing extra. A command name guaranteed absent
+// from PATH is a real, deterministic failure -- exec.Command's own "file
+// not found" -- without ever invoking a real package manager; "true" is
+// likewise a real, deterministic success available on every POSIX test
+// runner. A real go/npm/cargo/bun install succeeding or failing for real
+// stays exercised by hand, the same boundary this file's own package doc
+// comment already draws around manageServers.
+func TestRunInstallJob(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nonzero exit reports false and prints FAILED", func(t *testing.T) {
+		t.Parallel()
+		var buf bytes.Buffer
+		ok := runInstallJob("rgit-install-test-binary-does-not-exist", nil, &buf)
+		qt.Assert(t, qt.IsFalse(ok))
+		qt.Assert(t, qt.StringContains(buf.String(), "FAILED"))
+	})
+
+	t.Run("clean exit reports true", func(t *testing.T) {
+		t.Parallel()
+		var buf bytes.Buffer
+		ok := runInstallJob("true", nil, &buf)
+		qt.Assert(t, qt.IsTrue(ok))
+		qt.Assert(t, qt.Not(qt.StringContains(buf.String(), "FAILED")))
 	})
 }
