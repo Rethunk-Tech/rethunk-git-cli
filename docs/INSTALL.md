@@ -282,8 +282,12 @@ rgit diff 2>&1 >/dev/null | grep -q 'ts-only' && echo "degraded" || echo "cross-
 
 ```bash
 rm ~/.local/bin/rgit
-rm -f "${XDG_RUNTIME_DIR:-/tmp}"/rgit-*.sock "${XDG_RUNTIME_DIR:-/tmp}"/rgit-*.lock
+rm -f "${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}"/rgit-*.sock "${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}"/rgit-*.lock
 ```
 
 Those two files exist only for `gopls`; the stdio servers leave nothing behind.
-A `gopls` daemon `rgit` started exits on its own idle timeout.
+A `gopls` daemon `rgit` started exits on its own idle timeout. The lookup order
+above mirrors `rgit`'s own (`internal/lsp/dial.go`'s `runtimeDir`): `$XDG_RUNTIME_DIR`
+first, then Go's `os.TempDir()`, which on POSIX honours `$TMPDIR` before
+falling back to `/tmp` — a host with `$TMPDIR` set and no `$XDG_RUNTIME_DIR`
+puts the socket there, not in `/tmp`.
