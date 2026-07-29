@@ -75,6 +75,15 @@ Notable changes to `rgit`. The format follows
 
 ### Fixed
 
+- Staging a brand new member of a container whose own name is ambiguous no
+  longer falls back to an ordinary insertion. Blob synthesis's container-
+  widening step used to treat every resolution failure alike, so a member
+  of a container name that collides — two duplicate TOML `[[servers]]`
+  headers is the measured shape — produced malformed output instead of the
+  same exit-4 ambiguity a direct anchor resolve already gives. HTML element
+  anchors no longer risk widening a brand new nested element into an
+  unrelated, coincidentally same-named element elsewhere in the document;
+  a fresh HTML insert now always lands at its own sibling position instead.
 - `rgit diff` no longer silently shrinks a file's region set when a name
   `resolve.DeclOrder` emits fails to resolve — a condition that only ever
   signals an internal resolver inconsistency, never a legitimate input.

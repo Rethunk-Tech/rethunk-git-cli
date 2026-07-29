@@ -70,7 +70,10 @@ func (fp *filePlan) classify(ctx context.Context, sess *lsp.Session, root, ancho
 		return op, bytes.Equal(workBytes, headBytes), tsOnly, nil
 
 	case workRes != nil && headRes == nil:
-		workRes, isNestedMember := fp.escalateToContainer(workRes)
+		workRes, isNestedMember, escErr := fp.escalateToContainer(workRes)
+		if escErr != nil {
+			return editOp{}, false, false, escErr
+		}
 		pos, seq := fp.insertionPoint(workRes)
 		tsOnly, err = fp.crossCheck(ctx, sess, root, workRes)
 		if err != nil {
@@ -195,18 +198,46 @@ func lineStart(src []byte, off uint) uint {
 // treatment (no blank line, specs/design.md § Blob synthesis); a sibling method
 // and a whole freshly-escalated container are both ordinary top-level
 // insertions and keep their blank-line padding.
-func (fp *filePlan) escalateToContainer(member *resolve.Resolution) (res *resolve.Resolution, isMember bool) {
+//
+// err is a hard failure resolving member.Container against the worktree --
+// anything other than "no such container" (exitcode.AnchorUnresolvable). In
+// particular an exitcode.AnchorAmbiguous container name (two duplicate TOML
+// "[[servers]]" headers is the measured case) must reach the caller as the
+// same exit-4 ambiguity a direct anchor resolve would give, not be read as
+// "no container, so insert the bare member" -- Resolve's own three-outcome
+// contract (found / not-found / hard-failure) does not collapse just because
+// this call happens to be probing for absence.
+func (fp *filePlan) escalateToContainer(member *resolve.Resolution) (res *resolve.Resolution, isMember bool, err error) {
 	if member.Container == "" {
-		return member, false
+		return member, false, nil
+	}
+	// HTML's own Declaration.Container (lang_html.go) is not an enclosing
+	// ancestor's name -- it is the element's OWN tag, carried only so
+	// containerQualified can build the "tag#id" anchor text this adapter
+	// emits. Resolving it as if it named a real parent matches whatever
+	// element elsewhere happens to share that tag as its id (a coincidence,
+	// not containment), and when that accidental match is itself new, the
+	// escalated branch below would splice in its entire unrelated extent in
+	// place of the member actually named. There is no per-Declaration
+	// ancestor chain recorded to escalate to correctly instead (specs/
+	// design.md § Grammar scope keeps HTML's addressing at element+id, one
+	// level, on purpose), so the only sound fix is to never widen an HTML
+	// member to a "container" at all -- new nested elements insert directly
+	// at their sibling position, uninvolved with this mechanism.
+	if fp.lang.Name() == "html" {
+		return member, false, nil
 	}
 	container := member.Container
 
-	outer, err := fp.workFile.Resolve(container)
-	if err != nil {
-		return member, false
+	outer, werr := fp.workFile.Resolve(container)
+	if werr != nil {
+		if rerr, ok := asResolveError(werr); ok && rerr.Code == exitcode.AnchorUnresolvable {
+			return member, false, nil
+		}
+		return nil, false, werr
 	}
 	if outer.Extent.Start > member.Extent.Start || member.Extent.End > outer.Extent.End {
-		return member, false // a sibling, not a parent -- Go's receiver container
+		return member, false, nil // a sibling, not a parent -- Go's receiver container
 	}
 
 	// Already in HEAD: the ordinary insertion path finds a sibling member
@@ -214,7 +245,7 @@ func (fp *filePlan) escalateToContainer(member *resolve.Resolution) (res *resolv
 	// flush against it -- exactly as it already does in the worktree.
 	if fp.headExists {
 		if _, err := fp.headFile.Resolve(container); err == nil {
-			return member, true
+			return member, true, nil
 		}
 	}
 
@@ -222,7 +253,7 @@ func (fp *filePlan) escalateToContainer(member *resolve.Resolution) (res *resolv
 	// one HEAD does not have, so the whole container is staged instead --
 	// a top-level insertion, not a member.
 	fp.escalated = append(fp.escalated, member.Anchor+" -> "+container)
-	return outer, false
+	return outer, false, nil
 }
 
 // insertionPoint implements design.md's nearest-existing-sibling rule:
