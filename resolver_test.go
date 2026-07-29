@@ -1573,6 +1573,161 @@ func TestResolve_CSSPseudoAnchorShadowsAtRule(t *testing.T) {
 	qt.Assert(t, qt.DeepEquals(order, []string{".btn", "@header"}))
 }
 
+func TestResolve_JSON(t *testing.T) {
+	t.Parallel()
+	// A realistic config-shaped document: a nested object (container
+	// qualification), an array (a leaf, never descended), and a top-level
+	// scalar -- byte extents pinned by running the resolver against this
+	// exact fixture, not derived from the grammar's docs (CONTRIBUTING.md §
+	// Tests).
+	src := []byte(`{
+  "name": "example",
+  "server": {
+    "port": 8080,
+    "host": "localhost"
+  },
+  "list": [1, 2, 3]
+}
+`)
+
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".json", src, "name"), `"name": "example"`))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".json", src, "server.port"), `"port": 8080`))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".json", src, "server.host"), `"host": "localhost"`))
+
+	// Naming the container claims the whole nested object.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".json", src, "server"),
+		"\"server\": {\n    \"port\": 8080,\n    \"host\": \"localhost\"\n  }"))
+
+	// An array is a leaf -- "list" addresses the whole array, but there is
+	// no "list.0" to address one element by.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".json", src, "list"), `"list": [1, 2, 3]`))
+
+	lang, ok := resolve.ForExtension(".json")
+	qt.Assert(t, qt.IsTrue(ok))
+	_, err := resolve.Resolve(lang, src, "list.0")
+	var unresolvable *resolve.ResolveError
+	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
+	qt.Assert(t, qt.Equals(unresolvable.Code, exitcode.AnchorUnresolvable))
+
+	// JSON has no comment syntax, so @header and @imports both resolve to
+	// nothing -- the same degraded-but-not-an-error result Markdown gives a
+	// file with no shebang.
+	_, err = resolve.Resolve(lang, src, "@header")
+	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
+	_, err = resolve.Resolve(lang, src, "@imports")
+	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
+
+	// @toplevel reaches the whole document -- there is no header or import
+	// material to exclude, the same as YAML once its own @header is set
+	// aside.
+	toplevel := mustResolveExt(t, ".json", src, "@toplevel")
+	qt.Assert(t, qt.StringContains(toplevel, `"name": "example"`))
+	qt.Assert(t, qt.StringContains(toplevel, `"list": [1, 2, 3]`))
+
+	// A bare top-level array has no key to address at all.
+	_, ok = resolve.ForExtension(".json")
+	qt.Assert(t, qt.IsTrue(ok))
+	_, err = resolve.Resolve(lang, []byte("[1, 2, 3]\n"), "name")
+	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
+}
+
+func TestResolve_TOML(t *testing.T) {
+	t.Parallel()
+	// A realistic config file: a leading comment, a bare top-level pair, a
+	// "[table]" whose members include one separated from its neighbour by
+	// an own-line comment, and an array of tables ("[[servers]]") whose two
+	// elements share one header spelling -- byte extents pinned by running
+	// the resolver against this exact fixture, not derived from the
+	// grammar's docs (CONTRIBUTING.md § Tests).
+	src := []byte(`# leading comment
+
+title = "example"
+
+[server]
+port = 8080
+
+# comment for host
+host = "localhost"
+
+[[servers]]
+name = "a"
+
+[[servers]]
+name = "b"
+`)
+
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "@header"), "# leading comment"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "title"), `title = "example"`))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "server.port"), "port = 8080"))
+
+	// The comment sitting directly above "host" with no blank line between
+	// them attaches to it -- the shared blank-line rule (docs/ANCHORS.md),
+	// unmodified for TOML.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "server.host"),
+		"# comment for host\nhost = \"localhost\""))
+
+	// Naming a table claims the whole table, header through its last
+	// member -- including the blank line before the next section header,
+	// which the grammar attributes to the table node itself (measured:
+	// "table"'s own EndByte reaches the byte immediately before "[[servers]]"
+	// starts, not the end of "host"'s own line).
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "server"),
+		"[server]\nport = 8080\n\n# comment for host\nhost = \"localhost\"\n\n"))
+
+	// Two "[[servers]]" elements share one header spelling and collide the
+	// same way two same-named Go functions do: ambiguous (exit 4), not a
+	// silent pick of one, both for the table's own anchor and its member's.
+	lang, ok := resolve.ForExtension(".toml")
+	qt.Assert(t, qt.IsTrue(ok))
+	_, err := resolve.Resolve(lang, src, "servers")
+	var ambigErr *resolve.ResolveError
+	qt.Assert(t, qt.ErrorAs(err, &ambigErr))
+	qt.Assert(t, qt.Equals(ambigErr.Code, exitcode.AnchorAmbiguous))
+	qt.Assert(t, qt.DeepEquals(ambigErr.Candidates, []string{"servers#1", "servers#2"}))
+
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "servers#1"), "[[servers]]\nname = \"a\"\n\n"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "servers.name#1"), `name = "a"`))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "servers.name#2"), `name = "b"`))
+
+	// TOML has no include/import directive of any kind.
+	_, err = resolve.Resolve(lang, src, "@imports")
+	var unresolvable *resolve.ResolveError
+	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
+
+	// .toml is claimed.
+	_, ok = resolve.ForExtension(".toml")
+	qt.Assert(t, qt.IsTrue(ok))
+}
+
+// TestResolve_TOMLKeyShapes pins the key spellings tomlKeyName does and does
+// not turn into a Bare name, isolated from the realistic fixture above: a
+// quoted key, a dotted pair key left undecomposed, an inline table left
+// undescended, and an array left undescended.
+func TestResolve_TOMLKeyShapes(t *testing.T) {
+	t.Parallel()
+	src := []byte(`"quoted key" = 1
+inline = { a = 1, b = 2 }
+arr = [1, 2, 3]
+dotted.pair = 1
+`)
+
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "quoted key"), `"quoted key" = 1`))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "inline"), "inline = { a = 1, b = 2 }"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "arr"), "arr = [1, 2, 3]"))
+
+	// A dotted pair key is not decomposed into container.bare -- its Bare is
+	// the full dotted spelling, one predictable rule rather than a second
+	// qualification scheme layered on top of the "[table]"-header one.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "dotted.pair"), "dotted.pair = 1"))
+
+	lang, ok := resolve.ForExtension(".toml")
+	qt.Assert(t, qt.IsTrue(ok))
+	_, err := resolve.Resolve(lang, src, "inline.a")
+	var unresolvable *resolve.ResolveError
+	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
+	qt.Assert(t, qt.Equals(unresolvable.Code, exitcode.AnchorUnresolvable))
+}
+
 func TestResolve_ForPathShebangFallback(t *testing.T) {
 	t.Parallel()
 	// A recognized extension is authoritative and never even looks at

@@ -7,9 +7,11 @@ import (
 	tsts "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 
 	tsmd "github.com/tree-sitter-grammars/tree-sitter-markdown/bindings/go"
+	tstoml "github.com/tree-sitter-grammars/tree-sitter-toml/bindings/go"
 	tsyaml "github.com/tree-sitter-grammars/tree-sitter-yaml/bindings/go"
 	tsbash "github.com/tree-sitter/tree-sitter-bash/bindings/go"
 	tscss "github.com/tree-sitter/tree-sitter-css/bindings/go"
+	tsjson "github.com/tree-sitter/tree-sitter-json/bindings/go"
 )
 
 // The compiled grammars, in one place so each adapter calls a constructor
@@ -52,3 +54,9 @@ func yamlGrammar() *ts.Language { return ts.NewLanguage(tsyaml.Language()) }
 // an upstream gap, not a scoping choice, the same distinction lang_shell.go
 // draws for .zsh.
 func cssGrammar() *ts.Language { return ts.NewLanguage(tscss.Language()) }
+
+// jsonGrammar parses .json.
+func jsonGrammar() *ts.Language { return ts.NewLanguage(tsjson.Language()) }
+
+// tomlGrammar parses .toml.
+func tomlGrammar() *ts.Language { return ts.NewLanguage(tstoml.Language()) }

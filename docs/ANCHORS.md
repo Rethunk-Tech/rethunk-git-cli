@@ -172,7 +172,7 @@ binary or non-parseable files. Name the path instead. Behaviour per kind:
 
 ## Language support
 
-Seven grammars ship, claiming these extensions:
+Nine grammars ship, claiming these extensions:
 
 | Grammar | Extensions | Addresses |
 | --- | --- | --- |
@@ -184,6 +184,8 @@ Seven grammars ship, claiming these extensions:
 | Shell | `.sh`, `.bash` | Functions and top-level variable assignments. Shell has no containers, so a redefined function disambiguates by ordinal the same way two same-named Go functions would |
 | YAML | `.yaml`, `.yml` | Mapping keys, container-qualified one level the same way a Markdown heading is. Sequence items and anything inside a flow-style `{...}`/`[...]` value have no name to address |
 | CSS | `.css` | Selectors and at-rules. `.scss`/`.sass` are deliberately excluded — no SCSS/SASS tree-sitter grammar ships Go bindings ([`specs/design.md`](../specs/design.md#dependencies)) |
+| JSON | `.json` | Object key paths, container-qualified one level the same way a YAML mapping key is. Arrays and non-object documents have nothing to address |
+| TOML | `.toml` | Key paths and `[table]`/`[[array]]` headers, container-qualified one level. Inline tables and arrays have nothing to address inside them |
 
 A `---`-separated multi-document YAML stream has nothing addressable by key at
 all — name the path instead — rather than guessing which document a bare key
@@ -218,6 +220,35 @@ before it ever consults a file's own symbols, so a same-spelled at-rule is
 never reachable by that name under any circumstance — not merely
 deprioritized. It still shows up in `rgit diff`'s ordinary listing under its
 own qualified name; only the anchor spelling `@header` itself is shadowed.
+
+A JSON object's own key paths address the same way a YAML mapping key does:
+`config.json:server.port` claims one nested key, and naming an object claims
+everything under it. JSON has no comment syntax, so `@header` and `@imports`
+both resolve to nothing there, the same degraded-but-not-an-error result
+Markdown gives a file with no shebang. **Breadth overstates the value here**
+— most JSON `rgit` runs against in practice is `package.json`, a tsconfig,
+or a lockfile, all of which want whole-path staging regardless of whether a
+key anchor exists; this grammar earns its place on the narrower case where a
+single nested config key is genuinely the unit that changed, not by making
+every JSON file's full contents individually addressable. An array, at any
+depth, is a leaf — `list` addresses the whole array, never one element.
+
+TOML addresses the same way, with one more form: a `[table]` or
+`[[array]]` header is itself addressable by its own bracket text
+(`config.toml:server` claims the whole table), and its members qualify
+under that same text verbatim — `server.tls`'s own members address as
+`server.tls.<key>`, not a further-nested path, since the header's dotted
+spelling already is the container. Two array-of-tables entries sharing one
+header (`[[servers]]` twice) collide the same way two same-named Go
+functions do — `servers#1`/`servers#2`, ordinal by source order, not by
+array index — the same for their own same-named members. A dotted pair key
+written directly (`a.b = 1`, legal at the document root or inside a table
+body) is not split into its own container and leaf; its bare name is the
+full dotted spelling, one anchor rather than a second qualification scheme.
+Naming a table also stages any blank line between it and the next section
+header — the grammar attributes that gap to the table itself, since nothing
+else could claim it. Inline tables (`{ a = 1 }`) and arrays are leaves,
+never descended into, the same as YAML's flow-style values.
 
 A file whose extension claims no grammar is matched by its shebang instead, so
 an extensionless `bin/` script or git hook is addressable like any other file.

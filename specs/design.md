@@ -444,6 +444,91 @@ per the CSS spec, which requires `@import` before any other rule besides
 spec-conformant position was what standard tooling like `stylelint`
 already enforces upstream of `rgit`.
 
+**JSON and TOML were next in the v2 backlog by measured demand order
+(TODO.md), not re-surveyed independently.** Both reuse the existing
+`Container`/`Bare` machinery unchanged — `Bare` is the leaf key, `Container`
+is the immediate parent, and `index.go`'s `containerQualified` does the
+`Container + "." + Bare` join with no new naming code — but the two grammars
+told two different comment stories, measured separately rather than assumed
+symmetric.
+
+**JSON has no comment syntax at all.** Measured directly against
+`tree-sitter-json`'s own `node-types.json`: no "comment" node kind is
+declared anywhere in the grammar. `IsComment` is unconditionally `false`,
+and `HeaderKinds`/`ImportKinds` both return `nil` for the same underlying
+reason — there is nothing a leading comment run or an import statement could
+ever be, not merely nothing observed in a fixture.
+
+**JSON's grammar declares real fields, unusually among this resolver's
+adapters.** Measured: a `"pair"` node's `"key"` and `"value"` children are
+each reachable by `ChildByFieldName`, unlike CSS, TOML, or YAML's
+field-less, positional grammars. The key field is always a `"string"` node
+wrapping a single `"string_content"` child holding the unquoted text
+directly (`"name"` parses as `string` → `string_content` spanning exactly
+`name`) — no manual quote-stripping is needed the way YAML's quoted keys
+require, an artifact of JSON's stricter, simpler string grammar. An empty
+string key (`""`) has no `string_content` child at all and is left
+unaddressable rather than resolved to an empty `Bare`.
+
+**A JSON document whose root is not an object has nothing to address.** A
+bare top-level array or scalar are both legal JSON; `Declarations` returns
+nil for either, the same refusal `lang_yaml.go` gives a document with no
+top-level mapping. An array value at any depth is a leaf, never descended
+into — no measured demand for per-index addressing, and the JSON files
+`rgit` actually runs against in practice — `package.json`, tsconfig,
+lockfiles — mostly want whole-path staging regardless (TODO.md's own
+caveat, carried into `docs/ANCHORS.md`); this adapter earns its keep on the
+config-file case where one nested key is the unit that changes, not by
+making every JSON file's full breadth addressable.
+
+**TOML's grammar declares no fields at all, the same as CSS.** Measured
+against `tree-sitter-toml`'s own `node-types.json`: `"document"`, `"pair"`,
+`"table"`, and `"table_array_element"` all report an empty `"fields"`
+object — every shape `lang_toml.go` reads is by node kind and position.
+
+**A `[table]` header and a document's own top-level pairs are siblings, not
+nested by bracket path.** Measured: `document`'s only allowed children are
+`pair`, `table`, and `table_array_element` — a second header sharing a
+dotted prefix (`[server.tls]` after `[server]`) is its own separate
+top-level `table` node, not nested inside the first. `Container` for a
+table's members is therefore the header's own written text, taken verbatim
+(`"server.tls"` for a `dotted_key` header, `"server"` for a `bare_key` one)
+— the grammar already hands over exactly the dotted string the pre-decided
+design calls "the dotted parent path," with no segment-joining code needed.
+A `table`/`table_array_element` is itself reported as its own Declaration
+(Bare = its header text, Container empty, Node = the whole table) in
+addition to its members, the same "the container is also addressable by
+its own name" convention `lang_yaml.go`'s mapping keys already follow.
+
+**A dotted pair key (`a.b = 1`, legal directly at the document root or
+inside a table body) is deliberately not decomposed.** Its `Bare` is read
+as the full dotted spelling, one string, rather than split into its own
+container/leaf pair — the same simplification `lang_css.go`'s comma-joined
+`.a, .b` selector list makes: one predictable rule, not a second
+qualification scheme layered in parallel with the `[table]`-header one, for
+a shape with no measured demand for finer addressing.
+
+**A `table`/`table_array_element` node's own extent absorbs the blank line
+before the next section header.** Measured directly: a `table` node's own
+`EndByte()` reaches the byte immediately before the next `[table]`/
+`[[array]]` header begins, not the end of its last member's own line —
+staging a whole table by name therefore carries that trailing blank line
+along. Left as the grammar's own honest boundary rather than trimmed: there
+is no neighbor it could belong to instead, the table is genuinely the last
+thing before that gap.
+
+**Two `[[servers]]` elements sharing one header spelling collide the same
+way two same-named Go functions do, both for the table's own anchor and its
+members'.** No TOML-specific disambiguation exists or was built — the
+existing `#N` ordinal machinery (`index.go`) already counts
+`containerQualified` names project-wide, so `servers#1`/`servers#2` and
+`servers.name#1`/`servers.name#2` fall out unchanged, correctly interleaved
+in source order since both the table's own Declaration and its members are
+appended to the same list in parse order. This is a real, documented sharp
+edge (`docs/ANCHORS.md`): the ordinal says nothing about array position, so
+staging "the second `servers` entry" by ordinal requires already knowing
+source order.
+
 **Pseudo-anchors shadow a same-named at-rule unconditionally.** A generic
 at-rule can be spelled anything, including `@header` — CSS's own at-rule
 keyword grammar has no reserved-word list — so `auth.css:@header` genuinely
@@ -520,6 +605,8 @@ built.
 | `github.com/tree-sitter/tree-sitter-bash` | v0.25.1 | Shell function/variable anchors; import path is `<module>/bindings/go` |
 | `github.com/tree-sitter-grammars/tree-sitter-yaml` | v0.7.2 | YAML key-path anchors; import path is `<module>/bindings/go` |
 | `github.com/tree-sitter/tree-sitter-css` | v0.25.0 | CSS selector/at-rule anchors; import path is `<module>/bindings/go` |
+| `github.com/tree-sitter/tree-sitter-json` | v0.24.8 | JSON key-path anchors; import path is `<module>/bindings/go`; was already an indirect requirement, promoted to direct |
+| `github.com/tree-sitter-grammars/tree-sitter-toml` | v0.7.0 | TOML key-path anchors; import path is `<module>/bindings/go` |
 
 **Markdown earns its place two ways, both verified against the grammar's own
 `node-types.json`, not assumed.** It is the one language present in every
@@ -665,3 +752,27 @@ isolation: **13568 KB**) and after adding `tree-sitter-css` (**13696 KB**) —
 the smallest single-grammar jump recorded here, smaller even than YAML's
 +196 KB, because CSS's own grammar and external scanner are simply the
 smallest of the six measured so far.
+
+**JSON and TOML were each measured in isolation against the same
+post-CSS baseline (13696 KB), not only combined**, by building the binary
+with one adapter's import and grammar constructor temporarily removed and
+restored afterward — the same `go tool nm` check as every grammar above
+confirms neither pulls in an unused second grammar (JSON: exactly
+`tree_sitter_json` and its cgo glue, no external scanner at all; TOML:
+`tree_sitter_toml`, its external scanner's five entry points, and the cgo
+glue).
+
+| Addition | Stripped size | Delta |
+| --- | --- | --- |
+| Baseline (post-CSS) | 13696 KB | — |
+| + JSON only | 13708 KB | +12 KB, +0.1% |
+| + TOML only | 13728 KB | +32 KB, +0.2% |
+| + both (this commit) | 13740 KB | +44 KB, +0.3% |
+
+JSON's own grammar has no external scanner at all (confirmed by the `nm`
+check above), which is why it is the cheapest single-grammar addition
+measured in this record so far — smaller even than CSS's +128 KB. TOML's
+external scanner (multiline-string and indentation handling) accounts for
+the rest of the combined total tracking closely to the sum of the two
+isolated deltas (12 + 32 = 44), meaning neither adapter pulls in anything
+the other did not already need on its own.
