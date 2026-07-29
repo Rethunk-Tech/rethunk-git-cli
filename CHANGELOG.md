@@ -131,6 +131,11 @@ Notable changes to `rgit`. The format follows
   language-server label longer than the old fixed 24-character field pushed
   its own path out of line, and `[ok]` / `MISSING` being different widths
   shifted the name column by status. Both are padded now.
+- `rgit blame --` and `rgit log --` no longer panic. A bare `--` is consumed
+  whole by argument classification's own rule 1 ("everything after `--` is
+  a pathspec, always") and yields nothing to classify; both commands now
+  report the same "requires a `FILE:SYMBOL` anchor" refusal, exit 129, that
+  a missing positional already gets.
 
 ## [1.0.0] — 2026-07-28
 

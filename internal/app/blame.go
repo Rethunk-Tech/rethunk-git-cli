@@ -79,6 +79,14 @@ func runBlame(ctx context.Context, args []string, stdout, stderr io.Writer) exit
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.InvalidUsage
 	}
+	if len(classified) == 0 {
+		// A bare "--" is consumed whole by rule 1 (everything after "--" is
+		// a pathspec, always) and classifies to nothing -- the same refusal
+		// as no positional at all, not a classified[0] panic.
+		fmt.Fprintln(stderr, "rgit: blame requires a FILE:SYMBOL anchor")
+		fmt.Fprint(stderr, blameHelp)
+		return exitcode.InvalidUsage
+	}
 	c := classified[0]
 	if c.Kind != cli.KindAnchor {
 		fmt.Fprintln(stderr, "rgit: blame requires a FILE:SYMBOL anchor, not a plain path")

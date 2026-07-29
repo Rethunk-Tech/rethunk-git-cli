@@ -33,6 +33,17 @@ func TestRun_LogHelpAndUsage(t *testing.T) {
 		qt.Assert(t, qt.StringContains(stderr, "not a plain path"))
 	})
 
+	// TestRun_LogHelpAndUsage/"bare -- does not panic" mirrors blame's own
+	// regression: a lone "--" is consumed whole by cli.ClassifyArgs's rule 1
+	// and yields zero classifications, so indexing classified[0] blindly
+	// panicked instead of refusing like any other non-anchor positional.
+	t.Run("bare -- does not panic", func(t *testing.T) {
+		chdirTempRepo(t)
+		_, stderr, code := runApp(t, "log", "--")
+		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+		qt.Assert(t, qt.StringContains(stderr, "requires a FILE:SYMBOL anchor"))
+	})
+
 	t.Run("extra positional is refused", func(t *testing.T) {
 		chdirTempRepo(t)
 		_, stderr, code := runApp(t, "log", "a.go:A", "a.go:B")
