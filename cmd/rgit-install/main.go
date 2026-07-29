@@ -55,6 +55,7 @@ const sqlAdapterPackageName = "sqlgrammar"
 func main() {
 	dryRun := flag.Bool("dry-run", false, "print what would happen without building or installing")
 	prefixFlag := flag.String("prefix", "", "install directory (default: $GOBIN, else $(go env GOPATH)/bin)")
+	withServers := flag.Bool("with-servers", false, "also install/update the language servers rgit's LSP cross-check can use (shells out to go install/npm|bun/cargo; see docs/INSTALL.md)")
 	flag.Parse()
 
 	repoRoot, err := resolveRepoRoot()
@@ -85,6 +86,14 @@ func main() {
 		fmt.Println(" ", msg)
 	} else {
 		fmt.Println("No SQL adapter package present yet; building without SQL support.")
+	}
+
+	// Independent of rgit's own build/install below -- runs before the
+	// dry-run early return too, so `-dry-run -with-servers` previews both.
+	// A plain rgit-install (flag unset) never calls this, so its existing
+	// behavior is unchanged (the opt-in decision docs/INSTALL.md records).
+	if *withServers {
+		manageServers(*dryRun, os.Stdout)
 	}
 
 	ver := gitVersion(repoRoot)
