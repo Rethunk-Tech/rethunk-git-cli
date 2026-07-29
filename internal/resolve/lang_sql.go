@@ -103,10 +103,8 @@ func (l *sqlLanguage) buildTagGated() bool { return true }
 // ALTER, INSERT, SELECT, and CREATE SCHEMA all parse but declare no
 // persistent named object the way the six covered kinds do; CREATE DOMAIN
 // does not even parse under this grammar version (it produces an ERROR
-// node). None of the excluded kinds clears the "named nested
-// declarations do not clear the bar" reasoning specs/design.md § Grammar
-// scope already applies elsewhere in this resolver -- closed as not worth
-// building for v1, not deferred.
+// node). None of the excluded kinds clears the measured-demand bar
+// specs/design.md § Grammar scope holds every addressable shape to.
 func (l *sqlLanguage) Declarations(src []byte, root *ts.Node) []Declaration {
 	var decls []Declaration
 	for _, child := range namedChildren(root) {

@@ -99,8 +99,7 @@ func importsExtent(lang Language, src []byte, root *ts.Node) (Extent, bool) {
 // like shell's, where an import is a node kind shared with everything else,
 // distinguished only by its own text — or a plain ImportKinds membership
 // test otherwise. Built once per call rather than re-checked per node, so
-// the common (kind-only) path still pays for exactly one map allocation,
-// same as before this existed.
+// the common (kind-only) path pays for exactly one map allocation.
 func importPredicate(lang Language, src []byte) func(*ts.Node) bool {
 	if m, ok := lang.(ImportMatcher); ok {
 		return func(n *ts.Node) bool { return m.IsImport(src, n) }

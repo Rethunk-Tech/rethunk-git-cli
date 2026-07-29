@@ -63,7 +63,7 @@ func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) exitc
 		fmt.Fprintln(stderr, "rgit: --staged and --unstaged are mutually exclusive")
 		return exitcode.InvalidUsage
 	}
-	// Same contradiction commit.go already refuses (A-06): machine-readable
+	// Same contradiction commit.go already refuses: machine-readable
 	// output and no output at all, together, would leave a script parsing
 	// an empty stream it cannot tell apart from "nothing to commit".
 	if f.porcelain && f.quiet {

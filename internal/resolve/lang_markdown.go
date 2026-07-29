@@ -189,9 +189,8 @@ func headingText(src []byte, heading *ts.Node) string {
 // see atxHeadingOf), so "first declaration" is always the first actual
 // heading, and the shared formula computes "first heading through end of
 // document" -- everything the lede is not. pseudo.go dispatches here via a
-// type assertion on *mdLanguage rather than a new Language method, so Go,
-// TypeScript, and Python's own @toplevel stay on the shared code path,
-// byte-identical to before this existed.
+// type assertion on *mdLanguage rather than a new Language method, so
+// every other grammar's own @toplevel stays on the shared code path.
 //
 // found is false when there is no lede to stage: a document with no
 // content before its first heading (or none at all after frontmatter) has

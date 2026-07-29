@@ -22,13 +22,12 @@ func (c *countingRWC) Close() error {
 	return c.Conn.Close()
 }
 
-// TestNewClient_ClosesConnExactlyOnceOnHandshakeFailure pins A-25's chosen
-// single owner: NewClient closes the connection on a handshake failure
-// (Initialize/Initialized erroring), and closes it exactly once. Callers
+// TestNewClient_ClosesConnExactlyOnceOnHandshakeFailure pins the single
+// owner of a failed handshake: NewClient closes the connection when
+// Initialize/Initialized errors, and closes it exactly once. Callers
 // (dial.go's dialSocket and dialStdio) must not close it again on this
-// path -- dialSocket's own former redundant close is what A-25 found and
-// removed. An expired context against an unresponsive peer forces
-// Initialize to fail fast without depending on any real server.
+// path. An expired context against an unresponsive peer forces Initialize
+// to fail fast without depending on any real server.
 func TestNewClient_ClosesConnExactlyOnceOnHandshakeFailure(t *testing.T) {
 	clientConn, serverConn := net.Pipe()
 	defer func() { _ = serverConn.Close() }()
@@ -85,10 +84,9 @@ func TestLanguageKindFor(t *testing.T) {
 		{"foo.css", protocol.LanguageKindCSS, true},
 		{"foo.md", protocol.LanguageKindMarkdown, true},
 		{"foo.markdown", protocol.LanguageKindMarkdown, true},
-		// A-27: an extension with no mapping must report ok=false, never
-		// a silent wrong default -- there was previously no test pinning
-		// this because the old default (LanguageKindTypeScript) always
-		// "succeeded", which is exactly the bug.
+		// An extension with no mapping must report ok=false, never a
+		// silent default: a default that always "succeeds" would open
+		// every unknown file under some other language's server.
 		{"foo.unknown", "", false},
 		{"foo", "", false},
 	}
@@ -101,8 +99,8 @@ func TestLanguageKindFor(t *testing.T) {
 	}
 }
 
-// TestFlatten_UnknownShapeIsNotOK pins A-26: a DocumentSymbolResult that
-// matches neither known union member (here, the nil interface an explicit
+// TestFlatten_UnknownShapeIsNotOK pins that a DocumentSymbolResult
+// matching neither known union member (here, the nil interface an explicit
 // LSP "null" response decodes to -- go.lsp.dev/protocol's own
 // unmarshalDocumentSymbolResultValue sets exactly this on a JSON "null")
 // must report ok=false, not a silent empty success indistinguishable from
@@ -122,11 +120,11 @@ func TestFlatten_UnknownShapeIsNotOK(t *testing.T) {
 	}
 }
 
-// TestFlatten_RecognizedEmptyIsStillOK is the case A-26 must not break: a
+// TestFlatten_RecognizedEmptyIsStillOK is the other side of that rule: a
 // recognized shape with genuinely zero symbols (an empty outline, not an
 // unrecognized one) still reports ok=true, so a real empty file does not
-// start erroring just because this package got stricter about shapes it
-// cannot account for.
+// error just because this package is strict about shapes it cannot
+// account for.
 func TestFlatten_RecognizedEmptyIsStillOK(t *testing.T) {
 	syms, ok := flatten(protocol.DocumentSymbolSlice{})
 	if !ok {

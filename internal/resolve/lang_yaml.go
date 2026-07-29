@@ -246,7 +246,7 @@ func blockMappingIn(blockNode *ts.Node) (*ts.Node, bool) {
 // spelling for), so `jobs.build.steps` addresses the whole list and nothing
 // finer. Flow-style values (`{a: 1}`, `[1, 2]`) are likewise never
 // descended into, at any depth: there is no measured demand for it in the
-// CI/compose files this grammar was added for, and stopping at "flow style
+// CI/compose files this grammar targets, and stopping at "flow style
 // is a leaf" is one rule rather than a second recursion to maintain in
 // parallel with the block-style one.
 func mappingDeclarations(mapping *ts.Node, container string, src []byte) []Declaration {

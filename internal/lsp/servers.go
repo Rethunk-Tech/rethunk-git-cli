@@ -81,7 +81,7 @@ var servers = map[string]serverSpec{
 	// yaml, json, css, and markdown's servers hold to the same bar as the
 	// four above: their documentSymbol ranges match this resolver's own
 	// declOnlyExtent byte-for-byte on real fixtures (specs/design.md §
-	// Cross-check survey), including the doc-comment-exclusion case (a
+	// Cross-check coverage), including the doc-comment-exclusion case (a
 	// leading comment with no blank line before the symbol) -- not merely
 	// "it has a --stdio flag".
 	"yaml": {

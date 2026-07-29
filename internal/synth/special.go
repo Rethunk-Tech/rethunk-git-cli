@@ -14,7 +14,8 @@ import (
 // PathError is a target refused before any resolution was attempted on
 // it: a symlink, gitlink, or binary path a symbol anchor cannot address
 // (exit 10), a gitignored-and-untracked path (exit 7), or a symbol anchor
-// naming a language with no v1 grammar (exit 9). docs/ANCHORS.md and
+// naming a language with no grammar in this build (exit 9).
+// docs/ANCHORS.md and
 // docs/USAGE.md's exit-code table are authoritative; Code is set to
 // match directly rather than requiring callers to pattern-match text.
 type PathError struct {

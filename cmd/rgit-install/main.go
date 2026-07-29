@@ -224,10 +224,9 @@ func runPrereqChecks() (checks []prereq.Check, fatal error) {
 
 // prereqFatal decides which failing check aborts the install and with what
 // message. go, git, cgo, and the C compiler are each fatal on their own;
-// first-failure-wins ordering matches runPrereqChecks' own historical
-// sequence, so a caller with several things missing at once sees the same
-// single root cause it always has rather than a message that shuffles
-// depending on which check happened to run last.
+// first-failure-wins follows runPrereqChecks' own order, so a caller with
+// several things missing at once always sees the same single root cause
+// rather than a message that shuffles with which check ran last.
 func prereqFatal(goCheck, gitCheck, cgoCheck, ccCheck prereq.Check, cc string) error {
 	switch {
 	case !goCheck.OK:
@@ -308,9 +307,8 @@ func parseSQLAdapterListing(out []byte) (dir string, ok bool) {
 // generateSQLParser produces ABI 15 C sources for the SQL grammar into
 // pkgDir/csrc, when it can. It never fails the install: a missing
 // tree-sitter CLI, an unresolvable grammar module, or a generation error
-// all fall back to reporting why and continuing without SQL -- the
-// pre-decided call that a user without the tree-sitter CLI still gets a
-// working rgit.
+// all fall back to reporting why and continuing without SQL, so a user
+// without the tree-sitter CLI still gets a working rgit.
 //
 // lookPath is the one seam worth injecting here: it makes the fast,
 // no-network "tree-sitter isn't installed" path -- the common case on a

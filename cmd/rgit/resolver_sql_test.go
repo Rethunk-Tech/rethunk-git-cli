@@ -146,8 +146,8 @@ func TestResolve_SQLExtensionsClaimsOnlySQL(t *testing.T) {
 	t.Parallel()
 	_, ok := resolve.ForExtension(".sql")
 	qt.Assert(t, qt.IsTrue(ok))
-	// .psql/.pgsql/.ddl are all real conventions in the wild, but the
-	// pre-decided scope for this adapter claims ".sql" alone.
+	// .psql/.pgsql/.ddl are all real conventions in the wild, but this
+	// adapter claims ".sql" alone.
 	for _, ext := range []string{".psql", ".pgsql", ".ddl"} {
 		_, ok := resolve.ForExtension(ext)
 		qt.Assert(t, qt.IsFalse(ok))

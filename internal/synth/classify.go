@@ -235,11 +235,12 @@ func (fp *filePlan) escalateToContainer(member *resolve.Resolution) (res *resolv
 // entries.
 //
 // seq is the anchor's own start offset in the worktree, which is what
-// mergeInsertTies orders same-offset insertions by. Declaration order and
-// byte order agree, so this matches the old index-based seq for every
-// declaration -- but a pseudo-anchor is not a declaration and so has no
-// index at all. Ranking it by a missing index put @header after every
-// symbol, writing the package clause at the bottom of a new file.
+// mergeInsertTies orders same-offset insertions by. A byte offset rather
+// than a declaration index because a pseudo-anchor is not a declaration
+// and has no index at all: ranking it by a missing index puts @header
+// after every symbol, writing the package clause at the bottom of a new
+// file. Declaration order and byte order agree, so ordinary declarations
+// rank identically either way.
 func (fp *filePlan) insertionPoint(res *resolve.Resolution) (pos uint, seq int) {
 	seq = int(res.Extent.Start)
 

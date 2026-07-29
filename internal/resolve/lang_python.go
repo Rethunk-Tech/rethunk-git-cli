@@ -57,8 +57,8 @@ func (p *pythonLanguage) MembersSitFlush() bool { return false }
 // fallback to apply to.
 func (p *pythonLanguage) AllowsRawHeadingFallback() bool { return false }
 
-// Declarations walks only the root's named children — v1 addresses top-level
-// symbols; class bodies are not descended into, matching the Go and
+// Declarations walks only the root's named children: top-level symbols
+// alone, with class bodies never descended into, matching the Go and
 // TypeScript adapters.
 func (p *pythonLanguage) Declarations(src []byte, root *ts.Node) []Declaration {
 	var decls []Declaration

@@ -190,7 +190,7 @@ func declarationFor(outer, target *ts.Node, src []byte) []Declaration {
 		return declOne(namedDecl(src, outer, target))
 	case "enum_declaration":
 		// name field "identifier"; body is enum_body. Members (Color.Red)
-		// are out of scope for v1 — an enum's own values are not addressed,
+		// are not addressable — an enum's own values are not addressed,
 		// only the enum itself, matching how enum_body is never descended
 		// into below.
 		return declOne(namedDecl(src, outer, target))

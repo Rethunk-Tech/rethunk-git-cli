@@ -555,10 +555,10 @@ func F() int { return Alpha }
 
 func TestResolve_GoContainerMembers(t *testing.T) {
 	t.Parallel()
-	// Struct fields and interface methods were both exit 3 before this; one
-	// fixture exercises the addressable and the deliberately-unaddressable
-	// shapes together, including a member reached inside a grouped
-	// `type ( ... )` block.
+	// Struct fields and interface methods are addressable one level in.
+	// One fixture exercises the addressable and the deliberately-
+	// unaddressable shapes together, including a member reached inside a
+	// grouped `type ( ... )` block.
 	src := []byte(`package p
 
 type S struct {
@@ -616,7 +616,7 @@ func (c *Collide) Get() int { return c.Get }
 
 func TestResolve_UnsupportedLanguage(t *testing.T) {
 	t.Parallel()
-	// A symbol anchor on a file whose language has no v1 grammar is the
+	// A symbol anchor on a file whose language has no grammar is the
 	// caller's exit 9 (docs/ANCHORS.md § Language support); the resolver's
 	// contribution is just reporting the extension unclaimed.
 	_, ok := resolve.ForExtension(".rs")
@@ -1012,9 +1012,9 @@ func TestResolve_TypeScriptHeaderWithoutShebang(t *testing.T) {
 	t.Parallel()
 	// TypeScript has no package clause or other "this precedes code"
 	// marker; a licence/copyright block at the top of a file with no
-	// shebang is an ordinary "comment" node like any other, so @header
-	// resolved to nothing before this -- HeaderKinds() named only
-	// hash_bang_line. Matching Python's "comment" header kind fixes it.
+	// shebang is an ordinary "comment" node like any other. TypeScript's
+	// HeaderKinds() therefore names "comment" alongside hash_bang_line, as
+	// Python's does, or @header would resolve to nothing in such a file.
 	src := []byte(`// Copyright 2026 Example Corp.
 // SPDX-License-Identifier: MIT
 
@@ -1415,8 +1415,8 @@ foo() {
 
 	// Both surface forms of a function definition are addressable by bare
 	// name, and the flat namespace disambiguates a redefinition with the
-	// same #N ordinal every other language already uses -- nothing shell-
-	// specific was added for it.
+	// same #N ordinal every other language uses -- no shell-specific
+	// disambiguation of its own.
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".sh", src, "foo#1"), "foo() {\n  echo \"foo\"\n}"))
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".sh", src, "foo#2"), "foo() {\n  echo \"redefined foo\"\n}"))
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".sh", src, "bar"), "function bar {\n  echo \"bar\"\n}"))

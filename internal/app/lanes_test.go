@@ -1,5 +1,5 @@
-// Unit-lane coverage for guarantees that used to be provable only by
-// building and execing the real binary (cmd/rgit/rgit_e2e_test.go).
+// Unit-lane coverage for guarantees that otherwise need the real binary
+// built and exec'd (cmd/rgit/rgit_e2e_test.go).
 // app.Run already shells out to the real git binary for everything git
 // itself does (openRepo, synth.Stage, and commit's own gitx.Repo.Commit
 // call), so a real hook fires, a real index updates, and a real git
@@ -167,12 +167,11 @@ func TestRun_ResetAuthorForwarded(t *testing.T) {
 		gitOut(t, dir, "log", "-1", "--format=%cn")))
 }
 
-// TestRun_DiffUntrackedFileAndModeChange closes a coverage gap `rgit diff`
-// had at the unit level: no app.Run case exercised an untracked file
-// (internal/diff's buildUntrackedReport) or a mode-only change read from
-// either the worktree or the index (formatModeNote, and contentSide.mode on
-// indexSide specifically, which only --staged/--unstaged ever select). All
-// four were previously provable only through the e2e binary.
+// TestRun_DiffUntrackedFileAndModeChange holds `rgit diff`'s untracked and
+// mode-only paths at the unit level: an untracked file (internal/diff's
+// buildUntrackedReport) and a mode-only change read from either the
+// worktree or the index (formatModeNote, and contentSide.mode on indexSide
+// specifically, which only --staged/--unstaged ever select).
 func TestRun_DiffUntrackedFileAndModeChange(t *testing.T) {
 	dir := chdirTempRepo(t)
 	writeAppFile(t, dir, "untracked.go", "package a\n\nfunc U() int { return 1 }\n")

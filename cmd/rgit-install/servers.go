@@ -43,7 +43,7 @@ const (
 //
 // taplo is the one entry below with no counterpart in
 // internal/lsp/servers.go, and never will have one: specs/design.md's
-// cross-check survey measured its TOML ranges genuinely disagreeing with
+// cross-check coverage measured its TOML ranges genuinely disagreeing with
 // this resolver's own extents on an ordinary nested table, so it is
 // installed here for a user's own editor tooling only, not for rgit's own
 // cross-check. TestServerCatalog_MatchesLSPServers documents this as its

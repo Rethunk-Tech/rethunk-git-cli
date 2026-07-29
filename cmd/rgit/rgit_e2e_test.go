@@ -451,8 +451,8 @@ func TestCommit_PushAfterSuccessfulCommit(t *testing.T) {
 	qt.Assert(t, qt.Equals(strings.TrimSpace(gittest.Git(t, remote, "rev-parse", branch)), local))
 }
 
-// TestCommit_GoTSPythonSymbolGranularityInOneInvocation covers three of the
-// v1 grammars, not every one of them: the guarantee under test is that
+// TestCommit_GoTSPythonSymbolGranularityInOneInvocation covers three
+// grammars, not every one of them: the guarantee under test is that
 // symbol granularity holds across DIFFERENT languages within a single
 // invocation, not any one grammar's own resolution behaviour, which
 // resolver_test.go and index_test.go already cover per language. Go, TS and
@@ -972,8 +972,8 @@ func TestOutput_OrderedByPathThenPosition(t *testing.T) {
 
 func TestHelp_TopLevelExitsZeroOnEverySpelling(t *testing.T) {
 	t.Parallel()
-	// specs/design.md:231 counts "--help tokens" per flag library as a
-	// selection criterion; all three spellings -- bare "--help", "-h", and
+	// specs/design.md § CLI handling counts "--help tokens" per flag
+	// library as a selection criterion; all three spellings -- bare "--help", "-h", and
 	// "help" -- must print the same top-level help to stdout and exit 0,
 	// not fall into the unknown-command branch (exit 129).
 	repo, _ := gittest.New(t)

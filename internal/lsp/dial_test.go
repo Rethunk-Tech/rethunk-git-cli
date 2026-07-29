@@ -116,14 +116,14 @@ func TestTrySpawnDaemon_StartFailureIsToleratedSilently(t *testing.T) {
 	}
 }
 
-// TestDialStdio_CloseTearsDownConnectionThenProcess pins A-11: closing a
-// stdio client must close the connection -- letting jsonrpc2's own read
-// goroutine and the pipe's EOF-then-close sequence shut down cleanly --
-// before killing the subprocess, not merely kill the process out from
-// under a connection that was never closed at all. A query issued after
-// Close is the observable proof the connection actually came down, not
-// just the process: the original bug left both the jsonrpc2.Conn and the
-// pipes open forever, since the kill-only closeFn touched neither.
+// TestDialStdio_CloseTearsDownConnectionThenProcess pins the teardown
+// order: closing a stdio client must close the connection -- letting
+// jsonrpc2's own read goroutine and the pipe's EOF-then-close sequence
+// shut down cleanly -- before killing the subprocess, not kill the
+// process out from under a connection that was never closed at all. A
+// query issued after Close is the observable proof the connection came
+// down and not just the process; a kill-only closeFn would leave both the
+// jsonrpc2.Conn and the pipes open forever.
 //
 // Runs against a real, installed stdio server (CONTRIBUTING.md's "prefer
 // the real dependency over a double" rule -- a fake transport would only

@@ -158,7 +158,7 @@ func (c *Client) DocumentSymbols(ctx context.Context, path string, src []byte) (
 		// protocol ever grows a third variant, a shape this package does
 		// not understand. Either way this must not silently read as "the
 		// file genuinely has zero symbols" -- that is exactly the class
-		// of failure specs/design.md's cross-check survey and this
+		// of failure specs/design.md's cross-check coverage and this
 		// repo's own posture (fail loudly, never continue on a shape you
 		// cannot account for) both warn against, and it would be
 		// indistinguishable from a real empty outline downstream. Erring
@@ -177,7 +177,7 @@ func (c *Client) DocumentSymbols(ctx context.Context, path string, src []byte) (
 // extend one line past their own last real content, through the single
 // blank line separating them from a following sibling key at the same
 // level -- not block-scalar-specific: a plain-scalar sibling reproduces it
-// identically (specs/design.md's cross-check survey). tree-sitter-yaml's
+// identically (specs/design.md § Cross-check coverage). tree-sitter-yaml's
 // own node never does this, stopping at its own last real content line
 // instead.
 //
