@@ -98,6 +98,17 @@ func main() {
 
 	fmt.Println("Building...")
 	bin, cleanup, err := buildBinary(repoRoot, sql, ver)
+	if err != nil && sql {
+		// generateSQLParser only proves the C it wrote is well-formed enough
+		// to reach the compiler; a cgo build can still fail past that (a
+		// grammar.js version mismatch, a toolchain quirk). docs/INSTALL.md
+		// promises a working rgit without the tree-sitter CLI -- keep that
+		// promise here too rather than dying with SQL as the only path tried.
+		cleanup()
+		fmt.Fprintf(os.Stderr, "rgit-install: SQL build failed, retrying without SQL support: %v\n", err)
+		sql = false
+		bin, cleanup, err = buildBinary(repoRoot, sql, ver)
+	}
 	if err != nil {
 		fatalf("build failed: %v", err)
 	}
