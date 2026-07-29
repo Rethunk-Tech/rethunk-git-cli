@@ -10,6 +10,7 @@ package app
 import (
 	"context"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -40,13 +41,7 @@ func TestCompletionSubcommands(t *testing.T) {
 		if aliases[tok] {
 			continue
 		}
-		found := false
-		for _, name := range documented {
-			if name == tok {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(documented, tok)
 		if !found {
 			t.Errorf("rgitSubcommands has %q, which topLevelHelp does not document as a subcommand and is not a known top-level alias/flag -- stale entry?", tok)
 		}
@@ -58,16 +53,16 @@ func TestCompletionSubcommands(t *testing.T) {
 func subcommandNamesFromHelp(t *testing.T, help string) []string {
 	t.Helper()
 	const marker = "Commands:\n"
-	start := strings.Index(help, marker)
-	if start < 0 {
+	_, after, ok := strings.Cut(help, marker)
+	if !ok {
 		return nil
 	}
-	rest := help[start+len(marker):]
+	rest := after
 	if end := strings.Index(rest, "\n\n"); end >= 0 {
 		rest = rest[:end]
 	}
 	var names []string
-	for _, line := range strings.Split(rest, "\n") {
+	for line := range strings.SplitSeq(rest, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) > 0 {
 			names = append(names, fields[0])
@@ -137,7 +132,7 @@ func TestCompletionFlags_MatchLiveFlagSets(t *testing.T) {
 
 func tokenSet(s string) map[string]bool {
 	out := map[string]bool{}
-	for _, tok := range strings.Fields(s) {
+	for tok := range strings.FieldsSeq(s) {
 		out[tok] = true
 	}
 	return out
