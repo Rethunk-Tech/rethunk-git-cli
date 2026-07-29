@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 )
@@ -190,5 +191,30 @@ func TestCommittableBase_UnbornBranchFallsBackToEmptyTree(t *testing.T) {
 	const emptyTreeSHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 	if base != emptyTreeSHA {
 		t.Errorf("base = %q; want the empty tree %q, not a literal \"HEAD\" (branch is unborn)", base, emptyTreeSHA)
+	}
+}
+
+// TestExtractRangeToken_DetectsRangeNotAPath covers ExtractRangeToken's
+// main cold path (measured at 44.4% under -short -coverpkg=./...): a
+// "..2-shaped" argument that does not exist as a path in the worktree or
+// HEAD is the range token, pulled out of args rather than left for
+// cli.ClassifyArgs to fail on. The real GitPathChecker drives this rather
+// than a stand-in -- CONTRIBUTING's "prefer the real dependency" rule --
+// since the whole point of the check is a real git ls-tree/os.Stat answer,
+// not this package's belief about one.
+func TestExtractRangeToken_DetectsRangeNotAPath(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	checker := cli.GitPathChecker{Root: dir, Repo: repo}
+
+	token, rest, err := ExtractRangeToken(context.Background(), []string{"a.go", "HEAD..HEAD~1"}, checker)
+	if err != nil {
+		t.Fatalf("ExtractRangeToken: %v", err)
+	}
+	if token != "HEAD..HEAD~1" {
+		t.Errorf("token = %q; want %q", token, "HEAD..HEAD~1")
+	}
+	if len(rest) != 1 || rest[0] != "a.go" {
+		t.Errorf("rest = %v; want [\"a.go\"]", rest)
 	}
 }
