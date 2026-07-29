@@ -36,6 +36,16 @@ type serverSpec struct {
 	stdioArgs []string
 }
 
+// vtslsSpec is shared by the "typescript" and "tsx" catalog entries below:
+// one TypeScript server handles both grammars; only the didOpen languageId
+// differs (client.go).
+var vtslsSpec = serverSpec{
+	name:      "vtsls",
+	bin:       "vtsls",
+	transport: transportStdio,
+	stdioArgs: []string{"--stdio"},
+}
+
 // servers maps a resolve.Language's Name() to the server that cross-checks
 // it. "tsx" shares vtsls with "typescript" — one TypeScript server handles
 // both grammars; only the didOpen languageId differs (client.go).
@@ -51,18 +61,11 @@ var servers = map[string]serverSpec{
 			return []string{"-listen=unix;" + sockPath, "-listen.timeout=10m"}
 		},
 	},
-	"typescript": {
-		name:      "vtsls",
-		bin:       "vtsls",
-		transport: transportStdio,
-		stdioArgs: []string{"--stdio"},
-	},
-	"tsx": {
-		name:      "vtsls",
-		bin:       "vtsls",
-		transport: transportStdio,
-		stdioArgs: []string{"--stdio"},
-	},
+	// "typescript" and "tsx" both dial vtsls -- one server, two grammars
+	// (tsFamily's own doc comment in internal/resolve/lang_typescript.go) --
+	// so both catalog entries share the identical serverSpec literal.
+	"typescript": vtslsSpec,
+	"tsx":        vtslsSpec,
 	"python": {
 		name:      "pyright",
 		bin:       "pyright-langserver",
