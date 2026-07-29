@@ -138,15 +138,33 @@ cross-check, which catches build-tag, macro, and type-level mismatches.
 | TypeScript/JavaScript | `vtsls` | `npm i -g @vtsls/language-server` | One-shot subprocess per query |
 | Python | `pyright-langserver` | `npm i -g pyright` | One-shot subprocess per query |
 | Shell | `bash-language-server` | `npm i -g bash-language-server` | One-shot subprocess per query |
+| YAML | `yaml-language-server` | `npm i -g yaml-language-server` | One-shot subprocess per query |
+| JSON | `vscode-json-language-server` | `npm i -g vscode-langservers-extracted` | One-shot subprocess per query |
+| CSS | `vscode-css-language-server` | `npm i -g vscode-langservers-extracted` | One-shot subprocess per query |
+| Markdown | `marksman` | [GitHub release binary](https://github.com/artempyanykh/marksman/releases) — no package manager publishes it | One-shot subprocess per query |
+
+JSON and CSS share one npm package, `vscode-langservers-extracted` — a single
+install produces both binaries. `marksman` is the one server in this table
+[`-with-servers`](#installing-and-updating-servers-automatically) does not
+manage, for the same reason: nothing to shell out to.
 
 Only `gopls` has a listen mode, so Go is the only language with a reusable
 daemon: `rgit` probes for one and starts it in the background if none answers.
 That first invocation finishes in `[ts-only]` mode rather than blocking on a
-cold index; later ones get the full cross-check. The other three have no listen
-mode, so `rgit` spawns one over stdio per query and kills it on close — nothing
-persists, and the cross-check is live on the first invocation. The transport
-survey behind this split is in
+cold index; later ones get the full cross-check. Every other language's
+server has no listen mode, so `rgit` spawns one over stdio per query and
+kills it on close — nothing persists, and the cross-check is live on the
+first invocation. The transport survey behind this split is in
 [`specs/design.md`](../specs/design.md#transport-support-per-server).
+
+**TOML and SQL stay `[ts-only]` permanently, for different reasons.** `taplo`
+completes the LSP handshake once built with `-with-servers`' `--features
+lsp`, but its own ranges genuinely disagree with tree-sitter's on an
+ordinary nested TOML table — a measured range mismatch, not a missing
+feature, so installing `taplo` does not enable a TOML cross-check. SQL has no
+maintained tool that speaks `documentSymbol` at all. Both are deliberate;
+the measurements behind each are in
+[`specs/design.md` § Cross-check survey](../specs/design.md#cross-check-survey-the-six-v2-grammars).
 
 ### Installing and updating servers automatically
 
@@ -171,9 +189,14 @@ release binaries itself:
 | `vscode-json-language-server`, `vscode-css-language-server` | npm/bun | `npm install -g vscode-langservers-extracted` (one package, both binaries) |
 | `taplo` | cargo | `cargo install taplo-cli --locked --features lsp` |
 
-The yaml/json/css/taplo rows exist ahead of the table above: they are what
-this repo's newer tree-sitter grammars will need cross-checked next, not
-servers `rgit` dials today.
+`yaml-language-server`, `vscode-json-language-server`, and
+`vscode-css-language-server` now match the table above — YAML, JSON, and CSS
+are wired the same as the original four. `taplo` is the one row here that
+`rgit` never dials for its own cross-check: TOML stays `[ts-only]`
+permanently, on measured range disagreement rather than availability (see
+[Language servers](#language-servers) above) — `-with-servers` still manages
+`taplo` since other tooling can use it, but installing it will not turn on a
+TOML cross-check.
 
 **`taplo` needs the non-default `--locked --features lsp` explicitly.** A
 bare `cargo install taplo-cli` and npm's `@taplo/cli` package both build a
