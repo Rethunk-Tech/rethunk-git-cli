@@ -59,6 +59,7 @@ func assertUnresolvable(t *testing.T, err error) *resolve.ResolveError {
 // *resolve.ResolveError; Run must produce the same error, unfiltered by
 // whether the named file happens to have any uncommitted changes at all.
 func TestRun_UnresolvableSymReturnsResolveError(t *testing.T) {
+	t.Parallel()
 	dir, repo := newDiffTestRepo(t)
 	// b.py has an uncommitted change, so a silent empty result would be
 	// easy to mistake for success.
@@ -80,6 +81,7 @@ func TestRun_UnresolvableSymReturnsResolveError(t *testing.T) {
 // report nothing the way a --file pathspec would (git's own `git diff --
 // nosuch.py` convention, which --file deliberately keeps matching).
 func TestRun_SymOnNonexistentFileReturnsResolveError(t *testing.T) {
+	t.Parallel()
 	dir, repo := newDiffTestRepo(t)
 
 	_, err := Run(context.Background(), repo, dir, Options{
@@ -103,6 +105,7 @@ func TestRun_SymOnNonexistentFileReturnsResolveError(t *testing.T) {
 // is still a clean, exit-0 result with no row for it -- only an anchor
 // that does not resolve at all is an error.
 func TestRun_SymResolvesButUnchangedIsNotAnError(t *testing.T) {
+	t.Parallel()
 	dir, repo := newDiffTestRepo(t)
 	// No worktree edits at all: "existing" resolves against HEAD, and there
 	// is nothing uncommitted anywhere in the repo.
@@ -127,6 +130,7 @@ func TestRun_SymResolvesButUnchangedIsNotAnError(t *testing.T) {
 // Old when the file was deleted from the worktree, and failing when the
 // name exists on neither.
 func TestValidateSym_PrefersNewSideThenFallsBackToOld(t *testing.T) {
+	t.Parallel()
 	dir, repo := newDiffTestRepo(t)
 	ctx := context.Background()
 	scope, err := ResolveScope(ctx, repo, Options{})
@@ -165,6 +169,7 @@ func TestValidateSym_PrefersNewSideThenFallsBackToOld(t *testing.T) {
 // read-diff-copy-anchor-commit workflow can never discover them for a
 // git-hook-style script with no extension at all.
 func TestRun_ExtensionlessShebangEnumeratesSymbols(t *testing.T) {
+	t.Parallel()
 	dir, repo := newDiffTestRepo(t)
 	writeDiffFile(t, dir, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v1\n}\n\nbar() {\n  echo bar\n}\n")
 	gittest.Git(t, dir, "add", "pre-commit")
@@ -245,6 +250,7 @@ func TestRun_ExtensionlessShebangEnumeratesSymbols(t *testing.T) {
 // language: a canonical name (must keep working), gopls's receiver spelling,
 // and a Markdown heading's raw text.
 func TestRun_SymFilterMatchesAnyAcceptedAliasSpelling(t *testing.T) {
+	t.Parallel()
 	dir, repo := newDiffTestRepo(t)
 
 	writeDiffFile(t, dir, "a.go", "package p\n\ntype A struct{}\n\nfunc (a *A) Get() int { return 1 }\n")
@@ -289,6 +295,7 @@ func TestRun_SymFilterMatchesAnyAcceptedAliasSpelling(t *testing.T) {
 // wholesale, and a named file with no surviving rows drops out of the
 // report entirely rather than leaving an empty FileReport behind.
 func TestApplyFilters_KeepsOnlyNamedSymbolsAcrossFiles(t *testing.T) {
+	t.Parallel()
 	report := &Report{
 		Files: []FileReport{
 			{Path: "a.go", Rows: []Row{
@@ -327,6 +334,7 @@ func TestApplyFilters_KeepsOnlyNamedSymbolsAcrossFiles(t *testing.T) {
 // comment describes: a --file-only invocation needs no Go-side filtering at
 // all, since the git-level query already scoped it.
 func TestApplyFilters_NoSymsIsANoOp(t *testing.T) {
+	t.Parallel()
 	report := &Report{Files: []FileReport{
 		{Path: "a.go", Rows: []Row{{Status: StatusUnanchorable, Added: "1", Deleted: "0"}}},
 	}}
@@ -460,6 +468,7 @@ func describeRows(rows []Row) string {
 // second genuinely does remain unowned -- so exactly one (unanchorable)
 // line must survive there.
 func TestAttribute_TopLevelSymbolOwnsOneSeparator(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, path, head, work string
 		wantRows               string
@@ -551,6 +560,7 @@ func TestCrossCheckOutcome_DegradedAndMismatchAreOrthogonal(t *testing.T) {
 // exit 128 a git-level failure gets; the distinction is what tells a caller
 // whether they mistyped the command or whether git broke.
 func TestRun_ScopeUsageErrorsAreTyped(t *testing.T) {
+	t.Parallel()
 	dir, repo := newDiffTestRepo(t)
 
 	for _, tc := range []struct {
