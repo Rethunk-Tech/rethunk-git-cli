@@ -45,6 +45,15 @@ func dialSocket(ctx context.Context, spec serverSpec, repoRoot string) (*Client,
 	for _, candidate := range socketCandidates(sockPath, managedOK) {
 		managed := managedOK && candidate == sockPath
 
+		// Re-verify the managed directory right before dialing into it --
+		// defaultSocketPath's own privateSocketDir call happened earlier,
+		// possibly after a DialBudget-bounded probe of an earlier
+		// candidate. A user-supplied $RGIT_LSP_SOCKET has no directory of
+		// rgit's to re-check here; it was never ours to vouch for.
+		if managed && !verifyPrivateDir(filepath.Dir(candidate)) {
+			continue
+		}
+
 		dialer := net.Dialer{Timeout: DialBudget}
 		conn, err := dialer.DialContext(ctx, "unix", candidate)
 		if err != nil {
@@ -70,6 +79,21 @@ func dialSocket(ctx context.Context, spec serverSpec, repoRoot string) (*Client,
 				// in this same loop, or trySpawnDaemon below if this was
 				// the last one, reclaim the path instead of every future
 				// invocation staying pinned to a dead listener forever.
+				//
+				// Accepted best-effort gap: unlinking the directory entry
+				// does not stop whatever process is still listening on the
+				// inode behind it. If that process is a genuinely live
+				// (if slow or stuck) gopls rather than a truly dead one, a
+				// respawn here binds a fresh inode at the same path and
+				// strands the old process, unreachable, until its own
+				// -listen.timeout idle shutdown (servers.go's daemonArgs)
+				// reclaims it. A handshake failure this deep into
+				// DialBudget+QueryDeadline is itself strong evidence of a
+				// stuck process (specs/design.md measures a healthy gopls
+				// answering in single-digit milliseconds), so this is not
+				// treated as a case worth a shutdown RPC or kill-by-pid:
+				// no dialled server here exposes either, and there is
+				// nothing to key a kill on beyond the socket path itself.
 				_ = os.Remove(candidate)
 			}
 			continue
@@ -77,7 +101,14 @@ func dialSocket(ctx context.Context, spec serverSpec, repoRoot string) (*Client,
 		return client, false
 	}
 
-	if managedOK {
+	// Re-verify here too, immediately before the spawn attempt, for the
+	// same reason as the dial above -- trySpawnDaemon itself takes a bare
+	// sockPath and does not re-check its directory (its own unit tests
+	// deliberately drive it against an arbitrary path, decoupled from
+	// privateSocketDir's trust check; folding the check into trySpawnDaemon
+	// would force every one of those to also construct a verified private
+	// directory just to exercise the lock/spawn logic they actually test).
+	if managedOK && verifyPrivateDir(filepath.Dir(sockPath)) {
 		trySpawnDaemon(spec, sockPath)
 	}
 	return nil, true
@@ -127,18 +158,36 @@ func privateSocketDir() (dir string, ok bool) {
 	if err := os.Mkdir(dir, 0o700); err != nil && !os.IsExist(err) {
 		return "", false
 	}
+	if !verifyPrivateDir(dir) {
+		return "", false
+	}
+	return dir, true
+}
 
+// verifyPrivateDir reports whether dir is still a private, UID-owned,
+// non-symlink directory carrying no group/other permission bits -- the
+// same check privateSocketDir performs when it first vouches for one.
+//
+// It exists as its own function so dialSocket and trySpawnDaemon can
+// re-run it immediately before they actually dial or spawn into the
+// managed default, not only once when privateSocketDir first returned it.
+// Those two operations happen later than the original check -- after a
+// DialBudget-bounded probe of every other candidate, in dialSocket's
+// case -- leaving a TOCTOU window in which the parent directory could in
+// principle be rewritten to swap dir out from under a caller that trusted
+// an earlier verification. This narrows that window; it does not close
+// it (specs/design.md § Symbol resolution has the full reasoning for why
+// closing it fully was rejected here, and why the residual window is
+// accepted).
+func verifyPrivateDir(dir string) bool {
 	// Lstat, not Stat: a symlink at this exact path -- planted by another
 	// user pointing somewhere they control -- must be rejected outright,
 	// never followed.
 	info, err := os.Lstat(dir)
 	if err != nil {
-		return "", false
+		return false
 	}
-	if !info.Mode().IsDir() || info.Mode().Perm()&0o077 != 0 || !sameOwner(info) {
-		return "", false
-	}
-	return dir, true
+	return info.Mode().IsDir() && info.Mode().Perm()&0o077 == 0 && sameOwner(info)
 }
 
 func runtimeDir() string {
