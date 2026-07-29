@@ -804,7 +804,8 @@ func TestStage_DeletedSymbolExcisedFromBlob(t *testing.T) {
 // the file still reads as modified right after the commit that was
 // supposed to capture it.
 //
-// Python is deliberately the odd one out here (resolve.MembersSitFlush):
+// Python is deliberately the odd one out here (the language adapter's
+// own MembersSitFlush):
 // PEP 8 requires a blank line between method definitions inside a class,
 // so a Python class method keeps the ordinary top-level-shaped padding
 // instead -- proven by its own subtest expecting that blank line to survive.
