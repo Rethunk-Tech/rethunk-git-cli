@@ -314,7 +314,7 @@ func validateSym(ctx context.Context, repo *gitx.Repo, root string, scope Scope,
 		// Same worktree-shebang fallback as buildFileReport: a --sym anchor
 		// naming an extensionless script is only resolvable if its worktree
 		// copy is there to peek. A since-deleted or rev-only file has none,
-		// and degrades to the exit-9 refusal below exactly as before.
+		// and degrades to the exit-9 refusal below.
 		if line, peeked := resolve.PeekShebangLine(filepath.Join(root, s.File)); peeked {
 			lang, ok = resolve.ForPath(s.File, line)
 		}

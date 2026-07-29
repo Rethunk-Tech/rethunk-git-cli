@@ -219,8 +219,7 @@ func separatorLines(src []byte, self region, siblings []region) int {
 // Exported for the same reason LineCounts is: `rgit diff` and
 // `rgit commit --dry-run` promise to agree row for row (docs/CODES.md), and
 // two implementations of "does this symbol carry its separator" would be
-// free to drift apart -- which is exactly how the phantom (unanchorable)
-// row this fixes came about in the first place.
+// free to drift apart, producing a phantom (unanchorable) row.
 func SeparatorLines(src []byte, start, end uint, member bool) int {
 	if member {
 		return 0

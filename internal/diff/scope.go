@@ -175,10 +175,9 @@ func resolveRangeScope(ctx context.Context, repo *gitx.Repo, rangeToken string) 
 // ExtractRangeToken pulls a bare ".."/"..." shaped revision-range
 // positional out of args before cli.ClassifyArgs sees it: rule 3 verifies
 // via `git rev-parse --verify`, which names exactly one object and fails
-// outright on range syntax (measured: exit 1, even though it echoes both
-// endpoints to stdout) — so a range token would otherwise fall through
-// every rule to an unresolvable-argument error instead of selecting a
-// scope.
+// outright on range syntax (exit 1, even though it echoes both endpoints
+// to stdout) — so a range token would otherwise fall through every rule to
+// an unresolvable-argument error instead of selecting a scope.
 //
 // Only a token with no worktree/HEAD path of that exact name is treated as
 // a range: git forbids ".." in ref names, but a legitimate relative

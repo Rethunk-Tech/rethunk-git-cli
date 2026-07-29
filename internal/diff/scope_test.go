@@ -37,10 +37,9 @@ func newDivergentRepo(t *testing.T) (dir string, repo *gitx.Repo, baseSHA string
 // TestResolveRangeScope_ThreeDotUsesMergeBaseTwoDotUsesLiteralA is
 // resolveRangeScope's own doc comment turned into an assertion: the
 // three-dot form's old side has to be the merge base, and the two-dot
-// form's has to be A itself, unresolved. Before this test, only
-// cmd/rgit/rgit_e2e_test.go exercised either form at all, so a regression
-// swapping the two (or resolving the two-dot form's endpoints too) would
-// pass `go test -short ./...` clean.
+// form's has to be A itself, unresolved -- a regression swapping the two
+// (or resolving the two-dot form's endpoints too) must fail here, in the
+// unit lane, not only in cmd/rgit/rgit_e2e_test.go's slow lane.
 func TestResolveRangeScope_ThreeDotUsesMergeBaseTwoDotUsesLiteralA(t *testing.T) {
 	t.Parallel()
 	_, repo, base := newDivergentRepo(t)
@@ -178,9 +177,7 @@ func TestResolveRangeScope_ExplicitFormFallsBackToSingleRevision(t *testing.T) {
 // TestCommittableBase_UnbornBranchFallsBackToEmptyTree covers
 // committableBase's own reason to exist: gittest.New's repo has no commit
 // yet, so HEAD is unborn and `git diff HEAD` would fail outright --
-// docs/USAGE.md § Diff scope's documented fallback. Before this,
-// cmd/rgit/rgit_e2e_test.go's TestDiff_UnbornBranchListsEverythingCommittable
-// was the only thing exercising the EmptyTree branch at all.
+// docs/USAGE.md § Diff scope's documented fallback.
 func TestCommittableBase_UnbornBranchFallsBackToEmptyTree(t *testing.T) {
 	t.Parallel()
 	_, repo := gittest.New(t)

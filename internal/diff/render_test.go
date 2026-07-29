@@ -5,11 +5,11 @@ import (
 	"testing"
 )
 
-// TestRowHint_UnanchorableSuggestsToplevelOnlyForMarkdown pins the fix for a
-// hint that went stale the moment @toplevel became the Markdown lede
-// (internal/resolve/lang_markdown.go): an (unanchorable) row for a Markdown
-// file is always exactly that unreachable lede (Declarations never returns
-// an entry for it), so it is always stageable via --sym path:@toplevel, not
+// TestRowHint_UnanchorableSuggestsToplevelOnlyForMarkdown asserts an
+// (unanchorable) row's hint tracks what @toplevel actually spans
+// (internal/resolve/lang_markdown.go): for Markdown, an (unanchorable) row
+// is always exactly the unreachable lede (Declarations never returns an
+// entry for it), so it is always stageable via --sym path:@toplevel, not
 // merely via the whole path. A code file's (unanchorable) row must keep its
 // --file-only hint: @toplevel there spans every declaration already broken
 // out into its own row, so suggesting it as an alternative would point at a
@@ -35,10 +35,10 @@ func TestRowHint_UnanchorableSuggestsToplevelOnlyForMarkdown(t *testing.T) {
 	}
 }
 
-// TestRenderText_MarkdownUnanchorableRowPointsAtToplevel is the same fix at
-// RenderText's own level, guarding against the hint regressing back to
-// --file-only silently if a future change routes rows through a different
-// path than rowHint.
+// TestRenderText_MarkdownUnanchorableRowPointsAtToplevel asserts the same
+// guarantee at RenderText's own level, guarding against the hint regressing
+// back to --file-only silently if a future change routes rows through a
+// different path than rowHint.
 func TestRenderText_MarkdownUnanchorableRowPointsAtToplevel(t *testing.T) {
 	report := &Report{Files: []FileReport{
 		{Path: "README.md", Rows: []Row{{Status: StatusUnanchorable, Added: "2", Deleted: "1"}}},

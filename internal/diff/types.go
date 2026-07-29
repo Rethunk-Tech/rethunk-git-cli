@@ -65,8 +65,8 @@ type Row struct {
 	// pos is the row's byte offset in the file, used only to order rows
 	// within that file. Output has to be sorted by path then by position so
 	// it is greppable and identical between runs on an unchanged tree;
-	// emitting rows in the order they happened to be discovered put
-	// @imports last despite it being the first thing in the file.
+	// discovery order would put @imports last despite it being the first
+	// thing in the file.
 	pos uint
 }
 

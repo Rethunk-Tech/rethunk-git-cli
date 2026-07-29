@@ -18,8 +18,7 @@ import (
 
 // newDiffTestRepo is a temp repo with one committed file, "b.py", holding
 // a real Python symbol so an anchor can resolve against it either at HEAD
-// or in the worktree. The scaffolding itself lives in internal/gittest,
-// which four packages were each carrying their own copy of.
+// or in the worktree.
 func newDiffTestRepo(t *testing.T) (dir string, repo *gitx.Repo) {
 	t.Helper()
 	dir, repo = gittest.New(t)
@@ -50,17 +49,18 @@ func assertUnresolvable(t *testing.T, err error) *resolve.ResolveError {
 	return rerr
 }
 
-// TestRun_UnresolvableSymReturnsResolveError pins the fix for the reported
-// hazard: `rgit diff --sym b.py:doesNotExist` used to exit 0 with empty
-// output, indistinguishable from "that symbol is clean" -- a typo silently
-// inverting the check-before-commit workflow rgit diff exists to serve.
-// `rgit commit --dry-run` already refused the identical value with a typed
-// *resolve.ResolveError; Run must now produce the same error, unfiltered by
+// TestRun_UnresolvableSymReturnsResolveError asserts that an unresolvable
+// --sym request fails loudly: exit 3 via a typed *resolve.ResolveError,
+// never a silent exit 0 with empty output that would be indistinguishable
+// from "that symbol is clean" -- a typo must not silently invert the
+// check-before-commit workflow rgit diff exists to serve.
+// `rgit commit --dry-run` already refuses the identical value with a typed
+// *resolve.ResolveError; Run must produce the same error, unfiltered by
 // whether the named file happens to have any uncommitted changes at all.
 func TestRun_UnresolvableSymReturnsResolveError(t *testing.T) {
 	dir, repo := newDiffTestRepo(t)
-	// b.py has an uncommitted change -- the exact reproduction from the bug
-	// report, where the old behaviour's silence was most misleading.
+	// b.py has an uncommitted change, so a silent empty result would be
+	// easy to mistake for success.
 	writeDiffFile(t, dir, "b.py", "def existing():\n    return 2\n")
 
 	_, err := Run(context.Background(), repo, dir, Options{
@@ -97,10 +97,10 @@ func TestRun_SymOnNonexistentFileReturnsResolveError(t *testing.T) {
 	}
 }
 
-// TestRun_SymResolvesButUnchangedIsNotAnError pins the distinction the fix
-// must preserve: a symbol that genuinely exists but has no uncommitted
-// changes is still a clean, exit-0 result with no row for it -- only an
-// anchor that does not resolve at all is an error.
+// TestRun_SymResolvesButUnchangedIsNotAnError asserts the distinction that
+// must hold: a symbol that genuinely exists but has no uncommitted changes
+// is still a clean, exit-0 result with no row for it -- only an anchor
+// that does not resolve at all is an error.
 func TestRun_SymResolvesButUnchangedIsNotAnError(t *testing.T) {
 	dir, repo := newDiffTestRepo(t)
 	// No worktree edits at all: "existing" resolves against HEAD, and there
@@ -228,15 +228,14 @@ func TestRun_ExtensionlessShebangEnumeratesSymbols(t *testing.T) {
 	}
 }
 
-// TestRun_SymFilterMatchesAnyAcceptedAliasSpelling pins the fix for a
+// TestRun_SymFilterMatchesAnyAcceptedAliasSpelling guards against a
 // silent-empty-diff hazard identical in shape to the one
 // TestRun_UnresolvableSymReturnsResolveError already covers: applyFilters
-// used to match a --sym request against Row.Symbol using the caller's own
-// literal string, but Row.Symbol is always rgit's canonical, emitted
-// spelling (resolve.DeclOrder) -- never one of the alternate spellings
-// resolve.Resolve accepts on input but never produces (docs/ANCHORS.md):
-// gopls's "(*A).Get" receiver form, or a Markdown heading's raw text. Both
-// used to resolve cleanly (no error, exit 0) and then filter to zero rows,
+// must match a --sym request against any spelling resolve.Resolve accepts
+// on input, not only Row.Symbol's canonical, emitted spelling
+// (resolve.DeclOrder) -- gopls's "(*A).Get" receiver form, or a Markdown
+// heading's raw text (docs/ANCHORS.md), must match the same row the
+// canonical name matches, not silently filter to zero rows, which would be
 // indistinguishable from "that symbol is clean" -- the same false-negative
 // this package's validateSyms already exists to prevent for a name that
 // does not resolve at all.
@@ -354,11 +353,10 @@ func pathWithGitOnly(t *testing.T) string {
 	return bin
 }
 
-// TestRun_DegradedCrossCheckSetsTSOnly pins the signal docs/INSTALL.md §
-// Verify's recipe greps for. crossCheckFile used to discard the degraded
-// bool CrossCheckExtents returns, so `rgit diff` was silent whether or not a
-// server was reached -- and the documented way to tell the difference always
-// answered "cross-check active". rgit commit reported it all along.
+// TestRun_DegradedCrossCheckSetsTSOnly asserts the signal docs/INSTALL.md §
+// Verify's recipe greps for: crossCheckFile must propagate the degraded
+// bool CrossCheckExtents returns, so `rgit diff` reports [ts-only]
+// whenever no language server was reached to check a file's extents.
 func TestRun_DegradedCrossCheckSetsTSOnly(t *testing.T) {
 	dir, repo := newDiffTestRepo(t)
 	writeDiffFile(t, dir, "b.py", "def existing():\n    return 2\n")
@@ -444,17 +442,17 @@ func describeRows(rows []Row) string {
 	return b.String()
 }
 
-// TestAttribute_TopLevelSymbolOwnsOneSeparator pins the fix for a row that
-// told the reader to do the one thing rgit exists to avoid.
+// TestAttribute_TopLevelSymbolOwnsOneSeparator guards against a row that
+// tells the reader to do the one thing rgit exists to avoid: staging a
+// whole file for a change already captured by the anchor.
 //
 // Adding or removing a top-level declaration also moves the blank line
 // between it and its neighbour. internal/synth moves exactly one such line
 // (joinWithSeparator for an insert, spliceExcise's gap collapse for a
-// delete), but attribution counted only the declaration's own extent, so
-// that line fell to (unanchorable) -- a row carrying "-> use --file X",
-// advising a whole-path stage that was already unnecessary. Measured before
-// the fix: staging the anchor alone left the tree clean in Go and
-// TypeScript, with the row claiming work that did not exist.
+// delete), so attribution must count that line as part of the
+// declaration's own extent -- otherwise it falls to (unanchorable), a row
+// carrying "-> use --file X", advising a whole-path stage that is already
+// unnecessary.
 //
 // Python is the case that proves the rule is "one separator", not "all
 // adjacent blank lines": PEP 8 writes two, synth still inserts one, and the
