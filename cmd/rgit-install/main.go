@@ -417,11 +417,10 @@ func parserABIVersion(path string) (int, error) {
 		return 0, err
 	}
 	const marker = "#define LANGUAGE_VERSION "
-	i := bytes.Index(data, []byte(marker))
-	if i < 0 {
+	_, rest, ok := bytes.Cut(data, []byte(marker))
+	if !ok {
 		return 0, fmt.Errorf("no LANGUAGE_VERSION define found")
 	}
-	rest := data[i+len(marker):]
 	if end := bytes.IndexByte(rest, '\n'); end >= 0 {
 		rest = rest[:end]
 	}
