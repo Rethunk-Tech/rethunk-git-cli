@@ -1028,6 +1028,7 @@ built.
 | `github.com/tree-sitter/go-tree-sitter` | v0.25.0 | Core extent resolution |
 | `tree-sitter-go` / `-typescript` / `-python` | v0.25.0 / v0.23.2 / v0.25.0 | The v1 grammars; import path is `<module>/bindings/go` |
 | `go.lsp.dev/protocol` + `jsonrpc2` | v1.0.1 | Typed LSP 3.18; models `DocumentSymbolResult` as a sealed union over `SymbolInformationSlice \| DocumentSymbolSlice` — the case a hand-rolled client decodes wrongly |
+| `go.lsp.dev/uri` | v1.0.1 | `uri.File(path)`, the only path-to-`file://`-URI constructor in this dependency graph, for `rootURI` and `textDocument.uri` (`internal/lsp/client.go`); `protocol.URI` is a thin wrapper (`type URI uri.URI`) whose own doc defers path construction to this package rather than duplicating it. Its `Platform` handling matters directly for this repo's windows/amd64 target: drive-letter and slash conversion, not just POSIX paths |
 | `github.com/aymanbagabas/go-udiff` | v0.4.1 | Per-symbol `+N/-M` counts in-process, no fork/exec per anchor |
 | `golang.org/x/term` | v0.45.0 | `IsTerminal`, gating the `GIT_TERMINAL_PROMPT=0` rule |
 | `github.com/go-quicktest/qt` | v1.102.0 | Tests; matches `claude-format-hooks` |
