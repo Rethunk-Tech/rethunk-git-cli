@@ -71,13 +71,20 @@ func TestDial_NewServers(t *testing.T) {
 // TestDial_NewServers_Degraded covers the absent-binary side for a
 // language with no chance of a real server on the test machine: Dial must
 // report degraded rather than block or error, the same contract every
-// other unsupported/absent-server case already has.
+// other unsupported/absent-server case already has. PATH is stripped down
+// to a fresh, empty temp dir rather than skipped when yaml-language-server
+// happens to already be on it: skipping there means any dev box or CI
+// runner with servers installed never exercises this path at all -- and
+// worse, the skip used to come after the Dial call below, so on an
+// equipped machine this actually dialled a real server and discarded the
+// result before ever checking whether to skip. cmd/rgit/rgit_e2e_test.go's
+// TestDocumentedPathsWithoutOtherCoverage strips PATH the same way for its
+// own [ts-only] case.
 func TestDial_NewServers_Degraded(t *testing.T) {
-	t.Parallel()
+	// cannot Parallel because t.Setenv("PATH", ...) below
+	t.Setenv("PATH", t.TempDir())
+
 	_, degraded := Dial(context.Background(), "yaml", t.TempDir())
-	if _, err := exec.LookPath("yaml-language-server"); err == nil {
-		t.Skip("yaml-language-server is on PATH; this case wants it absent")
-	}
 	if !degraded {
 		t.Error("Dial(\"yaml\") with no yaml-language-server on PATH = not degraded; want degraded")
 	}
