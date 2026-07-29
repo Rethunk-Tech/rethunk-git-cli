@@ -58,7 +58,12 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 		fmt.Fprint(stdout, topLevelHelp)
 		return exitcode.Success
 	case "--version":
+		// The first line stays byte-identical to what scripts and
+		// cmd/rgit-install already parse (docs/USAGE.md) -- everything a
+		// caller might want beyond the bare version goes on lines after it,
+		// never on it.
 		fmt.Fprintf(stdout, "rgit %s\n", version)
+		fmt.Fprintln(stdout, versionGrammarsLine())
 		return exitcode.Success
 	case "diff":
 		return runDiff(ctx, args[1:], stdout, stderr)

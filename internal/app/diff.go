@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"slices"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
@@ -149,7 +150,19 @@ func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) exitc
 		// internal/app/commit.go does the equivalent dispatch for commit).
 		var rerr *resolve.ResolveError
 		if errors.As(err, &rerr) {
-			fmt.Fprintf(stderr, "rgit: %v\n", rerr)
+			msg := rerr.Error()
+			if rerr.Code == exitcode.UnsupportedLanguage {
+				// Unlike synth.PathError (commit.go's mapStageError),
+				// ResolveError carries only the bare anchor name, not the
+				// file it was resolved against -- validateSym (internal/
+				// diff/run.go) never attaches one. Recover it from the
+				// same allSyms list this function already built, matching
+				// on the identical Name a caller would have typed.
+				if ext, ok := extForFailedSym(allSyms, rerr.Anchor); ok {
+					msg += unsupportedLanguageHint(ext)
+				}
+			}
+			fmt.Fprintf(stderr, "rgit: %s\n", msg)
 			return rerr.Code
 		}
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
@@ -202,4 +215,20 @@ func symRefsFromFlag(syms []string) ([]diffpkg.SymRef, error) {
 		out = append(out, diffpkg.SymRef{File: file, Name: name})
 	}
 	return out, nil
+}
+
+// extForFailedSym finds the file extension of the sym in syms whose Name
+// matches anchor, for unsupportedLanguageHint's benefit -- see this
+// function's one call site in runDiff for why ResolveError alone cannot
+// answer this. Best-effort: two files sharing a bare symbol name would
+// resolve to whichever comes first, but the hint text itself only changes
+// for one extension (.sql) today, so a mismatch here could only ever
+// produce an absent hint, never a wrong one for a different gated language.
+func extForFailedSym(syms []diffpkg.SymRef, anchor string) (string, bool) {
+	for _, s := range syms {
+		if s.Name == anchor {
+			return filepath.Ext(s.File), true
+		}
+	}
+	return "", false
 }

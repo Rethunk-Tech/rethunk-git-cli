@@ -698,6 +698,40 @@ func TestRun_DoctorHelpAndUsage(t *testing.T) {
 	qt.Assert(t, qt.Not(qt.Equals(stderr, "")))
 }
 
+// TestRun_VersionReportsGrammars pins deliverable 3a: the first line stays
+// byte-identical to what scripts and cmd/rgit-install already parse, and a
+// second line reports optional/gated grammars -- present or explicitly
+// "none", so a caller can tell a SQL-enabled binary from a plain one
+// without a separate `rgit languages` call. Which word that second line
+// carries is build-specific (languages_sql_test.go, languages_nosql_test.go).
+func TestRun_VersionReportsGrammars(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	stdout, _, code := runApp(t, "--version")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	lines := strings.SplitN(stdout, "\n", 2)
+	qt.Assert(t, qt.Equals(lines[0], "rgit v0.0.0-test"))
+	qt.Assert(t, qt.StringContains(stdout, "optional grammars:"))
+}
+
+// TestRun_UnsupportedLanguageGetsNoRebuildHint pins the negative case for
+// deliverable 3b: a language this resolver has never supported (no grammar
+// exists at all, gated or otherwise) gets the plain exit-9 refusal with no
+// rebuild suggestion -- unlike a genuinely gated miss (languages_sql_test.go,
+// languages_nosql_test.go), which does. True regardless of -tags rgit_sql,
+// so it belongs in the untagged file rather than either build-specific one.
+func TestRun_UnsupportedLanguageGetsNoRebuildHint(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "main.rs", "fn main() {}\n")
+
+	_, stderr, code := runApp(t, "commit", "-m", "feat(x): y", "main.rs:main")
+
+	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
+	qt.Assert(t, qt.StringContains(stderr, "no grammar registered for .rs"))
+	qt.Assert(t, qt.Not(qt.StringContains(stderr, "rgit_sql")))
+	qt.Assert(t, qt.Not(qt.StringContains(stderr, "rebuild")))
+}
+
 // TestRun_HelpIsPlainText guards a defect that only shows up when something
 // reads the output rather than a person skimming it: pflag renders a string
 // flag's NoOptDefVal into the usage line as [="<value>"], so --gpg-sign's

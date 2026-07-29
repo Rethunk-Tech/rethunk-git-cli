@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
@@ -400,7 +401,14 @@ func targetLabel(t synth.Target) string {
 func mapStageError(err error) (exitcode.Code, string) {
 	var perr *synth.PathError
 	if errors.As(err, &perr) {
-		return perr.Code, perr.Error()
+		msg := perr.Error()
+		if perr.Code == exitcode.UnsupportedLanguage {
+			// synth/stage.go's own error names the extension in its Path,
+			// unlike resolve.ResolveError below -- see diff.go's
+			// counterpart for why that side needs a different lookup.
+			msg += unsupportedLanguageHint(filepath.Ext(perr.Path))
+		}
+		return perr.Code, msg
 	}
 	var rerr *resolve.ResolveError
 	if errors.As(err, &rerr) {
