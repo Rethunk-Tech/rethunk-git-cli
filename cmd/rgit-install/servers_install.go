@@ -178,7 +178,7 @@ func managerBinDir(m manager, useBun bool) (string, error) {
 // skip is not a failure -- there was nothing rgit could have run). Before
 // this, a per-job "FAILED" line was the only signal: the process still
 // exited 0, so automation driving -with-servers could not tell a clean run
-// from a partial one (finding 11).
+// from a partial one.
 func manageServers(dryRun bool, stdout io.Writer, lookPath func(string) (string, error)) (ok bool) {
 	fmt.Fprintln(stdout, "Language servers:")
 	for _, s := range detectServers(serverCatalog, lookPath) {
@@ -229,8 +229,8 @@ func manageServers(dryRun bool, stdout io.Writer, lookPath func(string) (string,
 
 // runInstallJob runs one job's already-built install-or-update command for
 // real, bounded by installTimeout so a hung registry or stalled build
-// cannot block -with-servers indefinitely (finding 11) the way an
-// unbounded exec.Command previously could. Separated from manageServers'
+// cannot block -with-servers indefinitely the way an unbounded
+// exec.Command previously could. Separated from manageServers'
 // loop so the failure-detection contract itself -- a nonzero exit prints
 // "FAILED" and reports ok=false -- can be pinned deterministically (a
 // command name guaranteed absent from PATH) without ever invoking a real

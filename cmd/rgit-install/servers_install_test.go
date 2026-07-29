@@ -4,8 +4,8 @@
 // manageServers itself takes an injected lookPath (servers_install.go), so
 // its wiring and skip branches are tested here too with dryRun:true, which
 // never runs a real command. runInstallJob's own failure-detection contract
-// (finding 11: FAILED printed and ok=false on a nonzero exit) is pinned
-// with real, deterministic exec.Command targets ("true", a binary name
+// (FAILED printed and ok=false on a nonzero exit) is pinned with real,
+// deterministic exec.Command targets ("true", a binary name
 // guaranteed absent from PATH) -- only a real go/npm/cargo/bun install
 // succeeding or failing for real stays untested, exercised by hand instead.
 package main
@@ -207,10 +207,10 @@ func TestManageServersDryRun(t *testing.T) {
 	})
 }
 
-// TestRunInstallJob covers finding 11's failure-detection contract directly:
-// a nonzero exit must print "FAILED" and report false, a clean exit must
-// report true and print nothing extra. A command name guaranteed absent
-// from PATH is a real, deterministic failure -- exec.Command's own "file
+// TestRunInstallJob covers runInstallJob's own failure-detection contract
+// directly: a nonzero exit must print "FAILED" and report false, a clean
+// exit must report true and print nothing extra. A command name guaranteed
+// absent from PATH is a real, deterministic failure -- exec.Command's own "file
 // not found" -- without ever invoking a real package manager; "true" is
 // likewise a real, deterministic success available on every POSIX test
 // runner. A real go/npm/cargo/bun install succeeding or failing for real

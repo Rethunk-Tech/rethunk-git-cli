@@ -116,7 +116,7 @@ func main() {
 	// build/install -- a language server failing to install is no reason
 	// to withhold the rgit binary this command exists to produce, but the
 	// process must still exit nonzero so automation driving -with-servers
-	// can tell a partial run from a clean one (finding 11).
+	// can tell a partial run from a clean one.
 	serversOK := true
 	if *withServers {
 		serversOK = manageServers(*dryRun, os.Stdout, exec.LookPath)
@@ -511,7 +511,7 @@ func runSQLGeneration(modDir, pkgDir string) error {
 // previous version of this function called os.RemoveAll(final) before
 // os.Rename(staging, final), so a rename failure (or the process dying
 // between the two calls) left a repository with no csrc/ at all, even
-// though a perfectly good one existed a moment earlier (finding 9).
+// though a perfectly good one existed a moment earlier.
 func finalizeGenerated(staging, final string) error {
 	old := final + ".old"
 	// A leftover from a prior failed finalize would otherwise block the

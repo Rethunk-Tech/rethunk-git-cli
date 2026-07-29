@@ -393,8 +393,8 @@ func TestInstallBinary(t *testing.T) {
 }
 
 // finalizeGenerated is runSQLGeneration's own finishing swap, factored out
-// so its atomicity (finding 9) is testable without a real tree-sitter CLI:
-// the two directories it moves between don't care what generated them.
+// so its atomicity is testable without a real tree-sitter CLI: the two
+// directories it moves between don't care what generated them.
 func TestFinalizeGenerated(t *testing.T) {
 	t.Parallel()
 
@@ -435,7 +435,7 @@ func TestFinalizeGenerated(t *testing.T) {
 		qt.Assert(t, qt.IsTrue(os.IsNotExist(err)))
 	})
 
-	// The regression finding 9 is about: a failure finalizing must restore
+	// The regression this guards against: a failure finalizing must restore
 	// the prior csrc/ exactly, not delete it and then fail with nothing to
 	// build from. staging pointing nowhere is a deterministic way to make
 	// the finishing os.Rename fail without touching permissions.
