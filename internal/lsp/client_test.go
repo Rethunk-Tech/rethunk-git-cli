@@ -1,9 +1,7 @@
 package lsp
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
 	"io"
 	"net"
 	"sync"
@@ -200,9 +198,12 @@ func TestTrimTrailingBlankLines(t *testing.T) {
 // which a real server's behaviour cannot demonstrate one way or the other.
 
 // didCloseObserver serves one initialize/didOpen/documentSymbol/didClose
-// exchange over conn, recording didOpen and didClose counts and the URI the
-// close named. It never calls a *testing.T method: it runs on its own
-// goroutine, and only Fatal-family calls are unsafe off the test goroutine.
+// exchange over conn (lsptest.ServeMockLSP's own wire loop), recording
+// didOpen and didClose counts and the URI the close named -- the two hook
+// points this test needs, and the only ones DocumentSymbols' own
+// close-what-it-opens guarantee requires. It never calls a *testing.T
+// method: it runs on its own goroutine, and only Fatal-family calls are
+// unsafe off the test goroutine.
 type didCloseObserver struct {
 	conn io.ReadWriteCloser
 
@@ -213,25 +214,13 @@ type didCloseObserver struct {
 }
 
 func (o *didCloseObserver) serve(resultJSON string) error {
-	r := bufio.NewReader(o.conn)
-	for {
-		msg, ok, err := lsptest.ReadFrame(r)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return nil
-		}
-
-		method, _ := msg["method"].(string)
-		id, hasID := msg["id"]
-
-		switch method {
-		case "textDocument/didOpen":
+	return lsptest.ServeMockLSP(o.conn, resultJSON, lsptest.MockServerHooks{
+		OnDidOpen: func(map[string]any) {
 			o.mu.Lock()
 			o.didOpens++
 			o.mu.Unlock()
-		case "textDocument/didClose":
+		},
+		OnDidClose: func(msg map[string]any) {
 			o.mu.Lock()
 			o.didCloses++
 			if params, ok := msg["params"].(map[string]any); ok {
@@ -242,36 +231,8 @@ func (o *didCloseObserver) serve(resultJSON string) error {
 				}
 			}
 			o.mu.Unlock()
-			// Nothing else is expected after the close this test is
-			// waiting for; returning here (rather than looping to the
-			// next, absent frame) lets Close's own conn teardown produce
-			// a clean EOF instead of a read error racing it.
-			return nil
-		case "textDocument/documentSymbol":
-			if err := lsptest.WriteFrame(o.conn, map[string]any{
-				"jsonrpc": "2.0",
-				"id":      id,
-				"result":  json.RawMessage(resultJSON),
-			}); err != nil {
-				return err
-			}
-		case "initialize":
-			if err := lsptest.WriteFrame(o.conn, map[string]any{
-				"jsonrpc": "2.0",
-				"id":      id,
-				"result":  map[string]any{"capabilities": map[string]any{}},
-			}); err != nil {
-				return err
-			}
-		default:
-			if hasID {
-				if err := lsptest.WriteFrame(o.conn, map[string]any{"jsonrpc": "2.0", "id": id, "result": nil}); err != nil {
-					return err
-				}
-			}
-			// Notifications (initialized) get no reply.
-		}
-	}
+		},
+	})
 }
 
 func TestDocumentSymbols_SendsDidClose(t *testing.T) {

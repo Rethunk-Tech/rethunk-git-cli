@@ -4,10 +4,7 @@
 package main
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
-	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -642,62 +639,6 @@ func TestResolve_UnsupportedLanguage(t *testing.T) {
 // normalized extent -- gets exactly one live case, skipped cleanly when
 // gopls is absent or -short is set (CONTRIBUTING.md § Tests).
 
-// runMockLSPServer serves one
-// initialize/initialized/didOpen/documentSymbol/didClose exchange over conn,
-// answering documentSymbol with resultJSON verbatim -- the raw union payload
-// under test -- and returning on the didClose that ends it. It never calls a
-// *testing.T method: it runs on its own goroutine, and only Fatal-family
-// calls are unsafe off the test goroutine.
-//
-// The exchange must be read to completion, not abandoned after the reply
-// documentSymbol asks for: net.Pipe is unbuffered and synchronous, so a
-// client write with nobody left reading blocks forever. DocumentSymbols
-// sends didClose after every didOpen, so returning at documentSymbol
-// deadlocks the client mid-teardown rather than ending the conversation.
-func runMockLSPServer(conn io.ReadWriteCloser, resultJSON string) error {
-	r := bufio.NewReader(conn)
-	for {
-		msg, ok, err := lsptest.ReadFrame(r)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return nil
-		}
-
-		method, _ := msg["method"].(string)
-		id, hasID := msg["id"]
-
-		switch method {
-		case "textDocument/documentSymbol":
-			if err := lsptest.WriteFrame(conn, map[string]any{
-				"jsonrpc": "2.0",
-				"id":      id,
-				"result":  json.RawMessage(resultJSON),
-			}); err != nil {
-				return err
-			}
-		case "textDocument/didClose":
-			return nil
-		case "initialize":
-			if err := lsptest.WriteFrame(conn, map[string]any{
-				"jsonrpc": "2.0",
-				"id":      id,
-				"result":  map[string]any{"capabilities": map[string]any{}},
-			}); err != nil {
-				return err
-			}
-		default:
-			if hasID {
-				if err := lsptest.WriteFrame(conn, map[string]any{"jsonrpc": "2.0", "id": id, "result": nil}); err != nil {
-					return err
-				}
-			}
-			// Notifications (initialized, didOpen) get no reply.
-		}
-	}
-}
-
 func TestLSP_DocumentSymbolsDecodesBothUnionShapes(t *testing.T) {
 	t.Parallel()
 	// go.lsp.dev/protocol's DocumentSymbolResult is a sealed union over
@@ -736,7 +677,7 @@ func TestLSP_DocumentSymbolsDecodesBothUnionShapes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			serverConn, clientConn := net.Pipe()
 			errCh := make(chan error, 1)
-			go func() { errCh <- runMockLSPServer(serverConn, tc.resultJSON) }()
+			go func() { errCh <- lsptest.ServeMockLSP(serverConn, tc.resultJSON, lsptest.MockServerHooks{}) }()
 
 			client, err := lsp.NewClient(context.Background(), clientConn, t.TempDir())
 			if err != nil {
