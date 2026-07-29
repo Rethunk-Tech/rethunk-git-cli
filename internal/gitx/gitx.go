@@ -550,13 +550,6 @@ func (r *Repo) HasUpstream(ctx context.Context) (bool, error) {
 	return ok, err
 }
 
-// Status runs `git status --porcelain=v1` with extra arguments and
-// returns the raw output for the caller to parse; rendering the
-// "everything committable" view is the diff layer's job, not gitx's.
-func (r *Repo) Status(ctx context.Context, extra ...string) ([]byte, error) {
-	return r.checked(ctx, append([]string{"status", "--porcelain=v1"}, extra...)...)
-}
-
 // LsFilesOthers lists untracked files via `git ls-files --others
 // --exclude-standard -z`, NUL-terminated so no path-quoting rules apply.
 // extra is appended after the flags, for pathspec scoping (`-- <pathspec>`).
