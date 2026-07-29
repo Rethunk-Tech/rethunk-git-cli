@@ -702,6 +702,44 @@ func TestStage_NewSymbolInsertsAtNearestSiblingIncludingNewNeighbours(t *testing
 	qt.Assert(t, qt.IsTrue(ia >= 0 && ia < iy && iy < ic))
 }
 
+func TestStage_NewSiblingAdjacentToModifiedFunctionNotSwallowed(t *testing.T) {
+	t.Parallel()
+	// Pinned defect (production incident, commit f27324f): C is new to HEAD
+	// and its nearest existing sibling in worktree declaration order is A,
+	// which is ALSO being modified in the same commit. insertionPoint
+	// resolves C's insertion point as A's own HEAD extent.End -- "insert
+	// right after A" -- which lands on the exact same byte offset as A's
+	// editReplace op's own end. coalesceOverlaps' swallowedBy treated that
+	// boundary as containment (op.start <= k.end, a closed interval), so it
+	// discarded C's insertion as "already part of A's replacement text" even
+	// though A's replacement text is only A's own body and never contained
+	// C at all. rgit reported C staged (a nonzero line count came out of
+	// opLineCounts, computed independently of coalescing) and exited 0, but
+	// the synthesized blob silently had no definition of C -- only whatever
+	// called it, if anything did. This is a data-integrity bug: a
+	// successful report must match the blob actually written.
+	dir, repo := newSynthRepo(t)
+	head := "package main\n\n// A returns one.\nfunc A() int {\n\treturn 1\n}\n\n// B returns two.\nfunc B() int {\n\treturn 2\n}\n"
+	writeFile(t, dir, "adj.go", head)
+	commitAll(t, dir, "chore: initial adj.go")
+
+	// A is modified AND a brand new C is inserted immediately after it, so
+	// C's nearest-existing-sibling walk lands on A -- the function also
+	// being replaced in this same commit.
+	work := "package main\n\n// A returns one.\nfunc A() int {\n\treturn 100\n}\n\n// C returns three.\nfunc C() int {\n\treturn 3\n}\n\n// B returns two.\nfunc B() int {\n\treturn 2\n}\n"
+	writeFile(t, dir, "adj.go", work)
+
+	mustStage(t, repo, dir, synth.AnchorTarget("adj.go", "A"), synth.AnchorTarget("adj.go", "C"))
+
+	got := indexBlob(t, repo, "adj.go")
+	mustParseGo(t, "new sibling adjacent to modified function", got)
+	qt.Assert(t, qt.StringContains(got, "func A() int {\n\treturn 100\n}"))
+	qt.Assert(t, qt.StringContains(got, "func C() int {\n\treturn 3\n}"))
+	qt.Assert(t, qt.Equals(strings.Count(got, "func C() int"), 1))
+	// B was never named, so it must keep HEAD's value.
+	qt.Assert(t, qt.StringContains(got, "func B() int {\n\treturn 2\n}"))
+}
+
 func TestStage_MultipleSymbolsSpliceInReverseOffsetOrder(t *testing.T) {
 	t.Parallel()
 	// Two extents in one file must be
