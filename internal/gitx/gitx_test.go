@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
@@ -59,6 +60,77 @@ func TestLsFilesStageAndMergeBase(t *testing.T) {
 	if mbSHA != branch1SHA {
 		t.Errorf("MergeBase SHA = %q; want %q", mbSHA, branch1SHA)
 	}
+}
+
+// TestCatFileSample pins the bounded-read contract classifyPath relies on:
+// a sample no larger than the caller's own limit, the same exists=false
+// folding CatFile itself does for a missing path or revision, and -- the
+// point of the whole method -- a blob larger than limit still returns
+// only limit bytes rather than the full content.
+func TestCatFileSample(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	ctx := context.Background()
+
+	gittest.Write(t, dir, "small.txt", "hi\n")
+	gittest.Write(t, dir, "large.txt", strings.Repeat("a", 100))
+	gittest.Commit(t, dir, "chore: fixtures")
+
+	t.Run("blob smaller than limit returns its full content", func(t *testing.T) {
+		t.Parallel()
+		sample, exists, err := repo.CatFileSample(ctx, "HEAD", "small.txt", 16)
+		if err != nil {
+			t.Fatalf("CatFileSample: %v", err)
+		}
+		if !exists {
+			t.Fatal("exists = false; want true")
+		}
+		if string(sample) != "hi\n" {
+			t.Errorf("sample = %q; want %q", sample, "hi\n")
+		}
+	})
+
+	t.Run("blob larger than limit is truncated to it", func(t *testing.T) {
+		t.Parallel()
+		sample, exists, err := repo.CatFileSample(ctx, "HEAD", "large.txt", 10)
+		if err != nil {
+			t.Fatalf("CatFileSample: %v", err)
+		}
+		if !exists {
+			t.Fatal("exists = false; want true")
+		}
+		if len(sample) != 10 {
+			t.Errorf("len(sample) = %d; want 10", len(sample))
+		}
+		if string(sample) != strings.Repeat("a", 10) {
+			t.Errorf("sample = %q; want 10 'a's", sample)
+		}
+	})
+
+	t.Run("path absent from rev reports exists=false, err=nil", func(t *testing.T) {
+		t.Parallel()
+		sample, exists, err := repo.CatFileSample(ctx, "HEAD", "nosuch.txt", 16)
+		if err != nil {
+			t.Fatalf("CatFileSample: %v", err)
+		}
+		if exists {
+			t.Error("exists = true; want false")
+		}
+		if sample != nil {
+			t.Errorf("sample = %q; want nil", sample)
+		}
+	})
+
+	t.Run("revision that does not resolve reports exists=false, err=nil", func(t *testing.T) {
+		t.Parallel()
+		_, exists, err := repo.CatFileSample(ctx, "nosuchrev", "small.txt", 16)
+		if err != nil {
+			t.Fatalf("CatFileSample: %v", err)
+		}
+		if exists {
+			t.Error("exists = true; want false")
+		}
+	})
 }
 
 // TestErrorMessagesNameTheCommand pins what a caller actually reads when
