@@ -101,6 +101,9 @@ func TestCompletionFlags_MatchLiveFlagSets(t *testing.T) {
 	}{
 		{"diff", runDiffHelp(), rgitDiffFlags, []string{"-h", "--help"}},
 		{"commit", runCommitHelp(), rgitCommitFlags, []string{"-h", "--help", "-S"}},
+		{"languages", runLanguagesHelp(), rgitLanguagesFlags, []string{"-h", "--help"}},
+		{"doctor", runDoctorHelp(), rgitDoctorFlags, []string{"-h", "--help"}},
+		{"completion", runCompletionHelpText(), rgitCompletionFlags, []string{"-h", "--help"}},
 	}
 
 	for _, tt := range tests {
@@ -152,5 +155,29 @@ func runDiffHelp() string {
 func runCommitHelp() string {
 	var stdout, stderr strings.Builder
 	runCommit(context.Background(), []string{"--help"}, &stdout, &stderr)
+	return stdout.String()
+}
+
+// runLanguagesHelp, runDoctorHelp, and runCompletionHelpText are
+// runDiffHelp/runCommitHelp's counterparts for the three subcommands small
+// enough to parse their own args by hand rather than via pflag -- none
+// takes a context.Context.
+func runLanguagesHelp() string {
+	var stdout, stderr strings.Builder
+	runLanguages([]string{"--help"}, &stdout, &stderr)
+	return stdout.String()
+}
+
+func runDoctorHelp() string {
+	var stdout, stderr strings.Builder
+	runDoctor([]string{"--help"}, &stdout, &stderr)
+	return stdout.String()
+}
+
+// runCompletionHelpText is named distinctly from completionHelp (the
+// constant it renders) to avoid a name collision.
+func runCompletionHelpText() string {
+	var stdout, stderr strings.Builder
+	runCompletion([]string{"--help"}, &stdout, &stderr)
 	return stdout.String()
 }
