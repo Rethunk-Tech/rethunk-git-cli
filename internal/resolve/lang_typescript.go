@@ -10,16 +10,20 @@ import ts "github.com/tree-sitter/go-tree-sitter"
 // registrations.
 
 // tsFamily implements Language for both the TypeScript and TSX grammars. The
-// two differ only in TSLanguage and Extensions.
+// two differ only in TSLanguage and Extensions. lang is resolved once, in
+// the constructors below, and stored rather than re-invoked on every parse
+// -- every other adapter in this package caches its *ts.Language the same
+// way (e.g. goLanguage in lang_go.go); ts.NewLanguage wraps the grammar's C
+// symbol table, which does not change between parses of the same language.
 type tsFamily struct {
 	name string
 	exts []string
-	lang func() *ts.Language
+	lang *ts.Language
 }
 
 func (l *tsFamily) Name() string             { return l.name }
 func (l *tsFamily) Extensions() []string     { return l.exts }
-func (l *tsFamily) TSLanguage() *ts.Language { return l.lang() }
+func (l *tsFamily) TSLanguage() *ts.Language { return l.lang }
 
 // IsComment is true for "comment", the one kind the grammar uses for both
 // `//` line comments and `/** */` doc comments.
@@ -340,7 +344,7 @@ func newTypeScriptLanguage() Language {
 	return &tsFamily{
 		name: "typescript",
 		exts: []string{".ts", ".mts", ".cts"},
-		lang: typescriptGrammar,
+		lang: typescriptGrammar(),
 	}
 }
 
@@ -352,7 +356,7 @@ func newTSXLanguage() Language {
 	return &tsFamily{
 		name: "tsx",
 		exts: []string{".tsx", ".jsx", ".js", ".mjs", ".cjs"},
-		lang: tsxGrammar,
+		lang: tsxGrammar(),
 	}
 }
 
