@@ -17,7 +17,43 @@ Notable changes to `rgit`. The format follows
   binaries. Generation runs once via `cmd/rgit-install -generate-only`; the
   per-target cost is only compiling the generated C, ~6–7s each.
 
+- Shell completion now offers flags for `languages`, `doctor` and
+  `completion`, which previously fell through to nothing in both bash and
+  zsh even though all three were offered as subcommands.
+
+### Security
+
+- The managed `gopls` socket and its spawn lock now live in a private,
+  UID-scoped `0700` directory that is verified — owner, mode, and not a
+  symlink — before every dial or spawn, rather than sitting at a predictable
+  path in a world-writable temp directory where another user on the host
+  could pre-create it and receive file contents via `didOpen`. A directory
+  that fails the check degrades to `[ts-only]`. A caller-supplied
+  `$RGIT_LSP_SOCKET` is untouched.
+
 ### Fixed
+
+- A stale or incompatible language-server socket no longer pins every later
+  invocation to `[ts-only]`: a managed socket that fails the handshake is
+  unlinked and the next candidate tried. Spawn-on-demand also unlinks a dead
+  daemon's leftover socket instead of failing its own bind forever, and a
+  stale spawn lock is reclaimed and retried inside the same invocation.
+- `DocumentSymbols` closes each document it opens, so a long-lived `gopls`
+  no longer accumulates open documents across an invocation's anchors.
+- A nil `*lsp.Session` degrades explicitly instead of dialling and leaking a
+  client nobody closes.
+- Binary detection samples a bounded prefix instead of reading a whole file:
+  classifying an anchor no longer slurps a large worktree file, nor
+  materializes an entire HEAD blob for a path that is only being sniffed.
+- The exit-9 message names the path and whether shebang sniffing ran. An
+  extensionless file produced a dangling "no grammar registered for " that
+  hid the fallback entirely.
+- `rgit commit --dry-run` warns about an untracked file it cannot read
+  rather than silently reporting low line counts.
+- `make clean` removes `./rgit-install`, which it built and `.gitignore`
+  already listed.
+- The unresolved-argument diagnostic says "rules considered" — it listed
+  pathspec magic as tried even when a leading colon had ruled it out.
 
 - The install docs named `~/.local/bin/rgit` as the uninstall target, which
   the default install never writes to — it targets `$GOBIN`, else
