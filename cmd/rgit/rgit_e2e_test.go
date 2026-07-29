@@ -48,8 +48,28 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	rgitBin = bin
+
+	// buildRgit links coverage instrumentation (-cover) into rgitBin, and an
+	// instrumented binary run with no GOCOVERDIR warns on its own stderr --
+	// noise every case in this file would otherwise have to filter out of
+	// its own assertions. Setting a real one here, once, for the whole test
+	// process, means every exec.Command in this file inherits it through
+	// os.Environ() with no per-call-site change, and the coverage data each
+	// invocation writes is real (many processes writing into the same
+	// directory is exactly what GOCOVERDIR is designed to accumulate).
+	coverDir, err := os.MkdirTemp("", "rgit-e2e-cover-*")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "create GOCOVERDIR for e2e tests:", err)
+		os.Exit(1)
+	}
+	if err := os.Setenv("GOCOVERDIR", coverDir); err != nil {
+		fmt.Fprintln(os.Stderr, "set GOCOVERDIR for e2e tests:", err)
+		os.Exit(1)
+	}
+
 	code := m.Run()
 	cleanup()
+	_ = os.RemoveAll(coverDir)
 	os.Exit(code)
 }
 
@@ -470,10 +490,18 @@ func TestCommit_PushAfterSuccessfulCommit(t *testing.T) {
 	qt.Assert(t, qt.Equals(strings.TrimSpace(gittest.Git(t, remote, "rev-parse", branch)), local))
 }
 
-func TestCommit_MultiLanguageSymbolGranularity(t *testing.T) {
+// TestCommit_GoTSPythonSymbolGranularityInOneInvocation covers three of the
+// v1 grammars, not every one of them: the guarantee under test is that
+// symbol granularity holds across DIFFERENT languages within a single
+// invocation, not any one grammar's own resolution behaviour, which
+// resolver_test.go and index_test.go already cover per language. Go, TS and
+// Python are representative of that mixing (free functions, no shared
+// container shape between them) without re-proving what those other files
+// already do for every grammar rgit supports.
+func TestCommit_GoTSPythonSymbolGranularityInOneInvocation(t *testing.T) {
 	t.Parallel()
-	// One commit naming a symbol in each v1 grammar. The point is that
-	// each file's OTHER symbol changed too and must stay uncommitted:
+	// One commit naming a symbol in each of three languages. The point is
+	// that each file's OTHER symbol changed too and must stay uncommitted:
 	// symbol granularity has to hold per grammar, in a single invocation.
 	repo, _ := gittest.New(t)
 	gittest.Write(t, repo, "auth.go", "package auth\n\nfunc GoA() int { return 1 }\n\nfunc GoB() int { return 1 }\n")
@@ -992,10 +1020,12 @@ func TestHelp_TopLevelExitsZeroOnEverySpelling(t *testing.T) {
 		t.Run(spelling, func(t *testing.T) {
 			got := runRgit(t, repo, spelling)
 			qt.Assert(t, qt.Equals(got.ExitCode, 0))
-			// Not an exact-empty check: the e2e binary is built with -cover
-			// (buildRgit), which itself warns on stderr when GOCOVERDIR is
-			// unset -- noise unrelated to this command's own behaviour.
-			qt.Assert(t, qt.Not(qt.StringContains(got.Stderr, "rgit:")))
+			// TestMain sets GOCOVERDIR for the whole process, so the
+			// -cover-instrumented binary (buildRgit) never has its own
+			// coverage warning to filter out here: stderr is exactly what
+			// this command itself writes, which for a help spelling is
+			// nothing.
+			qt.Assert(t, qt.Equals(got.Stderr, ""))
 			qt.Assert(t, qt.StringContains(got.Stdout, "diff"))
 			qt.Assert(t, qt.StringContains(got.Stdout, "commit"))
 			qt.Assert(t, qt.StringContains(got.Stdout, "--version"))
