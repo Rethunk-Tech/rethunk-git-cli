@@ -62,6 +62,27 @@ func TestLsFilesStageAndMergeBase(t *testing.T) {
 	}
 }
 
+// TestAdd_AlreadyStagedDeletionSucceeds pins Add's own fallback (the unit
+// lane's only path to hasStagedChange -- the e2e lane's
+// TestCommit_PathAlreadyStagedAsDeleted is the only other case that reaches
+// it, driving the whole binary to prove the same thing): after `git rm`, a
+// path matches nothing in either the worktree or the index, so plain
+// `git add` calls it a bad pathspec. Naming something already staged
+// exactly as asked must not fail -- the commit includes it either way.
+func TestAdd_AlreadyStagedDeletionSucceeds(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	ctx := context.Background()
+
+	gittest.Write(t, dir, "gone.md", "bye\n")
+	gittest.Commit(t, dir, "chore: add gone.md")
+	gittest.Git(t, dir, "rm", "-q", "gone.md")
+
+	if err := repo.Add(ctx, "gone.md"); err != nil {
+		t.Errorf("Add(already-staged deletion) = %v; want nil", err)
+	}
+}
+
 // TestCatFileSample pins the bounded-read contract classifyPath relies on:
 // a sample no larger than the caller's own limit, the same exists=false
 // folding CatFile itself does for a missing path or revision, and -- the
