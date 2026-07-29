@@ -640,6 +640,33 @@ func TestRun_Languages(t *testing.T) {
 	}
 }
 
+// TestRun_LanguagesPorcelain pins the record shape docs/CODES.md commits to
+// -- three tab-separated fields, no header -- against the "go" entry every
+// build carries, so this case holds regardless of -tags rgit_sql. Whether a
+// "sql" record appears, and what its GATED field reads, is build-specific
+// and covered separately (languages_sql_test.go, languages_nosql_test.go).
+func TestRun_LanguagesPorcelain(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	stdout, stderr, code := runApp(t, "languages", "--porcelain")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	// No stray human decoration leaking into the machine form.
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "(build-tag gated)")))
+
+	found := false
+	for line := range strings.SplitSeq(strings.TrimRight(stdout, "\n"), "\n") {
+		fields := strings.Split(line, "\t")
+		qt.Assert(t, qt.Equals(len(fields), 3))
+		if fields[0] == "go" {
+			found = true
+			qt.Assert(t, qt.Equals(fields[1], ".go"))
+			qt.Assert(t, qt.Equals(fields[2], "0"))
+		}
+	}
+	qt.Assert(t, qt.IsTrue(found))
+}
+
 // TestRun_LanguagesHelpAndUsage covers the two non-listing paths: --help
 // prints and exits 0, and an unexpected argument is the usual usage error.
 func TestRun_LanguagesHelpAndUsage(t *testing.T) {

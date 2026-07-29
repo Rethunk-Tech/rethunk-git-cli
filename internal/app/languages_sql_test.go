@@ -33,6 +33,17 @@ func TestRun_LanguagesListsSQLWhenTagged(t *testing.T) {
 	qt.Assert(t, qt.StringContains(version, "optional grammars: sql"))
 }
 
+// TestRun_LanguagesPorcelainMarksSQLGatedWhenTagged pins the GATED column's
+// build-specific half: with the grammar compiled in, its record reads "1",
+// the exact record docs/CODES.md's own example shows.
+func TestRun_LanguagesPorcelainMarksSQLGatedWhenTagged(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	stdout, _, code := runApp(t, "languages", "--porcelain")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(stdout, "sql\t.sql\t1\n"))
+}
+
 // TestRun_DoctorListsSQLWhenTagged is doctor's own agreement with the two
 // above: its "Grammars compiled in" section reuses the same
 // resolve.Languages() data, so it must never disagree with `rgit languages`.

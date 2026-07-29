@@ -19,34 +19,44 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
-const languagesHelp = `usage: rgit languages
+const languagesHelp = `usage: rgit languages [--porcelain]
 
 List every grammar compiled into this binary: name, file extensions, and
 whether it is present only because a build tag selected it (currently only
 SQL, behind -tags rgit_sql -- see docs/INSTALL.md § SQL support).
 
+--porcelain lists stable tab-separated records instead: see
+docs/CODES.md#output-records.
+
 Full reference: docs/USAGE.md
 `
 
-// runLanguages has no flags beyond -h/--help: the listing is unconditional,
-// so there is nothing yet to filter or format differently. A --porcelain
-// form is deliberately not implemented here -- docs/CODES.md is the machine
-// contract and has no record shape for this listing, and inventing one
-// without a matching entry there would give scripts a contract this repo
-// never agreed to. See the worker report for the record shape that would
-// need adding first.
+// runLanguages's only flag is --porcelain, so it is parsed by hand rather
+// than pulling in pflag's machinery the way diff and commit's much larger
+// flag surfaces need -- matching doctor.go and completion.go's own minimal
+// style for a subcommand this small.
 func runLanguages(args []string, stdout, stderr io.Writer) exitcode.Code {
-	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
-		fmt.Fprint(stdout, languagesHelp)
-		return exitcode.Success
-	}
-	if len(args) != 0 {
-		fmt.Fprintln(stderr, "rgit: languages takes no arguments")
-		fmt.Fprint(stderr, languagesHelp)
-		return exitcode.InvalidUsage
+	porcelain := false
+	for _, a := range args {
+		switch a {
+		case "--help", "-h":
+			fmt.Fprint(stdout, languagesHelp)
+			return exitcode.Success
+		case "--porcelain":
+			porcelain = true
+		default:
+			fmt.Fprintf(stderr, "rgit: languages: unrecognized argument %q\n", a)
+			fmt.Fprint(stderr, languagesHelp)
+			return exitcode.InvalidUsage
+		}
 	}
 
-	fmt.Fprint(stdout, renderLanguages(resolve.Languages()))
+	langs := resolve.Languages()
+	if porcelain {
+		fmt.Fprint(stdout, renderLanguagesPorcelain(langs))
+	} else {
+		fmt.Fprint(stdout, renderLanguages(langs))
+	}
 	return exitcode.Success
 }
 
@@ -67,6 +77,33 @@ func renderLanguages(langs []resolve.LanguageInfo) string {
 	}
 	// Writes go to a strings.Builder, which never fails.
 	_ = tw.Flush()
+	return buf.String()
+}
+
+// renderLanguagesPorcelain renders langs as docs/CODES.md's stable
+// tab-separated record: NAME<TAB>EXTENSIONS<TAB>GATED, one line per
+// language sorted by NAME (resolve.Languages() already returns them sorted,
+// so no further sort is needed here), no header -- the same "no STATUS
+// column when every row would carry the same shape of value" economy
+// rgit commit --porcelain already applies (docs/CODES.md), except GATED
+// really does vary per row, so it stays.
+//
+// EXTENSIONS joins with a single space, matching renderLanguages's own
+// human-readable join: unambiguous, since a real extension is always
+// ".something" and never itself contains whitespace, so a space can never
+// be mistaken for part of one. GATED is the literal "1" or "0" rather than
+// an empty/present column -- a definite answer for every row, the same way
+// internal/diff/porcelain.go's RenderPorcelain never leaves STATUS to be
+// inferred from a column's absence.
+func renderLanguagesPorcelain(langs []resolve.LanguageInfo) string {
+	var buf strings.Builder
+	for _, l := range langs {
+		gated := "0"
+		if l.Gated {
+			gated = "1"
+		}
+		fmt.Fprintf(&buf, "%s\t%s\t%s\n", l.Name, strings.Join(l.Extensions, " "), gated)
+	}
 	return buf.String()
 }
 

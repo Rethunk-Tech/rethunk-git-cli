@@ -29,6 +29,18 @@ func TestRun_LanguagesOmitsSQLWithoutTag(t *testing.T) {
 	qt.Assert(t, qt.StringContains(version, "optional grammars: none compiled in"))
 }
 
+// TestRun_LanguagesPorcelainOmitsSQLWithoutTag pins the GATED column's
+// build-specific half: without the grammar compiled in, there is no "sql"
+// record at all -- not one with GATED "0", which would wrongly claim the
+// grammar exists but happens not to be gated.
+func TestRun_LanguagesPorcelainOmitsSQLWithoutTag(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	stdout, _, code := runApp(t, "languages", "--porcelain")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "sql\t")))
+}
+
 // TestRun_DoctorOmitsSQLWithoutTag is doctor's own agreement with the
 // above: its grammar section reuses the identical resolve.Languages() data.
 func TestRun_DoctorOmitsSQLWithoutTag(t *testing.T) {
