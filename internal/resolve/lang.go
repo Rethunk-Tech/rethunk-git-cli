@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	ts "github.com/tree-sitter/go-tree-sitter"
@@ -186,6 +187,81 @@ func register(l Language) {
 func ForExtension(ext string) (Language, bool) {
 	l, ok := registered[ext]
 	return l, ok
+}
+
+// buildTagGated is an optional refinement of Language, the same seam shape
+// as ImportMatcher above and trailingCommentTrimmer (extent.go): a Language
+// implements it only when it needs to answer something most adapters never
+// have occasion to. Here, that is "was I compiled in only because a build
+// tag selected me" -- only sqlLanguage does (lang_sql.go's rgit_sql tag).
+//
+// This is deliberately an optional interface rather than a required
+// Language method the way OwnsTrailingSeparator/MembersSitFlush/
+// AllowsRawHeadingFallback were promoted to (lang.go): those three failed
+// silently for a language that never got a considered answer, corrupting
+// what that adapter actually resolved. Forgetting to implement this one for
+// some future gated adapter cannot do that -- the worst it does is describe
+// that adapter as unconditionally present in a `rgit languages` listing,
+// cosmetic rather than a correctness gap. A gated adapter's own author is
+// also, by construction, already writing the bespoke tag-scoped
+// registration file this seam lives beside, the same position lang_sql.go's
+// own author was already in.
+type buildTagGated interface {
+	buildTagGated() bool
+}
+
+// LanguageInfo describes one registered adapter for a caller that needs to
+// list what this build supports without reaching into resolve's own
+// registry or depending on the Language interface itself -- a `rgit
+// languages` subcommand is the motivating case. It is deliberately the
+// minimal read-only projection that satisfies that: no *Language, no
+// grammar handle, nothing that would let a caller start resolving anchors
+// through this seam instead of the real one (internal/synth,
+// internal/diff).
+type LanguageInfo struct {
+	// Name is the same string Language.Name reports for this adapter --
+	// "go", "css", "typescript", etc.
+	Name string
+
+	// Extensions is every file suffix this adapter claims, including the
+	// leading dot, in the same order Language.Extensions reports it.
+	Extensions []string
+
+	// Gated is true when this adapter was compiled in only because a build
+	// tag selected it (buildTagGated above) -- currently true for "sql"
+	// alone. A build with the tag omitted has no registry entry for a gated
+	// language to begin with, so there is nothing for Languages to report
+	// about it at all: Gated is never a way to discover an *absent*
+	// language, only to explain why a *present* one might not be in every
+	// build.
+	Gated bool
+}
+
+// Languages lists every adapter registered in this build, one entry per
+// distinct language rather than per extension -- .ts/.mts/.cts all report
+// as the single "typescript" entry, with Extensions holding all three, the
+// same de-duplication ForExtension's own multi-extension registration
+// already implies. Sorted by Name so a listing is stable across runs,
+// matching every other sorted listing this resolver produces (sortResults,
+// internal/synth's own stage.go).
+func Languages() []LanguageInfo {
+	seen := map[string]bool{}
+	var out []LanguageInfo
+	for _, l := range registered {
+		name := l.Name()
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		g, _ := l.(buildTagGated)
+		out = append(out, LanguageInfo{
+			Name:       name,
+			Extensions: append([]string(nil), l.Extensions()...),
+			Gated:      g != nil && g.buildTagGated(),
+		})
+	}
+	slices.SortFunc(out, func(a, b LanguageInfo) int { return strings.Compare(a.Name, b.Name) })
+	return out
 }
 
 // shebangExtension maps a shebang's own interpreter name to the file

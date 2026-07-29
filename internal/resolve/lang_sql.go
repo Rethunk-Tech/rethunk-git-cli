@@ -81,6 +81,11 @@ func (l *sqlLanguage) MembersSitFlush() bool { return false }
 // fallback to apply to.
 func (l *sqlLanguage) AllowsRawHeadingFallback() bool { return false }
 
+// buildTagGated implements the buildTagGated seam (lang.go). This file
+// itself carries the rgit_sql tag, so any build where this method exists to
+// be called at all already answers true.
+func (l *sqlLanguage) buildTagGated() bool { return true }
+
 // Declarations walks the program root's own named children. A "comment" or
 // "marginalia" node sits as a program-level sibling of "statement" nodes,
 // not nested inside one -- measured -- so both are skipped here the same
