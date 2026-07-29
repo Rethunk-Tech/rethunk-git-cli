@@ -25,9 +25,12 @@ attributes, and body — and leaves every other edit in the file uncommitted.
 `rgit diff` shows what is committable, labelled with the exact anchors
 `rgit commit` accepts, so the output of one is the input of the other.
 
+`rgit blame FILE:SYMBOL` bounds `git blame` to just that symbol's own lines
+instead of the whole file.
+
 Everything else stays plain `git`. `rgit` has two staging commands — plus
-`languages`, `doctor`, and `completion` for everything around them — and no
-opinions about the rest of your workflow.
+`blame`, `languages`, `doctor`, and `completion` for everything around them —
+and no opinions about the rest of your workflow.
 
 Commands and flags are in [`docs/USAGE.md`](docs/USAGE.md); anchor syntax is
 in [`docs/ANCHORS.md`](docs/ANCHORS.md); exit codes and the `--porcelain`

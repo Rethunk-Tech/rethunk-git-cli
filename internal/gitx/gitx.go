@@ -664,6 +664,17 @@ func (r *Repo) LsFilesStage(ctx context.Context, path string) (mode string, foun
 	return fields[0], true, nil
 }
 
+// Blame runs `git blame` on path, bounded to the 1-based, inclusive line
+// range [start, end] via `-L`, plus any extra flags (e.g. "--porcelain")
+// passed straight through. There is no "normal negative answer" of its own
+// -- an invalid range or a path git cannot blame is a genuine failure -- so
+// any non-zero exit is a *GitError like every other checked method.
+func (r *Repo) Blame(ctx context.Context, path string, start, end int, extra ...string) ([]byte, error) {
+	args := append([]string{"blame", fmt.Sprintf("-L%d,%d", start, end)}, extra...)
+	args = append(args, "--", path)
+	return r.checked(ctx, args...)
+}
+
 // MergeBase resolves the merge base of a and b via `git merge-base`, needed
 // for a diff-scope's `A...B` symmetric range: the range's "old" content
 // endpoint is the merge base, not A itself. ok is false when the two

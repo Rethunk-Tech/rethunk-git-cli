@@ -45,6 +45,15 @@ and proceed — degraded resolution is normal, not an error
 ([`AGENTS.md`](../AGENTS.md#resolution-model)). `rgit diff --quiet` still prints
 it, since `--quiet` suppresses the report on stdout, not diagnostics.
 
+### `blame` shares the anchor codes, not the staging ones
+
+`rgit blame FILE:SYMBOL` resolves its one anchor exactly like `commit` and
+`diff --sym` do, so 3 (unresolvable), 4 (ambiguous), and 9 (unsupported
+language) mean the same thing there. It never stages or commits anything, so
+1, 5, 6, 7, 8, 10, and 11 do not apply — a failure past resolution is `git
+blame`'s own exit, folded into 128 the same way any other unexpected git
+failure is.
+
 ## Output records
 
 `diff`, `commit`, and `languages` emit plain text only. `--porcelain`
@@ -142,6 +151,14 @@ answer instead of inferring "not gated" from an absent column.
 There is no row at all for a grammar this build was not compiled with: a
 plain build's records have no `sql` line, matching `rgit languages`'s own
 human output and `rgit --version`'s second line.
+
+### `rgit blame --porcelain`
+
+Not a new record shape: `--porcelain` passes straight through to git's own
+`git blame --porcelain` output, unmodified. See `git help blame` for that
+format — rewrapping it in a second, rgit-specific shape would be exactly the
+kind of duplication this file exists to avoid, for a fact git already
+establishes on its own.
 
 ## Rules the diff and commit forms obey
 

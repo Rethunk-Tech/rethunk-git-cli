@@ -107,16 +107,41 @@ A `chmod +x` with no content edit produces no changed symbols, so `rgit diff`
 lists it as a `MODE` entry — the file is never falsely reported clean. Stage it
 with a pathspec (`rgit commit script.sh`); `--sym` cannot express a mode change.
 
+## Blame
+
+```console
+$ rgit blame auth.go:ValidateToken
+^1a2b3c4 (Alice Example 2024-01-15 10:00:00 -0800  9) func ValidateToken(tok string) error {
+ 5d6e7f8 (Bob Example   2024-03-02 14:22:11 -0800 10)     if tok == "" {
+ ...
+```
+
+`rgit blame FILE:SYMBOL` resolves the anchor exactly like `commit` and `diff
+--sym` do, then runs `git blame -L start,end -- FILE` bounded to just that
+symbol's own extent in the current worktree file — never the whole file.
+There is no revision argument: blame always reads the worktree copy, the same
+file a bare `git blame FILE` would.
+
+An anchor that does not resolve is **never** silently widened to a whole-file
+blame — it is exit 3 (unresolvable), 4 (ambiguous), or 9 (unsupported
+language), the same codes `commit` and `diff --sym` already give the
+identical anchor. See [`CODES.md`](CODES.md#exit-codes).
+
+`--porcelain` passes straight through to git's own `git blame --porcelain`
+output, unmodified — not a second record format rgit invents. The default is
+likewise git's own human-readable blame output, unmodified. See
+[`CODES.md`](CODES.md#output-records).
+
 ## Help
 
 `rgit --help`, `rgit -h`, and `rgit help` print the top-level command list on
 stdout and exit 0. `rgit diff --help` / `-h` and `rgit commit --help` / `-h`
 print that command's own flags the same way, generated from the flag set itself
-so the two cannot drift. `rgit languages --help`, `rgit doctor --help`, and
-`rgit completion --help` (each also accepting `-h`) print their own
-hand-written usage text instead — surfaces small enough that a generated
-rendering was not worth building. A bare `rgit` (no command at all) is a usage
-error, not a help request — see § Exit codes.
+so the two cannot drift. `rgit blame --help`, `rgit languages --help`, `rgit
+doctor --help`, and `rgit completion --help` (each also accepting `-h`) print
+their own hand-written usage text instead — surfaces small enough that a
+generated rendering was not worth building. A bare `rgit` (no command at all)
+is a usage error, not a help request — see § Exit codes.
 
 `rgit --version` prints `rgit <version>` on its first line and exits 0. The
 version is stamped at build time (`-ldflags "-X main.version=vX.Y.Z"`) and
@@ -186,9 +211,10 @@ everywhere else. Install instructions: [`INSTALL.md`](INSTALL.md#shell-completio
 ## Flags
 
 `commit` and `diff`'s own flags — the two subcommands with a real flag
-surface. `languages` takes only `--porcelain`/`--help` (§ Languages above,
-[`CODES.md`](CODES.md#output-records)); `doctor` and `completion` take no
-flags beyond `--help`/`-h` (`completion` also takes its shell argument).
+surface. `blame` and `languages` each take only `--porcelain`/`--help` (§
+Blame and § Languages above, [`CODES.md`](CODES.md#output-records)); `doctor`
+and `completion` take no flags beyond `--help`/`-h` (`completion` also takes
+its shell argument).
 
 | Flag | Behavior |
 | --- | --- |

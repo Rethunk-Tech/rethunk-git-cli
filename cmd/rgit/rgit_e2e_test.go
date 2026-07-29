@@ -973,7 +973,7 @@ func TestHelp_TopLevelExitsZeroOnEverySpelling(t *testing.T) {
 func TestHelp_BareInvocationStillExitsInvalidUsage(t *testing.T) {
 	t.Parallel()
 	// Bare `git` prints its own full help to stdout at exit 1 -- but rgit's
-	// five subcommands (diff, commit, languages, doctor, completion)
+	// six subcommands (diff, commit, blame, languages, doctor, completion)
 	// include no useful no-op mode, and every other usage error in its
 	// table (missing message, no target, ...) is already
 	// pinned to exit 129. Naming no command is the same kind of usage

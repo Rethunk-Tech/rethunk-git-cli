@@ -154,6 +154,51 @@ func TestCatFileSample(t *testing.T) {
 	})
 }
 
+// TestBlame pins the -L bounding itself: blaming lines 2,2 of a three-line
+// file must name only that line's own commit, never the ones before or
+// after it -- the guardrail rgit blame exists to hold (TODO.md: no
+// whole-file fallback).
+func TestBlame(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	ctx := context.Background()
+
+	gittest.Write(t, dir, "f.txt", "one\ntwo\nthree\n")
+	gittest.Commit(t, dir, "chore: three lines")
+
+	out, err := repo.Blame(ctx, "f.txt", 2, 2)
+	if err != nil {
+		t.Fatalf("Blame: %v", err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "two") {
+		t.Errorf("Blame(2,2) output = %q; want it to name line 2's content (\"two\")", got)
+	}
+	if strings.Contains(got, "one") || strings.Contains(got, "three") {
+		t.Errorf("Blame(2,2) output = %q; want it bounded to line 2 only, not the whole file", got)
+	}
+}
+
+// TestBlame_Porcelain pins that extra args (here --porcelain) actually
+// reach git: porcelain blame output names the author on its own line,
+// which the default human-readable format does not.
+func TestBlame_Porcelain(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	ctx := context.Background()
+
+	gittest.Write(t, dir, "f.txt", "one\n")
+	gittest.Commit(t, dir, "chore: one line")
+
+	out, err := repo.Blame(ctx, "f.txt", 1, 1, "--porcelain")
+	if err != nil {
+		t.Fatalf("Blame: %v", err)
+	}
+	if !strings.Contains(string(out), "\nauthor ") {
+		t.Errorf("Blame(--porcelain) output = %q; want an \"author \" line", out)
+	}
+}
+
 // TestErrorMessagesNameTheCommand pins what a caller actually reads when
 // something goes wrong. Both types are surfaced verbatim by internal/app's
 // error mapping, so their text is the whole failure report -- and an

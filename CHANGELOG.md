@@ -8,6 +8,13 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit blame FILE:SYMBOL`, bounding `git blame` to one symbol's own extent
+  instead of the whole file. Reuses anchor resolution and nothing else: an
+  unresolvable anchor is exit 3 (or 4/9), never a silently widened
+  whole-file blame. `--porcelain` passes straight through to git's own
+  `git blame --porcelain` format. See
+  [`docs/USAGE.md`](docs/USAGE.md#blame).
+
 - `SECURITY.md`, a tag-driven release workflow that publishes cross-built
   binaries with their `SHA256SUMS`, and grouped Dependabot updates for Go
   modules and Actions.

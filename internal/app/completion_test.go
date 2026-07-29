@@ -101,6 +101,7 @@ func TestCompletionFlags_MatchLiveFlagSets(t *testing.T) {
 	}{
 		{"diff", runDiffHelp(), rgitDiffFlags, []string{"-h", "--help"}},
 		{"commit", runCommitHelp(), rgitCommitFlags, []string{"-h", "--help", "-S"}},
+		{"blame", runBlameHelpText(), rgitBlameFlags, []string{"-h", "--help"}},
 		{"languages", runLanguagesHelp(), rgitLanguagesFlags, []string{"-h", "--help"}},
 		{"doctor", runDoctorHelp(), rgitDoctorFlags, []string{"-h", "--help"}},
 		{"completion", runCompletionHelpText(), rgitCompletionFlags, []string{"-h", "--help"}},
@@ -179,5 +180,14 @@ func runDoctorHelp() string {
 func runCompletionHelpText() string {
 	var stdout, stderr strings.Builder
 	runCompletion([]string{"--help"}, &stdout, &stderr)
+	return stdout.String()
+}
+
+// runBlameHelpText is named distinctly from blameHelp (the constant it
+// renders), matching runCompletionHelpText's own reasoning; runBlame takes
+// a context.Context the way runDiff and runCommit do.
+func runBlameHelpText() string {
+	var stdout, stderr strings.Builder
+	runBlame(context.Background(), []string{"--help"}, &stdout, &stderr)
 	return stdout.String()
 }
