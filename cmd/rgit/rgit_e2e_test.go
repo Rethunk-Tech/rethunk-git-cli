@@ -22,6 +22,7 @@ import (
 	"github.com/go-quicktest/qt"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
@@ -87,30 +88,6 @@ func buildRgit() (bin string, cleanup func(), err error) {
 	return bin, cleanup, nil
 }
 
-// newTempRepo creates an empty git repository with no commits. Rule 4/5
-// path checks fall back to worktree existence alone on an unborn branch,
-// so none of this file's cases need an initial commit.
-func newTempRepo(t *testing.T) string {
-	t.Helper()
-	dir := t.TempDir()
-	cmd := exec.Command("git", "init", "-q", dir)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git init: %v: %s", err, out)
-	}
-	return dir
-}
-
-func writeFile(t *testing.T, repo, relPath, content string) {
-	t.Helper()
-	full := filepath.Join(repo, relPath)
-	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
 type rgitResult struct {
 	Stdout   string
 	Stderr   string
@@ -146,8 +123,8 @@ func TestCommit_InterspersedFlagAfterPositional(t *testing.T) {
 	// targets ("auth.go:Foo", "msg"), failing with exit 129 ("commit
 	// requires a message"). pflag's interspersed parsing must read one
 	// message and one target instead, letting the commit actually succeed.
-	repo := newTempRepo(t)
-	writeFile(t, repo, "auth.go", "package main\n\nfunc Foo() {}\n")
+	repo, _ := gittest.New(t)
+	gittest.Write(t, repo, "auth.go", "package main\n\nfunc Foo() {}\n")
 
 	got := runRgit(t, repo, "commit", "auth.go:Foo", "-m", "msg")
 
@@ -161,8 +138,8 @@ func TestCommit_ColonInFilenameIsPathspec(t *testing.T) {
 	// plain path (specs/design.md). Rule 4's existing-path check must
 	// claim it whole, before rule 5 gets a chance to split it into a bogus
 	// FILE:NAME anchor at the interior colon.
-	repo := newTempRepo(t)
-	writeFile(t, repo, "src/notes:draft.md", "draft\n")
+	repo, _ := gittest.New(t)
+	gittest.Write(t, repo, "src/notes:draft.md", "draft\n")
 
 	got := runRgit(t, repo, "commit", "src/notes:draft.md", "-m", "chore: add draft notes")
 
@@ -178,7 +155,7 @@ func TestCommit_DoubleDashForcesPathspec(t *testing.T) {
 	// (exit 128, "did not match any files") -- proof the whole string
 	// reached git as one literal path, never split at its colon.
 	// -m must come before "--", since pflag stops flag parsing there too.
-	repo := newTempRepo(t)
+	repo, _ := gittest.New(t)
 
 	got := runRgit(t, repo, "commit", "-m", "chore: force pathspec", "--", "missing.go:NotASymbol")
 
@@ -192,8 +169,8 @@ func TestCommit_LeadingColonPathspecMagicPassesThrough(t *testing.T) {
 	// Rule 2: all git pathspec magic is leading-colon, so this is claimed
 	// immediately, with no existence check at all -- paired here with a
 	// real target so the commit has something to actually stage.
-	repo := newTempRepo(t)
-	writeFile(t, repo, "keep.go", "package main\n\nfunc Keep() {}\n")
+	repo, _ := gittest.New(t)
+	gittest.Write(t, repo, "keep.go", "package main\n\nfunc Keep() {}\n")
 
 	got := runRgit(t, repo, "commit", "-m", "chore: exclude docs", "keep.go", ":(exclude)docs/*")
 
@@ -206,7 +183,7 @@ func TestCommit_UnresolvableArgumentListsTriedInterpretations(t *testing.T) {
 	// allowRevisions=false to ClassifyArgs (rule 3 is diff-only), so the
 	// error must list pathspec-magic, existing-path, and symbol-anchor —
 	// and must not claim a revision interpretation was tried.
-	repo := newTempRepo(t)
+	repo, _ := gittest.New(t)
 
 	got := runRgit(t, repo, "commit", "-m", "chore: bogus target", "totally-bogus-target")
 
@@ -249,7 +226,7 @@ func TestInvalidFlagCombinations(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			repo := newTempRepo(t)
+			repo, _ := gittest.New(t)
 			got := runRgit(t, repo, tc.args...)
 			qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.InvalidUsage)))
 			qt.Assert(t, qt.StringContains(got.Stderr, tc.wantSubstr))
@@ -270,8 +247,8 @@ func TestContradictoryPathAndAnchor(t *testing.T) {
 	// spelling must not change the answer.
 	setup := func(t *testing.T) string {
 		t.Helper()
-		repo := newTempRepo(t)
-		writeFile(t, repo, "greet.go", "package main\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+		repo, _ := gittest.New(t)
+		gittest.Write(t, repo, "greet.go", "package main\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 		return repo
 	}
 
@@ -295,7 +272,7 @@ func TestContradictoryPathAndAnchor(t *testing.T) {
 	t.Run("different files are not a contradiction", func(t *testing.T) {
 		// The rule is per path, not "a path and an anchor were both given".
 		repo := setup(t)
-		writeFile(t, repo, "other.go", "package main\n\nfunc C() int {\n\treturn 3\n}\n")
+		gittest.Write(t, repo, "other.go", "package main\n\nfunc C() int {\n\treturn 3\n}\n")
 
 		got := runRgit(t, repo, "commit", "-m", "chore: mixed targets", "other.go", "greet.go:A")
 
@@ -309,8 +286,8 @@ func TestCommit_AnnouncesPreambleAndOrdinalAnchors(t *testing.T) {
 	// must be "announced on stderr", and an ordinal, a last resort, must
 	// "warn and suggest qualification".
 	t.Run("new-file preamble is announced", func(t *testing.T) {
-		repo := newTempRepo(t)
-		writeFile(t, repo, "new.go", "package main\n\nimport \"fmt\"\n\nfunc Hi() { fmt.Println(\"hi\") }\n")
+		repo, _ := gittest.New(t)
+		gittest.Write(t, repo, "new.go", "package main\n\nimport \"fmt\"\n\nfunc Hi() { fmt.Println(\"hi\") }\n")
 
 		got := runRgit(t, repo, "commit", "-m", "feat(x): hi", "new.go:Hi")
 
@@ -320,8 +297,8 @@ func TestCommit_AnnouncesPreambleAndOrdinalAnchors(t *testing.T) {
 	})
 
 	t.Run("ordinal anchors warn", func(t *testing.T) {
-		repo := newTempRepo(t)
-		writeFile(t, repo, "dup.go", "package main\n\nfunc init() { println(1) }\n\nfunc init() { println(2) }\n")
+		repo, _ := gittest.New(t)
+		gittest.Write(t, repo, "dup.go", "package main\n\nfunc init() { println(1) }\n\nfunc init() { println(2) }\n")
 
 		got := runRgit(t, repo, "commit", "-m", "feat(x): dup", "dup.go:init#2")
 
@@ -332,8 +309,8 @@ func TestCommit_AnnouncesPreambleAndOrdinalAnchors(t *testing.T) {
 
 	t.Run("a uniquely named anchor does not warn", func(t *testing.T) {
 		// The warning must key on the ordinal form, not fire on every anchor.
-		repo := newTempRepo(t)
-		writeFile(t, repo, "one.go", "package main\n\nfunc Only() {}\n")
+		repo, _ := gittest.New(t)
+		gittest.Write(t, repo, "one.go", "package main\n\nfunc Only() {}\n")
 
 		got := runRgit(t, repo, "commit", "-m", "feat(x): only", "one.go:Only")
 
@@ -351,12 +328,12 @@ func TestDiff_CrossCheckReportsWithoutGating(t *testing.T) {
 	// worth knowing while reading the diff, but a read-only command must
 	// not fail on one, and a server that is absent, slow or silent about a
 	// symbol stays the normal case.
-	repo := newTempRepo(t)
-	writeFile(t, repo, "go.mod", "module x\n\ngo 1.21\n")
-	writeFile(t, repo, "a.go", "package x\n\n// Doc for A.\nfunc A() int {\n\treturn 1\n}\n")
-	gitIn(t, repo, "add", "-A")
-	gitIn(t, repo, "-c", "user.email=t@t.t", "-c", "user.name=T", "commit", "-q", "-m", "init")
-	writeFile(t, repo, "a.go", "package x\n\n// Doc for A.\nfunc A() int {\n\treturn 111\n}\n")
+	repo, _ := gittest.New(t)
+	gittest.Write(t, repo, "go.mod", "module x\n\ngo 1.21\n")
+	gittest.Write(t, repo, "a.go", "package x\n\n// Doc for A.\nfunc A() int {\n\treturn 1\n}\n")
+	gittest.Git(t, repo, "add", "-A")
+	gittest.Git(t, repo, "-c", "user.email=t@t.t", "-c", "user.name=T", "commit", "-q", "-m", "init")
+	gittest.Write(t, repo, "a.go", "package x\n\n// Doc for A.\nfunc A() int {\n\treturn 111\n}\n")
 
 	got := runRgit(t, repo, "diff", "--porcelain")
 
@@ -373,15 +350,15 @@ func TestDocumentedPathsWithoutOtherCoverage(t *testing.T) {
 	// no other test exercises the path that reaches it.
 	commitOne := func(t *testing.T, repo string) {
 		t.Helper()
-		gitIn(t, repo, "add", "-A")
-		gitIn(t, repo, "-c", "user.email=t@t.t", "-c", "user.name=T", "commit", "-q", "-m", "init")
+		gittest.Git(t, repo, "add", "-A")
+		gittest.Git(t, repo, "-c", "user.email=t@t.t", "-c", "user.name=T", "commit", "-q", "-m", "init")
 	}
 
 	t.Run("diff --exit-code reports 1 when committable", func(t *testing.T) {
-		repo := newTempRepo(t)
-		writeFile(t, repo, "a.go", "package main\n\nfunc A() int { return 1 }\n")
+		repo, _ := gittest.New(t)
+		gittest.Write(t, repo, "a.go", "package main\n\nfunc A() int { return 1 }\n")
 		commitOne(t, repo)
-		writeFile(t, repo, "a.go", "package main\n\nfunc A() int { return 2 }\n")
+		gittest.Write(t, repo, "a.go", "package main\n\nfunc A() int { return 2 }\n")
 
 		dirty := runRgit(t, repo, "diff", "--exit-code", "--porcelain")
 		qt.Assert(t, qt.Equals(dirty.ExitCode, 1))
@@ -394,10 +371,10 @@ func TestDocumentedPathsWithoutOtherCoverage(t *testing.T) {
 	})
 
 	t.Run("diff --quiet implies --exit-code and prints nothing", func(t *testing.T) {
-		repo := newTempRepo(t)
-		writeFile(t, repo, "a.go", "package main\n\nfunc A() int { return 1 }\n")
+		repo, _ := gittest.New(t)
+		gittest.Write(t, repo, "a.go", "package main\n\nfunc A() int { return 1 }\n")
 		commitOne(t, repo)
-		writeFile(t, repo, "a.go", "package main\n\nfunc A() int { return 2 }\n")
+		gittest.Write(t, repo, "a.go", "package main\n\nfunc A() int { return 2 }\n")
 
 		got := runRgit(t, repo, "diff", "--quiet")
 
@@ -406,8 +383,8 @@ func TestDocumentedPathsWithoutOtherCoverage(t *testing.T) {
 	})
 
 	t.Run("a non-conventional message warns but still commits", func(t *testing.T) {
-		repo := newTempRepo(t)
-		writeFile(t, repo, "a.go", "package main\n\nfunc A() {}\n")
+		repo, _ := gittest.New(t)
+		gittest.Write(t, repo, "a.go", "package main\n\nfunc A() {}\n")
 
 		got := runRgit(t, repo, "commit", "-m", "just some words", "a.go:A")
 
@@ -425,8 +402,8 @@ func TestDocumentedPathsWithoutOtherCoverage(t *testing.T) {
 		// directory stops the socket probe finding a daemon some earlier
 		// invocation left behind.
 		requireBinary(t)
-		repo := newTempRepo(t)
-		writeFile(t, repo, "a.go", "package main\n\nfunc A() int { return 1 }\n")
+		repo, _ := gittest.New(t)
+		gittest.Write(t, repo, "a.go", "package main\n\nfunc A() int { return 1 }\n")
 
 		cmd := exec.Command(rgitBin, "commit", "-m", "feat(x): a", "a.go:A")
 		cmd.Dir = repo
@@ -445,14 +422,14 @@ func TestDocumentedPathsWithoutOtherCoverage(t *testing.T) {
 	t.Run("push failure is exit 8 and keeps the commit", func(t *testing.T) {
 		// docs/USAGE.md § Flags: a push failure does not roll back the commit
 		// that preceded it. No remote is configured, so the push cannot work.
-		repo := newTempRepo(t)
-		writeFile(t, repo, "a.go", "package main\n\nfunc A() {}\n")
+		repo, _ := gittest.New(t)
+		gittest.Write(t, repo, "a.go", "package main\n\nfunc A() {}\n")
 
 		got := runRgit(t, repo, "commit", "--push", "-m", "feat(x): a", "a.go:A")
 
 		qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.PushFailed)))
 		// The commit itself landed: HEAD resolves and holds the file.
-		qt.Assert(t, qt.StringContains(gitIn(t, repo, "cat-file", "-p", "HEAD:a.go"), "func A()"))
+		qt.Assert(t, qt.StringContains(gittest.Git(t, repo, "cat-file", "-p", "HEAD:a.go"), "func A()"))
 	})
 }
 
@@ -463,24 +440,13 @@ func TestDocumentedPathsWithoutOtherCoverage(t *testing.T) {
 // behaviour (scope selection, numstat's mode/binary conventions, untracked
 // discovery), not about internal/diff's internals in isolation.
 
-func gitIn(t *testing.T, dir string, args ...string) string {
-	t.Helper()
-	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v: %v: %s", args, err, out)
-	}
-	return string(out)
-}
-
 // initRepoWithFile creates a repo, writes relPath, and commits it as the
 // base state every diff scope in this file's tests compares against.
 func initRepoWithFile(t *testing.T, relPath, content string) string {
 	t.Helper()
-	dir := newTempRepo(t)
-	writeFile(t, dir, relPath, content)
-	gitIn(t, dir, "add", "--", relPath)
-	gitIn(t, dir, "commit", "-q", "-m", "init")
+	dir, _ := gittest.New(t)
+	gittest.Write(t, dir, relPath, content)
+	gittest.Commit(t, dir, "init")
 	return dir
 }
 
@@ -541,12 +507,12 @@ func TestDiff_DefaultScopePicksUpStagedUnstagedAndUntracked(t *testing.T) {
 	repo := initRepoWithFile(t, "auth.go", authGoV1)
 
 	// Unstaged: modify the committed file.
-	writeFile(t, repo, "auth.go", authGoV2)
+	gittest.Write(t, repo, "auth.go", authGoV2)
 	// Staged: a brand new file, added but not committed.
-	writeFile(t, repo, "staged.go", "package auth\n\nfunc Staged() int { return 3 }\n")
-	gitIn(t, repo, "add", "--", "staged.go")
+	gittest.Write(t, repo, "staged.go", "package auth\n\nfunc Staged() int { return 3 }\n")
+	gittest.Git(t, repo, "add", "--", "staged.go")
 	// Untracked: never added at all.
-	writeFile(t, repo, "untracked.go", "package auth\n\nfunc Untracked() int { return 4 }\n")
+	gittest.Write(t, repo, "untracked.go", "package auth\n\nfunc Untracked() int { return 4 }\n")
 
 	got := runRgit(t, repo, "diff", "--porcelain")
 	qt.Assert(t, qt.Equals(got.ExitCode, 0))
@@ -567,10 +533,10 @@ func TestDiff_UnbornBranchListsEverythingCommittable(t *testing.T) {
 	t.Parallel()
 	// A fresh `git init` has no HEAD, so the default scope cannot run
 	// `git diff HEAD` -- it compares against the empty tree instead.
-	repo := newTempRepo(t)
-	writeFile(t, repo, "staged.go", "package auth\n\nfunc Staged() int { return 3 }\n")
-	gitIn(t, repo, "add", "--", "staged.go")
-	writeFile(t, repo, "untracked.go", "package auth\n\nfunc Untracked() int { return 4 }\n")
+	repo, _ := gittest.New(t)
+	gittest.Write(t, repo, "staged.go", "package auth\n\nfunc Staged() int { return 3 }\n")
+	gittest.Git(t, repo, "add", "--", "staged.go")
+	gittest.Write(t, repo, "untracked.go", "package auth\n\nfunc Untracked() int { return 4 }\n")
 
 	got := runRgit(t, repo, "diff", "--porcelain")
 	qt.Assert(t, qt.Equals(got.ExitCode, 0))
@@ -588,17 +554,17 @@ func TestCommit_PushAfterSuccessfulCommit(t *testing.T) {
 	t.Parallel()
 	repo := initRepoWithFile(t, "auth.go", authGoV1)
 	remote := t.TempDir()
-	gitIn(t, remote, "init", "-q", "--bare")
-	gitIn(t, repo, "remote", "add", "origin", remote)
-	branch := strings.TrimSpace(gitIn(t, repo, "rev-parse", "--abbrev-ref", "HEAD"))
-	gitIn(t, repo, "push", "-q", "-u", "origin", branch)
+	gittest.Git(t, remote, "init", "-q", "--bare")
+	gittest.Git(t, repo, "remote", "add", "origin", remote)
+	branch := strings.TrimSpace(gittest.Git(t, repo, "rev-parse", "--abbrev-ref", "HEAD"))
+	gittest.Git(t, repo, "push", "-q", "-u", "origin", branch)
 
-	writeFile(t, repo, "auth.go", authGoV2)
+	gittest.Write(t, repo, "auth.go", authGoV2)
 	got := runRgit(t, repo, "commit", "--push", "-m", "fix(auth): reject expired", "auth.go:ValidateToken")
 	qt.Assert(t, qt.Equals(got.ExitCode, 0))
 
-	local := strings.TrimSpace(gitIn(t, repo, "rev-parse", "HEAD"))
-	qt.Assert(t, qt.Equals(strings.TrimSpace(gitIn(t, remote, "rev-parse", branch)), local))
+	local := strings.TrimSpace(gittest.Git(t, repo, "rev-parse", "HEAD"))
+	qt.Assert(t, qt.Equals(strings.TrimSpace(gittest.Git(t, remote, "rev-parse", branch)), local))
 }
 
 func TestCommit_MultiLanguageSymbolGranularity(t *testing.T) {
@@ -606,16 +572,16 @@ func TestCommit_MultiLanguageSymbolGranularity(t *testing.T) {
 	// One commit naming a symbol in each v1 grammar. The point is that
 	// each file's OTHER symbol changed too and must stay uncommitted:
 	// symbol granularity has to hold per grammar, in a single invocation.
-	repo := newTempRepo(t)
-	writeFile(t, repo, "auth.go", "package auth\n\nfunc GoA() int { return 1 }\n\nfunc GoB() int { return 1 }\n")
-	writeFile(t, repo, "app.ts", "export function TsA(): number { return 1 }\n\nexport function TsB(): number { return 1 }\n")
-	writeFile(t, repo, "svc.py", "def py_a():\n    return 1\n\n\ndef py_b():\n    return 1\n")
-	gitIn(t, repo, "add", "-A")
-	gitIn(t, repo, "commit", "-q", "-m", "init")
+	repo, _ := gittest.New(t)
+	gittest.Write(t, repo, "auth.go", "package auth\n\nfunc GoA() int { return 1 }\n\nfunc GoB() int { return 1 }\n")
+	gittest.Write(t, repo, "app.ts", "export function TsA(): number { return 1 }\n\nexport function TsB(): number { return 1 }\n")
+	gittest.Write(t, repo, "svc.py", "def py_a():\n    return 1\n\n\ndef py_b():\n    return 1\n")
+	gittest.Git(t, repo, "add", "-A")
+	gittest.Git(t, repo, "commit", "-q", "-m", "init")
 
-	writeFile(t, repo, "auth.go", "package auth\n\nfunc GoA() int { return 2 }\n\nfunc GoB() int { return 2 }\n")
-	writeFile(t, repo, "app.ts", "export function TsA(): number { return 2 }\n\nexport function TsB(): number { return 2 }\n")
-	writeFile(t, repo, "svc.py", "def py_a():\n    return 2\n\n\ndef py_b():\n    return 2\n")
+	gittest.Write(t, repo, "auth.go", "package auth\n\nfunc GoA() int { return 2 }\n\nfunc GoB() int { return 2 }\n")
+	gittest.Write(t, repo, "app.ts", "export function TsA(): number { return 2 }\n\nexport function TsB(): number { return 2 }\n")
+	gittest.Write(t, repo, "svc.py", "def py_a():\n    return 2\n\n\ndef py_b():\n    return 2\n")
 
 	got := runRgit(t, repo, "commit", "-m", "fix: bump the first of each",
 		"auth.go:GoA", "app.ts:TsA", "svc.py:py_a")
@@ -626,7 +592,7 @@ func TestCommit_MultiLanguageSymbolGranularity(t *testing.T) {
 		{"app.ts", "export function TsA(): number { return 2 }", "export function TsB(): number { return 1 }"},
 		{"svc.py", "def py_a():\n    return 2", "def py_b():\n    return 1"},
 	} {
-		head := gitIn(t, repo, "show", "HEAD:"+c.path)
+		head := gittest.Git(t, repo, "show", "HEAD:"+c.path)
 		qt.Assert(t, qt.StringContains(head, c.committed))
 		qt.Assert(t, qt.StringContains(head, c.withheld))
 	}
@@ -638,17 +604,17 @@ func TestCommit_ExtensionlessShebangResolvesShellSymbol(t *testing.T) {
 	// shebang fallback is what makes it addressable, and staging one
 	// function must leave its sibling uncommitted exactly like any other
 	// symbol-granular commit.
-	repo := newTempRepo(t)
-	writeFile(t, repo, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v1\n}\n\nbar() {\n  echo bar\n}\n")
-	gitIn(t, repo, "add", "-A")
-	gitIn(t, repo, "commit", "-q", "-m", "init")
+	repo, _ := gittest.New(t)
+	gittest.Write(t, repo, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v1\n}\n\nbar() {\n  echo bar\n}\n")
+	gittest.Git(t, repo, "add", "-A")
+	gittest.Git(t, repo, "commit", "-q", "-m", "init")
 
-	writeFile(t, repo, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v2\n}\n\nbar() {\n  echo changed too\n}\n")
+	gittest.Write(t, repo, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v2\n}\n\nbar() {\n  echo changed too\n}\n")
 
 	got := runRgit(t, repo, "commit", "-m", "fix: bump foo only", "pre-commit:foo")
 	qt.Assert(t, qt.Equals(got.ExitCode, 0))
 
-	head := gitIn(t, repo, "show", "HEAD:pre-commit")
+	head := gittest.Git(t, repo, "show", "HEAD:pre-commit")
 	qt.Assert(t, qt.StringContains(head, "echo v2"))
 	qt.Assert(t, qt.StringContains(head, "echo bar")) // bar's edit stayed uncommitted
 
@@ -656,9 +622,9 @@ func TestCommit_ExtensionlessShebangResolvesShellSymbol(t *testing.T) {
 	// (tree-sitter-bash mis-parses zsh-only syntax), so an extensionless
 	// zsh script still refuses a symbol anchor -- the same exit 9 an
 	// unrecognized extension already gets, not a new failure mode.
-	writeFile(t, repo, "zsh-script", "#!/bin/zsh\n\nfoo() {\n  echo hi\n}\n")
-	gitIn(t, repo, "add", "-A")
-	gitIn(t, repo, "commit", "-q", "-m", "add zsh script")
+	gittest.Write(t, repo, "zsh-script", "#!/bin/zsh\n\nfoo() {\n  echo hi\n}\n")
+	gittest.Git(t, repo, "add", "-A")
+	gittest.Git(t, repo, "commit", "-q", "-m", "add zsh script")
 	got = runRgit(t, repo, "commit", "-m", "chore: touch", "zsh-script:foo")
 	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.UnsupportedLanguage)))
 }
@@ -679,11 +645,11 @@ func TestCommit_FromSubdirectoryResolvesCWDRelativePaths(t *testing.T) {
 	// git resolves a pathspec relative to the current directory: `git add
 	// a.go` in pkg/deep stages pkg/deep/a.go. Output stays root-relative,
 	// as git's own --numstat does.
-	repo := newTempRepo(t)
-	writeFile(t, repo, "pkg/deep/a.go", "package deep\n\nfunc Alpha() int { return 1 }\n")
-	gitIn(t, repo, "add", "-A")
-	gitIn(t, repo, "commit", "-q", "-m", "init")
-	writeFile(t, repo, "pkg/deep/a.go", "package deep\n\nfunc Alpha() int { return 42 }\n")
+	repo, _ := gittest.New(t)
+	gittest.Write(t, repo, "pkg/deep/a.go", "package deep\n\nfunc Alpha() int { return 1 }\n")
+	gittest.Git(t, repo, "add", "-A")
+	gittest.Git(t, repo, "commit", "-q", "-m", "init")
+	gittest.Write(t, repo, "pkg/deep/a.go", "package deep\n\nfunc Alpha() int { return 42 }\n")
 
 	sub := filepath.Join(repo, "pkg", "deep")
 
@@ -693,7 +659,7 @@ func TestCommit_FromSubdirectoryResolvesCWDRelativePaths(t *testing.T) {
 
 	got = runRgit(t, sub, "commit", "-m", "fix: bump", "a.go:Alpha")
 	qt.Assert(t, qt.Equals(got.ExitCode, 0))
-	qt.Assert(t, qt.StringContains(gitIn(t, repo, "show", "--stat", "--format=", "HEAD"), "pkg/deep/a.go"))
+	qt.Assert(t, qt.StringContains(gittest.Git(t, repo, "show", "--stat", "--format=", "HEAD"), "pkg/deep/a.go"))
 }
 
 func TestDiff_RevisionRangeScopes(t *testing.T) {
@@ -702,8 +668,8 @@ func TestDiff_RevisionRangeScopes(t *testing.T) {
 	// the worktree, a two-dot range, and a three-dot range (whose old side
 	// is the merge base, not the left endpoint).
 	repo := initRepoWithFile(t, "auth.go", authGoV1)
-	writeFile(t, repo, "auth.go", authGoV2)
-	gitIn(t, repo, "commit", "-q", "-a", "-m", "fix: v2")
+	gittest.Write(t, repo, "auth.go", authGoV2)
+	gittest.Git(t, repo, "commit", "-q", "-a", "-m", "fix: v2")
 
 	for _, rev := range []string{"HEAD~1", "HEAD~1..HEAD", "HEAD~1...HEAD"} {
 		got := runRgit(t, repo, "diff", "--porcelain", rev)
@@ -733,9 +699,9 @@ func TestDiff_UnstagedScopeExcludesStaged(t *testing.T) {
 	t.Parallel()
 	repo := initRepoWithFile(t, "auth.go", authGoV1)
 
-	writeFile(t, repo, "auth.go", authGoV2) // unstaged change
-	writeFile(t, repo, "staged.go", "package auth\n\nfunc Staged() int { return 3 }\n")
-	gitIn(t, repo, "add", "--", "staged.go") // staged-only change
+	gittest.Write(t, repo, "auth.go", authGoV2) // unstaged change
+	gittest.Write(t, repo, "staged.go", "package auth\n\nfunc Staged() int { return 3 }\n")
+	gittest.Git(t, repo, "add", "--", "staged.go") // staged-only change
 
 	def := parsePorcelain(t, runRgit(t, repo, "diff", "--porcelain").Stdout)
 	if _, ok := findRow(def, "staged.go", "MOD"); !ok {
@@ -759,7 +725,7 @@ func TestDiff_UnstagedScopeExcludesStaged(t *testing.T) {
 func TestDiff_AnchorRoundTrip(t *testing.T) {
 	t.Parallel()
 	repo := initRepoWithFile(t, "auth.go", authGoV1)
-	writeFile(t, repo, "auth.go", authGoV2) // modifies ValidateToken, deletes oldHelper
+	gittest.Write(t, repo, "auth.go", authGoV2) // modifies ValidateToken, deletes oldHelper
 
 	got := runRgit(t, repo, "diff", "--porcelain")
 	rows := parsePorcelain(t, got.Stdout)
@@ -818,12 +784,12 @@ func TestDiff_ModeRowOnChmod(t *testing.T) {
 func TestDiff_BinaryRowUsesDashCounts(t *testing.T) {
 	t.Parallel()
 	binary := []byte("PNGFAKE\x00\x01binary")
-	repo := newTempRepo(t)
+	repo, _ := gittest.New(t)
 	if err := os.WriteFile(filepath.Join(repo, "logo.bin"), binary, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	gitIn(t, repo, "add", "--", "logo.bin")
-	gitIn(t, repo, "commit", "-q", "-m", "add binary")
+	gittest.Git(t, repo, "add", "--", "logo.bin")
+	gittest.Git(t, repo, "commit", "-q", "-m", "add binary")
 
 	changed := append(append([]byte(nil), binary...), 'X')
 	if err := os.WriteFile(filepath.Join(repo, "logo.bin"), changed, 0o644); err != nil {
@@ -872,7 +838,7 @@ func B() int {
 }
 `
 	repo := initRepoWithFile(t, "notes.go", before)
-	writeFile(t, repo, "notes.go", after)
+	gittest.Write(t, repo, "notes.go", after)
 
 	rows := parsePorcelain(t, runRgit(t, repo, "diff", "--porcelain").Stdout)
 
@@ -937,7 +903,7 @@ func TestCommit_HappyPath(t *testing.T) {
 	marker := filepath.Join(repo, "hook-ran")
 	installHook(t, repo, "pre-commit", "#!/bin/sh\ntouch \""+marker+"\"\n")
 
-	writeFile(t, repo, "auth.go", commitHappyV2)
+	gittest.Write(t, repo, "auth.go", commitHappyV2)
 
 	diffGot := runRgit(t, repo, "diff", "--porcelain")
 	qt.Assert(t, qt.Equals(diffGot.ExitCode, 0))
@@ -948,15 +914,15 @@ func TestCommit_HappyPath(t *testing.T) {
 	got := runRgit(t, repo, "commit", "auth.go:A", "-m", "feat(auth): give A a real value")
 	qt.Assert(t, qt.Equals(got.ExitCode, 0))
 
-	head := gitIn(t, repo, "show", "HEAD:auth.go")
+	head := gittest.Git(t, repo, "show", "HEAD:auth.go")
 	qt.Assert(t, qt.StringContains(head, "return 100"))
 	qt.Assert(t, qt.Not(qt.StringContains(head, "return 200")))
 
 	// Clean index: nothing left staged after the commit.
-	qt.Assert(t, qt.Equals(gitIn(t, repo, "diff", "--staged", "--numstat"), ""))
+	qt.Assert(t, qt.Equals(gittest.Git(t, repo, "diff", "--staged", "--numstat"), ""))
 
 	// B's own edit is still outstanding, unstaged -- staging never touched it.
-	qt.Assert(t, qt.StringContains(gitIn(t, repo, "diff", "--numstat"), "auth.go"))
+	qt.Assert(t, qt.StringContains(gittest.Git(t, repo, "diff", "--numstat"), "auth.go"))
 
 	// The worktree file itself is never touched by staging.
 	onDisk, err := os.ReadFile(filepath.Join(repo, "auth.go"))
@@ -971,63 +937,63 @@ func TestCommit_HappyPath(t *testing.T) {
 func TestCommit_PreStagedSiblingFileComesAlong(t *testing.T) {
 	t.Parallel()
 	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
-	writeFile(t, repo, "auth.go", commitHappyV2)
-	writeFile(t, repo, "sibling.txt", "never named to rgit\n")
-	gitIn(t, repo, "add", "--", "sibling.txt")
+	gittest.Write(t, repo, "auth.go", commitHappyV2)
+	gittest.Write(t, repo, "sibling.txt", "never named to rgit\n")
+	gittest.Git(t, repo, "add", "--", "sibling.txt")
 
 	got := runRgit(t, repo, "commit", "auth.go:A", "-m", "feat(auth): update A")
 	qt.Assert(t, qt.Equals(got.ExitCode, 0))
 
-	show := gitIn(t, repo, "show", "--stat", "HEAD")
+	show := gittest.Git(t, repo, "show", "--stat", "HEAD")
 	qt.Assert(t, qt.StringContains(show, "sibling.txt"))
 }
 
 func TestCommit_HookRejectionLeavesStagingIntact(t *testing.T) {
 	t.Parallel()
 	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
-	writeFile(t, repo, "auth.go", commitHappyV2)
+	gittest.Write(t, repo, "auth.go", commitHappyV2)
 	installHook(t, repo, "pre-commit", "#!/bin/sh\nexit 1\n")
 
 	got := runRgit(t, repo, "commit", "auth.go:A", "-m", "feat(auth): update A")
 	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.GitFailure)))
 
 	// Nothing rolled back: A's synthesized edit is still staged.
-	indexed := gitIn(t, repo, "show", ":auth.go")
+	indexed := gittest.Git(t, repo, "show", ":auth.go")
 	qt.Assert(t, qt.StringContains(indexed, "return 100"))
 	qt.Assert(t, qt.Not(qt.StringContains(indexed, "return 200")))
 	// Staged (index differs from HEAD) AND unstaged (B's edit, worktree
 	// differs from index) both hold: git's porcelain reports "MM".
-	status := gitIn(t, repo, "status", "--porcelain")
+	status := gittest.Git(t, repo, "status", "--porcelain")
 	qt.Assert(t, qt.StringContains(status, "MM auth.go"))
 }
 
 func TestCommit_ResolveAllBeforeStageLeavesIndexUntouched(t *testing.T) {
 	t.Parallel()
 	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
-	writeFile(t, repo, "auth.go", commitHappyV2)
+	gittest.Write(t, repo, "auth.go", commitHappyV2)
 
 	// "Bogus" resolves nowhere -- the whole batch must fail before A (which
 	// resolves cleanly) is ever staged.
 	got := runRgit(t, repo, "commit", "auth.go:A", "auth.go:Bogus", "-m", "feat(auth): update A")
 	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.AnchorUnresolvable)))
 
-	status := gitIn(t, repo, "status", "--porcelain")
+	status := gittest.Git(t, repo, "status", "--porcelain")
 	qt.Assert(t, qt.Equals(status, " M auth.go\n"))
 }
 
 func TestCommit_PositionalPathspecParityWithFileFlag(t *testing.T) {
 	t.Parallel()
-	repoPositional := newTempRepo(t)
-	writeFile(t, repoPositional, "notes.txt", "hello\n")
+	repoPositional, _ := gittest.New(t)
+	gittest.Write(t, repoPositional, "notes.txt", "hello\n")
 	gotPositional := runRgit(t, repoPositional, "commit", "notes.txt", "-m", "chore: add notes")
 	qt.Assert(t, qt.Equals(gotPositional.ExitCode, 0))
 
-	repoFlag := newTempRepo(t)
-	writeFile(t, repoFlag, "notes.txt", "hello\n")
+	repoFlag, _ := gittest.New(t)
+	gittest.Write(t, repoFlag, "notes.txt", "hello\n")
 	gotFlag := runRgit(t, repoFlag, "commit", "--file", "notes.txt", "-m", "chore: add notes")
 	qt.Assert(t, qt.Equals(gotFlag.ExitCode, 0))
 
-	qt.Assert(t, qt.Equals(gitIn(t, repoPositional, "show", "HEAD:notes.txt"), gitIn(t, repoFlag, "show", "HEAD:notes.txt")))
+	qt.Assert(t, qt.Equals(gittest.Git(t, repoPositional, "show", "HEAD:notes.txt"), gittest.Git(t, repoFlag, "show", "HEAD:notes.txt")))
 }
 
 func TestCommit_PathEscapeRejected(t *testing.T) {
@@ -1037,7 +1003,7 @@ func TestCommit_PathEscapeRejected(t *testing.T) {
 	if err := os.MkdirAll(repo, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	gitIn(t, repo, "init", "-q", ".")
+	gittest.Git(t, repo, "init", "-q", ".")
 
 	// A real file just outside the repo root: rule 4's existence check
 	// succeeds, so the token reaches rgit's own target construction --
@@ -1061,7 +1027,7 @@ func TestCommit_ReportsWhatItCommitted(t *testing.T) {
 	// relaying it verbatim is both the cheapest fix and the one that
 	// matches git (AGENTS.md's governing principle).
 	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
-	writeFile(t, repo, "auth.go", commitHappyV2)
+	gittest.Write(t, repo, "auth.go", commitHappyV2)
 
 	got := runRgit(t, repo, "commit", "auth.go:A", "-m", "feat(auth): give A a real value")
 	qt.Assert(t, qt.Equals(got.ExitCode, 0))
@@ -1080,9 +1046,9 @@ func TestCommit_DryRunPreviewsAndStagesNothing(t *testing.T) {
 	// A preview that prints nothing and exits 0 is indistinguishable from
 	// one that resolved nothing at all, which defeats the point of asking.
 	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
-	writeFile(t, repo, "auth.go", commitHappyV2)
+	gittest.Write(t, repo, "auth.go", commitHappyV2)
 
-	before := gitIn(t, repo, "rev-parse", "HEAD")
+	before := gittest.Git(t, repo, "rev-parse", "HEAD")
 	got := runRgit(t, repo, "commit", "--dry-run", "auth.go:A", "-m", "feat(auth): preview only")
 	qt.Assert(t, qt.Equals(got.ExitCode, 0))
 	qt.Assert(t, qt.StringContains(got.Stdout, "auth.go:A"))
@@ -1100,7 +1066,7 @@ func TestCommit_DryRunPreviewsAndStagesNothing(t *testing.T) {
 	// with the numbers left out -- that would make the preview
 	// inconsistent with the diff for exactly the targets a caller is
 	// least able to eyeball.
-	writeFile(t, repo, "notes.md", "one\ntwo\n")
+	gittest.Write(t, repo, "notes.md", "one\ntwo\n")
 	pathGot := runRgit(t, repo, "commit", "--dry-run", "notes.md", "-m", "docs: preview a path")
 	qt.Assert(t, qt.Equals(pathGot.ExitCode, 0))
 	qt.Assert(t, qt.StringContains(pathGot.Stdout, "notes.md"))
@@ -1108,8 +1074,8 @@ func TestCommit_DryRunPreviewsAndStagesNothing(t *testing.T) {
 
 	// "writes no objects, stages nothing" (docs/USAGE.md): HEAD unmoved and
 	// the index untouched.
-	qt.Assert(t, qt.Equals(gitIn(t, repo, "rev-parse", "HEAD"), before))
-	qt.Assert(t, qt.Equals(gitIn(t, repo, "diff", "--staged", "--numstat"), ""))
+	qt.Assert(t, qt.Equals(gittest.Git(t, repo, "rev-parse", "HEAD"), before))
+	qt.Assert(t, qt.Equals(gittest.Git(t, repo, "diff", "--staged", "--numstat"), ""))
 }
 
 func TestCommit_PathAlreadyStagedAsDeleted(t *testing.T) {
@@ -1120,15 +1086,15 @@ func TestCommit_PathAlreadyStagedAsDeleted(t *testing.T) {
 	// commit includes it either way -- or `rgit commit <path>` would be
 	// unusable after a `git rm`.
 	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
-	writeFile(t, repo, "gone.md", "bye\n")
-	gitIn(t, repo, "add", "gone.md")
-	gitIn(t, repo, "commit", "-q", "-m", "chore: add gone.md")
-	gitIn(t, repo, "rm", "-q", "gone.md")
+	gittest.Write(t, repo, "gone.md", "bye\n")
+	gittest.Git(t, repo, "add", "gone.md")
+	gittest.Git(t, repo, "commit", "-q", "-m", "chore: add gone.md")
+	gittest.Git(t, repo, "rm", "-q", "gone.md")
 
 	got := runRgit(t, repo, "commit", "gone.md", "-m", "chore: drop gone.md")
 	qt.Assert(t, qt.Equals(got.ExitCode, 0))
 	qt.Assert(t, qt.StringContains(got.Stdout, "1 deletion"))
-	qt.Assert(t, qt.Not(qt.StringContains(gitIn(t, repo, "ls-files"), "gone.md")))
+	qt.Assert(t, qt.Not(qt.StringContains(gittest.Git(t, repo, "ls-files"), "gone.md")))
 }
 
 func TestOutput_OrderedByPathThenPosition(t *testing.T) {
@@ -1141,10 +1107,10 @@ func TestOutput_OrderedByPathThenPosition(t *testing.T) {
 	// tree.
 	src := "package p\n\nimport \"fmt\"\n\nfunc Zebra() int { return 1 }\n\nfunc Apple() int { return 2 }\n\nfunc Mango() int { return 3 }\n"
 	repo := initRepoWithFile(t, "b.go", src)
-	writeFile(t, repo, "a.go", src)
-	writeFile(t, repo, "zsub/c.go", src)
-	gitIn(t, repo, "add", "a.go", "zsub/c.go")
-	gitIn(t, repo, "commit", "-q", "-m", "chore: siblings")
+	gittest.Write(t, repo, "a.go", src)
+	gittest.Write(t, repo, "zsub/c.go", src)
+	gittest.Git(t, repo, "add", "a.go", "zsub/c.go")
+	gittest.Git(t, repo, "commit", "-q", "-m", "chore: siblings")
 
 	edited := strings.NewReplacer(
 		"return 1", "return 11",
@@ -1152,7 +1118,7 @@ func TestOutput_OrderedByPathThenPosition(t *testing.T) {
 		"return 3", "return 33",
 	).Replace(src)
 	for _, p := range []string{"a.go", "b.go", "zsub/c.go"} {
-		writeFile(t, repo, p, edited)
+		gittest.Write(t, repo, p, edited)
 	}
 
 	got := runRgit(t, repo, "diff", "--porcelain")
@@ -1194,7 +1160,7 @@ func TestHelp_TopLevelExitsZeroOnEverySpelling(t *testing.T) {
 	// selection criterion; all three spellings -- bare "--help", "-h", and
 	// "help" -- must print the same top-level help to stdout and exit 0,
 	// not fall into the unknown-command branch (exit 129).
-	repo := newTempRepo(t)
+	repo, _ := gittest.New(t)
 	for _, spelling := range []string{"--help", "-h", "help"} {
 		t.Run(spelling, func(t *testing.T) {
 			got := runRgit(t, repo, spelling)
@@ -1218,7 +1184,8 @@ func TestHelp_BareInvocationStillExitsInvalidUsage(t *testing.T) {
 	// pinned to exit 129. Naming no command is the same kind of usage
 	// error, so it keeps rgit's own convention rather than adopting git's
 	// top-level dispatcher quirk.
-	got := runRgit(t, newTempRepo(t))
+	repo, _ := gittest.New(t)
+	got := runRgit(t, repo)
 	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.InvalidUsage)))
 	qt.Assert(t, qt.Equals(got.Stdout, ""))
 	qt.Assert(t, qt.StringContains(got.Stderr, "usage: rgit"))
@@ -1237,7 +1204,7 @@ func TestHelp_SubcommandExitsZeroAndDoesNotLeakPflag(t *testing.T) {
 	// tests: each subcommand wires its own help text separately, so
 	// nothing structural stops one from missing this wiring while the
 	// other has it.
-	repo := newTempRepo(t)
+	repo, _ := gittest.New(t)
 	// wantFlag is a flag unique to that subcommand, proving the help came
 	// from its own FlagSet rather than the other's.
 	for sub, wantFlag := range map[string]string{"commit": "--amend", "diff": "--porcelain"} {
@@ -1262,23 +1229,23 @@ func TestCommit_AmendWithNoMessageReusesHeadSubject(t *testing.T) {
 	// deliberately not honoured), so --amend with neither -m nor -F has
 	// exactly one sensible meaning: `git commit --amend --no-edit`.
 	repo := initRepoWithFile(t, "g.go", "package main\n\nfunc G() int { return 1 }\n")
-	before := gitIn(t, repo, "log", "-1", "--format=%s")
+	before := gittest.Git(t, repo, "log", "-1", "--format=%s")
 
-	writeFile(t, repo, "g.go", "package main\n\nfunc G() int { return 2 }\n")
+	gittest.Write(t, repo, "g.go", "package main\n\nfunc G() int { return 2 }\n")
 	got := runRgit(t, repo, "commit", "--amend", "g.go:G")
 
 	qt.Assert(t, qt.Equals(got.ExitCode, 0))
-	after := gitIn(t, repo, "log", "-1", "--format=%s")
+	after := gittest.Git(t, repo, "log", "-1", "--format=%s")
 	qt.Assert(t, qt.Equals(after, before))
-	qt.Assert(t, qt.StringContains(gitIn(t, repo, "cat-file", "-p", "HEAD:g.go"), "return 2"))
+	qt.Assert(t, qt.StringContains(gittest.Git(t, repo, "cat-file", "-p", "HEAD:g.go"), "return 2"))
 }
 
 func TestCommit_NonAmendWithNoMessageStillRequiresOne(t *testing.T) {
 	t.Parallel()
 	// The message requirement is suppressed only for --amend; a plain
 	// commit with neither -m nor -F is still exit 129.
-	repo := newTempRepo(t)
-	writeFile(t, repo, "g.go", "package main\n\nfunc G() {}\n")
+	repo, _ := gittest.New(t)
+	gittest.Write(t, repo, "g.go", "package main\n\nfunc G() {}\n")
 
 	got := runRgit(t, repo, "commit", "g.go")
 
@@ -1294,7 +1261,7 @@ func TestCommit_NonAmendWithNoMessageStillRequiresOne(t *testing.T) {
 func TestCommit_FixupAndSquashGenerateAutosquashMessages(t *testing.T) {
 	t.Parallel()
 	repo := initRepoWithFile(t, "g.go", "package main\n\nfunc G() int { return 1 }\n")
-	target := strings.TrimSpace(gitIn(t, repo, "rev-parse", "HEAD"))
+	target := strings.TrimSpace(gittest.Git(t, repo, "rev-parse", "HEAD"))
 
 	for i, tc := range []struct{ flag, wantPrefix string }{
 		{"--fixup", "fixup! "},
@@ -1304,12 +1271,12 @@ func TestCommit_FixupAndSquashGenerateAutosquashMessages(t *testing.T) {
 			// Distinct content each iteration -- otherwise the second
 			// subtest's write is a no-op against the first subtest's
 			// already-committed content, and there is nothing to commit.
-			writeFile(t, repo, "g.go", fmt.Sprintf("package main\n\nfunc G() int { return %d }\n", i+2))
+			gittest.Write(t, repo, "g.go", fmt.Sprintf("package main\n\nfunc G() int { return %d }\n", i+2))
 			// Neither -m nor -F: the message requirement must not fire,
 			// same as bare --amend -- git generates the subject itself.
 			got := runRgit(t, repo, "commit", tc.flag+"="+target, "g.go")
 			qt.Assert(t, qt.Equals(got.ExitCode, 0))
-			qt.Assert(t, qt.Equals(gitIn(t, repo, "log", "-1", "--format=%s"), tc.wantPrefix+"init\n"))
+			qt.Assert(t, qt.Equals(gittest.Git(t, repo, "log", "-1", "--format=%s"), tc.wantPrefix+"init\n"))
 		})
 	}
 }
@@ -1320,21 +1287,21 @@ func TestCommit_FixupWithMessageAppendsRatherThanConflicts(t *testing.T) {
 	// of conflict: git appends -m's text as an extra body paragraph below
 	// the generated "fixup! ..." subject.
 	repo := initRepoWithFile(t, "g.go", "package main\n\nfunc G() int { return 1 }\n")
-	target := strings.TrimSpace(gitIn(t, repo, "rev-parse", "HEAD"))
+	target := strings.TrimSpace(gittest.Git(t, repo, "rev-parse", "HEAD"))
 
-	writeFile(t, repo, "g.go", "package main\n\nfunc G() int { return 2 }\n")
+	gittest.Write(t, repo, "g.go", "package main\n\nfunc G() int { return 2 }\n")
 	got := runRgit(t, repo, "commit", "--fixup="+target, "-m", "UNIQUE_BODY_MARKER", "g.go")
 
 	qt.Assert(t, qt.Equals(got.ExitCode, 0))
-	body := gitIn(t, repo, "log", "-1", "--format=%B")
+	body := gittest.Git(t, repo, "log", "-1", "--format=%B")
 	qt.Assert(t, qt.StringContains(body, "fixup! init"))
 	qt.Assert(t, qt.StringContains(body, "UNIQUE_BODY_MARKER"))
 }
 
 func TestCommit_AuthorAndDateForwarded(t *testing.T) {
 	t.Parallel()
-	repo := newTempRepo(t)
-	writeFile(t, repo, "g.go", "package main\n\nfunc G() {}\n")
+	repo, _ := gittest.New(t)
+	gittest.Write(t, repo, "g.go", "package main\n\nfunc G() {}\n")
 
 	got := runRgit(t, repo, "commit",
 		"--author", "Ada Lovelace <ada@example.com>",
@@ -1342,8 +1309,8 @@ func TestCommit_AuthorAndDateForwarded(t *testing.T) {
 		"-m", "feat(g): add G", "g.go")
 
 	qt.Assert(t, qt.Equals(got.ExitCode, 0))
-	qt.Assert(t, qt.Equals(gitIn(t, repo, "log", "-1", "--format=%an <%ae>"), "Ada Lovelace <ada@example.com>\n"))
-	qt.Assert(t, qt.Equals(gitIn(t, repo, "log", "-1", "--date=format:%Y-%m-%d", "--format=%ad"), "2005-04-07\n"))
+	qt.Assert(t, qt.Equals(gittest.Git(t, repo, "log", "-1", "--format=%an <%ae>"), "Ada Lovelace <ada@example.com>\n"))
+	qt.Assert(t, qt.Equals(gittest.Git(t, repo, "log", "-1", "--date=format:%Y-%m-%d", "--format=%ad"), "2005-04-07\n"))
 }
 
 func TestCommit_GPGSignFlagsForwarded(t *testing.T) {
@@ -1353,14 +1320,14 @@ func TestCommit_GPGSignFlagsForwarded(t *testing.T) {
 	// or with a key id) reached git and triggered signing, with no real
 	// GPG setup needed. --no-gpg-sign is checked the other way: it must
 	// override commit.gpgsign=true and still succeed.
-	repo := newTempRepo(t)
-	gitIn(t, repo, "config", "gpg.program", "/bin/false")
+	repo, _ := gittest.New(t)
+	gittest.Git(t, repo, "config", "gpg.program", "/bin/false")
 
-	writeFile(t, repo, "a.go", "package main\n\nfunc A() {}\n")
+	gittest.Write(t, repo, "a.go", "package main\n\nfunc A() {}\n")
 	unsigned := runRgit(t, repo, "commit", "-m", "feat(a): add A", "a.go")
 	qt.Assert(t, qt.Equals(unsigned.ExitCode, 0))
 
-	writeFile(t, repo, "b.go", "package main\n\nfunc B() {}\n")
+	gittest.Write(t, repo, "b.go", "package main\n\nfunc B() {}\n")
 	bare := runRgit(t, repo, "commit", "--gpg-sign", "-m", "feat(b): add B", "b.go")
 	qt.Assert(t, qt.Equals(bare.ExitCode, int(exitcode.GitFailure)))
 	qt.Assert(t, qt.StringContains(bare.Stderr, "sign"))
@@ -1368,8 +1335,8 @@ func TestCommit_GPGSignFlagsForwarded(t *testing.T) {
 	keyed := runRgit(t, repo, "commit", "--gpg-sign=DEADBEEF", "-m", "feat(c): add C", "a.go")
 	qt.Assert(t, qt.Equals(keyed.ExitCode, int(exitcode.GitFailure)))
 
-	gitIn(t, repo, "config", "commit.gpgsign", "true")
-	writeFile(t, repo, "d.go", "package main\n\nfunc D() {}\n")
+	gittest.Git(t, repo, "config", "commit.gpgsign", "true")
+	gittest.Write(t, repo, "d.go", "package main\n\nfunc D() {}\n")
 	noSign := runRgit(t, repo, "commit", "--no-gpg-sign", "-m", "feat(d): add D", "d.go")
 	qt.Assert(t, qt.Equals(noSign.ExitCode, 0))
 }
@@ -1383,17 +1350,17 @@ func TestCommit_PushWithNoUpstreamNamesTheFix(t *testing.T) {
 	// failure is a named, concrete fix.
 	repo := initRepoWithFile(t, "auth.go", authGoV1)
 	remote := t.TempDir()
-	gitIn(t, remote, "init", "-q", "--bare")
-	gitIn(t, repo, "remote", "add", "origin", remote)
-	branch := strings.TrimSpace(gitIn(t, repo, "rev-parse", "--abbrev-ref", "HEAD"))
+	gittest.Git(t, remote, "init", "-q", "--bare")
+	gittest.Git(t, repo, "remote", "add", "origin", remote)
+	branch := strings.TrimSpace(gittest.Git(t, repo, "rev-parse", "--abbrev-ref", "HEAD"))
 
-	writeFile(t, repo, "auth.go", authGoV2)
+	gittest.Write(t, repo, "auth.go", authGoV2)
 	got := runRgit(t, repo, "commit", "--push", "-m", "fix(auth): reject expired", "auth.go:ValidateToken")
 
 	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.PushFailed)))
 	qt.Assert(t, qt.StringContains(got.Stderr, "git push -u origin "+branch))
 	// The commit itself still landed even though the push failed.
-	qt.Assert(t, qt.StringContains(gitIn(t, repo, "cat-file", "-p", "HEAD:auth.go"), "len(tok)"))
+	qt.Assert(t, qt.StringContains(gittest.Git(t, repo, "cat-file", "-p", "HEAD:auth.go"), "len(tok)"))
 }
 
 func TestCommit_ResetAuthorForwarded(t *testing.T) {
@@ -1401,21 +1368,21 @@ func TestCommit_ResetAuthorForwarded(t *testing.T) {
 	// --author sets an identity the amend must then discard: with
 	// --reset-author, git takes the author from the committer, so the
 	// Ada identity written by the first commit must not survive.
-	repo := newTempRepo(t)
-	writeFile(t, repo, "g.go", "package main\n\nfunc G() int { return 1 }\n")
+	repo, _ := gittest.New(t)
+	gittest.Write(t, repo, "g.go", "package main\n\nfunc G() int { return 1 }\n")
 	first := runRgit(t, repo, "commit",
 		"--author", "Ada Lovelace <ada@example.com>",
 		"-m", "feat(g): add G", "g.go")
 	qt.Assert(t, qt.Equals(first.ExitCode, 0))
-	qt.Assert(t, qt.Equals(gitIn(t, repo, "log", "-1", "--format=%an"), "Ada Lovelace\n"))
+	qt.Assert(t, qt.Equals(gittest.Git(t, repo, "log", "-1", "--format=%an"), "Ada Lovelace\n"))
 
-	writeFile(t, repo, "g.go", "package main\n\nfunc G() int { return 2 }\n")
+	gittest.Write(t, repo, "g.go", "package main\n\nfunc G() int { return 2 }\n")
 	got := runRgit(t, repo, "commit", "--amend", "--reset-author", "g.go:G")
 
 	qt.Assert(t, qt.Equals(got.ExitCode, 0))
-	// newTempRepo's own committer identity, not Ada's.
-	qt.Assert(t, qt.Equals(gitIn(t, repo, "log", "-1", "--format=%an"),
-		gitIn(t, repo, "log", "-1", "--format=%cn")))
+	// gittest.New's own committer identity, not Ada's.
+	qt.Assert(t, qt.Equals(gittest.Git(t, repo, "log", "-1", "--format=%an"),
+		gittest.Git(t, repo, "log", "-1", "--format=%cn")))
 }
 
 func TestCommit_PorcelainEmitsRecords(t *testing.T) {
@@ -1423,9 +1390,9 @@ func TestCommit_PorcelainEmitsRecords(t *testing.T) {
 	// The machine-readable counterpart to the aligned listing, on both the
 	// preview and the commit it previews -- and the records must agree,
 	// which is the whole reason --dry-run's listing exists.
-	repo := newTempRepo(t)
-	writeFile(t, repo, "g.go", "package main\n\nfunc G() int { return 1 }\n")
-	writeFile(t, repo, "notes.txt", "hello\n")
+	repo, _ := gittest.New(t)
+	gittest.Write(t, repo, "g.go", "package main\n\nfunc G() int { return 1 }\n")
+	gittest.Write(t, repo, "notes.txt", "hello\n")
 
 	dry := runRgit(t, repo, "commit", "--dry-run", "--porcelain",
 		"-m", "feat(g): add G", "g.go:G", "notes.txt")
@@ -1452,13 +1419,13 @@ func TestCommit_PorcelainEmitsRecords(t *testing.T) {
 
 func TestCommit_QuietSuppressesStdoutOnly(t *testing.T) {
 	t.Parallel()
-	repo := newTempRepo(t)
-	writeFile(t, repo, "g.go", "package main\n\nfunc G() int { return 1 }\n")
+	repo, _ := gittest.New(t)
+	gittest.Write(t, repo, "g.go", "package main\n\nfunc G() int { return 1 }\n")
 	// An unchanged second target still has to warn on stderr: -q is git's
 	// own "suppress the summary", not "suppress the diagnostics".
 	runRgit(t, repo, "commit", "-m", "feat(h): add H", "g.go")
-	writeFile(t, repo, "g.go", "package main\n\nfunc G() int { return 2 }\n")
-	writeFile(t, repo, "h.go", "package main\n\nfunc H() {}\n")
+	gittest.Write(t, repo, "g.go", "package main\n\nfunc G() int { return 2 }\n")
+	gittest.Write(t, repo, "h.go", "package main\n\nfunc H() {}\n")
 	runRgit(t, repo, "commit", "-m", "feat(h): add H", "h.go")
 
 	got := runRgit(t, repo, "commit", "-q", "-m", "fix(g): bump", "g.go:G", "h.go:H")
@@ -1466,13 +1433,13 @@ func TestCommit_QuietSuppressesStdoutOnly(t *testing.T) {
 	qt.Assert(t, qt.Equals(got.ExitCode, 0))
 	qt.Assert(t, qt.Equals(got.Stdout, ""))
 	qt.Assert(t, qt.StringContains(got.Stderr, "has no uncommitted changes"))
-	qt.Assert(t, qt.StringContains(gitIn(t, repo, "cat-file", "-p", "HEAD:g.go"), "return 2"))
+	qt.Assert(t, qt.StringContains(gittest.Git(t, repo, "cat-file", "-p", "HEAD:g.go"), "return 2"))
 }
 
 func TestCommit_PorcelainAndQuietConflict(t *testing.T) {
 	t.Parallel()
-	repo := newTempRepo(t)
-	writeFile(t, repo, "g.go", "package main\n\nfunc G() {}\n")
+	repo, _ := gittest.New(t)
+	gittest.Write(t, repo, "g.go", "package main\n\nfunc G() {}\n")
 
 	got := runRgit(t, repo, "commit", "--porcelain", "-q", "-m", "feat(g): add G", "g.go")
 
@@ -1541,7 +1508,7 @@ func shellQuoteAll(words []string) string {
 func TestCompletion_BashCompletesSymbolsFromPorcelain(t *testing.T) {
 	t.Parallel()
 	repo := initRepoWithFile(t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	writeFile(t, repo, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
+	gittest.Write(t, repo, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
 
 	script := runRgit(t, repo, "completion", "bash")
 	qt.Assert(t, qt.Equals(script.ExitCode, 0))
@@ -1640,7 +1607,7 @@ func runZshCompletion(t *testing.T, repo, zshScript string, words ...string) []s
 func TestCompletion_ZshCompletesSymbolsFromPorcelain(t *testing.T) {
 	t.Parallel()
 	repo := initRepoWithFile(t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	writeFile(t, repo, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
+	gittest.Write(t, repo, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
 
 	script := runRgit(t, repo, "completion", "zsh")
 	qt.Assert(t, qt.Equals(script.ExitCode, 0))

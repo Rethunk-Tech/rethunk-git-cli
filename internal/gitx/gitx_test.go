@@ -1,37 +1,25 @@
-package gitx
+// Package gitx_test is an external test package (rather than the whitebox
+// "package gitx" the rest of this package's tests could use) so it can
+// build its fixtures through internal/gittest: gittest itself imports gitx,
+// and a whitebox test file importing gittest back would be a cycle.
+package gitx_test
 
 import (
 	"context"
 	"errors"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"testing"
+
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 )
 
 func TestLsFilesStageAndMergeBase(t *testing.T) {
-	dir := t.TempDir()
+	t.Parallel()
+	dir, repo := gittest.New(t)
 	ctx := context.Background()
 
-	runCmd := func(args ...string) {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v: %s", args, err, out)
-		}
-	}
-
-	runCmd("init")
-	runCmd("checkout", "-B", "main")
-	runCmd("config", "user.name", "test")
-	runCmd("config", "user.email", "test@example.com")
-
-	filePath := filepath.Join(dir, "file.txt")
-	if err := os.WriteFile(filePath, []byte("content"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	repo := New(dir)
+	gittest.Write(t, dir, "file.txt", "content")
 
 	// LsFilesStage for untracked file
 	_, found, err := repo.LsFilesStage(ctx, "file.txt")
@@ -43,7 +31,7 @@ func TestLsFilesStageAndMergeBase(t *testing.T) {
 	}
 
 	// Add file and check LsFilesStage
-	runCmd("add", "file.txt")
+	gittest.Git(t, dir, "add", "file.txt")
 	mode, found, err := repo.LsFilesStage(ctx, "file.txt")
 	if err != nil {
 		t.Fatalf("LsFilesStage error: %v", err)
@@ -53,18 +41,16 @@ func TestLsFilesStageAndMergeBase(t *testing.T) {
 	}
 
 	// Commit initial commit for MergeBase testing
-	runCmd("commit", "-m", "initial")
+	gittest.Commit(t, dir, "initial")
 	branch1SHA, _, err := repo.RevParseVerify(ctx, "HEAD")
 	if err != nil {
 		t.Fatalf("RevParseVerify error: %v", err)
 	}
 
 	// Create branch feature
-	runCmd("checkout", "-b", "feature")
-	if err := os.WriteFile(filePath, []byte("feature content"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	runCmd("commit", "-am", "feature commit")
+	gittest.Git(t, dir, "checkout", "-b", "feature")
+	gittest.Write(t, dir, "file.txt", "feature content")
+	gittest.Git(t, dir, "commit", "-am", "feature commit")
 
 	mbSHA, ok, err := repo.MergeBase(ctx, "main", "feature")
 	if err != nil || !ok {
@@ -86,7 +72,7 @@ func TestErrorMessagesNameTheCommand(t *testing.T) {
 	// GitError: git ran and chose a status. The command, the status, and
 	// git's own stderr all have to survive, with the stderr trimmed so the
 	// message stays one line.
-	gerr := &GitError{
+	gerr := &gitx.GitError{
 		Args:     []string{"commit", "-m", "x"},
 		ExitCode: 128,
 		Stderr:   []byte("fatal: nothing to commit\n\n"),
@@ -98,7 +84,7 @@ func TestErrorMessagesNameTheCommand(t *testing.T) {
 	// ExecError: git never ran. It wraps the cause, so errors.Is/As still
 	// reach it -- callers distinguish "git failed" from "git is missing".
 	cause := os.ErrNotExist
-	eerr := &ExecError{Args: []string{"rev-parse", "HEAD"}, Err: cause}
+	eerr := &gitx.ExecError{Args: []string{"rev-parse", "HEAD"}, Err: cause}
 	if got, want := eerr.Error(), "git rev-parse HEAD: "+cause.Error(); got != want {
 		t.Errorf("ExecError.Error() = %q; want %q", got, want)
 	}
