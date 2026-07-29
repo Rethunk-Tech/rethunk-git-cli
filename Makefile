@@ -7,6 +7,10 @@ BINARY        := rgit
 DIST          := dist
 SQL_CSRC      := internal/resolve/sqlgrammar/csrc
 VERSION       := $(shell git describe --tags --always --dirty 2>/dev/null)
+# Cross artifact filenames need a non-empty component even when VERSION comes
+# back blank (git missing, or the checkout has no commits yet) -- "dev"
+# matches main.go's own fallback constant so a filename never goes blank.
+CROSS_VERSION := $(if $(VERSION),$(VERSION),dev)
 
 LDFLAGS := -s -w
 ifneq ($(VERSION),)
@@ -33,7 +37,7 @@ help:
 	@echo "  fix-diff           go fix -diff ./...        (preview; read before applying)"
 	@echo "  fix                go fix ./... twice        (fixes can unlock fixes)"
 	@echo "  lint               golangci-lint run ./...   (.golangci.yml)"
-	@echo "  cross              cross-compile linux/amd64, linux/arm64, windows/amd64 into dist/"
+	@echo "  cross              cross-compile linux/amd64, linux/arm64, windows/amd64 into dist/, versioned, plus SHA256SUMS"
 	@echo "  clean              remove build outputs, including a generated SQL parser tree"
 
 build:
@@ -92,7 +96,21 @@ clean:
 # CLI on the build host plus a ~17 MB parser.c compile per target, unlike
 # `make install`'s single local build. Every dist/ binary is SQL-less; see
 # docs/INSTALL.md#cross-builds before "fixing" that.
+#
+# Filenames carry CROSS_VERSION so a second `make cross` at a different tag
+# cannot silently overwrite the previous run's artifacts, and SHA256SUMS
+# below is regenerated per run (not appended across runs) so it always
+# describes exactly what dist/ holds right now, not a mix of old and new
+# tags -- the simpler of the two options and the one that matches how these
+# artifacts are actually produced, one full run at a time.
 cross: cross-linux-amd64 cross-linux-arm64 cross-windows-amd64
+	$(need-sha256sum)
+	cd $(DIST) && sha256sum \
+		rgit-$(CROSS_VERSION)-linux-amd64 \
+		rgit-$(CROSS_VERSION)-linux-arm64 \
+		rgit-$(CROSS_VERSION)-windows-amd64.exe \
+		> SHA256SUMS
+	@echo "wrote $(DIST)/SHA256SUMS"
 
 define need-zig
 	@command -v $(ZIG) >/dev/null 2>&1 || { \
@@ -101,20 +119,27 @@ define need-zig
 	}
 endef
 
+define need-sha256sum
+	@command -v sha256sum >/dev/null 2>&1 || { \
+		echo "cross needs sha256sum on PATH -- not writing $(DIST)/SHA256SUMS without it"; \
+		exit 1; \
+	}
+endef
+
 cross-linux-amd64:
 	$(need-zig)
 	mkdir -p $(DIST)
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 CC="$(ZIG) cc -target x86_64-linux-gnu" \
-		go build -ldflags "$(LDFLAGS)" -o $(DIST)/rgit-linux-amd64 ./cmd/rgit
+		go build -ldflags "$(LDFLAGS)" -o $(DIST)/rgit-$(CROSS_VERSION)-linux-amd64 ./cmd/rgit
 
 cross-linux-arm64:
 	$(need-zig)
 	mkdir -p $(DIST)
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC="$(ZIG) cc -target aarch64-linux-gnu" \
-		go build -ldflags "$(LDFLAGS)" -o $(DIST)/rgit-linux-arm64 ./cmd/rgit
+		go build -ldflags "$(LDFLAGS)" -o $(DIST)/rgit-$(CROSS_VERSION)-linux-arm64 ./cmd/rgit
 
 cross-windows-amd64:
 	$(need-zig)
 	mkdir -p $(DIST)
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC="$(ZIG) cc -target x86_64-windows-gnu" \
-		go build -ldflags "$(LDFLAGS)" -o $(DIST)/rgit-windows-amd64.exe ./cmd/rgit
+		go build -ldflags "$(LDFLAGS)" -o $(DIST)/rgit-$(CROSS_VERSION)-windows-amd64.exe ./cmd/rgit
