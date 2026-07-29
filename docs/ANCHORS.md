@@ -172,7 +172,8 @@ binary or non-parseable files. Name the path instead. Behaviour per kind:
 
 ## Language support
 
-Ten grammars ship, claiming these extensions:
+Ten grammars ship unconditionally; an eleventh, SQL, ships only behind the
+`rgit_sql` build tag (see its own row). All eleven claim these extensions:
 
 | Grammar | Extensions | Addresses |
 | --- | --- | --- |
@@ -284,10 +285,13 @@ one being deleted, or a comparison between two revisions — falls back to a
 whole-file entry. Deliberate: reading it from a blob instead would buy one
 uncommon case at the cost of a bounded read through `git cat-file`.
 
-The language-server cross-check covers Go, TypeScript, Python, and Shell
-([`docs/INSTALL.md#language-servers`](INSTALL.md#language-servers)); Markdown
-and YAML have no server entry and resolve with tree-sitter alone, always in
-`[ts-only]` mode. Anything else → exit 9 on a symbol anchor; name the path.
+The language-server cross-check covers Go, TypeScript/TSX, Python, and Shell
+([`docs/INSTALL.md#language-servers`](INSTALL.md#language-servers)). Markdown,
+YAML, CSS, JSON, TOML, and SQL (when built with `rgit_sql`) are shipped
+grammars with no server entry — they resolve with tree-sitter alone,
+permanently in `[ts-only]` mode, and that is a supported result, not a
+degraded one. Exit 9 is reserved for a language with no grammar at all (Rust,
+HTML, and anything else not listed above); name the path instead.
 
 The grammars deferred to v2 are listed in [`../TODO.md`](../TODO.md).
 
