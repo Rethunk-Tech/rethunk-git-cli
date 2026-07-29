@@ -11,6 +11,7 @@ import (
 	tsyaml "github.com/tree-sitter-grammars/tree-sitter-yaml/bindings/go"
 	tsbash "github.com/tree-sitter/tree-sitter-bash/bindings/go"
 	tscss "github.com/tree-sitter/tree-sitter-css/bindings/go"
+	tshtml "github.com/tree-sitter/tree-sitter-html/bindings/go"
 	tsjson "github.com/tree-sitter/tree-sitter-json/bindings/go"
 )
 
@@ -19,10 +20,10 @@ import (
 //
 // ABI 14 vs 15 splits across these grammars by upstream release cadence, not
 // by anything rgit chose: TypeScript (v0.23.2), JSON (v0.24.8), YAML
-// (v0.7.2), and TOML (v0.7.0) report ABI 14; Go, Python, CSS (all v0.25.0),
-// Bash (v0.25.1), and Markdown (v0.5.1) report 15 (measured from each
-// module's own parser.c LANGUAGE_VERSION). go-tree-sitter v0.25.0 accepts
-// both, so the skew is not something adapters need to handle. Checked
+// (v0.7.2), TOML (v0.7.0), and HTML (v0.23.2) report ABI 14; Go, Python, CSS
+// (all v0.25.0), Bash (v0.25.1), and Markdown (v0.5.1) report 15 (measured
+// from each module's own parser.c LANGUAGE_VERSION). go-tree-sitter v0.25.0
+// accepts both, so the skew is not something adapters need to handle. Checked
 // against the module proxy: every ABI-14 module here is already pinned to
 // its newest tagged release, so none is a lagging pin waiting to be bumped
 // -- it is upstream's own ABI split, and go.mod cannot paper over it by
@@ -63,6 +64,9 @@ func cssGrammar() *ts.Language { return ts.NewLanguage(tscss.Language()) }
 
 // jsonGrammar parses .json.
 func jsonGrammar() *ts.Language { return ts.NewLanguage(tsjson.Language()) }
+
+// htmlGrammar parses .html and .htm.
+func htmlGrammar() *ts.Language { return ts.NewLanguage(tshtml.Language()) }
 
 // tomlGrammar parses .toml.
 func tomlGrammar() *ts.Language { return ts.NewLanguage(tstoml.Language()) }

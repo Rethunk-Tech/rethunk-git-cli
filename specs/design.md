@@ -789,6 +789,132 @@ language server the way `gopls`/`vtsls`/`pyright` are for their languages, and
 no measured need strong enough to justify probing for a fifth stdio process
 sight unseen. `.sql` resolves in `[ts-only]` mode (§ Cross-check coverage).
 
+**HTML is next in demand order after SQL (TODO.md), the first grammar whose
+own anchor is selector-shaped rather than a declaration name.** `div#app` is
+the fork that mattered before any grammar was chosen: every other anchor
+this resolver has is a name a language's own grammar already assigns
+(a function, a key, a selector's own text); an HTML anchor instead names
+*which* element, the way a CSS selector would. The steer settled here,
+deliberately, is element + id only — no class, no `nth-of-type`, no
+descendant combinator — because `rgit` resolves anchors; it is not a CSS
+selector engine, and every step past element#id is a step toward
+reimplementing one. TODO.md's own example is exactly `div#app`.
+
+**tree-sitter-html declares no fields at all, the same field-less, positional
+shape CSS and YAML's own constructs already have.** Measured against
+`node-types.json`: `element`, `start_tag`, `self_closing_tag`, `attribute`,
+and every other node kind report an empty `"fields"` object, so `lang_html.go`
+reads tag name, attribute name, and attribute value by node kind and
+position, not by field lookup.
+
+**An id's own value lives one of two shapes deep, measured directly against
+a compiled parse tree, not assumed from the grammar's docs.** A quoted value
+(`id="app"`, `id='app'`) wraps a plain `attribute_value` node one level
+inside `quoted_attribute_value`; a bare, unquoted value (`id=app`) is that
+same `attribute_value` kind directly, one level shallower — both read by the
+same one function, `htmlAttributeNameValue`, rather than two. A boolean
+attribute (bare `id`, no `=`) and an empty quoted value (`id=""`) both leave
+no `attribute_value` node to read at all, and are treated as no id present,
+the same "nothing to read a name from" refusal `lang_json.go` gives an empty
+string key. A second `id` attribute on one tag (invalid HTML the grammar
+nonetheless tolerates) is never reached — the first one found settles it,
+matching a browser's own first-occurrence-wins rule for a duplicate
+attribute. Attribute name matching is ASCII case-insensitive (`ID`, `Id`,
+`id` all recognized identically), a real WHATWG spec fact, not fuzzy
+guessing; the tag name and the id's own value are both taken verbatim, never
+case-folded, the same "exactly as written" convention `lang_css.go`'s
+selector text already follows.
+
+**An element with no id gets no `Declaration` of its own — deliberately,
+not merely unimplemented.** This resolver's index has no per-parent scoping
+the way a real DOM's `getElementById` has document-wide uniqueness (or the
+way CSS's own `Container` reaches only one level): indexing bare tag names
+too would make `div`, or any other common tag, collide across nearly every
+real HTML document, with no scoping mechanism to keep two unrelated
+same-tag siblings apart. An id-less element is still walked through — an
+id-bearing element nested five levels inside a page shell with no ids
+anywhere above it is exactly as addressable as one at the root, TODO.md's
+own component-root/mount-point case — it simply contributes no `Declaration`
+itself. Recursion has no depth limit, unlike CSS's own one-level
+`Container`-qualification ceiling: `Container` here is always the element's
+own tag name, never a chain through ancestors, so depth affects only how
+many `Declaration`s a subtree can contain, never how any one of them is
+named.
+
+**Ambiguity needed no new mechanism at all.** `Declaration{Bare: id,
+Container: tag, Sep: "#"}` is everything `lang_html.go` constructs; every
+other question — bare-id lookup, the tag-qualified spelling, ordinal
+disambiguation for two identical `tag#id` pairs — is already `index.go`'s
+job, unchanged. A verified fixture with `<div id="app">` and `<span
+id="app">` reports the bare `app` lookup as `AnchorAmbiguous` (exit 4) with
+candidates `div#app`, `span#app`, sorted — the identical mechanism two
+identically named Go functions or two identical CSS selectors already
+share, not a special HTML case.
+
+**Pseudo-anchors got a considered answer each, one degrading cleanly.**
+`@header` is `["doctype", "comment"]`: `<!DOCTYPE html>` is a real, distinct
+node kind, and a comment immediately preceding or following it joins the
+same leading run every other adapter's `@header` already collects.
+`@imports` is `nil`, inherited from `defaultLanguage`: no node kind in this
+grammar plays the role of an import statement. A `<link rel="stylesheet">`
+or a `<script src="...">` is semantically import-shaped but is not a
+distinct grammar node — both parse as an ordinary `element`/
+`script_element`, indistinguishable by kind from any other tag, the same
+shape shell's `source` command has (`ImportMatcher`). Unlike shell, no
+matcher is built: deciding which elements count (`rel="stylesheet"` but not
+`rel="icon"`? `script[src]` but not an inline `<script>`?) has no measured
+demand behind it and is exactly the scope element+id was kept narrow to
+avoid. `@toplevel` needed no override the way Markdown's did: the generic
+first-through-last-declaration formula (`pseudo.go`), applied to whatever a
+file's actual root children are, already produces the right answer — the
+whole `<html>` element for a typical page (the one top-level child
+containing every declaration), or exactly the declared elements themselves
+for a bare fragment file with no wrapping tag at all (TODO.md's own
+`<div id="app">`-only case).
+
+**A void element's own node measurably absorbs trailing content, left alone
+as the grammar's own honest boundary — TOML's trailing-blank-line
+precedent, not YAML's misattached-comment one.** Measured directly: an
+implicitly-void tag (`<img>`, `<input>`, `<br>`, and similarly self-closing-
+by-tag-name elements, with no explicit `/>` and no `end_tag`) that is not
+immediately followed by another element or its own enclosing tag's close
+absorbs the intervening whitespace (or, with nothing else following in
+scope, plain text) as its own trailing content — its own `element` node's
+`EndByte()` extends past its own tag to include it. Explicit self-closing
+syntax (`<img id="y"/>`) and any element with a real `end_tag` are
+unaffected in every case measured; the absorption is confined to the
+implicit-void shape. Two adjacent void elements, or a void element
+immediately followed by a real sibling element, never overlap — each
+absorbs only the inert whitespace between them, confirmed directly against
+a compiled parse tree, never a neighbour's own tag text. Left untrimmed,
+matching TOML's own "absorbs the blank line before the next section header,
+left as the grammar's own honest boundary" precedent, rather than building a
+new trimming seam for one adapter's own quirk.
+
+**That same absorption is the concrete, measured reason HTML's own
+cross-check stays unwired**, alongside a second, independent gap: measured
+directly against `vscode-html-language-server`, an ordinary id-bearing
+element without a `class` attribute names and ranges identically to what
+`rgit` itself resolves (`div#app`, `section#content`, exact line-range
+matches on a nested fixture) — but an element that also carries a `class`
+attribute is named `tag#id.class1.class2` by the server, which never
+matches `rgit`'s own `tag#id` spelling, degrading that one symbol to
+`[ts-only]` on its own (an existing, safe degrade — § Cross-check
+exemptions' fourth case — not a wrong match). The blocking gap is the void-
+element absorption above: it corrupts `declOnlyExtent` — the node's own raw
+`StartByte()`/`EndByte()`, the exact byte range the cross-check compares —
+for precisely the id-bearing void elements a realistic fixture exercises,
+since `declOnlyExtent` has no trimming seam at all (unlike `fullExtent`,
+reached through `extentEnd`'s optional `trailingCommentTrimmer` interface,
+which YAML already implements for its own, differently-shaped defect).
+Extending `declOnlyExtent` to consult a trimming seam too would touch every
+adapter's cross-check path core-wide to accommodate one language's own
+grammar quirk — a bigger, riskier change than this feature's own demand
+justifies. Left unwired, the same considered "not wired" verdict this
+table's own TOML and SQL rows already record — not a placeholder for a
+follow-up that must happen, but one that a future change to
+`declOnlyExtent`'s own contract could revisit.
+
 ### Cross-check coverage
 
 Markdown, YAML, CSS, JSON, TOML, and SQL were each checked for a real
@@ -815,6 +941,7 @@ a server's own docs.
 | Markdown | `vscode-markdown-language-server` | stdio | — | — | — | Crashes on startup (measured) | Not wired |
 | TOML | `taplo` 0.10.0 | stdio | 3.9ms | 0.5–1.0ms | 0.2–0.4ms | Real disagreement on nested tables (measured) | Not wired |
 | SQL | none maintained | — | — | — | — | `sqlfluff` installed, no LSP surface | Not wired |
+| HTML | `vscode-html-language-server` | stdio | — | — | — | Exact match, id-bearing + class-less; real disagreement on void elements and on any class-bearing element's own name (both measured, § Grammar scope) | Not wired |
 
 Method for the four that passed: a fixture per grammar exercising a nested
 container (so both a leaf declaration and a declaration whose own extent
@@ -1216,6 +1343,7 @@ built.
 | `github.com/tree-sitter/tree-sitter-json` | v0.24.8 | JSON key-path anchors; import path is `<module>/bindings/go`; was already an indirect requirement, promoted to direct |
 | `github.com/tree-sitter-grammars/tree-sitter-toml` | v0.7.0 | TOML key-path anchors; import path is `<module>/bindings/go` |
 | `github.com/DerekStride/tree-sitter-sql` | v0.3.11, pinned | SQL schema/function anchors; **not** a `go.mod` requirement — resolved by explicit `module@version` at build time, since nothing imports it (§ Grammar scope, SQL) |
+| `github.com/tree-sitter/tree-sitter-html` | v0.23.2 | HTML element+id anchors; import path is `<module>/bindings/go` |
 
 **`gopls` is pinned too, outside this table.** `cmd/rgit-install`'s
 `-with-servers` installed it via `go install golang.org/x/tools/gopls@latest`
@@ -1337,6 +1465,21 @@ the sum of the two isolated deltas (12 + 32 = 44 KB), so neither pulls in
 anything the other did not already need on its own. JSON's grammar has no
 external scanner at all, which is why it is the cheapest grammar here.
 
+**HTML's grammar is checked the same two ways every other grammar in this
+table is.** v0.23.2 is both the latest tag on the module proxy and the
+newest one that still ships `bindings/go` — checked directly against that
+tag's own file tree (`bindings/go/binding.go`, package `tree_sitter_html`,
+exporting `Language()`), the same check markdown's `v0.5.2` regression
+showed is never safe to skip. It reports ABI 14, not 15 (measured from the
+module's own `src/parser.c` `LANGUAGE_VERSION`) — the same split
+TypeScript/JSON/YAML/TOML already have, not something this adapter needs to
+handle itself (`go-tree-sitter` v0.25.0 accepts either). `go tool nm` on an
+unstripped build shows exactly one grammar's worth of `tree_sitter_html*`
+symbols — the entry point, its external scanner's five entry points, and the
+cgo glue — no second, unreferenced grammar riding along. Full reasoning for
+the anchor syntax this grammar's own node shapes support is in § Grammar
+scope.
+
 ### Binary size
 
 **13740 KB** stripped for the default build, against a **1644 KB**
@@ -1359,6 +1502,7 @@ any grammar:
 | CSS | +128 KB, +0.9% | 13568 KB |
 | JSON | +12 KB, +0.1% | 13696 KB |
 | TOML | +32 KB, +0.2% | 13696 KB |
+| HTML | +32 KB, +0.2% | 14190 KB |
 | SQL (`-tags rgit_sql`) | +2416 KB, +17.6% | 13740 KB |
 
 Shell and SQL are the two expensive entries, both for grammar size alone

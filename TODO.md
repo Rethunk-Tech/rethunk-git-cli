@@ -28,7 +28,6 @@ against, the same way the v1 three were chosen (`specs/design.md` § Grammar
 scope). Config and data files stage by path meanwhile, which is what a lockfile
 or a version bump wants regardless.
 
-- [ ] HTML element anchors (`div#app`).
 - [ ] Rust, C, C++. Speculative: no surveyed repository contains any. Worth
       doing if that changes, but not ahead of the languages above.
 

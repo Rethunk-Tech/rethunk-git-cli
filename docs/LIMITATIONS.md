@@ -6,7 +6,7 @@ throughout: name the path instead of a symbol anchor.
 ## Unsupported languages
 
 Any language with no tree-sitter grammar in this binary refuses a symbol
-anchor with exit 9 — Rust, C, C++, and HTML are common examples with none.
+anchor with exit 9 — Rust, C, and C++ are common examples with none.
 Run `rgit languages` (or `rgit doctor`) for the exact list the running
 binary supports; it drifts as grammars are added, which is why this file
 doesn't restate it. What's planned beyond the shipped set is tracked in
@@ -50,6 +50,22 @@ address. Stage the containing declaration or the path instead.
 - **SQL** — `DROP`, `ALTER`, `INSERT`, `SELECT`, and `CREATE SCHEMA` declare
   no persistent named object, so none is addressable; a `CREATE INDEX` with
   no name (`CREATE INDEX ON t (c)`) has nothing to read one from either.
+- **HTML** — everything a CSS selector can express beyond an element's own
+  id: a class (`.widget`), an attribute selector (`[data-foo]`), `nth-of-type`
+  and every other pseudo-class/pseudo-element (`:hover`, `::before`), and a
+  descendant/child/sibling combinator (`.parent .child`, `>`, `+`, `~`). This
+  is deliberate scope, not an oversight — `rgit` resolves anchors, it is not
+  a CSS selector engine, and each of those is a step toward reimplementing
+  one (`specs/design.md` § Grammar scope). An element with **no** id is also
+  unaddressable, even a lone, unambiguous `<button>` with no sibling to
+  confuse it with — HTML's own demand signal is the mount-point/component-root
+  case (`div#app`), where an id already exists; falling back to a bare tag
+  name would make "div" (or any common tag) collide across nearly every real
+  document, since this resolver's index has no per-parent scoping to keep two
+  same-named siblings apart the way a real DOM's `getElementById` uniqueness
+  does. An id shared by two elements — the same tag twice, or two different
+  tags — is exit 4 (ambiguous), the same as any other language's collision;
+  name the qualified `tag#id` form, or the path, instead.
 
 Full anchor and qualification rules: [`ANCHORS.md`](ANCHORS.md).
 
@@ -83,13 +99,29 @@ plain history lookup this command exists to serve. See
 ## Language-server coverage
 
 The extent cross-check is live for Go, TypeScript/TSX, Python, Shell, YAML,
-JSON, CSS, and Markdown. TOML and SQL resolve with tree-sitter alone,
+JSON, CSS, and Markdown. TOML, SQL, and HTML resolve with tree-sitter alone,
 permanently in `[ts-only]` mode — a supported result, not a degraded one:
 
 - **TOML** — `taplo` completes the LSP handshake, but its own ranges
   disagree with the extent `rgit` stages on an ordinary nested table, so
   installing it does not enable a cross-check.
 - **SQL** — no maintained tool speaks `documentSymbol` for SQL at all.
+- **HTML** — `vscode-html-language-server` completes the handshake and,
+  measured directly, names and ranges an ordinary id-bearing element exactly
+  the way `rgit` does (`div#app`) — but two things stop short of a real
+  cross-check. First, it names an element carrying a `class` attribute
+  `tag#id.class1.class2`, which never matches `rgit`'s own `tag#id` spelling,
+  so every class-bearing element degrades to `[ts-only]` on its own (a safe,
+  already-existing degrade, not a wrong match). Second, and load-bearing:
+  tree-sitter-html's own node for a void element (`<input>`, `<img>`, `<br>`,
+  and similarly self-closing-by-tag-name elements) measurably absorbs
+  trailing whitespace or text up to its next real sibling boundary when one
+  isn't immediately adjacent — the server's own range does not, so the two
+  disagree on a real byte range for exactly the elements a realistic fixture
+  exercises. Fixing that would mean widening `internal/resolve`'s
+  declaration-only extent (the one the cross-check compares) with a new
+  trim seam shared by every grammar, a bigger, riskier core change than this
+  language's own demand justifies — left unwired rather than forced.
 
 Install instructions and the full server table:
 [`INSTALL.md`](INSTALL.md#language-servers).

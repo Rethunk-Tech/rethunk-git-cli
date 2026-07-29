@@ -157,6 +157,18 @@ whichever key's extent happens to contain them. `@imports` resolves to nothing,
 the same as Markdown. `@toplevel` spans every top-level key, first through
 last, which in practice is the whole document once `@header` is set aside.
 
+An HTML file's own `@header` is its leading `<!DOCTYPE html>` plus any
+comment immediately preceding or following it — a real, distinct node kind
+in this grammar, unlike Markdown or YAML's comment-only preamble. `@imports`
+resolves to nothing: no node kind in this grammar plays the role of an
+import statement, so a `<link rel="stylesheet">` or `<script src="...">` —
+semantically import-shaped, but not a distinct node from any other tag — is
+not reachable through it. `@toplevel` spans every addressable (id-bearing)
+element, first through last, which in a typical page — one root `<html>`
+element enclosing everything — is the whole document once `@header` is set
+aside, the same as it is for every other language with no `@imports` of its
+own.
+
 ## Paths that anchors cannot address
 
 Symbol anchors are refused (exit 10) on symlinks, gitlinks/submodules, and
@@ -172,8 +184,8 @@ binary or non-parseable files. Name the path instead. Behaviour per kind:
 
 ## Language support
 
-Ten grammars ship unconditionally; an eleventh, SQL, ships only behind the
-`rgit_sql` build tag (see its own row). All eleven claim these extensions:
+Eleven grammars ship unconditionally; a twelfth, SQL, ships only behind the
+`rgit_sql` build tag (see its own row). All twelve claim these extensions:
 
 | Grammar | Extensions | Addresses |
 | --- | --- | --- |
@@ -187,6 +199,7 @@ Ten grammars ship unconditionally; an eleventh, SQL, ships only behind the
 | CSS | `.css` | Selectors and at-rules. `.scss`/`.sass` unsupported — see [`LIMITATIONS.md`](LIMITATIONS.md#unsupported-languages) |
 | JSON | `.json` | Object key paths, container-qualified one level the same way a YAML mapping key is. Arrays and non-object documents have nothing to address |
 | TOML | `.toml` | Key paths and `[table]`/`[[array]]` headers, container-qualified one level. Inline tables and arrays have nothing to address inside them |
+| HTML | `.html`, `.htm` | An id-bearing element, tag-qualified (`div#app`), to any nesting depth. An element with no id has no anchor of its own — see [`LIMITATIONS.md`](LIMITATIONS.md#constructs-no-anchor-reaches) |
 | SQL | `.sql` | `CREATE TABLE`/`VIEW`/`FUNCTION`/`INDEX`/`TRIGGER`/`TYPE`, schema-qualified one level. Ships behind the `rgit_sql` build tag ([`INSTALL.md`](INSTALL.md#sql-support)) |
 
 A `---`-separated multi-document YAML stream, and a comment sitting between
@@ -282,6 +295,31 @@ read. SQL ships behind the `rgit_sql` build tag rather than unconditionally
 — [`INSTALL.md`](INSTALL.md#sql-support) covers what that means for a build
 and what a user without the tree-sitter CLI loses.
 
+HTML addresses one shape only: an element carrying an `id` attribute,
+tag-qualified as `div#app` — element and id, nothing wider. There is
+deliberately no anchor for a class, an attribute selector, `nth-of-type`, a
+pseudo-class/pseudo-element, or a descendant/child/sibling combinator — see
+[`LIMITATIONS.md`](LIMITATIONS.md#constructs-no-anchor-reaches) for the full
+list and why. `rgit` resolves anchors; it is not a CSS selector engine. An
+element is addressable at any nesting depth, not only at the top level — a
+mount point (`div#app`) five levels deep inside a full page shell resolves
+the same as one at the root — and naming an outer element claims everything
+nested inside it, id-bearing descendants included, the same "naming the
+container claims its members" rule every other language's own container
+qualification already follows. An element with **no** id gets no anchor of
+its own at all, even when it is the only one of its tag in the file: this
+resolver's index has no per-parent scoping, so falling back to a bare tag
+name would make ordinary tags like `div` collide across nearly every real
+document; only an element's own written text (its tag name and its id's
+value, both taken verbatim) is ever staged, matching how a CSS selector
+already stages. Attribute names, including `id` itself, are matched
+case-insensitively (`ID`, `Id`, and `id` all recognize the same attribute),
+per the WHATWG HTML spec — the id's own value is not case-folded. Two
+elements sharing one id — the same tag twice, or two different tags — collide
+in this resolver's index exactly the way two identically named Go functions
+or two identical CSS selectors already do: exit 4 (ambiguous), listing each
+element's own tag-qualified spelling as a candidate.
+
 A file whose extension claims no grammar is matched by its shebang instead, so
 an extensionless `bin/` script or git hook is addressable like any other file.
 `bash` and `sh` resolve to the shell grammar and `python3`/`python` to Python,
@@ -298,9 +336,9 @@ uncommon case at the cost of a bounded read through `git cat-file`.
 
 The language-server cross-check covers Go, TypeScript/TSX, Python, Shell,
 YAML, JSON, CSS, and Markdown
-([`docs/INSTALL.md#language-servers`](INSTALL.md#language-servers)). TOML and
-SQL stay `[ts-only]` permanently instead, which is a supported result, not a
-degraded one — see
+([`docs/INSTALL.md#language-servers`](INSTALL.md#language-servers)). TOML,
+SQL, and HTML stay `[ts-only]` permanently instead, which is a supported
+result, not a degraded one — see
 [`LIMITATIONS.md`](LIMITATIONS.md#language-server-coverage) for why. Exit 9
 is reserved for a language with no grammar at all — see
 [`LIMITATIONS.md`](LIMITATIONS.md#unsupported-languages) for the current
