@@ -206,8 +206,17 @@ func (r *Repo) HashObject(ctx context.Context, path string, content []byte) (sha
 // It is the comparison base for an unborn branch: on a repository with no
 // commits there is no HEAD to diff against, and every tracked path is an
 // addition relative to nothing.
+//
+// Reads from an explicit empty stdin rather than a null-device path: this
+// binary ships a windows/amd64 build, and a literal "/dev/null" argument is
+// a platform assumption this package has no need to make when git already
+// accepts an empty --stdin portably.
 func (r *Repo) EmptyTree(ctx context.Context) (sha string, err error) {
-	return r.checkedLine(ctx, "hash-object", "-t", "tree", "/dev/null")
+	out, err := r.checkedStdin(ctx, bytes.NewReader(nil), "hash-object", "-t", "tree", "--stdin")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 // UpdateIndexCacheinfo stages a single entry directly, as the final step
