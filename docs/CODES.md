@@ -50,6 +50,12 @@ it, since `--quiet` suppresses the report on stdout, not diagnostics.
 Both commands emit plain text only. `--porcelain` replaces the aligned
 human layout with stable tab-separated records, no header.
 
+This is not a hypothetical contract: `rgit completion`'s own shell completion
+scripts (`internal/app/completion.go`) shell out to `rgit diff --porcelain`
+and cut its `FILE` and `SYMBOL` columns by position with `awk -F'\t'` to offer
+symbol names after `FILE:`. Reordering or adding a column here is a breaking
+change for that consumer, not just for external scripts.
+
 ### `rgit diff --porcelain`
 
 ```text
