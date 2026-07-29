@@ -427,6 +427,37 @@ func TestExpandGPGSignShorthand(t *testing.T) {
 	}
 }
 
+// TestRestoreDoubleDash_ReconstructsThroughRealPflag proves the actual
+// wiring cli.ClassifyArgs's rule 1 depends on. fs.Args() alone loses the
+// fact that "--" was ever present; only a real pflag.FlagSet's own
+// ArgsLenAtDash says where it was, and internal/cli's own precedence_test.go
+// covers rule 1 with a hand-built slice that already contains "--" --
+// never touching this function at all. A regression here (say, pflag
+// changing what ArgsLenAtDash reports, or an off-by-one in the splice)
+// would still pass `go test -short ./...` without this.
+func TestRestoreDoubleDash_ReconstructsThroughRealPflag(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{"-- present after a flag value", []string{"--sym", "a.go:A", "--", "b.go:B", "weird"}, []string{"--", "b.go:B", "weird"}},
+		{"-- absent leaves positionals untouched", []string{"--sym", "a.go:A", "pathspec.go"}, []string{"pathspec.go"}},
+		{"-- with nothing after it", []string{"a.go", "--"}, []string{"a.go", "--"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var syms, files []string
+			fs := newTargetFlagSet("test", &syms, &files)
+			if err := fs.Parse(tc.args); err != nil {
+				t.Fatalf("Parse(%v): %v", tc.args, err)
+			}
+			qt.Assert(t, qt.DeepEquals(restoreDoubleDash(fs), tc.want))
+		})
+	}
+}
+
 // TestRun_GPGSignShorthandReachesGit closes the loop through the real
 // command surface: -S must trigger signing exactly as --gpg-sign does.
 // gpg.program pointed at a binary that always fails turns any signing
