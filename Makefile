@@ -87,7 +87,7 @@ lint:
 	golangci-lint run ./...
 
 clean:
-	rm -f $(BINARY) coverage.out short.out
+	rm -f $(BINARY) rgit-install coverage.out short.out
 	rm -rf $(DIST) $(SQL_CSRC)
 
 # rgit links tree-sitter through cgo, so CGO_ENABLED=0 is not an option and
