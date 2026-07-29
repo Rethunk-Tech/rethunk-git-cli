@@ -6,6 +6,8 @@
 - **git** on `PATH`. `rgit` shells out to it for everything git already does.
 - Optionally, a **language server** per language you want cross-checked
   (see [Language servers](#language-servers)).
+- Optionally, the **tree-sitter CLI** for `.sql` anchors (see
+  [SQL support](#sql-support)) — everything else builds and works without it.
 
 The Go floor is not chosen — it tracks whatever the dependencies declare, since
 `rgit` keeps them at their latest releases. The `go.lsp.dev` modules set it
@@ -102,9 +104,14 @@ never committed; it regenerates on demand.
 
 `cmd/rgit-install` does this automatically once the SQL adapter package
 exists and the [tree-sitter CLI](https://github.com/tree-sitter/tree-sitter)
-is on `PATH` — a JS runtime is also needed, since grammar files are
-JavaScript. Without the CLI, the installer installs `rgit` without SQL
-support and says so plainly rather than failing.
+is on `PATH` — no separate Node.js install is needed even though `grammar.js`
+is JavaScript: the CLI evaluates it with its own embedded JS engine, measured
+directly by running `tree-sitter generate` with every `node`/`nodejs` binary
+removed from `PATH`. Without the CLI, the installer installs `rgit` without
+SQL support and says so plainly rather than failing; `.sql` anchors then
+resolve as any other unsupported language does (exit 9, `docs/ANCHORS.md`),
+and every other language is unaffected. What `.sql` addresses once built is
+in [`ANCHORS.md`](ANCHORS.md#language-support).
 
 ## Language servers
 

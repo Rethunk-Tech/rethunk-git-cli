@@ -543,6 +543,152 @@ other language) or teaching the resolver to fall back from a failed
 pseudo-anchor lookup to the symbol index (a general behavior change, not a
 CSS-specific fix, and outside this deliverable's scope).
 
+**SQL was the last v2 grammar (TODO.md), and the only one this repo generates
+its own C for rather than consuming a published binding.**
+`github.com/DerekStride/tree-sitter-sql` is the only SQL grammar with Go
+bindings at all, but its published module cannot compile as fetched: `src/
+parser.c` is generated and gitignored, absent from every tag v0.1.0–v0.3.11,
+so its own `bindings/go`'s `#include "../../src/parser.c"` fails — verified
+directly against every one of those tags' own file trees, the same check
+that already caught markdown's `v0.5.2` Go-bindings regression elsewhere in
+this record. The module does ship `grammar.js` and `tree-sitter.json` at its
+root, and `src/scanner.c` — everything `tree-sitter generate` needs except
+the one file it produces.
+
+**Generation at build time was chosen over vendoring, a genuine divergence
+from how every other grammar in this table is consumed.** Vendoring
+`parser.c` would mean carrying a 17.4 MB, 674,655-line generated file (`wc
+-l`, measured against this exact module/version) in the repository, entirely
+unreviewable by a human, and re-vendored by hand on every upstream grammar
+bump — an unversioned copy exactly as unwelcome as the one `AGENTS.md`
+already rejects `go-git` for creating. Generating it from the module's own
+`grammar.js` at build/install time instead means the repository never holds
+that file at all; `cmd/rgit-install`'s `generateSQLParser` reproduces it on
+demand, and `.gitignore` refuses it a second time in case one ever lands on
+disk. The cost is a `tree-sitter` CLI dependency and ~27s of generation time
+per fresh build (measured: `tree-sitter generate` alone, warm module cache,
+this machine) — paid once per checkout, not per invocation, and never paid
+at all by a plain `go build ./...`, which the `rgit_sql` tag keeps this
+entirely out of.
+
+**Two build-time facts were measured, not assumed, because getting either
+wrong fails silently.** First: `tree-sitter.json` must be copied alongside
+`grammar.js` before generating, or the CLI silently emits ABI 14 instead of
+ABI 15 (a warning, not an error) — `runSQLGeneration` copies both files into
+its scratch directory for exactly this reason. Second: the generated C must
+land in a subdirectory of the package that consumes it
+(`internal/resolve/sqlgrammar/csrc/`), never beside the `.go` file directly
+— measured directly: a `.c` file placed in the package directory itself gets
+compiled once by cgo's own file-globbing and a second time by the binding's
+own `#include`, producing `multiple definition of 'tree_sitter_sql'` at link
+time. Neither defect announces itself as a generation failure; both were
+caught by actually linking the result, not by reading `tree-sitter
+generate`'s own success/failure exit code.
+
+**No Node.js install is needed despite `grammar.js` being JavaScript** —
+measured by running `tree-sitter generate` against this exact module with
+every `node`/`nodejs` binary removed from `PATH`; the CLI (0.26.9 here)
+evaluates grammar files with its own embedded JS engine. `cmd/rgit-install`'s
+prerequisite checks accordingly probe for the `tree-sitter` CLI alone, not a
+JS runtime.
+
+**The binding imports neither the grammar module nor its own `bindings/go`
+package — deliberately, since the latter is exactly the one that cannot
+compile.** `internal/resolve/sqlgrammar`'s binding imports only `"C"` and
+`"unsafe"`; the generated C it `#include`s is reached through a relative
+path, not a Go import. One consequence threads through this record and the
+installer: nothing in this repository's build graph ever names
+`github.com/DerekStride/tree-sitter-sql` in an import statement, so `go mod
+tidy` has no dependency edge to hold a `go.mod` requirement open with and
+would drop a bare `require` line the moment it ran (verified: `go mod tidy`
+leaves `go.mod`/`go.sum` byte-for-byte unchanged after this grammar's own
+commit). The module is instead resolved by explicit `module@version` —
+`go mod download` and `go list -m` both accept that form as an ad-hoc query
+against the proxy/cache with no `go.mod` entry at all, verified directly —
+which is also why `cmd/rgit-install`'s own package-discovery for the SQL
+adapter had to change: the seam it replaced searched `go list`'s `Imports`
+field for a `tree-sitter-sql` substring, a check this binding was never
+going to satisfy. It now matches by package name (`sqlgrammar`) and the
+presence of at least one `CgoFiles` entry, both readable from `go list
+-tags rgit_sql -json ./...` even before generation has ever run — verified:
+cgo's own `#include` line is a C-preprocessor directive inside a Go source
+comment, invisible to `go list`, which only needs the `.go` file itself to
+parse.
+
+**Every node shape `lang_sql.go` reads was measured against a compiled
+parse tree**, the same discipline every other adapter here follows. The
+root node kind is `program`; its named children are `statement` wrappers —
+one per statement, each with exactly one named child — not the inner
+`create_table`/`create_view`/etc. node directly, measured across every
+statement kind this adapter addresses and every one it does not. A `;`
+terminator is its own unnamed sibling of `statement` under `program`, not a
+child of `statement` itself — measured directly by walking `program`'s
+children including unnamed ones — so a symbol's extent never includes it,
+the same "the grammar's own honest boundary" reasoning already applied to
+TOML's trailing-blank-line case above.
+
+Five of the six addressed statement kinds (`CREATE TABLE`/`VIEW`/
+`FUNCTION`/`TRIGGER`/`TYPE`) name themselves through an `object_reference`
+child holding a `"name"` field, and — only when the source wrote one — a
+`"schema"` field, read as `Container` the same one-level-qualification way a
+Go receiver or a TOML table header already is. That child is positional
+(tree-sitter-sql declares no field naming it on the parent statement), found
+by scanning for the first `object_reference`-kind child — measured to
+always be the statement's own name even on `CREATE TRIGGER`, whose statement
+carries three `object_reference` children in total (its own name, the table
+it fires on, the function it calls). `CREATE INDEX` is the exception: its
+own name is a field directly on `create_index` itself, confusingly named
+`"column"` — measured, and distinct from the same-named `"column"` field
+each entry inside its own `index_fields` carries for the columns actually
+being indexed; an anonymous index (`CREATE INDEX ON t (c)`, legal SQL) has
+no `"column"` field on `create_index` at all and is left unaddressable
+rather than guessing at the name the database would assign. `CREATE DOMAIN`
+does not parse under this grammar version at all — measured: it produces an
+`ERROR` node — so it was never a candidate for v1 scope regardless of
+demand.
+
+A line comment (`-- ...`) and a block comment (`/* ... */`) are two
+distinct node kinds, `"comment"` and `"marginalia"` respectively — measured
+by parsing one of each — so `IsComment` and `HeaderKinds` both name both
+kinds, or a file leading with a block comment would silently get no
+`@header`. Both sit as `program`-level siblings of `statement` nodes, not
+nested inside one, so the core resolver's ordinary `docStart` sibling-walk
+attributes a leading doc comment to a `CREATE TABLE` the same way it would
+in any other language, with no SQL-specific extension. `ImportKinds`
+returns `nil`: this grammar has no include/import-shaped statement of any
+kind, the same degraded-but-not-an-error answer TOML, JSON, and Markdown
+already give.
+
+Measured **binary size: +2416 KB (+17.6%)**, `go build -ldflags="-s -w"`
+without the `rgit_sql` tag (**13740 KB**, this same commit, matching the
+post-JSON-and-TOML baseline recorded above) against the same build with
+`-tags rgit_sql` after generation (**16156 KB**) — the largest single-grammar
+jump recorded in this document, ahead of shell's +1332 KB, consistent with
+this being by far the largest generated parser here (674,655 lines of C
+against bash's much smaller hand-maintained scanner). `go tool nm` on an
+unstripped `-tags rgit_sql` build shows exactly one grammar's worth of
+`tree_sitter_sql*` symbols — the entry point and its external scanner's five
+functions, plus the cgo glue — no second, unreferenced grammar riding along,
+the same check every other grammar in this table already passed. This cost
+is paid only by a caller who opts into `-tags rgit_sql`; the default,
+untagged binary this record's other size figures describe is unaffected.
+
+Measured **parse time**, warmed and averaged over 200 parses, in-process
+(no process-spawn cost, the same reason tree-sitter is the primary resolver
+at all): a single `CREATE TABLE users (id INT);` statement parses in
+**5.4µs**; a synthetic 50-statement, 4040-byte schema file (`CREATE TABLE
+t0`..`t49`, three columns each) parses in **513µs**, both on this machine.
+Neither figure is close to mattering next to the ~27s one-time generation
+cost or even the ~7.2s cgo compile of the generated C (`go build -tags
+rgit_sql ./internal/resolve/sqlgrammar/...`, this machine) — both paid once
+per checkout, not per `rgit` invocation.
+
+**No language-server cross-check**, the same reasoning YAML's own entry in
+this record already gives: there is no single dominant SQL language server
+the way `gopls`/`vtsls`/`pyright` are for their languages, and no measured
+need strong enough to justify probing for a fifth stdio process sight
+unseen. `.sql` always resolves in `[ts-only]` mode.
+
 ## Argument grammar
 
 Symbol anchors need no flag because **all git pathspec magic is leading-colon**
@@ -607,6 +753,7 @@ built.
 | `github.com/tree-sitter/tree-sitter-css` | v0.25.0 | CSS selector/at-rule anchors; import path is `<module>/bindings/go` |
 | `github.com/tree-sitter/tree-sitter-json` | v0.24.8 | JSON key-path anchors; import path is `<module>/bindings/go`; was already an indirect requirement, promoted to direct |
 | `github.com/tree-sitter-grammars/tree-sitter-toml` | v0.7.0 | TOML key-path anchors; import path is `<module>/bindings/go` |
+| `github.com/DerekStride/tree-sitter-sql` | v0.3.11, pinned | SQL schema/function anchors; **not** a `go.mod` requirement — resolved by explicit `module@version` at build time, since nothing imports it (§ Grammar scope, SQL) |
 
 **Markdown earns its place two ways, both verified against the grammar's own
 `node-types.json`, not assumed.** It is the one language present in every

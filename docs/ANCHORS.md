@@ -172,7 +172,7 @@ binary or non-parseable files. Name the path instead. Behaviour per kind:
 
 ## Language support
 
-Nine grammars ship, claiming these extensions:
+Ten grammars ship, claiming these extensions:
 
 | Grammar | Extensions | Addresses |
 | --- | --- | --- |
@@ -186,6 +186,7 @@ Nine grammars ship, claiming these extensions:
 | CSS | `.css` | Selectors and at-rules. `.scss`/`.sass` are deliberately excluded — no SCSS/SASS tree-sitter grammar ships Go bindings ([`specs/design.md`](../specs/design.md#dependencies)) |
 | JSON | `.json` | Object key paths, container-qualified one level the same way a YAML mapping key is. Arrays and non-object documents have nothing to address |
 | TOML | `.toml` | Key paths and `[table]`/`[[array]]` headers, container-qualified one level. Inline tables and arrays have nothing to address inside them |
+| SQL | `.sql` | `CREATE TABLE`/`VIEW`/`FUNCTION`/`INDEX`/`TRIGGER`/`TYPE`, schema-qualified one level. Ships behind the `rgit_sql` build tag ([`INSTALL.md`](INSTALL.md#sql-support)) |
 
 A `---`-separated multi-document YAML stream has nothing addressable by key at
 all — name the path instead — rather than guessing which document a bare key
@@ -249,6 +250,25 @@ Naming a table also stages any blank line between it and the next section
 header — the grammar attributes that gap to the table itself, since nothing
 else could claim it. Inline tables (`{ a = 1 }`) and arrays are leaves,
 never descended into, the same as YAML's flow-style values.
+
+SQL addresses `CREATE TABLE`, `CREATE VIEW`, `CREATE FUNCTION`, `CREATE
+INDEX`, `CREATE TRIGGER`, and `CREATE TYPE` by the name being defined —
+`schema.sql:users`, `schema.sql:active_users`. `DROP`, `ALTER`, `INSERT`,
+`SELECT`, and `CREATE SCHEMA` all parse but declare no persistent named
+object, so none is addressable; naming the path stages those the same way it
+does an unaddressable shape in any other language. A schema-qualified name
+(`CREATE TABLE s.t`) qualifies one level, the same as a Go receiver or a TOML
+table header — `s.sql:s.t` addresses it, and a bare `t` disambiguates by
+ordinal against another schema's `t` in the same file the way two identically
+named Go functions do. `CREATE TRIGGER` never carries a schema qualifier of
+its own — Postgres does not allow one — so two same-named triggers in one
+file (legal when they fire on different tables) disambiguate by ordinal only;
+there is no qualifier that captures which table each fires on. `CREATE INDEX`
+with no name (`CREATE INDEX ON t (c)`, legal SQL — the database assigns one)
+is unaddressable, the same as any other symbol with no name of its own to
+read. SQL ships behind the `rgit_sql` build tag rather than unconditionally
+— [`INSTALL.md`](INSTALL.md#sql-support) covers what that means for a build
+and what a user without the tree-sitter CLI loses.
 
 A file whose extension claims no grammar is matched by its shebang instead, so
 an extensionless `bin/` script or git hook is addressable like any other file.
