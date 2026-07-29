@@ -47,8 +47,9 @@ it, since `--quiet` suppresses the report on stdout, not diagnostics.
 
 ## Output records
 
-Both commands emit plain text only. `--porcelain` replaces the aligned
-human layout with stable tab-separated records, no header.
+`diff`, `commit`, and `languages` emit plain text only. `--porcelain`
+replaces the aligned human layout with stable tab-separated records, no
+header.
 
 This is not a hypothetical contract: `rgit completion`'s own shell completion
 scripts (`internal/app/completion.go`) shell out to `rgit diff --porcelain`
@@ -110,7 +111,35 @@ staged, so there is nothing to report. A caller that needs to distinguish that
 from "no commit happened" should read the exit code, or `git rev-parse HEAD`
 before and after — empty output on its own does not mean nothing was done.
 
-## Rules both forms obey
+### `rgit languages --porcelain`
+
+```text
+NAME<TAB>EXTENSIONS<TAB>GATED
+css<TAB>.css<TAB>0
+go<TAB>.go<TAB>0
+sql<TAB>.sql<TAB>1
+typescript<TAB>.ts .mts .cts<TAB>0
+```
+
+One record per grammar compiled into this binary, sorted alphabetically by
+`NAME`. `EXTENSIONS` is every extension the grammar claims, leading dot
+included on each, joined with a single space — unambiguous, since a real
+extension is always `.something` and never itself contains whitespace.
+`GATED` is `1` when the grammar exists in this binary only because a build
+tag selected it (currently SQL alone, `-tags rgit_sql`; see
+[`INSTALL.md`](INSTALL.md#sql-support)) and `0` otherwise, present on every
+row rather than only the gated ones, so a reader always gets a definite
+answer instead of inferring "not gated" from an absent column.
+
+There is no row at all for a grammar this build was not compiled with: a
+plain build's records have no `sql` line, matching `rgit languages`'s own
+human output and `rgit --version`'s second line.
+
+## Rules the diff and commit forms obey
+
+These rules are specific to `SYMBOL`-bearing records — `rgit languages
+--porcelain` has no symbol, count, or ordering concept to share with them,
+and its own rules are stated in full above.
 
 `SYMBOL` is empty for every row or record that owns no anchor. A non-empty
 `SYMBOL` is always exactly the string a symbol anchor accepts back, so output
