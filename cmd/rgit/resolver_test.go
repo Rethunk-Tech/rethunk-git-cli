@@ -678,11 +678,18 @@ func lspWriteFrame(w io.Writer, msg map[string]any) error {
 	return err
 }
 
-// runMockLSPServer serves one initialize/initialized/didOpen/documentSymbol
-// exchange over conn, answering documentSymbol with resultJSON verbatim --
-// the raw union payload under test -- then returns. It never calls a *testing.T
-// method: it runs on its own goroutine, and only Fatal-family calls are
-// unsafe off the test goroutine.
+// runMockLSPServer serves one
+// initialize/initialized/didOpen/documentSymbol/didClose exchange over conn,
+// answering documentSymbol with resultJSON verbatim -- the raw union payload
+// under test -- and returning on the didClose that ends it. It never calls a
+// *testing.T method: it runs on its own goroutine, and only Fatal-family
+// calls are unsafe off the test goroutine.
+//
+// The exchange must be read to completion, not abandoned after the reply
+// documentSymbol asks for: net.Pipe is unbuffered and synchronous, so a
+// client write with nobody left reading blocks forever. DocumentSymbols
+// sends didClose after every didOpen, so returning at documentSymbol
+// deadlocks the client mid-teardown rather than ending the conversation.
 func runMockLSPServer(conn io.ReadWriteCloser, resultJSON string) error {
 	r := bufio.NewReader(conn)
 	for {
@@ -699,11 +706,15 @@ func runMockLSPServer(conn io.ReadWriteCloser, resultJSON string) error {
 
 		switch method {
 		case "textDocument/documentSymbol":
-			return lspWriteFrame(conn, map[string]any{
+			if err := lspWriteFrame(conn, map[string]any{
 				"jsonrpc": "2.0",
 				"id":      id,
 				"result":  json.RawMessage(resultJSON),
-			})
+			}); err != nil {
+				return err
+			}
+		case "textDocument/didClose":
+			return nil
 		case "initialize":
 			if err := lspWriteFrame(conn, map[string]any{
 				"jsonrpc": "2.0",
