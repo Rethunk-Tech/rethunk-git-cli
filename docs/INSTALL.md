@@ -218,10 +218,14 @@ not just that the binary exists, and reports which is missing when it isn't
 there.
 
 The same invocation both installs a missing server and updates a present
-one: every manager above already resolves to the latest available version
-and reinstalls only when something actually changed (cargo additionally
-reinstalls when the requested `--features` differ from what's already
-built), so running `-with-servers` again is always safe.
+one: every npm/bun/cargo entry above already resolves to the latest
+available version and reinstalls only when something actually changed
+(cargo additionally reinstalls when the requested `--features` differ from
+what's already built). `gopls` is the one exception — it is pinned (see the
+table above), so re-running installs or reinstalls exactly `v0.23.0`
+regardless of what `gopls` has tagged since; bumping it needs an edit to
+`cmd/rgit-install/servers.go`, not another `-with-servers` run. Either way,
+running `-with-servers` again is always safe.
 
 **`marksman` is deliberately out of scope.** No package manager publishes
 it — only GitHub release binaries, platform-named per target. Teaching this

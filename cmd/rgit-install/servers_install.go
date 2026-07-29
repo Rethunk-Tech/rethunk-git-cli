@@ -77,14 +77,17 @@ func selectNPMManager(lookPath func(string) (string, error)) (cmd string, ok boo
 
 // installCommand builds the argv for one job's install-or-update
 // invocation. All three forms are naturally idempotent with no extra flag:
-// `go install pkg@latest`, `npm install -g pkg`, and `bun add -g pkg` all
-// re-resolve to the latest published version and update in place if it
-// changed (`bun add -g --dry-run` against an already-installed package
-// resolves and reports the current version, not an error). cargo's own
-// docs state it reinstalls whenever the resolved version, binary set, or
-// --features differ from what's already there, so requesting --features
-// lsp here makes a featureless taplo install look stale to cargo and get
-// rebuilt with LSP support.
+// `go install pkg@<query>` (job.pkg already carries the version query --
+// `@latest` for every Go entry except gopls's own deliberate pin, see its
+// catalog entry in servers.go), `npm install -g pkg`, and `bun add -g pkg`
+// all re-resolve that query and update in place if it changed (`bun add -g
+// --dry-run` against an already-installed package resolves and reports
+// the current version, not an error) -- a pinned query like gopls's simply
+// re-resolves to the same fixed tag every time rather than to whatever is
+// newest. cargo's own docs state it reinstalls whenever the resolved
+// version, binary set, or --features differ from what's already there, so
+// requesting --features lsp here makes a featureless taplo install look
+// stale to cargo and get rebuilt with LSP support.
 func installCommand(job installJob, useBun bool) (name string, args []string) {
 	switch job.manager {
 	case managerGo:
