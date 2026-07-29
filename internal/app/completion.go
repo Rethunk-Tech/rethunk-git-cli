@@ -77,9 +77,7 @@ const rgitCommitFlags = "-m --message -F --message-file -s --signoff --trailer -
 // TestCompletionFlags_MatchLiveFlagSets checks all five against their own
 // --help output the same way.
 const rgitLanguagesFlags = "--porcelain -h --help"
-
 const rgitDoctorFlags = "-h --help"
-
 const rgitCompletionFlags = "-h --help"
 
 // bashCompletionScript is emitted verbatim by `rgit completion bash`. The
