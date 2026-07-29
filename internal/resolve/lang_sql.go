@@ -1,5 +1,12 @@
 //go:build rgit_sql
 
+// This build tag must stay a literal -- go's toolchain parses //go:build
+// constraints textually, before any Go code compiles, so it cannot
+// reference gated.go's SQLBuildTag constant even though the two must
+// name the identical string. Changing the tag here means changing
+// SQLBuildTag too; gated_test.go's TestGatedTag_AgreesWithForExtension is
+// the guard that catches the two drifting apart.
+
 package resolve
 
 import (

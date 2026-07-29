@@ -1,11 +1,25 @@
 package resolve
 
+// SQLBuildTag is lang_sql.go's own build tag, spelled once so
+// gatedExtensionTags below and this package's own tests read the identical
+// string rather than each hand-writing "rgit_sql" and risking one drifting
+// from the other. lang_sql.go's `//go:build rgit_sql` line itself MUST
+// stay a literal -- go's toolchain parses build constraints textually,
+// before any Go code (including this constant) is compiled, so the
+// directive can never reference it directly. gated_test.go's own
+// TestGatedTag_AgreesWithForExtension is the drift guard that stands in
+// for a direct reference: it runs once under each configuration
+// -tags rgit_sql selects, and passing in both is what actually
+// demonstrates this constant names the real gating tag, not merely a
+// string that happens to match today.
+const SQLBuildTag = "rgit_sql"
+
 // gatedExtensionTags maps a file extension to the build tag that would
-// compile in its grammar -- currently SQL alone (lang_sql.go's own
-// "rgit_sql" tag). Deliberately always compiled, never behind a build tag
-// itself: its whole purpose is answering for a build where the adapter it
-// names is ABSENT, so it must exist in every build, including the ones with
-// nothing gated in at all.
+// compile in its grammar -- currently SQL alone, via SQLBuildTag above.
+// Deliberately always compiled, never behind a build tag itself: its whole
+// purpose is answering for a build where the adapter it names is ABSENT,
+// so it must exist in every build, including the ones with nothing gated
+// in at all.
 //
 // This is deliberately different information from LanguageInfo.Gated
 // (lang.go): Gated describes an adapter that IS registered in this build --
@@ -17,7 +31,7 @@ package resolve
 // method, or a build without the tag loses the only place that can still
 // say "sql exists, you just didn't build it in".
 var gatedExtensionTags = map[string]string{
-	".sql": "rgit_sql",
+	".sql": SQLBuildTag,
 }
 
 // GatedTag reports the build tag that would register ext's grammar, when

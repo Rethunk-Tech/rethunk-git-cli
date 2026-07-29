@@ -12,12 +12,20 @@ import "testing"
 // adapter:
 //
 //   - tag absent: ForExtension(".sql") is unregistered, and GatedTag(".sql")
-//     must name "rgit_sql" as the tag that would register it (gated.go's
+//     must name SQLBuildTag as the tag that would register it (gated.go's
 //     "genuinely unsupported" case does not apply -- .sql has a known gate).
 //   - tag present: ForExtension(".sql") is registered (lang_sql.go's own
 //     init), and GatedTag(".sql") must report ok=false -- gated.go's own
 //     doc comment: a caller must never be told "install a tag" for a
 //     grammar already working.
+//
+// Asserting against SQLBuildTag rather than a second "rgit_sql" literal is
+// also this suite's drift guard for the constant itself: lang_sql.go's own
+// //go:build line must stay a literal string (go's toolchain requirement,
+// SQLBuildTag's own doc comment), so it cannot reference the constant
+// directly. Running this test once under each configuration -tags rgit_sql
+// selects is what actually demonstrates SQLBuildTag names the real gating
+// tag, not merely a string that happens to match today.
 func TestGatedTag_AgreesWithForExtension(t *testing.T) {
 	t.Parallel()
 
@@ -32,9 +40,9 @@ func TestGatedTag_AgreesWithForExtension(t *testing.T) {
 	}
 
 	if !ok {
-		t.Fatal("GatedTag(\".sql\") ok = false while ForExtension(\".sql\") is unregistered; want (\"rgit_sql\", true)")
+		t.Fatalf("GatedTag(\".sql\") ok = false while ForExtension(\".sql\") is unregistered; want (%q, true)", SQLBuildTag)
 	}
-	if tag != "rgit_sql" {
-		t.Errorf("GatedTag(\".sql\") tag = %q; want %q", tag, "rgit_sql")
+	if tag != SQLBuildTag {
+		t.Errorf("GatedTag(\".sql\") tag = %q; want %q", tag, SQLBuildTag)
 	}
 }
