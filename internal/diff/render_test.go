@@ -19,6 +19,16 @@ func TestRowHint_UnanchorableSuggestsToplevelOnlyForMarkdown(t *testing.T) {
 
 	t.Run("rowHint", func(t *testing.T) {
 		t.Parallel()
+		// Two rows, not six: go, typescript, and python all take the same
+		// --file-only branch as unknown.rs (unanchorableHint only ever asks
+		// "is lang == markdown?"), so one non-Markdown row already covers
+		// what the other three would only repeat. unknown.rs is kept over
+		// auth.go/svc.ts/svc.py because it is also the empty-lang case, not
+		// merely another named language. The two Markdown rows are not
+		// redundant with each other: both take the --sym ...@toplevel
+		// branch, but the assertion is that the *shape* holds regardless of
+		// which markdown extension supplied it, and both a .md and a
+		// .markdown path are real docs/USAGE.md-recognized inputs.
 		tests := []struct {
 			path string
 			lang string
@@ -26,9 +36,6 @@ func TestRowHint_UnanchorableSuggestsToplevelOnlyForMarkdown(t *testing.T) {
 		}{
 			{"README.md", "markdown", "-> use --sym README.md:@toplevel or --file README.md"},
 			{"docs/USAGE.markdown", "markdown", "-> use --sym docs/USAGE.markdown:@toplevel or --file docs/USAGE.markdown"},
-			{"auth.go", "go", "-> use --file auth.go"},
-			{"svc.ts", "typescript", "-> use --file svc.ts"},
-			{"svc.py", "python", "-> use --file svc.py"},
 			{"unknown.rs", "", "-> use --file unknown.rs"},
 		}
 		for _, tt := range tests {

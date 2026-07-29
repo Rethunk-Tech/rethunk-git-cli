@@ -833,41 +833,27 @@ func TestCommit_ReportsWhatItCommitted(t *testing.T) {
 	qt.Assert(t, qt.Not(qt.StringContains(got.Stdout, "auth.go:B")))
 }
 
+// TestCommit_DryRunPreviewsAndStagesNothing is thinned to what only a real,
+// separately exec'd binary can show: internal/app/app_test.go's
+// TestRun_CommitDryRunAndPorcelain already pins --dry-run's record shape
+// and non-writing in-process (a whole-path preview's own counts are
+// likewise already covered there, via a --porcelain path-target case). Kept
+// here is the one cross-process invariant no in-process call can prove the
+// same way -- that the preview's own reported magnitude agrees with what a
+// second, independently invoked `rgit diff --porcelain` reports for the
+// identical change.
 func TestCommit_DryRunPreviewsAndStagesNothing(t *testing.T) {
 	t.Parallel()
-	// A preview that prints nothing and exits 0 is indistinguishable from
-	// one that resolved nothing at all, which defeats the point of asking.
 	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
 	gittest.Write(t, repo, "auth.go", commitHappyV2)
 
-	before := gittest.Git(t, repo, "rev-parse", "HEAD")
 	got := runRgit(t, repo, "commit", "--dry-run", "auth.go:A", "-m", "feat(auth): preview only")
 	qt.Assert(t, qt.Equals(got.ExitCode, 0))
-	qt.Assert(t, qt.StringContains(got.Stdout, "auth.go:A"))
 
-	// The preview reports magnitude, not just names, and its numbers come
-	// from the same counter `rgit diff` renders with -- assert they agree,
-	// since a preview that contradicts the diff it previews is worse than
-	// no preview at all.
 	diffGot := runRgit(t, repo, "diff", "--porcelain")
 	row, ok := findRow(parsePorcelain(t, diffGot.Stdout), "auth.go", "MOD")
 	qt.Assert(t, qt.IsTrue(ok))
 	qt.Assert(t, qt.StringContains(got.Stdout, "+"+row.Added+"/-"+row.Deleted))
-
-	// A whole-path target must report counts too, not a "(path)" label
-	// with the numbers left out -- that would make the preview
-	// inconsistent with the diff for exactly the targets a caller is
-	// least able to eyeball.
-	gittest.Write(t, repo, "notes.md", "one\ntwo\n")
-	pathGot := runRgit(t, repo, "commit", "--dry-run", "notes.md", "-m", "docs: preview a path")
-	qt.Assert(t, qt.Equals(pathGot.ExitCode, 0))
-	qt.Assert(t, qt.StringContains(pathGot.Stdout, "notes.md"))
-	qt.Assert(t, qt.StringContains(pathGot.Stdout, "+2/-0"))
-
-	// "writes no objects, stages nothing" (docs/USAGE.md): HEAD unmoved and
-	// the index untouched.
-	qt.Assert(t, qt.Equals(gittest.Git(t, repo, "rev-parse", "HEAD"), before))
-	qt.Assert(t, qt.Equals(gittest.Git(t, repo, "diff", "--staged", "--numstat"), ""))
 }
 
 func TestCommit_PathAlreadyStagedAsDeleted(t *testing.T) {
@@ -1094,11 +1080,17 @@ func TestCommit_PushWithNoUpstreamNamesTheFix(t *testing.T) {
 	qt.Assert(t, qt.StringContains(gittest.Git(t, repo, "cat-file", "-p", "HEAD:auth.go"), "len(tok)"))
 }
 
+// TestCommit_PorcelainEmitsRecords is thinned the same way: --dry-run
+// --porcelain's own record shape (a pathspec target's empty SYMBOL column
+// included, per TestRun_PathspecMatchingNothingStillListsItself,
+// internal/app/app_test.go) is already pinned in-process. What only two
+// separately exec'd binary invocations can show is kept: a dry-run
+// preview's porcelain stream is byte-identical to what the real commit it
+// previews actually emits, and the real commit's own --porcelain output
+// never lets git's human summary leak into it (docs/CODES.md's "no header,
+// no summary" record contract).
 func TestCommit_PorcelainEmitsRecords(t *testing.T) {
 	t.Parallel()
-	// The machine-readable counterpart to the aligned listing, on both the
-	// preview and the commit it previews -- and the records must agree,
-	// which is the whole reason --dry-run's listing exists.
 	repo, _ := gittest.New(t)
 	gittest.Write(t, repo, "g.go", "package main\n\nfunc G() int { return 1 }\n")
 	gittest.Write(t, repo, "notes.txt", "hello\n")
@@ -1106,23 +1098,12 @@ func TestCommit_PorcelainEmitsRecords(t *testing.T) {
 	dry := runRgit(t, repo, "commit", "--dry-run", "--porcelain",
 		"-m", "feat(g): add G", "g.go:G", "notes.txt")
 	qt.Assert(t, qt.Equals(dry.ExitCode, 0))
-	// No human preamble: records are the entire stdout stream.
-	qt.Assert(t, qt.Equals(strings.Contains(dry.Stdout, "dry run:"), false))
-	// A pathspec target leaves the SYMBOL column empty; an anchor fills it.
 	qt.Assert(t, qt.StringContains(dry.Stdout, "g.go\tG\t"))
-	qt.Assert(t, qt.StringContains(dry.Stdout, "notes.txt\t\t"))
-	for line := range strings.SplitSeq(strings.TrimRight(dry.Stdout, "\n"), "\n") {
-		if got := len(strings.Split(line, "\t")); got != 4 {
-			t.Errorf("record %q has %d fields; want 4", line, got)
-		}
-	}
 
 	real := runRgit(t, repo, "commit", "--porcelain",
 		"-m", "feat(g): add G", "g.go:G", "notes.txt")
 	qt.Assert(t, qt.Equals(real.ExitCode, 0))
 	qt.Assert(t, qt.Equals(real.Stdout, dry.Stdout))
-	// git's own summary is replaced, not merely appended to, exactly as
-	// git commit --porcelain replaces it.
 	qt.Assert(t, qt.Equals(strings.Contains(real.Stdout, "file changed"), false))
 }
 

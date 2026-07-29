@@ -83,14 +83,16 @@ func TestResolveRangeScope_ErrorPaths(t *testing.T) {
 	gittest.Commit(t, dir, "chore: fixture")
 	ctx := context.Background()
 
+	// One case per separator, not one per missing side: scope.go's own
+	// check is a single `a == "" || b == ""`, so a missing left endpoint
+	// and a missing right endpoint hit the identical branch -- a second
+	// case per separator would cover nothing the first does not already.
 	for _, tc := range []struct {
 		name  string
 		token string
 		want  string
 	}{
 		{"three-dot missing left endpoint", "...HEAD", `malformed revision range "...HEAD"`},
-		{"three-dot missing right endpoint", "HEAD...", `malformed revision range "HEAD..."`},
-		{"two-dot missing left endpoint", "..HEAD", `malformed revision range "..HEAD"`},
 		{"two-dot missing right endpoint", "HEAD..", `malformed revision range "HEAD.."`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
