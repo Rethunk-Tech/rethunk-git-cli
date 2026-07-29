@@ -24,8 +24,12 @@ installs, and reports each step:
 
 ```bash
 make install                     # to $GOBIN, or $(go env GOPATH)/bin
-make install PREFIX=~/.local/bin
+make install PREFIX=~/.local/bin # anywhere else
 ```
+
+**The default target is `$GOBIN`, falling back to `$(go env GOPATH)/bin`** —
+usually `~/go/bin`. That is where the binary lands unless you pass `PREFIX`
+(or `-prefix`), and it is the path the uninstall step below assumes.
 
 Run the installer directly for its own flags, including a preview that
 changes nothing:
@@ -47,14 +51,21 @@ uses, opt-in via `-with-servers` — see
 go build -ldflags="-s -w" -o rgit ./cmd/rgit
 ```
 
-The binary is ~11 MB stripped; what accounts for that is recorded in
-[`specs/design.md`](../specs/design.md#dependencies).
+The binary is ~13.5 MB stripped, or ~16 MB built with `-tags rgit_sql`;
+the grammars account for nearly all of it, measured per grammar in
+[`specs/design.md`](../specs/design.md#binary-size).
 
-Install any of the above onto `PATH` yourself if you didn't use `make install`:
+Install any of the above onto `PATH` yourself if you didn't use `make
+install` — anywhere on `PATH` works; this matches where `make install` would
+have put it:
 
 ```bash
-install -m 0755 rgit ~/.local/bin/rgit
+dest="$(go env GOBIN)"; [ -n "$dest" ] || dest="$(go env GOPATH)/bin"
+install -m 0755 rgit "$dest/rgit"
 ```
+
+`go env GOBIN` prints an empty line and exits 0 when it is unset, so the
+fallback has to test the value rather than the exit status.
 
 ## Makefile targets
 
@@ -280,9 +291,13 @@ rgit diff 2>&1 >/dev/null | grep -q 'ts-only' && echo "degraded" || echo "cross-
 ## Uninstall
 
 ```bash
-rm ~/.local/bin/rgit
+rm "$(command -v rgit)"
 rm -f "${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}"/rgit-*.sock "${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}"/rgit-*.lock
 ```
+
+`command -v rgit` resolves whichever copy your shell actually runs, which is
+the one to remove — hardcoding a path guesses wrong for anyone who installed
+to the default `$GOBIN`/`$(go env GOPATH)/bin` rather than passing `PREFIX`.
 
 Those two files exist only for `gopls`; the stdio servers leave nothing behind.
 A `gopls` daemon `rgit` started exits on its own idle timeout. The lookup order
