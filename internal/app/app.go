@@ -13,6 +13,13 @@ import (
 
 const usageLine = "usage: rgit [--version] <diff|commit|languages|doctor|completion> [flags] [target...]"
 
+// tsOnlyNotice is what rgit diff and rgit commit both print when no live
+// language server was reached in time. docs/INSTALL.md § Verify tells the
+// reader to grep either command's stderr for it, so the two staging
+// commands cannot answer "was the cross-check live?" differently -- one
+// constant instead of two copies that could drift apart.
+const tsOnlyNotice = "rgit: [ts-only] no live language server reached in time; extents unverified"
+
 // topLevelHelp is what `rgit --help`, `-h`, and `help` print. Kept to the
 // same budget as a subcommand's own help (specs/design.md:231's "--help
 // tokens" measurement): orientation, not a manual -- docs/USAGE.md is that.

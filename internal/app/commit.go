@@ -204,7 +204,7 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 	}
 
 	if plan.TSOnly() {
-		fmt.Fprintln(stderr, "rgit: [ts-only] no live language server reached in time; extents unverified")
+		fmt.Fprintln(stderr, tsOnlyNotice)
 	}
 	for _, path := range plan.Preamble() {
 		fmt.Fprintf(stderr, "[notice] %s is new; staging its @header and @imports so the file compiles\n", path)
