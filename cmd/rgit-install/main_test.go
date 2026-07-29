@@ -39,6 +39,136 @@ func TestRelTo(t *testing.T) {
 	qt.Assert(t, qt.Equals(relTo("/repo", "relative/path"), "relative/path"))
 }
 
+func TestResolvePrefix(t *testing.T) {
+	t.Parallel()
+	// Only the flagPrefix branch is a pure transformation; the GOBIN/GOPATH
+	// fallback shells out to `go env` via goEnv and is exercised by hand
+	// instead (see the fixup round's report) rather than mocked here.
+	got, err := resolvePrefix("/custom/prefix")
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(got, "/custom/prefix"))
+}
+
+func TestCopyFile(t *testing.T) {
+	t.Parallel()
+
+	t.Run("happy path", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		src := filepath.Join(dir, "src.txt")
+		dst := filepath.Join(dir, "nested", "dst.txt")
+		qt.Assert(t, qt.IsNil(os.WriteFile(src, []byte("hello"), 0o644)))
+		qt.Assert(t, qt.IsNil(os.MkdirAll(filepath.Dir(dst), 0o755)))
+		qt.Assert(t, qt.IsNil(copyFile(src, dst)))
+
+		got, err := os.ReadFile(dst)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(string(got), "hello"))
+	})
+
+	t.Run("missing source", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		err := copyFile(filepath.Join(dir, "nope"), filepath.Join(dir, "dst"))
+		qt.Assert(t, qt.IsNotNil(err))
+	})
+}
+
+func TestInstallBinary(t *testing.T) {
+	t.Parallel()
+
+	t.Run("fresh install reports not replaced", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		bin := filepath.Join(dir, "built")
+		qt.Assert(t, qt.IsNil(os.WriteFile(bin, []byte("binary content"), 0o644)))
+		dest := filepath.Join(dir, "prefix", "rgit") // prefix/ does not exist yet
+
+		replaced, err := installBinary(bin, dest)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.IsFalse(replaced))
+
+		got, err := os.ReadFile(dest)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(string(got), "binary content"))
+
+		info, err := os.Stat(dest)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(info.Mode().Perm(), os.FileMode(0o755)))
+	})
+
+	// The regression this guards: main's "Installed" vs "Replaced existing
+	// binary at" wording reads directly off this return value.
+	t.Run("existing binary reports replaced and its content is overwritten", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		bin := filepath.Join(dir, "built")
+		qt.Assert(t, qt.IsNil(os.WriteFile(bin, []byte("new content"), 0o644)))
+		dest := filepath.Join(dir, "rgit")
+		qt.Assert(t, qt.IsNil(os.WriteFile(dest, []byte("old content"), 0o755)))
+
+		replaced, err := installBinary(bin, dest)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.IsTrue(replaced))
+
+		got, err := os.ReadFile(dest)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(string(got), "new content"))
+	})
+
+	t.Run("missing source binary", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		_, err := installBinary(filepath.Join(dir, "nope"), filepath.Join(dir, "dest"))
+		qt.Assert(t, qt.IsNotNil(err))
+	})
+}
+
+func TestSQLCSRCContentHash(t *testing.T) {
+	t.Parallel()
+
+	writeCSRC := func(t *testing.T, content string) string {
+		t.Helper()
+		pkgDir := t.TempDir()
+		csrc := filepath.Join(pkgDir, "csrc")
+		qt.Assert(t, qt.IsNil(os.MkdirAll(csrc, 0o755)))
+		qt.Assert(t, qt.IsNil(os.WriteFile(filepath.Join(csrc, "parser.c"), []byte(content), 0o644)))
+		return pkgDir
+	}
+
+	t.Run("deterministic for the same content", func(t *testing.T) {
+		t.Parallel()
+		pkgDir := writeCSRC(t, "same content")
+		h1, err1 := sqlCSRCContentHash(pkgDir)
+		h2, err2 := sqlCSRCContentHash(pkgDir)
+		qt.Assert(t, qt.IsNil(err1))
+		qt.Assert(t, qt.IsNil(err2))
+		qt.Assert(t, qt.Equals(h1, h2))
+	})
+
+	// The regression this guards: buildBinary's cache-busting (see
+	// deliverable 1 of the fixup round, "key the SQL build on generated
+	// parser content") only defeats a stale go build cache if this hash
+	// actually changes when csrc/ content does. A hash that stayed constant
+	// across different content would silently bring that bug back.
+	t.Run("different content changes the hash", func(t *testing.T) {
+		t.Parallel()
+		a := writeCSRC(t, "content A")
+		b := writeCSRC(t, "content B")
+		ha, erra := sqlCSRCContentHash(a)
+		hb, errb := sqlCSRCContentHash(b)
+		qt.Assert(t, qt.IsNil(erra))
+		qt.Assert(t, qt.IsNil(errb))
+		qt.Assert(t, qt.Not(qt.Equals(ha, hb)))
+	})
+
+	t.Run("missing csrc dir", func(t *testing.T) {
+		t.Parallel()
+		_, err := sqlCSRCContentHash(t.TempDir())
+		qt.Assert(t, qt.IsNotNil(err))
+	})
+}
+
 func TestParserABIVersion(t *testing.T) {
 	t.Parallel()
 
