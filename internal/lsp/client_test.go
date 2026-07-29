@@ -41,13 +41,13 @@ func TestLanguageKindFor(t *testing.T) {
 	}
 }
 
-// TestTrimTrailingBlankLines pins the regression cmd/rgit/index_test.go's
-// TestStage_YAMLNestedKeyByteIdenticalRoundTrip caught live: a
-// yaml-language-server range for a nested container consistently extends
-// one line past its own last real content, through a blank line
-// separating it from a following sibling. This is the unit-lane guarantee
-// (CONTRIBUTING.md) -- it must fail without a live server, unlike the
-// server-dial tests in servers_test.go which need one.
+// TestTrimTrailingBlankLines pins the guarantee trimTrailingBlankLines
+// exists for: a yaml-language-server range for a nested container
+// consistently extends one line past its own last real content, through a
+// blank line separating it from a following sibling, and trimming it back
+// must not depend on a live server to verify. This is the unit-lane
+// guarantee (CONTRIBUTING.md) -- it must fail here, unlike the server-dial
+// tests in servers_test.go which need a live one.
 func TestTrimTrailingBlankLines(t *testing.T) {
 	src := []byte("build:\n  a: 1\n\ntest:\n  b: 2\n")
 	// Lines: 0 "build:", 1 "  a: 1", 2 "", 3 "test:", 4 "  b: 2", then a

@@ -15,13 +15,12 @@ const DialBudget = 150 * time.Millisecond
 // QueryDeadline bounds a single textDocument/documentSymbol round trip once
 // connected (specs/design.md).
 //
-// 2s, not the 250ms the design originally specified. That figure was derived
-// from a warm gopls daemon, where a query returns in single-digit
-// milliseconds. It does not survive contact with the stdio servers: vtsls
-// answers its first documentSymbol after didOpen in roughly half a second and
-// beat 250ms on no measured run, so the TypeScript cross-check degraded to
-// [ts-only] on every real invocation — present in the code, absent in effect.
-// A deadline that only ever fires is not a budget, it is a disabled feature.
+// 2s, not a tighter budget: a warm gopls daemon answers in single-digit
+// milliseconds, but vtsls's first documentSymbol after didOpen can take
+// roughly half a second, and a deadline a real server routinely misses
+// degrades the cross-check to [ts-only] on every invocation instead of
+// occasionally -- a deadline that only ever fires is not a budget, it is a
+// disabled feature.
 const QueryDeadline = 2 * time.Second
 
 // Symbol is one language-server-reported document symbol, flattened out of

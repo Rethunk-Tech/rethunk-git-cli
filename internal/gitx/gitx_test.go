@@ -77,9 +77,9 @@ func TestLsFilesStageAndMergeBase(t *testing.T) {
 
 // TestErrorMessagesNameTheCommand pins what a caller actually reads when
 // something goes wrong. Both types are surfaced verbatim by internal/app's
-// error mapping, so their text is the whole failure report -- and neither
-// was asserted anywhere before, which is how a message can quietly lose the
-// one detail that makes it actionable.
+// error mapping, so their text is the whole failure report -- and an
+// unasserted message is how it can quietly lose the one detail that makes
+// it actionable.
 func TestErrorMessagesNameTheCommand(t *testing.T) {
 	t.Parallel()
 

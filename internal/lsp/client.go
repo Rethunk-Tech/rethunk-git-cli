@@ -14,22 +14,17 @@ import (
 )
 
 // configClient answers workspace/configuration, the one server-initiated
-// request measured necessary for correct behaviour rather than added
-// speculatively: taplo (TOML) silently reports zero symbols for a document
-// it has just been told to open -- via a "this document has been excluded"
-// diagnostic, not an error -- whenever that request fails, which is what
+// request rgit implements rather than leaving unanswered: taplo (TOML)
+// silently reports zero symbols for a document it has just been told to
+// open -- via a "this document has been excluded" diagnostic, not an error
+// -- whenever that request fails, which is what
 // protocol.UnimplementedClient's own Configuration does by design (returns
-// errNotImplemented, turned into a JSON-RPC error response). Verified this
-// is what was happening: dialling a real taplo through NewClient's prior
-// protocol.UnimplementedClient{} produced a successful but empty
-// DocumentSymbols result, and a raw-protocol probe against the same binary
-// showed the exclusion diagnostic appearing only when workspace/
-// configuration errored, disappearing once it was answered instead. gopls,
-// vtsls, pyright, and bash-language-server all cross-check correctly
-// without ever sending this request, so answering it with an empty
-// settings object per requested item is a safe default: nothing changes
-// for a server that never asks, and the one that requires an answer stops
-// treating an opened document as excluded.
+// errNotImplemented, turned into a JSON-RPC error response). gopls, vtsls,
+// pyright, and bash-language-server all cross-check correctly without ever
+// sending this request, so answering it with an empty settings object per
+// requested item is a safe default: nothing changes for a server that
+// never asks, and the one that requires an answer stops treating an opened
+// document as excluded.
 type configClient struct {
 	protocol.UnimplementedClient
 }
@@ -50,7 +45,7 @@ func (configClient) Configuration(_ context.Context, params *protocol.Configurat
 // Client is a live LSP session sufficient for the one request rgit needs:
 // textDocument/documentSymbol. It is not a general-purpose LSP client — no
 // diagnostics, no completions, nothing an editor would want. configClient
-// above is the one deliberate, measured exception.
+// above is the one deliberate exception.
 type Client struct {
 	conn   jsonrpc2.Conn
 	server protocol.Server
@@ -148,15 +143,13 @@ func (c *Client) DocumentSymbols(ctx context.Context, path string, src []byte) (
 
 // trimTrailingBlankLines pulls each symbol's own EndLine back past any
 // wholly-blank (or whitespace-only) trailing lines within its own range,
-// in place. Measured against yaml-language-server (specs/design.md's
-// cross-check survey, re-measured after cmd/rgit/index_test.go's
-// TestStage_YAMLNestedKeyByteIdenticalRoundTrip caught it): a nested
-// mapping's own reported range consistently extends one line past its own
-// last real content, through the single blank line separating it from a
-// following sibling key at the same level -- proven not block-scalar-
-// specific, since a plain-scalar sibling reproduces it identically.
-// tree-sitter-yaml's own node never does this, stopping at its own last
-// real content line instead.
+// in place. yaml-language-server's nested mapping ranges consistently
+// extend one line past their own last real content, through the single
+// blank line separating them from a following sibling key at the same
+// level -- not block-scalar-specific: a plain-scalar sibling reproduces it
+// identically (specs/design.md's cross-check survey). tree-sitter-yaml's
+// own node never does this, stopping at its own last real content line
+// instead.
 //
 // This is the same shape of normalization already applied on the
 // tree-sitter side for a doc-comment prefix (declOnlyExtent strips it
@@ -171,13 +164,10 @@ func (c *Client) DocumentSymbols(ctx context.Context, path string, src []byte) (
 //
 // The very last element bytes.Split produces is deliberately never
 // trimmed: for a symbol with no following sibling, both tree-sitter and
-// the server were already measured extending through the file's own
-// trailing newline all the way to that final (often empty) element --
-// consuming it, not separating anything from a sibling. Trimming it would
-// undo an agreement that was already correct and manufacture a new
-// mismatch on every last declaration in a file, which is exactly the
-// regression a first version of this fix produced before being caught
-// against the plain-scalar "test" case, the file's own last key.
+// the server extend through the file's own trailing newline all the way to
+// that final (often empty) element -- consuming it, not separating
+// anything from a sibling. Trimming it would manufacture a mismatch on
+// every last declaration in a file.
 func trimTrailingBlankLines(src []byte, syms []Symbol) {
 	lines := bytes.Split(src, []byte{'\n'})
 	lastIdx := len(lines) - 1
@@ -192,8 +182,7 @@ func trimTrailingBlankLines(src []byte, syms []Symbol) {
 
 // flatten normalizes DocumentSymbolResult's two possible shapes —
 // DocumentSymbolSlice (a tree, via Children) and SymbolInformationSlice (a
-// flat list with a Location) — into one []Symbol. The shape
-// distinction was validated against a live gopls.
+// flat list with a Location) — into one []Symbol.
 func flatten(result protocol.DocumentSymbolResult) []Symbol {
 	switch v := result.(type) {
 	case protocol.DocumentSymbolSlice:

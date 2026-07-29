@@ -28,11 +28,9 @@ func TestLookPath(t *testing.T) {
 		qt.Assert(t, qt.Equals(c.Detail, "optional -- see docs"))
 	})
 
-	// The regression this guards: doctor's and cmd/rgit-install's git checks
-	// report an empty detail on failure today (no note at all) -- a
-	// LookPath that silently substituted something else here would change
-	// both commands' output, which is exactly what this extraction must not
-	// do.
+	// doctor's and cmd/rgit-install's git checks report an empty detail on
+	// failure (no note at all); a LookPath that silently substituted
+	// something else here would change both commands' output.
 	t.Run("missing with no note reports an empty detail", func(t *testing.T) {
 		t.Parallel()
 		c := LookPath("nonexistent-tool", "rgit-prereq-test-does-not-exist", "")

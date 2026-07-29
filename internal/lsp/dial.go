@@ -137,9 +137,9 @@ func trySpawnDaemon(spec serverSpec, sockPath string) {
 	_ = cmd.Process.Release()
 }
 
-// dialStdio spawns spec's server fresh, as measured necessary in
-// specs/design.md: vtsls and pyright have no listen-mode daemon, so every
-// query is a new process. The whole spawn+handshake is bounded by
+// dialStdio spawns spec's server fresh: vtsls and pyright have no
+// listen-mode daemon (specs/design.md), so every query is a new process.
+// The whole spawn+handshake is bounded by
 // DialBudget+QueryDeadline; a server still indexing when that expires is
 // killed and this invocation degrades rather than waits.
 func dialStdio(ctx context.Context, spec serverSpec, repoRoot string) (*Client, bool) {

@@ -427,15 +427,16 @@ type CommitOptions struct {
 	NoGPGSign    bool
 }
 
-// Commit runs `git commit` with opts translated to flags. A non-zero exit
-// — including a hook rejection — is reported as a *GitError; per
-// AGENTS.md, staging is never rolled back on that path, and Commit does
-// not attempt to.
-// Commit runs `git commit` and returns its output. The caller is expected to
-// relay that to the user: git prints the branch, the new SHA, and the
-// changed/insertion/deletion counts, and swallowing it forces the caller to
-// run `git show` afterwards to learn what just happened. Hook output arrives
-// on Stderr and matters for the same reason.
+// Commit runs `git commit` with opts translated to flags and returns its
+// output. The caller is expected to relay that to the user: git prints the
+// branch, the new SHA, and the changed/insertion/deletion counts, and
+// swallowing it forces the caller to run `git show` afterwards to learn
+// what just happened. Hook output arrives on Stderr and matters for the
+// same reason.
+//
+// A non-zero exit — including a hook rejection — is reported as a
+// *GitError; per AGENTS.md, staging is never rolled back on that path, and
+// Commit does not attempt to.
 func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 	args := []string{"commit"}
 	for _, m := range opts.Messages {

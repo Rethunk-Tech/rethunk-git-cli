@@ -32,7 +32,7 @@ type Check struct {
 // LookPath probes bin on PATH and reports the result as a Check named name.
 // missingDetail becomes Detail when bin is not found; pass "" for a check
 // that reports nothing beyond MISSING on failure (both callers' git and
-// go-toolchain checks read this way today).
+// go-toolchain checks read this way).
 func LookPath(name, bin, missingDetail string) Check {
 	path, err := exec.LookPath(bin)
 	if err != nil {
@@ -41,10 +41,9 @@ func LookPath(name, bin, missingDetail string) Check {
 	return Check{Name: name, OK: true, Detail: path}
 }
 
-// Print renders c as "  [ok/MISSING] name   detail\n" -- the exact line
-// shape both doctor and cmd/rgit-install already printed before this
-// package existed, preserved byte-for-byte on purpose (that agreement was
-// this extraction's whole reason to exist).
+// Print renders c as "  [ok/MISSING] name   detail\n", the shared line
+// shape doctor and cmd/rgit-install both print, kept byte-for-byte
+// identical between them on purpose.
 func Print(w io.Writer, c Check) {
 	status := "ok"
 	if !c.OK {

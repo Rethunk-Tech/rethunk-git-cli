@@ -1,14 +1,13 @@
 // Package gittest builds real temporary git repositories for tests.
 //
-// It exists because four packages had grown their own byte-identical copy
-// of the same fifteen lines -- init, force a known branch name, set an
-// identity, run a command and fail the test on its output. A fifth copy
-// was about to be written when jscpd reported the first four.
+// It exists so internal/app, internal/cli, internal/diff, and
+// internal/synth can share one implementation of init, force a known
+// branch name, set an identity, run a command and fail the test on its
+// output, instead of each carrying its own copy.
 //
 // It is deliberately a plain package rather than a _test.go helper: Go
-// scopes test files to their own package, so internal/app, internal/cli,
-// internal/diff and internal/synth cannot share one otherwise. Nothing in
-// the production build imports it.
+// scopes test files to their own package, so those four packages cannot
+// share one otherwise. Nothing in the production build imports it.
 //
 // What it does NOT do is stand in for git. Every function here shells out
 // to the real binary, because these tests exist to prove rgit agrees with
