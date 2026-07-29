@@ -10,9 +10,9 @@ reasoning and holds the evidence.
 **`rgit` is `git add <pathspec> && git commit` at symbol granularity.** Where
 git has an opinion, `rgit` matches it exactly rather than inventing semantics.
 
-This is load-bearing and has repeatedly overturned earlier drafts. Apply it
-before adding any behaviour; a proposal to diverge needs to argue against it
-explicitly. Each consequence was established by measurement, not assertion:
+This is load-bearing. Apply it before adding any behaviour; a proposal to
+diverge needs to argue against it explicitly. Each consequence was established
+by measurement, not assertion:
 
 | Consequence | What was measured |
 | --- | --- |
@@ -22,10 +22,10 @@ explicitly. Each consequence was established by measurement, not assertion:
 | Hooks are not policed | `git add -A` in a hook was measured sweeping an unrelated file into a commit. Plain `git commit` behaves identically; filtering would break formatter and codegen hooks |
 | Merges are not special-cased | `git commit` mid-merge reads `MERGE_HEAD` and writes a correct two-parent commit unaided |
 
-An earlier design used a temporary index seeded from `HEAD` to *exclude*
-pre-staged work. It forced index snapshots, restores, and rollback, and it
-diverged from the `add && commit` semantics `rgit` replaces. Removing it deleted
-roughly a third of the mechanism.
+**A private index is rejected.** Seeding a temporary index from `HEAD` to
+*exclude* pre-staged work would force index snapshots, restores, and rollback —
+roughly a third as much mechanism again — to arrive at semantics that diverge
+from the `add && commit` `rgit` replaces.
 
 ## Blob synthesis
 
@@ -119,8 +119,8 @@ their stderr noise under concurrent invocation.
 
 ### Transport support per server
 
-The daemon design above was verified only for `gopls` when it was written.
-Measured directly for each of the others before implementing against them:
+The daemon design above holds for `gopls` alone. Each of the others was
+measured directly rather than taken from its own `--help`:
 
 | Server | `--help` claim | Measured behaviour | Verdict |
 | --- | --- | --- | --- |
@@ -145,10 +145,10 @@ and killed on close rather than left running — there is no persistent daemon
 for either to reuse, so pretending otherwise would just be a subprocess rgit
 forgets to clean up.
 
-**The query deadline is 2s, not the 250ms first specified.** That figure came
-from a warm `gopls` daemon, which answers in single-digit milliseconds, and it
-did not survive contact with the stdio servers. Measured end to end through
-`Dial` + `DocumentSymbols`, single-declaration fixtures, warm binaries:
+**The query deadline is 2s, and a warm `gopls` alone would justify far less.**
+That daemon answers in single-digit milliseconds; the stdio servers do not.
+Measured end to end through `Dial` + `DocumentSymbols`, single-declaration
+fixtures, warm binaries:
 
 | Server | Transport | Dial | First `documentSymbol` after `didOpen` |
 | --- | --- | --- | --- |
@@ -156,11 +156,11 @@ did not survive contact with the stdio servers. Measured end to end through
 | `pyright-langserver` | one-shot stdio | 102ms | 135ms |
 | `vtsls` | one-shot stdio | 84ms | **259ms** |
 
-`vtsls` misses a 250ms deadline by single-digit milliseconds, so under the
-original budget the TypeScript cross-check degraded to `[ts-only]` on every
-run — present in the code and absent in effect. A deadline that only ever
-fires is not a budget, it is a disabled feature, and the accuracy argument for
-symbol anchors depends on the cross-check actually executing.
+`vtsls` misses a 250ms deadline by single-digit milliseconds: under that
+budget the TypeScript cross-check would degrade to `[ts-only]` on every run —
+present in the code and absent in effect. A deadline that only ever fires is
+not a budget, it is a disabled feature, and the accuracy argument for symbol
+anchors depends on the cross-check actually executing.
 
 2s clears all three with room for larger files. It does not weaken "never
 block on a cold server": that rule is about a server still building its index,
@@ -173,9 +173,9 @@ Tree-sitter alone, no LSP comparison: pseudo-anchors (servers do not report
 import blocks as document symbols), deletions (the symbol exists only in HEAD,
 outside the server's worktree view), and any degraded or absent daemon.
 
-A fourth case surfaced during implementation, beyond the three above: the
-daemon answers, but its own `documentSymbol` outline
-simply does not name the anchor being checked (a symbol kind the server
+A fourth case is degraded rather than exempt by category: the daemon answers,
+but its own `documentSymbol` outline simply does not name the anchor being
+checked (a symbol kind the server
 doesn't surface, or a container shape rgit's name normalization doesn't
 recognize). That is not the same claim as "the extents disagree" — there is
 nothing to compare — so it degrades to `[ts-only]` rather than hard-failing.
@@ -185,14 +185,14 @@ commit for a symbol tree-sitter resolved correctly.
 ### Grammar scope
 
 Grammars are chosen by measured demand, never by popularity. Go, TypeScript and
-Python came first: measured against 60 real commits in a live repo, **78%** of
+Python set the bar: measured against 60 real commits in a live repo, **78%** of
 touched files were one of the three and **91%** of added lines fell inside a
 symbol body, so those three cover the dominant case, with `@toplevel` /
 `@imports` handling the 8% at module scope. Median churn per touched file was
 **4%** (p90 20%), which is precisely where symbol staging beats whole-file
 staging; if commits typically rewrote most of a file, the tool would add nothing.
 
-Markdown and Shell were added on the same basis, surveyed across 51
+Markdown and Shell clear the same bar, surveyed across 51
 repositories: Markdown appears in every one of them, Shell in 45%. Shell earns
 a caveat the others do not — fewer than half of its lines sit inside a function
 and most shell files define none at all, so its value concentrates in
@@ -207,14 +207,13 @@ files), and 9.26% of Python (25.61% of files). TSX and Python are
 repository-concentrated rather than general — one repository accounts for 55%
 of the TSX hits, another for 60% of Python's — and anonymous nesting
 outnumbers named nesting 6–30× everywhere but Python. None of this clears the
-78%/91% bar the v1 grammars themselves were held to above; closed as not worth
-building, not deferred.
+78%/91% bar above: not worth building rather than deferred.
 
 **Container members are addressable, and the parse is held open.** Go's methods
-are file-scope, so `A.Get` resolved from the start; TypeScript and Python keep
-theirs in a class body, and until that body was descended into the finest unit
-in a one-class-per-file module was the class — which for staging is the same
-thing as naming the path.
+are file-scope, so `A.Get` resolves without descending anywhere; TypeScript and
+Python keep theirs in a class body, and without descending into it the finest
+unit in a one-class-per-file module is the class — which for staging is the
+same thing as naming the path.
 
 Descending multiplies the declaration count, and both hot paths resolved every
 declaration by re-parsing the whole file each time: attributing a diff does it
@@ -243,14 +242,14 @@ reasoning — the binding names share one pattern node — documented alongside
 the rest of TypeScript's addressable and unaddressable shapes in
 [`../docs/ANCHORS.md`](../docs/ANCHORS.md#qualification).
 
-**TypeScript's `declarationFor` covered five node kinds and fell through to
-`(unanchorable)` on everything else** — `enum_declaration`,
-`abstract_class_declaration`, `generator_function_declaration`,
-`variable_declaration` (`var`, the same declarator shape as `let`/`const`'s
-`lexical_declaration` under a different grammar node), and the namespace forms
-`internal_module`/`module`, all now addressable by bare name; the two class
-kinds and namespaces are also descended into for container-qualified members.
-One shape measured, not assumed: a bare (non-`export`ed) top-level
+**TypeScript's `declarationFor` reaches every declaration kind the grammar
+names, not a subset that falls through to `(unanchorable)`** — including
+`enum_declaration`, `abstract_class_declaration`,
+`generator_function_declaration`, `variable_declaration` (`var`, the same
+declarator shape as `let`/`const`'s `lexical_declaration` under a different
+grammar node), and the namespace forms `internal_module`/`module`, all
+addressable by bare name; the two class kinds and namespaces are also descended
+into for container-qualified members. One shape measured, not assumed: a bare (non-`export`ed) top-level
 `namespace N {}` parses as an `expression_statement` wrapping the
 `internal_module`, not the `internal_module` directly — `export namespace N {}`
 wraps it in `export_statement` instead, the same shape every other exported
@@ -259,16 +258,16 @@ nameless `function_expression` (`export_statement`'s `"value"` field, not
 `"declaration"`) with no name field to read; it stays unaddressable rather than
 invent a spelling that could someday collide with a real identifier.
 
-**Shell does not repeat the v1 case for justifying its own addition, and this
-record says so rather than implying parity.** Shell appears in roughly 45% of
-surveyed repositories — more than any single v1 language — but fewer than half
+**Shell's case is weaker than Go/TypeScript/Python's, and this record says so
+rather than implying parity.** Shell appears in roughly 45% of surveyed
+repositories — more than any single one of those three — but fewer than half
 of surveyed shell *lines* sit inside a function, and most shell files define
 none at all: a typical script is a flat sequence of top-level commands, not a
 library of callable units. That is well under the 91%-of-added-lines-inside-a-
 symbol-body figure that justified Go/TS/Python. The value shell staging
 delivers is real but concentrated in library-style scripts (`lib.sh`,
 `functions.sh`) that define several functions each, not spread evenly across
-every `.sh` file the way the v1 figure was.
+every `.sh` file the way that figure was.
 
 `function_definition` covers both `foo() {}` and `function foo {}` — one
 grammar node for both surface forms, measured against a compiled parse tree
@@ -306,10 +305,10 @@ with no `.sh` suffix) is deferred, not solved: `ForExtension` is keyed on file
 extension alone, and changing that is a registry-contract change every grammar
 shares, not a shell-specific one.
 
-**YAML was next by measured demand, not popularity: 49% of the 51 surveyed
-repositories, second only to Markdown.** The unit that matters is the same one
-TODO.md named before this was built — one CI job, one service in a compose
-file, one section of config — which is a container-qualified key path
+**YAML earns its place on measured demand, not popularity: 49% of the 51
+surveyed repositories, second only to Markdown.** The unit that matters is one
+CI job, one service in a compose file, one section of config — a
+container-qualified key path
 (`ci.yml:jobs.build`), not a whole-file grammar the way Shell's function
 namespace is flat.
 
@@ -367,39 +366,27 @@ direction: it can end a single-key anchor one comment short of the raw parse
 edit onto its neighbour's extent. Go, TypeScript, Python, Markdown, and Shell
 are unaffected — the seam is optional and only `lang_yaml.go` implements it.
 
-**The byte-identical round trip TODO.md's own warning demanded was verified,
-not assumed.** A `block_scalar` (`|`, `>`) is one opaque leaf node whose byte
+**The byte-identical round trip is verified, not assumed.** A `block_scalar` (`|`, `>`) is one opaque leaf node whose byte
 range already includes every line of its body verbatim, so staging the pair
 that contains one never requires reasoning about the scalar's own internal
 indentation. A `block_mapping_pair`'s own extent starts at its key's first
 byte, never at the line's indentation — the same convention every other
-adapter's container members already use — so `internal/synth`'s existing
-`lineStart`/`insertionText` machinery (`classify.go`, `8b8629d`) handles a
-YAML member's indentation with no YAML-specific code in that package at all.
+adapter's container members already use — so `internal/synth`'s
+`lineStart`/`insertionText` machinery (`classify.go`) handles a YAML member's
+indentation with no YAML-specific code in that package at all.
 
-**No language-server cross-check — superseded.** At the time this section was
-written, no entry existed in `internal/lsp/servers.go`'s `servers` map: YAML
-had no dominant, universally installed language server the way
-`gopls`/`vtsls`/`pyright` are, and there was no measured need strong enough to
-justify probing for a fourth stdio process sight unseen, so YAML resolved in
-`[ts-only]` mode, the same as Markdown.
+**YAML cross-checks against `yaml-language-server`** (§ Cross-check coverage),
+which reports `documentSymbol` ranges matching `declOnlyExtent` byte-for-byte,
+including the doc-comment-exclusion case `gopls` is held to. One normalization
+sits on top: its range for a nested container consistently extends one line
+past its own last real content, through a blank line separating it from the
+next sibling at the same level, where tree-sitter-yaml's own node never does.
+`trimTrailingBlankLines` narrows every wired server's reported range back to
+its own last non-blank line uniformly, not special-cased to YAML, so a genuine
+content disagreement still fails.
 
-The later v2 survey (§ Cross-check survey: the six v2 grammars) revisited that
-call and found `yaml-language-server` reports `documentSymbol` ranges matching
-`declOnlyExtent` byte-for-byte, including the doc-comment-exclusion case
-`gopls` was already held to. The entry was added (`7ad2d4b`), with one
-normalization on top: its range for a nested container consistently extends
-one line past its own last real content, through a blank line separating it
-from the next sibling at the same level — tree-sitter-yaml's own node never
-does. `trimTrailingBlankLines` narrows every wired server's reported range
-back to its own last non-blank line uniformly, not special-cased to YAML, so a
-genuine content disagreement still fails (`e5120ab`). YAML now cross-checks
-like any other wired grammar; only TOML and SQL still resolve in `[ts-only]`
-permanently.
-
-**CSS was next in the v2 backlog by measured demand order (TODO.md), not
-re-surveyed independently — it was already first in that list.** Every node
-shape below was measured against a compiled parse tree and cross-checked
+**CSS is next in demand order after YAML (TODO.md), not re-surveyed
+independently.** Every node shape below was measured against a compiled parse tree and cross-checked
 against `tree-sitter-css` v0.25.0's own `src/node-types.json`, not assumed
 from `grammar.js`.
 
@@ -414,12 +401,11 @@ reads is by node kind and position, the same positional discipline
 own children are `selectors` (holding the full, possibly comma-joined,
 selector list as one node — `.a, .b` is one `selectors` node, not two) and
 `block`; `.button-primary`, `#app`, `div`, and `.a, .b` all stage as their own
-literal text with no decomposition, per the brief's own instruction. Nested
-rule sets inside an `@media`/`@supports`/`@keyframes` block are not descended
-into and get no anchor of their own — the same "named nested declarations do
-not clear the bar" reasoning already applied above to Go/TypeScript/Python's
-anonymous function literals, closed as not worth building for v1 rather than
-deferred.
+literal text with no decomposition. Nested rule sets inside an
+`@media`/`@supports`/`@keyframes` block are not descended into and get no
+anchor of their own — the same "named nested declarations do not clear the
+bar" reasoning already applied above to Go/TypeScript/Python's anonymous
+function literals, not worth building rather than deferred.
 
 **At-rules are named by their full prelude, not the bare keyword.** Measured
 across every top-level statement kind this grammar defines
@@ -454,12 +440,12 @@ Python's own grammars enforce structurally; CSS's grammar does not enforce
 `@import`'s position, so a caller who writes one after other rules (invalid
 per the CSS spec, which requires `@import` before any other rule besides
 `@charset`, but not rejected by this grammar) would see it fall inside
-`@toplevel`'s span rather than being excluded — not fixed here, since the
-spec-conformant position was what standard tooling like `stylelint`
-already enforces upstream of `rgit`.
+`@toplevel`'s span rather than being excluded — left alone, since standard
+tooling like `stylelint` already enforces the spec-conformant position
+upstream of `rgit`.
 
-**JSON and TOML were next in the v2 backlog by measured demand order
-(TODO.md), not re-surveyed independently.** Both reuse the existing
+**JSON and TOML follow CSS in demand order (TODO.md), not re-surveyed
+independently.** Both reuse the existing
 `Container`/`Bare` machinery unchanged — `Bare` is the leaf key, `Container`
 is the immediate parent, and `index.go`'s `containerQualified` does the
 `Container + "." + Bare` join with no new naming code — but the two grammars
@@ -507,8 +493,8 @@ dotted prefix (`[server.tls]` after `[server]`) is its own separate
 top-level `table` node, not nested inside the first. `Container` for a
 table's members is therefore the header's own written text, taken verbatim
 (`"server.tls"` for a `dotted_key` header, `"server"` for a `bare_key` one)
-— the grammar already hands over exactly the dotted string the pre-decided
-design calls "the dotted parent path," with no segment-joining code needed.
+— the grammar already hands over exactly the dotted parent path, with no
+segment-joining code needed.
 A `table`/`table_array_element` is itself reported as its own Declaration
 (Bare = its header text, Container empty, Node = the whole table) in
 addition to its members, the same "the container is also addressable by
@@ -554,23 +540,23 @@ name, but no spelling of `Resolve` can ever reach it. Documented as a sharp
 edge in `docs/ANCHORS.md` rather than worked around, since resolving it would
 mean either renaming the caller's pseudo-anchors (a breaking change to every
 other language) or teaching the resolver to fall back from a failed
-pseudo-anchor lookup to the symbol index (a general behavior change, not a
-CSS-specific fix, and outside this deliverable's scope).
+pseudo-anchor lookup to the symbol index (a general behaviour change, not a
+CSS-specific fix).
 
-**SQL was the last v2 grammar (TODO.md), and the only one this repo generates
-its own C for rather than consuming a published binding.**
+**SQL is last in demand order (TODO.md), and the only grammar this repo
+generates its own C for rather than consuming a published binding.**
 `github.com/DerekStride/tree-sitter-sql` is the only SQL grammar with Go
 bindings at all, but its published module cannot compile as fetched: `src/
 parser.c` is generated and gitignored, absent from every tag v0.1.0–v0.3.11,
 so its own `bindings/go`'s `#include "../../src/parser.c"` fails — verified
 directly against every one of those tags' own file trees, the same check
-that already caught markdown's `v0.5.2` Go-bindings regression elsewhere in
-this record. The module does ship `grammar.js` and `tree-sitter.json` at its
+that catches markdown's `v0.5.2` Go-bindings regression (§ Dependencies).
+The module does ship `grammar.js` and `tree-sitter.json` at its
 root, and `src/scanner.c` — everything `tree-sitter generate` needs except
 the one file it produces.
 
-**Generation at build time was chosen over vendoring, a genuine divergence
-from how every other grammar in this table is consumed.** Vendoring
+**Generation at build time, not vendoring — a genuine divergence from how
+every other grammar in this table is consumed.** Vendoring
 `parser.c` would mean carrying a 17.4 MB, 674,655-line generated file (`wc
 -l`, measured against this exact module/version) in the repository, entirely
 unreviewable by a human, and re-vendored by hand on every upstream grammar
@@ -658,8 +644,7 @@ being indexed; an anonymous index (`CREATE INDEX ON t (c)`, legal SQL) has
 no `"column"` field on `create_index` at all and is left unaddressable
 rather than guessing at the name the database would assign. `CREATE DOMAIN`
 does not parse under this grammar version at all — measured: it produces an
-`ERROR` node — so it was never a candidate for v1 scope regardless of
-demand.
+`ERROR` node — so it is not a candidate regardless of demand.
 
 A line comment (`-- ...`) and a block comment (`/* ... */`) are two
 distinct node kinds, `"comment"` and `"marginalia"` respectively — measured
@@ -673,19 +658,14 @@ returns `nil`: this grammar has no include/import-shaped statement of any
 kind, the same degraded-but-not-an-error answer TOML, JSON, and Markdown
 already give.
 
-Measured **binary size: +2416 KB (+17.6%)**, `go build -ldflags="-s -w"`
-without the `rgit_sql` tag (**13740 KB**, this same commit, matching the
-post-JSON-and-TOML baseline recorded above) against the same build with
-`-tags rgit_sql` after generation (**16156 KB**) — the largest single-grammar
-jump recorded in this document, ahead of shell's +1332 KB, consistent with
-this being by far the largest generated parser here (674,655 lines of C
-against bash's much smaller hand-maintained scanner). `go tool nm` on an
+SQL is the most expensive grammar here by binary size (§ Binary size),
+consistent with its being by far the largest generated parser (674,655 lines
+of C against bash's much smaller hand-maintained scanner). `go tool nm` on an
 unstripped `-tags rgit_sql` build shows exactly one grammar's worth of
 `tree_sitter_sql*` symbols — the entry point and its external scanner's five
 functions, plus the cgo glue — no second, unreferenced grammar riding along,
-the same check every other grammar in this table already passed. This cost
-is paid only by a caller who opts into `-tags rgit_sql`; the default,
-untagged binary this record's other size figures describe is unaffected.
+the same check every other grammar passes. That cost is paid only by a caller
+who opts into `-tags rgit_sql`; the default, untagged binary is unaffected.
 
 Measured **parse time**, warmed and averaged over 200 parses, in-process
 (no process-spawn cost, the same reason tree-sitter is the primary resolver
@@ -697,34 +677,27 @@ cost or even the ~7.2s cgo compile of the generated C (`go build -tags
 rgit_sql ./internal/resolve/sqlgrammar/...`, this machine) — both paid once
 per checkout, not per `rgit` invocation.
 
-**No language-server cross-check at this point in the survey:** there is no
-single dominant SQL language server the way `gopls`/`vtsls`/`pyright` are for
-their languages, and no measured need strong enough to justify probing for a
-fifth stdio process sight unseen. `.sql` resolves in `[ts-only]` mode — unlike
-YAML's own entry above, which the later v2 survey revisited, the same survey
-(§ Cross-check survey: the six v2 grammars) found this still holds for SQL.
+**No language-server cross-check for SQL:** there is no single dominant SQL
+language server the way `gopls`/`vtsls`/`pyright` are for their languages, and
+no measured need strong enough to justify probing for a fifth stdio process
+sight unseen. `.sql` resolves in `[ts-only]` mode (§ Cross-check coverage).
 
-### Cross-check survey: the six v2 grammars
+### Cross-check coverage
 
-`[ts-only]` went from an edge case (one of five grammars uncovered) to the
-majority outcome (six of eleven) once Markdown, YAML, CSS, JSON, TOML, and
-SQL shipped. Each was checked against this machine for a real candidate
-server, on the same terms as the gopls/vtsls/pyright/bash-language-server
-survey above: is one installed, what does it speak, and — the load-bearing
-question — do its ranges land on the same declaration-only basis
-`internal/resolve`'s `declOnlyExtent` already produces (`node.StartByte()`..
+Markdown, YAML, CSS, JSON, TOML, and SQL were each checked for a real
+candidate server on the same terms as the gopls/vtsls/pyright/bash-language-
+server table above: is one installed, what does it speak, and — the
+load-bearing question — do its ranges land on the same declaration-only basis
+`internal/resolve`'s `declOnlyExtent` produces (`node.StartByte()`..
 `node.EndByte()`, no doc-comment prefix), so a real disagreement means a real
 extent bug rather than a transport artifact.
 
-A first pass found none of the candidates installed except a `taplo` build
-with its LSP feature compiled out — recorded further down, since it turned
-out to matter. Real binaries were then installed:
+Every measurement below is against a real, installed binary —
 `yaml-language-server`, `vscode-json-language-server`,
 `vscode-css-language-server` (all three via the `vscode-langservers-
-extracted`/bun toolchain), `marksman`, `vscode-markdown-language-server`,
-and a `taplo` rebuilt with its `lsp` feature enabled. Every measurement
-below is against those real, installed binaries — nothing here is inferred
-from a server's own docs.
+extracted`/bun toolchain), `marksman`, `vscode-markdown-language-server`, and
+a `taplo` built with its `lsp` feature enabled. Nothing here is inferred from
+a server's own docs.
 
 | Grammar | Server | Transport | Cold dial+handshake | Cold `documentSymbol` | Warm `documentSymbol` | Ranges vs `declOnlyExtent` | Verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -740,15 +713,12 @@ Method for the four that passed: a fixture per grammar exercising a nested
 container (so both a leaf declaration and a declaration whose own extent
 encloses another get compared) and, where the grammar has comment syntax, a
 leading comment with **no** blank line before the symbol — the doc-comment-
-exclusion case gopls was already held to (`ValidateToken` above). Each
-grammar's own tree was parsed directly with the same `go-tree-sitter` +
-grammar-binding packages `internal/resolve` imports, outside this
-repository (to stay off `internal/resolve`, out of this survey's own fence)
-but against the exact same module versions, and each `Declaration.Node`'s
-`StartByte()`/`EndByte()` was converted to a 0-based line the same way
-`crosscheck.go`'s own `lineOf` does, to get the real declOnly line range to
-compare the server's own reported range against — not a hand count, which
-turned out to be wrong once (below).
+exclusion case gopls is held to (`ValidateToken` above). Each grammar's own
+tree was parsed directly with the same `go-tree-sitter` + grammar-binding
+packages `internal/resolve` imports, at the same module versions, and each
+`Declaration.Node`'s `StartByte()`/`EndByte()` was converted to a 0-based line
+the same way `crosscheck.go`'s own `lineOf` does. Comparing against a hand
+count instead is not reliable at this precision.
 
 **YAML: exact match on every case, including the container that encloses
 another.** `yaml-language-server` on
@@ -773,61 +743,49 @@ symbols `rgit` never queries, since sequence items are not addressable
 (`docs/ANCHORS.md`), and harmless: `matchLSPSymbol` only ever looks up
 names `rgit`'s own resolver produced.
 
-**A real gap in that fixture surfaced only once measured against
-`cmd/rgit/index_test.go`'s own pre-existing
-`TestStage_YAMLNestedKeyByteIdenticalRoundTrip`, which this survey's own
-fixtures never exercised: a nested key whose subtree is directly followed
-by a blank-line-separated sibling at the same level.** That test's own
-fixture stages `jobs.build` in a file where `build`'s own steps end with a
+**One convention difference is real and normalized: a nested key whose
+subtree is directly followed by a blank-line-separated sibling at the same
+level.** `cmd/rgit/index_test.go`'s `TestStage_YAMLNestedKeyByteIdentical
+RoundTrip` stages `jobs.build` in a file where `build`'s own steps end with a
 block scalar (`run: |`) and a blank line separates `build` from its sibling
-`test`; the cross-check hard-failed with `tree-sitter L4..L9,
-language-server L4..L10` (1-based) — `yaml-language-server` one line past
-tree-sitter. Measured directly, both by re-parsing the exact fixture with
-the same `go-tree-sitter` + `tree-sitter-yaml` packages used above and by
-querying `yaml-language-server` for it directly: `build`'s own
-`block_mapping_pair` node ends at line 8 (0-based), the last real line of
-its own content; the server reports line 9, the blank separator line before
-`test:` begins.
+`test`. Measured directly, both by parsing that fixture with the same
+`go-tree-sitter` + `tree-sitter-yaml` packages used above and by querying
+`yaml-language-server` for it: `build`'s own `block_mapping_pair` node ends at
+line 8 (0-based), the last real line of its own content, where the server
+reports line 9 — the blank separator line before `test:` begins. Unnormalized,
+that is a hard fail (`tree-sitter L4..L9, language-server L4..L10`, 1-based) on
+a correct extent.
 
-**Proven not block-scalar-specific before deciding how to fix it — the
-same fixture with plain scalars in place of the block scalar reproduces
-the identical one-line-past-content mismatch**, `build` at tree-sitter
-line 7 vs. server line 8, ruling out "a defensible different idea of where
-a block scalar ends" (the taplo-shaped explanation this would have been
-if it were narrower) in favour of a general, mechanical convention
-difference: `yaml-language-server`'s own range for a nested container
-consistently extends through **one** trailing blank line separating it
-from a following sibling at the same level; tree-sitter-yaml's own node
-never does, stopping at its own last real content line. This is the same
-*shape* of difference doc-comment stripping already normalizes (one side
-includes a well-defined, content-free byte span the other does not) — not
-the same *category* as taplo's dotted-table mismatch, which claimed a
-neighbour's real, addressable content, not blank padding.
+**It is not block-scalar-specific — the same fixture with plain scalars in
+place of the block scalar reproduces the identical one-line-past-content
+difference**, `build` at tree-sitter line 7 vs. server line 8. That rules out
+"a defensible different idea of where a block scalar ends" in favour of a
+general, mechanical convention difference: `yaml-language-server`'s own range
+for a nested container consistently extends through **one** trailing blank
+line separating it from a following sibling at the same level; tree-sitter-
+yaml's own node never does, stopping at its own last real content line. This
+is the same *shape* of difference doc-comment stripping already normalizes
+(one side includes a well-defined, content-free byte span the other does not)
+— not the same *category* as taplo's dotted-table mismatch, which claims a
+neighbour's real, addressable content rather than blank padding.
 
-**Fix, kept inside `internal/lsp` rather than touching
-`internal/resolve`'s extents (which stay authoritative and unmoved):**
-`client.go`'s new `trimTrailingBlankLines` pulls every symbol's own
-`EndLine` back past wholly-blank trailing lines within its own range,
-applied uniformly to every symbol from every wired server inside
-`DocumentSymbols` itself, not special-cased to YAML. It can only ever
-narrow a reported range toward its own `StartLine`, never grow one, and it
-stops the instant it reaches a non-blank line — a genuine content-level
-disagreement (a server claiming real neighbouring content) is untouched
-and still fails. One case had to be measured and guarded against
-explicitly: the very last line `bytes.Split` produces is never trimmed,
-because a symbol with no following sibling was already measured (the
-`jobs`-only fixture above) extending through the file's own trailing
-newline all the way to that final element on **both** sides — trimming it
-would have undone an already-correct match and manufactured a new
-mismatch on every last declaration in a file. An earlier version of this
-fix did exactly that, caught by re-running the block/plain-scalar repro
-above against the file's own `test` job (the last declaration) before
-this landed. Re-verified after the fix: `TestStage_YAMLNestedKeyByte
-IdenticalRoundTrip` passes in full, including its previously-failing
-`jobs.build` case.
+**The normalization lives in `internal/lsp`, never in `internal/resolve`'s
+extents, which stay authoritative.** `client.go`'s `trimTrailingBlankLines`
+pulls every symbol's own `EndLine` back past wholly-blank trailing lines
+within its own range, applied uniformly to every symbol from every wired
+server inside `DocumentSymbols` itself, not special-cased to YAML. It can only
+ever narrow a reported range toward its own `StartLine`, never grow one, and
+it stops the instant it reaches a non-blank line — a genuine content-level
+disagreement (a server claiming real neighbouring content) is untouched and
+still fails. One case is guarded explicitly: the very last line `bytes.Split`
+produces is never trimmed, because a symbol with no following sibling was
+measured (the `jobs`-only fixture above) extending through the file's own
+trailing newline all the way to that final element on **both** sides.
+Trimming it would undo an already-correct match and manufacture a new
+mismatch on every last declaration in a file.
 
-**JSON, CSS, and Markdown were re-checked against this exact hazard, not
-assumed safe by association.** A JSON/CSS fixture with a blank-line-
+**JSON, CSS, and Markdown are checked against this exact hazard, not assumed
+safe by association.** A JSON/CSS fixture with a blank-line-
 separated sibling container (`{"server": {...}},\n\n"other": 1}` /
 `.a {...}\n\n.b {...}`) produced no mismatch in either grammar, because
 both are brace-delimited: a container's own node closes on its own `}`,
@@ -890,19 +848,18 @@ below: tree-sitter's own node already nests the way the server's own range
 does, rather than modelling siblings the server reports as parent/child.
 
 **`vscode-markdown-language-server` crashes on startup on this machine —
-measured, not assumed, and not chased further once `marksman` had already
-passed cleanly.** `vscode-markdown-language-server --stdio` exits
+measured, not assumed.** `vscode-markdown-language-server --stdio` exits
 immediately with `SyntaxError: The requested module 'vscode-uri' does not
 provide an export named 'default'`, an ESM/CJS interop break between its
 own bundled `vscode-markdown-languageservice` dependency and the installed
 `vscode-uri` version under Node.js v26.5.0. Not wired — not because
-Markdown lacks a compatible server (`marksman` already fills that role),
-but because this specific binary does not run here at all.
+Markdown lacks a compatible server (`marksman` fills that role), but
+because this specific binary does not run here at all.
 
-**TOML: `taplo` now completes the LSP handshake (the earlier build's own
-missing feature is fixed), but its ranges genuinely disagree with
-`declOnlyExtent` on the ordinary case of a nested table — the exact false-
-positive risk this survey exists to catch, not a normalization gap.** On
+**TOML: `taplo` completes the LSP handshake, but its ranges genuinely
+disagree with `declOnlyExtent` on the ordinary case of a nested table — the
+exact false-positive risk this comparison exists to catch, not a
+normalization gap.** On
 
 ```toml
 # leading comment for server table
@@ -920,8 +877,7 @@ through `cert`'s own line — because `taplo` understands TOML's dotted-table
 semantics and treats `[server.tls]` as a logical child of `server`.
 tree-sitter-toml does not: measured directly against a compiled parse tree,
 `document`'s only allowed children are `pair`/`table`/`table_array_element`
-as flat siblings (already recorded above, § the TOML grammar-scope entry),
-so `server`'s own node spans only L1..L5 — the header through the blank
+as flat siblings (§ Grammar scope), so `server`'s own node spans only L1..L5 — the header through the blank
 line before the next header begins, not through the next table's own
 content. `taplo`'s `server` range is objectively wider than the anchor
 `rgit` would ever stage for it. Cross-checking `server` against `taplo`
@@ -929,49 +885,42 @@ would hard-fail (exit 6) on a correct, unmodified extent, on every TOML file
 with a dotted-nested table — the ordinary organizing pattern the format
 exists to support, not a corner case.
 
-A second, independent disagreement surfaced on `server.tls` itself (the
-*last* declaration in the file): `taplo` reports it as L5..L7, ending at the
-last real character of `cert = "a.pem"`; tree-sitter's own node reaches
-L5..L8, one line further, because `table`'s `EndByte()` measured as
-reaching all the way to the file's own trailing newline when nothing
-follows it (the same "table absorbs the trailing blank line before the next
-header" behaviour already recorded above — with no next header, it absorbs
-through EOF instead). Two independent, measured mismatches, not one; TOML
-stays `[ts-only]`.
+A second, independent disagreement lands on `server.tls` itself (the *last*
+declaration in the file): `taplo` reports it as L5..L7, ending at the last
+real character of `cert = "a.pem"`; tree-sitter's own node reaches L5..L8,
+one line further, because `table`'s `EndByte()` measured as reaching all the
+way to the file's own trailing newline when nothing follows it (the same
+"table absorbs the trailing blank line before the next header" behaviour in
+§ Grammar scope — with no next header, it absorbs through EOF instead). Two
+independent, measured mismatches, not one; TOML stays `[ts-only]`.
 
-**A load-bearing client-side fix, made in this package, was needed before
-any of the above could even be measured.** `taplo` sends a server-initiated
-`workspace/configuration` request immediately after `initialized` and
-waits on it; `internal/lsp`'s `Client` was built on
-`protocol.UnimplementedClient{}`, whose own `Configuration` method returns
-an error. `taplo` treats that error as "no configuration available" and
-silently excludes every document from then on — `DocumentSymbols` returned
-successfully, with zero symbols, no error at all, until this was diagnosed
-with a raw-protocol probe outside this repository showing a
-`"this document has been excluded"` diagnostic that appeared only while
-`workspace/configuration` was left unanswered. `client.go`'s new
-`configClient` type answers it with one empty settings object per requested
-item — `rgit` has no configuration to report, so an empty object is not a
-guess, just the minimum reply a server that insists on an answer needs to
-stop excluding the file it was just told to open. `gopls`/`vtsls`/
-`pyright`/`bash-language-server` never send this request, so the change is
-inert for all four already-wired servers — verified by the unchanged
-passing state of every existing `internal/lsp` test after adding it.
+**Answering `workspace/configuration` is load-bearing, and `taplo` is the
+server that proves it.** It sends that server-initiated request immediately
+after `initialized` and waits on it. Against
+`protocol.UnimplementedClient{}`, whose own `Configuration` method returns an
+error, `taplo` reads the error as "no configuration available" and silently
+excludes every document from then on — `DocumentSymbols` returns
+successfully, with zero symbols and no error at all, and a raw-protocol probe
+is the only thing that surfaces the `"this document has been excluded"`
+diagnostic behind it. `client.go`'s `configClient` answers with one empty
+settings object per requested item: `rgit` has no configuration to report, so
+an empty object is not a guess, just the minimum reply a server that insists
+on an answer needs to stop excluding the file it was just told to open.
+`gopls`/`vtsls`/`pyright`/`bash-language-server` never send this request, so
+the reply is inert for all four.
 
-**SQL: unchanged from the availability-only pass — still nothing installed
-that speaks `documentSymbol`.** `sqlfluff` (`~/.local/bin/sqlfluff`)
-remains the only SQL tool present; its own `--help` lists `dialects`,
-`fix`, `format`, `lint`, `parse`, `render`, `rules`, `version` and no `lsp`
-subcommand, and `pip show sqlfluff-lsp` still reports no such package.
-`sqls` and `sql-language-server` remain absent from every location checked
-in the first pass. `.sql` stays `[ts-only]`.
+**SQL: nothing installed speaks `documentSymbol`.** `sqlfluff` is the only
+SQL tool present; its own `--help` lists `dialects`, `fix`, `format`, `lint`,
+`parse`, `render`, `rules`, `version` and no `lsp` subcommand, and `pip show
+sqlfluff-lsp` reports no such package. `sqls` and `sql-language-server` are
+absent from every location checked. `.sql` stays `[ts-only]`.
 
 **Net: YAML, JSON, CSS, and Markdown (via `marksman`) are wired; TOML and
 SQL are not, on measured range disagreement and measured unavailability
-respectively, not on a documentation assumption either way.**
-`[ts-only]` is no longer the majority outcome: 9 of 11 grammars now
-cross-check against a live server (Go, TypeScript, TSX, Python, Shell,
-YAML, JSON, CSS, Markdown), leaving TOML and SQL permanently `[ts-only]`.
+respectively, not on a documentation assumption either way.** 9 of 11
+grammars cross-check against a live server (Go, TypeScript, TSX, Python,
+Shell, YAML, JSON, CSS, Markdown), leaving TOML and SQL permanently
+`[ts-only]`.
 
 ## Argument grammar
 
@@ -1012,14 +961,13 @@ exit code (Cobra hardcodes 1, Kong exits 80). A full framework stays rejected:
 below the bar set in `claude-format-hooks`. pflag is a flag parser, not a
 framework — one dependency bought for a measured, specific defect.
 
-**No shell completion in v1 — superseded.** The original scope argued `rgit` is
-primarily agent-invoked, and that the genuinely useful completion (symbols after
-`auth.go:`) is a dynamic function shelling out to `rgit diff --porcelain`,
-hand-written under any option. That reasoning held; only the scope call changed.
-`rgit completion bash|zsh` now ships, implemented exactly as predicted — a
-hand-written script whose symbol completion parses `--porcelain` output, with no
-framework and no new dependency. The porcelain format is a machine contract with
-a shipped in-repo consumer as a result ([`docs/CODES.md`](../docs/CODES.md)).
+**Shell completion is hand-written, and a framework would not have shortened
+it.** The genuinely useful completion — symbols after `auth.go:` — is a dynamic
+function shelling out to `rgit diff --porcelain`, which every framework leaves
+hand-written anyway. `rgit completion bash|zsh` ships as exactly that: a script
+whose symbol completion parses `--porcelain` output, with no framework and no
+new dependency. The porcelain format is a machine contract with a shipped
+in-repo consumer as a result ([`docs/CODES.md`](../docs/CODES.md)).
 
 ## Dependencies
 
@@ -1031,7 +979,7 @@ built.
 | --- | --- | --- |
 | `github.com/spf13/pflag` | v1.0.10 | Interspersed flag parsing |
 | `github.com/tree-sitter/go-tree-sitter` | v0.25.0 | Core extent resolution |
-| `tree-sitter-go` / `-typescript` / `-python` | v0.25.0 / v0.23.2 / v0.25.0 | The v1 grammars; import path is `<module>/bindings/go` |
+| `tree-sitter-go` / `-typescript` / `-python` | v0.25.0 / v0.23.2 / v0.25.0 | The three grammars the demand survey ranked first; import path is `<module>/bindings/go` |
 | `go.lsp.dev/protocol` + `jsonrpc2` | v1.0.1 | Typed LSP 3.18; models `DocumentSymbolResult` as a sealed union over `SymbolInformationSlice \| DocumentSymbolSlice` — the case a hand-rolled client decodes wrongly |
 | `go.lsp.dev/uri` | v1.0.1 | `uri.File(path)`, the only path-to-`file://`-URI constructor in this dependency graph, for `rootURI` and `textDocument.uri` (`internal/lsp/client.go`); `protocol.URI` is a thin wrapper (`type URI uri.URI`) whose own doc defers path construction to this package rather than duplicating it. Its `Platform` handling matters directly for this repo's windows/amd64 target: drive-letter and slash conversion, not just POSIX paths |
 | `github.com/aymanbagabas/go-udiff` | v0.4.1 | Per-symbol `+N/-M` counts in-process, no fork/exec per anchor |
@@ -1083,8 +1031,7 @@ is referenced. Avoiding that cost for real would mean vendoring the block
 grammar's own C sources directly rather than depending on the upstream
 module's Go bindings package — a materially bigger commitment (an unversioned
 copy to track by hand, diverging from how every other grammar in this repo is
-consumed) than the measured 768 KB it would save, and not undertaken here
-without that being a deliberate, separate decision.
+consumed) than the measured 768 KB it would save.
 
 **Shell's grammar earns its place the same two ways markdown's did, verified
 the same way.** v0.25.1 is both the latest tag on the module proxy and the
@@ -1097,28 +1044,21 @@ mean "still has Go bindings."
 **Unlike markdown, there is no unused second grammar bundled in.** Markdown's
 `bindings/go` compiles both the block grammar and a separate, never-called
 inline grammar into one Go package, so `tree_sitter_markdown_inline` and its
-scanner symbols ship regardless (measured with `go tool nm`, recorded above).
+scanner symbols ship regardless (measured with `go tool nm`).
 tree-sitter-bash has only one grammar: `bindings/go/binding.go` compiles
 exactly `src/parser.c` and `src/scanner.c`, and `go tool nm` on the built
 binary shows exactly one grammar's worth of `tree_sitter_bash*` symbols, no
 second unreferenced set. The size this dependency adds is the bash grammar
 itself, not waste alongside it — bash's own grammar is simply larger, driven
 by its heredoc/expansion/quoting state machine (`scanner.c`'s external
-scanner), not by anything avoidable.
+scanner), not by anything avoidable — which is why it is the second most
+expensive grammar in the size table below.
 
-Measured **+1332 KB (+11.1%)**, `go build -ldflags="-s -w"` before (**12004
-KB**, same commit modulo this one dependency, matching the post-Markdown
-figure below) and after (**13336 KB**) adding `tree-sitter-bash`. This is a
-materially bigger jump than markdown's +768 KB (+6.8%) for the same reason
-noted above: bash's grammar and external scanner are simply larger than
-markdown's block-only grammar, not because anything unused rode along with
-it.
-
-**YAML's grammar was checked the same way, on the same organisation's own
-precedent for the exact failure mode that mattered here.**
+**YAML's grammar is checked the same way, on the same organisation's own
+precedent for the exact failure mode that matters here.**
 `tree-sitter-grammars/tree-sitter-yaml` is the same maintaining organisation as
-`tree-sitter-markdown`, whose own `v0.5.2` had already been measured dropping
-Go bindings — so every candidate tag's own `bindings/go` directory was checked
+`tree-sitter-markdown`, whose own `v0.5.2` was measured dropping Go
+bindings — so every candidate tag's own `bindings/go` directory is checked
 directly against the module proxy rather than assumed current from the
 version number. v0.7.2 is both the latest tag and still ships one:
 `bindings/go/binding.go`, package `tree_sitter_yaml`, exporting `Language()`,
@@ -1126,50 +1066,20 @@ with no `go.mod` of its own — it is an ordinary subpackage of the repository's
 single root module (`go-tree-sitter v0.24.0` there, compatible with this
 project's v0.25.0 via ordinary minimum-version selection), the same
 single-root shape `tree-sitter-markdown` and `tree-sitter-bash` already use.
-An older tag (v0.6.1) instead carried its own nested `go.mod` inside
-`bindings/go`, naming the identical module path as the repository root and
-depending on the long-deprecated `smacker/go-tree-sitter` fork — two `go.mod`
-files claiming one module path, which would have made `bindings/go` a
-separate, unresolvable module boundary had it still been there at the pinned
-tag. It was already gone by v0.7.0, well before the latest tag, so this was a
-past risk checked and closed, not a live one at v0.7.2.
-
 **No unused second grammar rides along, the same property `tree-sitter-bash`
-already had and `tree-sitter-markdown` did not.** `go tool nm` on an
+has and `tree-sitter-markdown` does not.** `go tool nm` on an
 unstripped build shows exactly `tree_sitter_yaml`, its external scanner's four
 entry points (`_create`, `_destroy`, `_scan`, `_(de)serialize`), and the cgo
 glue calling them — no second, uncalled grammar's symbols the way
-`tree_sitter_markdown_inline` rides along unused (recorded above).
-
-Measured **+196 KB (+1.5%)**, `go build -ldflags="-s -w"` before (**13360
-KB**, this same commit with the dependency reverted) and after (**13556 KB**)
-adding `tree-sitter-yaml` — the smallest single-grammar jump recorded here,
-smaller than either Markdown's +768 KB or Shell's +1332 KB, because YAML's
-own grammar and external scanner (indentation/flow-context tracking) are
-simply smaller than either. The 13360 KB baseline is itself measured fresh
-immediately beforehand rather than reused from the 13336 KB recorded above for
-the post-Markdown-and-Shell figure; the ~24 KB gap between the two is ordinary
-toolchain/dependency drift, not anything this dependency introduced.
+`tree_sitter_markdown_inline` rides along unused. YAML's own grammar and
+external scanner (indentation/flow-context tracking) are small, which the
+size table below reflects.
 
 **`go-git` is rejected.** It reimplements git in pure Go and provides none of
 what this design delegates: hook execution, `.gitattributes` filters, git's
 pathspec matching, credential and GPG prompting. Shelling out is the design, not
 a shortcut — using it even for reads would create a second, subtly divergent
 source of truth about repository state.
-
-Measured binary size: **11236 KB** stripped, against a 1644 KB no-dependency
-baseline. The grammars are the largest single contributor; every other
-dependency is noise beside them.
-
-Adding the Markdown grammar: **12004 KB** stripped, up from **11236 KB**
-measured the same way immediately beforehand (`go build -ldflags="-s -w"`,
-`stat`'s byte count, both built at the same commit modulo this one
-dependency) — **+768 KB, +6.8%**.
-
-Adding the shell grammar on top of that: **13336 KB** stripped, up from the
-same **12004 KB** — **+1332 KB, +11.1%**, the largest single-grammar jump
-recorded here, for the reason given above (bash's own grammar and scanner are
-simply bigger, not padded with anything unused).
 
 **CSS's grammar earns its place the same two ways as every other grammar in
 this table, verified the same way.** v0.25.0 is both the latest tag on the
@@ -1182,33 +1092,40 @@ symbols (`tree_sitter_css`, its external scanner's four entry points, and the
 cgo glue) — no second, unreferenced grammar rides along the way
 `tree_sitter_markdown_inline` does.
 
-Measured **+128 KB (+0.9%)**, `go build -ldflags="-s -w"` on the committed
-tree immediately before this dependency (`git archive HEAD`, built in
-isolation: **13568 KB**) and after adding `tree-sitter-css` (**13696 KB**) —
-the smallest single-grammar jump recorded here, smaller even than YAML's
-+196 KB, because CSS's own grammar and external scanner are simply the
-smallest of the six measured so far.
+**JSON and TOML are each measured in isolation, not only combined**, by
+building the binary with one adapter's import and grammar constructor removed
+— the same `go tool nm` check as every grammar above confirms neither pulls
+in an unused second grammar (JSON: exactly `tree_sitter_json` and its cgo
+glue, no external scanner at all; TOML: `tree_sitter_toml`, its external
+scanner's five entry points, and the cgo glue). Their combined cost tracks
+the sum of the two isolated deltas (12 + 32 = 44 KB), so neither pulls in
+anything the other did not already need on its own. JSON's grammar has no
+external scanner at all, which is why it is the cheapest grammar here.
 
-**JSON and TOML were each measured in isolation against the same
-post-CSS baseline (13696 KB), not only combined**, by building the binary
-with one adapter's import and grammar constructor temporarily removed and
-restored afterward — the same `go tool nm` check as every grammar above
-confirms neither pulls in an unused second grammar (JSON: exactly
-`tree_sitter_json` and its cgo glue, no external scanner at all; TOML:
-`tree_sitter_toml`, its external scanner's five entry points, and the cgo
-glue).
+### Binary size
 
-| Addition | Stripped size | Delta |
+**13740 KB** stripped for the default build, against a **1644 KB**
+no-dependency baseline. The grammars are the largest single contributor;
+every other dependency is noise beside them. A `-tags rgit_sql` build is
+**16156 KB**.
+
+Each grammar's cost is measured with `go build -ldflags="-s -w"` and `stat`'s
+byte count, against a baseline built the same way immediately beforehand with
+that one dependency removed. Baselines differ by a few tens of KB across
+measurements — ordinary toolchain and dependency drift, not attributable to
+any grammar:
+
+| Grammar | Measured addition | Baseline it was measured against |
 | --- | --- | --- |
-| Baseline (post-CSS) | 13696 KB | — |
-| + JSON only | 13708 KB | +12 KB, +0.1% |
-| + TOML only | 13728 KB | +32 KB, +0.2% |
-| + both (this commit) | 13740 KB | +44 KB, +0.3% |
+| Go, TypeScript, Python | — | 11236 KB with all three |
+| Markdown | +768 KB, +6.8% | 11236 KB |
+| Shell | +1332 KB, +11.1% | 12004 KB |
+| YAML | +196 KB, +1.5% | 13360 KB |
+| CSS | +128 KB, +0.9% | 13568 KB |
+| JSON | +12 KB, +0.1% | 13696 KB |
+| TOML | +32 KB, +0.2% | 13696 KB |
+| SQL (`-tags rgit_sql`) | +2416 KB, +17.6% | 13740 KB |
 
-JSON's own grammar has no external scanner at all (confirmed by the `nm`
-check above), which is why it is the cheapest single-grammar addition
-measured in this record so far — smaller even than CSS's +128 KB. TOML's
-external scanner (multiline-string and indentation handling) accounts for
-the rest of the combined total tracking closely to the sum of the two
-isolated deltas (12 + 32 = 44), meaning neither adapter pulls in anything
-the other did not already need on its own.
+Shell and SQL are the two expensive entries, both for grammar size alone
+rather than anything unused riding along: bash's heredoc/expansion/quoting
+state machine, and SQL's 674,655-line generated parser (§ Grammar scope).
