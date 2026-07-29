@@ -253,6 +253,20 @@ func TestRun_CommitExitCodes(t *testing.T) {
 		qt.Assert(t, qt.StringContains(stderr, "NoSuchSymbol"))
 	})
 
+	// "NoSuchSymbol" above is beyond suggest's maxDistance=3 from either
+	// A or B, so it never produces a candidate at all -- it cannot catch a
+	// regression that only drops did-you-mean candidates while leaving the
+	// bare exit-3 unresolved case intact. "DoesExit" is one insertion away
+	// from "DoesExist" (edit distance 1, well inside maxDistance), so
+	// synth's classify actually has a candidate to lose here (fix(synth):
+	// keep did-you-mean candidates on the commit path).
+	t.Run("an unresolvable anchor close to a real one suggests it", func(t *testing.T) {
+		writeAppFile(t, dir, "b.go", "package a\n\nfunc DoesExist() int {\n\treturn 1\n}\n")
+		_, stderr, code := runApp(t, "commit", "-m", "fix(a): x", "b.go:DoesExit")
+		qt.Assert(t, qt.Equals(code, exitcode.AnchorUnresolvable))
+		qt.Assert(t, qt.StringContains(stderr, "did you mean: DoesExist?"))
+	})
+
 	t.Run("every target unchanged is exit 11", func(t *testing.T) {
 		writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 		_, stderr, code := runApp(t, "commit", "-m", "fix(a): x", "a.go:A")
