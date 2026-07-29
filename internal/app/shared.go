@@ -193,7 +193,7 @@ func openRepo(ctx context.Context, stderr io.Writer) (root, prefix string, repo 
 		return "", "", nil, exitcode.GitFailure
 	}
 
-	return top, pfx, gitx.New(top), exitcode.Success
+	return top, pfx, probe.Reroot(top), exitcode.Success
 }
 
 // unsupportedLanguageHint returns a rebuild suggestion for ext when it is a

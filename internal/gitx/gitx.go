@@ -53,6 +53,16 @@ func New(dir string) *Repo {
 	return &Repo{root: dir, env: env}
 }
 
+// Reroot returns a Repo pointed at a different directory, reusing r's
+// already-computed environment (New's own GIT_TERMINAL_PROMPT detection)
+// rather than probing it a second time for the same process -- for a
+// caller that must query git relative to one directory (e.g. the
+// invocation directory, to learn the repository root) before it can build
+// the Repo it actually means to keep.
+func (r *Repo) Reroot(dir string) *Repo {
+	return &Repo{root: dir, env: r.env}
+}
+
 // Result is the raw outcome of a git invocation that ran to completion,
 // whatever its exit status. A non-zero ExitCode is not itself an error —
 // see the package doc for how individual methods interpret it.
