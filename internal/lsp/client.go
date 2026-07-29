@@ -25,6 +25,15 @@ import (
 // requested item is a safe default: nothing changes for a server that
 // never asks, and the one that requires an answer stops treating an opened
 // document as excluded.
+//
+// taplo is not in the servers map -- deliberately, not merely not-yet-wired:
+// specs/design.md § Symbol resolution measures taplo's own ranges genuinely
+// disagreeing with tree-sitter-toml on nested tables, a real false-positive
+// risk, not a normalization gap this package could paper over. This has no
+// live caller as a result, but stays: the workspace/configuration behavior
+// documented above is specific to taplo's own measured protocol quirk, not
+// speculative, and answering it safely costs nothing for every server that
+// is wired and never asks.
 type configClient struct {
 	protocol.UnimplementedClient
 }
