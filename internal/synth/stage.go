@@ -369,9 +369,9 @@ type preambleOp struct {
 // no imports -- valid as an extent, but not as a file.
 //
 // Either region legitimately resolves to nothing: TypeScript has no header
-// without a shebang, and a file need not import anything. TODO.md records
-// that callers must tolerate the absence, so an unresolvable one is skipped
-// rather than failing the commit.
+// without a shebang, and a file need not import anything.
+// docs/ANCHORS.md § Pseudo-anchors records that callers must tolerate the
+// absence, so an unresolvable one is skipped rather than failing the commit.
 //
 // Ordering needs no special case: seq is the region's own worktree offset,
 // the same rule insertionPoint uses, so the header sorts ahead of the
@@ -389,8 +389,9 @@ type preambleOp struct {
 // Go's package clause and after its import block, so that blank line is as
 // much part of "the header" and "the imports" as their own trailing newline
 // -- owning it is not misattribution, and it is what lets these rows sum to
-// git's own raw insertion count for a brand new file (TODO.md § Known
-// limitations). The synthesized blob itself is unaffected either way:
+// git's own raw insertion count for a brand new file (TODO.md § Deferred,
+// "Generalize separator ownership beyond @header and @imports"). The
+// synthesized blob itself is unaffected either way:
 // mergeInsertTies' joinWithSeparator trims and renormalizes every insert's
 // boundary regardless of what either side's own text already carries.
 func (fp *filePlan) addPreamble(named map[string]bool) (pairs []preambleOp) {

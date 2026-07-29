@@ -26,7 +26,7 @@ type Resolution struct {
 	// pseudo-anchor. internal/synth's insertion path uses it to decide
 	// whether a newly spliced-in symbol gets top-level blank-line padding
 	// or sits flush against its siblings, the way container members already
-	// sit in the worktree (TODO.md § Known limitations).
+	// sit in the worktree (specs/design.md § Blob synthesis).
 	Container string
 
 	// Sep is the join between Container and the bare name in Anchor --

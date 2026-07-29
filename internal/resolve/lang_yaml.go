@@ -9,7 +9,7 @@ func init() { register(newYAMLLanguage()) }
 // yamlLanguage adapts the tree-sitter YAML grammar.
 //
 // YAML is whitespace-sensitive in a way no other grammar here is
-// (TODO.md's own warning): a mis-spliced block silently changes the
+// (specs/design.md § Grammar scope): a mis-spliced block silently changes the
 // document's meaning rather than failing to parse, and a block scalar's
 // (`|`, `>`) body text carries leading whitespace that is part of its
 // value, not incidental formatting. Two facts make staging safe here

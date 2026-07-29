@@ -389,7 +389,7 @@ func TestStage_MemberDeletionKeepsTheFileParseable(t *testing.T) {
 }
 
 // TestStage_YAMLNestedKeyByteIdenticalRoundTrip pins the acceptance bar
-// TODO.md's own warning set for this grammar: YAML's indentation handling
+// specs/design.md § Grammar scope sets for this grammar: YAML's indentation handling
 // is exactly where synthesis bugs are easiest to hide, so a nested key's
 // own replace must reproduce the worktree byte-for-byte, not merely
 // "close."
@@ -1070,8 +1070,9 @@ func TestPlanStage_PreambleRowsAppearInResults(t *testing.T) {
 // deterministically inserts a blank line after @imports: neither TypeScript
 // nor Python inserts a blank line after the import block the way gofmt does
 // after Go's, so @imports' own row must stay exactly its own text -- not
-// the file's true total, and that gap is accepted (TODO.md §
-// Known limitations), not silently guessed away.
+// the file's true total, and that gap is accepted (TODO.md § Deferred,
+// "Generalize separator ownership beyond @header and @imports"), not
+// silently guessed away.
 func TestPlanStage_PreambleDoesNotAbsorbSeparatorForLanguagesThatDontOwnOne(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t)

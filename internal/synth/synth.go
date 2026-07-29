@@ -60,8 +60,9 @@ type editOp struct {
 	// top-level declaration. Container members sit flush against their
 	// siblings in idiomatic source -- no blank line between them -- so
 	// spliceInsert must not pad one in, or the synthesized blob is
-	// semantically right but never byte-identical to the worktree (TODO.md
-	// § Known limitations). Zero value is false, so every existing
+	// semantically right but never byte-identical to the worktree
+	// (specs/design.md § Blob synthesis). Zero value is false, so every
+	// existing
 	// top-level insertion keeps its blank-line padding unchanged.
 	member bool
 }
@@ -272,7 +273,7 @@ func spliceExcise(out []byte, start, end uint) []byte {
 // declarations, but exactly one newline between two members of the same
 // struct, interface, or class -- padding one in there is not "normalizing
 // spacing", it is producing a blob that never matches the worktree it was
-// supposed to reproduce (TODO.md § Known limitations).
+// supposed to reproduce (specs/design.md § Blob synthesis).
 func spliceInsert(out []byte, start uint, text []byte, member bool) []byte {
 	before := out[:start]
 	after := out[start:]
