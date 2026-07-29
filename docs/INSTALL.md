@@ -35,6 +35,10 @@ go run ./cmd/rgit-install -dry-run
 go run ./cmd/rgit-install -prefix ~/.local/bin
 ```
 
+It can also install or update the language servers `rgit`'s LSP cross-check
+uses, opt-in via `-with-servers` — see
+[Installing and updating servers automatically](#installing-and-updating-servers-automatically).
+
 **`make build`** builds `./rgit` for the host only, no install step.
 
 **Plain `go build`** needs no `make`:
@@ -143,6 +147,61 @@ mode, so `rgit` spawns one over stdio per query and kills it on close — nothin
 persists, and the cross-check is live on the first invocation. The transport
 survey behind this split is in
 [`specs/design.md`](../specs/design.md#transport-support-per-server).
+
+### Installing and updating servers automatically
+
+```bash
+go run ./cmd/rgit-install -with-servers            # alongside a normal install
+go run ./cmd/rgit-install -dry-run -with-servers   # preview only -- nothing runs
+```
+
+`-with-servers` is opt-in and off by default: a plain `rgit-install` never
+touches anything beyond this repo's own build, exactly as before. Passed, it
+additionally installs or updates every server it knows how to manage, by
+shelling out to that ecosystem's own package manager rather than fetching
+release binaries itself:
+
+| Server | Manager | Command |
+| --- | --- | --- |
+| `gopls` | go | `go install golang.org/x/tools/gopls@latest` |
+| `vtsls` | npm/bun | `npm install -g @vtsls/language-server` (`bun add -g` when bun is on `PATH`) |
+| `pyright-langserver` | npm/bun | `npm install -g pyright` |
+| `bash-language-server` | npm/bun | `npm install -g bash-language-server` |
+| `yaml-language-server` | npm/bun | `npm install -g yaml-language-server` |
+| `vscode-json-language-server`, `vscode-css-language-server` | npm/bun | `npm install -g vscode-langservers-extracted` (one package, both binaries) |
+| `taplo` | cargo | `cargo install taplo-cli --locked --features lsp` |
+
+The yaml/json/css/taplo rows exist ahead of the table above: they are what
+this repo's newer tree-sitter grammars will need cross-checked next, not
+servers `rgit` dials today.
+
+**`taplo` needs the non-default `--locked --features lsp` explicitly.** A
+bare `cargo install taplo-cli` and npm's `@taplo/cli` package both build a
+`taplo` that answers on `PATH` while speaking no LSP at all — presence
+without capability, measured directly on 2026-07-28. `-with-servers` checks
+for taplo's own `lsp` subcommand, not just that the binary exists, and
+reports which is missing when it isn't there.
+
+The same invocation both installs a missing server and updates a present
+one: every manager above already resolves to the latest available version
+and reinstalls only when something actually changed (cargo additionally
+reinstalls when the requested `--features` differ from what's already
+built), so running `-with-servers` again is always safe.
+
+**`marksman` is deliberately out of scope.** No package manager publishes
+it — only GitHub release binaries, platform-named per target. Teaching this
+installer HTTP fetching and checksum verification for one server was judged
+not worth it; `-with-servers` reports marksman as unmanaged and prints the
+release URL instead.
+
+**A server installed to a directory that isn't on `PATH` is still
+invisible.** `cargo install` in particular writes to `$CARGO_HOME/bin`
+(`~/.cargo/bin` by default), which is not on every system's `PATH` — this
+happened for real while building this feature: a correctly-built `taplo`
+sat unreachable after a successful `cargo install`. `-with-servers` checks
+every manager's bin directory against `PATH` after each install and warns
+loudly, by name and directory, rather than reporting success and leaving the
+binary unreachable.
 
 ## Environment variables
 
