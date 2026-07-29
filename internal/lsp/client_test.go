@@ -4,11 +4,8 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net"
-	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -16,6 +13,8 @@ import (
 
 	"go.lsp.dev/protocol"
 	"go.lsp.dev/uri"
+
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsptest"
 )
 
 // countingRWC wraps a net.Conn to count Close calls, so a test can assert
@@ -196,49 +195,6 @@ func TestTrimTrailingBlankLines(t *testing.T) {
 // didClose, which a real server's behaviour cannot demonstrate one way or
 // the other.
 
-// lspMockReadFrame reads one LSP header-framed JSON-RPC message
-// (Content-Length, blank line, JSON body) off r. ok=false at a clean EOF.
-func lspMockReadFrame(r *bufio.Reader) (msg map[string]any, ok bool, err error) {
-	length := -1
-	for {
-		line, rerr := r.ReadString('\n')
-		if rerr != nil {
-			return nil, false, nil //nolint:nilerr // EOF between frames is the normal shutdown path
-		}
-		line = strings.TrimRight(line, "\r\n")
-		if line == "" {
-			break
-		}
-		if after, found := strings.CutPrefix(line, "Content-Length:"); found {
-			n, convErr := strconv.Atoi(strings.TrimSpace(after))
-			if convErr != nil {
-				return nil, false, fmt.Errorf("mock lsp server: bad Content-Length %q: %w", line, convErr)
-			}
-			length = n
-		}
-	}
-	if length < 0 {
-		return nil, false, fmt.Errorf("mock lsp server: frame missing Content-Length")
-	}
-	body := make([]byte, length)
-	if _, rerr := io.ReadFull(r, body); rerr != nil {
-		return nil, false, fmt.Errorf("mock lsp server: read body: %w", rerr)
-	}
-	if uErr := json.Unmarshal(body, &msg); uErr != nil {
-		return nil, false, fmt.Errorf("mock lsp server: decode body: %w", uErr)
-	}
-	return msg, true, nil
-}
-
-func lspMockWriteFrame(w io.Writer, msg map[string]any) error {
-	body, err := json.Marshal(msg)
-	if err != nil {
-		return fmt.Errorf("mock lsp server: encode: %w", err)
-	}
-	_, err = fmt.Fprintf(w, "Content-Length: %d\r\n\r\n%s", len(body), body)
-	return err
-}
-
 // didCloseObserver serves one initialize/didOpen/documentSymbol/didClose
 // exchange over conn, recording didOpen and didClose counts and the URI the
 // close named. It never calls a *testing.T method: it runs on its own
@@ -255,7 +211,7 @@ type didCloseObserver struct {
 func (o *didCloseObserver) serve(resultJSON string) error {
 	r := bufio.NewReader(o.conn)
 	for {
-		msg, ok, err := lspMockReadFrame(r)
+		msg, ok, err := lsptest.ReadFrame(r)
 		if err != nil {
 			return err
 		}
@@ -288,7 +244,7 @@ func (o *didCloseObserver) serve(resultJSON string) error {
 			// a clean EOF instead of a read error racing it.
 			return nil
 		case "textDocument/documentSymbol":
-			if err := lspMockWriteFrame(o.conn, map[string]any{
+			if err := lsptest.WriteFrame(o.conn, map[string]any{
 				"jsonrpc": "2.0",
 				"id":      id,
 				"result":  json.RawMessage(resultJSON),
@@ -296,7 +252,7 @@ func (o *didCloseObserver) serve(resultJSON string) error {
 				return err
 			}
 		case "initialize":
-			if err := lspMockWriteFrame(o.conn, map[string]any{
+			if err := lsptest.WriteFrame(o.conn, map[string]any{
 				"jsonrpc": "2.0",
 				"id":      id,
 				"result":  map[string]any{"capabilities": map[string]any{}},
@@ -305,7 +261,7 @@ func (o *didCloseObserver) serve(resultJSON string) error {
 			}
 		default:
 			if hasID {
-				if err := lspMockWriteFrame(o.conn, map[string]any{"jsonrpc": "2.0", "id": id, "result": nil}); err != nil {
+				if err := lsptest.WriteFrame(o.conn, map[string]any{"jsonrpc": "2.0", "id": id, "result": nil}); err != nil {
 					return err
 				}
 			}

@@ -7,14 +7,11 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -22,6 +19,7 @@ import (
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsptest"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
@@ -634,50 +632,6 @@ func TestResolve_UnsupportedLanguage(t *testing.T) {
 // normalized extent -- gets exactly one live case, skipped cleanly when
 // gopls is absent or -short is set (CONTRIBUTING.md § Tests).
 
-// lspReadFrame reads one LSP header-framed JSON-RPC message
-// (Content-Length, blank line, JSON body -- go.lsp.dev/jsonrpc2's
-// NewStream framing) off r. ok=false at a clean EOF.
-func lspReadFrame(r *bufio.Reader) (msg map[string]any, ok bool, err error) {
-	length := -1
-	for {
-		line, rerr := r.ReadString('\n')
-		if rerr != nil {
-			return nil, false, nil //nolint:nilerr // EOF between frames is the normal shutdown path
-		}
-		line = strings.TrimRight(line, "\r\n")
-		if line == "" {
-			break
-		}
-		if after, found := strings.CutPrefix(line, "Content-Length:"); found {
-			n, convErr := strconv.Atoi(strings.TrimSpace(after))
-			if convErr != nil {
-				return nil, false, fmt.Errorf("mock lsp server: bad Content-Length %q: %w", line, convErr)
-			}
-			length = n
-		}
-	}
-	if length < 0 {
-		return nil, false, fmt.Errorf("mock lsp server: frame missing Content-Length")
-	}
-	body := make([]byte, length)
-	if _, rerr := io.ReadFull(r, body); rerr != nil {
-		return nil, false, fmt.Errorf("mock lsp server: read body: %w", rerr)
-	}
-	if uErr := json.Unmarshal(body, &msg); uErr != nil {
-		return nil, false, fmt.Errorf("mock lsp server: decode body: %w", uErr)
-	}
-	return msg, true, nil
-}
-
-func lspWriteFrame(w io.Writer, msg map[string]any) error {
-	body, err := json.Marshal(msg)
-	if err != nil {
-		return fmt.Errorf("mock lsp server: encode: %w", err)
-	}
-	_, err = fmt.Fprintf(w, "Content-Length: %d\r\n\r\n%s", len(body), body)
-	return err
-}
-
 // runMockLSPServer serves one
 // initialize/initialized/didOpen/documentSymbol/didClose exchange over conn,
 // answering documentSymbol with resultJSON verbatim -- the raw union payload
@@ -693,7 +647,7 @@ func lspWriteFrame(w io.Writer, msg map[string]any) error {
 func runMockLSPServer(conn io.ReadWriteCloser, resultJSON string) error {
 	r := bufio.NewReader(conn)
 	for {
-		msg, ok, err := lspReadFrame(r)
+		msg, ok, err := lsptest.ReadFrame(r)
 		if err != nil {
 			return err
 		}
@@ -706,7 +660,7 @@ func runMockLSPServer(conn io.ReadWriteCloser, resultJSON string) error {
 
 		switch method {
 		case "textDocument/documentSymbol":
-			if err := lspWriteFrame(conn, map[string]any{
+			if err := lsptest.WriteFrame(conn, map[string]any{
 				"jsonrpc": "2.0",
 				"id":      id,
 				"result":  json.RawMessage(resultJSON),
@@ -716,7 +670,7 @@ func runMockLSPServer(conn io.ReadWriteCloser, resultJSON string) error {
 		case "textDocument/didClose":
 			return nil
 		case "initialize":
-			if err := lspWriteFrame(conn, map[string]any{
+			if err := lsptest.WriteFrame(conn, map[string]any{
 				"jsonrpc": "2.0",
 				"id":      id,
 				"result":  map[string]any{"capabilities": map[string]any{}},
@@ -725,7 +679,7 @@ func runMockLSPServer(conn io.ReadWriteCloser, resultJSON string) error {
 			}
 		default:
 			if hasID {
-				if err := lspWriteFrame(conn, map[string]any{"jsonrpc": "2.0", "id": id, "result": nil}); err != nil {
+				if err := lsptest.WriteFrame(conn, map[string]any{"jsonrpc": "2.0", "id": id, "result": nil}); err != nil {
 					return err
 				}
 			}
