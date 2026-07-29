@@ -33,6 +33,22 @@ func shortTempDir(t *testing.T) string {
 // exercises the same code path a real long-lived gopls would.
 func noopDaemonArgs(string) []string { return nil }
 
+// writeStaleLock creates sockPath's lock file already backdated past
+// staleLockAge -- the shape trySpawnDaemon's stale-lock recovery path
+// exists for: a lock left behind by a process that died before its own
+// deferred cleanup ran.
+func writeStaleLock(t *testing.T, sockPath string) {
+	t.Helper()
+	lockPath := sockPath + ".lock"
+	if err := os.WriteFile(lockPath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	staleTime := time.Now().Add(-2 * staleLockAge)
+	if err := os.Chtimes(lockPath, staleTime, staleTime); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestTrySpawnDaemon_BinaryNotOnPATH covers the "load-bearing" no-op this
 // function is specs/design.md's rule for: a language server that is not
 // installed must never even attempt to create a spawn lock, since nothing
@@ -75,13 +91,7 @@ func TestTrySpawnDaemon_FreshLockIsLeftAlone(t *testing.T) {
 func TestTrySpawnDaemon_StaleLockIsCleared(t *testing.T) {
 	sockPath := filepath.Join(t.TempDir(), "rgit-test.sock")
 	lockPath := sockPath + ".lock"
-	if err := os.WriteFile(lockPath, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	staleTime := time.Now().Add(-2 * staleLockAge)
-	if err := os.Chtimes(lockPath, staleTime, staleTime); err != nil {
-		t.Fatal(err)
-	}
+	writeStaleLock(t, sockPath)
 
 	spec := serverSpec{name: "test", bin: "true", daemonArgs: noopDaemonArgs}
 	trySpawnDaemon(spec, sockPath)
@@ -456,14 +466,7 @@ func TestTrySpawnDaemon_StaleLockRetriesAndSpawns(t *testing.T) {
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	sockPath := filepath.Join(t.TempDir(), "rgit-test.sock")
-	lockPath := sockPath + ".lock"
-	if err := os.WriteFile(lockPath, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	staleTime := time.Now().Add(-2 * staleLockAge)
-	if err := os.Chtimes(lockPath, staleTime, staleTime); err != nil {
-		t.Fatal(err)
-	}
+	writeStaleLock(t, sockPath)
 
 	spec := serverSpec{name: "test", bin: "rgit-test-marker-bin", daemonArgs: noopDaemonArgs}
 	trySpawnDaemon(spec, sockPath)
