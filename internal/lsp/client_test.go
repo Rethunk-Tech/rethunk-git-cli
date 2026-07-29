@@ -101,9 +101,9 @@ func TestLanguageKindFor(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got, ok := languageKindFor(tt.path)
+		got, ok := LanguageKindFor(tt.path)
 		if got != tt.want || ok != tt.wantOK {
-			t.Errorf("languageKindFor(%q) = (%q, %v); want (%q, %v)", tt.path, got, ok, tt.want, tt.wantOK)
+			t.Errorf("LanguageKindFor(%q) = (%q, %v); want (%q, %v)", tt.path, got, ok, tt.want, tt.wantOK)
 		}
 	}
 }

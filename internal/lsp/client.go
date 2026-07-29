@@ -118,7 +118,7 @@ func (c *Client) DocumentSymbols(ctx context.Context, path string, src []byte) (
 	ctx, cancel := context.WithTimeout(ctx, QueryDeadline)
 	defer cancel()
 
-	langID, ok := languageKindFor(path)
+	langID, ok := LanguageKindFor(path)
 	if !ok {
 		// resolve.ForExtension has already gated which extensions reach
 		// here in practice, but a newly registered grammar can land
@@ -278,14 +278,21 @@ func flattenFlat(syms []protocol.SymbolInformation) []Symbol {
 	return out
 }
 
-// languageKindFor maps a file extension to the LSP languageId didOpen
+// LanguageKindFor maps a file extension to the LSP languageId didOpen
 // requires. ok=false means this package has no mapping for path's
 // extension. resolve.ForExtension has already gated which extensions reach
 // here in practice, so this should never fire today -- but a newly
 // registered grammar reaching Dial without a matching case here must not
 // silently didOpen as some other language a real server would then answer
 // nonsensically for; the caller degrades instead.
-func languageKindFor(path string) (kind protocol.LanguageKind, ok bool) {
+//
+// Exported so internal/resolve's own drift guard
+// (TestServerLanguages_HaveLanguageKindMapping) can call it directly rather
+// than a second, hand-maintained copy of this switch: internal/lsp cannot
+// import internal/resolve (resolve already imports lsp, for
+// CrossCheckExtent's Dial call), so that guard has to reach in from the
+// resolve side, which needs this exported.
+func LanguageKindFor(path string) (kind protocol.LanguageKind, ok bool) {
 	switch filepath.Ext(path) {
 	case ".go":
 		return protocol.LanguageKindGo, true
