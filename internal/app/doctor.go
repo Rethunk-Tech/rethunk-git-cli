@@ -40,7 +40,7 @@ func runDoctor(args []string, stdout, stderr io.Writer) exitcode.Code {
 		return exitcode.Success
 	}
 	if len(args) != 0 {
-		fmt.Fprintln(stderr, "rgit: doctor takes no arguments")
+		fmt.Fprintf(stderr, "rgit: doctor: unrecognized argument %q\n", args[0])
 		fmt.Fprint(stderr, doctorHelp)
 		return exitcode.InvalidUsage
 	}

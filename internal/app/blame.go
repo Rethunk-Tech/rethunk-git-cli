@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
@@ -48,7 +49,18 @@ func runBlame(ctx context.Context, args []string, stdout, stderr io.Writer) exit
 		case a == "--porcelain":
 			porcelain = true
 		case havePositional:
-			fmt.Fprintf(stderr, "rgit: blame: unexpected extra argument %q\n", a)
+			fmt.Fprintf(stderr, "rgit: blame: unrecognized argument %q\n", a)
+			fmt.Fprint(stderr, blameHelp)
+			return exitcode.InvalidUsage
+		case a != "--" && strings.HasPrefix(a, "-"):
+			// A "-"-prefixed token that is none of the flags above must be
+			// refused here, before it can fall through to the default case
+			// and be silently treated as the positional (e.g. an unknown
+			// "--foo" becoming the FILE:SYMBOL anchor itself). "--" is
+			// exempt: it is a legitimate bare positional here, refused by
+			// resolveAnchorExtent's own classification instead (a bare "--"
+			// classifies to nothing).
+			fmt.Fprintf(stderr, "rgit: blame: unrecognized argument %q\n", a)
 			fmt.Fprint(stderr, blameHelp)
 			return exitcode.InvalidUsage
 		default:

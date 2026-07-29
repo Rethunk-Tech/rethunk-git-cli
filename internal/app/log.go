@@ -15,6 +15,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
@@ -61,7 +62,17 @@ func runLog(ctx context.Context, args []string, stdout, stderr io.Writer) exitco
 		case a == "-p" || a == "--patch":
 			patch = true
 		case havePositional:
-			fmt.Fprintf(stderr, "rgit: log: unexpected extra argument %q\n", a)
+			fmt.Fprintf(stderr, "rgit: log: unrecognized argument %q\n", a)
+			fmt.Fprint(stderr, logHelp)
+			return exitcode.InvalidUsage
+		case a != "--" && strings.HasPrefix(a, "-"):
+			// A "-"-prefixed token that is none of the flags above must be
+			// refused here, before it can fall through to the default case
+			// and be silently treated as the positional. "--" is exempt:
+			// it is a legitimate bare positional here, refused by
+			// resolveAnchorExtent's own classification instead (a bare "--"
+			// classifies to nothing).
+			fmt.Fprintf(stderr, "rgit: log: unrecognized argument %q\n", a)
 			fmt.Fprint(stderr, logHelp)
 			return exitcode.InvalidUsage
 		default:

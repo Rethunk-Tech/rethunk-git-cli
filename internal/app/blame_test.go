@@ -46,7 +46,19 @@ func TestRun_BlameHelpAndUsage(t *testing.T) {
 		chdirTempRepo(t)
 		_, stderr, code := runApp(t, "blame", "a.go:A", "a.go:B")
 		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-		qt.Assert(t, qt.StringContains(stderr, "unexpected extra argument"))
+		qt.Assert(t, qt.StringContains(stderr, "unrecognized argument"))
+	})
+
+	// TestRun_BlameHelpAndUsage/"unknown flag is refused before positional
+	// classification" pins that a "-"-prefixed token which is none of
+	// blame's own flags is rejected outright, rather than silently falling
+	// through to the default case and being treated as the FILE:SYMBOL
+	// positional itself.
+	t.Run("unknown flag is refused before positional classification", func(t *testing.T) {
+		chdirTempRepo(t)
+		_, stderr, code := runApp(t, "blame", "--nope")
+		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+		qt.Assert(t, qt.StringContains(stderr, `unrecognized argument "--nope"`))
 	})
 }
 

@@ -145,6 +145,12 @@ Notable changes to `rgit`. The format follows
   a pathspec, always") and yields nothing to classify; both commands now
   report the same "requires a `FILE:SYMBOL` anchor" refusal, exit 129, that
   a missing positional already gets.
+- `rgit blame` and `rgit log` reject an unrecognized `-`-prefixed flag
+  (`rgit blame --nope`) before positional classification instead of
+  silently treating it as the `FILE:SYMBOL` anchor. The usage-error wording
+  for an unrecognized argument is now the same shape across `blame`, `log`,
+  `languages`, and `doctor` — `rgit: <command>: unrecognized argument
+  %q` — where each previously used its own phrasing.
 
 ## [1.0.0] — 2026-07-28
 

@@ -48,7 +48,18 @@ func TestRun_LogHelpAndUsage(t *testing.T) {
 		chdirTempRepo(t)
 		_, stderr, code := runApp(t, "log", "a.go:A", "a.go:B")
 		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-		qt.Assert(t, qt.StringContains(stderr, "unexpected extra argument"))
+		qt.Assert(t, qt.StringContains(stderr, "unrecognized argument"))
+	})
+
+	// TestRun_LogHelpAndUsage/"unknown flag is refused before positional
+	// classification" mirrors blame's own case: a "-"-prefixed token that
+	// is none of log's own flags is rejected outright, not silently treated
+	// as the FILE:SYMBOL positional.
+	t.Run("unknown flag is refused before positional classification", func(t *testing.T) {
+		chdirTempRepo(t)
+		_, stderr, code := runApp(t, "log", "--nope")
+		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+		qt.Assert(t, qt.StringContains(stderr, `unrecognized argument "--nope"`))
 	})
 
 	t.Run("--porcelain and --patch are mutually exclusive", func(t *testing.T) {
