@@ -8,6 +8,16 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- HTML element and id anchors (`div#app`), via a new tree-sitter-html
+  adapter. Deliberately narrow: element **+ id only** — no class selectors,
+  no `nth-of-type`, no combinators — and an element with no id gets no
+  anchor at all, since indexing bare tag names would collide across nearly
+  every real document (this resolver has no per-parent scoping). A
+  duplicate id is exit 4 through the existing ambiguity machinery, the
+  same as two same-named Go functions. The LSP cross-check is not wired,
+  matching TOML and SQL's existing `[ts-only]` verdict. See
+  [`docs/ANCHORS.md`](docs/ANCHORS.md).
+
 - `rgit context`, one-call repository orientation for an agent's first
   turn: recent commit subjects, then the same per-file, per-symbol
   diffstat `rgit diff` itself reports for everything committable, as a

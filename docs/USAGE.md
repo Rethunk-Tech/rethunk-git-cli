@@ -237,17 +237,18 @@ SQL-enabled binary from a plain one never needs a separate command.
 
 ```console
 $ rgit languages
-css           .css
-go            .go
-json          .json
-markdown      .md .markdown
-python        .py .pyi
-shell         .sh .bash
-sql           .sql                    (build-tag gated)
-toml          .toml
-tsx           .tsx .jsx .js .mjs .cjs
-typescript    .ts .mts .cts
-yaml          .yaml .yml
+css         .css
+go          .go
+html        .html .htm
+json        .json
+markdown    .md .markdown
+python      .py .pyi
+shell       .sh .bash
+sql         .sql                     (build-tag gated)
+toml        .toml
+tsx         .tsx .jsx .js .mjs .cjs
+typescript  .ts .mts .cts
+yaml        .yaml .yml
 ```
 
 This sample is from a `-tags rgit_sql` build; a plain `go build`/`go install`

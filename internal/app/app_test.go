@@ -650,7 +650,7 @@ func TestRun_Completion(t *testing.T) {
 }
 
 // TestRun_Languages pins the always-present part of the listing -- the
-// nine grammars every build carries regardless of -tags rgit_sql. Whether
+// eleven grammars every build carries regardless of -tags rgit_sql. Whether
 // "sql" itself appears is build-specific and covered separately
 // (languages_sql_test.go, languages_nosql_test.go), which is exactly why
 // this case avoids asserting either way about it.

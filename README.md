@@ -43,8 +43,8 @@ Start with [HUMANS.md](HUMANS.md) to run it, or
 - **Git semantics throughout** — git's exit codes, git's pathspecs, git's hooks
   and config. Divergence is treated as a bug.
 - **Go, TypeScript/JavaScript, Python, Markdown, Shell, YAML, CSS, JSON,
-  TOML**, plus SQL in a build with the `rgit_sql` tag; anything else stages
-  by path.
+  TOML, HTML**, plus SQL in a build with the `rgit_sql` tag; anything else
+  stages by path.
 
 ## Documentation
 
@@ -66,9 +66,10 @@ Start with [HUMANS.md](HUMANS.md) to run it, or
 ## Status
 
 Both staging commands are implemented for Go, TypeScript/JavaScript, Python, Markdown,
-Shell, YAML, CSS, JSON, and TOML, plus SQL in a build with the `rgit_sql` tag,
+Shell, YAML, CSS, JSON, TOML, and HTML, plus SQL in a build with the `rgit_sql` tag,
 with the language-server cross-check live for Go, TypeScript/TSX, Python,
-Shell, YAML, JSON, CSS, and Markdown. See [specs/design.md](specs/design.md)
+Shell, YAML, JSON, CSS, and Markdown — TOML, SQL, and HTML resolve with
+tree-sitter alone. See [specs/design.md](specs/design.md)
 for what was measured, [docs/LIMITATIONS.md](docs/LIMITATIONS.md) for what
 `rgit` does not do, and [TODO.md](TODO.md) for what's deferred.
 
