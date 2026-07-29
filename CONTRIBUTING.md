@@ -7,8 +7,8 @@ measured against, and the list of things that break silently.
 
 `rgit` matches git rather than inventing semantics. If a change makes `rgit`
 behave differently from `git add <pathspec> && git commit`, say so explicitly in
-the PR and justify it. Several earlier designs were reverted for diverging
-quietly; the record is in [`specs/design.md`](specs/design.md).
+the PR and justify it — the reasoning already on record is in
+[`specs/design.md`](specs/design.md).
 
 Claims in that record are backed by measurement. If you contradict one, measure
 it again and update the record — do not simply reword it.
@@ -24,8 +24,8 @@ Conventional commits: `type(scope): subject`.
 
 ## Tests
 
-**Least tests, highest coverage. The suite stays under 30s** (ideally under 10;
-it currently runs in about 3, or 2 under `-short`). Each file holds one happy
+**Least tests, highest coverage. The suite stays under 30s** (ideally under
+10). Each file holds one happy
 path plus the edge cases that have actually bitten — no permutation laundry
 lists.
 
@@ -63,11 +63,10 @@ Units run against in-memory tree-sitter. Prefer the real dependency over a
 double wherever one is reachable: a language server that is installed gets
 dialled for real, and the live-`gopls` check skips cleanly only when the binary
 is absent or `-short` is set. A double encodes what its author believed the
-dependency did and then stops tracking it — which is exactly the class of
-defect that invalidated an earlier design, when real language-server range
-semantics turned out to differ from the assumption baked into the stand-in.
-Reach for one only where the real thing is unreachable, and say at the seam
-what would catch its drift.
+dependency did and then stops tracking it — real language-server range
+semantics can diverge from what a stand-in assumes, and that gap is exactly
+what a double cannot catch. Reach for one only where the real thing is
+unreachable, and say at the seam what would catch its drift.
 
 **Write tests before implementation.**
 

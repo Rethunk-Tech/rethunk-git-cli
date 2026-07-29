@@ -10,8 +10,8 @@
   [SQL support](#sql-support)) — everything else builds and works without it.
 
 The Go floor is not chosen — it tracks whatever the dependencies declare, since
-`rgit` keeps them at their latest releases. The `go.lsp.dev` modules set it
-today; it rises whenever a dependency raises its own.
+`rgit` keeps them at their latest releases, and rises whenever one of them
+raises its own.
 
 ## Build
 
@@ -198,9 +198,9 @@ TOML cross-check.
 **`taplo` needs the non-default `--locked --features lsp` explicitly.** A
 bare `cargo install taplo-cli` and npm's `@taplo/cli` package both build a
 `taplo` that answers on `PATH` while speaking no LSP at all — presence
-without capability, measured directly on 2026-07-28. `-with-servers` checks
-for taplo's own `lsp` subcommand, not just that the binary exists, and
-reports which is missing when it isn't there.
+without capability. `-with-servers` checks for taplo's own `lsp` subcommand,
+not just that the binary exists, and reports which is missing when it isn't
+there.
 
 The same invocation both installs a missing server and updates a present
 one: every manager above already resolves to the latest available version
@@ -216,12 +216,10 @@ release URL instead.
 
 **A server installed to a directory that isn't on `PATH` is still
 invisible.** `cargo install` in particular writes to `$CARGO_HOME/bin`
-(`~/.cargo/bin` by default), which is not on every system's `PATH` — this
-happened for real while building this feature: a correctly-built `taplo`
-sat unreachable after a successful `cargo install`. `-with-servers` checks
-every manager's bin directory against `PATH` after each install and warns
-loudly, by name and directory, rather than reporting success and leaving the
-binary unreachable.
+(`~/.cargo/bin` by default), which is not on every system's `PATH`.
+`-with-servers` checks every manager's bin directory against `PATH` after
+each install and warns loudly, by name and directory, rather than reporting
+success and leaving the binary unreachable.
 
 ## Environment variables
 

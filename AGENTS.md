@@ -10,8 +10,8 @@ changes that would not otherwise think to consult it.
 **`rgit` is `git add <pathspec> && git commit` at symbol granularity.**
 
 Where git has an opinion, match it exactly. Do not invent semantics git already
-defines. This rule has overturned several drafts of this project; a change that
-diverges from git must argue against it explicitly in the PR, not quietly.
+defines. A change that diverges from git must argue against it explicitly in
+the PR, not quietly.
 
 The consequences are listed in
 [docs/USAGE.md § Behaviour inherited from git](docs/USAGE.md#behaviour-inherited-from-git),
@@ -57,8 +57,8 @@ this reason; it would create a second, divergent source of truth.
 
 ## Invariants in the synthesis path
 
-Each of these was a bug at some point in design. Breaking one is silent. The
-mechanism and the measurement behind each is in
+Breaking one of these is silent. The mechanism and the measurement behind
+each is in
 [specs/design.md § Blob synthesis](specs/design.md#blob-synthesis) and
 [§ Grammar scope](specs/design.md#grammar-scope).
 

@@ -16,8 +16,8 @@ constructs no anchor reaches — are documented in
       the final region's missing trailing newline offsets the file's own EOF
       terminator — but adopting it would change the general insertion path used
       by every commit, not just the new-file preamble. Deferred as a much larger
-      blast radius than the bug that motivated it. Go is the only language that
-      would benefit today: `OwnsTrailingSeparator` is an explicit `Language`
+      blast radius than the bug that motivated it. Go is the only language
+      positioned to benefit: `OwnsTrailingSeparator` is an explicit `Language`
       method every adapter answers, and only Go answers true, because no other
       grammar here has a formatter-enforced blank-line convention to hang it on.
 

@@ -126,7 +126,7 @@ One record per grammar compiled into this binary, sorted alphabetically by
 included on each, joined with a single space — unambiguous, since a real
 extension is always `.something` and never itself contains whitespace.
 `GATED` is `1` when the grammar exists in this binary only because a build
-tag selected it (currently SQL alone, `-tags rgit_sql`; see
+tag selected it (SQL alone, `-tags rgit_sql`; see
 [`INSTALL.md`](INSTALL.md#sql-support)) and `0` otherwise, present on every
 row rather than only the gated ones, so a reader always gets a definite
 answer instead of inferring "not gated" from an absent column.

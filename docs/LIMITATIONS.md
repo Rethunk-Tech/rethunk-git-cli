@@ -6,10 +6,10 @@ throughout: name the path instead of a symbol anchor.
 ## Unsupported languages
 
 Any language with no tree-sitter grammar in this binary refuses a symbol
-anchor with exit 9 — Rust, C, C++, and HTML are common examples with none
-today. Run `rgit languages` (or `rgit doctor`) for the exact list the running
+anchor with exit 9 — Rust, C, C++, and HTML are common examples with none.
+Run `rgit languages` (or `rgit doctor`) for the exact list the running
 binary supports; it drifts as grammars are added, which is why this file
-doesn't restate it. What's planned beyond today's set is tracked in
+doesn't restate it. What's planned beyond the shipped set is tracked in
 [`../TODO.md`](../TODO.md#v2--grammars).
 
 Two exclusions inside otherwise-supported languages are deliberate, not gaps
