@@ -1539,6 +1539,38 @@ div {
 	qt.Assert(t, qt.IsFalse(ok))
 }
 
+// TestResolve_CSSCommaSelectorListStagesAsOneAnchor pins docs/ANCHORS.md's
+// claim that a comma-joined selector list stages as one anchor, not two --
+// TestResolve_CSS's own fixture only ever exercises single selectors, so
+// this was a documented guarantee with no test actually driving it.
+func TestResolve_CSSCommaSelectorListStagesAsOneAnchor(t *testing.T) {
+	t.Parallel()
+	src := []byte(`.a, .b {
+  color: red;
+}
+
+.a {
+  color: blue;
+}
+`)
+
+	// The comma-joined selector's own bare name is its full text, verbatim,
+	// not decomposed into ".a" and ".b" separately.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", src, ".a, .b"),
+		".a, .b {\n  color: red;\n}"))
+
+	// A lone ".a" elsewhere in the file is its own, unrelated rule -- the
+	// comma list is not reachable through either of its own parts.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", src, ".a"), ".a {\n  color: blue;\n}"))
+
+	lang, ok := resolve.ForExtension(".css")
+	qt.Assert(t, qt.IsTrue(ok))
+	_, err := resolve.Resolve(lang, src, ".b")
+	var unresolvable *resolve.ResolveError
+	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
+	qt.Assert(t, qt.Equals(unresolvable.Code, exitcode.AnchorUnresolvable))
+}
+
 // TestResolve_CSSNestedRuleSets pins native CSS Nesting (tree-sitter-css
 // v0.25.0): a rule_set directly inside another rule_set's own block is now
 // addressable, qualified by its immediate parent's own selector text
@@ -1786,6 +1818,34 @@ dotted.pair = 1
 	lang, ok := resolve.ForExtension(".toml")
 	qt.Assert(t, qt.IsTrue(ok))
 	_, err := resolve.Resolve(lang, src, "inline.a")
+	var unresolvable *resolve.ResolveError
+	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
+	qt.Assert(t, qt.Equals(unresolvable.Code, exitcode.AnchorUnresolvable))
+}
+
+// TestResolve_TOMLDottedTableHeaderQualifiesMembers pins docs/ANCHORS.md's
+// claim that a dotted table header ("[server.tls]") qualifies its members
+// as "server.tls.<key>", not a further-nested "server.tls.tls.<key>" path --
+// TestResolve_TOML's own fixture only exercises a plain "[server]" header,
+// and TestResolve_TOMLKeyShapes only a root-level dotted pair
+// ("dotted.pair"), so a header's own dotted spelling qualifying its members
+// was a documented guarantee with no test actually driving it.
+func TestResolve_TOMLDottedTableHeaderQualifiesMembers(t *testing.T) {
+	t.Parallel()
+	src := []byte(`[server.tls]
+cert = "a.pem"
+`)
+
+	// The header's own dotted spelling is the container verbatim -- not
+	// decomposed into "server" containing a nested "tls".
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "server.tls"), "[server.tls]\ncert = \"a.pem\"\n"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "server.tls.cert"), `cert = "a.pem"`))
+	// Unambiguous on its own, the bare member name resolves too.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".toml", src, "cert"), `cert = "a.pem"`))
+
+	lang, ok := resolve.ForExtension(".toml")
+	qt.Assert(t, qt.IsTrue(ok))
+	_, err := resolve.Resolve(lang, src, "server.tls.tls.cert")
 	var unresolvable *resolve.ResolveError
 	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
 	qt.Assert(t, qt.Equals(unresolvable.Code, exitcode.AnchorUnresolvable))
