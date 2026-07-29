@@ -108,26 +108,13 @@ func importPredicate(lang Language, src []byte) func(*ts.Node) bool {
 	return func(n *ts.Node) bool { return kinds[n.Kind()] }
 }
 
-// ownsTrailingSeparator reports lang's own answer (Language.
-// OwnsTrailingSeparator) to whether its formatting convention treats the
-// blank line following its @header or @imports region as belonging to that
-// region, rather than as free-floating whitespace between two otherwise
-// unrelated fragments. gofmt inserts exactly one there unconditionally for
-// Go -- after the package clause and after the import block -- so in a
-// gofmt'd file that blank line is as much "part of the header" as the
-// package clause's own trailing newline is.
-//
-// Unexported: ExtendThroughOwnedSeparator below is its only caller, and
-// nothing outside this package needs the indirection -- a caller wanting
-// lang's own answer can call lang.OwnsTrailingSeparator() directly.
-func ownsTrailingSeparator(lang Language) bool {
-	return lang.OwnsTrailingSeparator()
-}
-
 // ExtendThroughOwnedSeparator widens ext's End through the whitespace
-// immediately following it, up to limit, when lang's convention makes that
-// whitespace part of the region itself (ownsTrailingSeparator) -- otherwise
-// ext is returned unchanged.
+// immediately following it, up to limit, when lang's own convention (Language.
+// OwnsTrailingSeparator) makes that whitespace part of the region itself --
+// otherwise ext is returned unchanged. gofmt inserts exactly one blank line
+// there unconditionally for Go -- after the package clause and after the
+// import block -- so in a gofmt'd file that blank line is as much "part of
+// the header" as the package clause's own trailing newline is.
 //
 // This is deliberately not built into headerExtent/importsExtent themselves:
 // those also compute the extent rgit diff renders for an ordinary (tracked-
@@ -137,7 +124,7 @@ func ownsTrailingSeparator(lang Language) bool {
 // new-file preamble staging, where @header and @imports are the only things
 // that will ever get their own row for that boundary at all.
 func ExtendThroughOwnedSeparator(lang Language, src []byte, ext Extent, limit uint) Extent {
-	if !ownsTrailingSeparator(lang) {
+	if !lang.OwnsTrailingSeparator() {
 		return ext
 	}
 	end := ext.End
@@ -150,31 +137,6 @@ func ExtendThroughOwnedSeparator(lang Language, src []byte, ext Extent, limit ui
 		}
 	}
 	return Extent{Start: ext.Start, End: end}
-}
-
-// MembersSitFlush reports lang's own answer (Language.MembersSitFlush) to
-// whether its convention keeps sibling container members -- struct fields,
-// interface methods, class methods -- adjacent with no blank line between
-// them, the way gofmt leaves Go struct fields and interface methods and
-// prettier leaves TypeScript class methods: neither tool inserts or requires
-// a separator there, so whatever the worktree already has is "flush" as far
-// as either is concerned.
-//
-// Python is the opposite case: PEP 8 requires exactly one blank line between
-// method definitions inside a class body (linters enforce it as E301), and
-// a Python class's only addressable member kind is a method (lang_python.go
-// never descends into plain attribute assignments) -- so a newly spliced-in
-// Python method is treated as an ordinary top-level-shaped boundary, not a
-// flush one, or the synthesized blob would drop a blank line every Python
-// style guide expects there.
-//
-// This only governs a brand-new nested member being inserted, not the
-// byte-identical replace/delete path a committed member already takes.
-//
-// Kept as a free function for the same reason OwnsTrailingSeparator is: so
-// classify.go's call site shares that same call shape.
-func MembersSitFlush(lang Language) bool {
-	return lang.MembersSitFlush()
 }
 
 // toplevelExtent spans every addressable declaration's full extent (leading

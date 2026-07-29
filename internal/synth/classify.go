@@ -85,10 +85,10 @@ func (fp *filePlan) classify(ctx context.Context, sess *lsp.Session, root, ancho
 			wend:   workRes.Extent.End,
 			// A structurally nested member only sits flush against its
 			// siblings when the language's own convention keeps it that
-			// way (resolve.MembersSitFlush) -- Python requires a blank line
+			// way (Language.MembersSitFlush) -- Python requires a blank line
 			// between class methods even though they are just as nested as
 			// a Go struct field or a TypeScript class method.
-			member: isNestedMember && resolve.MembersSitFlush(fp.lang),
+			member: isNestedMember && fp.lang.MembersSitFlush(),
 		}
 		return op, false, tsOnly, nil
 
