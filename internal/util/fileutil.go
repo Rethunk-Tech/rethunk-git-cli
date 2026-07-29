@@ -3,6 +3,8 @@ package util
 
 import (
 	"bytes"
+	"errors"
+	"io"
 	"os"
 )
 
