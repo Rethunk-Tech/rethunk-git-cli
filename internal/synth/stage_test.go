@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
@@ -73,4 +74,41 @@ func TestOpenFilePlan_UnsupportedLanguageReason(t *testing.T) {
 			t.Errorf("Reason = %q; want %q", perr.Reason, want)
 		}
 	})
+}
+
+// TestPathspecFileCounts_UnreadableUntrackedFileWarns pins the --dry-run
+// counting path: an untracked file whose content cannot be read must not
+// just vanish from the preview -- the numstat and ls-files failures right
+// above it in pathspecFileCounts both warn instead of silently shrinking
+// the total, and an unreadable untracked file is the same kind of gap.
+func TestPathspecFileCounts_UnreadableUntrackedFileWarns(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	ctx := context.Background()
+
+	full := filepath.Join(dir, "secret.txt")
+	if err := os.WriteFile(full, []byte("shh\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(full, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(full, 0o644) })
+
+	files, warnings := pathspecFileCounts(ctx, repo, dir, "secret.txt")
+
+	for _, f := range files {
+		if f.path == "secret.txt" {
+			t.Errorf("unreadable file %q was still counted: %+v", f.path, f)
+		}
+	}
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "secret.txt") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("warnings = %v; want one naming secret.txt", warnings)
+	}
 }

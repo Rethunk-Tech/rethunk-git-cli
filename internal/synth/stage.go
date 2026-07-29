@@ -701,10 +701,16 @@ func pathspecFileCounts(ctx context.Context, repo *gitx.Repo, root, pathspec str
 		seen[rel] = true
 		content, rerr := os.ReadFile(filepath.Join(root, rel))
 		if rerr != nil {
+			// A transient read failure (permissions, a race with something
+			// else removing the file) would otherwise understate the
+			// preview's total with no sign that anything was skipped --
+			// exactly the silent gap the numstat/ls-files failures above
+			// already warn about.
+			warnings = append(warnings, fmt.Sprintf("%s: line counts unavailable: %v", rel, rerr))
 			continue
 		}
-		a, _ := diff.LineCounts(nil, content)
-		out = append(out, pathFile{path: rel, added: a})
+		added, deleted := diff.LineCounts(nil, content)
+		out = append(out, pathFile{path: rel, added: added, deleted: deleted})
 	}
 	return out, warnings
 }
