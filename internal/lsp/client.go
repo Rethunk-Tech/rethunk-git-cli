@@ -136,7 +136,24 @@ func (c *Client) DocumentSymbols(ctx context.Context, path string, src []byte) (
 	if err != nil {
 		return nil, fmt.Errorf("lsp: documentSymbol %s: %w", path, err)
 	}
-	syms := flatten(result)
+	syms, ok := flatten(result)
+	if !ok {
+		// protocol.DocumentSymbolResult is a two-member sealed union
+		// (DocumentSymbolSlice, SymbolInformationSlice); result reaching
+		// neither case means either an explicit LSP "null" response (a
+		// legitimate no-info answer per the spec) or, if go.lsp.dev/
+		// protocol ever grows a third variant, a shape this package does
+		// not understand. Either way this must not silently read as "the
+		// file genuinely has zero symbols" -- that is exactly the class
+		// of failure specs/design.md's cross-check survey and this
+		// repo's own posture (fail loudly, never continue on a shape you
+		// cannot account for) both warn against, and it would be
+		// indistinguishable from a real empty outline downstream. Erring
+		// out here degrades this query the same way a query error
+		// already does, rather than returning a result that looks
+		// identical to "nothing to report."
+		return nil, fmt.Errorf("lsp: documentSymbol %s: unrecognized result shape %T", path, result)
+	}
 	trimTrailingBlankLines(src, syms)
 	return syms, nil
 }
@@ -182,15 +199,20 @@ func trimTrailingBlankLines(src []byte, syms []Symbol) {
 
 // flatten normalizes DocumentSymbolResult's two possible shapes —
 // DocumentSymbolSlice (a tree, via Children) and SymbolInformationSlice (a
-// flat list with a Location) — into one []Symbol.
-func flatten(result protocol.DocumentSymbolResult) []Symbol {
+// flat list with a Location) — into one []Symbol. ok=false means result
+// matched neither: an explicit LSP "null" (nil interface) or, if
+// go.lsp.dev/protocol ever adds a third union member, a shape this
+// function does not recognize. Callers must not treat that the same as a
+// recognized-but-genuinely-empty result — see DocumentSymbols's own use of
+// this return.
+func flatten(result protocol.DocumentSymbolResult) (syms []Symbol, ok bool) {
 	switch v := result.(type) {
 	case protocol.DocumentSymbolSlice:
-		return flattenTree([]protocol.DocumentSymbol(v), "")
+		return flattenTree([]protocol.DocumentSymbol(v), ""), true
 	case protocol.SymbolInformationSlice:
-		return flattenFlat([]protocol.SymbolInformation(v))
+		return flattenFlat([]protocol.SymbolInformation(v)), true
 	default:
-		return nil
+		return nil, false
 	}
 }
 

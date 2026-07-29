@@ -102,6 +102,50 @@ func TestLanguageKindFor(t *testing.T) {
 	}
 }
 
+// TestFlatten_UnknownShapeIsNotOK pins A-26: a DocumentSymbolResult that
+// matches neither known union member (here, the nil interface an explicit
+// LSP "null" response decodes to -- go.lsp.dev/protocol's own
+// unmarshalDocumentSymbolResultValue sets exactly this on a JSON "null")
+// must report ok=false, not a silent empty success indistinguishable from
+// a file that genuinely has zero symbols. The sealed union
+// (isDocumentSymbolResult is unexported to package protocol) means no
+// third concrete type can be constructed from here to simulate a future
+// protocol variant directly, but it would fall through the same type
+// switch to the same default case this covers.
+func TestFlatten_UnknownShapeIsNotOK(t *testing.T) {
+	var result protocol.DocumentSymbolResult // nil: the "null" response shape
+	syms, ok := flatten(result)
+	if ok {
+		t.Errorf("flatten(nil) ok = true; want false")
+	}
+	if syms != nil {
+		t.Errorf("flatten(nil) syms = %v; want nil", syms)
+	}
+}
+
+// TestFlatten_RecognizedEmptyIsStillOK is the case A-26 must not break: a
+// recognized shape with genuinely zero symbols (an empty outline, not an
+// unrecognized one) still reports ok=true, so a real empty file does not
+// start erroring just because this package got stricter about shapes it
+// cannot account for.
+func TestFlatten_RecognizedEmptyIsStillOK(t *testing.T) {
+	syms, ok := flatten(protocol.DocumentSymbolSlice{})
+	if !ok {
+		t.Error("flatten(DocumentSymbolSlice{}) ok = false; want true")
+	}
+	if len(syms) != 0 {
+		t.Errorf("flatten(DocumentSymbolSlice{}) syms = %v; want empty", syms)
+	}
+
+	syms, ok = flatten(protocol.SymbolInformationSlice{})
+	if !ok {
+		t.Error("flatten(SymbolInformationSlice{}) ok = false; want true")
+	}
+	if len(syms) != 0 {
+		t.Errorf("flatten(SymbolInformationSlice{}) syms = %v; want empty", syms)
+	}
+}
+
 // TestTrimTrailingBlankLines pins the guarantee trimTrailingBlankLines
 // exists for: a yaml-language-server range for a nested container
 // consistently extends one line past its own last real content, through a
