@@ -7,12 +7,17 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -71,7 +76,9 @@ func main() {
 	}
 
 	sql := false
+	var sqlPkgDir string
 	if pkgDir, ok := findSQLAdapter(repoRoot); ok {
+		sqlPkgDir = pkgDir
 		fmt.Println("SQL adapter package detected:", relTo(repoRoot, pkgDir))
 		var msg string
 		sql, msg = generateSQLParser(repoRoot, pkgDir, *dryRun)
@@ -98,7 +105,7 @@ func main() {
 	}
 
 	fmt.Println("Building...")
-	bin, cleanup, err := buildBinary(repoRoot, sql, ver)
+	bin, cleanup, err := buildBinary(repoRoot, sql, sqlPkgDir, ver)
 	if err != nil && sql {
 		// generateSQLParser only proves the C it wrote is well-formed enough
 		// to reach the compiler; a cgo build can still fail past that (a
@@ -108,7 +115,7 @@ func main() {
 		cleanup()
 		fmt.Fprintf(os.Stderr, "rgit-install: SQL build failed, retrying without SQL support: %v\n", err)
 		sql = false
-		bin, cleanup, err = buildBinary(repoRoot, sql, ver)
+		bin, cleanup, err = buildBinary(repoRoot, sql, sqlPkgDir, ver)
 	}
 	if err != nil {
 		fatalf("build failed: %v", err)
@@ -463,7 +470,7 @@ func ldflags(ver string) string {
 // buildBinary builds ./cmd/rgit into a fresh temp directory rather than
 // straight to the install prefix, so a build failure never leaves a
 // half-written binary at the destination.
-func buildBinary(repoRoot string, sql bool, ver string) (bin string, cleanup func(), err error) {
+func buildBinary(repoRoot string, sql bool, sqlPkgDir, ver string) (bin string, cleanup func(), err error) {
 	dir, err := os.MkdirTemp("", "rgit-install-build-*")
 	if err != nil {
 		return "", func() {}, err
@@ -479,6 +486,28 @@ func buildBinary(repoRoot string, sql bool, ver string) (bin string, cleanup fun
 
 	cmd := exec.Command("go", args...)
 	cmd.Dir = repoRoot
+	if sql {
+		// Go's build cache does not otherwise notice csrc/ changing: the
+		// generated C reaches the compiler only through a C #include inside
+		// grammar.go's cgo comment, which the go tool never reads as a
+		// build input, so the package's cache key stays keyed on grammar.go
+		// alone (reproduced: a corrupted parser.c with grammar.go untouched
+		// built silently from a stale cached object). CGO_CFLAGS is one of
+		// the environment variables Go's cache genuinely does key cgo
+		// compiles on, so folding the actual csrc/ content into it -- as an
+		// inert, unreferenced macro -- makes the cache key honestly track
+		// what will get compiled, without the whole-world cost of -a.
+		if hash, herr := sqlCSRCContentHash(sqlPkgDir); herr == nil {
+			flag := "-DRGIT_SQL_CSRC_HASH=" + hash
+			if existing := os.Getenv("CGO_CFLAGS"); existing != "" {
+				flag = existing + " " + flag
+			}
+			cmd.Env = append(os.Environ(), "CGO_CFLAGS="+flag)
+		}
+		// A hashing failure (e.g. csrc/ genuinely missing) is left for the
+		// build itself to report -- it will fail with a much clearer
+		// "no such file" than anything worth synthesizing here.
+	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
