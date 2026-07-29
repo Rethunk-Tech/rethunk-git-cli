@@ -1,0 +1,410 @@
+// Command rgit-install is the one-command path for a user who does not want
+// to run make: it checks prerequisites, generates the SQL parser when it
+// can, builds rgit, and installs the binary. It is deliberately stdlib-only
+// -- see CONTRIBUTING.md § Dependencies -- so verifying a build environment
+// never itself needs a working build environment.
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+)
+
+// sqlGrammarModule is the Go module that publishes the SQL grammar's
+// grammar.js and tree-sitter.json, but not a working parser.c (measured:
+// the module gitignores it at every tag, so its own bindings/go cannot
+// compile). rgit generates that file itself; see generateSQLParser.
+const sqlGrammarModule = "github.com/DerekStride/tree-sitter-sql"
+
+func main() {
+	dryRun := flag.Bool("dry-run", false, "print what would happen without building or installing")
+	prefixFlag := flag.String("prefix", "", "install directory (default: $GOBIN, else $(go env GOPATH)/bin)")
+	flag.Parse()
+
+	repoRoot, err := resolveRepoRoot()
+	if err != nil {
+		fatalf("%v", err)
+	}
+
+	fmt.Println("Checking prerequisites...")
+	checks, fatal := runPrereqChecks()
+	for _, c := range checks {
+		status := "ok"
+		if !c.ok {
+			status = "MISSING"
+		}
+		fmt.Printf("  [%s] %-24s %s\n", status, c.name, c.detail)
+	}
+	if fatal != nil {
+		fatalf("%v", fatal)
+	}
+
+	sql := false
+	if pkgDir, ok := findSQLAdapter(repoRoot); ok {
+		fmt.Println("SQL adapter package detected:", relTo(repoRoot, pkgDir))
+		var msg string
+		sql, msg = generateSQLParser(repoRoot, pkgDir, *dryRun)
+		fmt.Println(" ", msg)
+	} else {
+		fmt.Println("No SQL adapter package present yet; building without SQL support.")
+	}
+
+	ver := gitVersion(repoRoot)
+
+	prefix, err := resolvePrefix(*prefixFlag)
+	if err != nil {
+		fatalf("%v", err)
+	}
+	dest := filepath.Join(prefix, "rgit")
+
+	if *dryRun {
+		tags := ""
+		if sql {
+			tags = " -tags rgit_sql"
+		}
+		fmt.Printf("Would build ./cmd/rgit%s (version %s) and install to %s\n", tags, versionOrDev(ver), dest)
+		return
+	}
+
+	fmt.Println("Building...")
+	bin, cleanup, err := buildBinary(repoRoot, sql, ver)
+	if err != nil {
+		fatalf("build failed: %v", err)
+	}
+	defer cleanup()
+
+	replaced, err := installBinary(bin, dest)
+	if err != nil {
+		fatalf("install failed: %v", err)
+	}
+
+	action := "Installed"
+	if replaced {
+		action = "Replaced existing binary at"
+	}
+	fmt.Printf("%s %s (version %s)\n", action, dest, versionOrDev(ver))
+}
+
+func fatalf(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "rgit-install: "+format+"\n", args...)
+	os.Exit(1)
+}
+
+// resolveRepoRoot finds the module root by asking the go tool rather than
+// walking up looking for go.mod by hand -- it already knows the answer and
+// already accounts for GOFLAGS, workspace files, and everything else that
+// can move where "the module" is.
+func resolveRepoRoot() (string, error) {
+	out, err := exec.Command("go", "env", "GOMOD").Output()
+	if err != nil {
+		return "", fmt.Errorf("go env GOMOD: %w", err)
+	}
+	gomod := strings.TrimSpace(string(out))
+	if gomod == "" || gomod == os.DevNull {
+		return "", fmt.Errorf("not inside a Go module -- run from within the rgit checkout")
+	}
+	return filepath.Dir(gomod), nil
+}
+
+type prereqCheck struct {
+	name   string
+	ok     bool
+	detail string
+}
+
+// runPrereqChecks verifies what a build needs. go, git, cgo, and a C
+// compiler are fatal -- rgit links tree-sitter through cgo, so none of them
+// is optional (AGENTS.md's delegation boundary: git is shelled out to for
+// everything git already does). tree-sitter and a JS runtime are informational
+// only, since SQL generation degrades gracefully without them.
+func runPrereqChecks() (checks []prereqCheck, fatal error) {
+	goPath, err := exec.LookPath("go")
+	checks = append(checks, prereqCheck{"go toolchain", err == nil, goPath})
+	if err != nil {
+		fatal = fmt.Errorf("go not found on PATH")
+	}
+
+	gitPath, err := exec.LookPath("git")
+	checks = append(checks, prereqCheck{"git", err == nil, gitPath})
+	if err != nil && fatal == nil {
+		fatal = fmt.Errorf("git not found on PATH")
+	}
+
+	cgo := goEnv("CGO_ENABLED")
+	checks = append(checks, prereqCheck{"CGO_ENABLED", cgo == "1", cgo})
+	if cgo != "1" && fatal == nil {
+		fatal = fmt.Errorf("cgo is disabled (CGO_ENABLED=%s) -- rgit links tree-sitter through cgo and cannot build without it", cgo)
+	}
+
+	cc := goEnv("CC")
+	ccPath, ccErr := exec.LookPath(firstField(cc))
+	checks = append(checks, prereqCheck{"C compiler (" + cc + ")", ccErr == nil, ccPath})
+	if ccErr != nil && fatal == nil {
+		fatal = fmt.Errorf("C compiler %q not found on PATH", cc)
+	}
+
+	tsPath, tsErr := exec.LookPath("tree-sitter")
+	tsDetail := tsPath
+	if tsErr != nil {
+		tsDetail = "optional -- needed only to generate the SQL parser"
+	}
+	checks = append(checks, prereqCheck{"tree-sitter CLI", tsErr == nil, tsDetail})
+
+	return checks, fatal
+}
+
+func goEnv(name string) string {
+	out, err := exec.Command("go", "env", name).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func firstField(s string) string {
+	f := strings.Fields(s)
+	if len(f) == 0 {
+		return ""
+	}
+	return f[0]
+}
+
+// findSQLAdapter looks for an in-repo package, built under the rgit_sql tag,
+// that imports the SQL grammar's Go bindings. The path is discovered rather
+// than hardcoded: this installer is owned by the build-restructure change
+// and the SQL adapter package lands from a separate one, so hardcoding its
+// location here would silently drift the moment either side moves it.
+func findSQLAdapter(repoRoot string) (dir string, ok bool) {
+	cmd := exec.Command("go", "list", "-tags", "rgit_sql", "-json", "./...")
+	cmd.Dir = repoRoot
+	out, err := cmd.Output()
+	if err != nil {
+		return "", false
+	}
+	dec := json.NewDecoder(bytes.NewReader(out))
+	for dec.More() {
+		var pkg struct {
+			Dir     string
+			Imports []string
+		}
+		if err := dec.Decode(&pkg); err != nil {
+			return "", false
+		}
+		for _, imp := range pkg.Imports {
+			if strings.Contains(imp, "tree-sitter-sql") {
+				return pkg.Dir, true
+			}
+		}
+	}
+	return "", false
+}
+
+// generateSQLParser produces ABI 15 C sources for the SQL grammar into
+// pkgDir/csrc, when it can. It never fails the install: a missing
+// tree-sitter CLI, an unresolvable grammar module, or a generation error
+// all fall back to reporting why and continuing without SQL -- the
+// pre-decided call that a user without the tree-sitter CLI still gets a
+// working rgit.
+func generateSQLParser(repoRoot, pkgDir string, dryRun bool) (ok bool, msg string) {
+	if _, err := exec.LookPath("tree-sitter"); err != nil {
+		return false, "tree-sitter CLI not found on PATH -- installing rgit without SQL support"
+	}
+	modDir, err := moduleDir(repoRoot, sqlGrammarModule)
+	if err != nil {
+		return false, fmt.Sprintf("%s not resolvable (%v) -- installing rgit without SQL support", sqlGrammarModule, err)
+	}
+	if _, err := os.Stat(filepath.Join(modDir, "grammar.js")); err != nil {
+		return false, fmt.Sprintf("%s has no grammar.js -- installing rgit without SQL support", sqlGrammarModule)
+	}
+	if dryRun {
+		return true, fmt.Sprintf("would generate the SQL parser into %s/csrc", relTo(repoRoot, pkgDir))
+	}
+	if err := runSQLGeneration(modDir, pkgDir); err != nil {
+		return false, fmt.Sprintf("SQL generation failed (%v) -- installing rgit without SQL support", err)
+	}
+	return true, fmt.Sprintf("generated the SQL parser into %s/csrc (ABI 15)", relTo(repoRoot, pkgDir))
+}
+
+// moduleDir resolves the on-disk directory of an already-required module.
+// It deliberately does not add anything to go.mod: `go list -m` only reads
+// the build list, and errors cleanly when the module in question is not on
+// it yet -- which, today, it never is, since findSQLAdapter gates this on
+// a package that does not exist.
+func moduleDir(repoRoot, mod string) (string, error) {
+	cmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", mod)
+	cmd.Dir = repoRoot
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	dir := strings.TrimSpace(string(out))
+	if dir == "" {
+		return "", fmt.Errorf("no cached module directory")
+	}
+	return dir, nil
+}
+
+// runSQLGeneration is the mechanics measured for this repo: copy grammar.js
+// and tree-sitter.json into a scratch directory (the module cache is
+// read-only, and tree-sitter.json alongside grammar.js is what yields ABI
+// 15 instead of a silent ABI 14), run `tree-sitter generate` there, then
+// copy the result -- plus the module's own scanner.c -- into pkgDir/csrc.
+// The generated C must live in that subdirectory rather than pkgDir itself:
+// measured, putting it directly in the package directory makes cgo compile
+// it and the adapter's #include pull it in again, a duplicate-symbol link
+// error.
+func runSQLGeneration(modDir, pkgDir string) error {
+	scratch, err := os.MkdirTemp("", "rgit-sql-gen-*")
+	if err != nil {
+		return fmt.Errorf("scratch dir: %w", err)
+	}
+	defer os.RemoveAll(scratch)
+
+	if err := copyFile(filepath.Join(modDir, "grammar.js"), filepath.Join(scratch, "grammar.js")); err != nil {
+		return err
+	}
+	if err := copyFile(filepath.Join(modDir, "tree-sitter.json"), filepath.Join(scratch, "tree-sitter.json")); err != nil {
+		return err
+	}
+
+	cmd := exec.Command("tree-sitter", "generate")
+	cmd.Dir = scratch
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("tree-sitter generate: %w: %s", err, stderr.String())
+	}
+
+	treeSitterDir := filepath.Join(pkgDir, "csrc", "tree_sitter")
+	if err := os.MkdirAll(treeSitterDir, 0o755); err != nil {
+		return err
+	}
+	copies := [][2]string{
+		{filepath.Join(scratch, "src", "parser.c"), filepath.Join(pkgDir, "csrc", "parser.c")},
+		{filepath.Join(scratch, "src", "tree_sitter", "parser.h"), filepath.Join(treeSitterDir, "parser.h")},
+		{filepath.Join(scratch, "src", "tree_sitter", "array.h"), filepath.Join(treeSitterDir, "array.h")},
+		{filepath.Join(scratch, "src", "tree_sitter", "alloc.h"), filepath.Join(treeSitterDir, "alloc.h")},
+		{filepath.Join(modDir, "src", "scanner.c"), filepath.Join(pkgDir, "csrc", "scanner.c")},
+	}
+	for _, c := range copies {
+		if err := copyFile(c[0], c[1]); err != nil {
+			return fmt.Errorf("copy %s: %w", filepath.Base(c[0]), err)
+		}
+	}
+	return nil
+}
+
+func copyFile(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, 0o644)
+}
+
+func relTo(root, path string) string {
+	if r, err := filepath.Rel(root, path); err == nil {
+		return r
+	}
+	return path
+}
+
+// gitVersion mirrors what docs/USAGE.md documents: rgit --version reads
+// "dev" whenever the build did not stamp one. An empty return here leaves
+// that stamp unset rather than inventing a version scheme this repo has
+// not established.
+func gitVersion(repoRoot string) string {
+	out, err := exec.Command("git", "-C", repoRoot, "describe", "--tags", "--always", "--dirty").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func versionOrDev(v string) string {
+	if v == "" {
+		return "dev"
+	}
+	return v
+}
+
+func ldflags(ver string) string {
+	f := "-s -w"
+	if ver != "" {
+		f += " -X main.version=" + ver
+	}
+	return f
+}
+
+// buildBinary builds ./cmd/rgit into a fresh temp directory rather than
+// straight to the install prefix, so a build failure never leaves a
+// half-written binary at the destination.
+func buildBinary(repoRoot string, sql bool, ver string) (bin string, cleanup func(), err error) {
+	dir, err := os.MkdirTemp("", "rgit-install-build-*")
+	if err != nil {
+		return "", func() {}, err
+	}
+	cleanup = func() { _ = os.RemoveAll(dir) }
+
+	bin = filepath.Join(dir, "rgit")
+	args := []string{"build", "-ldflags", ldflags(ver), "-o", bin}
+	if sql {
+		args = append(args, "-tags", "rgit_sql")
+	}
+	args = append(args, "./cmd/rgit")
+
+	cmd := exec.Command("go", args...)
+	cmd.Dir = repoRoot
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return "", cleanup, fmt.Errorf("go build: %w: %s", err, stderr.String())
+	}
+	return bin, cleanup, nil
+}
+
+// resolvePrefix follows Go convention: $GOBIN if set, else
+// $(go env GOPATH)/bin. -prefix overrides both.
+func resolvePrefix(flagPrefix string) (string, error) {
+	if flagPrefix != "" {
+		return flagPrefix, nil
+	}
+	if gobin := goEnv("GOBIN"); gobin != "" {
+		return gobin, nil
+	}
+	gopath := goEnv("GOPATH")
+	if gopath == "" {
+		return "", fmt.Errorf("neither GOBIN nor GOPATH is set")
+	}
+	return filepath.Join(gopath, "bin"), nil
+}
+
+// installBinary writes to a temp file beside dest and renames over it, so a
+// crash mid-install never leaves a truncated binary at the install path --
+// the same reasoning the invariants table in AGENTS.md applies to staging.
+func installBinary(bin, dest string) (replaced bool, err error) {
+	if _, err := os.Stat(dest); err == nil {
+		replaced = true
+	}
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return replaced, err
+	}
+	data, err := os.ReadFile(bin)
+	if err != nil {
+		return replaced, err
+	}
+	tmp := dest + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o755); err != nil {
+		return replaced, err
+	}
+	if err := os.Rename(tmp, dest); err != nil {
+		return replaced, err
+	}
+	return replaced, nil
+}
