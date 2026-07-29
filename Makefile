@@ -86,6 +86,12 @@ clean:
 # host. darwin/amd64 and darwin/arm64 are deliberately not in this matrix --
 # they need a macOS SDK zig cannot supply (net's use in go.lsp.dev/jsonrpc2
 # pulls in `resolv`/CoreFoundation at link time); see docs/INSTALL.md.
+#
+# None of the three targets below passes -tags rgit_sql or generates the SQL
+# parser -- deliberate, not a gap to close: generation needs the tree-sitter
+# CLI on the build host plus a ~17 MB parser.c compile per target, unlike
+# `make install`'s single local build. Every dist/ binary is SQL-less; see
+# docs/INSTALL.md#cross-builds before "fixing" that.
 cross: cross-linux-amd64 cross-linux-arm64 cross-windows-amd64
 
 define need-zig

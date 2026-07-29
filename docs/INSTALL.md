@@ -91,6 +91,15 @@ CoreFoundation` from an actual macOS SDK — building with `-tags
 netgo,osusergo` does not clear it. Build darwin binaries on a Mac, or in CI
 with a macOS runner; it is deliberately not in `make cross`'s default matrix.
 
+**Cross binaries never carry SQL support.** `make cross` does not pass
+`-tags rgit_sql` and does not generate the SQL parser, unlike `make install`
+(see [SQL support](#sql-support) below). That is deliberate, not an
+oversight: generation needs the tree-sitter CLI on the build host and a
+~17 MB `parser.c` compile per target, which does not fit a cross matrix the
+way it fits a single local `make install`. `.sql` anchors resolve as any
+other unsupported language does (exit 9, `docs/ANCHORS.md`) in every `dist/`
+binary; every other language is unaffected.
+
 ## SQL support
 
 SQL is a second grammar behind the `rgit_sql` build tag: a plain `go build
