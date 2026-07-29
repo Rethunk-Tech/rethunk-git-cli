@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"context"
+	"net"
 	"testing"
 )
 
@@ -64,4 +65,50 @@ func TestSession_CloseIsNilSafe(t *testing.T) {
 
 	sess := NewSession()
 	sess.Close() // nothing cached; must not panic
+}
+
+// TestSession_ReusesCachedClientAndClosesIt covers the two branches
+// TestSession_CachesClientAndDegradedState's own degraded-language case does
+// not: a language dialled successfully once must be handed back on a second
+// Dial for the same language without redialling, and Close must actually
+// close every client it has cached. Both are otherwise gated behind an
+// installed language server and never run under -short -- Dial itself is
+// bypassed here by seeding sess.clients directly (an in-package field, since
+// this file is package lsp) with a real *Client over an in-memory pipe, the
+// same client_test.go mock (didCloseObserver, countingRWC) the didClose
+// coverage already uses, so this proves Session's own caching and teardown
+// rather than re-proving NewClient's handshake.
+func TestSession_ReusesCachedClientAndClosesIt(t *testing.T) {
+	t.Parallel()
+
+	serverConn, clientConn := net.Pipe()
+	observer := &didCloseObserver{conn: serverConn}
+	errCh := make(chan error, 1)
+	go func() { errCh <- observer.serve(`[]`) }()
+
+	rwc := &countingRWC{Conn: clientConn}
+	client, err := NewClient(context.Background(), rwc, t.TempDir())
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	sess := NewSession()
+	sess.clients["go"] = client
+
+	got, degraded := sess.Dial(context.Background(), "go", t.TempDir())
+	if degraded {
+		t.Fatal("Dial() degraded = true for a cached language; want false")
+	}
+	if got != client {
+		t.Error("Dial() returned a different *Client than the one cached; want the cached one reused, not a redial")
+	}
+
+	sess.Close()
+	if closes := rwc.closes.Load(); closes != 1 {
+		t.Errorf("cached client closed %d times by Session.Close(); want exactly 1", closes)
+	}
+
+	if srvErr := <-errCh; srvErr != nil {
+		t.Fatalf("mock server: %v", srvErr)
+	}
 }
