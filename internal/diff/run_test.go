@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -510,6 +511,37 @@ func TestAttribute_TopLevelSymbolOwnsOneSeparator(t *testing.T) {
 				t.Errorf("rows = %s; want %s", got, tc.wantRows)
 			}
 		})
+	}
+}
+
+// TestCrossCheckOutcome_DegradedAndMismatchAreOrthogonal pins the
+// regression 8a560aa's own follow-up left behind: CrossCheckExtents began
+// returning degraded=true whenever any declaration in the batch was absent
+// from the server's outline, but crossCheckFile still discarded a genuine
+// mismatch whenever degraded was true -- that clause was only ever safe
+// while CrossCheckExtents could not produce that combination at all. A
+// file where nine of ten declarations verify clean and the tenth is a real
+// disagreement must report the disagreement, not silently downgrade to
+// [ts-only]. Exercised directly against the (degraded, mismatches) pair
+// rather than through a live language server: the bug is in how this
+// package combines two already-computed signals, not in what a server
+// says, so a real dial would only add flakiness without adding proof.
+func TestCrossCheckOutcome_DegradedAndMismatchAreOrthogonal(t *testing.T) {
+	t.Parallel()
+	mismatch := &resolve.ResolveError{
+		Code:            exitcode.ExtentMismatch,
+		Anchor:          "Found",
+		TreeSitterRange: "1..2",
+		LSPRange:        "3..4",
+	}
+
+	degraded, warnings := crossCheckOutcome("a.go", true, []error{mismatch})
+
+	if !degraded {
+		t.Error("degraded = false; want true -- some declaration was genuinely not found")
+	}
+	if want := []string{"a.go: " + mismatch.Error()}; !slices.Equal(warnings, want) {
+		t.Errorf("warnings = %v; want %v -- the mismatch must survive a degraded batch", warnings, want)
 	}
 }
 
