@@ -151,7 +151,7 @@ func formatRange(start, end uint32) string {
 // server's own reported order, which is source order for every grammar
 // rgit supports.
 func matchLSPSymbol(anchor, sep string, symbols []lsp.Symbol) (lsp.Symbol, bool) {
-	bare, ordinal := splitOrdinal(anchor)
+	bare, ordinal, hasOrdinal := ParseOrdinal(anchor)
 
 	var byBare []lsp.Symbol
 	for _, s := range symbols {
@@ -159,12 +159,12 @@ func matchLSPSymbol(anchor, sep string, symbols []lsp.Symbol) (lsp.Symbol, bool)
 		if qualified == anchor {
 			return s, true
 		}
-		if ordinal > 0 && (qualified == bare || s.Name == bare) {
+		if hasOrdinal && (qualified == bare || s.Name == bare) {
 			byBare = append(byBare, s)
 		}
 	}
 
-	if ordinal > 0 && ordinal <= len(byBare) {
+	if hasOrdinal && ordinal <= len(byBare) {
 		return byBare[ordinal-1], true
 	}
 	return lsp.Symbol{}, false
@@ -186,16 +186,26 @@ func qualifyLSPSymbol(s lsp.Symbol, sep string) string {
 	return normalizeAnchorInput(s.Name)
 }
 
-// splitOrdinal separates "init#2" into ("init", 2); a name with no "#"
-// returns (anchor, 0).
-func splitOrdinal(anchor string) (bare string, ordinal int) {
-	before, after, ok := strings.Cut(anchor, "#")
-	if !ok {
-		return anchor, 0
+// ParseOrdinal parses docs/ANCHORS.md's positional "Bare#N" anchor form:
+// "init#2" separates into ("init", 2, true). ok=false means anchor does not
+// use this form at all -- no "#", an empty bare name before it, or a suffix
+// that is not a positive integer -- and bare/n are meaningless. No
+// identifier in a supported grammar contains "#", so a suffix that parses
+// as a positive integer is unambiguous.
+//
+// Exported so internal/synth's own ordinal check (stage.go's
+// isOrdinalAnchor) can share this one parse instead of maintaining a
+// second copy with its own, slightly different rules -- the divergence
+// this replaces: isOrdinalAnchor required n > 0 and a non-empty bare name,
+// matchLSPSymbol's own former splitOrdinal checked neither.
+func ParseOrdinal(anchor string) (bare string, n int, ok bool) {
+	before, after, hasHash := strings.Cut(anchor, "#")
+	if !hasHash || before == "" {
+		return "", 0, false
 	}
-	n, err := strconv.Atoi(after)
-	if err != nil {
-		return anchor, 0
+	parsed, err := strconv.Atoi(after)
+	if err != nil || parsed <= 0 {
+		return "", 0, false
 	}
-	return before, n
+	return before, parsed, true
 }
