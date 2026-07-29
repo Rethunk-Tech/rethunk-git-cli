@@ -215,6 +215,9 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 	for _, anchor := range plan.Ordinals() {
 		fmt.Fprintf(stderr, "[warning] anchor '%s' is positional; inserting a symbol above it repoints it -- qualify it where the language allows\n", anchor)
 	}
+	for _, w := range plan.CountingWarnings() {
+		fmt.Fprintf(stderr, "[warning] %s\n", w)
+	}
 
 	allUnchanged := len(plan.Results()) > 0
 	for _, r := range plan.Results() {
