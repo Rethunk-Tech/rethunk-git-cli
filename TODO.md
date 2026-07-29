@@ -20,6 +20,19 @@ behaviour that ships lives in [`docs/`](docs/).
       comment's own written column, so neither the preceding key nor the one
       it was written above claims it (`lang_yaml.go`'s `trimTrailingComment`).
       Still reachable via `@toplevel` or the whole file.
+- [ ] SCSS and SASS have no anchor support, and cannot until a grammar ships Go
+      bindings. Neither candidate does: `tree-sitter-grammars/tree-sitter-scss`
+      publishes `bindings/{c,node,python,rust,swift}` and is not a Go module at
+      all, and `serenadeai/tree-sitter-scss` publishes only `{node,rust}`.
+      Parsing `.scss` with the CSS grammar is not a substitute — nesting,
+      `$variables` and `@mixin` yield ERROR nodes, the same reason
+      `lang_shell.go` refuses `.zsh`. `.css` is claimed; `.scss`/`.sass` are not.
+- [ ] `make cross` covers linux/amd64, linux/arm64 and windows/amd64 but not
+      darwin. Cross-building for macOS needs a macOS SDK: `rgit` links
+      tree-sitter through cgo, so `CGO_ENABLED=0` is impossible, and package
+      `net` (via `go.lsp.dev/jsonrpc2`) forces `-lresolv` and
+      `-framework CoreFoundation` at link time. Building with `-tags
+      netgo,osusergo` does not avoid it. `zig cc` covers every other target.
 
 ## v2 — grammars
 
@@ -28,19 +41,6 @@ against, the same way the v1 three were chosen (`specs/design.md` § Grammar
 scope). Config and data files stage by path meanwhile, which is what a lockfile
 or a version bump wants regardless.
 
-- [ ] CSS/SCSS selector anchors (`.button-primary`, `@media`).
-- [ ] JSON/TOML key-path anchors (`server.port`). Breadth overstates the value:
-      most of it is `package.json`, tsconfig, and lockfiles, which want
-      whole-path staging anyway.
-- [ ] SQL. Schema and function definitions benefit; migrations are append-only
-      new files, where symbol granularity adds nothing.
 - [ ] HTML element anchors (`div#app`).
 - [ ] Rust, C, C++. Speculative: no surveyed repository contains any. Worth
       doing if that changes, but not ahead of the languages above.
-
-## Deferred features
-
-- [ ] Shell completion — the useful form (symbols after `auth.go:`) is a dynamic
-      function calling `rgit diff --porcelain`; no framework needed. Cheaper now
-      than when it was deferred: `pflag` is already a dependency and
-      `--porcelain` is the data source.
