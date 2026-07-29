@@ -16,6 +16,7 @@ package lsptest
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -23,14 +24,28 @@ import (
 )
 
 // ReadFrame reads one LSP header-framed JSON-RPC message (Content-Length,
-// blank line, JSON body) off r. ok=false at a clean EOF.
+// blank line, JSON body) off r. ok=false at a clean EOF between frames --
+// specifically, an io.EOF with no header bytes read yet in this call.
+//
+// Anything else that goes wrong reading the header -- a non-EOF error, or
+// an EOF after at least one header byte has already been consumed (a
+// truncated frame: a mock server that died mid-header, or between a
+// complete Content-Length line and the blank line that should terminate
+// it) -- is a real error, not a second clean-shutdown shape. A test helper
+// that swallowed both identically would hide a mock server dying mid-frame
+// behind the same "the peer hung up" result an orderly shutdown produces.
 func ReadFrame(r *bufio.Reader) (msg map[string]any, ok bool, err error) {
 	length := -1
+	first := true
 	for {
 		line, rerr := r.ReadString('\n')
 		if rerr != nil {
-			return nil, false, nil //nolint:nilerr // EOF between frames is the normal shutdown path
+			if first && len(line) == 0 && errors.Is(rerr, io.EOF) {
+				return nil, false, nil //nolint:nilerr // clean EOF before any header byte: the normal shutdown path between frames
+			}
+			return nil, false, fmt.Errorf("mock lsp server: read header: %w", rerr)
 		}
+		first = false
 		line = strings.TrimRight(line, "\r\n")
 		if line == "" {
 			break
