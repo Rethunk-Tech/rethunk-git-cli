@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# No SQL lane here on purpose: any target that builds or tests SQL must
+# delegate to cmd/rgit-install, so -tags rgit_sql and parser generation stay
+# in exactly one place (AGENTS.md § Delegation boundary). Plain `go build`/
+# `go test` never touch it.
+#
+# cgo is mandatory -- rgit links tree-sitter through cgo, so CGO_ENABLED=0
+# is not an option. ubuntu-latest ships gcc (verified against
+# actions/runner-images' own software manifest), so no toolchain step is
+# needed here.
+jobs:
+  test:
+    name: test (unit lane)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # -short: the unit lane CONTRIBUTING.md calls where the guarantee
+      # lives. It also skips every live-language-server test cleanly (each
+      # checks testing.Short() and/or exec.LookPath before dialling), which
+      # matters here since this runner has no language servers installed.
+      - run: go test -short ./...
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.12.2
+
+  race:
+    name: race (internal/lsp)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # Scoped to internal/lsp, not ./...: CONTRIBUTING.md names jsonrpc2
+      # and the spawn lock -- both there -- as the concurrency that
+      # matters. Every live-server case in this package skips cleanly via
+      # its own exec.LookPath guard when nothing is installed.
+      - run: go test -race ./internal/lsp/...
