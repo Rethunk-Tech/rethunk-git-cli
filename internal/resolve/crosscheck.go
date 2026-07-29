@@ -170,20 +170,21 @@ func matchLSPSymbol(anchor, sep string, symbols []lsp.Symbol) (lsp.Symbol, bool)
 	return lsp.Symbol{}, false
 }
 
-// qualifyLSPSymbol joins s's own Container and Name the same way
-// containerQualified (index.go) joins a Declaration's -- sep verbatim when
-// the resolution supplied one (CSS Nesting's " ", Declaration.Sep's own doc
-// comment), "." otherwise -- so a server-reported symbol qualifies to
-// exactly the string Resolve would have emitted as Anchor for the same
-// declaration.
+// qualifyLSPSymbol joins s's own Container and Name via joinQualified
+// (index.go) -- sep verbatim when the resolution supplied one (CSS
+// Nesting's " ", Declaration.Sep's own doc comment), "." otherwise -- so a
+// server-reported symbol qualifies to exactly the string Resolve would
+// have emitted as Anchor for the same declaration. Unlike
+// containerQualified, an empty Container here falls back to
+// normalizeAnchorInput, not the bare name verbatim: gopls's own receiver
+// spelling ("(*A).Get") arrives with no containerName field at all, so
+// this is the one place a server-reported symbol's own name still needs
+// the same normalization anchor input already gets.
 func qualifyLSPSymbol(s lsp.Symbol, sep string) string {
-	if s.Container != "" {
-		if sep == "" {
-			sep = "."
-		}
-		return s.Container + sep + s.Name
+	if s.Container == "" {
+		return normalizeAnchorInput(s.Name)
 	}
-	return normalizeAnchorInput(s.Name)
+	return joinQualified(s.Container, s.Name, sep)
 }
 
 // ParseOrdinal parses docs/ANCHORS.md's positional "Bare#N" anchor form:

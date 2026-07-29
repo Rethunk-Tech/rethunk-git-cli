@@ -170,11 +170,20 @@ func containerQualified(s *Symbol) string {
 	if s.Decl.Container == "" {
 		return s.Decl.Bare
 	}
-	sep := s.Decl.Sep
+	return joinQualified(s.Decl.Container, s.Decl.Bare, s.Decl.Sep)
+}
+
+// joinQualified joins container and name with sep, defaulting an empty sep
+// to "." -- the one rule containerQualified above and crosscheck.go's
+// qualifyLSPSymbol both need identically. It is deliberately only that
+// much: the two callers otherwise disagree on what an *empty* container
+// means (containerQualified's own bare name vs. qualifyLSPSymbol's
+// gopls-receiver normalization), so neither is folded in here.
+func joinQualified(container, name, sep string) string {
 	if sep == "" {
 		sep = "."
 	}
-	return s.Decl.Container + sep + s.Decl.Bare
+	return container + sep + name
 }
 
 // normalizeAnchorInput rewrites gopls's receiver spelling, "(*A).Get" or
