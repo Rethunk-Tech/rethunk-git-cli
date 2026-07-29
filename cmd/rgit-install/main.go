@@ -20,7 +20,31 @@ import (
 // grammar.js and tree-sitter.json, but not a working parser.c (measured:
 // the module gitignores it at every tag, so its own bindings/go cannot
 // compile). rgit generates that file itself; see generateSQLParser.
-const sqlGrammarModule = "github.com/DerekStride/tree-sitter-sql"
+//
+// sqlGrammarVersion is pinned rather than left floating: internal/resolve/
+// sqlgrammar's own binding imports neither this module nor its bindings/go
+// package (that is the whole point -- the latter is what cannot compile), so
+// nothing in this repo's build graph ever names it in an import statement.
+// `go mod tidy` therefore has nothing to hold a go.mod requirement open
+// with and would drop a bare `require` line the moment it ran. Resolving
+// the module by explicit "module@version" instead of a bare module path
+// (downloadSQLGrammarModule) sidesteps that entirely: `go mod download` and
+// `go list -m` both accept a version-qualified query with no go.mod entry
+// at all, verified against this exact module and version.
+const (
+	sqlGrammarModule  = "github.com/DerekStride/tree-sitter-sql"
+	sqlGrammarVersion = "v0.3.11"
+)
+
+// sqlAdapterPackageName is the package name findSQLAdapter looks for. Matching
+// by name rather than by import content is what changed here: an earlier
+// draft searched go list's own Imports field for a "tree-sitter-sql"
+// substring, on the assumption that whatever package needed generation would
+// import the upstream module's own bindings/go directly. It never will --
+// internal/resolve/sqlgrammar's binding imports only "C" and "unsafe" (see
+// its own doc comment) specifically because that upstream package is the one
+// that cannot compile -- so that check silently matched nothing, forever.
+const sqlAdapterPackageName = "sqlgrammar"
 
 func main() {
 	dryRun := flag.Bool("dry-run", false, "print what would happen without building or installing")
@@ -176,10 +200,19 @@ func firstField(s string) string {
 }
 
 // findSQLAdapter looks for an in-repo package, built under the rgit_sql tag,
-// that imports the SQL grammar's Go bindings. The path is discovered rather
-// than hardcoded: this installer is owned by the build-restructure change
-// and the SQL adapter package lands from a separate one, so hardcoding its
-// location here would silently drift the moment either side moves it.
+// that is the cgo binding generation targets. The package is discovered by
+// name (sqlAdapterPackageName) rather than by a hardcoded directory path, so
+// the adapter can move without this installer silently going blind -- but
+// not by import content: see sqlAdapterPackageName's own doc comment for why
+// the earlier "does it import tree-sitter-sql" check could never match.
+// len(CgoFiles) > 0 additionally confirms it is the cgo binding itself, not
+// some unrelated package that happens to share the name.
+//
+// `go list -tags rgit_sql -json ./...` succeeds here even before generation
+// has ever run: cgo's own #include "csrc/parser.c" is a C-preprocessor
+// directive inside a Go source comment, invisible to `go list`, which only
+// needs the .go file to parse -- verified directly, since this is exactly
+// the state a clean checkout is in.
 func findSQLAdapter(repoRoot string) (dir string, ok bool) {
 	cmd := exec.Command("go", "list", "-tags", "rgit_sql", "-json", "./...")
 	cmd.Dir = repoRoot
@@ -190,16 +223,15 @@ func findSQLAdapter(repoRoot string) (dir string, ok bool) {
 	dec := json.NewDecoder(bytes.NewReader(out))
 	for dec.More() {
 		var pkg struct {
-			Dir     string
-			Imports []string
+			Dir      string
+			Name     string
+			CgoFiles []string
 		}
 		if err := dec.Decode(&pkg); err != nil {
 			return "", false
 		}
-		for _, imp := range pkg.Imports {
-			if strings.Contains(imp, "tree-sitter-sql") {
-				return pkg.Dir, true
-			}
+		if pkg.Name == sqlAdapterPackageName && len(pkg.CgoFiles) > 0 {
+			return pkg.Dir, true
 		}
 	}
 	return "", false
@@ -215,9 +247,9 @@ func generateSQLParser(repoRoot, pkgDir string, dryRun bool) (ok bool, msg strin
 	if _, err := exec.LookPath("tree-sitter"); err != nil {
 		return false, "tree-sitter CLI not found on PATH -- installing rgit without SQL support"
 	}
-	modDir, err := moduleDir(repoRoot, sqlGrammarModule)
+	modDir, err := downloadSQLGrammarModule(repoRoot)
 	if err != nil {
-		return false, fmt.Sprintf("%s not resolvable (%v) -- installing rgit without SQL support", sqlGrammarModule, err)
+		return false, fmt.Sprintf("%s@%s not resolvable (%v) -- installing rgit without SQL support", sqlGrammarModule, sqlGrammarVersion, err)
 	}
 	if _, err := os.Stat(filepath.Join(modDir, "grammar.js")); err != nil {
 		return false, fmt.Sprintf("%s has no grammar.js -- installing rgit without SQL support", sqlGrammarModule)
@@ -231,13 +263,32 @@ func generateSQLParser(repoRoot, pkgDir string, dryRun bool) (ok bool, msg strin
 	return true, fmt.Sprintf("generated the SQL parser into %s/csrc (ABI 15)", relTo(repoRoot, pkgDir))
 }
 
-// moduleDir resolves the on-disk directory of an already-required module.
-// It deliberately does not add anything to go.mod: `go list -m` only reads
-// the build list, and errors cleanly when the module in question is not on
-// it yet -- which, today, it never is, since findSQLAdapter gates this on
-// a package that does not exist.
-func moduleDir(repoRoot, mod string) (string, error) {
-	cmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", mod)
+// downloadSQLGrammarModule resolves the on-disk cache directory of the SQL
+// grammar module at its pinned version, without ever touching go.mod.
+//
+// A bare `go list -m -f {{.Dir}} <path>` (no version) only answers for a
+// module already on the main module's build list -- i.e. named in a
+// `require`, direct or indirect -- which this one never is (see
+// sqlGrammarVersion's doc comment). Qualifying the query with an explicit
+// "<path>@<version>" instead makes both `go mod download` and `go list -m`
+// treat it as an ad-hoc query against the module proxy/cache: verified
+// directly against this module and version, `go mod download
+// <path>@<version>` populates the module cache and leaves go.mod
+// byte-for-byte unchanged, and a subsequent `go list -m -f {{.Dir}}
+// <path>@<version>` then resolves the same cache directory `go env
+// GOMODCACHE` would.
+func downloadSQLGrammarModule(repoRoot string) (string, error) {
+	versioned := sqlGrammarModule + "@" + sqlGrammarVersion
+
+	dlCmd := exec.Command("go", "mod", "download", versioned)
+	dlCmd.Dir = repoRoot
+	var stderr bytes.Buffer
+	dlCmd.Stderr = &stderr
+	if err := dlCmd.Run(); err != nil {
+		return "", fmt.Errorf("go mod download %s: %w: %s", versioned, err, stderr.String())
+	}
+
+	cmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", versioned)
 	cmd.Dir = repoRoot
 	out, err := cmd.Output()
 	if err != nil {
