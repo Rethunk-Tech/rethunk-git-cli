@@ -61,10 +61,10 @@ func (p *pythonLanguage) MembersSitFlush() bool { return false }
 // alone, with class bodies never descended into, matching the Go and
 // TypeScript adapters.
 func (p *pythonLanguage) Declarations(src []byte, root *ts.Node) []Declaration {
+	children := namedChildren(root)
 	var decls []Declaration
-	count := root.NamedChildCount()
-	for i := range count {
-		node := root.NamedChild(i)
+	for i := range children {
+		node := &children[i]
 		d, ok := p.declarationFor(src, node)
 		if !ok {
 			continue
@@ -106,10 +106,10 @@ func (p *pythonLanguage) classMembers(class *ts.Node, container string, src []by
 	if body == nil {
 		return nil
 	}
+	members := namedChildren(body)
 	var out []Declaration
-	count := body.NamedChildCount()
-	for i := range count {
-		member := body.NamedChild(i)
+	for i := range members {
+		member := &members[i]
 		var (
 			d  Declaration
 			ok bool

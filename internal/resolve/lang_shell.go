@@ -98,11 +98,10 @@ func (s *shellLanguage) MembersSitFlush() bool { return false }
 // (index.go's assignQualifiedNames) unchanged, the same as two Go
 // package-level functions accidentally sharing a name would.
 func (s *shellLanguage) Declarations(src []byte, root *ts.Node) []Declaration {
+	children := namedChildren(root)
 	var decls []Declaration
-	count := root.NamedChildCount()
-	for i := range count {
-		node := root.NamedChild(i)
-		if d, ok := s.declarationFor(src, node); ok {
+	for i := range children {
+		if d, ok := s.declarationFor(src, &children[i]); ok {
 			decls = append(decls, d)
 		}
 	}
