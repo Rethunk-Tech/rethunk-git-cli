@@ -6,6 +6,11 @@
 *.test
 *.out
 
+# go tool cover -html writes this by hand; the Makefile itself never
+# generates it (cover/cover-short only run -func), but whoever runs the
+# command shouldn't have to remember to keep it out of a commit.
+coverage.html
+
 # Local agent/editor settings. Nothing here is shared, and the only thing
 # stopping an accidental commit otherwise is whatever global ignore file the
 # committer happens to have.
