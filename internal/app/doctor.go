@@ -12,8 +12,10 @@ package app
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/prereq"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
@@ -30,28 +32,6 @@ language server or the tree-sitter CLI is informational, since degraded
 
 Full reference: docs/USAGE.md
 `
-
-// languageServerCheck is one row of docs/INSTALL.md § Language servers: the
-// binary rgit actually shells out to for that language's cross-check, and
-// the install line to print when it is missing. Read from INSTALL.md
-// (out of fence) rather than duplicating its own reasoning about transport;
-// this is only the subset doctor needs to probe PATH.
-type languageServerCheck struct {
-	language string
-	binary   string
-	install  string
-}
-
-// languageServers mirrors docs/INSTALL.md's own table. Keep it in sync by
-// hand if that table's binaries change -- there is no single source both
-// a markdown table and this slice could share without docs/ depending on
-// Go, which AGENTS.md's delegation boundary gives no reason to introduce.
-var languageServers = []languageServerCheck{
-	{"go", "gopls", "go install golang.org/x/tools/gopls@latest"},
-	{"typescript/javascript", "vtsls", "npm i -g @vtsls/language-server"},
-	{"python", "pyright-langserver", "npm i -g pyright"},
-	{"shell", "bash-language-server", "npm i -g bash-language-server"},
-}
 
 func runDoctor(args []string, stdout, stderr io.Writer) exitcode.Code {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
@@ -70,9 +50,10 @@ func runDoctor(args []string, stdout, stderr io.Writer) exitcode.Code {
 		prereq.Print(stdout, c)
 	}
 
-	fmt.Fprintln(stdout, "\nLanguage servers (optional -- a missing one falls back to [ts-only]):")
-	for _, ls := range languageServers {
-		c := prereq.LookPath(ls.binary+" ("+ls.language+")", ls.binary, "not on PATH -- "+ls.install)
+	fmt.Fprintln(stdout, "\nLanguage servers (optional -- a missing one falls back to [ts-only]; install with docs/INSTALL.md § Language servers):")
+	for _, s := range lsp.Servers() {
+		label := s.Bin + " (" + strings.Join(s.Languages, ", ") + ")"
+		c := prereq.LookPath(label, s.Bin, "not on PATH -- see docs/INSTALL.md § Language servers")
 		prereq.Print(stdout, c)
 	}
 

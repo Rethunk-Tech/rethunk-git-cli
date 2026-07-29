@@ -25,18 +25,29 @@ const (
 	managerCargo
 )
 
-// serverEntry is one server rgit's LSP cross-check can dial, plus how
-// -with-servers installs or updates it.
+// serverEntry is one server this installer can set up, plus how
+// -with-servers installs or updates it. Most, but not all, are also
+// something rgit's own LSP cross-check dials (internal/lsp/servers.go).
 //
-// This catalog is hardcoded rather than driven from internal/lsp/servers.go
-// at runtime: every field there (serverSpec, the servers map itself) is
-// unexported, so nothing in that package is importable from outside it.
-// Keeping this list in sync with internal/lsp/servers.go and
-// docs/INSTALL.md's Language servers table is a manual coupling this
-// comment exists to flag, not to hide -- there is no exported surface to
-// drive it from instead. taplo is the one entry below with no counterpart
-// in internal/lsp/servers.go yet: TOML cross-check support (see this
-// repo's go.mod) will need it wired there next.
+// This catalog stays hardcoded here rather than driven from
+// internal/lsp.Servers() at runtime: that function is a clean, free import
+// for internal/app (already a transitive dependency via internal/resolve),
+// but this is a separate main package with none of that dependency graph
+// today -- measured: importing internal/lsp here would add ~24 packages to
+// this binary purely for a data catalog, including the full jsonrpc2/LSP
+// client machinery this installer never dials itself. servers_test.go's
+// TestServerCatalog_MatchesLSPServers is the tradeoff: a test-only import
+// (never linked into the shipped binary) that fails the moment this list
+// and internal/lsp/servers.go disagree, so the silence is fixed even
+// though the duplication itself is not.
+//
+// taplo is the one entry below with no counterpart in
+// internal/lsp/servers.go, and never will have one: specs/design.md's
+// cross-check survey measured its TOML ranges genuinely disagreeing with
+// this resolver's own extents on an ordinary nested table, so it is
+// installed here for a user's own editor tooling only, not for rgit's own
+// cross-check. TestServerCatalog_MatchesLSPServers documents this as its
+// one allowed exception rather than silently ignoring it.
 type serverEntry struct {
 	// name mirrors internal/lsp/servers.go's own "name" field where a
 	// counterpart already exists there.

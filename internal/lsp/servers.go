@@ -1,5 +1,7 @@
 package lsp
 
+import "sort"
+
 // transportKind is how Dial reaches a language's server. Only "go" has a
 // real listen-mode daemon (specs/design.md § Symbol resolution): gopls's
 // `-listen=unix;<path>` binds a unix socket other processes can dial into.
@@ -114,4 +116,35 @@ var servers = map[string]serverSpec{
 		transport: transportStdio,
 		stdioArgs: []string{"server"},
 	},
+}
+
+// ServerInfo is one server rgit's cross-check can dial, plus which
+// grammars resolve to it. serverSpec itself stays unexported (Dial owns
+// transport internals no caller outside this package needs); this is the
+// read-only subset a caller like `rgit doctor` needs to report every
+// wired server without a second, hand-maintained list.
+type ServerInfo struct {
+	// Bin is the binary Dial looks up on PATH.
+	Bin string
+	// Languages is every resolve.Language.Name() this server cross-checks,
+	// sorted. More than one language can share a server -- "typescript"
+	// and "tsx" both dial vtsls.
+	Languages []string
+}
+
+// Servers returns one ServerInfo per distinct binary in the package-level
+// servers map, sorted by Bin, so a caller iterating the result gets a
+// stable order without sorting it itself.
+func Servers() []ServerInfo {
+	byBin := map[string][]string{}
+	for lang, spec := range servers {
+		byBin[spec.bin] = append(byBin[spec.bin], lang)
+	}
+	out := make([]ServerInfo, 0, len(byBin))
+	for bin, langs := range byBin {
+		sort.Strings(langs)
+		out = append(out, ServerInfo{Bin: bin, Languages: langs})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Bin < out[j].Bin })
+	return out
 }

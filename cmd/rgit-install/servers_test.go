@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	qt "github.com/go-quicktest/qt"
+
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
 )
 
 func fakeLookPath(found map[string]string) func(string) (string, error) {
@@ -145,6 +147,43 @@ func TestServerCatalog(t *testing.T) {
 	qt.Assert(t, qt.IsNotNil(taplo))
 	qt.Assert(t, qt.DeepEquals(taplo.extraArgs, []string{"--locked", "--features", "lsp"}))
 	qt.Assert(t, qt.IsNotNil(taplo.capability))
+}
+
+// TestServerCatalog_MatchesLSPServers is a drift test, not a shared
+// catalog: internal/lsp's own serverSpec is unexported, and importing
+// package lsp from this main package's own production code would pull in
+// its full jsonrpc2/LSP client dependency graph purely for a data list
+// (servers.go's own doc comment measures the cost). A _test.go import
+// never ships in the built rgit-install binary, so comparing catalogs
+// here costs nothing.
+//
+// taplo is the one documented exception: specs/design.md measured its
+// ranges genuinely disagreeing with this resolver's own extents on a
+// nested TOML table, so it stays permanently unwired in
+// internal/lsp/servers.go despite being installed here for a user's own
+// editor tooling.
+func TestServerCatalog_MatchesLSPServers(t *testing.T) {
+	t.Parallel()
+
+	const taplo = "taplo"
+
+	wired := map[string]bool{}
+	for _, s := range lsp.Servers() {
+		wired[s.Bin] = true
+	}
+
+	for _, e := range serverCatalog {
+		if e.bin == taplo {
+			continue
+		}
+		if !wired[e.bin] {
+			t.Errorf("serverCatalog has %q with no counterpart in internal/lsp.Servers() -- either it was unwired from internal/lsp/servers.go (update this catalog and its comment) or this catalog is stale", e.bin)
+		}
+		delete(wired, e.bin)
+	}
+	for bin := range wired {
+		t.Errorf("internal/lsp.Servers() wires %q but serverCatalog has no entry for it -- a user running -with-servers cannot install it", bin)
+	}
 }
 
 // fakeTaplo writes a tiny script at a controlled path that behaves like

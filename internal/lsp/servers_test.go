@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"sort"
 	"testing"
 	"time"
 )
@@ -76,5 +78,43 @@ func TestDial_NewServers_Degraded(t *testing.T) {
 	}
 	if !degraded {
 		t.Error("Dial(\"yaml\") with no yaml-language-server on PATH = not degraded; want degraded")
+	}
+}
+
+// TestServers pins Servers()'s contract against the package-level servers
+// map directly, so a caller like doctor.go can trust it rather than a
+// second hand list: every wired binary appears exactly once, sorted, with
+// every language that dials it grouped under it.
+func TestServers(t *testing.T) {
+	got := Servers()
+
+	byBin := map[string][]string{}
+	var order []string
+	for _, s := range got {
+		if _, ok := byBin[s.Bin]; ok {
+			t.Errorf("Servers() lists %q more than once", s.Bin)
+		}
+		byBin[s.Bin] = s.Languages
+		order = append(order, s.Bin)
+	}
+	if !sort.StringsAreSorted(order) {
+		t.Errorf("Servers() bins are not sorted: %v", order)
+	}
+
+	for lang, spec := range servers {
+		langs := byBin[spec.bin]
+		if !slices.Contains(langs, lang) {
+			t.Errorf("Servers()[%q].Languages = %v; want it to contain %q (servers[%q].bin)", spec.bin, langs, lang, lang)
+		}
+	}
+
+	wantBins := map[string]bool{}
+	for _, spec := range servers {
+		wantBins[spec.bin] = true
+	}
+	for bin := range byBin {
+		if !wantBins[bin] {
+			t.Errorf("Servers() has %q, which no servers map entry's bin matches", bin)
+		}
 	}
 }
