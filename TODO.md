@@ -6,6 +6,15 @@ behaviour that ships lives in [`docs/`](docs/).
 
 ## Known limitations
 
+Both of the first two were re-judged against the CSS, JSON, TOML and SQL
+grammars and are unaffected, so the growing grammar count has not changed the
+calculus. Separator ownership is now an explicit `Language` method rather than a
+name switch, so every adapter states its own answer; all of them except Go
+answer false, because none has a deterministic formatter-enforced blank-line
+convention to hang the rule on. The YAML gap is specific to tree-sitter-yaml's
+external scanner grafting a comment onto whichever block was still open, which
+TOML (flat, bracket-delimited) and CSS (brace-delimited) do not share.
+
 - [ ] Separator ownership stops at `@header` and `@imports`. The same rule was
       verified to generalize to any chain of adjacent top-level declarations —
       each non-final region absorbing its own trailing gap sums exactly, since
