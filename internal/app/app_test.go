@@ -442,6 +442,32 @@ func TestRun_GPGSignShorthandReachesGit(t *testing.T) {
 	qt.Assert(t, qt.StringContains(stderr, "sign"))
 }
 
+// TestRun_PushFailureReportsUpstreamHint covers the --push branch the
+// --dry-run cases above never reach: --dry-run returns before repo.Push is
+// ever called, so it is the only shape of --push this file's other tests
+// exercise, leaving repo.Push, repo.HasUpstream, repo.CurrentBranch, and
+// exitcode.PushFailed's own message at 0% under -short even though the
+// full lane covers all four -- a regression in any of them would pass
+// `go test -short ./...` clean. A repo gittest builds has no remote
+// configured at all, so `git push` fails for the plainest possible
+// reason and HasUpstream's negative answer is real, not assumed.
+func TestRun_PushFailureReportsUpstreamHint(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+
+	stdout, stderr, code := runApp(t, "commit", "--push", "-m", "fix(a): bump", "a.go:A")
+
+	qt.Assert(t, qt.Equals(code, exitcode.PushFailed))
+	// AGENTS.md: a push failure never rolls back the commit that preceded
+	// it -- it already landed by the time Push is even attempted.
+	qt.Assert(t, qt.StringContains(stdout, "a.go:A"))
+	qt.Assert(t, qt.StringContains(gitOut(t, dir, "cat-file", "-p", "HEAD:a.go"), "return 111"))
+	// The concrete, named fix commit.go's own doc comment promises: branch
+	// "main" (gittest.New forces it) and the exact command to run.
+	qt.Assert(t, qt.StringContains(stderr, "main has no upstream tracking branch"))
+	qt.Assert(t, qt.StringContains(stderr, "git push -u origin main"))
+}
+
 // TestRun_PathspecListsEveryFileItStages pins the reported bug: naming a
 // directory listed one aggregate row for the pathspec, so a caller could
 // see that something under it moved but not what. `rgit diff` already broke
