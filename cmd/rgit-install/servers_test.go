@@ -70,14 +70,14 @@ func TestFormatServerStatus(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name string
-		st   serverStatus
-		want string
+		name      string
+		st        serverStatus
+		wantParts []string
 	}{
 		{
-			name: "not found, managed",
-			st:   serverStatus{entry: serverEntry{bin: "gopls", manager: managerGo}},
-			want: "gopls                        not found",
+			name:      "not found, managed",
+			st:        serverStatus{entry: serverEntry{bin: "gopls", manager: managerGo}},
+			wantParts: []string{"gopls", "not found"},
 		},
 		{
 			name: "not found, unmanaged shows the hand-run hint",
@@ -85,7 +85,7 @@ func TestFormatServerStatus(t *testing.T) {
 				bin: "marksman", manager: managerNone,
 				unmanagedHint: "download a release binary from GitHub",
 			}},
-			want: "marksman                     not found -- download a release binary from GitHub",
+			wantParts: []string{"marksman", "not found -- download a release binary from GitHub"},
 		},
 		{
 			name: "found and capable",
@@ -93,7 +93,7 @@ func TestFormatServerStatus(t *testing.T) {
 				entry: serverEntry{bin: "gopls", manager: managerGo}, pathFound: true,
 				foundAt: "/usr/bin/gopls", capable: true,
 			},
-			want: "gopls                        found at /usr/bin/gopls",
+			wantParts: []string{"gopls", "found at /usr/bin/gopls"},
 		},
 		{
 			// A naive presence check would report this line identically to
@@ -105,14 +105,23 @@ func TestFormatServerStatus(t *testing.T) {
 				pathFound: true, foundAt: "/home/x/.cargo/bin/taplo",
 				capable: false, capDetail: `no "lsp" subcommand`,
 			},
-			want: `taplo                        found at /home/x/.cargo/bin/taplo but unusable: no "lsp" subcommand`,
+			wantParts: []string{"taplo", `found at /home/x/.cargo/bin/taplo but unusable: no "lsp" subcommand`},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			qt.Assert(t, qt.Equals(formatServerStatus(tt.st), tt.want))
+			// Substrings, not the whole padded line: the column width is a
+			// layout choice, and pinning it byte-for-byte fails this test
+			// for a change altering nothing a reader depends on. What must
+			// hold is that the binary is named and its status reads
+			// correctly -- including the "unusable" case a naive presence
+			// check would render identically to the capable one.
+			got := formatServerStatus(tt.st)
+			for _, want := range tt.wantParts {
+				qt.Assert(t, qt.StringContains(got, want))
+			}
 		})
 	}
 }
