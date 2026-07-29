@@ -493,6 +493,75 @@ func TestRun_PathspecMatchingNothingStillListsItself(t *testing.T) {
 	qt.Assert(t, qt.StringContains(stdout, "kept\t\t0\t0"))
 }
 
+// assertShellParses feeds script through "<shell> -n", the cheapest
+// possible proof an emitted completion script is not garbage -- a script
+// that fails to parse is the most obvious way this feature could break,
+// and it costs one process fork to rule out. Skips when the shell binary
+// is not on PATH, the same way resolver_test.go treats a missing gopls:
+// a missing cross-check is never a failure.
+func assertShellParses(t *testing.T, shell, script string) {
+	t.Helper()
+	path, err := exec.LookPath(shell)
+	if err != nil {
+		t.Skipf("%s not on PATH", shell)
+	}
+	f := filepath.Join(t.TempDir(), "rgit-completion")
+	if err := os.WriteFile(f, []byte(script), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command(path, "-n", f).CombinedOutput(); err != nil {
+		t.Fatalf("%s -n %s: %v: %s", shell, f, err, out)
+	}
+}
+
+// TestRun_Completion covers the completion subcommand: a script for each
+// supported shell, syntactically valid by its own shell's judgment, and
+// the usage error docs/CODES.md gives every other malformed argument for
+// anything else.
+func TestRun_Completion(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	t.Run("bash", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "completion", "bash")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "complete -F _rgit_completion rgit"))
+		qt.Assert(t, qt.StringContains(stdout, "rgit diff --porcelain"))
+		assertShellParses(t, "bash", stdout)
+	})
+
+	t.Run("zsh", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "completion", "zsh")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "compdef _rgit rgit"))
+		qt.Assert(t, qt.StringContains(stdout, "rgit diff --porcelain"))
+		assertShellParses(t, "zsh", stdout)
+	})
+
+	t.Run("--help prints usage and exits 0", func(t *testing.T) {
+		stdout, _, code := runApp(t, "completion", "--help")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.StringContains(stdout, "usage: rgit completion"))
+	})
+
+	for _, tc := range []struct {
+		name string
+		args []string
+	}{
+		{"unknown shell", []string{"completion", "fish"}},
+		{"missing shell", []string{"completion"}},
+		{"too many args", []string{"completion", "bash", "zsh"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stdout, stderr, code := runApp(t, tc.args...)
+			qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+			qt.Assert(t, qt.Equals(stdout, ""))
+			qt.Assert(t, qt.Not(qt.Equals(stderr, "")))
+		})
+	}
+}
+
 // TestRun_HelpIsPlainText guards a defect that only shows up when something
 // reads the output rather than a person skimming it: pflag renders a string
 // flag's NoOptDefVal into the usage line as [="<value>"], so --gpg-sign's
