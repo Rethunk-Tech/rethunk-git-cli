@@ -37,7 +37,7 @@ help:
 	@echo "  install            build and install via cmd/rgit-install (PREFIX=dir to override)"
 	@echo "  test               go test ./...            (full suite, builds and execs the binary)"
 	@echo "  test-short         go test -short ./...      (unit lane -- the one a regression must fail)"
-	@echo "  test-race          go test -race ./...       (jsonrpc2, the LSP spawn lock)"
+	@echo "  test-race          go test -race ./...       (full tree -- CI's own race job scopes to internal/lsp: jsonrpc2, the LSP spawn lock)"
 	@echo "  cover              coverage for the full suite, -coverpkg=./... as CONTRIBUTING.md requires"
 	@echo "  cover-short        coverage for the -short lane"
 	@echo "  fix-diff           go fix -diff ./...        (preview; read before applying)"

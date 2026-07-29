@@ -47,9 +47,12 @@ stale.
 path plus the edge cases that have actually bitten — no permutation laundry
 lists.
 
-These gates, plus `golangci-lint`, run in
+The two test lanes below, plus `golangci-lint`, run in
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on every push and pull
-request, so this is enforced, not just documented.
+request — that much is enforced, not just documented. The ≤30s suite-time
+budget and the coverage numbers in [§ Coverage](#coverage) are not: CI runs
+no timing check and no coverage step, so both stay a review discipline
+rather than a CI gate.
 
 There are two lanes, and which one a case belongs in is the first decision:
 
