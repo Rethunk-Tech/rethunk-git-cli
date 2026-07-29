@@ -92,10 +92,10 @@ func CrossCheckExtents(ctx context.Context, sess *lsp.Session, lang Language, re
 // per-anchor and batch forms cannot independently drift on what "not
 // found" or "a mismatch" means for identical input: both dial, check
 // res.Pseudo or an empty list, and fetch symbols entirely on their own,
-// but neither decides a verdict without coming through here. LOW9's own
-// parity table (crosscheck_test.go) drives this directly with a shared
-// mock symbol list, which is the closest a mock can get to proving the two
-// public forms agree without a live dial.
+// but neither decides a verdict without coming through here.
+// TestCrossCheckVerdict_AgreesPerAnchorAndBatch (crosscheck_test.go) drives
+// this directly with a shared mock symbol list, which is the closest a
+// mock can get to proving the two public forms agree without a live dial.
 func crossCheckVerdict(src []byte, list []*Resolution, symbols []lsp.Symbol) (degraded bool, mismatches []error) {
 	// evaluated tracks whether any resolution actually reached
 	// MatchAndCompare. A list that is non-empty but every entry nil or
@@ -144,7 +144,30 @@ func MatchAndCompare(src []byte, res *Resolution, symbols []lsp.Symbol) (found b
 		return false, nil
 	}
 
-	wantStart, wantEnd := lineOf(src, res.DeclOnly.Start), lineOf(src, res.DeclOnly.End)
+	wantStart, startOK := lineOf(src, res.DeclOnly.Start)
+	wantEnd, endOK := lineOf(src, res.DeclOnly.End)
+	if !startOK || !endOK {
+		// Not a real tree-sitter/language-server disagreement: res itself
+		// names an offset past the end of src, which every offset this
+		// package hands lineOf today cannot do -- a Resolution's DeclOnly
+		// extent always comes from a Declaration parsed out of this exact
+		// src (index.go's buildIndex). Reaching here means that invariant
+		// itself broke -- a corrupted *Resolution, not a legitimate input --
+		// so it is reported plainly, the same "internal inconsistency"
+		// phrasing internal/diff's own resolveRegions uses for its own
+		// unreachable-in-practice guard, rather than folded into
+		// exitcode.ExtentMismatch below: that code and its message are
+		// reserved for an actual tree-sitter/language-server range
+		// disagreement, and reusing it here (with no real TreeSitterRange
+		// or LSPRange to report) would misdescribe corruption as one.
+		// found=true, not false: crossCheckVerdict drops err entirely on
+		// found=false (that shape means "the server never named this
+		// symbol", nothing to report), and silently discarding this is
+		// exactly the "worse than failing loudly" outcome resolveRegions'
+		// own comment argues against.
+		return true, fmt.Errorf("resolve: internal inconsistency: %q declOnly extent [%d,%d) exceeds source length %d",
+			res.Anchor, res.DeclOnly.Start, res.DeclOnly.End, len(src))
+	}
 	if wantStart == match.StartLine && wantEnd == match.EndLine {
 		return true, nil
 	}
@@ -159,9 +182,13 @@ func MatchAndCompare(src []byte, res *Resolution, symbols []lsp.Symbol) (found b
 
 // lineOf converts a byte offset to a 0-based line number, matching LSP's
 // Position.Line convention directly so callers never juggle a 1-based/
-// 0-based mismatch across the comparison.
-func lineOf(src []byte, offset uint) uint32 {
-	return uint32(bytes.Count(src[:offset], []byte{'\n'}))
+// 0-based mismatch across the comparison. ok=false means offset exceeds
+// len(src), which src[:offset] would otherwise panic on rather than report.
+func lineOf(src []byte, offset uint) (line uint32, ok bool) {
+	if offset > uint(len(src)) {
+		return 0, false
+	}
+	return uint32(bytes.Count(src[:offset], []byte{'\n'})), true
 }
 
 func formatRange(start, end uint32) string {

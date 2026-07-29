@@ -318,7 +318,12 @@ func yamlKeyName(src []byte, key *ts.Node) (string, bool) {
 		// future grammar version ever puts trivia inside flow_node itself.
 		return nodeText(src, &children[0]), true
 	case "double_quote_scalar", "single_quote_scalar":
-		return stripQuotes(nodeText(src, key))
+		// Same reasoning as plain_scalar just above, and for the same
+		// reason must not read key (the outer flow_node) instead: doing so
+		// here stayed byte-identical only because flow_node wraps nothing
+		// else today, the exact coincidence that comment warns against
+		// trusting.
+		return stripQuotes(nodeText(src, &children[0]))
 	default:
 		return "", false
 	}

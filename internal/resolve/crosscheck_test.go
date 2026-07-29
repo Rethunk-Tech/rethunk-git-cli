@@ -6,10 +6,12 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
 )
 
-// TestCrossCheckVerdict_AgreesPerAnchorAndBatch is LOW9's parity guard:
-// commit's per-anchor CrossCheckExtent and diff's batch CrossCheckExtents
-// must never independently drift on what "degraded" or "a mismatch" means
-// for an identical resolution against an identical symbol table. Neither
+// TestCrossCheckVerdict_AgreesPerAnchorAndBatch guards the invariant this
+// package's two public cross-check entry points must never independently
+// drift on: commit's per-anchor CrossCheckExtent and diff's batch
+// CrossCheckExtents must never disagree about what "degraded" or "a
+// mismatch" means for an identical resolution against an identical symbol
+// table. Neither
 // function is driven directly here -- both dial a real *lsp.Session before
 // ever reaching a verdict, and Session's client cache is unexported to
 // package lsp, so there is no seam to hand either one a mock client
@@ -86,5 +88,31 @@ func TestCrossCheckVerdict_AgreesPerAnchorAndBatch(t *testing.T) {
 	if batchMismatches[0].Error() != soloMismatches[0].Error() {
 		t.Errorf("batch mismatch = %q; want the identical per-anchor verdict %q",
 			batchMismatches[0].Error(), soloMismatches[0].Error())
+	}
+}
+
+// TestMatchAndCompare_CorruptedOffsetFailsLoudly guards lineOf's own bounds
+// check. Every DeclOnly offset this package hands MatchAndCompare today
+// comes from a Declaration parsed out of the exact src passed alongside it
+// (index.go's buildIndex), so this is unreachable in practice -- but a
+// *Resolution naming an offset past len(src) must be reported, not panic
+// slicing src[:offset], and not be silently swallowed the way a genuine
+// "server never named this symbol" (found=false) answer already is.
+func TestMatchAndCompare_CorruptedOffsetFailsLoudly(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("func A() int { return 1 }\n")
+	symbols := []lsp.Symbol{{Name: "A", StartLine: 0, EndLine: 0}}
+	corrupted := &Resolution{Anchor: "A", DeclOnly: Extent{Start: 0, End: uint(len(src) + 100)}}
+
+	found, err := MatchAndCompare(src, corrupted, symbols)
+	if !found {
+		t.Error("found = false; want true so the caller does not drop err on the floor")
+	}
+	if err == nil {
+		t.Fatal("err = nil; want a reported internal-inconsistency error")
+	}
+	if _, ok := err.(*ResolveError); ok {
+		t.Errorf("err = %T (%v); want a plain error, not exitcode.ExtentMismatch's own -- this is not a real tree-sitter/language-server disagreement", err, err)
 	}
 }
