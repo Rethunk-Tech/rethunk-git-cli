@@ -157,14 +157,11 @@ kills it on close — nothing persists, and the cross-check is live on the
 first invocation. The transport survey behind this split is in
 [`specs/design.md`](../specs/design.md#transport-support-per-server).
 
-**TOML and SQL stay `[ts-only]` permanently, for different reasons.** `taplo`
-completes the LSP handshake once built with `-with-servers`' `--features
-lsp`, but its own ranges genuinely disagree with tree-sitter's on an
-ordinary nested TOML table — a measured range mismatch, not a missing
-feature, so installing `taplo` does not enable a TOML cross-check. SQL has no
-maintained tool that speaks `documentSymbol` at all. Both are deliberate;
-the measurements behind each are in
-[`specs/design.md` § Cross-check survey](../specs/design.md#cross-check-survey-the-six-v2-grammars).
+**TOML and SQL stay `[ts-only]` permanently** — see
+[`LIMITATIONS.md`](LIMITATIONS.md#language-server-coverage) for why. `taplo`
+still completes the LSP handshake once built with `-with-servers`'
+`--features lsp`, and other tooling can use it; it just never drives
+`rgit`'s own cross-check.
 
 ### Installing and updating servers automatically
 

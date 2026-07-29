@@ -51,6 +51,7 @@ Start with [HUMANS.md](HUMANS.md) to run it, or
 | [docs/USAGE.md](docs/USAGE.md) | Commands, argument grammar, flags |
 | [docs/ANCHORS.md](docs/ANCHORS.md) | Anchor syntax, extents, pseudo-anchors, special paths |
 | [docs/CODES.md](docs/CODES.md) | Exit codes and `--porcelain` record formats |
+| [docs/LIMITATIONS.md](docs/LIMITATIONS.md) | What `rgit` does not do, and why |
 | [AGENTS.md](AGENTS.md) | Internals, invariants, delegation boundary |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Commits, tests, dependency policy |
 | [specs/design.md](specs/design.md) | Design record and the measurements behind it |
@@ -60,9 +61,10 @@ Start with [HUMANS.md](HUMANS.md) to run it, or
 
 Both commands are implemented for Go, TypeScript/JavaScript, Python, Markdown,
 Shell, YAML, CSS, JSON, and TOML, plus SQL in a build with the `rgit_sql` tag,
-with the language-server cross-check live for Go, TypeScript, Python, and
-Shell. See [specs/design.md](specs/design.md) for what was measured and
-[TODO.md](TODO.md) for known limitations and what is deferred.
+with the language-server cross-check live for Go, TypeScript/TSX, Python,
+Shell, YAML, JSON, CSS, and Markdown. See [specs/design.md](specs/design.md)
+for what was measured, [docs/LIMITATIONS.md](docs/LIMITATIONS.md) for what
+`rgit` does not do, and [TODO.md](TODO.md) for what's deferred.
 
 ## License
 

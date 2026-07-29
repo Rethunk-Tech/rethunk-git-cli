@@ -5,8 +5,8 @@ measurements behind them, live in [`specs/design.md`](specs/design.md);
 behaviour that ships lives in [`docs/`](docs/).
 
 Limitations that ship — unsupported languages, excluded cross-build targets,
-constructs no anchor reaches — are documented in [`docs/`](docs/) beside the
-behaviour they qualify, not listed here.
+constructs no anchor reaches — are documented in
+[`docs/LIMITATIONS.md`](docs/LIMITATIONS.md), not listed here.
 
 ## Deferred
 

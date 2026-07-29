@@ -35,7 +35,8 @@ Read whichever one the change touches; none is loaded for you.
 | [docs/ANCHORS.md](docs/ANCHORS.md) | Anchor syntax, extents, pseudo-anchors, special paths |
 | [docs/CODES.md](docs/CODES.md) | Exit codes and `--porcelain` record formats — the machine contract |
 | [docs/INSTALL.md](docs/INSTALL.md) | Build, installer, cross builds, language servers, env vars, verify |
-| [TODO.md](TODO.md) | Backlog — known limitations, v2 grammars, deferrals |
+| [docs/LIMITATIONS.md](docs/LIMITATIONS.md) | What `rgit` does not do, and why |
+| [TODO.md](TODO.md) | Backlog — v2 grammars, deferrals |
 
 `docs/` ships with the tool. `specs/` does not — the design record lives there.
 

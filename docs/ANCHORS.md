@@ -184,19 +184,15 @@ Ten grammars ship unconditionally; an eleventh, SQL, ships only behind the
 | Markdown | `.md`, `.markdown` | Headings and their sections only — inline constructs such as emphasis, links, and code spans are not parsed and have nothing to address |
 | Shell | `.sh`, `.bash` | Functions and top-level variable assignments. Shell has no containers, so a redefined function disambiguates by ordinal the same way two same-named Go functions would |
 | YAML | `.yaml`, `.yml` | Mapping keys, container-qualified one level the same way a Markdown heading is. Sequence items and anything inside a flow-style `{...}`/`[...]` value have no name to address |
-| CSS | `.css` | Selectors and at-rules. `.scss`/`.sass` are deliberately excluded — no SCSS/SASS tree-sitter grammar ships Go bindings ([`specs/design.md`](../specs/design.md#dependencies)) |
+| CSS | `.css` | Selectors and at-rules. `.scss`/`.sass` unsupported — see [`LIMITATIONS.md`](LIMITATIONS.md#unsupported-languages) |
 | JSON | `.json` | Object key paths, container-qualified one level the same way a YAML mapping key is. Arrays and non-object documents have nothing to address |
 | TOML | `.toml` | Key paths and `[table]`/`[[array]]` headers, container-qualified one level. Inline tables and arrays have nothing to address inside them |
 | SQL | `.sql` | `CREATE TABLE`/`VIEW`/`FUNCTION`/`INDEX`/`TRIGGER`/`TYPE`, schema-qualified one level. Ships behind the `rgit_sql` build tag ([`INSTALL.md`](INSTALL.md#sql-support)) |
 
-A `---`-separated multi-document YAML stream has nothing addressable by key at
-all — name the path instead — rather than guessing which document a bare key
-path means. A comment sitting between the end of a nested value and the next,
-more shallowly indented key is excluded from every key's own anchor: measured
-directly against tree-sitter-yaml, its own scanner grafts such a comment onto
-whichever block was still open when it read the comment token, regardless of
-the comment's own written column, so neither neighbour's extent claims it
-(still reachable via `@toplevel` or the whole file).
+A `---`-separated multi-document YAML stream, and a comment sitting between
+the end of a nested value and the next, more shallowly indented key, are both
+unaddressable by key — see
+[`LIMITATIONS.md`](LIMITATIONS.md#constructs-no-anchor-reaches) for why.
 
 A CSS selector's bare name is its own text, exactly as written —
 `.button-primary`, `#app`, `div`, or a comma-joined list like `.a, .b`, which
@@ -303,14 +299,12 @@ uncommon case at the cost of a bounded read through `git cat-file`.
 The language-server cross-check covers Go, TypeScript/TSX, Python, Shell,
 YAML, JSON, CSS, and Markdown
 ([`docs/INSTALL.md#language-servers`](INSTALL.md#language-servers)). TOML and
-SQL (when built with `rgit_sql`) are shipped grammars with no server entry —
-measured, not assumed: the one installed TOML server's ranges genuinely
-disagree with the extent `rgit` stages on an ordinary nested table, and no
-maintained SQL language server exists at all (`specs/design.md`'s cross-check
-survey). Both resolve with tree-sitter alone, permanently in `[ts-only]`
-mode, and that is a supported result, not a degraded one. Exit 9 is reserved
-for a language with no grammar at all (Rust, HTML, and anything else not
-listed above); name the path instead.
+SQL stay `[ts-only]` permanently instead, which is a supported result, not a
+degraded one — see
+[`LIMITATIONS.md`](LIMITATIONS.md#language-server-coverage) for why. Exit 9
+is reserved for a language with no grammar at all — see
+[`LIMITATIONS.md`](LIMITATIONS.md#unsupported-languages) for the current
+examples; name the path instead.
 
 The grammars deferred to v2 are listed in [`../TODO.md`](../TODO.md).
 
