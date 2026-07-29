@@ -112,8 +112,11 @@ with a pathspec (`rgit commit script.sh`); `--sym` cannot express a mode change.
 `rgit --help`, `rgit -h`, and `rgit help` print the top-level command list on
 stdout and exit 0. `rgit diff --help` / `-h` and `rgit commit --help` / `-h`
 print that command's own flags the same way, generated from the flag set itself
-so the two cannot drift. A bare `rgit` (no command at all) is a usage error, not
-a help request — see § Exit codes.
+so the two cannot drift. `rgit languages --help`, `rgit doctor --help`, and
+`rgit completion --help` (each also accepting `-h`) print their own
+hand-written usage text instead — surfaces small enough that a generated
+rendering was not worth building. A bare `rgit` (no command at all) is a usage
+error, not a help request — see § Exit codes.
 
 `rgit --version` prints `rgit <version>` on its first line and exits 0. The
 version is stamped at build time (`-ldflags "-X main.version=vX.Y.Z"`) and
@@ -178,6 +181,11 @@ everywhere else. Install instructions: [`INSTALL.md`](INSTALL.md#shell-completio
 
 ## Flags
 
+`commit` and `diff`'s own flags — the two subcommands with a real flag
+surface. `languages` takes only `--porcelain`/`--help` (§ Languages above,
+[`CODES.md`](CODES.md#output-records)); `doctor` and `completion` take no
+flags beyond `--help`/`-h` (`completion` also takes its shell argument).
+
 | Flag | Behavior |
 | --- | --- |
 | `--sym FILE:NAME` | Explicit anchor form; equivalent to a bare `FILE:NAME` positional. Repeatable. |
@@ -228,18 +236,14 @@ output is passed through too. `--dry-run` prints the same listing, so a preview
 and the commit it previews are comparable line for line, and neither needs a
 follow-up `git show` or `rgit diff` to interpret.
 
-`--porcelain` replaces both with stable tab-separated records:
+`--porcelain` replaces both with stable tab-separated records — schema and
+rationale in [`CODES.md`](CODES.md#output-records):
 
 ```text
-FILE<TAB>SYMBOL<TAB>ADDED<TAB>DELETED
 auth.go<TAB>ValidateToken<TAB>12<TAB>3
-package.json<TAB><TAB>4<TAB>1
 ```
 
-`SYMBOL` is empty for a pathspec target, as in `rgit diff --porcelain`. There
-is no `STATUS` column: an unchanged target is omitted from the listing
-entirely, so every record would carry the same value. The records are
-identical for `--dry-run` and for the commit it previews.
+The records are identical for `--dry-run` and for the commit it previews.
 
 Repeatable `-m` gives subject and body without embedding newlines in one shell
 argument:
