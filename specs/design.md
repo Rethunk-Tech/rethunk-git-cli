@@ -383,6 +383,81 @@ installed language server the way `gopls`/`vtsls`/`pyright` are, and there was
 no measured need strong enough to justify probing for a fourth stdio process
 sight unseen; YAML always resolves in `[ts-only]` mode, the same as Markdown.
 
+**CSS was next in the v2 backlog by measured demand order (TODO.md), not
+re-surveyed independently — it was already first in that list.** Every node
+shape below was measured against a compiled parse tree and cross-checked
+against `tree-sitter-css` v0.25.0's own `src/node-types.json`, not assumed
+from `grammar.js`.
+
+**tree-sitter-css declares no fields at all.** Measured: `rule_set`,
+`at_rule`, `media_statement`, `declaration`, `import_statement`, and every
+other statement kind report an empty `"fields"` object in
+`node-types.json` — unlike Go, Python, or JSON, every shape `lang_css.go`
+reads is by node kind and position, the same positional discipline
+`lang_yaml.go`'s field-less `block_mapping_pair` children already required.
+
+**A selector's bare name is its own text, exactly as written.** `rule_set`'s
+own children are `selectors` (holding the full, possibly comma-joined,
+selector list as one node — `.a, .b` is one `selectors` node, not two) and
+`block`; `.button-primary`, `#app`, `div`, and `.a, .b` all stage as their own
+literal text with no decomposition, per the brief's own instruction. Nested
+rule sets inside an `@media`/`@supports`/`@keyframes` block are not descended
+into and get no anchor of their own — the same "named nested declarations do
+not clear the bar" reasoning already applied above to Go/TypeScript/Python's
+anonymous function literals, closed as not worth building for v1 rather than
+deferred.
+
+**At-rules are named by their full prelude, not the bare keyword.** Measured
+across every top-level statement kind this grammar defines
+(`media_statement`, `supports_statement`, `keyframes_statement`, generic
+`at_rule`, `charset_statement`, `namespace_statement`, `scope_statement`): a
+bare keyword collides on every at-rule of the same kind in a file with more
+than one — two `@media` blocks are the ordinary case, not a corner — where
+the prelude (`@media (max-width: 600px)`) is what actually distinguishes
+them. The name is the statement's own text from its start up to whichever
+comes first: its body's own start byte (`block` for four of the seven kinds
+above, measured as each one's own last named child; `keyframe_block_list` for
+`keyframes_statement`, a distinctly-named body the same rule still catches)
+or the statement's own end byte for the three body-less kinds
+(`charset_statement`, `import_statement`, `namespace_statement`, none of
+which ever have a block, measured), trimmed of trailing whitespace and the
+`;` a body-less statement ends with. A generic at-rule with no prelude at all
+(`@font-face { ... }`) degrades cleanly to the bare keyword, which is exactly
+what a caller would expect to type for it.
+
+**`@import` is a real, unambiguous node kind, so `@imports` is meaningful
+here** — unlike shell's `source`, which shares its node kind with every other
+command, `import_statement` needs no `ImportMatcher` seam. This also means an
+`@import` is reachable only through `@imports`, never as a bare anchor of its
+own: `import_statement` is deliberately excluded from `Declarations()`, the
+same exclusion Go's `import_declaration` already gets, and for the same
+reason — `toplevelExtent`'s own contract is that a `Language`'s
+`Declarations` never returns entries for import material, or `@header`/
+`@imports`/`@toplevel` would claim overlapping bytes. `@toplevel`'s
+first-through-last-declaration formula additionally assumes imports are
+contiguous ahead of every declaration, the same assumption Go/TypeScript/
+Python's own grammars enforce structurally; CSS's grammar does not enforce
+`@import`'s position, so a caller who writes one after other rules (invalid
+per the CSS spec, which requires `@import` before any other rule besides
+`@charset`, but not rejected by this grammar) would see it fall inside
+`@toplevel`'s span rather than being excluded — not fixed here, since the
+spec-conformant position was what standard tooling like `stylelint`
+already enforces upstream of `rgit`.
+
+**Pseudo-anchors shadow a same-named at-rule unconditionally.** A generic
+at-rule can be spelled anything, including `@header` — CSS's own at-rule
+keyword grammar has no reserved-word list — so `auth.css:@header` genuinely
+collides with the pseudo-anchor `@header`. Verified directly against
+`resolver.go`: `File.Resolve` calls `isPseudoAnchor` before it ever consults
+the symbol index, so the pseudo-anchor always wins; the colliding at-rule
+still appears in `DeclOrder`'s source-order listing under its own qualified
+name, but no spelling of `Resolve` can ever reach it. Documented as a sharp
+edge in `docs/ANCHORS.md` rather than worked around, since resolving it would
+mean either renaming the caller's pseudo-anchors (a breaking change to every
+other language) or teaching the resolver to fall back from a failed
+pseudo-anchor lookup to the symbol index (a general behavior change, not a
+CSS-specific fix, and outside this deliverable's scope).
+
 ## Argument grammar
 
 Symbol anchors need no flag because **all git pathspec magic is leading-colon**
@@ -444,6 +519,7 @@ built.
 | `tree-sitter-grammars/tree-sitter-markdown` | v0.5.1 | Markdown sections; import path is `<module>/bindings/go`, block grammar only |
 | `github.com/tree-sitter/tree-sitter-bash` | v0.25.1 | Shell function/variable anchors; import path is `<module>/bindings/go` |
 | `github.com/tree-sitter-grammars/tree-sitter-yaml` | v0.7.2 | YAML key-path anchors; import path is `<module>/bindings/go` |
+| `github.com/tree-sitter/tree-sitter-css` | v0.25.0 | CSS selector/at-rule anchors; import path is `<module>/bindings/go` |
 
 **Markdown earns its place two ways, both verified against the grammar's own
 `node-types.json`, not assumed.** It is the one language present in every
@@ -571,3 +647,21 @@ Adding the shell grammar on top of that: **13336 KB** stripped, up from the
 same **12004 KB** — **+1332 KB, +11.1%**, the largest single-grammar jump
 recorded here, for the reason given above (bash's own grammar and scanner are
 simply bigger, not padded with anything unused).
+
+**CSS's grammar earns its place the same two ways as every other grammar in
+this table, verified the same way.** v0.25.0 is both the latest tag on the
+module proxy and the newest one that still ships `bindings/go` — checked
+directly against that tag's own file tree (`bindings/go/binding.go`, package
+`tree_sitter_css`, exporting `Language()`), the same check markdown's
+`v0.5.2` regression showed is never safe to skip. `go tool nm` on an
+unstripped build shows exactly one grammar's worth of `tree_sitter_css*`
+symbols (`tree_sitter_css`, its external scanner's four entry points, and the
+cgo glue) — no second, unreferenced grammar rides along the way
+`tree_sitter_markdown_inline` does.
+
+Measured **+128 KB (+0.9%)**, `go build -ldflags="-s -w"` on the committed
+tree immediately before this dependency (`git archive HEAD`, built in
+isolation: **13568 KB**) and after adding `tree-sitter-css` (**13696 KB**) —
+the smallest single-grammar jump recorded here, smaller even than YAML's
++196 KB, because CSS's own grammar and external scanner are simply the
+smallest of the six measured so far.

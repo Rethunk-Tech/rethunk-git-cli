@@ -9,6 +9,7 @@ import (
 	tsmd "github.com/tree-sitter-grammars/tree-sitter-markdown/bindings/go"
 	tsyaml "github.com/tree-sitter-grammars/tree-sitter-yaml/bindings/go"
 	tsbash "github.com/tree-sitter/tree-sitter-bash/bindings/go"
+	tscss "github.com/tree-sitter/tree-sitter-css/bindings/go"
 )
 
 // The compiled grammars, in one place so each adapter calls a constructor
@@ -45,3 +46,9 @@ func bashGrammar() *ts.Language { return ts.NewLanguage(tsbash.Language()) }
 
 // yamlGrammar parses .yaml and .yml.
 func yamlGrammar() *ts.Language { return ts.NewLanguage(tsyaml.Language()) }
+
+// cssGrammar parses .css. Not .scss/.sass: no SCSS/SASS tree-sitter grammar
+// ships Go bindings as of this writing (specs/design.md § Dependencies) --
+// an upstream gap, not a scoping choice, the same distinction lang_shell.go
+// draws for .zsh.
+func cssGrammar() *ts.Language { return ts.NewLanguage(tscss.Language()) }

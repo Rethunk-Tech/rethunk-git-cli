@@ -1453,6 +1453,126 @@ foo() {
 	qt.Assert(t, qt.IsFalse(ok))
 }
 
+func TestResolve_CSS(t *testing.T) {
+	t.Parallel()
+	// A realistic small stylesheet: a leading comment, three selector
+	// shapes, an @import, an @media block whose nested rule is not itself
+	// addressable, and a generic at-rule with no prelude -- byte extents
+	// pinned by running the resolver against this exact fixture, not
+	// derived from the grammar's docs (CONTRIBUTING.md § Tests).
+	src := []byte(`/* Global styles */
+
+@import "reset.css";
+
+.btn {
+  color: red;
+}
+
+#app {
+  display: flex;
+}
+
+div {
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .btn { color: blue; }
+}
+
+@font-face {
+  font-family: "MyFont";
+}
+`)
+
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", src, "@header"), "/* Global styles */"))
+
+	// A selector's bare name is its own text as written -- the leading "."
+	// or "#" included, not stripped the way a Go identifier never carries
+	// punctuation to begin with.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", src, ".btn"), ".btn {\n  color: red;\n}"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", src, "#app"), "#app {\n  display: flex;\n}"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", src, "div"), "div {\n  margin: 0;\n}"))
+
+	// @imports spans the whole import_statement, semicolon included -- the
+	// pseudo-anchor's extent, not the trimmed name cssAtRuleName computes
+	// for a bare-addressable at-rule.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", src, "@imports"), `@import "reset.css";`))
+
+	// An @import is reachable only via @imports, never as a bare anchor of
+	// its own name -- the same exclusion Go's import_declaration gets.
+	lang, ok := resolve.ForExtension(".css")
+	qt.Assert(t, qt.IsTrue(ok))
+	_, err := resolve.Resolve(lang, src, `@import "reset.css"`)
+	qt.Assert(t, qt.IsNotNil(err))
+	var unresolvable *resolve.ResolveError
+	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
+	qt.Assert(t, qt.Equals(unresolvable.Code, exitcode.AnchorUnresolvable))
+
+	// An at-rule's bare name is its full prelude, not the bare keyword --
+	// two "@media" blocks in one file would otherwise collide even though
+	// their preludes differ. The nested ".btn" inside the block is not
+	// itself addressable; naming "@media (max-width: 600px)" claims the
+	// whole thing, block included.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", src, "@media (max-width: 600px)"),
+		"@media (max-width: 600px) {\n  .btn { color: blue; }\n}"))
+
+	// A generic at-rule with no prelude at all degrades to the bare
+	// keyword.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", src, "@font-face"),
+		"@font-face {\n  font-family: \"MyFont\";\n}"))
+
+	// @toplevel spans every addressable rule, first through last --
+	// excluding the leading comment (@header) and the @import (reachable
+	// only via @imports).
+	toplevel := mustResolveExt(t, ".css", src, "@toplevel")
+	qt.Assert(t, qt.StringContains(toplevel, ".btn {\n  color: red;\n}"))
+	qt.Assert(t, qt.StringContains(toplevel, "@font-face"))
+	qt.Assert(t, qt.Not(qt.StringContains(toplevel, "Global styles")))
+	qt.Assert(t, qt.Not(qt.StringContains(toplevel, "@import")))
+
+	// .css is claimed; .scss and .sass deliberately are not -- no SCSS/SASS
+	// tree-sitter grammar ships Go bindings (specs/design.md § Dependencies).
+	_, ok = resolve.ForExtension(".scss")
+	qt.Assert(t, qt.IsFalse(ok))
+	_, ok = resolve.ForExtension(".sass")
+	qt.Assert(t, qt.IsFalse(ok))
+}
+
+// TestResolve_CSSPseudoAnchorShadowsAtRule pins the deliberate sharp edge
+// docs/ANCHORS.md documents: an at-rule spelled like a pseudo-anchor
+// ("@header") never resolves as itself, because Resolve checks
+// isPseudoAnchor before it ever consults the symbol index
+// (resolver.go). The colliding at-rule is not merely deprioritized -- it is
+// unreachable by that spelling under any circumstance.
+func TestResolve_CSSPseudoAnchorShadowsAtRule(t *testing.T) {
+	t.Parallel()
+	src := []byte(`/* real header */
+
+.btn {
+  color: red;
+}
+
+@header {
+  color: green;
+}
+`)
+
+	lang, ok := resolve.ForExtension(".css")
+	qt.Assert(t, qt.IsTrue(ok))
+	res, err := resolve.Resolve(lang, src, "@header")
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsTrue(res.Pseudo))
+	qt.Assert(t, qt.Equals(string(src[res.Extent.Start:res.Extent.End]), "/* real header */"))
+
+	// The colliding at-rule still exists in source order -- DeclOrder lists
+	// it under its own qualified name "@header" -- but that spelling can
+	// never resolve to it: isPseudoAnchor wins first, every time.
+	order, err := resolve.DeclOrder(lang, src)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.DeepEquals(order, []string{".btn", "@header"}))
+}
+
 func TestResolve_ForPathShebangFallback(t *testing.T) {
 	t.Parallel()
 	// A recognized extension is authoritative and never even looks at

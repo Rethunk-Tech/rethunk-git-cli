@@ -172,7 +172,7 @@ binary or non-parseable files. Name the path instead. Behaviour per kind:
 
 ## Language support
 
-Six grammars ship, claiming these extensions:
+Seven grammars ship, claiming these extensions:
 
 | Grammar | Extensions | Addresses |
 | --- | --- | --- |
@@ -183,6 +183,7 @@ Six grammars ship, claiming these extensions:
 | Markdown | `.md`, `.markdown` | Headings and their sections only — inline constructs such as emphasis, links, and code spans are not parsed and have nothing to address |
 | Shell | `.sh`, `.bash` | Functions and top-level variable assignments. Shell has no containers, so a redefined function disambiguates by ordinal the same way two same-named Go functions would |
 | YAML | `.yaml`, `.yml` | Mapping keys, container-qualified one level the same way a Markdown heading is. Sequence items and anything inside a flow-style `{...}`/`[...]` value have no name to address |
+| CSS | `.css` | Selectors and at-rules. `.scss`/`.sass` are deliberately excluded — no SCSS/SASS tree-sitter grammar ships Go bindings ([`specs/design.md`](../specs/design.md#dependencies)) |
 
 A `---`-separated multi-document YAML stream has nothing addressable by key at
 all — name the path instead — rather than guessing which document a bare key
@@ -192,6 +193,31 @@ directly against tree-sitter-yaml, its own scanner grafts such a comment onto
 whichever block was still open when it read the comment token, regardless of
 the comment's own written column, so neither neighbour's extent claims it
 (still reachable via `@toplevel` or the whole file).
+
+A CSS selector's bare name is its own text, exactly as written —
+`.button-primary`, `#app`, `div`, or a comma-joined list like `.a, .b`, which
+stages as one anchor rather than two. An at-rule (`@media`, `@supports`,
+`@keyframes`, `@font-face`, and any custom at-rule the grammar accepts)
+addresses by its full prelude, not the bare keyword —
+`@media (max-width: 600px)` — because two at-rules of the same kind in one
+file are the ordinary case, not a corner, and only the prelude tells them
+apart; an at-rule with no prelude at all (`@font-face { ... }`) degrades to
+the bare keyword. Nested rules inside an `@media`/`@supports`/`@keyframes`
+block are not descended into and have no anchor of their own — naming the
+enclosing at-rule stages the whole block. `@import` is a real, distinct node
+kind, so `@imports` is meaningful for CSS, unlike Markdown, YAML, JSON, or
+TOML — but an `@import` is reachable only through `@imports`, never as a
+bare anchor of its own, the same way a Go file's imports are invisible to
+its own `Declarations`.
+
+**A generic at-rule can be spelled anything, including a pseudo-anchor's own
+name** — CSS reserves no at-rule keywords, so `styles.css:@header` is legal
+CSS and genuinely collides with the pseudo-anchor `@header`. The
+pseudo-anchor always wins: `rgit` checks for `@header`/`@imports`/`@toplevel`
+before it ever consults a file's own symbols, so a same-spelled at-rule is
+never reachable by that name under any circumstance — not merely
+deprioritized. It still shows up in `rgit diff`'s ordinary listing under its
+own qualified name; only the anchor spelling `@header` itself is shadowed.
 
 A file whose extension claims no grammar is matched by its shebang instead, so
 an extensionless `bin/` script or git hook is addressable like any other file.
