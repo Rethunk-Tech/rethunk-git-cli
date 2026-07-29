@@ -36,6 +36,7 @@ func (c *countingRWC) Close() error {
 // path. An expired context against an unresponsive peer forces Initialize
 // to fail fast without depending on any real server.
 func TestNewClient_ClosesConnExactlyOnceOnHandshakeFailure(t *testing.T) {
+	t.Parallel()
 	clientConn, serverConn := net.Pipe()
 	defer func() { _ = serverConn.Close() }()
 	rwc := &countingRWC{Conn: clientConn}
@@ -67,6 +68,7 @@ func TestNewClient_ClosesConnExactlyOnceOnHandshakeFailure(t *testing.T) {
 }
 
 func TestLanguageKindFor(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		path   string
 		want   protocol.LanguageKind
@@ -117,6 +119,7 @@ func TestLanguageKindFor(t *testing.T) {
 // protocol variant directly, but it would fall through the same type
 // switch to the same default case this covers.
 func TestFlatten_UnknownShapeIsNotOK(t *testing.T) {
+	t.Parallel()
 	var result protocol.DocumentSymbolResult // nil: the "null" response shape
 	syms, ok := flatten(result)
 	if ok {
@@ -133,6 +136,7 @@ func TestFlatten_UnknownShapeIsNotOK(t *testing.T) {
 // error just because this package is strict about shapes it cannot
 // account for.
 func TestFlatten_RecognizedEmptyIsStillOK(t *testing.T) {
+	t.Parallel()
 	syms, ok := flatten(protocol.DocumentSymbolSlice{})
 	if !ok {
 		t.Error("flatten(DocumentSymbolSlice{}) ok = false; want true")
@@ -158,6 +162,7 @@ func TestFlatten_RecognizedEmptyIsStillOK(t *testing.T) {
 // guarantee (CONTRIBUTING.md) -- it must fail here, unlike the server-dial
 // tests in servers_test.go which need a live one.
 func TestTrimTrailingBlankLines(t *testing.T) {
+	t.Parallel()
 	src := []byte("build:\n  a: 1\n\ntest:\n  b: 2\n")
 	// Lines: 0 "build:", 1 "  a: 1", 2 "", 3 "test:", 4 "  b: 2", then a
 	// trailing empty element from the final newline at index 5.

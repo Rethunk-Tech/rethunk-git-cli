@@ -19,6 +19,7 @@ import (
 // calls a mock the way its author expected, exactly the class of defect
 // specs/design.md's cross-check coverage warns a stand-in produces.
 func TestDial_NewServers(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("live language-server dial skipped under -short")
 	}
@@ -72,6 +73,7 @@ func TestDial_NewServers(t *testing.T) {
 // report degraded rather than block or error, the same contract every
 // other unsupported/absent-server case already has.
 func TestDial_NewServers_Degraded(t *testing.T) {
+	t.Parallel()
 	_, degraded := Dial(context.Background(), "yaml", t.TempDir())
 	if _, err := exec.LookPath("yaml-language-server"); err == nil {
 		t.Skip("yaml-language-server is on PATH; this case wants it absent")
@@ -86,6 +88,7 @@ func TestDial_NewServers_Degraded(t *testing.T) {
 // second hand list: every wired binary appears exactly once, sorted, with
 // every language that dials it grouped under it.
 func TestServers(t *testing.T) {
+	t.Parallel()
 	got := Servers()
 
 	byBin := map[string][]string{}

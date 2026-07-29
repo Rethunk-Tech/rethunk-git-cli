@@ -54,6 +54,7 @@ func writeStaleLock(t *testing.T, sockPath string) {
 // installed must never even attempt to create a spawn lock, since nothing
 // will ever clear one for a binary that can never be spawned.
 func TestTrySpawnDaemon_BinaryNotOnPATH(t *testing.T) {
+	t.Parallel()
 	sockPath := filepath.Join(t.TempDir(), "rgit-test.sock")
 	spec := serverSpec{name: "test", bin: "rgit-lsp-test-binary-does-not-exist", daemonArgs: noopDaemonArgs}
 
@@ -69,6 +70,7 @@ func TestTrySpawnDaemon_BinaryNotOnPATH(t *testing.T) {
 // untouched, or a burst of concurrent rgit invocations would each clear and
 // recreate it instead of the one spawn the lock is meant to serialize.
 func TestTrySpawnDaemon_FreshLockIsLeftAlone(t *testing.T) {
+	t.Parallel()
 	sockPath := filepath.Join(t.TempDir(), "rgit-test.sock")
 	lockPath := sockPath + ".lock"
 	if err := os.WriteFile(lockPath, nil, 0o600); err != nil {
@@ -89,6 +91,7 @@ func TestTrySpawnDaemon_FreshLockIsLeftAlone(t *testing.T) {
 // left behind by a process that died before its own deferred cleanup ran
 // must not pin every later invocation to [ts-only] forever.
 func TestTrySpawnDaemon_StaleLockIsCleared(t *testing.T) {
+	t.Parallel()
 	sockPath := filepath.Join(t.TempDir(), "rgit-test.sock")
 	lockPath := sockPath + ".lock"
 	writeStaleLock(t, sockPath)
@@ -106,6 +109,7 @@ func TestTrySpawnDaemon_StaleLockIsCleared(t *testing.T) {
 // lock cleaned up -- so a later invocation is never left believing a spawn
 // is still in progress when it already finished.
 func TestTrySpawnDaemon_SuccessfulSpawnCleansUpItsOwnLock(t *testing.T) {
+	t.Parallel()
 	sockPath := filepath.Join(t.TempDir(), "rgit-test.sock")
 	spec := serverSpec{name: "test", bin: "true", daemonArgs: noopDaemonArgs}
 
@@ -125,6 +129,7 @@ func TestTrySpawnDaemon_SuccessfulSpawnCleansUpItsOwnLock(t *testing.T) {
 // not propagate this; a caller-visible failure here would surface as
 // rgit's own error for a background optimization it never asked about.
 func TestTrySpawnDaemon_StartFailureIsToleratedSilently(t *testing.T) {
+	// cannot Parallel because t.Setenv("PATH", ...) below
 	binDir := t.TempDir()
 	fakeBin := filepath.Join(binDir, "not-a-real-executable")
 	if err := os.WriteFile(fakeBin, []byte("this is not an executable\n"), 0o755); err != nil {
@@ -159,6 +164,7 @@ func TestTrySpawnDaemon_StartFailureIsToleratedSilently(t *testing.T) {
 // concurrency go test -race exists for: jsonrpc2's own read goroutine is
 // still live when Close begins tearing the connection down.
 func TestDialStdio_CloseTearsDownConnectionThenProcess(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("live language-server dial skipped under -short")
 	}
@@ -204,6 +210,7 @@ func TestDialStdio_CloseTearsDownConnectionThenProcess(t *testing.T) {
 // created under it, and a second call against the same base is idempotent
 // (returns the same path, still trusted).
 func TestPrivateSocketDir_CreatesPrivateDirectory(t *testing.T) {
+	// cannot Parallel because t.Setenv("XDG_RUNTIME_DIR", ...) below
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 
 	dir, ok := privateSocketDir()
@@ -235,6 +242,7 @@ func TestPrivateSocketDir_CreatesPrivateDirectory(t *testing.T) {
 // rule out a planted path, but a directory this loose is rejected before
 // ownership even needs checking.
 func TestPrivateSocketDir_RejectsLoosePermissions(t *testing.T) {
+	// cannot Parallel because t.Setenv("XDG_RUNTIME_DIR", ...) below
 	base := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", base)
 	dir := filepath.Join(base, fmt.Sprintf("rgit-%d", os.Getuid()))
@@ -251,6 +259,7 @@ func TestPrivateSocketDir_RejectsLoosePermissions(t *testing.T) {
 // expected path: it must be rejected outright, never followed, regardless
 // of what it points at or that path's own permissions.
 func TestPrivateSocketDir_RejectsSymlink(t *testing.T) {
+	// cannot Parallel because t.Setenv("XDG_RUNTIME_DIR", ...) below
 	base := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", base)
 	dir := filepath.Join(base, fmt.Sprintf("rgit-%d", os.Getuid()))
@@ -270,6 +279,7 @@ func TestPrivateSocketDir_RejectsSymlink(t *testing.T) {
 // TestPrivateSocketDir_RejectsNonDirectory covers a plain file occupying the
 // expected path.
 func TestPrivateSocketDir_RejectsNonDirectory(t *testing.T) {
+	// cannot Parallel because t.Setenv("XDG_RUNTIME_DIR", ...) below
 	base := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", base)
 	dir := filepath.Join(base, fmt.Sprintf("rgit-%d", os.Getuid()))
@@ -288,6 +298,7 @@ func TestPrivateSocketDir_RejectsNonDirectory(t *testing.T) {
 // of its own -- the same "fail closed" posture the fix for finding 1 uses
 // throughout.
 func TestPrivateSocketDir_BaseMissingFailsClosed(t *testing.T) {
+	// cannot Parallel because t.Setenv("XDG_RUNTIME_DIR", ...) below
 	t.Setenv("XDG_RUNTIME_DIR", filepath.Join(t.TempDir(), "does-not-exist"))
 
 	if _, ok := privateSocketDir(); ok {
@@ -305,6 +316,7 @@ func TestPrivateSocketDir_BaseMissingFailsClosed(t *testing.T) {
 // path via spawn-on-demand instead of finding the same dead listener
 // forever.
 func TestDialSocket_HandshakeFailureUnlinksManagedSocketAndDegrades(t *testing.T) {
+	// cannot Parallel because t.Setenv("XDG_RUNTIME_DIR", ...) below
 	// A unix socket path is capped at ~108 bytes (sun_path) on Linux --
 	// t.TempDir() embeds this test's own (long) name in the path, which
 	// combined with privateSocketDir's own "rgit-<uid>" subdirectory
@@ -359,6 +371,7 @@ func TestDialSocket_HandshakeFailureUnlinksManagedSocketAndDegrades(t *testing.T
 // not rgit's to manage, so a handshake failure against it must never
 // unlink it -- only the managed default is rgit's to clean up.
 func TestDialSocket_HandshakeFailureLeavesUserSuppliedSocketAlone(t *testing.T) {
+	// cannot Parallel because t.Setenv("XDG_RUNTIME_DIR", ...) below
 	t.Setenv("XDG_RUNTIME_DIR", shortTempDir(t))
 
 	sockPath := filepath.Join(shortTempDir(t), "user-supplied.sock")
@@ -401,6 +414,13 @@ func TestDialSocket_HandshakeFailureLeavesUserSuppliedSocketAlone(t *testing.T) 
 // net.Listen on the same path fails EADDRINUSE and spawn-on-demand never
 // recovers.
 func TestUnlinkDeadSocket_RemovesDeadSocketFile(t *testing.T) {
+	// cannot Parallel: asserts a real connect() against a just-closed unix
+	// listener fails fast enough to fall inside unlinkDeadSocket's
+	// DialBudget window (150ms). Verified flaky under -count=1 alongside
+	// this package's other now-parallel cases (~1 in 15 runs): heavier
+	// concurrent scheduling load widens the gap between ln.Close() and the
+	// dial attempt enough for a stray connect to land inside it. Running
+	// serially keeps that window narrow and the assertion deterministic.
 	sockPath := filepath.Join(shortTempDir(t), "rgit-test.sock")
 	ln, err := net.Listen("unix", sockPath)
 	if err != nil {
@@ -424,6 +444,7 @@ func TestUnlinkDeadSocket_RemovesDeadSocketFile(t *testing.T) {
 // live daemon is actually listening on must never be unlinked out from
 // under it.
 func TestUnlinkDeadSocket_LeavesLiveSocketAlone(t *testing.T) {
+	t.Parallel()
 	sockPath := filepath.Join(shortTempDir(t), "rgit-test.sock")
 	ln, err := net.Listen("unix", sockPath)
 	if err != nil {
@@ -456,6 +477,7 @@ func TestUnlinkDeadSocket_LeavesLiveSocketAlone(t *testing.T) {
 // end-state, which looks identical whether or not a spawn actually
 // happened.
 func TestTrySpawnDaemon_StaleLockRetriesAndSpawns(t *testing.T) {
+	// cannot Parallel because t.Setenv("PATH", ...) below
 	binDir := t.TempDir()
 	marker := filepath.Join(t.TempDir(), "spawned")
 	fakeBin := filepath.Join(binDir, "rgit-test-marker-bin")

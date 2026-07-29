@@ -17,6 +17,7 @@ import (
 // daemon; if this regresses to the old fallthrough, this test's own nil
 // Session would successfully dial (or spawn) it.
 func TestSession_NilDialDegradesWithoutDialing(t *testing.T) {
+	t.Parallel()
 	var sess *Session
 
 	client, degraded := sess.Dial(context.Background(), "go", t.TempDir())
@@ -35,6 +36,7 @@ func TestSession_NilDialDegradesWithoutDialing(t *testing.T) {
 // and an unsupported language name degrades identically to Dial's own
 // contract for one.
 func TestSession_CachesClientAndDegradedState(t *testing.T) {
+	t.Parallel()
 	sess := NewSession()
 
 	client1, degraded1 := sess.Dial(context.Background(), "no-such-language", t.TempDir())
@@ -56,6 +58,7 @@ func TestSession_CachesClientAndDegradedState(t *testing.T) {
 // Close unconditionally in some paths) and a fresh Session with nothing
 // cached.
 func TestSession_CloseIsNilSafe(t *testing.T) {
+	t.Parallel()
 	var nilSess *Session
 	nilSess.Close() // must not panic
 
