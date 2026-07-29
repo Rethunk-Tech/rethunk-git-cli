@@ -87,5 +87,12 @@ Never block on a cold server.
 ## State
 
 `rgit` holds no persistent state of its own. The only files it creates are the
-language-server socket and its spawn lock under `$XDG_RUNTIME_DIR`, both
-disposable. Repository state lives entirely in git.
+language-server socket and its spawn lock, inside a private, UID-scoped
+`rgit-<uid>` subdirectory of `$XDG_RUNTIME_DIR` (falling back to the system
+temp directory when unset) — both disposable. That subdirectory is created
+`0700` and verified owned by the current user before every use; a directory
+that fails either check is never dialled or spawned into, degrading to
+`[ts-only]` instead (`internal/lsp/dial.go`'s `privateSocketDir`) — a
+predictable path in a shared, world-writable temp directory must not be
+trusted just because it has the right name. Repository state lives entirely
+in git.

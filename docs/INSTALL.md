@@ -241,7 +241,7 @@ success and leaving the binary unreachable.
 | Variable | Effect |
 | --- | --- |
 | `RGIT_LSP_SOCKET` | Path to an existing `gopls` socket. Checked before the default location. No effect on the stdio servers. |
-| `XDG_RUNTIME_DIR` | Where `rgit` creates `rgit-gopls.sock` and its spawn lock. Falls back to the system temp dir. |
+| `XDG_RUNTIME_DIR` | Where `rgit` creates its private `rgit-<uid>/` subdirectory, holding `rgit-gopls.sock` and its spawn lock. Falls back to the system temp dir. |
 | `GIT_TERMINAL_PROMPT` | Set to `0` automatically when stdin is not a terminal. Set it yourself to override. |
 
 Everything else is git's own configuration, honoured because `git commit` does
@@ -297,16 +297,18 @@ rgit diff 2>&1 >/dev/null | grep -q 'ts-only' && echo "degraded" || echo "cross-
 
 ```bash
 rm "$(command -v rgit)"
-rm -f "${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}"/rgit-*.sock "${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}"/rgit-*.lock
+rm -rf "${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/rgit-$(id -u)"
 ```
 
 `command -v rgit` resolves whichever copy your shell actually runs, which is
 the one to remove — hardcoding a path guesses wrong for anyone who installed
 to the default `$GOBIN`/`$(go env GOPATH)/bin` rather than passing `PREFIX`.
 
-Those two files exist only for `gopls`; the stdio servers leave nothing behind.
-A `gopls` daemon `rgit` started exits on its own idle timeout. The lookup order
-above mirrors `rgit`'s own (`internal/lsp/dial.go`'s `runtimeDir`): `$XDG_RUNTIME_DIR`
-first, then Go's `os.TempDir()`, which on POSIX honours `$TMPDIR` before
-falling back to `/tmp` — a host with `$TMPDIR` set and no `$XDG_RUNTIME_DIR`
-puts the socket there, not in `/tmp`.
+That subdirectory exists only for `gopls`; the stdio servers leave nothing
+behind. A `gopls` daemon `rgit` started exits on its own idle timeout. The
+lookup order above mirrors `rgit`'s own (`internal/lsp/dial.go`'s
+`runtimeDir`): `$XDG_RUNTIME_DIR` first, then Go's `os.TempDir()`, which on
+POSIX honours `$TMPDIR` before falling back to `/tmp` — a host with `$TMPDIR`
+set and no `$XDG_RUNTIME_DIR` puts the socket there, not in `/tmp`. `rgit`
+only ever creates or trusts the `rgit-<uid>/` subdirectory itself, never the
+base directory directly — see `AGENTS.md` § State.
