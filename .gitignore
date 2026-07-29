@@ -20,3 +20,9 @@ coverage.html
 # the upstream module's own gitignored source) -- never committed.
 /internal/resolve/sqlgrammar/csrc/
 
+# generateSQLParser's own staging directory (main.go), a sibling of csrc/
+# swapped in atomically on success. A generation run that fails partway
+# through leaves this behind untracked; ignore it rather than stranding it
+# for the next `git status` to puzzle over.
+/internal/resolve/sqlgrammar/csrc.tmp/
+
