@@ -795,6 +795,35 @@ func TestStage_DeletedSymbolExcisedFromBlob(t *testing.T) {
 	mustParseGo(t, "deletion", got)
 }
 
+// TestStage_ModeInheritsFromHEADWhenWorktreeFileGone pins resolveMode's
+// (internal/synth/stage.go) HEAD-fallback branch, measured at 36.4% under
+// -short -coverpkg=./... with only the worktree-os.Stat arm exercised: when
+// the whole file was itself removed from the worktree, staging a symbol
+// deletion from it has no worktree entry left to os.Stat, so the mode has
+// to come from `git ls-tree HEAD` instead (AGENTS.md's mode-inheritance
+// invariant). The fixture is committed executable so a bug that quietly
+// defaulted to plain 100644 -- rather than genuinely reading HEAD's own
+// entry -- would be caught here, not just a bug that failed to stage at
+// all.
+func TestStage_ModeInheritsFromHEADWhenWorktreeFileGone(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	gittest.Write(t, dir, "gone.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	qt.Assert(t, qt.IsNil(os.Chmod(filepath.Join(dir, "gone.go"), 0o755)))
+	gittest.Commit(t, dir, "chore: add executable gone.go")
+
+	qt.Assert(t, qt.IsNil(os.Remove(filepath.Join(dir, "gone.go"))))
+
+	mustStage(t, repo, dir, synth.AnchorTarget("gone.go", "A"))
+
+	lsFiles := gittest.Git(t, dir, "ls-files", "-s", "gone.go")
+	qt.Assert(t, qt.StringContains(lsFiles, "100755"))
+
+	got := indexBlob(t, repo, "gone.go")
+	qt.Assert(t, qt.Not(qt.StringContains(got, "func A()")))
+	qt.Assert(t, qt.StringContains(got, "func B()"))
+}
+
 // TestStage_ContainerMemberInsertIsByteIdenticalToWorktree guards against a
 // symbol inserted into an existing container gaining a blank line on each
 // side: a Go struct field, a Go interface method, and a TypeScript class

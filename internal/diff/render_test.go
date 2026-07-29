@@ -54,3 +54,69 @@ func TestRowHint_UnanchorableSuggestsToplevelOnlyForMarkdown(t *testing.T) {
 		}
 	})
 }
+
+// TestRowLabelAndRowHint_ThinStatuses covers rowLabel's and rowHint's own
+// placeholder branches for (mode), (binary), and (untracked) -- measured at
+// 44.4% and 42.9% respectively under -short -coverpkg=./..., since the test
+// above only ever drives StatusUnanchorable. cmd/rgit/rgit_e2e_test.go does
+// see mode and binary rows, but execs a separate binary and so contributes
+// nothing to this package's own coverprofile.
+func TestRowLabelAndRowHint_ThinStatuses(t *testing.T) {
+	t.Parallel()
+
+	t.Run("rowLabel", func(t *testing.T) {
+		t.Parallel()
+		tests := []struct {
+			name string
+			row  Row
+			want string
+		}{
+			{"mode note", Row{Status: StatusMode, ModeNote: "644->755"}, "(mode 644->755)"},
+			{"binary", Row{Status: StatusBinary}, "(binary)"},
+			{"untracked", Row{Status: StatusUntracked}, "(untracked)"},
+		}
+		for _, tt := range tests {
+			if got := rowLabel(tt.row); got != tt.want {
+				t.Errorf("%s: rowLabel = %q; want %q", tt.name, got, tt.want)
+			}
+		}
+	})
+
+	t.Run("rowHint", func(t *testing.T) {
+		t.Parallel()
+		tests := []struct {
+			name string
+			row  Row
+			want string
+		}{
+			{"mode", Row{Status: StatusMode, ModeNote: "644->755"}, "-> use rgit commit script.sh"},
+			{"untracked with a resolvable symbol", Row{Status: StatusUntracked, HintSymbol: "Handler"}, "-> use --sym script.sh:Handler or --file script.sh"},
+			{"untracked with no symbols at all", Row{Status: StatusUntracked}, "-> use --file script.sh"},
+			{"binary has no hint", Row{Status: StatusBinary}, ""},
+		}
+		for _, tt := range tests {
+			if got := rowHint("script.sh", "shell", tt.row); got != tt.want {
+				t.Errorf("%s: rowHint = %q; want %q", tt.name, got, tt.want)
+			}
+		}
+	})
+
+	// RenderText's own level: a mode row and a binary row both reach the
+	// tabwriter with their placeholder label, proving RenderText routes
+	// through rowLabel/rowHint here too rather than a second, drifting
+	// rendering only the (unanchorable) case above would catch.
+	t.Run("RenderText agrees", func(t *testing.T) {
+		t.Parallel()
+		report := &Report{Files: []FileReport{
+			{Path: "script.sh", Rows: []Row{{Status: StatusMode, ModeNote: "644->755", Added: "0", Deleted: "0"}}, lang: "shell"},
+			{Path: "logo.png", Rows: []Row{{Status: StatusBinary, Added: "-", Deleted: "-"}}},
+		}}
+		out := RenderText(report)
+		if !strings.Contains(out, "(mode 644->755)") {
+			t.Errorf("RenderText output = %q; want a (mode 644->755) row", out)
+		}
+		if !strings.Contains(out, "(binary)") {
+			t.Errorf("RenderText output = %q; want a (binary) row", out)
+		}
+	})
+}

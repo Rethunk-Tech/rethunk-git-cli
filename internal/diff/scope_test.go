@@ -195,26 +195,78 @@ func TestCommittableBase_UnbornBranchFallsBackToEmptyTree(t *testing.T) {
 }
 
 // TestExtractRangeToken_DetectsRangeNotAPath covers ExtractRangeToken's
-// main cold path (measured at 44.4% under -short -coverpkg=./...): a
-// "..2-shaped" argument that does not exist as a path in the worktree or
-// HEAD is the range token, pulled out of args rather than left for
-// cli.ClassifyArgs to fail on. The real GitPathChecker drives this rather
-// than a stand-in -- CONTRIBUTING's "prefer the real dependency" rule --
-// since the whole point of the check is a real git ls-tree/os.Stat answer,
-// not this package's belief about one.
+// main cold path (measured at 77.8% under -short -coverpkg=./... before the
+// subtests below were added): a "..2-shaped" argument that does not exist
+// as a path in the worktree or HEAD is the range token, pulled out of args
+// rather than left for cli.ClassifyArgs to fail on. The real GitPathChecker
+// drives this rather than a stand-in -- CONTRIBUTING's "prefer the real
+// dependency" rule -- since the whole point of the check is a real git
+// ls-tree/os.Stat answer, not this package's belief about one.
 func TestExtractRangeToken_DetectsRangeNotAPath(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t)
 	checker := cli.GitPathChecker{Root: dir, Repo: repo}
+	ctx := context.Background()
 
-	token, rest, err := ExtractRangeToken(context.Background(), []string{"a.go", "HEAD..HEAD~1"}, checker)
-	if err != nil {
-		t.Fatalf("ExtractRangeToken: %v", err)
-	}
-	if token != "HEAD..HEAD~1" {
-		t.Errorf("token = %q; want %q", token, "HEAD..HEAD~1")
-	}
-	if len(rest) != 1 || rest[0] != "a.go" {
-		t.Errorf("rest = %v; want [\"a.go\"]", rest)
-	}
+	t.Run("range token pulled out, non-range args left in rest", func(t *testing.T) {
+		token, rest, err := ExtractRangeToken(ctx, []string{"a.go", "HEAD..HEAD~1"}, checker)
+		if err != nil {
+			t.Fatalf("ExtractRangeToken: %v", err)
+		}
+		if token != "HEAD..HEAD~1" {
+			t.Errorf("token = %q; want %q", token, "HEAD..HEAD~1")
+		}
+		if len(rest) != 1 || rest[0] != "a.go" {
+			t.Errorf("rest = %v; want [\"a.go\"]", rest)
+		}
+	})
+
+	// "--" ends the scan outright (docs/USAGE.md's own "everything after --
+	// is a pathspec, always"): a range-shaped token past it must never be
+	// pulled out, even though it would qualify on its own.
+	t.Run("-- stops the range scan", func(t *testing.T) {
+		args := []string{"a.go", "--", "HEAD..HEAD~1"}
+		token, rest, err := ExtractRangeToken(ctx, args, checker)
+		if err != nil {
+			t.Fatalf("ExtractRangeToken: %v", err)
+		}
+		if token != "" {
+			t.Errorf("token = %q; want \"\" (nothing before -- is range-shaped)", token)
+		}
+		if len(rest) != len(args) {
+			t.Errorf("rest = %v; want args returned unchanged", rest)
+		}
+	})
+
+	// Two range-shaped, non-existent args in the same invocation is
+	// ambiguous -- ExtractRangeToken cannot guess which one the caller
+	// meant, so both a rgit diff and a --range flag can only ever supply
+	// one.
+	t.Run("multiple range-shaped arguments is an error", func(t *testing.T) {
+		_, _, err := ExtractRangeToken(ctx, []string{"main..feature", "HEAD..HEAD~1"}, checker)
+		want := `multiple revision-range-shaped arguments given: "main..feature" and "HEAD..HEAD~1"`
+		if err == nil || err.Error() != want {
+			t.Errorf("err = %v; want %q", err, want)
+		}
+	})
+
+	// A relative pathspec containing ".." (typed from a subdirectory) has
+	// to win over the range heuristic: path existence is checked first,
+	// and PrefixPath's own root-relative rebasing is what makes "../shared/
+	// util.go" resolve to the real "shared/util.go" from prefix "sub".
+	t.Run("an existing ../path wins over range-shaped parsing", func(t *testing.T) {
+		gittest.Write(t, dir, "shared/util.go", "package shared\n")
+		subChecker := cli.GitPathChecker{Root: dir, Prefix: "sub", Repo: repo}
+
+		token, rest, err := ExtractRangeToken(ctx, []string{"../shared/util.go"}, subChecker)
+		if err != nil {
+			t.Fatalf("ExtractRangeToken: %v", err)
+		}
+		if token != "" {
+			t.Errorf("token = %q; want \"\" (the path exists, so it is not a range)", token)
+		}
+		if len(rest) != 1 || rest[0] != "../shared/util.go" {
+			t.Errorf("rest = %v; want ../shared/util.go left untouched", rest)
+		}
+	})
 }

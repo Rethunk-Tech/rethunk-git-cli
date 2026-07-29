@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 )
@@ -31,9 +32,16 @@ func commitSpecial(t *testing.T, dir string, paths ...string) {
 // (os.Lstat finds nothing, so it falls back to LsTreeTolerant) -- the branch
 // docs/ANCHORS.md's "staging a symbol deletion from a deleted file" case
 // reaches, and index_test.go's worktree-present cases never touch since
-// their special paths still exist on disk. Each subtest commits a special
-// path, then removes it from the worktree only, leaving HEAD's tree entry
-// (the classification source) intact.
+// their special paths still exist on disk. Each of the first four subtests
+// commits a special path, then removes it from the worktree only, leaving
+// HEAD's tree entry (the classification source) intact.
+//
+// The last two subtests are the opposite side, folded in here rather than a
+// second test function: classifyWorktreeEntry's own two thin branches --
+// a plain (non-submodule) directory, and a binary file the worktree copy
+// itself still has -- which index_test.go's
+// TestStage_SubmoduleAndSymlinkPathStaging leaves uncovered since it only
+// anchors the symlink case for its worktree-present half.
 func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -128,6 +136,44 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 		}
 		if kind != pathRegular {
 			t.Errorf("kind = %v; want pathRegular", kind)
+		}
+	})
+
+	t.Run("plain directory in the worktree classifies as pathRegular, not a submodule", func(t *testing.T) {
+		dir, repo := newSpecialTestRepo(t)
+		if err := os.MkdirAll(filepath.Join(dir, "plaindir"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+
+		kind, err := classifyPath(ctx, repo, dir, "plaindir")
+		if err != nil {
+			t.Fatalf("classifyPath: %v", err)
+		}
+		if kind != pathRegular {
+			t.Errorf("kind = %v; want pathRegular", kind)
+		}
+	})
+
+	t.Run("binary file present in the worktree refuses a symbol anchor", func(t *testing.T) {
+		dir, repo := newSpecialTestRepo(t)
+		if err := os.WriteFile(filepath.Join(dir, "blob.bin"), []byte("a\x00b\x00c"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		// openFilePlan, not classifyPath directly: this is the branch
+		// TestStage_SubmoduleAndSymlinkPathStaging (index_test.go) leaves
+		// untouched, since it only anchors the symlink there -- driving
+		// openFilePlan exercises classifyWorktreeEntry's own binary check
+		// (Lstat succeeds; the worktree copy is what gets sniffed, an
+		// untracked file included) and refusalFor's pathBinary case in the
+		// same call, the way a real anchor target actually reaches both.
+		_, err := openFilePlan(ctx, repo, dir, "blob.bin")
+		pathErr, ok := err.(*PathError)
+		if !ok {
+			t.Fatalf("openFilePlan error = %v (%T); want *PathError", err, err)
+		}
+		if pathErr.Code != exitcode.SpecialPathRefused {
+			t.Errorf("Code = %v; want SpecialPathRefused", pathErr.Code)
 		}
 	})
 
