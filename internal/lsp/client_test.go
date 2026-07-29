@@ -1,13 +1,21 @@
 package lsp
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net"
+	"strconv"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"go.lsp.dev/protocol"
+	"go.lsp.dev/uri"
 )
 
 // countingRWC wraps a net.Conn to count Close calls, so a test can assert
@@ -173,5 +181,172 @@ func TestTrimTrailingBlankLines(t *testing.T) {
 				t.Errorf("EndLine = %d; want %d", syms[0].EndLine, tt.wantTrimmedEnd)
 			}
 		})
+	}
+}
+
+// --- finding 8: DocumentSymbols must send textDocument/didClose ---
+//
+// gopls is a long-lived daemon reused across an invocation's whole set of
+// anchors; a didOpen with no matching didClose accumulates open documents
+// in it for as long as it stays up. This is exercised against a minimal
+// in-process mock rather than a live server -- the wire exchange itself
+// (frame the request, decode the reply) is already pinned by
+// TestFlatten_UnknownShapeIsNotOK and friends; what finding 8 needs proven
+// is that this package's own DocumentSymbols emits the matching
+// didClose, which a real server's behaviour cannot demonstrate one way or
+// the other.
+
+// lspMockReadFrame reads one LSP header-framed JSON-RPC message
+// (Content-Length, blank line, JSON body) off r. ok=false at a clean EOF.
+func lspMockReadFrame(r *bufio.Reader) (msg map[string]any, ok bool, err error) {
+	length := -1
+	for {
+		line, rerr := r.ReadString('\n')
+		if rerr != nil {
+			return nil, false, nil //nolint:nilerr // EOF between frames is the normal shutdown path
+		}
+		line = strings.TrimRight(line, "\r\n")
+		if line == "" {
+			break
+		}
+		if after, found := strings.CutPrefix(line, "Content-Length:"); found {
+			n, convErr := strconv.Atoi(strings.TrimSpace(after))
+			if convErr != nil {
+				return nil, false, fmt.Errorf("mock lsp server: bad Content-Length %q: %w", line, convErr)
+			}
+			length = n
+		}
+	}
+	if length < 0 {
+		return nil, false, fmt.Errorf("mock lsp server: frame missing Content-Length")
+	}
+	body := make([]byte, length)
+	if _, rerr := io.ReadFull(r, body); rerr != nil {
+		return nil, false, fmt.Errorf("mock lsp server: read body: %w", rerr)
+	}
+	if uErr := json.Unmarshal(body, &msg); uErr != nil {
+		return nil, false, fmt.Errorf("mock lsp server: decode body: %w", uErr)
+	}
+	return msg, true, nil
+}
+
+func lspMockWriteFrame(w io.Writer, msg map[string]any) error {
+	body, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("mock lsp server: encode: %w", err)
+	}
+	_, err = fmt.Fprintf(w, "Content-Length: %d\r\n\r\n%s", len(body), body)
+	return err
+}
+
+// didCloseObserver serves one initialize/didOpen/documentSymbol/didClose
+// exchange over conn, recording didOpen and didClose counts and the URI the
+// close named. It never calls a *testing.T method: it runs on its own
+// goroutine, and only Fatal-family calls are unsafe off the test goroutine.
+type didCloseObserver struct {
+	conn io.ReadWriteCloser
+
+	mu        sync.Mutex
+	didOpens  int
+	didCloses int
+	closedURI string
+}
+
+func (o *didCloseObserver) serve(resultJSON string) error {
+	r := bufio.NewReader(o.conn)
+	for {
+		msg, ok, err := lspMockReadFrame(r)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return nil
+		}
+
+		method, _ := msg["method"].(string)
+		id, hasID := msg["id"]
+
+		switch method {
+		case "textDocument/didOpen":
+			o.mu.Lock()
+			o.didOpens++
+			o.mu.Unlock()
+		case "textDocument/didClose":
+			o.mu.Lock()
+			o.didCloses++
+			if params, ok := msg["params"].(map[string]any); ok {
+				if td, ok := params["textDocument"].(map[string]any); ok {
+					if u, ok := td["uri"].(string); ok {
+						o.closedURI = u
+					}
+				}
+			}
+			o.mu.Unlock()
+			// Nothing else is expected after the close this test is
+			// waiting for; returning here (rather than looping to the
+			// next, absent frame) lets Close's own conn teardown produce
+			// a clean EOF instead of a read error racing it.
+			return nil
+		case "textDocument/documentSymbol":
+			if err := lspMockWriteFrame(o.conn, map[string]any{
+				"jsonrpc": "2.0",
+				"id":      id,
+				"result":  json.RawMessage(resultJSON),
+			}); err != nil {
+				return err
+			}
+		case "initialize":
+			if err := lspMockWriteFrame(o.conn, map[string]any{
+				"jsonrpc": "2.0",
+				"id":      id,
+				"result":  map[string]any{"capabilities": map[string]any{}},
+			}); err != nil {
+				return err
+			}
+		default:
+			if hasID {
+				if err := lspMockWriteFrame(o.conn, map[string]any{"jsonrpc": "2.0", "id": id, "result": nil}); err != nil {
+					return err
+				}
+			}
+			// Notifications (initialized) get no reply.
+		}
+	}
+}
+
+func TestDocumentSymbols_SendsDidClose(t *testing.T) {
+	t.Parallel()
+
+	serverConn, clientConn := net.Pipe()
+	observer := &didCloseObserver{conn: serverConn}
+	errCh := make(chan error, 1)
+	go func() { errCh <- observer.serve(`[]`) }()
+
+	client, err := NewClient(context.Background(), clientConn, t.TempDir())
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	defer func() { _ = client.Close() }()
+
+	const path = "/tmp/a.go"
+	if _, err := client.DocumentSymbols(context.Background(), path, []byte("package p\n")); err != nil {
+		t.Fatalf("DocumentSymbols: %v", err)
+	}
+
+	if srvErr := <-errCh; srvErr != nil {
+		t.Fatalf("mock server: %v", srvErr)
+	}
+
+	observer.mu.Lock()
+	defer observer.mu.Unlock()
+	if observer.didOpens != 1 {
+		t.Errorf("didOpens = %d; want 1", observer.didOpens)
+	}
+	if observer.didCloses != 1 {
+		t.Errorf("didCloses = %d; want 1 -- DocumentSymbols must close what it opens (finding 8)", observer.didCloses)
+	}
+	wantURI := string(uri.File(path))
+	if observer.closedURI != wantURI {
+		t.Errorf("didClose uri = %q; want %q", observer.closedURI, wantURI)
 	}
 }
