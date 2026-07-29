@@ -593,3 +593,31 @@ func TestRun_ScopeUsageErrorsAreTyped(t *testing.T) {
 		})
 	}
 }
+
+// TestNumstatPath covers git's two numstat rename spellings plus the
+// non-rename identity case: a full "old => new" (already exercised
+// indirectly by every rename fixture elsewhere in this package), and the
+// common-prefix "dir/{old => new}suffix" shorthand git switches to once a
+// rename shares a path prefix, which nothing in this package's own tests
+// reached before.
+func TestNumstatPath(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name    string
+		raw     string
+		oldPath string
+		newPath string
+	}{
+		{"no rename", "unchanged.go", "unchanged.go", "unchanged.go"},
+		{"full rename", "old.go => new.go", "old.go", "new.go"},
+		{"common-prefix brace shorthand", "pkg/{old => new}/file.go", "pkg/old/file.go", "pkg/new/file.go"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			oldPath, newPath := NumstatPath(tc.raw)
+			if oldPath != tc.oldPath || newPath != tc.newPath {
+				t.Errorf("NumstatPath(%q) = (%q, %q); want (%q, %q)", tc.raw, oldPath, newPath, tc.oldPath, tc.newPath)
+			}
+		})
+	}
+}
