@@ -85,7 +85,16 @@ func TestRun_SymOnNonexistentFileReturnsResolveError(t *testing.T) {
 		Syms: []SymRef{{File: "nosuch.py", Name: "foo"}},
 	})
 
-	assertUnresolvable(t, err)
+	// validateSym's own doc comment promises a missing file reads as an
+	// empty source and fails exactly the way a real but absent symbol
+	// would -- "no separate message shape". Asserting the message here,
+	// not just the code, is what actually pins that promise: the two
+	// failure modes must produce the identical string, not merely the
+	// identical exit code.
+	rerr := assertUnresolvable(t, err)
+	if got, want := rerr.Error(), `resolve: "foo": unresolved`; got != want {
+		t.Errorf("Error() = %q; want %q", got, want)
+	}
 }
 
 // TestRun_SymResolvesButUnchangedIsNotAnError pins the distinction the fix
