@@ -619,6 +619,16 @@ func TestResolve_UnsupportedLanguage(t *testing.T) {
 	// contribution is just reporting the extension unclaimed.
 	_, ok := resolve.ForExtension(".rs")
 	qt.Assert(t, qt.IsFalse(ok))
+
+	// internal/diff/run.go's validateSym constructs exactly this shape --
+	// Code set, no Candidates -- for the identical failure reached through
+	// `rgit diff --sym`. Error() must actually say what docs/CODES.md's
+	// exit-9 row promises ("Unsupported / deferred language for a symbol
+	// anchor"), not silently fall through to the same "unresolved" label
+	// exit 3 (AnchorUnresolvable) uses -- the code is right, the message
+	// must not contradict it.
+	err := &resolve.ResolveError{Code: exitcode.UnsupportedLanguage, Anchor: "main"}
+	qt.Assert(t, qt.Equals(err.Error(), `resolve: "main": unsupported language`))
 }
 
 // --- Language-server cross-check (specs/design.md § Symbol resolution) ---

@@ -33,9 +33,22 @@ func (e *ResolveError) Error() string {
 		return fmt.Sprintf("resolve: %q: language-server extent mismatch (tree-sitter %s, language-server %s)",
 			e.Anchor, e.TreeSitterRange, e.LSPRange)
 	}
+	// label defaults to AnchorUnresolvable's own wording; every other code
+	// handled here overrides it explicitly rather than falling through --
+	// exitcode.UnsupportedLanguage used to fall through to "unresolved",
+	// contradicting docs/CODES.md's exit-9 row ("Unsupported / deferred
+	// language for a symbol anchor") while the exit code itself was
+	// already right. internal/diff/run.go's validateSym is the one caller
+	// that constructs this code, and it never sets Candidates -- there is
+	// nothing to suggest for a language with no grammar at all -- so the
+	// "did you mean" suffix below stays unreachable for it the same way it
+	// already is for ExtentMismatch.
 	label := "unresolved"
-	if e.Code == exitcode.AnchorAmbiguous {
+	switch e.Code {
+	case exitcode.AnchorAmbiguous:
 		label = "ambiguous"
+	case exitcode.UnsupportedLanguage:
+		label = "unsupported language"
 	}
 	if len(e.Candidates) == 0 {
 		return fmt.Sprintf("resolve: %q: %s", e.Anchor, label)

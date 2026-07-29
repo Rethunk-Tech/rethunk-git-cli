@@ -60,6 +60,10 @@ Notable changes to `rgit`. The format follows
 - The exit-9 message names the path and whether shebang sniffing ran. An
   extensionless file produced a dangling "no grammar registered for " that
   hid the fallback entirely.
+- `rgit diff --sym` on an anchor whose file has no grammar printed
+  `resolve: "NAME": unresolved` — the same label exit 3 uses — instead of
+  naming what docs/CODES.md's exit-9 row actually means. It now says
+  `unsupported language`.
 - `rgit commit --dry-run` warns about an untracked file it cannot read
   rather than silently reporting low line counts.
 - `make clean` removes `./rgit-install`, which it built and `.gitignore`
