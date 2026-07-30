@@ -35,7 +35,7 @@ type diffFlags struct {
 	files     []string
 }
 
-func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) exitcode.Code {
+func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	var f diffFlags
 	fs := newTargetFlagSet("diff", &f.syms, &f.files)
 	fs.BoolVar(&f.unstaged, "unstaged", false, "worktree vs index (git's bare diff)")
@@ -71,7 +71,7 @@ func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) exitc
 		return exitcode.InvalidUsage
 	}
 
-	root, prefix, repo, code := openRepo(ctx, stderr)
+	root, prefix, repo, code := openRepo(ctx, dir, stderr)
 	if code != exitcode.Success {
 		return code
 	}

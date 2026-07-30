@@ -168,17 +168,26 @@ func restoreDoubleDash(fs *pflag.FlagSet) []string {
 	return withDash
 }
 
-// openRepo resolves the current working directory's git toplevel and
-// returns a Repo rooted there. Every subcommand needs this before
-// classification, since rules 3-5 all query git or the filesystem.
-func openRepo(ctx context.Context, stderr io.Writer) (root, prefix string, repo *gitx.Repo, code exitcode.Code) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return "", "", nil, exitcode.GitFailure
+// openRepo resolves dir's git toplevel and returns a Repo rooted there.
+// Every subcommand needs this before classification, since rules 3-5 all
+// query git or the filesystem.
+//
+// dir is the global -C option's directory (app.go's parseChdir), or "" for
+// the process working directory -- the only two things "where was rgit
+// started" can mean, resolved here rather than at each of the five call
+// sites, so no subcommand can end up reading one of them and its neighbour
+// the other.
+func openRepo(ctx context.Context, dir string, stderr io.Writer) (root, prefix string, repo *gitx.Repo, code exitcode.Code) {
+	if dir == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return "", "", nil, exitcode.GitFailure
+		}
+		dir = cwd
 	}
 
-	probe := gitx.New(cwd)
+	probe := gitx.New(dir)
 	top, err := probe.Toplevel(ctx)
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
@@ -222,8 +231,8 @@ type anchorSourceFunc func(ctx context.Context, repo *gitx.Repo, root, file stri
 // On success code is exitcode.Success and repo, file, src, res are all
 // populated; otherwise every refusal has already been written to stderr
 // and the caller must return code immediately.
-func resolveAnchorExtent(ctx context.Context, stderr io.Writer, positional, cmdName, help string, fetchSource anchorSourceFunc) (repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, code exitcode.Code) {
-	root, prefix, repo, code := openRepo(ctx, stderr)
+func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, positional, cmdName, help string, fetchSource anchorSourceFunc) (repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, code exitcode.Code) {
+	root, prefix, repo, code := openRepo(ctx, dir, stderr)
 	if code != exitcode.Success {
 		return nil, "", nil, nil, code
 	}

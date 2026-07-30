@@ -21,6 +21,32 @@ $ rgit commit -m "auth: reject expired tokens" \
     auth.go:ValidateToken auth.go:@imports
 ```
 
+## Global flags
+
+Three, all given **before** the command: `-C <path>`, `--version`, and
+`-h`/`--help` (the latter two under § Help).
+
+`-C <path>` runs as if `rgit` had been started in `<path>`, exactly as
+`git -C <path>` does — the repository is discovered from there, and a
+relative pathspec or anchor resolves against it, so passing `-C` is
+indistinguishable from having stood there:
+
+```bash
+rgit -C ~/src/api diff --porcelain
+rgit -C ~/src/api commit -m "fix(auth): reject expired" auth.go:ValidateToken
+```
+
+It must come before the command, because `git commit -C <commit>` already
+means "reuse that commit's message" and the two spellings must not collide.
+Repeats accumulate, each read relative to the last (`-C a -C b` is `-C a/b`,
+an absolute path resetting), and `-C ""` is a no-op — git's own semantics in
+each case.
+
+The directory is checked before the command runs, so both refusals reach
+even a command that never opens a repository: no directory argument at all
+is a usage error (129), and a directory `rgit` cannot enter is fatal (128).
+The glued `-C<path>` spelling is a usage error, as it is in git.
+
 ## Argument shape
 
 Positional arguments carry everything: pathspecs, revisions, and symbol anchors.

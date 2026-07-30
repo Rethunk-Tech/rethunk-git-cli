@@ -5,13 +5,18 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 )
 
-const usageLine = "usage: rgit [--version] <diff|commit|blame|log|context|languages|doctor|completion> [flags] [target...]"
+const usageLine = "usage: rgit [--version] [-C <path>] <diff|commit|blame|log|context|languages|doctor|completion> [flags] [target...]"
 
 // tsOnlyNotice is what rgit diff and rgit commit both print when no live
 // language server was reached in time. docs/INSTALL.md § Verify tells the
@@ -39,7 +44,8 @@ Commands:
   doctor      Report environment health (language servers, grammars, git)
   completion  Print a shell completion script (bash, zsh)
 
-Global flags:
+Global flags (before the command):
+  -C <path>    run as if rgit was started in <path>
   --version    print the version and exit
   -h, --help   show this help and exit
 
@@ -51,6 +57,11 @@ Full reference: docs/USAGE.md
 // supplied by the caller so the build-time -ldflags value stays attached to
 // package main.
 func Run(ctx context.Context, version string, args []string, stdout, stderr io.Writer) exitcode.Code {
+	dir, args, code, ok := parseChdir(args, stderr)
+	if !ok {
+		return code
+	}
+
 	if len(args) == 0 {
 		// Bare `git` prints its own full help to stdout at exit 1 -- but
 		// rgit has no useful no-op mode, and every other usage error in
@@ -76,15 +87,15 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 		fmt.Fprintln(stdout, versionGrammarsLine())
 		return exitcode.Success
 	case "diff":
-		return runDiff(ctx, args[1:], stdout, stderr)
+		return runDiff(ctx, dir, args[1:], stdout, stderr)
 	case "commit":
-		return runCommit(ctx, args[1:], stdout, stderr)
+		return runCommit(ctx, dir, args[1:], stdout, stderr)
 	case "blame":
-		return runBlame(ctx, args[1:], stdout, stderr)
+		return runBlame(ctx, dir, args[1:], stdout, stderr)
 	case "log":
-		return runLog(ctx, args[1:], stdout, stderr)
+		return runLog(ctx, dir, args[1:], stdout, stderr)
 	case "context":
-		return runContext(ctx, args[1:], stdout, stderr)
+		return runContext(ctx, dir, args[1:], stdout, stderr)
 	case "languages":
 		return runLanguages(args[1:], stdout, stderr)
 	case "doctor":
@@ -96,4 +107,76 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 		fmt.Fprintln(stderr, usageLine)
 		return exitcode.InvalidUsage
 	}
+}
+
+// parseChdir consumes the leading `-C <path>` options and returns the
+// directory every repository-opening subcommand should resolve from, plus
+// the remaining arguments. dir is "" when none was given, meaning "the
+// process working directory" -- openRepo's own default, so an invocation
+// without -C reaches git through exactly the path it always did.
+//
+// This is git's own option, matched rather than reinvented (AGENTS.md's one
+// invariant), down to each observable: -C is accepted only *before* the
+// command, since `git commit -C <commit>` already means "reuse that
+// commit's message" and the two spellings must not collide; options
+// accumulate, each read relative to the last (`-C a -C b` is `-C a/b`) with
+// an absolute path resetting; and `-C ""` is a documented no-op rather than
+// an error or a jump to the root.
+//
+// Where it diverges is the *message* on two refusals, never the exit code.
+// git rejects the glued `-C<path>` as an unknown option, which rgit does
+// too -- but it names the fix, because -C exists here for the caller
+// writing git-shaped commands from memory, and "unknown command" would send
+// them looking for a missing subcommand instead of a missing space.
+//
+// ok is false when the caller must return code immediately; the refusal has
+// already been written to stderr.
+func parseChdir(args []string, stderr io.Writer) (dir string, rest []string, code exitcode.Code, ok bool) {
+	for len(args) > 0 && strings.HasPrefix(args[0], "-C") {
+		if args[0] != "-C" {
+			fmt.Fprintf(stderr, "rgit: -C takes its directory as a separate argument (-C <path>), not %q\n", args[0])
+			fmt.Fprintln(stderr, usageLine)
+			return "", nil, exitcode.InvalidUsage, false
+		}
+		if len(args) < 2 {
+			fmt.Fprintln(stderr, "rgit: no directory given for '-C' option")
+			fmt.Fprintln(stderr, usageLine)
+			return "", nil, exitcode.InvalidUsage, false
+		}
+		switch next := args[1]; {
+		case next == "":
+		case dir == "" || filepath.IsAbs(next):
+			dir = next
+		default:
+			dir = filepath.Join(dir, next)
+		}
+		args = args[2:]
+	}
+	if dir == "" {
+		return "", args, exitcode.Success, true
+	}
+
+	// Validated here, before dispatch, rather than left to the first git
+	// call: git chdirs up front and dies whatever command followed, so a
+	// broken -C must not be silent on `doctor`, `languages`, `completion`
+	// or `--version` merely because those never open a repository. The
+	// exit code is git's own for a chdir it cannot perform (128), not the
+	// 129 a malformed option gets.
+	info, err := os.Stat(dir)
+	if err != nil {
+		// The errno alone, matching git's own "cannot change to '<path>':
+		// No such file or directory". os.Stat's wrapper would repeat the
+		// path back and name a syscall the caller never asked for.
+		var pathErr *fs.PathError
+		if errors.As(err, &pathErr) {
+			err = pathErr.Err
+		}
+		fmt.Fprintf(stderr, "rgit: cannot change to %q: %v\n", dir, err)
+		return "", nil, exitcode.GitFailure, false
+	}
+	if !info.IsDir() {
+		fmt.Fprintf(stderr, "rgit: cannot change to %q: not a directory\n", dir)
+		return "", nil, exitcode.GitFailure, false
+	}
+	return dir, args, exitcode.Success, true
 }

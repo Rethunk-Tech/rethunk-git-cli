@@ -37,7 +37,7 @@ Full reference: docs/USAGE.md
 // runBlame's flag surface is exactly rgit languages': one positional
 // FILE:SYMBOL anchor plus --porcelain, hand-parsed rather than pulling in
 // pflag for a command this small (languages.go's own precedent).
-func runBlame(ctx context.Context, args []string, stdout, stderr io.Writer) exitcode.Code {
+func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	porcelain := false
 	var positional string
 	havePositional := false
@@ -76,7 +76,7 @@ func runBlame(ctx context.Context, args []string, stdout, stderr io.Writer) exit
 
 	// Blame operates on the worktree file, not HEAD: there is nothing to
 	// resolve or blame in a revision this command never names.
-	repo, file, src, res, code := resolveAnchorExtent(ctx, stderr, positional, "blame", blameHelp,
+	repo, file, src, res, code := resolveAnchorExtent(ctx, dir, stderr, positional, "blame", blameHelp,
 		func(_ context.Context, _ *gitx.Repo, root, file string) ([]byte, string, bool, error) {
 			src, err := os.ReadFile(filepath.Join(root, file))
 			if err != nil {

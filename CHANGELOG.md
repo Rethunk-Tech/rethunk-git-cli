@@ -8,6 +8,13 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- A global `-C <path>` option, given before the command, matching
+  `git -C <path>`: the repository is discovered from there and relative
+  pathspecs and anchors resolve against it, repeats accumulate, and `-C ""`
+  is a no-op. Validated before dispatch, so a missing directory argument
+  (129) or one that cannot be entered (128) fails whatever command
+  followed. See [`docs/USAGE.md`](docs/USAGE.md#global-flags).
+
 - HTML element and id anchors (`div#app`), via a new tree-sitter-html
   adapter. Deliberately narrow: element **+ id only** — no class selectors,
   no `nth-of-type`, no combinators — and an element with no id gets no

@@ -1321,6 +1321,42 @@ whose symbol completion parses `--porcelain` output, with no framework and no
 new dependency. The porcelain format is a machine contract with a shipped
 in-repo consumer as a result ([`docs/CODES.md`](../docs/CODES.md)).
 
+### The global `-C <path>`: git's own semantics, threaded rather than `chdir`ed
+
+Accepted for the same reason interspersed parsing was: a caller writing
+git-shaped commands produces it routinely, and without it `rgit -C <repo>
+diff` exits 129 as an unknown command. Its behaviour is git's, measured
+against `git` 2.55.0 rather than assumed — four observables, each reproduced:
+
+| Invocation | git | `rgit` |
+| --- | --- | --- |
+| `-C a -C b` | cumulative; `b` read relative to `a`, an absolute path resetting | same |
+| `-C ""` | documented no-op — stays put, not an error and not the root | same |
+| `-C` with nothing after it | `no directory given for '-C' option`, exit **129** | same |
+| `-C <unenterable>` | `cannot change to '<path>'`, exit **128**, whatever command followed | same |
+
+Two choices are `rgit`'s own. It is accepted **only before the command**,
+because `git commit -C <commit>` already means "reuse that commit's
+message" — a collision git itself avoids the same way, and one that a
+`commit`-level `-C` would resolve silently and wrongly. And the glued
+`-C<path>` stays the 129 git gives it, but with a message naming the
+missing space rather than `unknown command`: the caller reaching for this
+flag from memory is exactly the one who mistypes it.
+
+The path is **threaded** to `openRepo` rather than applied with `chdir`.
+Git can afford the real `chdir` — it does it once per process, before
+dispatch. `internal/app` cannot: `app.Run` is called in-process, many times
+per test binary, which is the whole reason it lives outside `main`
+([`CONTRIBUTING.md`](../CONTRIBUTING.md#tests)), so a `chdir` that no
+subcommand ever restores would leak into every later case in the package.
+Threading also has no seam to get wrong — `openRepo` was already the single
+place a working directory entered the program, and `internal/gitx` already
+reaches git through `git -C <root>`, so "started somewhere else" needed no
+new mechanism at all. What it does not buy is validation: nothing chdirs, so
+the directory is `os.Stat`ed in `parseChdir` before dispatch, which is what
+keeps a broken `-C` fatal on `doctor` and `languages` too, as git's own
+pre-dispatch `chdir` makes it.
+
 ## Dependencies
 
 Binary size and dependency count are not constraints; each entry earns its place

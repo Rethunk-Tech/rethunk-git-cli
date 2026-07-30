@@ -22,7 +22,7 @@ func TestRunCommit_CountingWarningsReachStderr(t *testing.T) {
 	t.Chdir(dir)
 
 	var stdout, stderr strings.Builder
-	code := runCommit(context.Background(), []string{"-m", "chore: add new.txt", "--dry-run", "new.txt"}, &stdout, &stderr)
+	code := runCommit(context.Background(), "", []string{"-m", "chore: add new.txt", "--dry-run", "new.txt"}, &stdout, &stderr)
 	if code != exitcode.Success {
 		t.Fatalf("runCommit --dry-run = %v; stdout: %s; stderr: %s", code, stdout.String(), stderr.String())
 	}

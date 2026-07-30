@@ -46,11 +46,14 @@ func runCompletion(args []string, stdout, stderr io.Writer) exitcode.Code {
 
 // rgitSubcommands is the completion script's first-word candidate list:
 // every subcommand app.go's Run dispatches, plus its own top-level
-// aliases and flags. completion_test.go's TestCompletionSubcommands
+// aliases and flags -- including -C, which is why neither script can read
+// the command out of a fixed word index any more: `rgit -C <path> commit`
+// puts it at word three, and the two scripts walk past each -C pair to
+// find it (offering directories for the pair's own argument). completion_test.go's TestCompletionSubcommands
 // checks it against topLevelHelp's own Commands section, generated at
 // test time rather than copied, so a new subcommand missing here fails
 // the suite instead of only being missing from a shell's tab completion.
-const rgitSubcommands = "diff commit blame log context languages doctor completion help -h --help --version"
+const rgitSubcommands = "diff commit blame log context languages doctor completion help -C -h --help --version"
 
 // rgitDiffFlags and rgitCommitFlags are the static parts of completion:
 // each subcommand's own flag surface, mirroring docs/USAGE.md § Flags plus
@@ -116,13 +119,22 @@ _rgit_symbols() {
 }
 
 _rgit_completion() {
-    local cur cmd
+    local cur cmd i
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
-    cmd="${COMP_WORDS[1]}"
 
-    if [[ $COMP_CWORD -eq 1 ]]; then
-        COMPREPLY=( $(compgen -W "` + rgitSubcommands + `" -- "$cur") )
+    # The global "-C <path>" options sit before the command, so the command
+    # is not at a fixed index -- walk past each pair to find it.
+    i=1
+    while [[ "${COMP_WORDS[i]}" == "-C" ]]; do i=$((i+2)); done
+    cmd="${COMP_WORDS[i]}"
+
+    if [[ $COMP_CWORD -le $i ]]; then
+        if [[ "${COMP_WORDS[COMP_CWORD-1]}" == "-C" ]]; then
+            COMPREPLY=( $(compgen -d -- "$cur") )
+        else
+            COMPREPLY=( $(compgen -W "` + rgitSubcommands + `" -- "$cur") )
+        fi
         return 0
     fi
 
@@ -137,7 +149,7 @@ _rgit_completion() {
         doctor) flags="$_rgit_doctor_flags" ;;
         completion)
             flags="$_rgit_completion_flags"
-            if [[ $COMP_CWORD -eq 2 && "$cur" != -* ]]; then
+            if [[ $COMP_CWORD -eq $((i+1)) && "$cur" != -* ]]; then
                 COMPREPLY=( $(compgen -W "bash zsh" -- "$cur") )
                 return 0
             fi
@@ -192,11 +204,20 @@ _rgit_symbols() {
 
 _rgit() {
     local cur cmd
+    local -i i
     cur="${words[CURRENT]}"
-    cmd="${words[2]}"
 
-    if (( CURRENT == 2 )); then
-        compadd -- ` + rgitSubcommands + `
+    # Same walk past the global "-C <path>" options as the bash script's.
+    i=2
+    while [[ "${words[i]}" == "-C" ]]; do (( i += 2 )); done
+    cmd="${words[i]}"
+
+    if (( CURRENT <= i )); then
+        if [[ "${words[CURRENT-1]}" == "-C" ]]; then
+            _files -/
+        else
+            compadd -- ` + rgitSubcommands + `
+        fi
         return
     fi
 
@@ -211,7 +232,7 @@ _rgit() {
         doctor) flags=("${_rgit_doctor_flags[@]}") ;;
         completion)
             flags=("${_rgit_completion_flags[@]}")
-            if (( CURRENT == 3 )) && [[ "$cur" != -* ]]; then
+            if (( CURRENT == i+1 )) && [[ "$cur" != -* ]]; then
                 compadd -- bash zsh
                 return
             fi

@@ -93,7 +93,7 @@ func expandGPGSignShorthand(args []string) []string {
 // brackets keep it out of the space of real GPG key ids just as well.
 const gpgSignBare = "<default-key>"
 
-func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exitcode.Code {
+func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	var f commitFlags
 	fs := newTargetFlagSet("commit", &f.syms, &f.files)
 	// -m's long spelling matches git commit's own --message, and -F's long
@@ -170,7 +170,7 @@ func runCommit(ctx context.Context, args []string, stdout, stderr io.Writer) exi
 		fmt.Fprintln(stderr, `rgit: warning: message does not look like "type(scope): subject"`)
 	}
 
-	root, prefix, repo, code := openRepo(ctx, stderr)
+	root, prefix, repo, code := openRepo(ctx, dir, stderr)
 	if code != exitcode.Success {
 		return code
 	}

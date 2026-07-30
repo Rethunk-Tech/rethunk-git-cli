@@ -21,12 +21,20 @@ For the flags that produce these, see [`USAGE.md`](USAGE.md).
 | 9 | Unsupported / deferred language for a symbol anchor |
 | 10 | Symbol anchor refused on a special path (symlink, gitlink, binary) |
 | 11 | All named targets resolve but have no uncommitted changes |
-| 128 | Fatal git / system failure (includes hook rejection, GPG failure) |
-| 129 | Invalid usage (bad flags, missing message, no targets, path escape) |
+| 128 | Fatal git / system failure (includes hook rejection, GPG failure, a `-C` directory that cannot be entered) |
+| 129 | Invalid usage (bad flags, missing message, no targets, path escape, malformed `-C`) |
 
 128 and 129 follow git's own conventions. 1 is git's `--exit-code` convention
 and is deliberately absent from the named constants: unlike every other status
 here, its meaning is conditional on a flag rather than fixed.
+
+Those two are the only codes **every** command can produce, `languages`,
+`doctor` and `completion` included, because the global `-C <path>`
+([`USAGE.md`](USAGE.md#global-flags)) is validated before dispatch: a
+missing directory argument is 129 and an unenterable directory is 128 even
+for a command that would never have opened a repository. Git chdirs before
+it dispatches too, so a broken `-C` cannot be silent on one command and
+fatal on the next.
 
 The numeric bindings live in `internal/exitcode`, which spells no meaning of
 its own — the constant names carry it, and this table defines it.

@@ -47,7 +47,7 @@ Full reference: docs/USAGE.md
 // runLog's flag surface is hand-parsed rather than pulling in pflag, the
 // same minimal style blame.go and languages.go already use for a command
 // this small.
-func runLog(ctx context.Context, args []string, stdout, stderr io.Writer) exitcode.Code {
+func runLog(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	porcelain := false
 	patch := false
 	var positional string
@@ -96,7 +96,7 @@ func runLog(ctx context.Context, args []string, stdout, stderr io.Writer) exitco
 	// against HEAD's own blob is what keeps the derived line range
 	// meaningful to `git log -L`, which walks HEAD's own history and knows
 	// nothing about the worktree at all (specs/design.md § Commands).
-	repo, file, head, res, code := resolveAnchorExtent(ctx, stderr, positional, "log", logHelp,
+	repo, file, head, res, code := resolveAnchorExtent(ctx, dir, stderr, positional, "log", logHelp,
 		func(ctx context.Context, repo *gitx.Repo, _, file string) ([]byte, string, bool, error) {
 			head, exists, err := repo.CatFile(ctx, "HEAD", file)
 			if err != nil {

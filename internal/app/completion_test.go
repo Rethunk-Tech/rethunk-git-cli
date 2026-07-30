@@ -37,7 +37,7 @@ func TestCompletionSubcommands(t *testing.T) {
 		}
 	}
 
-	aliases := map[string]bool{"help": true, "-h": true, "--help": true, "--version": true}
+	aliases := map[string]bool{"help": true, "-h": true, "--help": true, "--version": true, "-C": true}
 	for tok := range got {
 		if aliases[tok] {
 			continue
@@ -151,13 +151,13 @@ func tokenSet(s string) map[string]bool {
 // the live FlagSet each command built for itself.
 func runDiffHelp() string {
 	var stdout, stderr strings.Builder
-	runDiff(context.Background(), []string{"--help"}, &stdout, &stderr)
+	runDiff(context.Background(), "", []string{"--help"}, &stdout, &stderr)
 	return stdout.String()
 }
 
 func runCommitHelp() string {
 	var stdout, stderr strings.Builder
-	runCommit(context.Background(), []string{"--help"}, &stdout, &stderr)
+	runCommit(context.Background(), "", []string{"--help"}, &stdout, &stderr)
 	return stdout.String()
 }
 
@@ -190,7 +190,7 @@ func runCompletionHelpText() string {
 // a context.Context the way runDiff and runCommit do.
 func runBlameHelpText() string {
 	var stdout, stderr strings.Builder
-	runBlame(context.Background(), []string{"--help"}, &stdout, &stderr)
+	runBlame(context.Background(), "", []string{"--help"}, &stdout, &stderr)
 	return stdout.String()
 }
 
@@ -198,7 +198,7 @@ func runBlameHelpText() string {
 // context.Context.
 func runLogHelpText() string {
 	var stdout, stderr strings.Builder
-	runLog(context.Background(), []string{"--help"}, &stdout, &stderr)
+	runLog(context.Background(), "", []string{"--help"}, &stdout, &stderr)
 	return stdout.String()
 }
 
@@ -206,6 +206,6 @@ func runLogHelpText() string {
 // takes a context.Context.
 func runContextHelpText() string {
 	var stdout, stderr strings.Builder
-	runContext(context.Background(), []string{"--help"}, &stdout, &stderr)
+	runContext(context.Background(), "", []string{"--help"}, &stdout, &stderr)
 	return stdout.String()
 }

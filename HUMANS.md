@@ -11,6 +11,7 @@ The starting point for running and using `rgit`, pointing into
 cd /some/git/repo
 rgit diff                                        # what can I commit?
 rgit commit -m "fix(auth): reject expired" auth.go:ValidateToken
+rgit -C /some/other/repo diff                    # ...without standing in it
 ```
 
 Build, prerequisites, language-server setup, environment variables,

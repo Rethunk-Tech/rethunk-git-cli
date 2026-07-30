@@ -177,6 +177,122 @@ func TestRun_UsageErrors(t *testing.T) {
 	}
 }
 
+// TestRun_ChdirBeforeCommand pins the global -C flag against git's own: the
+// repository is resolved from <path> instead of the process working
+// directory, on every command that opens one. Each case runs from a
+// directory that is not a repository at all, so a subcommand that still
+// reached for the working directory fails rather than quietly agreeing --
+// which is why one test covers all five: the threading is per-call-site,
+// and a call site left passing the working directory compiles fine.
+func TestRun_ChdirBeforeCommand(t *testing.T) {
+	repo := chdirTempRepo(t)
+	writeAppFile(t, repo, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	writeAppFile(t, repo, "pkg/deep/c.go", "package deep\n\nfunc C() int {\n\treturn 1\n}\n")
+	gitOut(t, repo, "add", "-A")
+
+	// Still standing in the repository: git documents `-C ""` as a no-op,
+	// not as an error and not as "the root".
+	t.Run(`-C "" is a no-op`, func(t *testing.T) {
+		stdout, _, code := runApp(t, "-C", "", "diff", "--porcelain")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.StringContains(stdout, "a.go"))
+	})
+
+	outside := t.TempDir()
+	t.Chdir(outside)
+
+	t.Run("diff", func(t *testing.T) {
+		stdout, _, code := runApp(t, "-C", repo, "diff", "--porcelain")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.StringContains(stdout, "a.go\tA"))
+	})
+
+	// Two -C options are cumulative, the second read relative to the first,
+	// and the pair lands on a subdirectory -- so this also pins that the
+	// invocation prefix comes from where -C put us: a bare "c.go" resolves
+	// against pkg/deep while output stays root-relative, exactly as it does
+	// for a caller who actually stood there (TestRun_DiffFromSubdirectory).
+	t.Run("cumulative, second relative to the first", func(t *testing.T) {
+		stdout, _, code := runApp(t, "-C", repo, "-C", "pkg/deep", "diff", "--porcelain", "c.go")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.StringContains(stdout, "pkg/deep/c.go"))
+	})
+
+	t.Run("blame", func(t *testing.T) {
+		stdout, _, code := runApp(t, "-C", repo, "blame", "a.go:B")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.StringContains(stdout, "func B()"))
+	})
+
+	t.Run("log", func(t *testing.T) {
+		stdout, _, code := runApp(t, "-C", repo, "log", "a.go:B")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.StringContains(stdout, "chore: initial"))
+	})
+
+	t.Run("context", func(t *testing.T) {
+		stdout, _, code := runApp(t, "-C", repo, "context")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.StringContains(stdout, "chore: initial"))
+	})
+
+	// Last: this one writes, so every read-only case above sees the same
+	// worktree.
+	t.Run("commit", func(t *testing.T) {
+		stdout, _, code := runApp(t, "-C", repo, "commit", "-m", "fix(a): bump A", "a.go:A")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.StringContains(stdout, "a.go:A"))
+		qt.Assert(t, qt.StringContains(gitOut(t, repo, "cat-file", "-p", "HEAD:a.go"), "return 111"))
+	})
+}
+
+// TestRun_ChdirRefusals pins the shapes -C refuses, and the code each
+// exits with: git reports a missing directory argument as a usage error
+// (129) and a directory it cannot enter as a fatal (128), and rgit's own
+// table already spells both. The bad directory is validated whatever
+// follows it, including a command that never opens a repository -- git
+// chdirs before it dispatches, so `doctor` cannot be the one invocation
+// where a broken -C passes silently.
+func TestRun_ChdirRefusals(t *testing.T) {
+	dir := chdirTempRepo(t)
+
+	for _, tc := range []struct {
+		name string
+		args []string
+		want string
+		code exitcode.Code
+	}{{
+		name: "no directory given",
+		args: []string{"-C"},
+		want: "no directory given for '-C'",
+		code: exitcode.InvalidUsage,
+	}, {
+		// git rejects the glued spelling as an unknown option; rgit exits
+		// the same 129 but names the fix, since -C exists here precisely
+		// for callers writing git-shaped commands from memory.
+		name: "glued -C<path>",
+		args: []string{"-C" + dir, "diff"},
+		want: "separate argument",
+		code: exitcode.InvalidUsage,
+	}, {
+		name: "nonexistent directory",
+		args: []string{"-C", filepath.Join(dir, "no-such-dir"), "diff"},
+		want: "cannot change to",
+		code: exitcode.GitFailure,
+	}, {
+		name: "not a directory",
+		args: []string{"-C", filepath.Join(dir, "a.go"), "doctor"},
+		want: "not a directory",
+		code: exitcode.GitFailure,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, stderr, code := runApp(t, tc.args...)
+			qt.Assert(t, qt.Equals(code, tc.code))
+			qt.Assert(t, qt.StringContains(stderr, tc.want))
+		})
+	}
+}
+
 // TestRun_CommitStagesOneSymbol is the happy path through the whole
 // surface: classification, target building, synthesis, the real git commit,
 // and the per-target listing git cannot produce itself.

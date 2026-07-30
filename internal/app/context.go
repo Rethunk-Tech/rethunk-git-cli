@@ -72,7 +72,7 @@ const contextByteBudget = 16384
 
 // runContext takes no flags beyond --help, matching doctor.go's own
 // arg-count-driven style for a command with no real flag surface at all.
-func runContext(ctx context.Context, args []string, stdout, stderr io.Writer) exitcode.Code {
+func runContext(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		fmt.Fprint(stdout, contextHelp)
 		return exitcode.Success
@@ -83,7 +83,7 @@ func runContext(ctx context.Context, args []string, stdout, stderr io.Writer) ex
 		return exitcode.InvalidUsage
 	}
 
-	root, _, repo, code := openRepo(ctx, stderr)
+	root, _, repo, code := openRepo(ctx, dir, stderr)
 	if code != exitcode.Success {
 		return code
 	}
