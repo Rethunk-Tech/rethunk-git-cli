@@ -250,16 +250,8 @@ func TestRun_SymFilterMatchesAnyAcceptedAliasSpelling(t *testing.T) {
 
 	gittest.Write(t, dir, "a.go", "package p\n\ntype A struct{}\n\nfunc (a *A) Get() int { return 1 }\n")
 	gittest.Write(t, dir, "doc.md", "# Diff Scope\n\nOriginal.\n")
-	runGit := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v: %s", args, err, out)
-		}
-	}
-	runGit("add", "a.go", "doc.md")
-	runGit("commit", "-q", "-m", "chore: add a.go and doc.md")
+	gittest.Git(t, dir, "add", "a.go", "doc.md")
+	gittest.Git(t, dir, "commit", "-q", "-m", "chore: add a.go and doc.md")
 
 	gittest.Write(t, dir, "a.go", "package p\n\ntype A struct{}\n\nfunc (a *A) Get() int { return 2 }\n")
 	gittest.Write(t, dir, "doc.md", "# Diff Scope\n\nEdited.\n")
@@ -407,11 +399,7 @@ func TestRun_NoResolvableDeclarationsIsNotDegraded(t *testing.T) {
 	t.Setenv("PATH", pathWithGitOnly(t))
 	// A Python file holding only a comment: parses, but declares nothing.
 	gittest.Write(t, dir, "empty.py", "# no declarations here\n")
-	cmd := exec.Command("git", "add", "empty.py")
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git add: %v: %s", err, out)
-	}
+	gittest.Git(t, dir, "add", "empty.py")
 
 	report, err := Run(context.Background(), repo, dir, Options{Files: []string{"empty.py"}})
 	if err != nil {
@@ -614,5 +602,135 @@ func TestNumstatPath(t *testing.T) {
 				t.Errorf("NumstatPath(%q) = (%q, %q); want (%q, %q)", tc.raw, oldPath, newPath, tc.oldPath, tc.newPath)
 			}
 		})
+	}
+}
+
+// TestRun_FileAndRowOrderIsPathThenPosition pins docs/USAGE.md's stable
+// ordering contract at the unit lane: files sorted alphabetically by path
+// (sortReport), rows within a file sorted by source position, not by
+// symbol name (attributeSymbols' own SortStableFunc by pos). Previously
+// only rgit_e2e_test.go's TestOutput_OrderedByPathThenPosition proved this,
+// so a regression in either sort would pass `go test -short ./...`
+// undetected. Two files guard the path sort; each declaring Zebra before
+// Apple in source order guards the position sort against an accidental
+// alphabetical one.
+func TestRun_FileAndRowOrderIsPathThenPosition(t *testing.T) {
+	t.Parallel()
+	src := "package p\n\nfunc Zebra() int { return 1 }\n\nfunc Apple() int { return 2 }\n"
+	dir, repo := gittest.New(t)
+	gittest.Write(t, dir, "b.go", src)
+	gittest.Write(t, dir, "a.go", src)
+	gittest.Commit(t, dir, "chore: fixture")
+
+	edited := strings.NewReplacer("return 1", "return 11", "return 2", "return 22").Replace(src)
+	gittest.Write(t, dir, "a.go", edited)
+	gittest.Write(t, dir, "b.go", edited)
+
+	report, err := Run(context.Background(), repo, dir, Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(report.Files) != 2 || report.Files[0].Path != "a.go" || report.Files[1].Path != "b.go" {
+		t.Fatalf("Files = %+v; want a.go before b.go", report.Files)
+	}
+	for _, f := range report.Files {
+		if len(f.Rows) != 2 || f.Rows[0].Symbol != "Zebra" || f.Rows[1].Symbol != "Apple" {
+			t.Errorf("%s rows = %+v; want Zebra before Apple (source order, not alphabetical)", f.Path, f.Rows)
+		}
+	}
+}
+
+// TestRun_BinaryChangeReportsDashCounts pins run.go's binary short-circuit
+// (buildFileReport's addedStr == "-" && deletedStr == "-" branch) at the
+// unit lane: previously only rgit_e2e_test.go's
+// TestDiff_BinaryRowUsesDashCounts proved a real worktree binary change
+// surfaces as StatusBinary with "-" counts; render_test.go only ever
+// constructed StatusBinary rows by hand for rendering, never exercised
+// Run's own classification of one.
+func TestRun_BinaryChangeReportsDashCounts(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	binary := []byte("PNGFAKE\x00\x01binary")
+	gittest.Write(t, dir, "logo.bin", string(binary))
+	gittest.Git(t, dir, "add", "--", "logo.bin")
+	gittest.Git(t, dir, "commit", "-q", "-m", "add binary")
+
+	changed := append(append([]byte(nil), binary...), 'X')
+	gittest.Write(t, dir, "logo.bin", string(changed))
+
+	report, err := Run(context.Background(), repo, dir, Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	var got *FileReport
+	for i := range report.Files {
+		if report.Files[i].Path == "logo.bin" {
+			got = &report.Files[i]
+		}
+	}
+	if got == nil || len(got.Rows) != 1 {
+		t.Fatalf("report for logo.bin = %+v; want exactly one row", got)
+	}
+	row := got.Rows[0]
+	if row.Status != StatusBinary || row.Added != "-" || row.Deleted != "-" {
+		t.Errorf("logo.bin row = %+v; want StatusBinary with \"-\" counts", row)
+	}
+}
+
+// TestRun_FreeFloatingCommentIsUnanchorable pins docs/ANCHORS.md's example
+// at the unit lane: a comment separated from every declaration by a blank
+// line on both sides belongs to no symbol, so editing only it must surface
+// as (unanchorable) and neither neighbouring function may show any change
+// -- the sum-of-hunks invariant. Previously only rgit_e2e_test.go's
+// TestDiff_UnanchorableHunk exercised this path; the unit lane had markdown
+// setext attribution and hand-built rows, never a Go free-floating comment
+// driven through attributeSymbols/Run.
+func TestRun_FreeFloatingCommentIsUnanchorable(t *testing.T) {
+	t.Parallel()
+	const before = `package notes
+
+func A() int {
+	return 1
+}
+
+// free-floating note
+
+func B() int {
+	return 2
+}
+`
+	const after = `package notes
+
+func A() int {
+	return 1
+}
+
+// free-floating note, edited
+
+func B() int {
+	return 2
+}
+`
+	dir, repo := gittest.New(t)
+	gittest.Write(t, dir, "notes.go", before)
+	gittest.Commit(t, dir, "chore: fixture")
+	gittest.Write(t, dir, "notes.go", after)
+
+	rows := rowsFor(t, dir, repo, "notes.go")
+
+	var found bool
+	for _, r := range rows {
+		if r.Status == StatusUnanchorable {
+			found = true
+			if r.Added != "1" || r.Deleted != "1" {
+				t.Errorf("UNANCHORABLE row = %+v; want Added=1 Deleted=1", r)
+			}
+		}
+		if r.Symbol != "" {
+			t.Errorf("neither A nor B changed; the comment edit must not be attributed to a symbol: %+v", r)
+		}
+	}
+	if !found {
+		t.Fatalf("comment-only change between two functions must surface as UNANCHORABLE: %+v", rows)
 	}
 }
