@@ -272,7 +272,7 @@ func fakeTaplo(t *testing.T, exitCode int) string {
 func mustTaploCapable(t *testing.T, bin string) (ok bool, detail string) {
 	t.Helper()
 	const attempts = 5
-	for i := 0; i < attempts; i++ {
+	for range attempts {
 		ok, detail = taploCapability(bin)
 		if ok {
 			return ok, detail
