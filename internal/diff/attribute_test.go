@@ -79,6 +79,39 @@ func TestTopLevelComma(t *testing.T) {
 	}
 }
 
+// TestAttributeSymbols_GoInlineMultiNameConstFallsBackUnanchorable guards
+// the diff-layer half of lang_go.go's goSpecNameDeclarations fix: "a" and
+// "b" in "const a, b = 1, 2" now both resolve, sharing one extent, since
+// isMultiDeclaratorLang (attribute.go) now includes "go". exclusiveText's
+// own containment check treats two regions with the identical extent as
+// fully nested in each other, so both empty out rather than double-counting
+// the line or mis-attributing the change to whichever name sorts first --
+// the change must fall to (unanchorable), honoring this package's "every
+// row sums to the file's true total" invariant, and neither "a" nor "b" may
+// carry a row of their own.
+func TestAttributeSymbols_GoInlineMultiNameConstFallsBackUnanchorable(t *testing.T) {
+	t.Parallel()
+	lang, ok := resolve.ForExtension(".go")
+	if !ok {
+		t.Fatal("resolve: no adapter registered for .go")
+	}
+
+	oldSrc := []byte("package p\n\nconst a, b = 1, 2\n")
+	newSrc := []byte("package p\n\nconst a, b = 1, 3\n")
+
+	rows, err := attributeSymbols(lang, oldSrc, newSrc, 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(rows) != 1 || rows[0].Status != StatusUnanchorable {
+		t.Fatalf("rows = %+v; want exactly one UNANCHORABLE row", rows)
+	}
+	if rows[0].Added != "1" || rows[0].Deleted != "1" {
+		t.Errorf("UNANCHORABLE row = %+v; want Added=1 Deleted=1", rows[0])
+	}
+}
+
 func TestNarrowMultiDeclarator(t *testing.T) {
 	t.Parallel()
 	src := []byte("const a = 1, b = 2")

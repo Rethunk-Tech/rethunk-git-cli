@@ -548,6 +548,43 @@ func F() int { return Alpha }
 	qt.Assert(t, qt.StringContains(toplevelText, "func F()"))
 }
 
+func TestResolve_GoInlineMultiNameConstVarBothResolve(t *testing.T) {
+	t.Parallel()
+	// "const a, b = 1, 2" is one const_spec with two names sharing one
+	// value list -- unlike TypeScript's grouped declarators, the grammar
+	// gives no sub-range naming b alone, so goSpecNameDeclarations shares
+	// the whole spec's extent between both names rather than resolving
+	// only the first and leaving b unresolvable, the "silent
+	// drag-a-sibling" defect TypeScript's own lexicalDeclarations fix
+	// (TestResolve_TypeScriptMultiDeclarator) already guards against for
+	// its own grammar.
+	src := []byte(`package p
+
+const a, b = 1, 2
+
+var x, y = 3, 4
+
+func F() int { return a + b + x + y }
+`)
+
+	order, err := resolve.DeclOrder(resolverGoLang(t), src)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.DeepEquals(order, []string{"a", "b", "x", "y", "F"}))
+
+	// Both names resolve, to the identical shared extent -- staging either
+	// one splices the same line, honestly reflecting that there is no way
+	// to give b its own bytes without a's (and the keyword's) coming along
+	// too.
+	qt.Assert(t, qt.Equals(string(src[mustResolve(t, src, "a").Extent.Start:mustResolve(t, src, "a").Extent.End]),
+		"const a, b = 1, 2"))
+	qt.Assert(t, qt.Equals(string(src[mustResolve(t, src, "b").Extent.Start:mustResolve(t, src, "b").Extent.End]),
+		"const a, b = 1, 2"))
+	qt.Assert(t, qt.Equals(string(src[mustResolve(t, src, "x").Extent.Start:mustResolve(t, src, "x").Extent.End]),
+		"var x, y = 3, 4"))
+	qt.Assert(t, qt.Equals(string(src[mustResolve(t, src, "y").Extent.Start:mustResolve(t, src, "y").Extent.End]),
+		"var x, y = 3, 4"))
+}
+
 func TestResolve_GoContainerMembers(t *testing.T) {
 	t.Parallel()
 	// Struct fields and interface methods are addressable one level in.

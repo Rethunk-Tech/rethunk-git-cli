@@ -144,14 +144,21 @@ func exclusiveText(src []byte, self region, siblings []region) []byte {
 	return out
 }
 
-// isMultiDeclaratorLang reports whether lang's grammar can produce a
-// Declaration whose Full extent covers more than the addressable name
-// alone — docs/ANCHORS.md and lang_typescript.go: "const a = 1, b = 2" is
-// one lexical_declaration statement, and only the first declarator is
-// named, but the staged extent is the whole statement.
+// isMultiDeclaratorLang reports whether lang's grammar can produce more than
+// one Declaration sharing the same Full extent — lang_go.go's
+// goSpecNameDeclarations: "const a, b = 1, 2" is one const_spec with two
+// names and one shared value list, so both "a" and "b" resolve to the whole
+// spec, not a range of their own the way TypeScript's separately-noded
+// declarators get. narrowMultiDeclarator's bracket-aware truncation still
+// runs for these two languages for the same reason it always has --
+// exclusiveText's own containment check already treats two regions with the
+// identical extent as fully nested in each other and empties both out, so a
+// changed Go multi-name spec falls to (unanchorable) rather than being
+// double-counted or mis-attributed to whichever name sorts first, honoring
+// this package's own "every row sums to the file's true total" invariant.
 func isMultiDeclaratorLang(lang resolve.Language) bool {
 	switch lang.Name() {
-	case "typescript", "tsx":
+	case "typescript", "tsx", "go":
 		return true
 	}
 	return false

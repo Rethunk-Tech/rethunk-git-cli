@@ -130,28 +130,61 @@ func goSpecDeclarations(node *ts.Node, src []byte) []Declaration {
 		return nil
 	}
 	if len(specs) == 1 {
-		d, ok := namedDecl(src, node, specs[0])
-		if !ok {
+		decls := goSpecNameDeclarations(node, specs[0], src)
+		if len(decls) == 0 {
 			return nil
 		}
-		out := []Declaration{d}
 		if specs[0].Kind() == "type_spec" {
-			out = append(out, goContainerMembers(specs[0], d.Bare, src)...)
+			decls = append(decls, goContainerMembers(specs[0], decls[0].Bare, src)...)
 		}
-		return out
+		return decls
 	}
 
 	out := make([]Declaration, 0, len(specs))
 	for _, spec := range specs {
-		if d, ok := namedDecl(src, spec, spec); ok {
-			out = append(out, d)
-			// type ( ... ) groups each spec individually (goSpecs above);
-			// members must work the same way inside a grouped block as
-			// beside it, so this runs for every spec, not just a lone one.
-			if spec.Kind() == "type_spec" {
-				out = append(out, goContainerMembers(spec, d.Bare, src)...)
-			}
+		decls := goSpecNameDeclarations(spec, spec, src)
+		out = append(out, decls...)
+		// type ( ... ) groups each spec individually (goSpecs above);
+		// members must work the same way inside a grouped block as
+		// beside it, so this runs for every spec, not just a lone one.
+		if len(decls) > 0 && spec.Kind() == "type_spec" {
+			out = append(out, goContainerMembers(spec, decls[0].Bare, src)...)
 		}
+	}
+	return out
+}
+
+// goSpecNameDeclarations builds one Declaration per identifier spec's own
+// "name" field carries, every one staged at extent. const_spec and var_spec
+// allow more than one comma-separated name sharing a single value list
+// ("const a, b = 1, 2" is one const_spec, not two) -- unlike TypeScript's
+// grouped declarators, which the grammar already separates into their own
+// nodes for lexicalDeclarations to give each its own extent, there is no
+// sub-range of a shared Go spec that names b without a's text (and the
+// keyword) coming along too, the same constraint goStructFields' shared
+// "A, B int" field line hits. Rather than resolve only the first name and
+// leave the rest silently unaddressable, every name here shares the
+// identical extent: resolving "b" now finds the whole spec, same as "a"
+// already did, instead of reporting b unresolvable. type_spec and
+// type_alias carry exactly one name, so this is a no-op split for them --
+// ChildByFieldName's own single-match behavior, generalized to read every
+// match rather than just the first.
+//
+// ChildrenByFieldName also surfaces the anonymous "," tokens joining a
+// comma-separated "name" field's identifiers: field() in this grammar tags
+// every top-level symbol of the seq it wraps, commas included, not only the
+// identifiers -- so each candidate is filtered to IsNamed() before being
+// read as a name, or a grouped spec would mint a bogus "," symbol between
+// every real one.
+func goSpecNameDeclarations(extent, spec *ts.Node, src []byte) []Declaration {
+	cursor := spec.Walk()
+	defer cursor.Close()
+	var out []Declaration
+	for _, name := range spec.ChildrenByFieldName("name", cursor) {
+		if !name.IsNamed() {
+			continue
+		}
+		out = append(out, Declaration{Node: extent, Bare: nodeText(src, &name)})
 	}
 	return out
 }

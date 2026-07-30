@@ -90,6 +90,11 @@ Notable changes to `rgit`. The format follows
 
 ### Fixed
 
+- Every name in a Go inline multi-name declaration resolves, not just the
+  first: `const a, b = 1, 2` indexed only `a`, leaving `b` unresolvable
+  where the identical TypeScript shape already worked. Both names share the
+  spec's whole extent, since no sub-range names one without the other's
+  bytes. See [`docs/ANCHORS.md`](docs/ANCHORS.md).
 - `rgit log FILE:SYMBOL` refuses a path containing `:` instead of embedding
   it into `git log`'s own `-L<range>:<path>` argument, which joins the two
   with `:` and has no way to escape one inside `path` -- and, measured
