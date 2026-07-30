@@ -73,6 +73,18 @@ type serverEntry struct {
 	// actually usable. Presence proves nothing for taplo: an npm-installed
 	// binary answers fine on PATH while speaking no LSP.
 	capability func(bin string) (ok bool, detail string)
+	// wantSpawnArgs pins the static argv internal/lsp/servers.go spawns
+	// this binary with once it's on PATH -- unrelated to extraArgs above,
+	// which is this installer's own *install*-command flags, not the
+	// server's own runtime invocation. Nil for a server with no
+	// counterpart in internal/lsp.Servers() (taplo) or a transportSocket
+	// one (gopls -- its argv is only known at spawn time, built around a
+	// socket path this catalog never sees). Only
+	// TestServerCatalog_MatchesLSPServers reads this field: before m21 (the
+	// 2026-07-29 audit), spawn argv shapes lived solely in
+	// internal/lsp/servers.go with nothing to catch them drifting from
+	// what this installer sets a user up to run.
+	wantSpawnArgs []string
 }
 
 var serverCatalog = []serverEntry{
@@ -84,44 +96,54 @@ var serverCatalog = []serverEntry{
 		// cmd/rgit-install/main.go. Bump deliberately
 		// (specs/design.md § Dependencies), not silently on every install.
 		pkg: "golang.org/x/tools/gopls@v0.23.0",
+		// No wantSpawnArgs: gopls is transportSocket in
+		// internal/lsp/servers.go, spawned with a sockPath this catalog
+		// never sees.
 	},
 	{
-		bin:     "vtsls",
-		manager: managerNPM,
-		pkg:     "@vtsls/language-server",
+		bin:           "vtsls",
+		manager:       managerNPM,
+		pkg:           "@vtsls/language-server",
+		wantSpawnArgs: []string{"--stdio"},
 	},
 	{
-		bin:     "pyright-langserver",
-		manager: managerNPM,
-		pkg:     "pyright",
+		bin:           "pyright-langserver",
+		manager:       managerNPM,
+		pkg:           "pyright",
+		wantSpawnArgs: []string{"--stdio"},
 	},
 	{
-		bin:     "bash-language-server",
-		manager: managerNPM,
-		pkg:     "bash-language-server",
+		bin:           "bash-language-server",
+		manager:       managerNPM,
+		pkg:           "bash-language-server",
+		wantSpawnArgs: []string{"start"},
 	},
 	{
-		bin:     "yaml-language-server",
-		manager: managerNPM,
-		pkg:     "yaml-language-server",
+		bin:           "yaml-language-server",
+		manager:       managerNPM,
+		pkg:           "yaml-language-server",
+		wantSpawnArgs: []string{"--stdio"},
 	},
 	{
 		// Same npm package as vscode-css-language-server below --
 		// buildInstallJobs (servers_install.go) groups them into one
 		// install, not two.
-		bin:     "vscode-json-language-server",
-		manager: managerNPM,
-		pkg:     "vscode-langservers-extracted",
+		bin:           "vscode-json-language-server",
+		manager:       managerNPM,
+		pkg:           "vscode-langservers-extracted",
+		wantSpawnArgs: []string{"--stdio"},
 	},
 	{
-		bin:     "vscode-css-language-server",
-		manager: managerNPM,
-		pkg:     "vscode-langservers-extracted",
+		bin:           "vscode-css-language-server",
+		manager:       managerNPM,
+		pkg:           "vscode-langservers-extracted",
+		wantSpawnArgs: []string{"--stdio"},
 	},
 	{
 		bin:           "marksman",
 		manager:       managerNone,
 		unmanagedHint: "no package manager publishes it -- download a release binary from https://github.com/artempyanykh/marksman/releases and put it on PATH",
+		wantSpawnArgs: []string{"server"},
 	},
 	{
 		bin:        "taplo",

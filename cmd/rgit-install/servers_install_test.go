@@ -12,6 +12,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -130,6 +131,34 @@ func TestDirOnPATH(t *testing.T) {
 	// cargo can write taplo to ~/.cargo/bin while that directory is absent
 	// from PATH; dirOnPATH is what catches it.
 	qt.Assert(t, qt.IsFalse(dirOnPATH("/home/x/.cargo/bin", path)))
+}
+
+// TestBinDirWarning covers the three-way decision manageServers' loop makes
+// after a job's install succeeds -- including the err != nil case (m23 in
+// the 2026-07-29 audit) that previously had no signal at all, silently
+// skipping the PATH check on a managerBinDir failure.
+func TestBinDirWarning(t *testing.T) {
+	t.Parallel()
+
+	t.Run("managerBinDir failed: warn PATH could not be verified", func(t *testing.T) {
+		t.Parallel()
+		got := binDirWarning("taplo", "", fmt.Errorf("boom"), "/usr/bin")
+		qt.Assert(t, qt.StringContains(got, "taplo"))
+		qt.Assert(t, qt.StringContains(got, "could not verify"))
+		qt.Assert(t, qt.StringContains(got, "boom"))
+	})
+
+	t.Run("dir known and on PATH: nothing to print", func(t *testing.T) {
+		t.Parallel()
+		got := binDirWarning("gopls", "/usr/local/bin", nil, "/usr/local/bin:/usr/bin")
+		qt.Assert(t, qt.Equals(got, ""))
+	})
+
+	t.Run("dir known and off PATH: formatPathWarning's own message", func(t *testing.T) {
+		t.Parallel()
+		got := binDirWarning("taplo", "/home/x/.cargo/bin", nil, "/usr/bin")
+		qt.Assert(t, qt.Equals(got, formatPathWarning("taplo", "/home/x/.cargo/bin")))
+	})
 }
 
 func TestFormatPathWarning(t *testing.T) {

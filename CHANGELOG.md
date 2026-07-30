@@ -73,6 +73,10 @@ Notable changes to `rgit`. The format follows
   three accepted it only as their sole argument, so `rgit context --porcelain
   --help` was a usage error rather than help. `rgit completion <unknown>`
   also prints the command's help, as a missing shell argument already did.
+- `rgit-install -generate-only` combined with `-with-servers` installs the
+  managed language servers instead of silently skipping them, and an install
+  whose manager bin directory cannot be located now warns that PATH
+  reachability could not be verified rather than saying nothing.
 - `rgit-install -with-servers` installs `gopls@v0.23.0` instead of
   `gopls@latest`, matching the deliberate `tree-sitter-sql` pin: install
   reproducibility no longer drifts under a fixed rgit release. See

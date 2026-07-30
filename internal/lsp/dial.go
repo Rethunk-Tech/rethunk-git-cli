@@ -37,7 +37,7 @@ func Dial(ctx context.Context, lang, repoRoot string) (client *Client, degraded 
 
 // dialSocket implements the probe/spawn sequence from specs/design.md:
 // try $RGIT_LSP_SOCKET, then the default socket path, each within
-// DialBudget; if neither answers, spawn a daemon for a future invocation to
+// dialBudget; if neither answers, spawn a daemon for a future invocation to
 // find and degrade this one to [ts-only] rather than wait for it.
 func dialSocket(ctx context.Context, spec serverSpec, repoRoot string) (*Client, bool) {
 	sockPath, managedOK := defaultSocketPath(spec.name)
@@ -47,20 +47,20 @@ func dialSocket(ctx context.Context, spec serverSpec, repoRoot string) (*Client,
 
 		// Re-verify the managed directory right before dialing into it --
 		// defaultSocketPath's own privateSocketDir call happened earlier,
-		// possibly after a DialBudget-bounded probe of an earlier
+		// possibly after a dialBudget-bounded probe of an earlier
 		// candidate. A user-supplied $RGIT_LSP_SOCKET has no directory of
 		// rgit's to re-check here; it was never ours to vouch for.
 		if managed && !verifyPrivateDir(filepath.Dir(candidate)) {
 			continue
 		}
 
-		dialer := net.Dialer{Timeout: DialBudget}
+		dialer := net.Dialer{Timeout: dialBudget}
 		conn, err := dialer.DialContext(ctx, "unix", candidate)
 		if err != nil {
 			continue
 		}
 
-		handshakeCtx, cancel := context.WithTimeout(ctx, DialBudget+QueryDeadline)
+		handshakeCtx, cancel := context.WithTimeout(ctx, dialBudget+queryDeadline)
 		client, err := NewClient(handshakeCtx, conn, repoRoot)
 		cancel()
 		if err != nil {
@@ -88,7 +88,7 @@ func dialSocket(ctx context.Context, spec serverSpec, repoRoot string) (*Client,
 				// strands the old process, unreachable, until its own
 				// -listen.timeout idle shutdown (servers.go's daemonArgs)
 				// reclaims it. A handshake failure this deep into
-				// DialBudget+QueryDeadline is itself strong evidence of a
+				// dialBudget+queryDeadline is itself strong evidence of a
 				// stuck process (specs/design.md measures a healthy gopls
 				// answering in single-digit milliseconds), so this is not
 				// treated as a case worth a shutdown RPC or kill-by-pid:
@@ -172,7 +172,7 @@ func privateSocketDir() (dir string, ok bool) {
 // re-run it immediately before they actually dial or spawn into the
 // managed default, not only once when privateSocketDir first returned it.
 // Those two operations happen later than the original check -- after a
-// DialBudget-bounded probe of every other candidate, in dialSocket's
+// dialBudget-bounded probe of every other candidate, in dialSocket's
 // case -- leaving a TOCTOU window in which the parent directory could in
 // principle be rewritten to swap dir out from under a caller that trusted
 // an earlier verification. This narrows that window; it does not close
@@ -293,7 +293,7 @@ func unlinkDeadSocket(sockPath string) {
 	if _, err := os.Stat(sockPath); err != nil {
 		return
 	}
-	conn, err := (&net.Dialer{Timeout: DialBudget}).DialContext(context.Background(), "unix", sockPath)
+	conn, err := (&net.Dialer{Timeout: dialBudget}).DialContext(context.Background(), "unix", sockPath)
 	if err != nil {
 		_ = os.Remove(sockPath)
 		return
@@ -304,7 +304,7 @@ func unlinkDeadSocket(sockPath string) {
 // dialStdio spawns spec's server fresh: vtsls and pyright have no
 // listen-mode daemon (specs/design.md), so every query is a new process.
 // The whole spawn+handshake is bounded by
-// DialBudget+QueryDeadline; a server still indexing when that expires is
+// dialBudget+queryDeadline; a server still indexing when that expires is
 // killed and this invocation degrades rather than waits.
 func dialStdio(ctx context.Context, spec serverSpec, repoRoot string) (*Client, bool) {
 	if _, err := exec.LookPath(spec.bin); err != nil {
@@ -338,7 +338,7 @@ func dialStdio(ctx context.Context, spec serverSpec, repoRoot string) (*Client, 
 		return cmd.Wait()
 	}
 
-	handshakeCtx, cancel := context.WithTimeout(ctx, DialBudget+QueryDeadline)
+	handshakeCtx, cancel := context.WithTimeout(ctx, dialBudget+queryDeadline)
 	defer cancel()
 	client, err := NewClient(handshakeCtx, pipeRWC{stdout, stdin}, repoRoot)
 	if err != nil {

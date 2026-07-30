@@ -17,6 +17,14 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
 )
 
+// fakeLookPath doubles exec.LookPath for detectServers/manageServers, which
+// take lookPath injected precisely so their own branching -- found vs.
+// absent, capable vs. not -- is testable without a real PATH to control.
+// What would catch this double drifting from a real exec.LookPath (PATHEXT
+// handling, symlink resolution, relative-vs-absolute results): main.go's own
+// doc comment on main() names `go run ./cmd/rgit-install -dry-run`, run by
+// hand against whatever the real environment has on PATH, as the check for
+// the wiring this stands in for.
 func fakeLookPath(found map[string]string) func(string) (string, error) {
 	return func(bin string) (string, error) {
 		if p, ok := found[bin]; ok {
@@ -172,24 +180,39 @@ func TestServerCatalog(t *testing.T) {
 // nested TOML table, so it stays permanently unwired in
 // internal/lsp/servers.go despite being installed here for a user's own
 // editor tooling.
+//
+// Beyond binary names, this also cross-checks each entry's wantSpawnArgs
+// against internal/lsp.ServerInfo.SpawnArgs (m21 in the 2026-07-29 audit):
+// before this, the argv internal/lsp/servers.go spawns a server with had no
+// counterpart here at all, so a spawn-shape change in one file (say,
+// bash-language-server's "start" becoming "--stdio") could silently drift
+// from what this catalog documents without either test noticing.
 func TestServerCatalog_MatchesLSPServers(t *testing.T) {
 	t.Parallel()
 
 	const taplo = "taplo"
 
-	wired := map[string]bool{}
+	wired := map[string]lsp.ServerInfo{}
 	for _, s := range lsp.Servers() {
-		wired[s.Bin] = true
+		wired[s.Bin] = s
 	}
 
 	for _, e := range serverCatalog {
 		if e.bin == taplo {
 			continue
 		}
-		if !wired[e.bin] {
+		info, ok := wired[e.bin]
+		if !ok {
 			t.Errorf("serverCatalog has %q with no counterpart in internal/lsp.Servers() -- either it was unwired from internal/lsp/servers.go (update this catalog and its comment) or this catalog is stale", e.bin)
+			continue
 		}
 		delete(wired, e.bin)
+
+		if e.wantSpawnArgs == nil && info.SpawnArgs != nil {
+			t.Errorf("serverCatalog[%q].wantSpawnArgs = nil, but internal/lsp spawns it with %v -- pin the real argv here", e.bin, info.SpawnArgs)
+			continue
+		}
+		qt.Assert(t, qt.DeepEquals(info.SpawnArgs, e.wantSpawnArgs), qt.Commentf("bin %q", e.bin))
 	}
 	for bin := range wired {
 		t.Errorf("internal/lsp.Servers() wires %q but serverCatalog has no entry for it -- a user running -with-servers cannot install it", bin)

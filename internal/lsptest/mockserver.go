@@ -49,6 +49,18 @@ type MockServerHooks struct {
 // behaviour drifting out from under this mock's assumptions still has a
 // path to be caught, rather than this double quietly becoming the only
 // definition of "correct" either caller checks against.
+//
+// One gap this loop cannot model at all (n15 in the 2026-07-29 audit): a
+// server-initiated request, e.g. workspace/configuration, which
+// internal/lsp/client.go's configClient exists to answer for taplo. This is
+// a client speaking to a server it drives, not server-side jsonrpc2 --
+// nothing here reads an outbound request from conn and waits on this
+// client's own reply the way a real server would, so no test can exercise
+// configClient.Configuration through this double no matter what is added to
+// the switch above. Extend this loop only if taplo is ever wired into the
+// servers map for real; until then, configClient's live counterpart is
+// TestResolve_CrossCheckLiveGopls's same real-server boundary, not this
+// mock, and even that test would need taplo installed and wired to reach it.
 func ServeMockLSP(conn io.ReadWriteCloser, resultJSON string, hooks MockServerHooks) error {
 	r := bufio.NewReader(conn)
 	for {

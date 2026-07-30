@@ -127,6 +127,28 @@ func formatPathWarning(servers, dir string) string {
 	)
 }
 
+// binDirWarning is what manageServers prints, if anything, after a job's
+// install succeeds: formatPathWarning's own message when dir (from
+// managerBinDir) is known and off pathEnv, or a distinct "could not verify"
+// notice when managerBinDir itself failed. Before this (m23 in the
+// 2026-07-29 audit), a managerBinDir error silently skipped the PATH check
+// with no signal at all -- indistinguishable from "checked and it's fine"
+// to anyone reading the output. Empty string means nothing needs printing.
+//
+// Split out from manageServers' loop, which only ever reaches the
+// err != nil branch through a real npm/bun/cargo install (managerBinDir's
+// own doc comment already draws that "exercised by hand" boundary), so
+// this is the one piece of that decision worth a direct, no-exec unit test.
+func binDirWarning(label, dir string, err error, pathEnv string) string {
+	if err != nil {
+		return fmt.Sprintf("WARNING: could not verify %s is reachable on PATH (%v) -- the binary may be installed somewhere nothing that shells out (rgit included) can reach.", label, err)
+	}
+	if !dirOnPATH(dir, pathEnv) {
+		return formatPathWarning(label, dir)
+	}
+	return ""
+}
+
 // managerBinDir resolves where a manager places the binaries it installs, so
 // the caller can check that directory against PATH. Only the go and cargo
 // branches are pure enough to unit test without shelling out (go's through
@@ -223,8 +245,8 @@ func manageServers(dryRun bool, stdout io.Writer, lookPath func(string) (string,
 		}
 
 		dir, err := managerBinDir(job.manager, useBun)
-		if err == nil && !dirOnPATH(dir, os.Getenv("PATH")) {
-			fmt.Fprintln(stdout, "    "+formatPathWarning(label, dir))
+		if msg := binDirWarning(label, dir, err, os.Getenv("PATH")); msg != "" {
+			fmt.Fprintln(stdout, "    "+msg)
 		}
 	}
 	return ok

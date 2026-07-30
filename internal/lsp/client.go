@@ -34,6 +34,14 @@ import (
 // documented above is specific to taplo's own measured protocol quirk, not
 // speculative, and answering it safely costs nothing for every server that
 // is wired and never asks.
+//
+// Dead on every wired path today (n14 in the 2026-07-29 audit) is therefore
+// the correct, deliberate state, not debt: this is protocol reserve for
+// taplo specifically, kept rather than deleted or stubbed, and worth
+// revisiting only if taplo is ever wired into the servers map for real.
+// internal/lsptest's mockserver has no equivalent of this handler -- see
+// its own doc comment (n15) for what that gap in the double does and does
+// not cover.
 type configClient struct {
 	protocol.UnimplementedClient
 }
@@ -121,10 +129,10 @@ func (c *Client) Close() error {
 
 // DocumentSymbols requests textDocument/documentSymbol for path with
 // content src and returns the flattened, shape-normalized result. ctx is
-// wrapped in QueryDeadline internally; callers do not need their own
+// wrapped in queryDeadline internally; callers do not need their own
 // timeout for this specific call.
 func (c *Client) DocumentSymbols(ctx context.Context, path string, src []byte) ([]Symbol, error) {
-	ctx, cancel := context.WithTimeout(ctx, QueryDeadline)
+	ctx, cancel := context.WithTimeout(ctx, queryDeadline)
 	defer cancel()
 
 	langID, ok := LanguageKindFor(path)
@@ -156,12 +164,12 @@ func (c *Client) DocumentSymbols(ctx context.Context, path string, src []byte) (
 	// must be matched by a didClose here -- otherwise open documents
 	// accumulate in the server for as long as it stays up. A
 	// fresh, short-lived context rather than ctx: ctx is already scoped to
-	// this one query and may be at or past QueryDeadline by the time a slow
+	// this one query and may be at or past queryDeadline by the time a slow
 	// documentSymbol round trip below returns, which would silently drop
 	// this notification exactly when a real server (not the deadline) is
 	// the reason it is late.
 	defer func() {
-		closeCtx, closeCancel := context.WithTimeout(context.Background(), QueryDeadline)
+		closeCtx, closeCancel := context.WithTimeout(context.Background(), queryDeadline)
 		defer closeCancel()
 		_ = c.server.DidClose(closeCtx, &protocol.DidCloseTextDocumentParams{
 			TextDocument: protocol.TextDocumentIdentifier{URI: docURI},

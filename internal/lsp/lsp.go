@@ -8,11 +8,16 @@ package lsp
 
 import "time"
 
-// DialBudget bounds how long Dial waits to reach a live daemon socket
+// dialBudget bounds how long Dial waits to reach a live daemon socket
 // before giving up and reporting degraded=true (specs/design.md).
-const DialBudget = 150 * time.Millisecond
+//
+// Unexported: no caller outside this package reaches Dial's timing directly
+// (n13 in the 2026-07-29 audit found none when this was still exported) --
+// internal/resolve calls CrossCheckExtent/CrossCheckExtents, never Dial or
+// these constants themselves.
+const dialBudget = 150 * time.Millisecond
 
-// QueryDeadline bounds a single textDocument/documentSymbol round trip once
+// queryDeadline bounds a single textDocument/documentSymbol round trip once
 // connected (specs/design.md).
 //
 // 2s, not a tighter budget: a warm gopls daemon answers in single-digit
@@ -21,7 +26,9 @@ const DialBudget = 150 * time.Millisecond
 // degrades the cross-check to [ts-only] on every invocation instead of
 // occasionally -- a deadline that only ever fires is not a budget, it is a
 // disabled feature.
-const QueryDeadline = 2 * time.Second
+//
+// Unexported alongside dialBudget -- see its comment.
+const queryDeadline = 2 * time.Second
 
 // Symbol is one language-server-reported document symbol, flattened out of
 // LSP's DocumentSymbolResult union (a tree of DocumentSymbol or a flat list

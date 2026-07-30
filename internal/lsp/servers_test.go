@@ -49,10 +49,10 @@ func TestDial_NewServers(t *testing.T) {
 			}
 
 			// 10s, not 5s: comfortably covers one degraded attempt below
-			// (bounded internally by DialBudget+QueryDeadline, ~2.15s) plus
+			// (bounded internally by dialBudget+queryDeadline, ~2.15s) plus
 			// a second, successful one plus the DocumentSymbols query after
 			// it -- generous because this bounds only how long this test
-			// is willing to wait, never Dial's own DialBudget, which stays
+			// is willing to wait, never Dial's own dialBudget, which stays
 			// exactly what a real caller gets.
 			//
 			// Every non-gopls server here is a one-shot stdio subprocess
@@ -66,22 +66,22 @@ func TestDial_NewServers(t *testing.T) {
 			defer cancel()
 
 			// Retry once on a degraded Dial before failing. Degrading
-			// within DialBudget is Dial's own designed behaviour under
+			// within dialBudget is Dial's own designed behaviour under
 			// load (AGENTS.md: "Never block on a cold server"), not a
 			// wiring defect -- every one of these servers is spawned fresh
 			// per query (dialStdio), so losing a single race against a
-			// loaded scheduler is exactly the contention DialBudget exists
+			// loaded scheduler is exactly the contention dialBudget exists
 			// to protect a real caller from, not the regression this test
 			// exists to catch. A genuine regression (a broken invocation,
 			// a rejected handshake, wrong initialize params) fails to
 			// connect on every attempt, not just one, so retrying once is
-			// the cheapest way to tell the two apart -- raising DialBudget
+			// the cheapest way to tell the two apart -- raising dialBudget
 			// itself would only turn a fast flake into a slow one while
 			// leaving the assertion just as environment-dependent.
 			//
 			// Measured, not assumed: this subtest ("markdown") lost the
 			// race while three agents were saturating this same checkout,
-			// marksman taking ~2.2s to fail against a 150ms DialBudget --
+			// marksman taking ~2.2s to fail against a 150ms dialBudget --
 			// contention real enough that a second attempt, moments later,
 			// is a materially different roll, not a rubber stamp.
 			client, degraded := Dial(ctx, tc.lang, dir)
