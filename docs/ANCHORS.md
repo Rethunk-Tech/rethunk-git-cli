@@ -344,8 +344,6 @@ is reserved for a language with no grammar at all — see
 [`LIMITATIONS.md`](LIMITATIONS.md#unsupported-languages) for the current
 examples; name the path instead.
 
-The grammars deferred to v2 are listed in [`../TODO.md`](../TODO.md).
-
 ## Deletions
 
 Deleting a symbol is anchored like any other change — `rgit` resolves the

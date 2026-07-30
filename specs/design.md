@@ -111,6 +111,20 @@ no.
 **Concurrency** needs no handling: two `rgit` runs contend on `.git/index`
 exactly as two `git add` runs do, and git's `index.lock` arbitrates.
 
+**Separator ownership beyond `@header`/`@imports` was considered and
+deferred, not built.** The rule that lets a new-file preamble's own regions
+each own their own trailing separator was verified to hold generally: it
+sums exactly for any chain of adjacent top-level declarations, since each
+non-final region absorbing its own trailing gap is offset by the final
+region's own missing trailing newline against the file's own EOF
+terminator. It was not extended to the general insertion path every other
+commit uses, on blast radius rather than correctness: generalizing it
+would change the insertion path used by every commit, not only the
+new-file preamble case it would improve. Go is the only language
+positioned to benefit — `OwnsTrailingSeparator` is an explicit `Language`
+method every adapter answers, and only Go answers true, because no other
+grammar here has a formatter-enforced blank-line convention to hang it on.
+
 ## Symbol resolution
 
 Tree-sitter is the primary resolver: it computes extents immediately with no
@@ -154,7 +168,7 @@ between them. Three options were weighed:
 1. Re-verify (fresh `Lstat` + ownership check) immediately before the dial
    and immediately before the spawn, rather than trusting the one check
    `defaultSocketPath` performed earlier — cheap, and shrinks the window
-   from "since this invocation started, possibly after a `DialBudget`-bounded
+   from "since this invocation started, possibly after a `dialBudget`-bounded
    probe of an earlier candidate" to "the last few instructions before the
    syscall." Still technically racy.
 2. Hold an `O_DIRECTORY` file descriptor from the verified check and operate
@@ -187,7 +201,7 @@ but slow or stuck `gopls` rather than a truly dead one, the respawn binds a
 new inode at the same path and the stranded old process keeps running,
 unreachable, until its own `-listen.timeout` idle shutdown
 (`servers.go`'s `daemonArgs`) reclaims it. A handshake failure this deep
-into `DialBudget+QueryDeadline` is itself strong evidence of a stuck
+into `dialBudget+queryDeadline` is itself strong evidence of a stuck
 process — a healthy `gopls` answers in single-digit milliseconds (measured
 above) — so a shutdown RPC or kill-by-pid was judged out of scope rather
 than genuinely trivial: no server wired into `Dial` exposes either, and
@@ -407,10 +421,30 @@ implements it; Go, TypeScript and Python do not, so they take the plain
 Deliberately excluded: `.zsh`. tree-sitter-bash is a POSIX/Bash grammar, not a
 zsh grammar, and zsh-only syntax produces `ERROR` nodes under it — the same
 reason TSX and TypeScript stay two separate grammars rather than one stretched
-to cover both (above). Shebang-sniffing an extensionless script (`#!/bin/sh`
-with no `.sh` suffix) is deferred, not solved: `ForExtension` is keyed on file
-extension alone, and changing that is a registry-contract change every grammar
-shares, not a shell-specific one.
+to cover both (above).
+
+**Shebang-sniffing an extensionless script shipped, keyed off the
+interpreter name rather than the extension `ForExtension` alone reads.**
+`ForPath` (`internal/resolve/lang.go`) falls back to `shebangInterpreter`
+only when extension lookup finds nothing, reading at most 256 bytes of the
+file's first line — enough for a real interpreter line, never enough to
+force a full read of a large or binary file just to learn it has none.
+`shebangExtension` maps `bash`/`sh` to the shell grammar and `python3`/
+`python` to Python, unwrapping `#!/usr/bin/env NAME` to `NAME` the same way
+a direct `#!/bin/NAME` already resolves; every other interpreter (`perl`,
+`ruby`, `node`, a project's own wrapper) is left unmapped rather than
+guessed at. Three limits are deliberate, not oversights: `zsh` stays
+excluded here too, the same mis-parse risk as the extension case above;
+`#!/usr/bin/env -S bash -x` is not unwrapped, since the first field after
+`env` is `-S`, not the interpreter, and an unrecognized interpreter already
+has an honest fallback to fall into; and the peek reads the **worktree**
+copy only (`PeekShebangLine`), so a path that exists only in `HEAD` — a
+deletion, or a revision-to-revision comparison that never touches the
+worktree — falls back to a whole-file entry rather than fetching a blob
+through `git cat-file` just to sniff one line. `LanguageForWorktreePath` is
+the one entry point `internal/synth` and `internal/diff` both call rather
+than repeating the extension-then-peek sequence themselves. Live behavior:
+[`../docs/ANCHORS.md`](../docs/ANCHORS.md#language-support).
 
 **YAML earns its place on measured demand, not popularity: 49% of the 51
 surveyed repositories, second only to Markdown.** The unit that matters is one
@@ -492,8 +526,8 @@ next sibling at the same level, where tree-sitter-yaml's own node never does.
 its own last non-blank line uniformly, not special-cased to YAML, so a genuine
 content disagreement still fails.
 
-**CSS is next in demand order after YAML (TODO.md), not re-surveyed
-independently.** Every node shape below was measured against a compiled parse tree and cross-checked
+**CSS followed YAML in demand order, not re-surveyed independently.** Every
+node shape below was measured against a compiled parse tree and cross-checked
 against `tree-sitter-css` v0.25.0's own `src/node-types.json`, not assumed
 from `grammar.js`.
 
@@ -551,7 +585,7 @@ per the CSS spec, which requires `@import` before any other rule besides
 tooling like `stylelint` already enforces the spec-conformant position
 upstream of `rgit`.
 
-**JSON and TOML follow CSS in demand order (TODO.md), not re-surveyed
+**JSON and TOML followed CSS in demand order, not re-surveyed
 independently.** Both reuse the existing
 `Container`/`Bare` machinery unchanged — `Bare` is the leaf key, `Container`
 is the immediate parent, and `index.go`'s `containerQualified` does the
@@ -583,8 +617,8 @@ nil for either, the same refusal `lang_yaml.go` gives a document with no
 top-level mapping. An array value at any depth is a leaf, never descended
 into — no measured demand for per-index addressing, and the JSON files
 `rgit` actually runs against in practice — `package.json`, tsconfig,
-lockfiles — mostly want whole-path staging regardless (TODO.md's own
-caveat, carried into `docs/ANCHORS.md`); this adapter earns its keep on the
+lockfiles — mostly want whole-path staging regardless (the same caveat
+[`../docs/ANCHORS.md`](../docs/ANCHORS.md) carries); this adapter earns its keep on the
 config-file case where one nested key is the unit that changes, not by
 making every JSON file's full breadth addressable.
 
@@ -650,7 +684,7 @@ other language) or teaching the resolver to fall back from a failed
 pseudo-anchor lookup to the symbol index (a general behaviour change, not a
 CSS-specific fix).
 
-**SQL is last in demand order (TODO.md), and the only grammar this repo
+**SQL was last in demand order, and is the only grammar this repo
 generates its own C for rather than consuming a published binding.**
 `github.com/DerekStride/tree-sitter-sql` is the only SQL grammar with Go
 bindings at all, but its published module cannot compile as fetched: `src/
@@ -789,16 +823,17 @@ language server the way `gopls`/`vtsls`/`pyright` are for their languages, and
 no measured need strong enough to justify probing for a fifth stdio process
 sight unseen. `.sql` resolves in `[ts-only]` mode (§ Cross-check coverage).
 
-**HTML is next in demand order after SQL (TODO.md), the first grammar whose
-own anchor is selector-shaped rather than a declaration name.** `div#app` is
-the fork that mattered before any grammar was chosen: every other anchor
-this resolver has is a name a language's own grammar already assigns
+**HTML followed SQL in demand order, the first grammar whose own anchor is
+selector-shaped rather than a declaration name.** `div#app` is the fork
+that mattered before any grammar was chosen: every other anchor this
+resolver has is a name a language's own grammar already assigns
 (a function, a key, a selector's own text); an HTML anchor instead names
 *which* element, the way a CSS selector would. The steer settled here,
 deliberately, is element + id only — no class, no `nth-of-type`, no
 descendant combinator — because `rgit` resolves anchors; it is not a CSS
 selector engine, and every step past element#id is a step toward
-reimplementing one. TODO.md's own example is exactly `div#app`.
+reimplementing one. `div#app` is the canonical example throughout this
+section.
 
 **tree-sitter-html declares no fields at all, the same field-less, positional
 shape CSS and YAML's own constructs already have.** Measured against
@@ -833,9 +868,9 @@ too would make `div`, or any other common tag, collide across nearly every
 real HTML document, with no scoping mechanism to keep two unrelated
 same-tag siblings apart. An id-less element is still walked through — an
 id-bearing element nested five levels inside a page shell with no ids
-anywhere above it is exactly as addressable as one at the root, TODO.md's
-own component-root/mount-point case — it simply contributes no `Declaration`
-itself. Recursion has no depth limit, unlike CSS's own one-level
+anywhere above it is exactly as addressable as one at the root — the
+component-root/mount-point case that motivated this grammar — it simply
+contributes no `Declaration` itself. Recursion has no depth limit, unlike CSS's own one-level
 `Container`-qualification ceiling: `Container` here is always the element's
 own tag name, never a chain through ancestors, so depth affects only how
 many `Declaration`s a subtree can contain, never how any one of them is
@@ -869,8 +904,8 @@ first-through-last-declaration formula (`pseudo.go`), applied to whatever a
 file's actual root children are, already produces the right answer — the
 whole `<html>` element for a typical page (the one top-level child
 containing every declaration), or exactly the declared elements themselves
-for a bare fragment file with no wrapping tag at all (TODO.md's own
-`<div id="app">`-only case).
+for a bare fragment file with no wrapping tag at all (the
+`<div id="app">`-only fragment case).
 
 **A void element's own node measurably absorbs trailing content, left alone
 as the grammar's own honest boundary — TOML's trailing-blank-line
@@ -914,6 +949,15 @@ justifies. Left unwired, the same considered "not wired" verdict this
 table's own TOML and SQL rows already record — not a placeholder for a
 follow-up that must happen, but one that a future change to
 `declOnlyExtent`'s own contract could revisit.
+
+**Rust, C, and C++ were checked against the same 51-repository survey and
+cleared no bar at all: zero of the surveyed repositories contained any.**
+Nothing here rules either in or out on principle — the same measured-demand
+test applied to Go/TypeScript/Python's initial ranking, and to every
+grammar added since, would admit any of the three the moment a survey
+turned up real files to stage. Config and data files in a Rust/C/C++ tree
+still stage by path in the meantime, the same as any other file with no
+grammar behind it.
 
 ### Cross-check coverage
 
@@ -1149,21 +1193,23 @@ SQL tool present; its own `--help` lists `dialects`, `fix`, `format`, `lint`,
 sqlfluff-lsp` reports no such package. `sqls` and `sql-language-server` are
 absent from every location checked. `.sql` stays `[ts-only]`.
 
-**Net: YAML, JSON, CSS, and Markdown (via `marksman`) are wired; TOML and
-SQL are not, on measured range disagreement and measured unavailability
-respectively, not on a documentation assumption either way.** 9 of 11
-grammars cross-check against a live server (Go, TypeScript, TSX, Python,
-Shell, YAML, JSON, CSS, Markdown), leaving TOML and SQL permanently
-`[ts-only]`.
+**Net: YAML, JSON, CSS, and Markdown (via `marksman`) are wired; TOML, SQL,
+and HTML are not — on measured range disagreement, measured unavailability,
+and a measured extent-corruption blocker respectively (above), not on a
+documentation assumption either way.** 9 of 12 grammars cross-check against
+a live server (Go, TypeScript, TSX, Python, Shell, YAML, JSON, CSS,
+Markdown) — 9 of 11 on a build without `-tags rgit_sql` — leaving TOML,
+SQL, and HTML permanently `[ts-only]`.
 
 ## Commands
 
-`TODO.md`'s v2 command set (`blame`, `log`, `context`) was accepted against
-one question each: does it save an LLM tokens `git` already charges for? —
-shipped; contract in `docs/USAGE.md`. Every one is a thin caller over
-resolution and delegation machinery that already exists — none introduces
-a second attribution path or new resolution mechanism, per `AGENTS.md`'s
-delegation boundary.
+`blame`, `log`, and `context` were each accepted against one question: does
+it save an LLM tokens `git` already charges for? — shipped; contract in
+`docs/USAGE.md`. Every one is a thin caller over resolution and delegation
+machinery that already exists — none introduces a second attribution path
+or new resolution mechanism, per `AGENTS.md`'s delegation boundary.
+`restore`, the fourth command considered under the same question, was
+designed and then deliberately not built — see below.
 
 ### `rgit log`: `git log -L`, resolved once against HEAD — not `--follow` with per-commit re-resolution
 
@@ -1224,8 +1270,8 @@ already draw.
 
 ### `rgit context`: one `diffpkg.Run` call, one new `git log -n` primitive, no second attribution path
 
-TODO.md holds this command to one question: does its record stream save an
-LLM the tokens `status` + `diff --stat` + `diff` + `log`, run separately,
+This command is held to one question: does its record stream save an LLM
+the tokens `status` + `diff --stat` + `diff` + `log`, run separately,
 already charge? Held literally to "pure read composition ... no new
 resolution machinery":
 
@@ -1274,6 +1320,53 @@ mid-line, keeps every emitted line parseable; commits sort first
 specifically so a truncation, when it happens, only ever costs diff rows,
 never the smaller and arguably more load-bearing commit history.
 
+### `rgit restore FILE:SYMBOL`: an accepted design, deliberately not built
+
+This is the one candidate command from the original set that was designed
+and then explicitly held back, not merely unstarted. `blame`, `log`, and
+`context` (above) all wrap read-only machinery that already exists;
+`restore` would be the only `rgit` command that rewrites working-tree
+bytes, and holding it back is what keeps the whole surface non-destructive
+by design rather than by an accident of which commands happened to ship
+first.
+
+**Mechanism, if it were built:** surgical undo — splice a symbol's `HEAD`
+(or `--source REV`) content over its working-tree copy, leaving everything
+else in the file untouched. `git show REV:FILE` reads the source blob,
+resolves the same anchor in both blobs, and `internal/synth` splices — the
+same blob-synthesis machinery every staging command already runs, in
+reverse (§ Blob synthesis above). No new resolution or synthesis mechanism,
+only a new caller. The token case: today the only surgical-undo path is
+read the file, edit by hand, hope — round-tripping the whole file through
+the model for a change scoped to one symbol.
+
+**Backup contract, carried in full because this would be the only
+destructive command in the set:** before writing, the displaced
+working-tree extent is captured and emitted as a `git apply`-compatible
+unified diff — correct path header, the replaced extent plus three lines
+of context either side, so `git apply` can relocate it even after
+neighbouring edits. In `--porcelain` mode the patch would be a record in
+the output stream; otherwise it would go to stderr in a fenced block. Undo
+of a mistaken restore is therefore plain `git apply`, no `rgit` machinery
+required. The backup is *not* written to disk by `rgit` itself: the tool
+holds no persistent state (`AGENTS.md` § State), so the artifact travels
+with the caller, who is already capturing the output stream. `git stash`
+was rejected for this role — it is pathspec-granular, not
+symbol-granular, and it mutates stash state the user did not ask for.
+
+**Guardrails the design carries:** resolve in *both* revisions before
+writing — a symbol that does not exist at the source revision is an error,
+not a deletion. The backup patch is emitted before any byte is written,
+and a failed splice (extent drift since resolution) leaves the file
+untouched, matching the resolve-before-stage invariant the synthesis path
+already holds (§ Blob synthesis above).
+
+**Accepted against the same question every shipped command in this set was
+held to:** does it save an LLM tokens `git` already charges? The design
+above is the answer this repository settled on if a destructive command is
+ever accepted deliberately. It stays a design record, not a queued task —
+`restore` is not slated for implementation.
+
 ## Argument grammar
 
 Symbol anchors need no flag because **all git pathspec magic is leading-colon**
@@ -1285,7 +1378,11 @@ Two complications, both measured: colons are legal in filenames (git tracked
 (`git diff HEAD~1:f.go HEAD:f.go` works). The precedence order in
 [`../docs/USAGE.md`](../docs/USAGE.md#argument-shape) resolves both without any
 escape syntax — an existing-path check beats a `\:` escape, and rule 3 keeps
-git's blob-reference form working.
+`rev:path` from being misread as a `FILE:NAME` anchor by rule 5. That is
+classification, not a feature of its own: `rgit diff` still refuses a
+positional that classifies as `rev:path` (exit 129) rather than diffing the
+two blobs it names, since they carry no single changed file for `rgit diff`
+to group rows under (`internal/diff/classify.go`, `docs/USAGE.md`).
 
 ## CLI handling
 
@@ -1309,8 +1406,12 @@ ordering routinely.
 
 pflag is the only option with both interspersed parsing and free control of the
 exit code (Cobra hardcodes 1, Kong exits 80). A full framework stays rejected:
-`rgit` must own its positional precedence regardless, and two subcommands sits
-below the bar set in `claude-format-hooks`. pflag is a flag parser, not a
+`rgit` must own its positional precedence regardless, and eight dispatched
+commands — `diff`, `commit`, `blame`, `log`, `context`, `languages`,
+`doctor`, `completion` — still sits below the bar set in
+`claude-format-hooks`: none of them carries an independent subcommand tree,
+shared persistent flags, or generated multi-level help, which is the
+machinery a framework actually buys. pflag is a flag parser, not a
 framework — one dependency bought for a measured, specific defect.
 
 **Shell completion is hand-written, and a framework would not have shortened

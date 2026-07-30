@@ -42,8 +42,8 @@ Start with [HUMANS.md](HUMANS.md) to run it, or
   ([docs/CODES.md](docs/CODES.md#exit-6-is-commits-alone)).
 - **Git semantics throughout** — git's exit codes, git's pathspecs, git's hooks
   and config. Divergence is treated as a bug.
-- **Go, TypeScript/JavaScript, Python, Markdown, Shell, YAML, CSS, JSON,
-  TOML, HTML**, plus SQL in a build with the `rgit_sql` tag; anything else
+- **Eleven grammars ship unconditionally, a twelfth (SQL) behind a build
+  tag** — see [§ Status](#status) below for the full list; anything else
   stages by path.
 
 ## Documentation
@@ -61,7 +61,6 @@ Start with [HUMANS.md](HUMANS.md) to run it, or
 | [CHANGELOG.md](CHANGELOG.md) | What changed in each release |
 | [SECURITY.md](SECURITY.md) | Reporting a vulnerability, and what is in scope |
 | [specs/design.md](specs/design.md) | Design record and the measurements behind it |
-| [TODO.md](TODO.md) | Backlog |
 
 ## Status
 
@@ -70,8 +69,8 @@ Shell, YAML, CSS, JSON, TOML, and HTML, plus SQL in a build with the `rgit_sql` 
 with the language-server cross-check live for Go, TypeScript/TSX, Python,
 Shell, YAML, JSON, CSS, and Markdown — TOML, SQL, and HTML resolve with
 tree-sitter alone. See [specs/design.md](specs/design.md)
-for what was measured, [docs/LIMITATIONS.md](docs/LIMITATIONS.md) for what
-`rgit` does not do, and [TODO.md](TODO.md) for what's deferred.
+for what was measured, and [docs/LIMITATIONS.md](docs/LIMITATIONS.md) for
+what `rgit` does not do.
 
 ## License
 

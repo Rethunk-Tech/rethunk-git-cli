@@ -48,10 +48,23 @@ diff rather than mid-commit.
 
 ### A missing cross-check is never a failure
 
-When no language server is reached, both staging commands print `[ts-only]` on stderr
-and proceed — degraded resolution is normal, not an error
-([`AGENTS.md`](../AGENTS.md#resolution-model)). `rgit diff --quiet` still prints
-it, since `--quiet` suppresses the report on stdout, not diagnostics.
+When no language server is reached, any command that runs the diff
+cross-check — `diff`, `commit`, and `context`, which composes `diff`'s own
+default scope — prints `[ts-only]` on stderr and proceeds — degraded
+resolution is normal, not an error
+([`AGENTS.md`](../AGENTS.md#resolution-model)). `rgit diff --quiet` still
+prints it, since `--quiet` suppresses the report on stdout, not
+diagnostics.
+
+### The cross-check compares lines, not columns
+
+Both sides of the exit-6 comparison reduce to a 0-based start/end line pair
+before comparing (`internal/resolve/crosscheck.go`'s `lineOf`); a language
+server and tree-sitter agreeing on every line but disagreeing on a column
+within one passes silently. Deliberate, not a gap: the anchors this
+resolver stages are whole declarations, never sub-line ranges, so a
+same-line disagreement has nothing narrower for either side to report
+against.
 
 ### `blame` shares the anchor codes, not the staging ones
 
@@ -152,6 +165,7 @@ before and after — empty output on its own does not mean nothing was done.
 NAME<TAB>EXTENSIONS<TAB>GATED
 css<TAB>.css<TAB>0
 go<TAB>.go<TAB>0
+html<TAB>.html .htm<TAB>0
 json<TAB>.json<TAB>0
 markdown<TAB>.md .markdown<TAB>0
 python<TAB>.py .pyi<TAB>0
@@ -191,7 +205,7 @@ establishes on its own.
 Unlike every other command in this file, `rgit context` has no aligned
 human default to alternate with: its one output shape is always this
 tab-separated record stream, no header, no `--porcelain` flag to ask for it
-— TODO.md's own guardrail against a flag surface here at all.
+— see [`specs/design.md`](../specs/design.md#commands) for why.
 
 ```text
 C<TAB>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2<TAB>fix(auth): reject expired tokens

@@ -56,13 +56,24 @@ disambiguation, never as requirements.
 All git pathspec magic is **leading**-colon (`:(exclude)`, `:(glob)`, `:/`). An
 *interior* colon is therefore free for `FILE:NAME` and needs no flag.
 
+**For `diff`, a bare `A..B` or `A...B` positional is pulled out before the
+precedence table below ever runs.** `git rev-parse --verify` (rule 3) fails
+outright on range syntax, so a range token would otherwise fall through
+every rule to an unresolvable-argument error instead of selecting a scope.
+Only a token with no existing worktree/HEAD path of that exact name is
+treated as a range — git forbids `..` in ref names, but a legitimate
+relative pathspec like `../shared/util.go` also contains `..`, and path
+existence wins over the heuristic. At most one such token is accepted per
+invocation; a second is a usage error (exit 129). `--range` is the explicit
+form of the same value and is mutually exclusive with the positional one.
+
 Resolution precedence, first match wins:
 
 | # | Test | Result |
 | --- | --- | --- |
 | 1 | Appears after `--` | Pathspec, always |
 | 2 | Starts with `:` | Git pathspec magic, passed through verbatim |
-| 3 | *(`diff` only)* resolves via `git rev-parse --verify` | Revision or `rev:path` blob reference |
+| 3 | *(`diff` only)* resolves via `git rev-parse --verify` | Revision, or a `rev:path` blob reference — classified, then refused as a diff scope |
 | 4 | Names a path existing in the worktree or HEAD | Pathspec |
 | 5 | Splits at the last `:` into an existing path + a name | Symbol anchor |
 | 6 | None of the above | Error listing each interpretation tried |
@@ -70,6 +81,17 @@ Resolution precedence, first match wins:
 No escaping is ever needed. `src/notes:draft.md` is a legal path, so rule 4
 claims it; `auth.go:ValidateToken` names nothing, so rule 5 splits it. Use
 `--sym` or `--file` to force the reading when a repo genuinely has both.
+
+Rule 3 splits at the **first** colon (`HEAD~1:f.go` is revision `HEAD~1`,
+path `f.go`), where rule 5 splits at the **last** — each rule uses the
+split git's own syntax needs at that position, not a shared convention.
+`rev:path` is real `git diff` syntax (`git diff HEAD~1:f.go HEAD:f.go`
+compares two blobs directly), and rule 3 exists so it classifies correctly
+rather than being misread as a `FILE:NAME` anchor by rule 5 — not to add a
+`rev:path` diff scope of its own. A positional that classifies as one is
+refused outright (exit 129): comparing two arbitrary blobs by revision
+names no single changed file for `rgit diff` to group rows under. Name the
+file directly instead.
 
 **Paths are relative to the directory you run in, not the repository root** —
 git's own rule. In `pkg/deep`, `rgit commit a.go` stages `pkg/deep/a.go`, and
@@ -211,8 +233,9 @@ record stream. It replaces the separate `status`, `diff --stat`, `diff`, and
 own subprocess call.
 
 **The output shape is fixed and takes no flags beyond `--help`.** A command
-with options becomes `git status` with extra steps — see `TODO.md`'s own
-guardrail. Three record types, tab-separated, no header:
+with options becomes `git status` with extra steps — see
+[`specs/design.md`](../specs/design.md#commands) for why the shape stays
+fixed rather than growing one. Three record types, tab-separated, no header:
 
 | Record | Fields | Meaning |
 | --- | --- | --- |
@@ -388,8 +411,10 @@ before decode. Closes #42." \
               auth.go:ValidateToken
 ```
 
-**Invalid combinations:** `--dry-run` + `--push`, `--staged` + `--range`,
-`--staged` + `--unstaged`, `-m` + `-F`, `--porcelain` + `--quiet` → exit 129.
+**Invalid combinations:** `--dry-run` + `--push`, `--staged`/`--unstaged` +
+a revision argument (a range, or one or two bare revisions), `--staged` +
+`--unstaged`, `--range` + a positional `A..B`/`A...B` range, `-m` + `-F`,
+`--porcelain` + `--quiet` → exit 129.
 Naming one path both as a path and as a symbol anchor → exit 5, in
 whichever spelling: `--file` with
 `--sym`, or the positional forms `greet.go greet.go:A`.

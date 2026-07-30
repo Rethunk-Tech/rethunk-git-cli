@@ -35,7 +35,10 @@ not restate it: the tiered layout below is what keeps one authority per fact.
 
 Cutting a release: tag `vX.Y.Z`, which
 [`.github/workflows/release.yml`](.github/workflows/release.yml) turns into a
-GitHub release with the cross-built binaries and their `SHA256SUMS`. Move the
+GitHub release with the cross-built binaries and their `SHA256SUMS`. That
+workflow also fails the release outright if the linux/amd64 artifact's own
+`rgit languages` output has no `sql` row — a `-tags rgit_sql` regression on
+the one target the release is verified against. Move the
 unreleased entries under the new version heading, and bump the README's
 version badge — it is a static shield, so nothing else catches it going
 stale. Also check `sqlGrammarVersion` in
@@ -146,6 +149,21 @@ without the binary is one the unit lane does not really cover:
 go test -short -coverpkg=./... -coverprofile=short.out ./...
 go tool cover -func=short.out | tail -1
 ```
+
+**That comparison is in-process only — it cannot see the built binary's own
+coverage.** `rgit_e2e_test.go` builds `rgitBin` with `-cover` and points
+`GOCOVERDIR` at a temp directory for the whole process (`TestMain`), but
+removes that directory unmerged once the run finishes. Every case in this
+file execs the real binary, and the coverage that binary itself accumulated
+is discarded before either `coverprofile` above is written — so the full
+lane's number is exactly the in-process short-lane number plus whatever the
+in-process parts of the full lane alone added, never the binary's own
+exec'd paths. The full and `-short` totals reading identical is this
+artifact, not evidence the unit lane already covers everything the binary
+exercises. To actually see the binary's own coverage, merge `GOCOVERDIR`
+into a profile before it is removed — `go tool covdata textfmt
+-i=<GOCOVERDIR> -o=e2e.out`, comparable to the two profiles above with
+`go tool cover -func=e2e.out | tail -1`.
 
 ## Modernization
 

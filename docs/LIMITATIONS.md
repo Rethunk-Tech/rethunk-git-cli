@@ -9,8 +9,11 @@ Any language with no tree-sitter grammar in this binary refuses a symbol
 anchor with exit 9 — Rust, C, and C++ are common examples with none.
 Run `rgit languages` (or `rgit doctor`) for the exact list the running
 binary supports; it drifts as grammars are added, which is why this file
-doesn't restate it. What's planned beyond the shipped set is tracked in
-[`../TODO.md`](../TODO.md#v2--grammars).
+doesn't restate it. Rust, C, and C++ stay unsupported on the same demand
+survey that ordered every shipped grammar: no repository surveyed
+contained any ([`../specs/design.md`](../specs/design.md#grammar-scope));
+config and data files in those ecosystems still stage by path in the
+meantime.
 
 Two exclusions inside otherwise-supported languages are deliberate, not gaps
 waiting to close:

@@ -120,6 +120,20 @@ every target builds SQL-less instead of failing — the same fallback
 language does (exit 9, `docs/ANCHORS.md`); every other language is
 unaffected either way.
 
+**`-generate-only` combines with `-with-servers` rather than skipping it.**
+`cmd/rgit-install`'s `main()` runs the `-with-servers` step before
+`-generate-only`'s own early return, so `cmd/rgit-install -generate-only
+-with-servers` — what `make cross` would need if it ever grew a
+server-installing mode — still installs or updates every managed language
+server ([§ Installing and updating servers
+automatically](#installing-and-updating-servers-automatically)) even though
+it exits before touching `rgit`'s own build or install.
+
+`make cross` also regenerates `dist/SHA256SUMS` from that run's own
+artifacts — each invocation overwrites the file rather than appending to
+it, so the checksums on disk always match the binaries currently in
+`dist/`.
+
 ## SQL support
 
 SQL is a second grammar behind the `rgit_sql` build tag: a plain `go build
@@ -173,7 +187,7 @@ kills it on close — nothing persists, and the cross-check is live on the
 first invocation. The transport survey behind this split is in
 [`specs/design.md`](../specs/design.md#transport-support-per-server).
 
-**TOML and SQL stay `[ts-only]` permanently** — see
+**TOML, SQL, and HTML stay `[ts-only]` permanently** — see
 [`LIMITATIONS.md`](LIMITATIONS.md#language-server-coverage) for why. `taplo`
 still completes the LSP handshake once built with `-with-servers`'
 `--features lsp`, and other tooling can use it; it just never drives
