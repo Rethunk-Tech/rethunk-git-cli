@@ -18,11 +18,12 @@ import (
 
 const usageLine = "usage: rgit [--version] [-C <path>] <diff|commit|blame|log|context|languages|doctor|completion> [flags] [target...]"
 
-// tsOnlyNotice is what rgit diff and rgit commit both print when no live
+// tsOnlyNotice is what any command that runs the diff cross-check --
+// currently rgit diff, rgit commit, and rgit context -- prints when no live
 // language server was reached in time. docs/INSTALL.md § Verify tells the
-// reader to grep either command's stderr for it, so the two staging
-// commands cannot answer "was the cross-check live?" differently -- one
-// constant instead of two copies that could drift apart.
+// reader to grep a command's stderr for it, so those commands cannot answer
+// "was the cross-check live?" differently -- one constant instead of one
+// copy per caller that could drift apart.
 const tsOnlyNotice = "rgit: [ts-only] no live language server reached in time; extents unverified"
 
 // topLevelHelp is what `rgit --help`, `-h`, and `help` print. Kept to the
@@ -49,7 +50,8 @@ Global flags (before the command):
   --version    print the version and exit
   -h, --help   show this help and exit
 
-Run 'rgit diff --help' or 'rgit commit --help' for that command's flags.
+Run 'rgit <command> --help' for that command's own flags -- blame, log, and
+languages each have a real flag surface too, not only diff and commit.
 Full reference: docs/USAGE.md
 `
 

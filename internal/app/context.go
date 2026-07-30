@@ -3,11 +3,12 @@
 // per-symbol diffstat `rgit diff` itself reports for everything
 // committable, as a single fixed-shape record stream.
 //
-// Pure read composition over internal/gitx and internal/diff, per TODO.md:
-// no new resolution or attribution machinery. The diff half is literally
-// internal/diff.Run's default scope, rendered through its own
-// RenderPorcelain and re-tagged per line, rather than a second walk of
-// report.Files that could drift from what `rgit diff --porcelain` emits.
+// Pure read composition over internal/gitx and internal/diff, per
+// specs/design.md § Commands: no new resolution or attribution machinery.
+// The diff half is literally internal/diff.Run's default scope, rendered
+// through its own RenderPorcelain and re-tagged per line, rather than a
+// second walk of report.Files that could drift from what
+// `rgit diff --porcelain` emits.
 package app
 
 import (
@@ -31,7 +32,8 @@ diff, and log calls an agent would otherwise make before editing.
 
 Takes no flags or targets beyond --help: the output shape is fixed and
 byte-budgeted on purpose ("a command with options becomes git status with
-extra steps" -- TODO.md), so there is nothing here to select or narrow.
+extra steps" -- see docs/USAGE.md § Context), so there is nothing here to
+select or narrow.
 
 Records, one per line, tab-separated, no header:
 
@@ -72,15 +74,19 @@ const contextByteBudget = 16384
 
 // runContext takes no flags beyond --help, matching doctor.go's own
 // arg-count-driven style for a command with no real flag surface at all.
+//
+// --help wins wherever it appears in args, not only as the sole argument
+// (m12: every hand-parsed command follows the same rule now, matching
+// blame.go/log.go's own loop) -- but since context takes nothing else,
+// that reduces to just checking args[0]: any other token has already
+// failed by the time a later --help could be reached.
 func runContext(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
-	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
+	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h") {
 		fmt.Fprint(stdout, contextHelp)
 		return exitcode.Success
 	}
 	if len(args) != 0 {
-		fmt.Fprintln(stderr, "rgit: context takes no arguments")
-		fmt.Fprint(stderr, contextHelp)
-		return exitcode.InvalidUsage
+		return refuseExtraArgs("context", args, stderr, contextHelp)
 	}
 
 	root, _, repo, code := openRepo(ctx, dir, stderr)
@@ -96,9 +102,9 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 
 	// The default "everything committable" scope -- staged + unstaged vs
 	// HEAD, plus untracked -- is exactly what a bare `rgit diff` already
-	// reports; no Options fields are set here, per TODO.md's own guardrail
-	// against a flag surface that would let this grow into a second
-	// `git status`.
+	// reports; no Options fields are set here, per specs/design.md §
+	// Commands's own guardrail against a flag surface that would let this
+	// grow into a second `git status`.
 	report, err := diffpkg.Run(ctx, repo, root, diffpkg.Options{})
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)

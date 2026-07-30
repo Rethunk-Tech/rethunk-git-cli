@@ -34,15 +34,15 @@ language server or the tree-sitter CLI is informational, since degraded
 Full reference: docs/USAGE.md
 `
 
+// --help wins wherever it appears in args (m12); doctor takes no other
+// arguments, so -- as in context.go -- that reduces to checking args[0].
 func runDoctor(args []string, stdout, stderr io.Writer) exitcode.Code {
-	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
+	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h") {
 		fmt.Fprint(stdout, doctorHelp)
 		return exitcode.Success
 	}
 	if len(args) != 0 {
-		fmt.Fprintf(stderr, "rgit: doctor: unrecognized argument %q\n", args[0])
-		fmt.Fprint(stderr, doctorHelp)
-		return exitcode.InvalidUsage
+		return refuseExtraArgs("doctor", args, stderr, doctorHelp)
 	}
 
 	essential, fatal := runEnvironmentChecks()

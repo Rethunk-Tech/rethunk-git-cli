@@ -5,17 +5,16 @@
 // ancestor commit itself, so there is no per-commit tree-sitter re-parse
 // here and no second attribution path (specs/design.md § Commands).
 //
-// TODO.md's guardrail is non-negotiable: patches are opt-in (-p/--patch),
-// never default -- the default stream is bounded by commit count, not by
-// code size, which `git log -L` on its own would not be (it always shows
-// the patch).
+// specs/design.md § Commands's own guardrail for this command is
+// non-negotiable: patches are opt-in (-p/--patch), never default -- the
+// default stream is bounded by commit count, not by code size, which
+// `git log -L` on its own would not be (it always shows the patch).
 package app
 
 import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
@@ -44,46 +43,22 @@ Mutually exclusive with --porcelain.
 Full reference: docs/USAGE.md
 `
 
-// runLog's flag surface is hand-parsed rather than pulling in pflag, the
-// same minimal style blame.go and languages.go already use for a command
-// this small.
+// runLog's flag surface is hand-parsed via shared.go's
+// parseAnchorCommandArgs (m10: the same loop blame.go now shares, rather
+// than each command keeping its own copy a future flag could land on and
+// miss), the same minimal style blame.go and languages.go already use for
+// a command this small.
 func runLog(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	porcelain := false
 	patch := false
-	var positional string
-	havePositional := false
-	for _, a := range args {
-		switch {
-		case a == "--help" || a == "-h":
-			fmt.Fprint(stdout, logHelp)
-			return exitcode.Success
-		case a == "--porcelain":
-			porcelain = true
-		case a == "-p" || a == "--patch":
-			patch = true
-		case havePositional:
-			fmt.Fprintf(stderr, "rgit: log: unrecognized argument %q\n", a)
-			fmt.Fprint(stderr, logHelp)
-			return exitcode.InvalidUsage
-		case a != "--" && strings.HasPrefix(a, "-"):
-			// A "-"-prefixed token that is none of the flags above must be
-			// refused here, before it can fall through to the default case
-			// and be silently treated as the positional. "--" is exempt:
-			// it is a legitimate bare positional here, refused by
-			// resolveAnchorExtent's own classification instead (a bare "--"
-			// classifies to nothing).
-			fmt.Fprintf(stderr, "rgit: log: unrecognized argument %q\n", a)
-			fmt.Fprint(stderr, logHelp)
-			return exitcode.InvalidUsage
-		default:
-			positional = a
-			havePositional = true
-		}
-	}
-	if !havePositional {
-		fmt.Fprintln(stderr, "rgit: log requires a FILE:SYMBOL anchor")
-		fmt.Fprint(stderr, logHelp)
-		return exitcode.InvalidUsage
+	positional, code, done := parseAnchorCommandArgs("log", args,
+		[]anchorCommandFlag{
+			{tokens: []string{"--porcelain"}, set: &porcelain},
+			{tokens: []string{"-p", "--patch"}, set: &patch},
+		},
+		logHelp, stdout, stderr)
+	if done {
+		return code
 	}
 	if porcelain && patch {
 		fmt.Fprintln(stderr, "rgit: --porcelain and --patch are mutually exclusive")

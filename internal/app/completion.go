@@ -21,17 +21,33 @@ Print a shell completion script for that shell to stdout.
 Persistent installation: docs/INSTALL.md § Shell completion.
 `
 
+// runCompletion's --help check is a loop rather than a sole-argument test
+// (m12: help wins wherever it appears, the same rule as every other
+// hand-parsed command, e.g. `rgit completion bash --help` -- not only
+// `rgit completion --help` on its own) so it can still see past the shell
+// positional to find it.
 func runCompletion(args []string, stdout, stderr io.Writer) exitcode.Code {
-	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
-		fmt.Fprint(stdout, completionHelp)
-		return exitcode.Success
+	var shell string
+	haveShell := false
+	for _, a := range args {
+		if a == "--help" || a == "-h" {
+			fmt.Fprint(stdout, completionHelp)
+			return exitcode.Success
+		}
+		if haveShell {
+			fmt.Fprintln(stderr, "rgit: completion requires exactly one shell argument (bash or zsh)")
+			fmt.Fprint(stderr, completionHelp)
+			return exitcode.InvalidUsage
+		}
+		shell = a
+		haveShell = true
 	}
-	if len(args) != 1 {
+	if !haveShell {
 		fmt.Fprintln(stderr, "rgit: completion requires exactly one shell argument (bash or zsh)")
 		fmt.Fprint(stderr, completionHelp)
 		return exitcode.InvalidUsage
 	}
-	switch args[0] {
+	switch shell {
 	case "bash":
 		fmt.Fprint(stdout, bashCompletionScript)
 		return exitcode.Success
@@ -39,7 +55,12 @@ func runCompletion(args []string, stdout, stderr io.Writer) exitcode.Code {
 		fmt.Fprint(stdout, zshCompletionScript)
 		return exitcode.Success
 	default:
-		fmt.Fprintf(stderr, "rgit: unknown shell %q; supported: bash, zsh\n", args[0])
+		// m14: the missing-shell branch above already prints completionHelp;
+		// an unrecognized shell name is the same kind of usage error and
+		// must not leave the caller with less guidance than a bare
+		// `rgit completion` gets.
+		fmt.Fprintf(stderr, "rgit: unknown shell %q; supported: bash, zsh\n", shell)
+		fmt.Fprint(stderr, completionHelp)
 		return exitcode.InvalidUsage
 	}
 }
@@ -57,10 +78,12 @@ const rgitSubcommands = "diff commit blame log context languages doctor completi
 
 // rgitDiffFlags and rgitCommitFlags are the static parts of completion:
 // each subcommand's own flag surface, mirroring docs/USAGE.md § Flags plus
-// the --sym/--file pair every subcommand shares (internal/app/shared.go's
-// newTargetFlagSet). They are duplicated here rather than introspected at
-// runtime because the completion script is a standalone text blob with no
-// Go runtime behind it once emitted -- but completion_test.go's
+// the --sym/--file pair diff and commit share (internal/app/shared.go's
+// newTargetFlagSet -- no other subcommand builds a flag set with it, or
+// takes --sym/--file at all). They are duplicated here rather than
+// introspected at runtime because the completion script is a standalone
+// text blob with no Go runtime behind it once emitted -- but
+// completion_test.go's
 // TestCompletionFlags_MatchLiveFlagSets drives each command's own --help
 // output (pflag's own FlagUsages rendering of the live FlagSet, not a
 // second hand copy) and fails the suite the moment either list drifts from

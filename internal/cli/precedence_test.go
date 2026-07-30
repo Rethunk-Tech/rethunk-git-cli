@@ -115,7 +115,11 @@ func TestClassifyArgs_Rule6ListsWhatItTried(t *testing.T) {
 	qt.Assert(t, qt.Equals(uerr.Arg, "nosuch.go:Nope"))
 	qt.Assert(t, qt.DeepEquals(uerr.Tried, []string{
 		"pathspec magic (leading ':')",
-		"revision, rev:path, or range (git rev-parse --verify)",
+		// M5: "or range" dropped -- a positional A..B/A...B range is peeled
+		// out by diff.ExtractRangeToken before ClassifyArgs ever sees it
+		// (internal/diff/scope.go), so rule 3 never actually tries one via
+		// rev-parse --verify; saying it did was false.
+		"revision or rev:path (git rev-parse --verify)",
 		"existing path (worktree or HEAD)",
 		"symbol anchor (existing path + name after last ':')",
 	}))
@@ -125,7 +129,7 @@ func TestClassifyArgs_Rule6ListsWhatItTried(t *testing.T) {
 	// prefix check rather than a real attempt at resolving the token.
 	qt.Assert(t, qt.Equals(uerr.Error(),
 		`cannot classify "nosuch.go:Nope": rules considered: pathspec magic (leading ':'); `+
-			`revision, rev:path, or range (git rev-parse --verify); existing path (worktree or HEAD); `+
+			`revision or rev:path (git rev-parse --verify); existing path (worktree or HEAD); `+
 			`symbol anchor (existing path + name after last ':')`))
 
 	// Without revisions the rule-3 line must be absent rather than merely

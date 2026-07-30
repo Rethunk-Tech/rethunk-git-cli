@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -38,8 +40,10 @@ func splitAnchor(s string) (file, name string, ok bool) {
 // exempt -- there is nothing here to resolve against root at all.
 //
 // This is the one piece of path safety rgit owns rather than delegating,
-// so both subcommands apply it: docs/USAGE.md's exit table lists a path
-// escape as 129 without qualifying it to commit.
+// so every command that resolves a caller-supplied path applies it --
+// diff and commit directly, blame and log via resolveAnchorExtent's own
+// call to repoPath below: docs/USAGE.md's exit table lists a path escape
+// as 129 without qualifying it to any one command.
 func checkPathEscape(root, path string) error {
 	if strings.HasPrefix(path, ":") {
 		return nil
@@ -53,9 +57,9 @@ func checkPathEscape(root, path string) error {
 
 // repoPath resolves one caller-supplied path to its root-relative form and
 // refuses it if it climbs above root. Every pathspec and every anchor file
-// in both subcommands goes through here, so the one piece of path safety
-// rgit owns rather than delegating to git cannot end up applied on one
-// command and skipped on the other.
+// diff, commit, blame, and log resolve goes through here, so the one piece
+// of path safety rgit owns rather than delegating to git cannot end up
+// applied on one command and skipped on another.
 func repoPath(root, prefix, path string) (string, error) {
 	p := cli.PrefixPath(prefix, path)
 	if err := checkPathEscape(root, p); err != nil {
@@ -131,6 +135,12 @@ func pathAnchorContradiction(paths, anchorFiles []string, stderr io.Writer) exit
 	return exitcode.Success
 }
 
+// conventionalShapeRe and hasConventionalShape below are commit.go's own
+// helpers, not shared with diff -- there is no commit message to check on
+// a read-only command. Kept in this file only because commit.go was
+// already large; unlike everything else here, a rename or move to
+// commit.go would not change what calls what.
+//
 // conventionalShapeRe is a loose match for "type(scope): subject" and
 // "type(scope)!: subject" — just enough to decide whether the warning in
 // docs/USAGE.md ("A missing conventional-commit shape ... warns on
@@ -326,4 +336,111 @@ func unsupportedLanguageHint(ext string) string {
 		return ""
 	}
 	return fmt.Sprintf(" (this build was compiled without -tags %s; installing the tree-sitter CLI and rebuilding would enable it -- see docs/INSTALL.md § SQL support, or run rgit doctor)", tag)
+}
+
+// refuseExtraArgs is the shared "this command takes no arguments beyond
+// --help" refusal for context.go and doctor.go -- the two hand-parsed
+// commands with no flag surface at all. They used to word this
+// differently (context's own "context takes no arguments" prose vs.
+// doctor's "unrecognized argument %q", which also quoted only args[0] and
+// silently dropped the rest): one wording, and the offending argument is
+// always named. Called only once len(args) != 0 is already known, so
+// args[0] is always the first (and, for these two commands, only ever
+// reachable) offending token -- see runDoctor/runContext's own help-first
+// check just above each call site.
+func refuseExtraArgs(cmdName string, args []string, stderr io.Writer, help string) exitcode.Code {
+	fmt.Fprintf(stderr, "rgit: %s: unrecognized argument %q\n", cmdName, args[0])
+	fmt.Fprint(stderr, help)
+	return exitcode.InvalidUsage
+}
+
+// lineRange converts ext's byte offsets in src to the 1-based, inclusive
+// line range git's own `-L start,end` wants. Lives here rather than in
+// blame.go, its original home, because log.go needs it too: ext.End is
+// exclusive and a tree-sitter node's own EndByte() never includes a
+// trailing newline, so the extent's last real byte sits at End-1, not
+// End -- using End directly would pull the following line into the
+// blamed/logged range whenever the extent's own content ends exactly at a
+// line boundary.
+func lineRange(src []byte, ext resolve.Extent) (start, end int) {
+	startLine := bytes.Count(src[:ext.Start], []byte{'\n'})
+	endOffset := ext.End
+	if endOffset > ext.Start {
+		endOffset--
+	}
+	endLine := bytes.Count(src[:endOffset], []byte{'\n'})
+	return startLine + 1, endLine + 1
+}
+
+// anchorCommandFlag is one boolean flag parseAnchorCommandArgs recognizes
+// alongside the single FILE:SYMBOL positional -- a token (or, for a short
+// and long spelling like log's -p/--patch, several) and the bool it sets
+// when seen.
+type anchorCommandFlag struct {
+	tokens []string
+	set    *bool
+}
+
+// parseAnchorCommandArgs is the "one FILE:SYMBOL positional plus a handful
+// of boolean flags" arg loop blame.go and log.go used to each hand-roll in
+// full: a future flag landing on one command's own copy and not the
+// other's was exactly the drift this shares out (m10). Both commands'
+// loops already agreed on every other rule, so this is the one loop, not
+// two kept in sync by hand:
+//
+//   - --help/-h always wins, checked first every iteration -- so it is
+//     found "anywhere" in args (m12's rule for every hand-parsed command),
+//     not only as the sole argument or only before the positional.
+//   - A recognized flag from flags sets its bool and is consumed.
+//   - A second positional, or an unrecognized "-"-prefixed token, is
+//     refused by name. "--" is exempt (never itself the positional): a
+//     bare "--" classifies to nothing and is refused by
+//     resolveAnchorExtent's own classification instead, with a message
+//     that names the anchor requirement rather than an "unrecognized
+//     argument" that would be true of nothing in particular.
+//   - Anything else becomes the positional.
+//
+// done is true whenever the caller must return code immediately (help
+// printed, or a refusal already written to stderr); positional is only
+// meaningful when done is false.
+func parseAnchorCommandArgs(cmdName string, args []string, flags []anchorCommandFlag, help string, stdout, stderr io.Writer) (positional string, code exitcode.Code, done bool) {
+	havePositional := false
+	for _, a := range args {
+		if a == "--help" || a == "-h" {
+			fmt.Fprint(stdout, help)
+			return "", exitcode.Success, true
+		}
+
+		matched := false
+		for _, f := range flags {
+			if slices.Contains(f.tokens, a) {
+				*f.set = true
+				matched = true
+				break
+			}
+		}
+		if matched {
+			continue
+		}
+
+		switch {
+		case havePositional:
+			fmt.Fprintf(stderr, "rgit: %s: unrecognized argument %q\n", cmdName, a)
+			fmt.Fprint(stderr, help)
+			return "", exitcode.InvalidUsage, true
+		case a != "--" && strings.HasPrefix(a, "-"):
+			fmt.Fprintf(stderr, "rgit: %s: unrecognized argument %q\n", cmdName, a)
+			fmt.Fprint(stderr, help)
+			return "", exitcode.InvalidUsage, true
+		default:
+			positional = a
+			havePositional = true
+		}
+	}
+	if !havePositional {
+		fmt.Fprintf(stderr, "rgit: %s requires a FILE:SYMBOL anchor\n", cmdName)
+		fmt.Fprint(stderr, help)
+		return "", exitcode.InvalidUsage, true
+	}
+	return positional, exitcode.Success, false
 }

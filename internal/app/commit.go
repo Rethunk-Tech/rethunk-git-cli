@@ -167,7 +167,10 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	}
 
 	if !hasConventionalShape(f.messages) {
-		fmt.Fprintln(stderr, `rgit: warning: message does not look like "type(scope): subject"`)
+		// [warning], not "rgit: warning:" -- every other advisory in this
+		// command (below) and in diff.go already uses the bracketed form;
+		// one spelling for "advisory, not a refusal" across the surface.
+		fmt.Fprintln(stderr, `[warning] message does not look like "type(scope): subject"`)
 	}
 
 	root, prefix, repo, code := openRepo(ctx, dir, stderr)
@@ -461,6 +464,14 @@ func commitTargets(root, prefix string, classified []cli.Classification, files, 
 			if err := addAnchor(c.Anchor.File, c.Anchor.Name); err != nil {
 				return nil, err
 			}
+		default:
+			// classified is built with allowRevisions=false (above), so
+			// KindRevision/KindRevPath never reach here today -- but a
+			// silent skip would stage nothing for a positional the caller
+			// named, with no line on stderr to say why, if that ever
+			// changes. An internal error is honest; committing part of what
+			// was asked for without saying so is not.
+			return nil, fmt.Errorf("internal error: commitTargets: unhandled classification kind %v", c.Kind)
 		}
 	}
 	for _, file := range files {

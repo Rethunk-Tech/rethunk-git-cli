@@ -83,6 +83,14 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.InvalidUsage
 	}
+	// Same wording as internal/diff/scope.go's own check (ResolveScope would
+	// catch this identically further down), surfaced here as soon as both
+	// sides are known instead of after classification and BucketClassified
+	// have already done their own git calls for nothing.
+	if f.rangeFlag != "" && rangeToken != "" {
+		fmt.Fprintln(stderr, "rgit: --range and a positional revision range are mutually exclusive")
+		return exitcode.InvalidUsage
+	}
 
 	classified, err := cli.ClassifyArgs(ctx, rest, true, checker, cli.GitRevisionResolver{Repo: repo})
 	if err != nil {
@@ -93,6 +101,15 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 	revisions, files, syms, err := diffpkg.BucketClassified(classified)
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return exitcode.InvalidUsage
+	}
+	// Same wording as internal/diff/scope.go's own check. --staged and
+	// --range are already caught above with no repo call at all; this is
+	// the rest of that same contradiction -- --unstaged, and either flag
+	// against a bare revision positional -- which cannot be known until
+	// classification has resolved what the positionals are.
+	if (f.staged || f.unstaged) && (f.rangeFlag != "" || rangeToken != "" || len(revisions) > 0) {
+		fmt.Fprintln(stderr, "rgit: --staged/--unstaged and a revision range are mutually exclusive")
 		return exitcode.InvalidUsage
 	}
 

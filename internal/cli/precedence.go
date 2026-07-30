@@ -142,7 +142,7 @@ func classifyOne(ctx context.Context, a string, allowRevisions bool, paths PathC
 			}
 			return Classification{Kind: KindRevision, Revision: a}, nil
 		}
-		tried = append(tried, "revision, rev:path, or range (git rev-parse --verify)")
+		tried = append(tried, "revision or rev:path (git rev-parse --verify)")
 	}
 
 	// Rule 4. An existing-path check beats a colon-split so that a

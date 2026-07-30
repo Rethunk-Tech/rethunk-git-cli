@@ -65,6 +65,14 @@ Notable changes to `rgit`. The format follows
 
 ### Changed
 
+- Advisory output uses one prefix everywhere: the non-conventional commit
+  message warning now reads `[warning] …` like every other advisory, instead
+  of `rgit: warning: …`.
+- `--help`/`-h` wins wherever it appears on `context`, `doctor`, and
+  `completion`, matching `blame`, `log`, and `languages` — previously those
+  three accepted it only as their sole argument, so `rgit context --porcelain
+  --help` was a usage error rather than help. `rgit completion <unknown>`
+  also prints the command's help, as a missing shell argument already did.
 - `rgit-install -with-servers` installs `gopls@v0.23.0` instead of
   `gopls@latest`, matching the deliberate `tree-sitter-sql` pin: install
   reproducibility no longer drifts under a fixed rgit release. See
