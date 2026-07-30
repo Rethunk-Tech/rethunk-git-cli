@@ -613,6 +613,13 @@ func TestDiff_AnchorRoundTrip(t *testing.T) {
 	}
 }
 
+// TestDiff_ModeRowOnChmod is thinned to the human-readable text rendering
+// (m27): the porcelain half -- a mode-only change surfacing as MODE at
+// all -- is already pinned at the unit level
+// (internal/app/lanes_test.go's TestRun_DiffUntrackedFileAndModeChange),
+// which covered it via both the default and --staged scopes. What only
+// this e2e case still proves is that the *human* output names both the
+// old and new mode.
 func TestDiff_ModeRowOnChmod(t *testing.T) {
 	t.Parallel()
 	repo := initRepoWithFile(t, "script.sh", "#!/bin/sh\necho hi\n")
@@ -620,14 +627,6 @@ func TestDiff_ModeRowOnChmod(t *testing.T) {
 	if err := os.Chmod(filepath.Join(repo, "script.sh"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-
-	rows := parsePorcelain(t, runRgit(t, repo, "diff", "--porcelain").Stdout)
-	row, ok := findRow(rows, "script.sh", "MODE")
-	if !ok {
-		t.Fatalf("chmod +x with no content change must surface as MODE, not silently clean: %+v", rows)
-	}
-	qt.Assert(t, qt.Equals(row.Added, "0"))
-	qt.Assert(t, qt.Equals(row.Deleted, "0"))
 
 	text := runRgit(t, repo, "diff").Stdout
 	qt.Assert(t, qt.StringContains(text, "644"))
@@ -1065,6 +1064,14 @@ func TestCommit_PushWithNoUpstreamNamesTheFix(t *testing.T) {
 	// successful push with no upstream at all, and pre-empting on that
 	// basis would silently break them). What it adds on top of git's own
 	// failure is a named, concrete fix.
+	//
+	// m26: also pinned at the unit level
+	// (internal/app/app_test.go's TestRun_PushFailureReportsUpstreamHint),
+	// deliberately -- see that test's own comment for why this is not
+	// plain duplication: it triggers push failure via no remote configured
+	// at all, this one via a real remote with no upstream tracking, git's
+	// own distinct "no upstream branch" refusal, which only a real remote
+	// can produce.
 	repo := initRepoWithFile(t, "auth.go", authGoV1)
 	remote := t.TempDir()
 	gittest.Git(t, remote, "init", "-q", "--bare")

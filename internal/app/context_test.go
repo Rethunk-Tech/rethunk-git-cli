@@ -1,3 +1,5 @@
+// No t.Parallel here: every case changes directory (app_test.go's own
+// package comment explains why), which t.Chdir forbids combining with it.
 package app
 
 import (
@@ -18,10 +20,10 @@ func TestRun_ContextHelpAndUsage(t *testing.T) {
 		qt.Assert(t, qt.StringContains(stdout, "usage: rgit context"))
 	})
 
-	// TODO.md's own guardrail: "a command with options becomes git status
-	// with extra steps" -- context takes no flags or targets beyond
-	// --help, so any argument at all is refused rather than quietly
-	// growing a flag surface.
+	// docs/USAGE.md § Context's own guardrail: "a command with options
+	// becomes git status with extra steps" -- context takes no flags or
+	// targets beyond --help, so any argument at all is refused rather than
+	// quietly growing a flag surface.
 	t.Run("any argument is refused", func(t *testing.T) {
 		chdirTempRepo(t)
 		for _, args := range [][]string{
@@ -31,7 +33,9 @@ func TestRun_ContextHelpAndUsage(t *testing.T) {
 		} {
 			_, stderr, code := runApp(t, args...)
 			qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-			qt.Assert(t, qt.StringContains(stderr, "takes no arguments"))
+			// n8: context and doctor now share refuseExtraArgs (shared.go),
+			// unifying on doctor's own "unrecognized argument %q" wording.
+			qt.Assert(t, qt.StringContains(stderr, "unrecognized argument"))
 		}
 	})
 }
@@ -50,10 +54,10 @@ func TestRun_ContextEmptyRepoEmitsNothing(t *testing.T) {
 	qt.Assert(t, qt.Equals(stderr, ""))
 }
 
-// TestRun_ContextEmitsCommitsBeforeDiffRows is the token case TODO.md
-// accepted this command against: one invocation reports recent commit
-// subjects AND the same per-symbol diffstat `rgit diff` itself reports,
-// as one stream, commits first.
+// TestRun_ContextEmitsCommitsBeforeDiffRows is the token case
+// specs/design.md § Commands accepted this command against: one
+// invocation reports recent commit subjects AND the same per-symbol
+// diffstat `rgit diff` itself reports, as one stream, commits first.
 func TestRun_ContextEmitsCommitsBeforeDiffRows(t *testing.T) {
 	dir := chdirTempRepo(t) // "chore: initial" commits a.go with A and B
 

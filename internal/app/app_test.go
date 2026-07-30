@@ -49,6 +49,13 @@ func chdirTempRepo(t *testing.T) string {
 	return dir
 }
 
+// writeAppFile is a thin wrapper over gittest.Write, kept rather than
+// calling gittest.Write directly at its ~49 call sites across this package
+// for the same reason gitOut wraps gittest.Git below it: every test in
+// this package reaches the temp repo through an "App"-local name, so a
+// future change to what a package-level fixture call looks like here (a
+// second argument, a different return shape) is one signature to edit,
+// not every call site in every file in this package.
 func writeAppFile(t *testing.T, dir, rel, content string) {
 	t.Helper()
 	gittest.Write(t, dir, rel, content)
@@ -662,6 +669,18 @@ func TestRun_GPGSignShorthandReachesGit(t *testing.T) {
 // `go test -short ./...` clean. A repo gittest builds has no remote
 // configured at all, so `git push` fails for the plainest possible
 // reason and HasUpstream's negative answer is real, not assumed.
+//
+// m26: this is deliberately pinned again in
+// cmd/rgit/rgit_e2e_test.go's TestCommit_PushWithNoUpstreamNamesTheFix, the
+// same dual-pin CONTRIBUTING.md sanctions for hook rejection
+// (lanes_test.go's own TestRun_HookRejectionLeavesStagingIntact) -- but for
+// a different reason than duplication would suggest. The two cases trigger
+// genuinely different git failures that both leave HasUpstream negative:
+// no remote configured at all here, versus a real remote with no upstream
+// tracking there (git's own literal "no upstream branch" refusal). Losing
+// this lane would still catch a regression in the message-construction
+// code, but only the e2e twin proves the hint fires for the specific
+// failure its own text names.
 func TestRun_PushFailureReportsUpstreamHint(t *testing.T) {
 	dir := chdirTempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")

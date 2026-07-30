@@ -12,6 +12,9 @@
 // file never collides with it; it shares that file's runApp, chdirTempRepo,
 // writeAppFile, and gitOut helpers, since Go compiles every _test.go file
 // in a package together.
+//
+// No t.Parallel here either, for the same reason as app_test.go: every case
+// changes directory, which t.Chdir forbids combining with it.
 package app
 
 import (
@@ -120,6 +123,45 @@ func TestRun_FixupAndSquashGenerateAutosquashMessages(t *testing.T) {
 	}
 }
 
+// TestRun_FixupWithMessageAppendsRatherThanConflicts is m24: --fixup plus
+// -m is not the "-m and -F are mutually exclusive" shape of conflict --
+// git appends -m's text as an extra body paragraph below the generated
+// "fixup! <original subject>" subject, and that behaviour was only proven
+// through the built binary (cmd/rgit/rgit_e2e_test.go's identically named
+// case).
+func TestRun_FixupWithMessageAppendsRatherThanConflicts(t *testing.T) {
+	dir := chdirTempRepo(t)
+	target := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	_, _, code := runApp(t, "commit", "--fixup="+target, "-m", "UNIQUE_BODY_MARKER", "a.go:A")
+
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	body := gitOut(t, dir, "log", "-1", "--format=%B")
+	qt.Assert(t, qt.StringContains(body, "fixup! chore: initial"))
+	qt.Assert(t, qt.StringContains(body, "UNIQUE_BODY_MARKER"))
+}
+
+// TestRun_NoGPGSignOverridesConfiguredGPGSign is m25's --no-gpg-sign half:
+// commit.gpgsign=true only proved it overrode a configured signing default
+// through the built binary
+// (cmd/rgit/rgit_e2e_test.go's TestCommit_GPGSignFlagsForwarded); -S itself
+// already has a unit case (app_test.go's TestRun_GPGSignShorthandReachesGit).
+// gpg.program pointed at a binary that always fails would turn an
+// un-overridden commit.gpgsign=true into a deterministic failure, so a
+// successful commit here is proof --no-gpg-sign actually reached git ahead
+// of the config rather than the config never having fired at all.
+func TestRun_NoGPGSignOverridesConfiguredGPGSign(t *testing.T) {
+	dir := chdirTempRepo(t)
+	gitOut(t, dir, "config", "gpg.program", "/bin/false")
+	gitOut(t, dir, "config", "commit.gpgsign", "true")
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+
+	_, _, code := runApp(t, "commit", "--no-gpg-sign", "-m", "fix(a): bump", "a.go:A")
+
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+}
+
 // TestRun_AuthorAndDateForwarded pins plain forwarding of both flags to git.
 func TestRun_AuthorAndDateForwarded(t *testing.T) {
 	dir := chdirTempRepo(t)
@@ -156,6 +198,54 @@ func TestRun_ResetAuthorForwarded(t *testing.T) {
 		gitOut(t, dir, "log", "-1", "--format=%cn")))
 }
 
+// TestRun_DiffUnbornBranchListsEverythingCommittable is m28: a fresh repo
+// with no HEAD cannot run `git diff HEAD` for the default scope, so it
+// compares against the empty tree instead (committableBase,
+// internal/diff/scope.go) -- both the staged and untracked halves of that
+// listing were only proven through the built binary
+// (cmd/rgit/rgit_e2e_test.go's identically named case); the unit lane
+// covered only the empty-tree base itself (internal/diff/scope_test.go),
+// not a real listing through it.
+func TestRun_DiffUnbornBranchListsEverythingCommittable(t *testing.T) {
+	dir, _ := gittest.New(t)
+	t.Chdir(dir)
+
+	writeAppFile(t, dir, "staged.go", "package auth\n\nfunc Staged() int { return 3 }\n")
+	gitOut(t, dir, "add", "--", "staged.go")
+	writeAppFile(t, dir, "untracked.go", "package auth\n\nfunc Untracked() int { return 4 }\n")
+
+	stdout, _, code := runApp(t, "diff", "--porcelain")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	// staged.go is a brand-new file, so it attributes per symbol (its
+	// @header preamble plus the Staged function) rather than one aggregate
+	// MOD row -- the point here is that it appears at all against the
+	// empty-tree base, not its own attribution shape.
+	qt.Assert(t, qt.StringContains(stdout, "staged.go\tStaged\tMOD\t"))
+	qt.Assert(t, qt.StringContains(stdout, "untracked.go\t\tUNTRACKED\t"))
+}
+
+// TestRun_PushAfterSuccessfulCommit is m29: a successful --push (as
+// opposed to the failure path TestRun_PushFailureReportsUpstreamHint,
+// app_test.go, already covers) was only proven through the built binary
+// (cmd/rgit/rgit_e2e_test.go's identically named case) -- a real bare
+// remote, upstream already configured, and repo.Push actually reaching it
+// successfully.
+func TestRun_PushAfterSuccessfulCommit(t *testing.T) {
+	dir := chdirTempRepo(t)
+	remote := t.TempDir()
+	gittest.Git(t, remote, "init", "-q", "--bare")
+	gitOut(t, dir, "remote", "add", "origin", remote)
+	branch := strings.TrimSpace(gitOut(t, dir, "rev-parse", "--abbrev-ref", "HEAD"))
+	gitOut(t, dir, "push", "-q", "-u", "origin", branch)
+
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	_, _, code := runApp(t, "commit", "--push", "-m", "fix(a): bump", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+
+	local := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	qt.Assert(t, qt.Equals(strings.TrimSpace(gittest.Git(t, remote, "rev-parse", branch)), local))
+}
+
 // TestRun_DiffUntrackedFileAndModeChange holds `rgit diff`'s untracked and
 // mode-only paths at the unit level: an untracked file (internal/diff's
 // buildUntrackedReport) and a mode-only change read from either the
@@ -181,6 +271,70 @@ func TestRun_DiffUntrackedFileAndModeChange(t *testing.T) {
 	staged, _, code := runApp(t, "diff", "--staged", "--porcelain")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(staged, "a.go\t\tMODE\t"))
+}
+
+// TestRun_CommitExtensionlessShebangResolvesShellSymbol is M11: the commit
+// path's own use of the worktree-shebang fallback (resolveAnchorExtent and
+// synth's own resolution share it) was only proven by building and execing
+// the binary (cmd/rgit/rgit_e2e_test.go's identically named case) -- the
+// unit lane covered the shebang fallback on the diff path
+// (internal/diff/run_test.go) but never through a real commit, so a
+// regression specific to the commit-path resolution would not fail
+// `-short`. gittest.New is used directly, not chdirTempRepo, so the only
+// file in the repository is the extensionless script itself.
+func TestRun_CommitExtensionlessShebangResolvesShellSymbol(t *testing.T) {
+	dir, _ := gittest.New(t)
+	t.Chdir(dir)
+
+	writeAppFile(t, dir, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v1\n}\n\nbar() {\n  echo bar\n}\n")
+	gitOut(t, dir, "add", "-A")
+	gitOut(t, dir, "commit", "-q", "-m", "init")
+
+	writeAppFile(t, dir, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v2\n}\n\nbar() {\n  echo changed too\n}\n")
+
+	_, _, code := runApp(t, "commit", "-m", "fix: bump foo only", "pre-commit:foo")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+
+	head := gitOut(t, dir, "show", "HEAD:pre-commit")
+	qt.Assert(t, qt.StringContains(head, "echo v2"))
+	qt.Assert(t, qt.StringContains(head, "echo bar")) // bar's edit stayed uncommitted
+}
+
+// TestRun_CommitGoTSPythonSymbolGranularityInOneInvocation is M12: the
+// cross-grammar single-invocation guarantee (one `commit` naming a symbol
+// in each of three languages, each file's other symbol staying
+// uncommitted) was only proven through the built binary
+// (cmd/rgit/rgit_e2e_test.go's identically named case). Per-grammar
+// staging is already covered elsewhere at the unit level; what only the
+// e2e case proved was that naming all three together in one invocation
+// does not let one grammar's plan step over another's.
+func TestRun_CommitGoTSPythonSymbolGranularityInOneInvocation(t *testing.T) {
+	dir, _ := gittest.New(t)
+	t.Chdir(dir)
+
+	writeAppFile(t, dir, "auth.go", "package auth\n\nfunc GoA() int { return 1 }\n\nfunc GoB() int { return 1 }\n")
+	writeAppFile(t, dir, "app.ts", "export function TsA(): number { return 1 }\n\nexport function TsB(): number { return 1 }\n")
+	writeAppFile(t, dir, "svc.py", "def py_a():\n    return 1\n\n\ndef py_b():\n    return 1\n")
+	gitOut(t, dir, "add", "-A")
+	gitOut(t, dir, "commit", "-q", "-m", "init")
+
+	writeAppFile(t, dir, "auth.go", "package auth\n\nfunc GoA() int { return 2 }\n\nfunc GoB() int { return 2 }\n")
+	writeAppFile(t, dir, "app.ts", "export function TsA(): number { return 2 }\n\nexport function TsB(): number { return 2 }\n")
+	writeAppFile(t, dir, "svc.py", "def py_a():\n    return 2\n\n\ndef py_b():\n    return 2\n")
+
+	_, _, code := runApp(t, "commit", "-m", "fix: bump the first of each",
+		"auth.go:GoA", "app.ts:TsA", "svc.py:py_a")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+
+	for _, c := range []struct{ path, committed, withheld string }{
+		{"auth.go", "func GoA() int { return 2 }", "func GoB() int { return 1 }"},
+		{"app.ts", "export function TsA(): number { return 2 }", "export function TsB(): number { return 1 }"},
+		{"svc.py", "def py_a():\n    return 2", "def py_b():\n    return 1"},
+	} {
+		head := gitOut(t, dir, "show", "HEAD:"+c.path)
+		qt.Assert(t, qt.StringContains(head, c.committed))
+		qt.Assert(t, qt.StringContains(head, c.withheld))
+	}
 }
 
 // TestRun_DiffUnsupportedLanguageSymReachesExtLookup closes internal/app's

@@ -1,3 +1,5 @@
+// No t.Parallel here: every case changes directory (app_test.go's own
+// package comment explains why), which t.Chdir forbids combining with it.
 package app
 
 import (
@@ -12,55 +14,7 @@ import (
 )
 
 func TestRun_LogHelpAndUsage(t *testing.T) {
-	t.Run("--help", func(t *testing.T) {
-		t.Chdir(t.TempDir())
-		stdout, _, code := runApp(t, "log", "--help")
-		qt.Assert(t, qt.Equals(code, exitcode.Success))
-		qt.Assert(t, qt.StringContains(stdout, "usage: rgit log"))
-	})
-
-	t.Run("no arguments", func(t *testing.T) {
-		t.Chdir(t.TempDir())
-		_, stderr, code := runApp(t, "log")
-		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-		qt.Assert(t, qt.StringContains(stderr, "requires a FILE:SYMBOL anchor"))
-	})
-
-	t.Run("bare pathspec is refused, not silently split", func(t *testing.T) {
-		chdirTempRepo(t)
-		_, stderr, code := runApp(t, "log", "a.go")
-		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-		qt.Assert(t, qt.StringContains(stderr, "not a plain path"))
-	})
-
-	// TestRun_LogHelpAndUsage/"bare -- does not panic" mirrors blame's own
-	// regression: a lone "--" is consumed whole by cli.ClassifyArgs's rule 1
-	// and yields zero classifications, so indexing classified[0] blindly
-	// panicked instead of refusing like any other non-anchor positional.
-	t.Run("bare -- does not panic", func(t *testing.T) {
-		chdirTempRepo(t)
-		_, stderr, code := runApp(t, "log", "--")
-		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-		qt.Assert(t, qt.StringContains(stderr, "requires a FILE:SYMBOL anchor"))
-	})
-
-	t.Run("extra positional is refused", func(t *testing.T) {
-		chdirTempRepo(t)
-		_, stderr, code := runApp(t, "log", "a.go:A", "a.go:B")
-		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-		qt.Assert(t, qt.StringContains(stderr, "unrecognized argument"))
-	})
-
-	// TestRun_LogHelpAndUsage/"unknown flag is refused before positional
-	// classification" mirrors blame's own case: a "-"-prefixed token that
-	// is none of log's own flags is rejected outright, not silently treated
-	// as the FILE:SYMBOL positional.
-	t.Run("unknown flag is refused before positional classification", func(t *testing.T) {
-		chdirTempRepo(t)
-		_, stderr, code := runApp(t, "log", "--nope")
-		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-		qt.Assert(t, qt.StringContains(stderr, `unrecognized argument "--nope"`))
-	})
+	assertAnchorUsageRefusals(t, "log") // shared with blame_test.go (m31)
 
 	t.Run("--porcelain and --patch are mutually exclusive", func(t *testing.T) {
 		chdirTempRepo(t)
@@ -111,8 +65,9 @@ func TestRun_LogUnsupportedLanguage(t *testing.T) {
 }
 
 // TestRun_LogDefaultIsPatchFreeAndListsOnlyTouchingCommits pins the
-// non-negotiable guardrail TODO.md states in full: patches are opt-in,
-// never default, and the stream is bounded by commit count, not code size.
+// non-negotiable guardrail specs/design.md § Commands states in full:
+// patches are opt-in, never default, and the stream is bounded by commit
+// count, not code size.
 // A commit that only touched B must never appear in A's own history, and
 // no patch marker may leak into the default output no matter how many
 // commits touched the symbol.

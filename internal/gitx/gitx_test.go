@@ -156,8 +156,8 @@ func TestCatFileSample(t *testing.T) {
 
 // TestBlame pins the -L bounding itself: blaming lines 2,2 of a three-line
 // file must name only that line's own commit, never the ones before or
-// after it -- the guardrail rgit blame exists to hold (TODO.md: no
-// whole-file fallback).
+// after it -- the guardrail rgit blame exists to hold (docs/USAGE.md §
+// Blame: no whole-file fallback).
 func TestBlame(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t)
