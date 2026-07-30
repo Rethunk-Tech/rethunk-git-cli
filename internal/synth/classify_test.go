@@ -26,6 +26,43 @@ func stagedBlob(t *testing.T, repo *gitx.Repo, path string) string {
 	return string(content)
 }
 
+// TestClassify_DefersCrossCheckToOneBatchPerFile guards m20's own fix:
+// classify used to dial a live language server once per anchor
+// (fp.crossCheck, since deleted), so a commit naming N symbols in one file
+// paid N documentSymbol round trips where internal/diff's own crossCheckFile
+// already batches identically-shaped work into one. classify no longer
+// dials at all -- it only queues each worktree resolution onto
+// fp.pendingCrossCheck (deferCrossCheck) -- so two anchors in the same file
+// must land in the identical, shared queue, in resolution order, ready for
+// crossCheckPending to drain in a single CrossCheckExtents call. No live or
+// mock server is needed to prove this: the batching is decided entirely by
+// what classify queues, before any dial ever happens.
+func TestClassify_DefersCrossCheckToOneBatchPerFile(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	gittest.Write(t, dir, "a.go", "package p\n\nfunc A() int { return 1 }\n\nfunc B() int { return 2 }\n")
+	gittest.Commit(t, dir, "chore: fixture")
+	gittest.Write(t, dir, "a.go", "package p\n\nfunc A() int { return 11 }\n\nfunc B() int { return 22 }\n")
+
+	fp, err := openFilePlan(context.Background(), repo, dir, "a.go")
+	qt.Assert(t, qt.IsNil(err))
+	defer fp.close()
+
+	qt.Assert(t, qt.HasLen(fp.pendingCrossCheck, 0))
+
+	_, _, err = fp.classify("A")
+	qt.Assert(t, qt.IsNil(err))
+	_, _, err = fp.classify("B")
+	qt.Assert(t, qt.IsNil(err))
+
+	qt.Assert(t, qt.HasLen(fp.pendingCrossCheck, 2))
+	var anchors []string
+	for _, res := range fp.pendingCrossCheck {
+		anchors = append(anchors, res.Anchor)
+	}
+	qt.Assert(t, qt.DeepEquals(anchors, []string{"A", "B"}))
+}
+
 // TestEscalateToContainer_AmbiguousContainerPropagates pins the fix for a
 // silent-fallback bug: escalateToContainer used to treat every
 // *resolve.ResolveError alike when resolving a new member's own container,

@@ -23,18 +23,21 @@ type region struct {
 	ext  resolve.Extent
 }
 
-// declResolver is the subset of *resolve.File that resolveRegions needs.
-// The real implementation, *resolve.File, can never actually take the
-// error path resolveRegions guards against (buildRegions' own doc comment
-// explains why: DeclOrder and Resolve are both built from the same index
-// in the same call, so a name DeclOrder emits always hits Resolve's first
-// lookup). That is exactly why this seam exists -- it lets a test double
-// violate the invariant deliberately, something no real resolve.Language
-// can do, to prove the guard fires and propagates rather than silently
-// dropping a region. The assertion below is what would catch this
-// interface drifting from *resolve.File's real signatures: a future
-// rename or signature change on either method fails this file to compile
-// rather than leaving the seam quietly stale.
+// declResolver is the subset of *resolve.File that resolveRegions needs --
+// deliberately an interface rather than a concrete *resolve.File parameter,
+// so attributeSymbolsOpen (below) can be handed a file buildFileReport
+// (run.go) already parsed for its own LSP cross-check instead of forcing a
+// second parse of the same bytes. The real implementation, *resolve.File,
+// can never actually take the error path resolveRegions guards against:
+// DeclOrder and Resolve are both built from the same index in the same
+// call, so a name DeclOrder emits always hits Resolve's first lookup. That
+// is exactly why this seam exists -- it lets a test double violate the
+// invariant deliberately, something no real resolve.Language can do, to
+// prove the guard fires and propagates rather than silently dropping a
+// region. The assertion below is what would catch this interface drifting
+// from *resolve.File's real signatures: a future rename or signature
+// change on either method fails this file to compile rather than leaving
+// the seam quietly stale.
 type declResolver interface {
 	DeclOrder() []string
 	Resolve(anchor string) (*resolve.Resolution, error)
@@ -42,20 +45,9 @@ type declResolver interface {
 
 var _ declResolver = (*resolve.File)(nil)
 
-// buildRegions computes every named region in src.
-func buildRegions(lang resolve.Language, src []byte) ([]region, error) {
-	// One parse for the whole file: this resolves every declaration in it,
-	// and it runs once per side of every comparison.
-	f, err := resolve.Open(lang, src)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	return resolveRegions(lang, src, f)
-}
-
-// resolveRegions is buildRegions' own logic, factored out so a test can
-// drive it against a declResolver double instead of a real parsed file.
+// resolveRegions is attributeSymbolsOpen's own logic, factored out so a
+// test can drive it against a declResolver double instead of a real parsed
+// file.
 //
 // A resolve.Resolve failure on a name resolve.DeclOrder itself just
 // produced is not something a legitimate source file can trigger, so it is
@@ -307,11 +299,34 @@ func indexRegions(regions []region) map[string]resolve.Extent {
 // per-symbol diffs and git's whole-file diff can align ambiguous content
 // (duplicate lines, say) differently.
 func attributeSymbols(lang resolve.Language, oldSrc, newSrc []byte, totalAdded, totalDeleted int) ([]Row, error) {
-	oldRegions, err := buildRegions(lang, oldSrc)
+	oldFile, err := resolve.Open(lang, oldSrc)
 	if err != nil {
 		return nil, err
 	}
-	newRegions, err := buildRegions(lang, newSrc)
+	defer oldFile.Close()
+	newFile, err := resolve.Open(lang, newSrc)
+	if err != nil {
+		return nil, err
+	}
+	defer newFile.Close()
+	return attributeSymbolsOpen(lang, oldSrc, newSrc, oldFile, newFile, totalAdded, totalDeleted)
+}
+
+// attributeSymbolsOpen is attributeSymbols' own logic, taking each side's
+// already-parsed file (buildRegions' Open, factored out) rather than
+// opening its own. buildFileReport (run.go) already parses newSrc once for
+// the LSP cross-check; calling through here with that same *resolve.File
+// instead of letting attributeSymbols open a second one is this package's
+// own share of the held-parse gain specs/design.md § Blob synthesis
+// measures for internal/synth (~39x, one parse per side instead of one per
+// anchor) -- attributeSymbols above stays the convenience form for a caller
+// (this package's own tests) with nothing already open to hand in.
+func attributeSymbolsOpen(lang resolve.Language, oldSrc, newSrc []byte, oldFile, newFile declResolver, totalAdded, totalDeleted int) ([]Row, error) {
+	oldRegions, err := resolveRegions(lang, oldSrc, oldFile)
+	if err != nil {
+		return nil, err
+	}
+	newRegions, err := resolveRegions(lang, newSrc, newFile)
 	if err != nil {
 		return nil, err
 	}

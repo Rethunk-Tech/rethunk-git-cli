@@ -3,7 +3,6 @@ package synth
 import (
 	"bytes"
 	"context"
-	"errors"
 	"path/filepath"
 	"slices"
 
@@ -14,18 +13,23 @@ import (
 
 // classify resolves one anchor against a file's already-loaded HEAD and
 // worktree content and reports what to do about it. It performs no
-// mutating I/O -- resolution (including the LSP cross-check) is a pure
-// read, so a failure here leaves the caller free to abandon the whole
-// batch with the index exactly as found (AGENTS.md).
+// mutating I/O and no LSP round trip of its own -- a symbol that needs
+// verifying against a live language server is only queued onto
+// fp.pendingCrossCheck here; crossCheckPending below is what actually
+// dials, once per file rather than once per anchor (m20's own fix: a
+// commit naming several symbols in one file used to pay one documentSymbol
+// round trip per anchor, the same query repeated, where internal/diff's
+// own crossCheckFile already batches identically-shaped work into one).
+// Deferring the dial rather than dropping it keeps this a pure read, same
+// as before: a failure surfaces once crossCheckPending runs, still before
+// planStage returns a plan Apply could act on, so AGENTS.md's "resolve
+// every target before staging any" still holds.
 //
 // unchanged reports whether the resolved extent is byte-identical between
 // HEAD and the worktree -- docs/USAGE.md's "target has no uncommitted
 // changes" warning, which the caller (not classify) turns into a message
-// and folds into the exit-11 rule. tsOnly reports whether the cross-check
-// degraded to tree-sitter-only for this anchor because no live language
-// server answered in time -- normal, not an error (specs/design.md), but
-// worth the caller announcing once on stderr.
-func (fp *filePlan) classify(ctx context.Context, sess *lsp.Session, root, anchor string) (op editOp, unchanged, tsOnly bool, err error) {
+// and folds into the exit-11 rule.
+func (fp *filePlan) classify(anchor string) (op editOp, unchanged bool, err error) {
 	var workRes, headRes *resolve.Resolution
 	var workErr, headErr error
 	if fp.workExists {
@@ -38,27 +42,24 @@ func (fp *filePlan) classify(ctx context.Context, sess *lsp.Session, root, ancho
 	// A non-ResolveError means tree-sitter or the language adapter
 	// itself failed (e.g. SetLanguage), not "anchor not found" -- that
 	// is a hard failure, not grounds to guess this is a new symbol.
-	if workErr != nil && !isResolveError(workErr) {
-		return editOp{}, false, false, workErr
+	if _, ok := resolve.AsResolveError(workErr); workErr != nil && !ok {
+		return editOp{}, false, workErr
 	}
-	if headErr != nil && !isResolveError(headErr) {
-		return editOp{}, false, false, headErr
+	if _, ok := resolve.AsResolveError(headErr); headErr != nil && !ok {
+		return editOp{}, false, headErr
 	}
-	if amb, ok := asAmbiguous(workErr); ok {
-		return editOp{}, false, false, amb
+	if amb, ok := resolve.AsAmbiguous(workErr); ok {
+		return editOp{}, false, amb
 	}
-	if amb, ok := asAmbiguous(headErr); ok {
-		return editOp{}, false, false, amb
+	if amb, ok := resolve.AsAmbiguous(headErr); ok {
+		return editOp{}, false, amb
 	}
 
 	switch {
 	case workRes != nil && headRes != nil:
 		workBytes := fp.workSrc[workRes.Extent.Start:workRes.Extent.End]
 		headBytes := fp.headSrc[headRes.Extent.Start:headRes.Extent.End]
-		tsOnly, err = fp.crossCheck(ctx, sess, root, workRes)
-		if err != nil {
-			return editOp{}, false, false, err
-		}
+		fp.deferCrossCheck(workRes)
 		op = editOp{
 			kind:   editReplace,
 			start:  headRes.Extent.Start,
@@ -67,18 +68,15 @@ func (fp *filePlan) classify(ctx context.Context, sess *lsp.Session, root, ancho
 			wstart: workRes.Extent.Start,
 			wend:   workRes.Extent.End,
 		}
-		return op, bytes.Equal(workBytes, headBytes), tsOnly, nil
+		return op, bytes.Equal(workBytes, headBytes), nil
 
 	case workRes != nil && headRes == nil:
 		workRes, isNestedMember, escErr := fp.escalateToContainer(workRes)
 		if escErr != nil {
-			return editOp{}, false, false, escErr
+			return editOp{}, false, escErr
 		}
 		pos, seq := fp.insertionPoint(workRes)
-		tsOnly, err = fp.crossCheck(ctx, sess, root, workRes)
-		if err != nil {
-			return editOp{}, false, false, err
-		}
+		fp.deferCrossCheck(workRes)
 		op = editOp{
 			kind:   editInsert,
 			start:  pos,
@@ -93,7 +91,7 @@ func (fp *filePlan) classify(ctx context.Context, sess *lsp.Session, root, ancho
 			// a Go struct field or a TypeScript class method.
 			member: isNestedMember && fp.lang.MembersSitFlush(),
 		}
-		return op, false, tsOnly, nil
+		return op, false, nil
 
 	case workRes == nil && headRes != nil:
 		// Deletion: never cross-checked. The symbol exists only in HEAD,
@@ -113,7 +111,7 @@ func (fp *filePlan) classify(ctx context.Context, sess *lsp.Session, root, ancho
 			kind:  editDelete,
 			start: lineStart(fp.headSrc, headRes.Extent.Start),
 			end:   headRes.Extent.End,
-		}, false, false, nil
+		}, false, nil
 
 	default:
 		// Both sides came back nil, which can only be an AnchorUnresolvable
@@ -121,29 +119,54 @@ func (fp *filePlan) classify(ctx context.Context, sess *lsp.Session, root, ancho
 		// returned above. workErr and headErr carry the "did you mean"
 		// Candidates idx.suggest computed; a fresh ResolveError here would
 		// silently drop them, leaving the caller with a bare exit 3.
-		if rerr, ok := asResolveError(workErr); ok {
-			return editOp{}, false, false, rerr
+		if rerr, ok := resolve.AsResolveError(workErr); ok {
+			return editOp{}, false, rerr
 		}
-		if rerr, ok := asResolveError(headErr); ok {
-			return editOp{}, false, false, rerr
+		if rerr, ok := resolve.AsResolveError(headErr); ok {
+			return editOp{}, false, rerr
 		}
-		return editOp{}, false, false, &resolve.ResolveError{Code: exitcode.AnchorUnresolvable, Anchor: anchor}
+		return editOp{}, false, &resolve.ResolveError{Code: exitcode.AnchorUnresolvable, Anchor: anchor}
 	}
 }
 
-// crossCheck verifies res against a live language server, when reachable.
-// Pseudo-anchors are skipped here too, proactively, even though
-// resolve.CrossCheckExtent also treats res.Pseudo as a safety net --
-// docs/ANCHORS.md documents the exemption as the caller's rule to know,
-// not something to rely on a callee catching.
-func (fp *filePlan) crossCheck(ctx context.Context, sess *lsp.Session, root string, res *resolve.Resolution) (tsOnly bool, err error) {
+// deferCrossCheck queues res to be verified against a live language server
+// the next time crossCheckPending runs for this file, instead of dialing
+// immediately -- the batching m20's fix rests on. Pseudo-anchors are
+// skipped here too, proactively, even though resolve.CrossCheckExtents
+// also treats a Pseudo entry as exempt internally -- docs/ANCHORS.md
+// documents the exemption as the caller's rule to know, not something to
+// rely on a callee catching, and there is no reason to grow the batch with
+// an entry that can only ever be a no-op.
+func (fp *filePlan) deferCrossCheck(res *resolve.Resolution) {
 	if res.Pseudo {
+		return
+	}
+	fp.pendingCrossCheck = append(fp.pendingCrossCheck, res)
+}
+
+// crossCheckPending verifies every resolution deferCrossCheck queued for
+// this file against a live language server, in one query -- the same
+// per-file batching internal/diff's own crossCheckFile already does via
+// resolve.CrossCheckExtents, rather than the one-documentSymbol-round-trip-
+// per-anchor query classify used to issue directly (m20). Only the
+// worktree side is ever queued (deferCrossCheck's callers, classify's own
+// two non-deletion branches), matching CrossCheckExtents' own worktree-only
+// contract.
+//
+// err is the first genuine range disagreement (exit 6), if any. Called once
+// per file after every target naming that file has already been resolved
+// and its op built (planStage's own final pass over plan.files), so a
+// mismatch here still aborts planStage before it ever returns a plan Apply
+// could act on -- AGENTS.md's "resolve every target before staging any"
+// holds exactly as it did when this dialed inline.
+func (fp *filePlan) crossCheckPending(ctx context.Context, sess *lsp.Session, root string) (tsOnly bool, err error) {
+	if len(fp.pendingCrossCheck) == 0 {
 		return false, nil
 	}
 	absPath := filepath.Join(root, fp.path)
-	degraded, cerr := resolve.CrossCheckExtent(ctx, sess, fp.lang, root, absPath, fp.workSrc, res)
-	if cerr != nil {
-		return false, cerr
+	degraded, mismatches := resolve.CrossCheckExtents(ctx, sess, fp.lang, root, absPath, fp.workSrc, fp.pendingCrossCheck)
+	if len(mismatches) > 0 {
+		return degraded, mismatches[0]
 	}
 	return degraded, nil
 }
@@ -221,17 +244,21 @@ func (fp *filePlan) escalateToContainer(member *resolve.Resolution) (res *resolv
 	// place of the member actually named. There is no per-Declaration
 	// ancestor chain recorded to escalate to correctly instead (specs/
 	// design.md § Grammar scope keeps HTML's addressing at element+id, one
-	// level, on purpose), so the only sound fix is to never widen an HTML
-	// member to a "container" at all -- new nested elements insert directly
-	// at their sibling position, uninvolved with this mechanism.
-	if fp.lang.Name() == "html" {
+	// level, on purpose), so the only sound fix is to never widen a flat-
+	// container adapter's member to a "container" at all -- new nested
+	// elements insert directly at their sibling position, uninvolved with
+	// this mechanism. resolve.FlatContainerLanguage's own doc comment is
+	// the seam; matched by type assertion, the same way markdown's
+	// structural difference is (toplevelExtent, pseudo.go), rather than a
+	// Language.Name() string compare a future rename would silently break.
+	if flat, ok := fp.lang.(resolve.FlatContainerLanguage); ok && flat.FlatContainer() {
 		return member, false, nil
 	}
 	container := member.Container
 
 	outer, werr := fp.workFile.Resolve(container)
 	if werr != nil {
-		if rerr, ok := asResolveError(werr); ok && rerr.Code == exitcode.AnchorUnresolvable {
+		if rerr, ok := resolve.AsResolveError(werr); ok && rerr.Code == exitcode.AnchorUnresolvable {
 			return member, false, nil
 		}
 		return nil, false, werr
@@ -295,25 +322,4 @@ func (fp *filePlan) insertionPoint(res *resolve.Resolution) (pos uint, seq int) 
 		}
 	}
 	return uint(len(fp.headSrc)), seq
-}
-
-func isResolveError(err error) bool {
-	var rerr *resolve.ResolveError
-	return errors.As(err, &rerr)
-}
-
-func asResolveError(err error) (*resolve.ResolveError, bool) {
-	var rerr *resolve.ResolveError
-	if errors.As(err, &rerr) {
-		return rerr, true
-	}
-	return nil, false
-}
-
-func asAmbiguous(err error) (*resolve.ResolveError, bool) {
-	var rerr *resolve.ResolveError
-	if errors.As(err, &rerr) && rerr.Code == exitcode.AnchorAmbiguous {
-		return rerr, true
-	}
-	return nil, false
 }

@@ -2,6 +2,7 @@ package resolve
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -77,6 +78,34 @@ func (e *ResolveError) Error() string {
 	}
 	return fmt.Sprintf("resolve: %q: %s (did you mean: %s?)",
 		e.Anchor, label, strings.Join(e.Candidates, ", "))
+}
+
+// AsResolveError reports whether err is, or wraps, a *ResolveError, via
+// errors.As rather than a bare type assertion -- a caller one layer removed
+// from where an error is constructed (internal/synth's classify.go is the
+// motivating case) cannot assume it never travels wrapped, and a bare
+// assertion silently treats a wrapped ResolveError as "some other kind of
+// hard failure" instead of the typed resolution outcome it actually is.
+// Exported so every package needing this reads it from here once, rather
+// than each carrying its own copy the way internal/synth's classify.go used
+// to (isResolveError/asResolveError, now deleted in its favor).
+func AsResolveError(err error) (*ResolveError, bool) {
+	var rerr *ResolveError
+	if errors.As(err, &rerr) {
+		return rerr, true
+	}
+	return nil, false
+}
+
+// AsAmbiguous is AsResolveError narrowed to exitcode.AnchorAmbiguous -- the
+// one Code a caller like classify's switch must re-propagate immediately
+// rather than falling through to "neither side resolved", since ambiguous
+// and absent take different exit codes and different remediations.
+func AsAmbiguous(err error) (*ResolveError, bool) {
+	if rerr, ok := AsResolveError(err); ok && rerr.Code == exitcode.AnchorAmbiguous {
+		return rerr, true
+	}
+	return nil, false
 }
 
 // Symbol is one resolved top-level declaration: its identity, both extents,
@@ -283,7 +312,7 @@ func (idx *index) resolve(anchor string) (*Symbol, error) {
 		if slug, ok := rawHeadingFallback(anchor); ok {
 			if s, err := idx.resolve(slug); err == nil {
 				return s, nil
-			} else if rerr, ok := err.(*ResolveError); ok && rerr.Code == exitcode.AnchorAmbiguous {
+			} else if rerr, ok := AsAmbiguous(err); ok {
 				return nil, rerr
 			}
 		}

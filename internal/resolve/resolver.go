@@ -2,6 +2,7 @@ package resolve
 
 import (
 	"fmt"
+	"sync"
 
 	ts "github.com/tree-sitter/go-tree-sitter"
 
@@ -127,17 +128,71 @@ func DeclOrder(lang Language, src []byte) ([]string, error) {
 	return f.DeclOrder(), nil
 }
 
+// parserCache holds one *ts.Parser per distinct *ts.Language, reused across
+// every resolve.Open call rather than constructing and discarding one per
+// parse. m5's own fix (internal/diff's attributeSymbolsOpen) already cut how
+// many times a file gets opened; this cuts what each Open itself costs --
+// ts.NewParser() is real construction work (allocating the parser's C-side
+// state), not a cheap wrapper, and buildFileReport/attributeSymbolsOpen and
+// internal/synth's openFilePlan between them can call Open several times
+// per invocation. Parsers are never closed: like the registered-language
+// map (lang.go's registered), they live for the process's lifetime, and
+// rgit is a short-lived CLI invocation with nothing else to reclaim them
+// for.
+//
+// Keyed by *ts.Language rather than by name: TSLanguage() already returns
+// the one compiled grammar handle each adapter caches for itself
+// (lang_go.go's own goLanguage.lang is the pattern every adapter follows),
+// so pointer identity is exactly "the same grammar", with no risk of two
+// distinct languages colliding on a reused string key the way "go" could
+// coincidentally collide with a future adapter's own Name().
+var (
+	parserCacheMu sync.Mutex
+	parserCache   = map[*ts.Language]*ts.Parser{}
+)
+
+// parseSource parses src with lang's cached parser. The lock is held for
+// the whole parse, not just the cache lookup: a *ts.Parser is not
+// documented safe for concurrent use, and this package's own test suite
+// (CONTRIBUTING.md's t.Parallel() rule) calls Open from many goroutines at
+// once even though no production call path in this codebase parses
+// concurrently -- the lock is what makes a shared cache correct under both,
+// at a cost this package's own sequential production usage never pays a
+// contended wait for.
+//
+// oldTree is always nil (no caller here does incremental reparsing), so
+// reusing a parser across unrelated src buffers is safe without an
+// intervening Parser.Reset(): Parse(text, nil) always parses text from
+// scratch, regardless of what the same parser instance parsed before.
 func parseSource(lang Language, src []byte) (*ts.Tree, error) {
-	parser := ts.NewParser()
-	defer parser.Close()
-	if err := parser.SetLanguage(lang.TSLanguage()); err != nil {
-		return nil, fmt.Errorf("resolve: set language %s: %w", lang.Name(), err)
+	parserCacheMu.Lock()
+	defer parserCacheMu.Unlock()
+
+	parser, err := cachedParserLocked(lang)
+	if err != nil {
+		return nil, err
 	}
 	tree := parser.Parse(src, nil)
 	if tree == nil {
 		return nil, fmt.Errorf("resolve: %s: parse produced no tree", lang.Name())
 	}
 	return tree, nil
+}
+
+// cachedParserLocked returns lang's cached parser, creating and caching one
+// on first use. Callers must hold parserCacheMu.
+func cachedParserLocked(lang Language) (*ts.Parser, error) {
+	tsLang := lang.TSLanguage()
+	if p, ok := parserCache[tsLang]; ok {
+		return p, nil
+	}
+	p := ts.NewParser()
+	if err := p.SetLanguage(tsLang); err != nil {
+		p.Close()
+		return nil, fmt.Errorf("resolve: set language %s: %w", lang.Name(), err)
+	}
+	parserCache[tsLang] = p
+	return p, nil
 }
 
 func isPseudoAnchor(anchor string) bool {

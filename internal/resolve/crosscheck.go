@@ -24,9 +24,17 @@ import (
 // unsupported language, or a symbol its outline does not name. None is a
 // failure -- the caller prints "[ts-only]" and proceeds. err is non-nil
 // only for a genuine range disagreement (exit 6).
+//
+// res.Pseudo reports degraded=false, not true: production callers already
+// skip a pseudo-anchor before ever reaching this function (internal/synth's
+// filePlan.crossCheck checks res.Pseudo itself, docs/ANCHORS.md), so this
+// guard exists only for a caller reaching this public function directly --
+// and a caller that does must see the exemption applied consistently with
+// every other entry point, not report "[ts-only]" for something this
+// package documents as exempt, not unverified.
 func CrossCheckExtent(ctx context.Context, sess *lsp.Session, lang Language, repoRoot, absPath string, src []byte, res *Resolution) (degraded bool, err error) {
 	if res.Pseudo {
-		return true, nil
+		return false, nil
 	}
 
 	// The session owns the client and closes it once per invocation.
@@ -100,13 +108,15 @@ func crossCheckVerdict(src []byte, list []*Resolution, symbols []lsp.Symbol) (de
 	// evaluated tracks whether any resolution actually reached
 	// MatchAndCompare. A list that is non-empty but every entry nil or
 	// Pseudo (a file whose only cross-checked resolution is @imports, say)
-	// must still degrade -- allFound's own zero value is vacuously true
-	// when the loop below never runs a real comparison, which used to
-	// report false positives: "not degraded, no mismatches" when zero
-	// comparisons actually happened. CrossCheckExtent's own res.Pseudo
-	// pre-check already treats a single pseudo resolution as degraded
-	// before ever reaching here; this is the batch form's equivalent for
-	// a list that turns out to hold nothing else.
+	// has nothing to compare -- the same fourth cross-check exemption
+	// CrossCheckExtent's own res.Pseudo shortcut applies before ever
+	// reaching here, so this is exempt, not degraded, aligning the batch
+	// form with the single-anchor one rather than reporting "[ts-only]" for
+	// a list this package itself declares has nothing to verify. allFound's
+	// own zero value would otherwise be vacuously true when the loop below
+	// never runs a real comparison, which used to report a *different* false
+	// positive ("not degraded, no mismatches" while claiming a genuine
+	// verification took place) before this early return existed.
 	evaluated := false
 	allFound := true
 	for _, res := range list {
@@ -124,7 +134,7 @@ func crossCheckVerdict(src []byte, list []*Resolution, symbols []lsp.Symbol) (de
 		}
 	}
 	if !evaluated {
-		return true, nil
+		return false, nil
 	}
 	return !allFound, mismatches
 }

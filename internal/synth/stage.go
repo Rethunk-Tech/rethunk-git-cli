@@ -101,6 +101,14 @@ type filePlan struct {
 	headFile  *resolve.File
 	workFile  *resolve.File
 	escalated []string // member anchors widened to their enclosing container
+
+	// pendingCrossCheck accumulates every worktree resolution classify
+	// resolved for this file that still needs verifying against a live
+	// language server (deferCrossCheck). crossCheckPending drains it in one
+	// batched query per file instead of classify dialing once per anchor
+	// (m20: this used to be N documentSymbol round trips for N anchors in
+	// one file, where internal/diff's own crossCheckFile already paid one).
+	pendingCrossCheck []*resolve.Resolution
 }
 
 // stagePlan is the pure-read result of resolving every target: nothing in
@@ -300,14 +308,11 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 		if sess == nil {
 			sess = lsp.NewSession()
 		}
-		op, unchanged, tsOnly, err := fp.classify(ctx, sess, root, t.Symbol.Anchor)
+		op, unchanged, err := fp.classify(t.Symbol.Anchor)
 		if err != nil {
 			return nil, err
 		}
 		fp.ops = append(fp.ops, op)
-		if tsOnly {
-			plan.tsOnly = true
-		}
 		if named[fp.path] == nil {
 			named[fp.path] = map[string]bool{}
 		}
@@ -331,6 +336,18 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 	}
 
 	for _, fp := range plan.files {
+		// One batched language-server query per file, not one per anchor
+		// (m20) -- every anchor named in this file has already been
+		// resolved and its op built above, so a mismatch here still aborts
+		// the whole plan before Apply ever runs.
+		tsOnly, err := fp.crossCheckPending(ctx, sess, root)
+		if err != nil {
+			return nil, err
+		}
+		if tsOnly {
+			plan.tsOnly = true
+		}
+
 		pseudos := fp.addPreamble(named[fp.path])
 		for _, po := range pseudos {
 			added, deleted := opLineCounts(fp, po.op)
@@ -389,9 +406,10 @@ type preambleOp struct {
 // Go's package clause and after its import block, so that blank line is as
 // much part of "the header" and "the imports" as their own trailing newline
 // -- owning it is not misattribution, and it is what lets these rows sum to
-// git's own raw insertion count for a brand new file (TODO.md § Deferred,
-// "Generalize separator ownership beyond @header and @imports"). The
-// synthesized blob itself is unaffected either way:
+// git's own raw insertion count for a brand new file (specs/design.md §
+// Blob synthesis's "Separator ownership beyond @header/@imports was
+// considered and deferred, not built"). The synthesized blob itself is
+// unaffected either way:
 // mergeInsertTies' joinWithSeparator trims and renormalizes every insert's
 // boundary regardless of what either side's own text already carries.
 func (fp *filePlan) addPreamble(named map[string]bool) (pairs []preambleOp) {

@@ -250,6 +250,15 @@ func TestExtractRangeToken_DetectsRangeNotAPath(t *testing.T) {
 		if err == nil || err.Error() != want {
 			t.Errorf("err = %v; want %q", err, want)
 		}
+		// Typed as *UsageError, the same as every other scope-shape problem
+		// this package detects itself (Run's own ResolveScope checks,
+		// TestRun_ScopeUsageErrorsAreTyped) -- this is a caller mistake
+		// (exit 129), never a git-level failure (exit 128), and internal/app
+		// maps the two exit codes by this exact type.
+		var uerr *UsageError
+		if !errors.As(err, &uerr) {
+			t.Errorf("err = %v (%T); want *UsageError", err, err)
+		}
 	})
 
 	// A relative pathspec containing ".." (typed from a subdirectory) has

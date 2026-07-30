@@ -210,7 +210,7 @@ func ExtractRangeToken(ctx context.Context, args []string, paths cli.PathChecker
 			continue
 		}
 		if found >= 0 {
-			return "", nil, fmt.Errorf("multiple revision-range-shaped arguments given: %q and %q", args[found], a)
+			return "", nil, &UsageError{Msg: fmt.Sprintf("multiple revision-range-shaped arguments given: %q and %q", args[found], a)}
 		}
 		found = i
 	}

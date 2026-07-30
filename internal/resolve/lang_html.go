@@ -17,8 +17,9 @@ func init() { register(newHTMLLanguage()) }
 //
 // docs/ANCHORS.md and specs/design.md § Grammar scope record the anchor
 // syntax this adapter deliberately stops at: element + id only ("div#app",
-// TODO.md's own example), never a class, an nth-of-type, or a descendant
-// combinator. rgit resolves anchors; it is not a CSS selector engine.
+// that section's own canonical example), never a class, an nth-of-type, or
+// a descendant combinator. rgit resolves anchors; it is not a CSS selector
+// engine.
 type htmlLanguage struct {
 	defaultLanguage
 	lang *ts.Language
@@ -29,6 +30,12 @@ func newHTMLLanguage() *htmlLanguage {
 }
 
 func (h *htmlLanguage) Name() string { return "html" }
+
+// FlatContainer is true: Declaration.Container above is always the
+// element's own tag, never an enclosing ancestor's name, so
+// internal/synth's escalateToContainer must never resolve it as one
+// (FlatContainerLanguage's own doc comment, lang.go).
+func (h *htmlLanguage) FlatContainer() bool { return true }
 
 func (h *htmlLanguage) Extensions() []string { return []string{".html", ".htm"} }
 
@@ -54,11 +61,11 @@ func (h *htmlLanguage) HeaderKinds() []string { return []string{"doctype", "comm
 // lang_shell.go). Unlike shell, no ImportMatcher is built for it here:
 // deciding which elements count (rel="stylesheet" but not rel="icon"?
 // script[src] but not an inline <script>? a <base href>?) has no measured
-// demand behind it -- TODO.md names only div#app -- and is exactly the kind
-// of widened scope element+id was deliberately kept narrow to avoid
-// (specs/design.md § Grammar scope). @imports therefore degrades the same
-// way it does for JSON, TOML, YAML, and Markdown: unresolvable, not an
-// error.
+// demand behind it -- specs/design.md § Grammar scope's own HTML entry
+// names only div#app as the demand signal -- and is exactly the kind of
+// widened scope element+id was deliberately kept narrow to avoid.
+// @imports therefore degrades the same way it does for JSON, TOML, YAML,
+// and Markdown: unresolvable, not an error.
 
 // OwnsTrailingSeparator is false: no HTML formatter -- Prettier's own HTML
 // printer included -- deterministically inserts a blank line after a leading
@@ -83,7 +90,9 @@ func (h *htmlLanguage) MembersSitFlush() bool { return false }
 // Unlike lang_css.go's one-level rule_set-inside-rule_set nesting, HTML's own
 // structure has no natural depth limit, and a caller's div#app is exactly as
 // likely to sit five levels deep -- a component root mounted inside a full
-// page shell, the realistic shape of TODO.md's own example -- as at the top.
+// page shell, the same shape specs/design.md § Grammar scope measured as
+// this grammar's own component-root/mount-point demand case -- as at the
+// top.
 func (h *htmlLanguage) Declarations(src []byte, root *ts.Node) []Declaration {
 	return h.elementDeclarations(src, root)
 }
@@ -102,8 +111,9 @@ func (h *htmlLanguage) elementDeclarations(src []byte, node *ts.Node) []Declarat
 
 // declarationsFor reports node's own Declaration -- tag-qualified by its own
 // id attribute, Sep "#" (Declaration.Sep's own doc comment; this is what
-// produces TODO.md's exact "div#app" spelling with no extra join code) --
-// when it has one, plus, recursively, one Declaration per id-bearing element
+// produces the "div#app" spelling docs/ANCHORS.md § Language support ships,
+// with no extra join code) -- when it has one, plus, recursively, one
+// Declaration per id-bearing element
 // nested anywhere inside it, to whatever depth the worktree actually nests
 // them.
 //
@@ -113,11 +123,11 @@ func (h *htmlLanguage) elementDeclarations(src []byte, node *ts.Node) []Declarat
 // scoping the way a real DOM's getElementById has document-wide uniqueness
 // (or the way lang_css.go's Container only reaches one level) -- indexing
 // bare tag names too would make "div" (or any common tag) collide across
-// nearly every real HTML document. TODO.md's own demand signal is the
+// nearly every real HTML document. The demand signal was always the
 // component-root/mount-point case, where an id already exists; teaching the
 // resolver to fall back to bare-tag-name or positional lookup would reopen
 // exactly the "how far does the selector syntax go" question element+id was
-// scoped to close (specs/design.md § Grammar scope).
+// scoped to close (specs/design.md § Grammar scope, which records both).
 func (h *htmlLanguage) declarationsFor(src []byte, node *ts.Node) []Declaration {
 	var out []Declaration
 	if tag, id, ok := htmlTagAndID(src, node); ok {

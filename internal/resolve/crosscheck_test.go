@@ -52,7 +52,7 @@ func TestCrossCheckVerdict_AgreesPerAnchorAndBatch(t *testing.T) {
 	}{
 		{"exact match is not degraded and has no mismatch", matchA, false, false},
 		{"a genuine range disagreement is a mismatch, not degraded", mismatchB, false, true},
-		{"a pseudo-anchor never reaches a verdict at all -- degraded", pseudoImports, true, false},
+		{"a pseudo-anchor never reaches a verdict at all -- exempt, not degraded", pseudoImports, false, false},
 		{"absent from the server's own outline degrades, not a mismatch", missingName, true, false},
 	}
 
@@ -73,9 +73,9 @@ func TestCrossCheckVerdict_AgreesPerAnchorAndBatch(t *testing.T) {
 	// The batch form over the whole list at once must agree with every
 	// per-anchor verdict above: exactly mismatchB's own error surfaces (an
 	// identical mismatch, not merely one of some count), and the batch
-	// degrades overall because pseudoImports and missingName are each
-	// individually not-found -- even though matchA and mismatchB, sharing
-	// the same query, were each individually found.
+	// degrades overall because missingName is not found -- even though
+	// pseudoImports is exempt rather than degrading, and matchA and
+	// mismatchB, sharing the same query, were each individually found.
 	_, soloMismatches := crossCheckVerdict(src, []*Resolution{mismatchB}, symbols)
 	batchDegraded, batchMismatches := crossCheckVerdict(src, list, symbols)
 

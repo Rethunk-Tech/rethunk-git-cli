@@ -84,8 +84,12 @@ func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Repo
 // row shape: BINARY and MODE short-circuit before any grammar lookup (a
 // mode-only change has zero content diff to attribute, and a binary file
 // has none to attempt); an unsupported language falls back to the file's
-// numstat total under StatusNoSymbols; everything else goes through
-// attributeSymbols.
+// numstat total under StatusNoSymbols; everything else parses each side
+// exactly once and goes through crossCheckFile and attributeSymbolsOpen,
+// sharing that one parse of newSrc between them instead of each opening
+// its own -- specs/design.md § Blob synthesis' held-parse gain, applied
+// here the same way internal/synth already holds one *resolve.File per
+// side across every anchor it resolves.
 func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Scope, oldPath, newPath, addedStr, deletedStr string, sess *lsp.Session, report *Report) (*FileReport, error) {
 	if addedStr == "-" && deletedStr == "-" {
 		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusBinary, Added: "-", Deleted: "-"}}}, nil
@@ -134,13 +138,24 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 		return nil, err
 	}
 
+	oldFile, err := resolve.Open(lang, oldSrc)
+	if err != nil {
+		return nil, err
+	}
+	defer oldFile.Close()
+	newFile, err := resolve.Open(lang, newSrc)
+	if err != nil {
+		return nil, err
+	}
+	defer newFile.Close()
+
 	if sess != nil {
-		degraded, warnings := crossCheckFile(ctx, sess, lang, root, newPath, newSrc)
+		degraded, warnings := crossCheckFile(ctx, sess, lang, root, newPath, newSrc, newFile)
 		report.TSOnly = report.TSOnly || degraded
 		report.Warnings = append(report.Warnings, warnings...)
 	}
 
-	rows, err := attributeSymbols(lang, oldSrc, newSrc, added, deleted)
+	rows, err := attributeSymbolsOpen(lang, oldSrc, newSrc, oldFile, newFile, added, deleted)
 	if err != nil {
 		return nil, err
 	}
@@ -406,19 +421,20 @@ func sortReport(report *Report) {
 // slow or simply silent about a symbol is the normal case the whole
 // resolution model is built to tolerate (specs/design.md).
 //
+// f is newSrc already parsed by buildFileReport's own call to resolve.Open
+// -- this function no longer opens its own; a parse failure is buildFileReport's
+// to report (it already fails loudly there, on the very next parse of the
+// same file for attribution), not something crossCheckFile silently
+// downgraded to "not degraded" while a sibling call moments later hit the
+// identical failure as a hard error.
+//
 // degraded reports that this file had declarations to verify and none were,
 // which the caller surfaces once per invocation as [ts-only]. A file with
 // nothing to compare returns false: CrossCheckExtents answers degraded=true
 // for an empty resolution list, which is not the same claim as "no server
 // answered", and forwarding it would make an ordinary declaration-free file
 // report a whole invocation as unverified.
-func crossCheckFile(ctx context.Context, sess *lsp.Session, lang resolve.Language, root, path string, src []byte) (degraded bool, warnings []string) {
-	f, err := resolve.Open(lang, src)
-	if err != nil {
-		return false, nil
-	}
-	defer f.Close()
-
+func crossCheckFile(ctx context.Context, sess *lsp.Session, lang resolve.Language, root, path string, src []byte, f *resolve.File) (degraded bool, warnings []string) {
 	names := f.DeclOrder()
 	list := make([]*resolve.Resolution, 0, len(names))
 	for _, name := range names {
