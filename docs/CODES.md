@@ -21,6 +21,7 @@ For the flags that produce these, see [`USAGE.md`](USAGE.md).
 | 9 | Unsupported / deferred language for a symbol anchor |
 | 10 | Symbol anchor refused on a special path (symlink, gitlink, binary) |
 | 11 | All named targets resolve but have no uncommitted changes |
+| 12 | Symbol anchor refused on a structured-data file (JSON, YAML, TOML) (`commit` only) |
 | 128 | Fatal git / system failure (includes hook rejection, GPG failure, a `-C` directory that cannot be entered) |
 | 129 | Invalid usage (bad flags, missing message, no targets, path escape, malformed `-C`) |
 
@@ -45,6 +46,15 @@ its own — the constant names carry it, and this table defines it.
 still exits 0 (or 1 under `--exit-code`). A diff is a read-only report, and the
 point of surfacing it there is that the caller learns of it while reading the
 diff rather than mid-commit.
+
+### Exit 12 is `commit`'s alone
+
+`rgit diff --sym`, `rgit blame`, and `rgit log` all resolve a `FILE:SYMBOL`
+anchor into JSON, YAML, or TOML exactly like any other anchor — none of them
+writes a blob, so there is nothing for the guard to protect. Only `rgit
+commit` refuses it, because only `rgit commit` would splice a synthesized
+extent into a blob and stage it. Name the path instead: `rgit commit
+config.yaml` stages the whole file, unaffected.
 
 ### A missing cross-check is never a failure
 
@@ -71,7 +81,7 @@ against.
 `rgit blame FILE:SYMBOL` resolves its one anchor exactly like `commit` and
 `diff --sym` do, so 3 (unresolvable), 4 (ambiguous), and 9 (unsupported
 language) mean the same thing there. It never stages or commits anything, so
-1, 5, 6, 7, 8, 10, and 11 do not apply — a failure past resolution is `git
+1, 5, 6, 7, 8, 10, 11, and 12 do not apply — a failure past resolution is `git
 blame`'s own exit, folded into 128 the same way any other unexpected git
 failure is.
 
@@ -81,15 +91,15 @@ failure is.
 3 (unresolvable), 4 (ambiguous), and 9 (unsupported language) mean the same
 thing — except against `HEAD`'s own blob rather than the worktree, since
 history is a question about what has already been committed. It never
-stages or commits anything either, so the same 1, 5, 6, 7, 8, 10, and 11
+stages or commits anything either, so the same 1, 5, 6, 7, 8, 10, 11, and 12
 exclusions apply, and a failure past resolution is `git log`'s own exit,
 folded into 128.
 
 ### `context` has no anchor to resolve at all
 
 `rgit context` names no symbol, so 3, 4, and 9 never apply either. It never
-stages or commits anything, so the same 1, 5, 6, 7, 8, 10, and 11 exclusions
-as `blame` and `log` hold. A failure reaching `git log` or `git diff`
+stages or commits anything, so the same 1, 5, 6, 7, 8, 10, 11, and 12
+exclusions as `blame` and `log` hold. A failure reaching `git log` or `git diff`
 underneath it is folded into 128, same as everywhere else.
 
 ## Output records

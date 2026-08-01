@@ -25,6 +25,10 @@ func (j *jsonLanguage) Extensions() []string { return []string{".json"} }
 
 func (j *jsonLanguage) TSLanguage() *ts.Language { return j.lang }
 
+// StructuredData is true: `rgit commit` refuses a FILE:SYMBOL anchor
+// against JSON (StructuredDataLanguage's own doc comment, lang.go).
+func (j *jsonLanguage) StructuredData() bool { return true }
+
 // IsComment is unconditionally false: JSON has no comment syntax at all,
 // unlike every other adapter in this resolver.
 func (j *jsonLanguage) IsComment(string) bool { return false }

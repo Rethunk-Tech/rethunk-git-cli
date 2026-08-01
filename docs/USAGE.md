@@ -419,6 +419,13 @@ Naming one path both as a path and as a symbol anchor → exit 5, in
 whichever spelling: `--file` with
 `--sym`, or the positional forms `greet.go greet.go:A`.
 
+A `FILE:SYMBOL` anchor into a structured-data file (JSON, YAML, TOML) → exit
+12: a spliced extent is not guaranteed to agree with the file's own grammar,
+and nothing would fail at commit time to say so. Name the path instead —
+`rgit commit package.json` stages the whole file, unaffected; `rgit diff`,
+`rgit blame`, and `rgit log` still resolve the identical anchor, since none
+of them writes a blob (see [`CODES.md`](CODES.md#exit-12-is-commits-alone)).
+
 A missing conventional-commit shape (`type(scope): subject`) warns on stderr;
 the commit proceeds.
 

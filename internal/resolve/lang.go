@@ -148,6 +148,33 @@ type FlatContainerLanguage interface {
 	FlatContainer() bool
 }
 
+// StructuredDataLanguage is an optional refinement of Language for an
+// adapter whose format `rgit commit`'s own symbol-splice guard must refuse
+// a FILE:SYMBOL anchor against: JSON, YAML, and TOML's grammars do not
+// always agree with where a spliced extent actually belongs, and unlike a
+// source-code grammar there is no compiler downstream to catch the
+// resulting malformed blob -- it lands in HEAD looking like a normal
+// commit (internal/synth/stage.go's openFilePlan is where the refusal
+// itself lives). Naming the path instead is unaffected: nothing here
+// changes how `diff`, `blame`, or `log` read these files.
+//
+// A Language that does not implement this interface is not one of these
+// guarded formats -- IsStructuredData below answers false for it, the same
+// "absence means no" default FlatContainerLanguage and ImportMatcher
+// already use.
+type StructuredDataLanguage interface {
+	// StructuredData reports whether this adapter's format is guarded.
+	StructuredData() bool
+}
+
+// IsStructuredData reports whether lang implements StructuredDataLanguage
+// and answers true -- the one test internal/synth's openFilePlan applies to
+// every FILE:SYMBOL anchor before staging it.
+func IsStructuredData(lang Language) bool {
+	sd, ok := lang.(StructuredDataLanguage)
+	return ok && sd.StructuredData()
+}
+
 // ImportMatcher is an optional refinement of Language for a grammar whose
 // import statement cannot be identified by node kind alone. Shell's `source
 // f.sh` (or `. f.sh`) parses as an ordinary "command" node — the same kind

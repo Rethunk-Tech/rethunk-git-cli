@@ -4,6 +4,18 @@ Notable changes to `rgit`. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `rgit commit` refuses a `FILE:SYMBOL` anchor into a structured-data file
+  (JSON, YAML, TOML), a new exit code 12: a spliced extent is not
+  guaranteed to agree with one of these formats' own grammar, and nothing
+  downstream would catch the resulting malformed blob before it reached
+  `HEAD`. `rgit diff`, `rgit blame`, and `rgit log` are unaffected — none of
+  them writes a blob — and committing the same file by path still works.
+  See [`docs/CODES.md`](docs/CODES.md#exit-12-is-commits-alone).
+
 ## [1.1.0] — 2026-07-29
 
 ### Added

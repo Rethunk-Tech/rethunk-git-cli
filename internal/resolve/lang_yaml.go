@@ -37,6 +37,12 @@ func (y *yamlLanguage) Extensions() []string { return []string{".yaml", ".yml"} 
 
 func (y *yamlLanguage) TSLanguage() *ts.Language { return y.lang }
 
+// StructuredData is true: `rgit commit` refuses a FILE:SYMBOL anchor
+// against YAML (StructuredDataLanguage's own doc comment, lang.go) --
+// whitespace-sensitivity makes a wrongly-spliced blob especially easy to
+// produce here, per this file's own package doc comment above.
+func (y *yamlLanguage) StructuredData() bool { return true }
+
 func (y *yamlLanguage) IsComment(kind string) bool { return kind == "comment" }
 
 // trimTrailingComment implements the trailingCommentTrimmer seam

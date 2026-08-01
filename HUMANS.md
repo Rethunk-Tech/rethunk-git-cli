@@ -61,9 +61,13 @@ measured to establish each is in
 Anchors need a parsed syntax tree, so they are refused on binaries, symlinks,
 submodules, and any language with no grammar — see
 [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md#unsupported-languages) for which.
-A `chmod +x` with no content change has nothing to name either. In every case,
-name the path instead — `rgit commit package.json` works fine, and `rgit diff`
-never reports such a file as clean.
+A `chmod +x` with no content change has nothing to name either. `rgit commit`
+also refuses a `FILE:SYMBOL` anchor into JSON, YAML, or TOML specifically —
+`rgit diff`, `rgit blame`, and `rgit log` still resolve one fine, but a
+spliced extent in one of these formats is not guaranteed to agree with the
+file's own grammar, and `commit` is the one command that would write the
+result. In every case, name the path instead — `rgit commit package.json`
+works fine, and `rgit diff` never reports such a file as clean.
 
 Which paths are refused, and how each kind stages:
 [`docs/ANCHORS.md`](docs/ANCHORS.md#paths-that-anchors-cannot-address).

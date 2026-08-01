@@ -71,6 +71,7 @@ each is in
 | Resolve every target before staging any | A failure must leave the index untouched |
 | The resolver indexes bare **and** qualified names | A bare name that is merely absent yields "did you mean" where "qualify it" is correct |
 | `@imports` spans N nodes | Go emits one `import_declaration`; TS and Python emit one `import_statement` per import |
+| `commit` refuses a `FILE:SYMBOL` anchor on JSON/YAML/TOML | A spliced extent is not guaranteed to agree with the file's own grammar, and nothing downstream would catch it |
 
 ## Resolution model
 

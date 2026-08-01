@@ -25,6 +25,10 @@ func (l *tomlLanguage) Extensions() []string { return []string{".toml"} }
 
 func (l *tomlLanguage) TSLanguage() *ts.Language { return l.lang }
 
+// StructuredData is true: `rgit commit` refuses a FILE:SYMBOL anchor
+// against TOML (StructuredDataLanguage's own doc comment, lang.go).
+func (l *tomlLanguage) StructuredData() bool { return true }
+
 // IsComment: TOML comments ("# ...") parse as a real "comment" node kind --
 // unlike JSON, which has no comment syntax at all.
 func (l *tomlLanguage) IsComment(kind string) bool { return kind == "comment" }

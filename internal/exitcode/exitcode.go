@@ -49,6 +49,10 @@ const (
 	// NothingToCommit means EVERY named target was unchanged, not some.
 	NothingToCommit Code = 11
 
+	// StructuredDataAnchorRefused means commit's alone: a FILE:SYMBOL
+	// anchor targeted JSON/YAML/TOML. Name the path instead.
+	StructuredDataAnchorRefused Code = 12
+
 	// GitFailure includes hook rejection and GPG failure, not only git's.
 	GitFailure Code = 128
 

@@ -182,6 +182,13 @@ binary or non-parseable files. Name the path instead. Behaviour per kind:
 | Rename | Nothing special — name both paths; git detects the rename at diff time |
 | Gitignored | Refused (exit 7) unless already tracked, matching `git add` |
 
+A `FILE:SYMBOL` anchor into JSON, YAML, or TOML resolves fine for `diff`,
+`blame`, and `log` — all three read-only — but `rgit commit` refuses it (exit
+12): the format itself has no error `rgit` could rely on to catch a splice
+that disagrees with the file's own grammar, so the write it would produce is
+never trustworthy. Name the path instead. See
+[`CODES.md`](CODES.md#exit-12-is-commits-alone).
+
 ## Language support
 
 Eleven grammars ship unconditionally; a twelfth, SQL, ships only behind the

@@ -10,6 +10,35 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
 )
 
+// TestRunCommit_RefusesSymbolAnchorOnStructuredData pins the end-to-end
+// behaviour of the structured-data guard: a FILE:SYMBOL anchor into a
+// package.json is refused at exit 12 naming the file, and the identical
+// change committed by path still works -- the guard must never make a
+// structured-data file uncommittable, only unaddressable by symbol.
+func TestRunCommit_RefusesSymbolAnchorOnStructuredData(t *testing.T) {
+	dir, _ := gittest.New(t)
+	gittest.Write(t, dir, "package.json", `{"name": "before"}`+"\n")
+	gittest.Commit(t, dir, "chore: add package.json")
+	gittest.Write(t, dir, "package.json", `{"name": "after"}`+"\n")
+	t.Chdir(dir)
+
+	var stdout, stderr strings.Builder
+	code := runCommit(context.Background(), "", []string{"-m", "chore: bump", "package.json:name"}, &stdout, &stderr)
+	if code != exitcode.StructuredDataAnchorRefused {
+		t.Fatalf("runCommit FILE:SYMBOL = %v; want exitcode.StructuredDataAnchorRefused; stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "package.json") {
+		t.Errorf("stderr = %q; want it to name package.json", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = runCommit(context.Background(), "", []string{"-m", "chore: bump", "package.json"}, &stdout, &stderr)
+	if code != exitcode.Success {
+		t.Fatalf("runCommit by path = %v; want exitcode.Success; stderr: %s", code, stderr.String())
+	}
+}
+
 // TestRunCommit_CountingWarningsReachStderr proves synth.Plan's
 // CountingWarnings actually reaches a caller now that commit.go reads it,
 // rather than staying dead code. An untracked file on an unborn branch is

@@ -198,6 +198,9 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	if code := pathAnchorContradiction(paths, anchorFiles, stderr); code != exitcode.Success {
 		return code
 	}
+	if code := refuseStructuredDataAnchors(root, targets, stderr); code != exitcode.Success {
+		return code
+	}
 
 	plan, err := synth.PlanStage(ctx, repo, root, targets)
 	if err != nil {
@@ -376,6 +379,34 @@ func targetPaths(targets []synth.Target) (paths, anchorFiles []string) {
 		anchorFiles = append(anchorFiles, t.Symbol.Path)
 	}
 	return paths, anchorFiles
+}
+
+// refuseStructuredDataAnchors implements docs/CODES.md's exit 12: a
+// FILE:SYMBOL anchor into JSON, YAML, or TOML is refused before synth ever
+// reads the file, because a spliced extent is not guaranteed to agree with
+// one of these formats' own grammar and nothing downstream would catch the
+// resulting malformed blob before it reached HEAD (AGENTS.md's invariant
+// table).
+//
+// This lives here, at rgit commit's own command surface, rather than
+// inside internal/synth: it is commit's own policy on what it accepts to
+// stage, not a claim that blob synthesis itself is unreliable for these
+// languages -- internal/synth's own tests still stage them directly to
+// prove the machinery correct, and rgit diff, blame, and log all resolve
+// the identical anchor fine, since none of them writes a blob.
+func refuseStructuredDataAnchors(root string, targets []synth.Target, stderr io.Writer) exitcode.Code {
+	for _, t := range targets {
+		if t.Pathspec != "" {
+			continue
+		}
+		lang, ok, _ := resolve.LanguageForWorktreePath(root, t.Symbol.Path)
+		if !ok || !resolve.IsStructuredData(lang) {
+			continue
+		}
+		fmt.Fprintf(stderr, "rgit: %s: structured-data file; commit it by path instead of a symbol anchor\n", t.Symbol.Path)
+		return exitcode.StructuredDataAnchorRefused
+	}
+	return exitcode.Success
 }
 
 // resultLabel renders one staged row: "FILE:NAME" for a symbol anchor, and
