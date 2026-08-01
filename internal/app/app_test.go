@@ -22,8 +22,10 @@ import (
 
 	"github.com/go-quicktest/qt"
 
+	diffpkg "github.com/Rethunk-Tech/rethunk-git-cli/internal/diff"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
@@ -518,6 +520,59 @@ func TestRun_DiffScopesAndOutput(t *testing.T) {
 		_, stderr, code := runApp(t, "diff", "--sym", "a.go:NoSuchSymbol")
 		qt.Assert(t, qt.Equals(code, exitcode.AnchorUnresolvable))
 		qt.Assert(t, qt.StringContains(stderr, "NoSuchSymbol"))
+	})
+}
+
+// TestRun_DiffPatchFlag covers -p/--patch on rgit diff: it reaches git and
+// carries real content, is mutually exclusive with --porcelain the same way
+// --quiet already is, and -- the requirement the design settled on --
+// leaves the non--patch default output completely untouched. That last
+// case is proven structurally rather than by a hand-copied expected
+// string: runDiff's own render block is `RenderText(report)` plus, only
+// when -p was given, the patch appended after it -- so calling
+// diffpkg.Run/RenderText directly with the identical Options (Patch left
+// false) and comparing byte-for-byte against the CLI's own default output
+// is what would catch an accidental extra byte on the non-patch path,
+// without this test also being the thing that goes stale the next time
+// RenderText's own format changes.
+func TestRun_DiffPatchFlag(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+
+	t.Run("default output is unchanged by the patch feature's existence", func(t *testing.T) {
+		stdout, _, code := runApp(t, "diff")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+
+		repo := gitx.New(dir)
+		report, err := diffpkg.Run(context.Background(), repo, dir, diffpkg.Options{})
+		if err != nil {
+			t.Fatalf("diffpkg.Run: %v", err)
+		}
+		qt.Assert(t, qt.Equals(stdout, diffpkg.RenderText(report)))
+	})
+
+	t.Run("-p/--patch includes the real patch body after the report", func(t *testing.T) {
+		for _, flag := range []string{"-p", "--patch"} {
+			t.Run(flag, func(t *testing.T) {
+				stdout, _, code := runApp(t, "diff", flag)
+				qt.Assert(t, qt.Equals(code, exitcode.Success))
+				qt.Assert(t, qt.StringContains(stdout, "a.go"))
+				qt.Assert(t, qt.StringContains(stdout, "diff --git"))
+				qt.Assert(t, qt.StringContains(stdout, "return 111"))
+			})
+		}
+	})
+
+	t.Run("--porcelain and --patch are mutually exclusive", func(t *testing.T) {
+		_, stderr, code := runApp(t, "diff", "--porcelain", "--patch")
+		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+		qt.Assert(t, qt.StringContains(stderr, "mutually exclusive"))
+	})
+
+	t.Run("--quiet suppresses the patch body too", func(t *testing.T) {
+		stdout, _, code := runApp(t, "diff", "--patch", "--quiet")
+		qt.Assert(t, qt.Equals(code, exitcode.Code(1)))
+		qt.Assert(t, qt.Equals(stdout, ""))
 	})
 }
 

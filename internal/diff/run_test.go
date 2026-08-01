@@ -119,6 +119,37 @@ func TestRun_SymResolvesButUnchangedIsNotAnError(t *testing.T) {
 	}
 }
 
+// TestRun_PatchPopulatesReportPatch pins Options.Patch against the default
+// scope: opting in populates Report.Patch with a real patch body covering
+// the same file the symbol-attributed report already names, and leaving it
+// unset (the zero value, Options{}'s own default) leaves Report.Patch nil --
+// the "purely additive, gated entirely behind Patch" requirement Run's own
+// implementation promises.
+func TestRun_PatchPopulatesReportPatch(t *testing.T) {
+	t.Parallel()
+	dir, repo := newDiffTestRepo(t)
+	gittest.Write(t, dir, "b.py", "def existing():\n    return 2\n")
+
+	withPatch, err := Run(context.Background(), repo, dir, Options{Patch: true})
+	if err != nil {
+		t.Fatalf("Run error = %v; want nil", err)
+	}
+	if !strings.Contains(string(withPatch.Patch), "diff --git") {
+		t.Errorf("Report.Patch = %q; want a real patch body", withPatch.Patch)
+	}
+	if !strings.Contains(string(withPatch.Patch), "return 2") {
+		t.Errorf("Report.Patch = %q; want the actual changed content", withPatch.Patch)
+	}
+
+	withoutPatch, err := Run(context.Background(), repo, dir, Options{})
+	if err != nil {
+		t.Fatalf("Run error = %v; want nil", err)
+	}
+	if withoutPatch.Patch != nil {
+		t.Errorf("Report.Patch = %q; want nil when Options.Patch is false", withoutPatch.Patch)
+	}
+}
+
 // TestValidateSym_PrefersNewSideThenFallsBackToOld exercises validateSym
 // directly against every side-availability combination applyFilters'
 // hazard rests on: resolving on the New side when present, falling back to

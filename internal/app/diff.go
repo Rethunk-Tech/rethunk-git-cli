@@ -31,6 +31,7 @@ type diffFlags struct {
 	porcelain bool
 	exitCode  bool
 	quiet     bool
+	patch     bool
 	syms      []string
 	files     []string
 }
@@ -45,6 +46,7 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 	fs.BoolVar(&f.porcelain, "porcelain", false, "stable tab-separated records")
 	fs.BoolVar(&f.exitCode, "exit-code", false, "exit 1 when anything is committable")
 	fs.BoolVar(&f.quiet, "quiet", false, "implies --exit-code and suppresses output")
+	fs.BoolVarP(&f.patch, "patch", "p", false, "include the real patch body")
 
 	help := "usage: rgit diff [flags] [target...]\n\n" +
 		"Show what is committable -- staged, unstaged, and untracked -- broken\n" +
@@ -68,6 +70,10 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 	// an empty stream it cannot tell apart from "nothing to commit".
 	if f.porcelain && f.quiet {
 		fmt.Fprintln(stderr, "rgit: --porcelain and --quiet are mutually exclusive")
+		return exitcode.InvalidUsage
+	}
+	if f.porcelain && f.patch {
+		fmt.Fprintln(stderr, "rgit: --porcelain and --patch are mutually exclusive")
 		return exitcode.InvalidUsage
 	}
 
@@ -158,6 +164,10 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 		Revisions:       revisions,
 		Files:           allFiles,
 		Syms:            allSyms,
+		// Skip fetching the patch entirely when output is suppressed by
+		// --quiet: nothing would ever read it, so there is no reason to pay
+		// for the extra `git diff` invocation.
+		Patch: f.patch && !f.quiet,
 	}
 
 	report, err := diffpkg.Run(ctx, repo, root, opts)
@@ -215,6 +225,9 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 			fmt.Fprint(stdout, diffpkg.RenderPorcelain(report))
 		} else {
 			fmt.Fprint(stdout, diffpkg.RenderText(report))
+		}
+		if f.patch {
+			_, _ = stdout.Write(report.Patch)
 		}
 	}
 

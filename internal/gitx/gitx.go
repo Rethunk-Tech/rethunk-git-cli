@@ -435,6 +435,17 @@ func (r *Repo) DiffNumstat(ctx context.Context, extra ...string) ([]NumstatEntry
 	return parseNumstat(out)
 }
 
+// DiffPatch runs `git diff` (no `--numstat`) with the given extra arguments
+// and returns git's own patch body unmodified -- the same "pass through
+// git's own format" convention as LogLineRange and Blame, and the raw
+// counterpart to DiffNumstat's parsed one. A caller wanting both the
+// symbol-attributed report and the real patch text passes the identical
+// extra arguments to each, guaranteeing the same scope (default/staged/
+// unstaged/range) and the same pathspec filter underlies both.
+func (r *Repo) DiffPatch(ctx context.Context, extra ...string) ([]byte, error) {
+	return r.checked(ctx, append([]string{"diff"}, extra...)...)
+}
+
 // parseNumstat fails loudly on a line that does not split into exactly
 // three tab-separated fields -- the same posture internal/diff takes on a
 // numstat count that fails to parse as an integer -- rather than dropping

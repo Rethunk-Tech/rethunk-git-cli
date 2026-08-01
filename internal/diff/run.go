@@ -50,6 +50,16 @@ func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Repo
 	}
 
 	report := &Report{}
+	if opts.Patch {
+		// Same scope.NumstatArgs + pathspecs DiffNumstat above just used, so
+		// the patch body is guaranteed to cover the identical comparison and
+		// the identical pathspec filter as the symbol table alongside it.
+		patch, perr := repo.DiffPatch(ctx, withPathspecs(scope.NumstatArgs, pathspecs)...)
+		if perr != nil {
+			return nil, perr
+		}
+		report.Patch = patch
+	}
 	for _, e := range entries {
 		oldPath, newPath := NumstatPath(e.Path)
 		fr, ferr := buildFileReport(ctx, repo, root, scope, oldPath, newPath, e.Added, e.Deleted, sess, report)

@@ -106,6 +106,12 @@ type Report struct {
 	// declaration -- since a signal that fires when nothing was wrong is one
 	// readers learn to ignore.
 	TSOnly bool
+
+	// Patch is git's own raw patch body, set only when Options.Patch was
+	// true -- opt-in, not a second format this package invents. It covers
+	// the identical scope and pathspec filter as the symbol-attributed Files
+	// above, since Run derives both from the same NumstatArgs/pathspecs.
+	Patch []byte
 }
 
 // Dirty reports whether anything in the report is committable — the
@@ -155,6 +161,11 @@ type Options struct {
 	// bare KindAnchor positionals. Unlike Files, these narrow rendering
 	// only — git has no notion of a symbol (docs/USAGE.md § Diff scope).
 	Syms []SymRef
+
+	// Patch opts into fetching git's own real patch body alongside the
+	// symbol-attributed report, stored in Report.Patch. Purely additive:
+	// false changes nothing about the rest of Run's behavior.
+	Patch bool
 }
 
 // UsageError is a scope- or argument-shape problem Run detects itself,

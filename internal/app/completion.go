@@ -88,7 +88,7 @@ const rgitSubcommands = "diff commit blame log context languages doctor completi
 // output (pflag's own FlagUsages rendering of the live FlagSet, not a
 // second hand copy) and fails the suite the moment either list drifts from
 // what diff.go or commit.go actually registers.
-const rgitDiffFlags = "--unstaged --staged --cached --range --porcelain --exit-code --quiet --sym --file -h --help"
+const rgitDiffFlags = "--unstaged --staged --cached --range --porcelain --exit-code --quiet -p --patch --sym --file -h --help"
 
 const rgitCommitFlags = "-m --message -F --message-file -s --signoff --trailer --amend --allow-empty --push " +
 	"--dry-run --no-verify --fixup --squash --author --date --reset-author --porcelain -q --quiet " +

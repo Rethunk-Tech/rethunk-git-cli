@@ -227,6 +227,39 @@ func TestLogLineRange_RejectsColonInPath(t *testing.T) {
 	}
 }
 
+// TestDiffPatch pins that DiffPatch returns git's own real patch body
+// unmodified, and that it respects the same extra args (--staged, a
+// pathspec after --) DiffNumstat already does -- the two are supposed to
+// describe the identical scope, just in raw vs. parsed form.
+func TestDiffPatch(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	ctx := context.Background()
+
+	gittest.Write(t, dir, "a.txt", "one\n")
+	gittest.Write(t, dir, "b.txt", "one\n")
+	gittest.Commit(t, dir, "chore: add a and b")
+
+	gittest.Write(t, dir, "a.txt", "two\n")
+	gittest.Write(t, dir, "b.txt", "two\n")
+	gittest.Git(t, dir, "add", "-A")
+
+	out, err := repo.DiffPatch(ctx, "--staged", "--", "a.txt")
+	if err != nil {
+		t.Fatalf("DiffPatch: %v", err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "diff --git a/a.txt b/a.txt") {
+		t.Errorf("DiffPatch(--staged, a.txt) = %q; want a real patch header for a.txt", got)
+	}
+	if !strings.Contains(got, "@@") {
+		t.Errorf("DiffPatch(--staged, a.txt) = %q; want a hunk marker", got)
+	}
+	if strings.Contains(got, "b.txt") {
+		t.Errorf("DiffPatch(--staged, a.txt) = %q; want b.txt excluded by the pathspec", got)
+	}
+}
+
 // TestLog_FiltersByPath pins rgit log's own path-scoped shape (docs/USAGE.md
 // § Log): a path filter narrows to only the commits that actually touched
 // it, the same way plain `git log -- path` does, and every other commit is

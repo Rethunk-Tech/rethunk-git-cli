@@ -8,6 +8,15 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `-p`/`--patch` on `rgit diff`, appending git's own real patch body after
+  the aligned/porcelain report — unmodified, the same "not a second format
+  `rgit` invents" convention `log -p` and `blame --porcelain` already use.
+  Purely additive: the default output with neither flag is unchanged, and
+  the patch covers the identical scope and pathspec filter as the report
+  above it. Mutually exclusive with `--porcelain`; closes the
+  `diff <(git show HEAD:file) file` workaround. See
+  [`docs/USAGE.md`](docs/USAGE.md#output).
+
 - `rgit log --since=DATE [--until=DATE] [PATH...]`, a second, unanchored
   invocation shape selected by the presence of either flag: ordinary git
   history bounded by date and, optionally, one or more paths, with no

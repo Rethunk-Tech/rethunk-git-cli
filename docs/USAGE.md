@@ -155,6 +155,13 @@ A `chmod +x` with no content edit produces no changed symbols, so `rgit diff`
 lists it as a `MODE` entry — the file is never falsely reported clean. Stage it
 with a pathspec (`rgit commit script.sh`); `--sym` cannot express a mode change.
 
+`-p`/`--patch` appends git's own real patch body after the aligned/porcelain
+report, unmodified — not a second diff format `rgit` invents, the same
+framing as `log -p` and `blame --porcelain`. It covers the identical scope
+and pathspec filter as the report above it, since both are derived from the
+same comparison. Mutually exclusive with `--porcelain`; the default output
+with neither flag is unaffected by `-p`'s existence.
+
 ## Blame
 
 ```console
@@ -395,6 +402,7 @@ argument; `context`'s fixed output shape is the point — § Context above).
 | `--porcelain` | (`diff`) Stable tab-separated records. |
 | `--exit-code` | (`diff`) Exit 1 when anything is committable, 0 when clean. |
 | `--quiet` | (`diff`) Implies `--exit-code` and suppresses output. |
+| `-p`, `--patch` | (`diff`) Append git's own real patch body after the report. Suppressed by `--quiet`, mutually exclusive with `--porcelain`. |
 | `--since DATE`, `--until DATE` | (`log`) Switch to date-bounded, unanchored history; presence of either selects this shape over `FILE:SYMBOL`. Forwarded to git's own `--since`/`--until` unparsed. |
 
 `commit` requires a message (`-m` or `-F`) and at least one target, unless
@@ -440,7 +448,8 @@ before decode. Closes #42." \
 **Invalid combinations:** `--dry-run` + `--push`, `--staged`/`--unstaged` +
 a revision argument (a range, or one or two bare revisions), `--staged` +
 `--unstaged`, `--range` + a positional `A..B`/`A...B` range, `-m` + `-F`,
-`--porcelain` + `--quiet` → exit 129.
+`--porcelain` + `--quiet` (`diff`), `--porcelain` + `-p`/`--patch` (`diff`,
+`log`) → exit 129.
 Naming one path both as a path and as a symbol anchor → exit 5, in
 whichever spelling: `--file` with
 `--sym`, or the positional forms `greet.go greet.go:A`.
