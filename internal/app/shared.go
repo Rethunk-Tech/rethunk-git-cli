@@ -374,19 +374,21 @@ func lineRange(src []byte, ext resolve.Extent) (start, end int) {
 
 // anchorCommandFlag is one boolean flag parseAnchorCommandArgs recognizes
 // alongside the single FILE:SYMBOL positional -- a token (or, for a short
-// and long spelling like log's -p/--patch, several) and the bool it sets
-// when seen.
+// and long spelling, several) and the bool it sets when seen.
 type anchorCommandFlag struct {
 	tokens []string
 	set    *bool
 }
 
 // parseAnchorCommandArgs is the "one FILE:SYMBOL positional plus a handful
-// of boolean flags" arg loop blame.go and log.go used to each hand-roll in
-// full: a future flag landing on one command's own copy and not the
-// other's was exactly the drift this shares out (m10). Both commands'
-// loops already agreed on every other rule, so this is the one loop, not
-// two kept in sync by hand:
+// of boolean flags" arg loop blame.go and log.go's own FILE:SYMBOL form
+// (runLogAnchor) share (m10): a future boolean flag landing on one
+// command's own copy and not the other's was exactly the drift this
+// shares out. log.go's --since/--until form (runLogPathScoped) does not
+// use this loop -- its arity (zero or more path positionals, no required
+// anchor) and its value-taking flags are both outside what this loop
+// exists to parse, so it uses pflag instead, the same way commit.go and
+// diff.go already do for their own larger flag surfaces:
 //
 //   - --help/-h always wins, checked first every iteration -- so it is
 //     found "anywhere" in args (m12's rule for every hand-parsed command),

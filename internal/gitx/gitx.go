@@ -737,6 +737,36 @@ func (e *LineRangePathError) Error() string {
 	return fmt.Sprintf("gitx: %q: cannot be used with LogLineRange -- git log's own -L<range>:<path> argument joins the two with ':' and has no way to escape one inside path", e.Path)
 }
 
+// Log runs `git log`, optionally bounded by --since/--until and a path
+// filter, plus any extra flags/args (e.g. "--no-patch", "--format=...")
+// passed straight through -- rgit log's own time- and path-scoped shape
+// (docs/USAGE.md § Log), distinct from LogLineRange's single-symbol -L
+// form. since and until are forwarded to git's own --since/--until
+// unparsed; git accepts anything from an ISO date to "2 weeks ago", and
+// reimplementing that parsing here would only ever be a worse copy of
+// git's own. paths is forwarded after "--" so pathspec magic still
+// applies, exactly as every other pathspec-accepting method in this
+// package; an empty paths reports the whole repository's history within
+// the same date bounds, matching plain `git log --since=X`. Like Blame and
+// LogLineRange, there is no "normal negative answer" of its own -- an
+// unparseable date or an unwalkable path is a genuine failure -- so any
+// non-zero exit is a *GitError.
+func (r *Repo) Log(ctx context.Context, since, until string, paths []string, extra ...string) ([]byte, error) {
+	args := []string{"log"}
+	if since != "" {
+		args = append(args, "--since="+since)
+	}
+	if until != "" {
+		args = append(args, "--until="+until)
+	}
+	args = append(args, extra...)
+	if len(paths) > 0 {
+		args = append(args, "--")
+		args = append(args, paths...)
+	}
+	return r.checked(ctx, args...)
+}
+
 // CommitSummary is one commit's hash and subject, as RecentCommits reports
 // it -- deliberately nothing more: rgit context (internal/app/context.go)
 // is the sole caller, and it has no use for anything `git log --format`

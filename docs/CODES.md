@@ -95,6 +95,12 @@ stages or commits anything either, so the same 1, 5, 6, 7, 8, 10, 11, and 12
 exclusions apply, and a failure past resolution is `git log`'s own exit,
 folded into 128.
 
+`rgit log --since`/`--until` — the second, unanchored shape (see
+[`USAGE.md`](USAGE.md#log-by-date-and-path)) — resolves no anchor at all, so
+none of 3, 4, or 9 apply to it; only the general table's 129 (bad flags, a
+path that escapes the repository root) and 128 (an unwalkable path or bad
+date, folded from `git log`'s own exit) are reachable.
+
 ### `context` has no anchor to resolve at all
 
 `rgit context` names no symbol, so 3, 4, and 9 never apply either. It never

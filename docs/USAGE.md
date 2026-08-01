@@ -216,6 +216,30 @@ already give the identical anchor. See [`CODES.md`](CODES.md#exit-codes).
 the aligned `<abbrev-hash> <subject>` default, no header. Mutually exclusive
 with `-p`/`--patch`. See [`CODES.md`](CODES.md#output-records).
 
+### Log by date and path
+
+```console
+$ rgit log --since=2024-01-01 -- src/auth
+a1b2c3d fix(auth): reject expired tokens
+```
+
+`--since=DATE` or `--until=DATE` (either alone, or together) switches `log`
+to a second, unanchored shape: ordinary git history bounded by date and,
+optionally, one or more trailing path positionals — no `FILE:SYMBOL` at all.
+Values are forwarded to git's own `--since`/`--until` unparsed, so anything
+git accepts there (`"2024-01-01"`, `"2 weeks ago"`) works here too. With no
+paths, it is the whole repository's history in that window, matching plain
+`git log --since=DATE`.
+
+This is the one `git log` carve-out `rgit`'s own "the tree is only ever
+inspected through `rgit`" convention otherwise has to make for a plain
+`git log --since=... -- <paths>` — closed by giving `rgit log` a second
+invocation shape rather than a second command. `--porcelain` and `-p`/
+`--patch` behave identically to the `FILE:SYMBOL` form above: patch-free
+aligned records by default, `--porcelain`'s tab-separated form on request,
+and the real patch body only when `-p`/`--patch` is given, mutually
+exclusive with `--porcelain`.
+
 ## Context
 
 ```text
@@ -337,10 +361,11 @@ everywhere else. Install instructions: [`INSTALL.md`](INSTALL.md#shell-completio
 `commit` and `diff`'s own flags — the two subcommands with a real flag
 surface. `blame` and `languages` each take only `--porcelain`/`--help` (§
 Blame and § Languages above, [`CODES.md`](CODES.md#output-records)); `log`
-additionally takes `-p`/`--patch`, mutually exclusive with `--porcelain` (§
-Log above); `doctor`, `completion`, and `context` take no flags beyond
-`--help`/`-h` (`completion` also takes its shell argument; `context`'s
-fixed output shape is the point — § Context above).
+additionally takes `-p`/`--patch`, mutually exclusive with `--porcelain`, and
+— only in its `--since`/`--until` shape — `--since`/`--until` themselves (§
+Log and § Log by date and path above); `doctor`, `completion`, and `context`
+take no flags beyond `--help`/`-h` (`completion` also takes its shell
+argument; `context`'s fixed output shape is the point — § Context above).
 
 | Flag | Behavior |
 | --- | --- |
@@ -370,6 +395,7 @@ fixed output shape is the point — § Context above).
 | `--porcelain` | (`diff`) Stable tab-separated records. |
 | `--exit-code` | (`diff`) Exit 1 when anything is committable, 0 when clean. |
 | `--quiet` | (`diff`) Implies `--exit-code` and suppresses output. |
+| `--since DATE`, `--until DATE` | (`log`) Switch to date-bounded, unanchored history; presence of either selects this shape over `FILE:SYMBOL`. Forwarded to git's own `--since`/`--until` unparsed. |
 
 `commit` requires a message (`-m` or `-F`) and at least one target, unless
 `--amend`, `--fixup`, or `--squash` is given with neither — each generates its

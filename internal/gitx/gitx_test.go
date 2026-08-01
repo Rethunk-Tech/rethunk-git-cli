@@ -227,6 +227,71 @@ func TestLogLineRange_RejectsColonInPath(t *testing.T) {
 	}
 }
 
+// TestLog_FiltersByPath pins rgit log's own path-scoped shape (docs/USAGE.md
+// § Log): a path filter narrows to only the commits that actually touched
+// it, the same way plain `git log -- path` does, and every other commit is
+// excluded even though it happened in between.
+func TestLog_FiltersByPath(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	ctx := context.Background()
+
+	gittest.Write(t, dir, "a.txt", "a\n")
+	gittest.Write(t, dir, "b.txt", "b\n")
+	gittest.Commit(t, dir, "chore: add a and b")
+
+	gittest.Write(t, dir, "a.txt", "a2\n")
+	gittest.Commit(t, dir, "fix(a): bump a")
+
+	gittest.Write(t, dir, "b.txt", "b2\n")
+	gittest.Commit(t, dir, "fix(b): bump b")
+
+	out, err := repo.Log(ctx, "", "", []string{"a.txt"}, "--no-patch", "--format=%s")
+	if err != nil {
+		t.Fatalf("Log: %v", err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "bump a") {
+		t.Errorf("Log(paths=[a.txt]) = %q; want it to include the commit that touched a.txt", got)
+	}
+	if strings.Contains(got, "bump b") {
+		t.Errorf("Log(paths=[a.txt]) = %q; want it to exclude the commit that never touched a.txt", got)
+	}
+}
+
+// TestLog_SinceExcludesEarlierCommits pins that --since is forwarded to
+// git rather than reimplemented: an old commit dated well before the bound
+// is excluded, and a commit dated after it is not -- the actual date
+// comparison is entirely git's own.
+//
+// No t.Parallel: t.Setenv forbids it (CONTRIBUTING.md § Tests).
+func TestLog_SinceExcludesEarlierCommits(t *testing.T) {
+	dir, repo := gittest.New(t)
+	ctx := context.Background()
+
+	t.Setenv("GIT_AUTHOR_DATE", "2020-01-01T00:00:00")
+	t.Setenv("GIT_COMMITTER_DATE", "2020-01-01T00:00:00")
+	gittest.Write(t, dir, "f.txt", "one\n")
+	gittest.Commit(t, dir, "chore: old commit")
+
+	t.Setenv("GIT_AUTHOR_DATE", "2030-01-01T00:00:00")
+	t.Setenv("GIT_COMMITTER_DATE", "2030-01-01T00:00:00")
+	gittest.Write(t, dir, "f.txt", "two\n")
+	gittest.Commit(t, dir, "chore: new commit")
+
+	out, err := repo.Log(ctx, "2025-01-01", "", nil, "--no-patch", "--format=%s")
+	if err != nil {
+		t.Fatalf("Log: %v", err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "new commit") {
+		t.Errorf("Log(since=2025-01-01) = %q; want the 2030 commit included", got)
+	}
+	if strings.Contains(got, "old commit") {
+		t.Errorf("Log(since=2025-01-01) = %q; want the 2020 commit excluded", got)
+	}
+}
+
 // TestErrorMessagesNameTheCommand pins what a caller actually reads when
 // something goes wrong. Both types are surfaced verbatim by internal/app's
 // error mapping, so their text is the whole failure report -- and an

@@ -30,7 +30,10 @@ attributes, and body — and leaves every other edit in the file uncommitted.
 instead of the whole file.
 
 `rgit log FILE:SYMBOL` shows that symbol's own history — one line per
-touching commit, patch-free unless you ask for one with `-p`.
+touching commit, patch-free unless you ask for one with `-p`. Give `--since`
+or `--until` instead of an anchor for ordinary, date-bounded history over
+one or more paths — the `git log --since=... -- <paths>` you would otherwise
+have had to fall back to plain `git` for.
 
 `rgit context` is one-call orientation for a fresh session: recent commits,
 plus the same per-symbol diffstat `rgit diff` reports, as a single record

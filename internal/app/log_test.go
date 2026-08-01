@@ -155,6 +155,149 @@ func TestRun_LogResolvesAgainstHEADNotWorktree(t *testing.T) {
 	qt.Assert(t, qt.StringContains(stdout, "chore: initial"))
 }
 
+// TestRun_LogPathScopedSinceAndUntil pins the date-bounded second shape
+// against real commit timestamps -- --since alone, --until alone, and both
+// together -- so the filtering is proven to be git's own, not a string
+// match this command invents.
+func TestRun_LogPathScopedSinceAndUntil(t *testing.T) {
+	dir := chdirTempRepo(t) // "chore: initial", undated (today)
+
+	t.Setenv("GIT_AUTHOR_DATE", "2020-01-01T00:00:00")
+	t.Setenv("GIT_COMMITTER_DATE", "2020-01-01T00:00:00")
+	writeAppFile(t, dir, "old.txt", "old\n")
+	gitOut(t, dir, "add", "-A")
+	gitOut(t, dir, "commit", "-m", "chore: old commit")
+
+	t.Setenv("GIT_AUTHOR_DATE", "2030-01-01T00:00:00")
+	t.Setenv("GIT_COMMITTER_DATE", "2030-01-01T00:00:00")
+	writeAppFile(t, dir, "new.txt", "new\n")
+	gitOut(t, dir, "add", "-A")
+	gitOut(t, dir, "commit", "-m", "chore: new commit")
+
+	t.Run("--since alone excludes the earlier commit", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "log", "--since=2025-01-01")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "new commit"))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "old commit")))
+	})
+
+	t.Run("--until alone excludes the later commit", func(t *testing.T) {
+		stdout, _, code := runApp(t, "log", "--until=2025-01-01")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.StringContains(stdout, "old commit"))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "new commit")))
+	})
+
+	t.Run("--since and --until together bound both ends", func(t *testing.T) {
+		stdout, _, code := runApp(t, "log", "--since=2019-01-01", "--until=2021-01-01")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.StringContains(stdout, "old commit"))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "new commit")))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "chore: initial")))
+	})
+}
+
+// TestRun_LogPathScopedPaths pins the other half of the second shape: zero
+// or more trailing positionals are pathspecs, not an anchor, narrowing
+// history the same way plain `git log -- path` does.
+func TestRun_LogPathScopedPaths(t *testing.T) {
+	dir := chdirTempRepo(t) // "chore: initial" touches only a.go
+
+	writeAppFile(t, dir, "x.txt", "x\n")
+	writeAppFile(t, dir, "y.txt", "y\n")
+	gitOut(t, dir, "add", "-A")
+	gitOut(t, dir, "commit", "-m", "chore: add x and y")
+
+	writeAppFile(t, dir, "x.txt", "x2\n")
+	gitOut(t, dir, "add", "-A")
+	gitOut(t, dir, "commit", "-m", "fix(x): bump x")
+
+	writeAppFile(t, dir, "y.txt", "y2\n")
+	gitOut(t, dir, "add", "-A")
+	gitOut(t, dir, "commit", "-m", "fix(y): bump y")
+
+	t.Run("one path narrows to only its own touching commits", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "log", "--since=2000-01-01", "x.txt")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "bump x"))
+		qt.Assert(t, qt.StringContains(stdout, "add x and y"))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "bump y")))
+	})
+
+	t.Run("multiple paths union their own touching commits", func(t *testing.T) {
+		stdout, _, code := runApp(t, "log", "--since=2000-01-01", "x.txt", "y.txt")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.StringContains(stdout, "bump x"))
+		qt.Assert(t, qt.StringContains(stdout, "bump y"))
+	})
+
+	t.Run("zero paths with --since is the whole repository's history", func(t *testing.T) {
+		stdout, _, code := runApp(t, "log", "--since=2000-01-01")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.StringContains(stdout, "bump x"))
+		qt.Assert(t, qt.StringContains(stdout, "bump y"))
+		qt.Assert(t, qt.StringContains(stdout, "chore: initial"))
+	})
+
+	t.Run("--since narrows the anchorless form the same as any other filter", func(t *testing.T) {
+		stdout, _, code := runApp(t, "log", "--since=2000-01-01", "--until=2000-01-02")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stdout, ""))
+	})
+}
+
+// TestRun_LogPathScopedOutputModes covers --porcelain and -p/--patch on the
+// path-scoped shape, and that the two remain mutually exclusive there the
+// same as on the anchor shape (TestRun_LogHelpAndUsage covers that one).
+func TestRun_LogPathScopedOutputModes(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	gitOut(t, dir, "add", "-A")
+	gitOut(t, dir, "commit", "-m", "fix(a): bump A")
+
+	t.Run("--porcelain emits tab-separated records", func(t *testing.T) {
+		stdout, _, code := runApp(t, "log", "--since=2000-01-01", "--porcelain")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		for line := range strings.SplitSeq(strings.TrimRight(stdout, "\n"), "\n") {
+			fields := strings.Split(line, "\t")
+			qt.Assert(t, qt.Equals(len(fields), 2))
+			qt.Assert(t, qt.IsTrue(len(fields[0]) >= 7))
+		}
+	})
+
+	t.Run("-p/--patch includes the real patch body", func(t *testing.T) {
+		stdout, _, code := runApp(t, "log", "--since=2000-01-01", "-p", "a.go")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.StringContains(stdout, "diff --git"))
+		qt.Assert(t, qt.StringContains(stdout, "return 111"))
+	})
+
+	t.Run("--porcelain and --patch are mutually exclusive", func(t *testing.T) {
+		_, stderr, code := runApp(t, "log", "--since=2000-01-01", "--porcelain", "--patch")
+		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+		qt.Assert(t, qt.StringContains(stderr, "mutually exclusive"))
+	})
+}
+
+// TestRun_LogPathScopedPathEscapeIsRefused pins that the path-scoped shape
+// goes through the same repoPath safety check as every other pathspec-
+// accepting command, rather than forwarding a caller-supplied path to git
+// unchecked because this shape parses with pflag instead of
+// parseAnchorCommandArgs.
+func TestRun_LogPathScopedPathEscapeIsRefused(t *testing.T) {
+	dir := chdirTempRepo(t)
+	outside := filepath.Join(filepath.Dir(dir), "outside.go")
+	if err := os.WriteFile(outside, []byte("package outside\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, stderr, code := runApp(t, "log", "--since=2000-01-01", "../outside.go")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "escapes the repository root"))
+}
+
 // TestRun_LogSurvivesWorktreeDeletion is the same design decision from the
 // other side: a symbol's history is reachable even with nothing left on
 // disk to open, because HEAD's blob is read directly (gitx.CatFile) rather

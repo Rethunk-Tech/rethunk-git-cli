@@ -8,6 +8,14 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit log --since=DATE [--until=DATE] [PATH...]`, a second, unanchored
+  invocation shape selected by the presence of either flag: ordinary git
+  history bounded by date and, optionally, one or more paths, with no
+  `FILE:SYMBOL` at all. Closes the one `git log --since=... -- <paths>`
+  carve-out that otherwise had no `rgit` equivalent. `--porcelain` and
+  `-p`/`--patch` work exactly as they do on the `FILE:SYMBOL` form. See
+  [`docs/USAGE.md`](docs/USAGE.md#log-by-date-and-path).
+
 - `rgit commit` refuses a `FILE:SYMBOL` anchor into a structured-data file
   (JSON, YAML, TOML), a new exit code 12: a spliced extent is not
   guaranteed to agree with one of these formats' own grammar, and nothing
