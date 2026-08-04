@@ -2,7 +2,7 @@
 # (bindings/go) starting v0.5.2 — upstream removed Go support, not a
 # transient constraint. Held at the last Go-compatible release.
 [[hold]]
-package = "tree-sitter-grammars/tree-sitter-markdown"
+package = "github.com/tree-sitter-grammars/tree-sitter-markdown"
 max_version = "0.5.1"
 until = "2026-09-03"
 ecosystem = "go"
