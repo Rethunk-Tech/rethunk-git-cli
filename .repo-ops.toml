@@ -1,0 +1,9 @@
+# tree-sitter-grammars/tree-sitter-markdown dropped the Go bindings
+# (bindings/go) starting v0.5.2 — upstream removed Go support, not a
+# transient constraint. Held at the last Go-compatible release.
+[[hold]]
+package = "tree-sitter-grammars/tree-sitter-markdown"
+max_version = "0.5.1"
+until = "2026-09-03"
+ecosystem = "go"
+reason = "v0.5.2+ removed bindings/go upstream; go build breaks above v0.5.1"
