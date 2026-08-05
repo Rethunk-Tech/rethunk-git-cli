@@ -100,6 +100,29 @@ touches `rgit`'s own byte synthesis at all (`internal/synth/stage.go`'s
 `TestStage_SubmoduleAndSymlinkPathStaging` for both the pathspec staging and
 the anchor refusal, on each of the two kinds.
 
+**An uninitialized submodule refuses the identical anchor the same way** —
+`git submodule deinit` leaves the directory in place, emptied of its own
+`.git`, and `classifyPath` (`internal/synth/special.go`) cross-checks HEAD's
+own `160000` tree entry rather than trusting local shape (".git present")
+alone, so this is not silently misread as an ordinary directory. A **nested**
+submodule (one submodule's own `.gitmodules` naming another) is invisible to
+this repository's index either way — only the immediate gitlink entry at
+its own path is ever visible from here, nested or not, so it needs no
+different treatment.
+
+**A sparse-checkout-excluded path** is handled entirely by delegation, not
+special-cased: the default diff scope is a real `git diff --numstat`
+(`internal/gitx.DiffNumstat`), and git itself never reports a skip-worktree
+path as changed, so it never reaches `rgit`'s own attribution at all in the
+ordinary case. Naming it explicitly is the only way to reach `rgit`'s own
+code: `--sym`/an anchor on a path materialized nowhere refuses at
+resolution with the same exit 3 (unresolvable) a deleted file gets — there is
+nothing rgit-specific to distinguish "sparse-excluded" from "genuinely
+absent", and inventing that distinction would mean asking `git
+sparse-checkout` questions this tool has no other reason to. A pathspec
+target reaches real `git add`, which refuses on its own with the advice text
+it already prints for exactly this case (`git config advice.updateSparsePath`).
+
 A **rename** staged by symbol anchor is not detected as one: `HEAD` simply
 has no blob at the new path, so an anchor into it stages as an ordinary new
 file, and git's own tree diff is what notices the rename after the fact

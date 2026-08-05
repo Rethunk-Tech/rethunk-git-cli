@@ -232,30 +232,6 @@ constructs no anchor reaches — are documented in
 
 ## Repository edges
 
-- [ ] **Submodule and sparse-checkout behaviour audit.** Symbol anchors on
-      submodules are refused (exit 10) per `docs/ANCHORS.md` § Paths that anchors
-      cannot address; staging uses gitlink SHA from submodule HEAD
-      (`internal/synth/special.go`). Sparse checkouts, partial clones, and
-      pathspecs that omit populated paths may leave surprising holes — unanchored
-      behaviour vs silent whole-file fallback needs a documented matrix.
-
-      **Packages / files:** `internal/synth/special.go`, `internal/cli/precedence.go`
-      (path existence checks), `internal/gitx/gitx.go`, `internal/diff/scope.go`,
-      `docs/ANCHORS.md`, `docs/LIMITATIONS.md`, `specs/design.md`.
-
-      **Traps:** `git rev-parse` / worktree existence checks differ for sparse
-      paths. Submodule in `.gitmodules` but not initialized — index vs worktree
-      SHA. `-C` subdirectory repos. Do not promise symbol resolution inside
-      submodules without explicit product decision. Fixes must match git's own
-      behaviour, not invent semantics (AGENTS.md invariant).
-
-      **Acceptance criteria:** Documented table in `docs/LIMITATIONS.md` or
-      `ANCHORS.md`: sparse path absent from worktree, uninitialized submodule,
-      symlink to file, nested submodule — for each, `diff`/`commit`/`blame` behaviour
-      and exit code. Gaps found during audit become fix tasks or explicit
-      limitations. Tests in `internal/synth/special_test.go` or e2e for any
-      behaviour change (not documentation-only if fixable).
-
 ## Release
 
 - [ ] **Signed release artifacts.** `release.yml` publishes `dist/*` with

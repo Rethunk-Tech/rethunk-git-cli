@@ -99,6 +99,46 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 		}
 	})
 
+	t.Run("uninitialized submodule directory classifies via HEAD's 160000 entry, not pathRegular", func(t *testing.T) {
+		// "git submodule deinit" leaves the directory itself in the
+		// worktree, emptied of its own ".git" -- unlike the case above,
+		// where the whole directory is gone. classifyWorktreeEntry's own
+		// ".git present" heuristic cannot tell this apart from an ordinary
+		// directory by local shape alone; classifyPath must still cross-
+		// check HEAD's own tree mode rather than settling for pathRegular.
+		dir, repo := newSpecialTestRepo(t)
+		subDir := filepath.Join(dir, "sub")
+		if err := os.MkdirAll(subDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		gittest.Git(t, subDir, "init", "-q")
+		gittest.Git(t, subDir, "config", "user.email", "sub@example.com")
+		gittest.Git(t, subDir, "config", "user.name", "Sub")
+		if err := os.WriteFile(filepath.Join(subDir, "x.txt"), []byte("x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		gittest.Git(t, subDir, "add", "x.txt")
+		gittest.Git(t, subDir, "commit", "-q", "-m", "chore: sub commit")
+
+		commitSpecial(t, dir, "sub")
+
+		// Deinit-shaped: the directory survives, empty, with no ".git".
+		if err := os.RemoveAll(filepath.Join(subDir, ".git")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(filepath.Join(subDir, "x.txt")); err != nil {
+			t.Fatal(err)
+		}
+
+		kind, err := classifyPath(ctx, repo, dir, "sub")
+		if err != nil {
+			t.Fatalf("classifyPath: %v", err)
+		}
+		if kind != pathGitlink {
+			t.Errorf("kind = %v; want pathGitlink", kind)
+		}
+	})
+
 	t.Run("binary file deleted from the worktree classifies via HEAD's content", func(t *testing.T) {
 		dir, repo := newSpecialTestRepo(t)
 		if err := os.WriteFile(filepath.Join(dir, "blob.bin"), []byte("a\x00b\x00c"), 0o644); err != nil {

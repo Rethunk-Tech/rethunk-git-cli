@@ -8,6 +8,14 @@ Notable changes to `rgit`. The format follows
 
 ### Fixed
 
+- A symbol anchor into an **uninitialized submodule** (`git submodule
+  deinit`'s own shape: the directory survives, emptied of its own `.git`)
+  now refuses with exit 10, the same "submodule; name the path instead"
+  every initialized submodule already gets — previously it fell through to
+  a misleading exit 9 ("no grammar registered") once the empty directory's
+  contents turned out unparseable. See
+  [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md#symlinks-submodules-renames-and-content-filters).
+
 - Exit 3's "did you mean" suggestion now finds a close typo on a name that
   exists only inside a container (e.g. `Gett` → `A.Get`): distance was
   measured against the container-qualified string, which inflated it past

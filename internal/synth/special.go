@@ -52,11 +52,35 @@ func classifyPath(ctx context.Context, repo *gitx.Repo, root, path string) (path
 	info, statErr := os.Lstat(full)
 	switch {
 	case statErr == nil:
-		return classifyWorktreeEntry(full, info)
+		kind, isDir, err := classifyWorktreeEntry(full, info)
+		if err != nil || kind != pathRegular || !isDir {
+			return kind, err
+		}
+		// A worktree directory with no ".git" inside it is not yet proof
+		// there is no submodule here: an uninitialized (or since-deinited)
+		// submodule is exactly this shape -- HEAD still records its gitlink,
+		// but "git submodule update --init" was never run, so nothing
+		// distinguishes it from an ordinary directory by Lstat alone.
+		// Falling through to the same HEAD-tree-mode check the "absent from
+		// the worktree entirely" branch below already does is what lets an
+		// uninitialized submodule refuse a symbol anchor the same way an
+		// initialized one does (exit 10), rather than falling all the way
+		// through to a misleading "no grammar registered" (exit 9) once the
+		// directory's own contents turn out unparseable.
+		return classifyTreeEntry(ctx, repo, path)
 	case !os.IsNotExist(statErr):
 		return pathRegular, statErr
 	}
 
+	return classifyTreeEntry(ctx, repo, path)
+}
+
+// classifyTreeEntry is classifyPath's HEAD-tree fallback, shared by the
+// "absent from the worktree entirely" path and the "worktree directory
+// exists but isn't recognizably a submodule" path above -- both ultimately
+// ask the identical question, "what does HEAD's own tree say this path is",
+// and must answer it identically.
+func classifyTreeEntry(ctx context.Context, repo *gitx.Repo, path string) (pathKind, error) {
 	entry, found, err := repo.LsTreeTolerant(ctx, "HEAD", path)
 	if err != nil {
 		return pathRegular, err
@@ -80,27 +104,27 @@ func classifyPath(ctx context.Context, repo *gitx.Repo, root, path string) (path
 	return pathRegular, nil
 }
 
-func classifyWorktreeEntry(full string, info os.FileInfo) (pathKind, error) {
+func classifyWorktreeEntry(full string, info os.FileInfo) (kind pathKind, isDir bool, err error) {
 	if info.Mode()&os.ModeSymlink != 0 {
-		return pathSymlink, nil
+		return pathSymlink, false, nil
 	}
 	if info.IsDir() {
 		if _, err := os.Stat(filepath.Join(full, ".git")); err == nil {
-			return pathGitlink, nil
+			return pathGitlink, true, nil
 		}
-		// A directory that isn't a submodule is never a symbol-anchor
-		// target on its own; report it regular and let the caller's own
-		// pathspec/anchor split handle it.
-		return pathRegular, nil
+		// Not recognizably a submodule by local shape alone -- classifyPath
+		// still cross-checks HEAD's own tree mode before settling on
+		// pathRegular (an uninitialized submodule is exactly this shape).
+		return pathRegular, true, nil
 	}
-	binary, err := util.LooksBinaryFile(full)
-	if err != nil {
-		return pathRegular, err
+	binary, berr := util.LooksBinaryFile(full)
+	if berr != nil {
+		return pathRegular, false, berr
 	}
 	if binary {
-		return pathBinary, nil
+		return pathBinary, false, nil
 	}
-	return pathRegular, nil
+	return pathRegular, false, nil
 }
 
 // refusalFor turns a non-regular pathKind into the PathError docs/ANCHORS.md
