@@ -526,26 +526,6 @@ constructs no anchor reaches — are documented in
       spec explicitly widens. Commit on same tree still stages container. Test in
       `classify_test.go` or diff lane.
 
-- [ ] **Context truncation priority — prefer `F` rows over `C` rows.** `runContext`
-      appends all `C` commit records before all `F` diff rows (`internal/app/context.go`);
-      `buildContextStream` truncates at the byte budget from the front of that list.
-      On a busy branch, 20 commits can crowd out the actionable diff section.
-
-      **Packages / files:** `internal/app/context.go` (`runContext`, `buildContextStream`),
-      `internal/app/context_test.go`, `docs/USAGE.md` § Context,
-      `specs/design.md` § `rgit context`.
-
-      **Traps:** Changing order is a contract change for parsers that assumed commits
-      first — document in `docs/CODES.md`. `X TRUNCATED` count must still be correct.
-      Commits are cheap (bounded 20); diff rows are unbounded — priority inversion
-      may drop old commits entirely, which is likely desired but must be explicit.
-      Do not add flags — fix the fixed shape.
-
-      **Acceptance criteria:** Fixture exceeding 16 KiB: every `F` row for the current
-      worktree change fits before any `C` row is omitted, or documented hybrid
-      (e.g. last N commits then all F until budget). `context_test.go` pins order
-      with small budget. Agent-oriented example in `docs/USAGE.md`.
-
 ## LSP
 
 - [ ] **Configurable LSP dial/query timeouts via environment.** `dialBudget`

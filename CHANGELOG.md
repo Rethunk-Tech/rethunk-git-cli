@@ -33,6 +33,14 @@ Notable changes to `rgit`. The format follows
   them writes a blob — and committing the same file by path still works.
   See [`docs/CODES.md`](docs/CODES.md#exit-12-is-commits-alone).
 
+### Changed
+
+- `rgit context` now emits `F` (diff) records before `C` (commit) records,
+  reversing the original order. On a busy branch the bounded 20-commit
+  history could crowd out the unbounded, actionable diff section before the
+  16 KiB budget was reached; diff rows now survive truncation first. See
+  [`docs/USAGE.md`](docs/USAGE.md#context).
+
 ## [1.1.0] — 2026-07-29
 
 ### Added

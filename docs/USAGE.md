@@ -250,18 +250,18 @@ exclusive with `--porcelain`.
 ## Context
 
 ```text
-C<TAB>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2<TAB>fix(auth): reject expired tokens
-C<TAB>9e8f7d6c5b4a9e8f7d6c5b4a9e8f7d6c5b4a9e8f<TAB>feat(auth): add ValidateToken
 F<TAB>auth.go<TAB>ValidateToken<TAB>MOD<TAB>12<TAB>3
 F<TAB>newfile.go<TAB><TAB>UNTRACKED<TAB>15<TAB>0
+C<TAB>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2<TAB>fix(auth): reject expired tokens
+C<TAB>9e8f7d6c5b4a9e8f7d6c5b4a9e8f7d6c5b4a9e8f<TAB>feat(auth): add ValidateToken
 ```
 
 `rgit context` is one-call repository orientation for an agent's first turn:
-recent commit subjects, then the same per-file, per-symbol diffstat `rgit
-diff` itself reports for everything committable — as a single, fixed-shape
-record stream. It replaces the separate `status`, `diff --stat`, `diff`, and
-`log` calls an agent would otherwise make before editing, each billed as its
-own subprocess call.
+the same per-file, per-symbol diffstat `rgit diff` itself reports for
+everything committable, then recent commit subjects — as a single,
+fixed-shape record stream. It replaces the separate `status`, `diff --stat`,
+`diff`, and `log` calls an agent would otherwise make before editing, each
+billed as its own subprocess call.
 
 **The output shape is fixed and takes no flags beyond `--help`.** A command
 with options becomes `git status` with extra steps — see
@@ -278,10 +278,13 @@ The diff half is pure composition, not a second attribution path: it is
 literally `rgit diff`'s own default scope (everything committable), rendered
 through the same `--porcelain` records and re-tagged per line.
 
-**The whole stream is capped at 16 KiB.** Commits are bounded up front (the
-most recent 20, via git's own history limit); the diff section, which has no
-such natural bound, is truncated at the byte boundary instead, with a
-trailing `X` record naming how many rows were withheld. See
+**The whole stream is capped at 16 KiB, and `F` rows come first so they
+survive truncation before `C` rows do.** The diff section is the unbounded,
+actionable half and has no natural limit of its own; commits are already
+bounded up front (the most recent 20, via git's own history limit) and cost
+little to drop, so a busy branch sheds commit history before it ever
+shortens the diff. Truncation happens at the byte boundary, with a trailing
+`X` record naming how many rows were withheld. See
 [`../specs/design.md`](../specs/design.md#commands) for the reasoning. See
 [`CODES.md`](CODES.md#output-records) for the exact record grammar.
 

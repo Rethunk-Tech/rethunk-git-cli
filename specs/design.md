@@ -1312,13 +1312,24 @@ with repository size, which is the whole point of a budget rather than an
 aspiration. **Commits are bounded by input** (`-n 20`, so git itself never
 over-produces); **the diff section, which has no equivalent git-side flag
 that also respects rgit's own symbol attribution, is truncated after
-assembly instead** — `buildContextStream` (`context.go`) walks the already-
-bounded commit records first, then the diff records, stopping the instant
-the next record would cross the budget, and appends exactly one `X`
+assembly instead** — `buildContextStream` (`context.go`) walks the diff
+records first, then the already-bounded commit records, stopping the
+instant the next record would cross the budget, and appends exactly one `X`
 record naming how many were withheld. Truncating by whole records, never
-mid-line, keeps every emitted line parseable; commits sort first
-specifically so a truncation, when it happens, only ever costs diff rows,
-never the smaller and arguably more load-bearing commit history.
+mid-line, keeps every emitted line parseable.
+
+**Diff rows sort first, reversing this command's original priority.** The
+first cut of `rgit context` put commits first on the theory that they were
+"smaller and arguably more load-bearing" — but on a busy branch, 20 commit
+subjects are cheap to produce and can still fill enough of the 16 KiB budget
+to crowd out the diff section entirely, which is the half an agent about to
+edit actually needs to act on. Commit history is the part it is safe to lose
+first: it is recoverable with a separate `git log` call the moment it
+matters, while a truncated diff row is a silent gap in "everything
+committable" that the agent has no cheaper way to notice. Priority is only
+the build order in `runContext` (diff rows appended to `records` before
+commit rows) — `buildContextStream` itself stays order-agnostic, keeping
+whatever prefix fits and dropping the rest.
 
 ### `rgit restore FILE:SYMBOL`: an accepted design, deliberately not built
 

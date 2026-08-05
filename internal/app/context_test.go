@@ -54,11 +54,13 @@ func TestRun_ContextEmptyRepoEmitsNothing(t *testing.T) {
 	qt.Assert(t, qt.Equals(stderr, ""))
 }
 
-// TestRun_ContextEmitsCommitsBeforeDiffRows is the token case
+// TestRun_ContextEmitsDiffRowsBeforeCommits is the token case
 // specs/design.md § Commands accepted this command against: one
 // invocation reports recent commit subjects AND the same per-symbol
-// diffstat `rgit diff` itself reports, as one stream, commits first.
-func TestRun_ContextEmitsCommitsBeforeDiffRows(t *testing.T) {
+// diffstat `rgit diff` itself reports, as one stream, diff rows first --
+// on a busy branch the unbounded, actionable F rows must survive budget
+// truncation before the cheap, bounded C rows do (docs/CODES.md#output-records).
+func TestRun_ContextEmitsDiffRowsBeforeCommits(t *testing.T) {
 	dir := chdirTempRepo(t) // "chore: initial" commits a.go with A and B
 
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
@@ -76,7 +78,7 @@ func TestRun_ContextEmitsCommitsBeforeDiffRows(t *testing.T) {
 	diffIdx := strings.Index(stdout, "F\t")
 	qt.Assert(t, qt.IsTrue(commitIdx >= 0))
 	qt.Assert(t, qt.IsTrue(diffIdx >= 0))
-	qt.Assert(t, qt.IsTrue(commitIdx < diffIdx))
+	qt.Assert(t, qt.IsTrue(diffIdx < commitIdx))
 }
 
 // TestRun_ContextRecordsAreTabSeparatedWithExpectedFieldCounts pins the
@@ -143,5 +145,19 @@ func TestBuildContextStream(t *testing.T) {
 
 	t.Run("no records is the empty string", func(t *testing.T) {
 		qt.Assert(t, qt.Equals(buildContextStream(nil, 4096), ""))
+	})
+
+	// buildContextStream itself is order-agnostic -- it keeps a prefix and
+	// drops a suffix regardless of record type. Priority between F and C
+	// rows is runContext's own build order (F rows first), pinned by
+	// TestRun_ContextEmitsDiffRowsBeforeCommits; this fixture proves the
+	// truncation mechanics honor whatever order it hands in.
+	t.Run("truncation drops from the end regardless of record type", func(t *testing.T) {
+		records := []string{"F\ta.go\tA\tMOD\t1\t0\n", "C\th1\tsubject one\n", "C\th2\tsubject two\n"}
+		got := buildContextStream(records, 40) // room for the F row and the marker, not either C row
+		qt.Assert(t, qt.StringContains(got, "F\ta.go\tA\tMOD\t1\t0\n"))
+		qt.Assert(t, qt.StringContains(got, "X\tTRUNCATED\t2\n"))
+		qt.Assert(t, qt.Not(qt.StringContains(got, "subject one")))
+		qt.Assert(t, qt.Not(qt.StringContains(got, "subject two")))
 	})
 }

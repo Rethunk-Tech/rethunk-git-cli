@@ -24,11 +24,12 @@ import (
 
 const contextHelp = `usage: rgit context
 
-One-call repository orientation for an agent's first turn: recent commit
-subjects, then the same per-file, per-symbol diffstat "rgit diff" itself
-reports for everything committable (staged, unstaged, and untracked) -- as
-a single, fixed-shape record stream. Replaces the separate status, diffstat,
-diff, and log calls an agent would otherwise make before editing.
+One-call repository orientation for an agent's first turn: the same
+per-file, per-symbol diffstat "rgit diff" itself reports for everything
+committable (staged, unstaged, and untracked), then recent commit
+subjects -- as a single, fixed-shape record stream. Replaces the separate
+status, diffstat, diff, and log calls an agent would otherwise make before
+editing.
 
 Takes no flags or targets beyond --help: the output shape is fixed and
 byte-budgeted on purpose ("a command with options becomes git status with
@@ -37,23 +38,23 @@ select or narrow.
 
 Records, one per line, tab-separated, no header:
 
-  C<TAB>HASH<TAB>SUBJECT
-      One per recent commit, newest first, bounded to the last 20.
-
   F<TAB>FILE<TAB>SYMBOL<TAB>STATUS<TAB>ADDED<TAB>DELETED
       One per "rgit diff --porcelain" row -- identical fields, with this
       stream's own leading type tag. See docs/CODES.md#output-records for
       what STATUS carries.
 
+  C<TAB>HASH<TAB>SUBJECT
+      One per recent commit, newest first, bounded to the last 20.
+
   X<TAB>TRUNCATED<TAB>COUNT
       At most one, always last: this many records were withheld because
       the stream reached its byte budget.
 
-The whole stream is capped at 16 KiB. Commits are bounded up front (the
-most recent 20, via git's own -n); the diff section, which has no such
-natural bound, is truncated at the byte boundary instead, with the X
-record naming how many rows were withheld. See
-specs/design.md#commands for the reasoning.
+The whole stream is capped at 16 KiB, and F rows come first so they survive
+truncation before C rows do: the diff section has no natural bound of its
+own, while commits are already bounded up front (the most recent 20, via
+git's own -n) and cost little to drop. The X record names how many rows
+were withheld. See specs/design.md#commands for the reasoning.
 
 Full reference: docs/USAGE.md
 `
@@ -120,10 +121,12 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 		fmt.Fprintf(stderr, "[warning] %s\n", w)
 	}
 
+	// F rows go first: they are the actionable, unbounded half of the
+	// stream, while the 20 commit subjects are cheap and expendable. Budget
+	// truncation below drops from the end of records, so this ordering is
+	// what makes a busy branch's commit history yield to the diff instead
+	// of crowding it out (docs/CODES.md#output-records).
 	records := make([]string, 0, len(commits)+len(report.Files))
-	for _, c := range commits {
-		records = append(records, fmt.Sprintf("C\t%s\t%s\n", c.Hash, c.Subject))
-	}
 	// diffpkg.RenderPorcelain is the exact rendering `rgit diff --porcelain`
 	// already produces, reused verbatim and re-tagged per line -- not a
 	// second walk of report.Files that could drift from it.
@@ -132,6 +135,9 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 		for line := range strings.SplitSeq(porcelain, "\n") {
 			records = append(records, "F\t"+line+"\n")
 		}
+	}
+	for _, c := range commits {
+		records = append(records, fmt.Sprintf("C\t%s\t%s\n", c.Hash, c.Subject))
 	}
 
 	fmt.Fprint(stdout, buildContextStream(records, contextByteBudget))
