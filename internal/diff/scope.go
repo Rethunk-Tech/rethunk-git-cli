@@ -186,8 +186,13 @@ func ResolveScope(ctx context.Context, repo *gitx.Repo, opts Options) (Scope, er
 	if (opts.Staged || opts.Unstaged) && hasRevArgs {
 		return Scope{}, &UsageError{Msg: "--staged/--unstaged and a revision range are mutually exclusive"}
 	}
+	if len(opts.RevPaths) == 2 && (opts.Staged || opts.Unstaged || hasRevArgs || len(opts.Files) > 0) {
+		return Scope{}, &UsageError{Msg: "a two-blob \"A:f.go B:f.go\" scope is exclusive of every other scope selector and pathspec"}
+	}
 
 	switch {
+	case len(opts.RevPaths) == 2:
+		return resolveRevPathScope(opts.RevPaths[0], opts.RevPaths[1]), nil
 	case opts.Staged:
 		return Scope{Old: revSide("HEAD"), New: indexSide(), NumstatArgs: []string{"--staged"}}, nil
 	case opts.Unstaged:
@@ -222,6 +227,23 @@ func committableBase(ctx context.Context, repo *gitx.Repo) (string, error) {
 		return "HEAD", nil
 	}
 	return repo.EmptyTree(ctx)
+}
+
+// resolveRevPathScope builds the two-blob "A:f.go B:f.go" scope from a
+// pair BucketClassified already verified name the identical path.
+// NumstatArgs passes both blob refs straight through to `git diff
+// --numstat`, which accepts them exactly like any other two comparison
+// endpoints and reports one ordinary numstat row for the path -- no
+// synthetic file key needed, since the path itself is already the row's
+// own key. contentSide's existing revSide covers reading each side's blob
+// (CatFile(rev, path)), so the rest of Run needs no changes at all to
+// attribute this scope by symbol the same way any other does.
+func resolveRevPathScope(a, b cli.RevPath) Scope {
+	return Scope{
+		Old:         revSide(a.Rev),
+		New:         revSide(b.Rev),
+		NumstatArgs: []string{a.Rev + ":" + a.Path, b.Rev + ":" + b.Path},
+	}
 }
 
 // resolveRangeScope splits a "A..B" or "A...B" positional. The three-dot

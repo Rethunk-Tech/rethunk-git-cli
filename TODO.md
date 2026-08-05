@@ -77,37 +77,6 @@ constructs no anchor reaches — are documented in
       to degrade to `[ts-only]` (safe). `rgit doctor` reports HTML server status.
       Design record and `docs/LIMITATIONS.md` updated to reflect wired status.
 
-## Diff
-
-- [ ] **Support `rev:path` two-blob diff scope.** Rule 3 in
-      `internal/cli/precedence.go` already classifies `HEAD:a.go` as
-      `KindRevPath`, but `internal/diff/classify.go` refuses it (exit 129) because
-      two independent blobs have no single changed file to group symbol rows under
-      (`docs/USAGE.md` § Argument shape, `specs/design.md` § Argument grammar).
-      Valid git syntax: `git diff HEAD~1:f.go HEAD:f.go`.
-
-      **Packages / files:** `internal/diff/classify.go`, `internal/diff/scope.go`,
-      `internal/diff/run.go`, `internal/cli/precedence.go`,
-      `internal/gitx/gitx.go` (`CatFile`), `docs/USAGE.md`, `docs/CODES.md`,
-      `specs/design.md`.
-
-      **Traps:** `rgit diff`'s report is per-file — two-blob scope needs an
-      explicit output shape (likely one synthetic file key or a documented
-      porcelain extension). Symbol attribution requires parsing **both** blobs;
-      re-use `resolve.Open` per side (`run.go` already holds parses open). Do
-      not break the `A..B` / `--range` scope path. A single `rev:path` without a
-      paired blob is not this feature — stay refused or document as usage error.
-      `--porcelain` record contract in `docs/CODES.md` must be extended, not
-      silently changed.
-
-      **Acceptance criteria:** `rgit diff HEAD~1:auth.go HEAD:auth.go` (fixture
-      with one symbol changed between revisions) emits per-symbol rows for the
-      path, not exit 129. `rgit diff HEAD:a.go` alone remains refused with a
-      clear message. Porcelain shape documented and covered in
-      `internal/diff/classify_test.go` / `run_test.go`. Help text in
-      `docs/USAGE.md` describes the two-blob form and its limits (no pathspec
-      magic mixing).
-
 ## Log
 
 - [ ] **`rgit log FILE:SYMBOL` across file renames.** Today history is

@@ -42,7 +42,16 @@ func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Repo
 		defer sess.Close()
 	}
 
-	pathspecs := effectivePathspecs(opts)
+	// git's own "<blob> <blob>" two-argument form (RevPaths' own NumstatArgs)
+	// takes no trailing pathspec at all -- unlike every other diff form,
+	// its usage string has no "[--] <path>" tail -- and there is nothing
+	// to further scope anyway: the two blob refs already name the one file
+	// completely. --sym still narrows rendering afterward (applyFilters);
+	// only the git-level pathspec is skipped here.
+	var pathspecs []string
+	if len(opts.RevPaths) != 2 {
+		pathspecs = effectivePathspecs(opts)
+	}
 
 	entries, err := repo.DiffNumstat(ctx, withPathspecs(scope.NumstatArgs, pathspecs)...)
 	if err != nil {

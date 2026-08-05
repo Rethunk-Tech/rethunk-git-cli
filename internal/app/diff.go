@@ -104,7 +104,7 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 		return exitcode.InvalidUsage
 	}
 
-	revisions, files, syms, err := diffpkg.BucketClassified(classified)
+	revisions, files, syms, revPaths, err := diffpkg.BucketClassified(classified)
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.InvalidUsage
@@ -164,6 +164,7 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 		Revisions:       revisions,
 		Files:           allFiles,
 		Syms:            allSyms,
+		RevPaths:        revPaths,
 		// Skip fetching the patch entirely when output is suppressed by
 		// --quiet: nothing would ever read it, so there is no reason to pay
 		// for the extra `git diff` invocation.

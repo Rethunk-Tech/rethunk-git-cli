@@ -53,6 +53,12 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit diff A:f.go B:f.go` — exactly two `rev:path` positionals naming the
+  identical path at two revisions — compares that file across revisions,
+  attributed by symbol like any other scope. A lone (unpaired) `rev:path`,
+  or two naming different paths, still refuses (exit 129) as before. See
+  [`docs/USAGE.md`](docs/USAGE.md#argument-shape).
+
 - `rgit diff` batches every changed file's git-backed blob read into one
   `git cat-file --batch` process instead of one `git cat-file` subprocess
   per file per side — a large rename or vendor bump no longer pays linear

@@ -1430,11 +1430,28 @@ Two complications, both measured: colons are legal in filenames (git tracked
 (`git diff HEAD~1:f.go HEAD:f.go` works). The precedence order in
 [`../docs/USAGE.md`](../docs/USAGE.md#argument-shape) resolves both without any
 escape syntax — an existing-path check beats a `\:` escape, and rule 3 keeps
-`rev:path` from being misread as a `FILE:NAME` anchor by rule 5. That is
-classification, not a feature of its own: `rgit diff` still refuses a
-positional that classifies as `rev:path` (exit 129) rather than diffing the
-two blobs it names, since they carry no single changed file for `rgit diff`
-to group rows under (`internal/diff/classify.go`, `docs/USAGE.md`).
+`rev:path` from being misread as a `FILE:NAME` anchor by rule 5.
+
+**`rgit diff` does grant `rev:path` a scope of its own, but only when it
+resolves the ambiguity the general refusal exists for.** A *lone* `rev:path`
+positional still refuses (exit 129): naming one arbitrary blob carries no
+partner to diff it against, and there is no honest guess for what the
+missing side would have been. *Exactly two*, naming the identical path at
+two revisions (`rgit diff HEAD~1:auth.go HEAD:auth.go`), name exactly the
+one file the general case's own objection is about — so `BucketClassified`
+(`internal/diff/classify.go`) pairs them instead of refusing, and
+`resolveRevPathScope` (`internal/diff/scope.go`) builds an ordinary
+two-`revSide` `Scope` whose `NumstatArgs` are the two blob refs passed straight
+through to `git diff --numstat`, which already reports one ordinary numstat
+row for the path — no synthetic file key invented, since the path column is
+already the row's own key. Every other combination (differently-named
+paths, three or more, or mixed with `--file`/a revision range/`--staged`)
+still refuses, for the identical "no single file to report against" reason
+the general case does. `git diff <blob> <blob>` is also the one form with
+no trailing pathspec of its own, so this scope forgoes the `--sym`-derived
+pathspec optimization every other scope gets (`internal/diff/run.go`'s
+`Run`) — `--sym` still narrows *rendering* afterward via `applyFilters`,
+unaffected.
 
 ## CLI handling
 

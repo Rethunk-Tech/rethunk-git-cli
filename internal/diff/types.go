@@ -9,6 +9,8 @@
 // back — rgit diff and rgit commit must agree on what a symbol is called.
 package diff
 
+import "github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
+
 // Status is one row's classification. The six porcelain spellings it maps to
 // are specified in docs/CODES.md § Output records; StatusNoSymbols is
 // internal to this package, an unsupported-language file reported as MOD
@@ -166,6 +168,14 @@ type Options struct {
 	// symbol-attributed report, stored in Report.Patch. Purely additive:
 	// false changes nothing about the rest of Run's behavior.
 	Patch bool
+
+	// RevPaths is the two-blob "A:f.go B:f.go" scope: exactly two
+	// cli.RevPath values naming the identical path at two revisions
+	// (BucketClassified's own pairing rule, classify.go), or empty for
+	// every other scope. ResolveScope compares that one file across the
+	// two named revisions directly, with no numstat walk of the rest of
+	// the tree.
+	RevPaths []cli.RevPath
 }
 
 // UsageError is a scope- or argument-shape problem Run detects itself,

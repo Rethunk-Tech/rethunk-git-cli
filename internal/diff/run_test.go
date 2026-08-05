@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
@@ -673,6 +674,10 @@ func TestRun_ScopeUsageErrorsAreTyped(t *testing.T) {
 		name: "three revisions",
 		opts: Options{Revisions: []string{"HEAD", "HEAD", "HEAD"}},
 		want: "at most two revision arguments are accepted",
+	}, {
+		name: "a rev:path pair with a pathspec too",
+		opts: Options{RevPaths: []cli.RevPath{{Rev: "HEAD~1", Path: "a.go"}, {Rev: "HEAD", Path: "a.go"}}, Files: []string{"a.go"}},
+		want: "a two-blob \"A:f.go B:f.go\" scope is exclusive of every other scope selector and pathspec",
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := Run(context.Background(), repo, dir, tc.opts)
@@ -685,6 +690,58 @@ func TestRun_ScopeUsageErrorsAreTyped(t *testing.T) {
 				t.Errorf("Error() = %q; want %q", uerr.Error(), tc.want)
 			}
 		})
+	}
+}
+
+// TestRun_RevPathTwoBlobScope pins the "A:f.go B:f.go" scope end-to-end
+// through Run: the identical path at two arbitrary revisions attributes by
+// symbol exactly like any other scope, --sym filters it the same way, and
+// a lone (unpaired) rev:path stays refused rather than silently becoming
+// this feature by accident.
+func TestRun_RevPathTwoBlobScope(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	gittest.Write(t, dir, "a.go", "package p\n\nfunc Foo() int { return 1 }\n\nfunc Bar() int { return 2 }\n")
+	gittest.Commit(t, dir, "chore: v1")
+	gittest.Write(t, dir, "a.go", "package p\n\nfunc Foo() int { return 11 }\n\nfunc Bar() int { return 22 }\n")
+	gittest.Commit(t, dir, "chore: v2")
+	// A third, unrelated commit -- proves the comparison is strictly
+	// between the two named revisions, not "HEAD and its parent" by
+	// coincidence.
+	gittest.Write(t, dir, "b.go", "package p\n\nfunc Unrelated() {}\n")
+	gittest.Commit(t, dir, "chore: unrelated change")
+
+	report, err := Run(context.Background(), repo, dir, Options{
+		RevPaths: []cli.RevPath{{Rev: "HEAD~2", Path: "a.go"}, {Rev: "HEAD~1", Path: "a.go"}},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	fr, ok := findFile(report.Files, "a.go")
+	if !ok {
+		t.Fatalf("Files = %+v; want a.go present", report.Files)
+	}
+	var symbols []string
+	for _, r := range fr.Rows {
+		symbols = append(symbols, r.Symbol)
+	}
+	if !slices.Contains(symbols, "Foo") || !slices.Contains(symbols, "Bar") {
+		t.Errorf("symbols = %v; want both Foo and Bar changed between HEAD~2 and HEAD~1", symbols)
+	}
+	if len(report.Files) != 1 {
+		t.Errorf("Files = %+v; want only a.go -- b.go belongs to a later commit than either endpoint", report.Files)
+	}
+
+	filtered, err := Run(context.Background(), repo, dir, Options{
+		RevPaths: []cli.RevPath{{Rev: "HEAD~2", Path: "a.go"}, {Rev: "HEAD~1", Path: "a.go"}},
+		Syms:     []SymRef{{File: "a.go", Name: "Foo"}},
+	})
+	if err != nil {
+		t.Fatalf("Run with --sym: %v", err)
+	}
+	fr, ok = findFile(filtered.Files, "a.go")
+	if !ok || len(fr.Rows) != 1 || fr.Rows[0].Symbol != "Foo" {
+		t.Fatalf("filtered Files = %+v; want exactly one Foo row", filtered.Files)
 	}
 }
 

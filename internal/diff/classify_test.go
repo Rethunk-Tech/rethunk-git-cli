@@ -10,16 +10,13 @@ import (
 // TestBucketClassified_SortsEveryKind covers the three branches only a
 // KindPathspec classification exercised before (measured at 57.1% under
 // -short -coverpkg=./...): a bare revision positional, a bare symbol
-// anchor positional, and a rev:path blob reference -- the one kind
-// BucketClassified refuses outright, since it names two independent blobs
-// with no single changed file to group rows under (the func's own doc
-// comment).
+// anchor positional, and a rev:path blob reference.
 func TestBucketClassified_SortsEveryKind(t *testing.T) {
 	t.Parallel()
 
 	t.Run("revision, pathspec, and anchor sort into their own buckets", func(t *testing.T) {
 		t.Parallel()
-		revisions, files, syms, err := BucketClassified([]cli.Classification{
+		revisions, files, syms, revPaths, err := BucketClassified([]cli.Classification{
 			{Kind: cli.KindPathspec, Pathspec: "a.go"},
 			{Kind: cli.KindRevision, Revision: "HEAD~1"},
 			{Kind: cli.KindAnchor, Anchor: cli.Anchor{File: "b.go", Name: "B"}},
@@ -36,19 +33,62 @@ func TestBucketClassified_SortsEveryKind(t *testing.T) {
 		if len(syms) != 1 || syms[0] != (SymRef{File: "b.go", Name: "B"}) {
 			t.Errorf("syms = %v; want [{b.go B}]", syms)
 		}
+		if len(revPaths) != 0 {
+			t.Errorf("revPaths = %v; want none", revPaths)
+		}
 	})
 
-	t.Run("a rev:path positional is refused", func(t *testing.T) {
+	t.Run("two rev:path positionals naming the identical path pair up", func(t *testing.T) {
 		t.Parallel()
-		_, _, _, err := BucketClassified([]cli.Classification{
+		_, _, _, revPaths, err := BucketClassified([]cli.Classification{
+			{Kind: cli.KindRevPath, RevPath: cli.RevPath{Rev: "HEAD~1", Path: "a.go"}},
+			{Kind: cli.KindRevPath, RevPath: cli.RevPath{Rev: "HEAD", Path: "a.go"}},
+		})
+		if err != nil {
+			t.Fatalf("BucketClassified: %v", err)
+		}
+		want := []cli.RevPath{{Rev: "HEAD~1", Path: "a.go"}, {Rev: "HEAD", Path: "a.go"}}
+		if len(revPaths) != 2 || revPaths[0] != want[0] || revPaths[1] != want[1] {
+			t.Errorf("revPaths = %v; want %v", revPaths, want)
+		}
+	})
+
+	t.Run("a lone rev:path positional is refused, naming the paired form", func(t *testing.T) {
+		t.Parallel()
+		_, _, _, _, err := BucketClassified([]cli.Classification{
 			{Kind: cli.KindRevPath, RevPath: cli.RevPath{Rev: "HEAD", Path: "a.go"}},
 		})
 		var uerr *UsageError
 		if !errors.As(err, &uerr) {
 			t.Fatalf("BucketClassified error = %v (%T); want *UsageError", err, err)
 		}
-		if uerr.Error() != `rev:path blob references (HEAD:a.go) are not supported as a diff scope; name the file directly` {
+		if uerr.Error() != `rev:path blob reference (HEAD:a.go) has no paired blob to compare against; name two, "A:a.go B:a.go", or name the file directly` {
 			t.Errorf("BucketClassified error = %q", uerr.Error())
+		}
+	})
+
+	t.Run("two rev:path positionals naming different paths are refused", func(t *testing.T) {
+		t.Parallel()
+		_, _, _, _, err := BucketClassified([]cli.Classification{
+			{Kind: cli.KindRevPath, RevPath: cli.RevPath{Rev: "HEAD~1", Path: "a.go"}},
+			{Kind: cli.KindRevPath, RevPath: cli.RevPath{Rev: "HEAD", Path: "b.go"}},
+		})
+		var uerr *UsageError
+		if !errors.As(err, &uerr) {
+			t.Fatalf("BucketClassified error = %v (%T); want *UsageError", err, err)
+		}
+	})
+
+	t.Run("three rev:path positionals are refused", func(t *testing.T) {
+		t.Parallel()
+		_, _, _, _, err := BucketClassified([]cli.Classification{
+			{Kind: cli.KindRevPath, RevPath: cli.RevPath{Rev: "HEAD~2", Path: "a.go"}},
+			{Kind: cli.KindRevPath, RevPath: cli.RevPath{Rev: "HEAD~1", Path: "a.go"}},
+			{Kind: cli.KindRevPath, RevPath: cli.RevPath{Rev: "HEAD", Path: "a.go"}},
+		})
+		var uerr *UsageError
+		if !errors.As(err, &uerr) {
+			t.Fatalf("BucketClassified error = %v (%T); want *UsageError", err, err)
 		}
 	})
 }

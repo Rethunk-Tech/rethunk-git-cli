@@ -81,7 +81,7 @@ Resolution precedence, first match wins:
 | --- | --- | --- |
 | 1 | Appears after `--` | Pathspec, always |
 | 2 | Starts with `:` | Git pathspec magic, passed through verbatim |
-| 3 | *(`diff` only)* resolves via `git rev-parse --verify` | Revision, or a `rev:path` blob reference — classified, then refused as a diff scope |
+| 3 | *(`diff` only)* resolves via `git rev-parse --verify` | Revision, or a `rev:path` blob reference — see below |
 | 4 | Names a path existing in the worktree or HEAD | Pathspec |
 | 5 | Splits at the last `:` into an existing path + a name | Symbol anchor |
 | 6 | None of the above | Error listing each interpretation tried |
@@ -94,12 +94,22 @@ Rule 3 splits at the **first** colon (`HEAD~1:f.go` is revision `HEAD~1`,
 path `f.go`), where rule 5 splits at the **last** — each rule uses the
 split git's own syntax needs at that position, not a shared convention.
 `rev:path` is real `git diff` syntax (`git diff HEAD~1:f.go HEAD:f.go`
-compares two blobs directly), and rule 3 exists so it classifies correctly
-rather than being misread as a `FILE:NAME` anchor by rule 5 — not to add a
-`rev:path` diff scope of its own. A positional that classifies as one is
-refused outright (exit 129): comparing two arbitrary blobs by revision
-names no single changed file for `rgit diff` to group rows under. Name the
-file directly instead.
+compares two blobs directly), and rule 3 exists first so it classifies
+correctly rather than being misread as a `FILE:NAME` anchor by rule 5.
+
+**Exactly two `rev:path` positionals naming the identical path** compare
+that one file across two revisions, attributed by symbol like any other
+scope: `rgit diff HEAD~1:auth.go HEAD:auth.go`. `--sym` still narrows
+rendering afterward, exactly as it does everywhere else. This is the one
+scope with no trailing pathspec of its own — `git diff <blob> <blob>` takes
+none, and the two blob refs already name the file completely — so
+combining it with `--file`/a pathspec, `--staged`/`--unstaged`, a revision
+range, or bare revision positionals is refused (exit 129). A single,
+unpaired `rev:path` positional is refused the same way: comparing two
+*arbitrary* blobs by revision names no single changed file to group rows
+under, and there is no honest guess for what the missing partner would
+have been. Name the file directly instead when you only meant a plain
+revision-scoped diff.
 
 **Paths are relative to the directory you run in, not the repository root** —
 git's own rule. In `pkg/deep`, `rgit commit a.go` stages `pkg/deep/a.go`, and
