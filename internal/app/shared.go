@@ -241,10 +241,10 @@ type anchorSourceFunc func(ctx context.Context, repo *gitx.Repo, root, file stri
 // On success code is exitcode.Success and repo, file, src, res are all
 // populated; otherwise every refusal has already been written to stderr
 // and the caller must return code immediately.
-func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, positional, cmdName, help string, fetchSource anchorSourceFunc) (repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, code exitcode.Code) {
+func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, positional, cmdName, help string, fetchSource anchorSourceFunc) (repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, anchorName string, code exitcode.Code) {
 	root, prefix, repo, code := openRepo(ctx, dir, stderr)
 	if code != exitcode.Success {
-		return nil, "", nil, nil, code
+		return nil, "", nil, nil, "", code
 	}
 
 	// Reused rather than hand-parsed: the six-rule precedence table
@@ -256,7 +256,7 @@ func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, posi
 	classified, err := cli.ClassifyArgs(ctx, []string{positional}, false, checker, cli.GitRevisionResolver{Repo: repo})
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return nil, "", nil, nil, exitcode.InvalidUsage
+		return nil, "", nil, nil, "", exitcode.InvalidUsage
 	}
 	if len(classified) == 0 {
 		// A bare "--" is consumed whole by rule 1 (everything after "--" is
@@ -264,19 +264,19 @@ func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, posi
 		// as no positional at all, not a classified[0] panic.
 		fmt.Fprintf(stderr, "rgit: %s requires a FILE:SYMBOL anchor\n", cmdName)
 		fmt.Fprint(stderr, help)
-		return nil, "", nil, nil, exitcode.InvalidUsage
+		return nil, "", nil, nil, "", exitcode.InvalidUsage
 	}
 	c := classified[0]
 	if c.Kind != cli.KindAnchor {
 		fmt.Fprintf(stderr, "rgit: %s requires a FILE:SYMBOL anchor, not a plain path\n", cmdName)
 		fmt.Fprint(stderr, help)
-		return nil, "", nil, nil, exitcode.InvalidUsage
+		return nil, "", nil, nil, "", exitcode.InvalidUsage
 	}
 
 	file, err = repoPath(root, prefix, c.Anchor.File)
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return nil, "", nil, nil, exitcode.InvalidUsage
+		return nil, "", nil, nil, "", exitcode.InvalidUsage
 	}
 
 	lang, ok := resolve.ForExtension(filepath.Ext(file))
@@ -291,18 +291,18 @@ func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, posi
 	if !ok {
 		rerr := &resolve.ResolveError{Code: exitcode.UnsupportedLanguage, Anchor: c.Anchor.Name}
 		fmt.Fprintf(stderr, "rgit: %s\n", rerr.Error()+unsupportedLanguageHint(filepath.Ext(file)))
-		return nil, "", nil, nil, rerr.Code
+		return nil, "", nil, nil, "", rerr.Code
 	}
 
 	src, notFoundDetail, ok, err := fetchSource(ctx, repo, root, file)
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return nil, "", nil, nil, exitcode.GitFailure
+		return nil, "", nil, nil, "", exitcode.GitFailure
 	}
 	if !ok {
 		rerr := &resolve.ResolveError{Code: exitcode.AnchorUnresolvable, Anchor: c.Anchor.Name}
 		fmt.Fprintf(stderr, "rgit: %s (%q %s)\n", rerr.Error(), file, notFoundDetail)
-		return nil, "", nil, nil, rerr.Code
+		return nil, "", nil, nil, "", rerr.Code
 	}
 
 	res, err = resolve.Resolve(lang, src, c.Anchor.Name)
@@ -310,13 +310,26 @@ func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, posi
 		var rerr *resolve.ResolveError
 		if errors.As(err, &rerr) {
 			fmt.Fprintf(stderr, "rgit: %s\n", rerr.Error())
-			return nil, "", nil, nil, rerr.Code
+			return nil, "", nil, nil, "", rerr.Code
 		}
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return nil, "", nil, nil, exitcode.GitFailure
+		return nil, "", nil, nil, "", exitcode.GitFailure
 	}
 
-	return repo, file, src, res, exitcode.Success
+	return repo, file, src, res, c.Anchor.Name, exitcode.Success
+}
+
+// warnIfOrdinalAnchor prints commit.go's own ordinal-anchor advisory
+// (internal/synth/stage.go's plan.Ordinals(), surfaced by runCommit) on any
+// other command that resolves a single explicit anchor -- blame, log, and
+// diff's --sym. Advisory only: never fails the command, matching commit's
+// own [warning] rather than an error. Fires only for an anchor whose own
+// text is ordinal-shaped ("Foo#2"), never for a bare or container-qualified
+// name that merely happened to resolve to the same symbol.
+func warnIfOrdinalAnchor(stderr io.Writer, file, anchorName string) {
+	if _, _, ok := resolve.ParseOrdinal(anchorName); ok {
+		fmt.Fprintf(stderr, "[warning] anchor '%s:%s' is positional; inserting a symbol above it repoints it -- qualify it where the language allows\n", file, anchorName)
+	}
 }
 
 // unsupportedLanguageHint returns a rebuild suggestion for ext when it is a

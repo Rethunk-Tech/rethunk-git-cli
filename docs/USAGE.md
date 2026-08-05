@@ -499,6 +499,21 @@ the commit proceeds.
 When stdin is not a terminal, `rgit` sets `GIT_TERMINAL_PROMPT=0` so a
 credential or GPG prompt fails fast instead of hanging.
 
+## Ordinal-anchor warnings
+
+An ordinal anchor (`auth.go:init#2`, [`ANCHORS.md`](ANCHORS.md#qualification))
+is positional — inserting a symbol above it repoints which one it names.
+Resolving one prints an advisory on stderr, never fails the command:
+
+```text
+[warning] anchor 'dup.go:init#2' is positional; inserting a symbol above it repoints it -- qualify it where the language allows
+```
+
+`rgit commit`, `rgit diff --sym`, `rgit blame`, and `rgit log` all print it
+for the identical anchor — the same advisory everywhere an ordinal
+resolves, not only at commit time. A bare or container-qualified anchor
+that merely happens to match the same symbol never warns.
+
 ## Targets with nothing to commit
 
 Naming a target that has no uncommitted changes is a warning, not a failure.

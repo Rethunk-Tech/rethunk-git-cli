@@ -49,7 +49,7 @@ func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.
 
 	// Blame operates on the worktree file, not HEAD: there is nothing to
 	// resolve or blame in a revision this command never names.
-	repo, file, src, res, code := resolveAnchorExtent(ctx, dir, stderr, positional, "blame", blameHelp,
+	repo, file, src, res, anchorName, code := resolveAnchorExtent(ctx, dir, stderr, positional, "blame", blameHelp,
 		func(_ context.Context, _ *gitx.Repo, root, file string) ([]byte, string, bool, error) {
 			src, err := os.ReadFile(filepath.Join(root, file))
 			if err != nil {
@@ -63,6 +63,7 @@ func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.
 	if code != exitcode.Success {
 		return code
 	}
+	warnIfOrdinalAnchor(stderr, file, anchorName)
 
 	start, end := lineRange(src, res.Extent)
 

@@ -522,6 +522,24 @@ func TestRun_DiffScopesAndOutput(t *testing.T) {
 		qt.Assert(t, qt.Equals(code, exitcode.AnchorUnresolvable))
 		qt.Assert(t, qt.StringContains(stderr, "NoSuchSymbol"))
 	})
+
+	// docs/ANCHORS.md's ordinal-anchor advisory, mirrored from commit onto
+	// diff's own --sym form: an anchor resolved by position warns on
+	// stderr, but only when it is actually ordinal-shaped.
+	writeAppFile(t, dir, "dup.go", "package a\n\nfunc init() { println(1) }\n\nfunc init() { println(2) }\n")
+
+	t.Run("an ordinal --sym anchor warns", func(t *testing.T) {
+		_, stderr, code := runApp(t, "diff", "--sym", "dup.go:init#2")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.StringContains(stderr, "dup.go:init#2"))
+		qt.Assert(t, qt.StringContains(stderr, "positional"))
+	})
+
+	t.Run("a uniquely named --sym anchor does not warn", func(t *testing.T) {
+		_, stderr, code := runApp(t, "diff", "--sym", "a.go:A")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Not(qt.StringContains(stderr, "positional")))
+	})
 }
 
 // TestRun_DiffPatchFlag covers -p/--patch on rgit diff: it reaches git and

@@ -218,6 +218,12 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 	for _, w := range report.Warnings {
 		fmt.Fprintf(stderr, "[warning] %s\n", w)
 	}
+	// diffpkg.Run above already resolved every entry in allSyms successfully
+	// (a failure returned above instead), so any that is ordinal-shaped is
+	// commit's own advisory, surfaced here too rather than only at stage time.
+	for _, s := range allSyms {
+		warnIfOrdinalAnchor(stderr, s.File, s.Name)
+	}
 
 	dirty := report.Dirty()
 	if !f.quiet {

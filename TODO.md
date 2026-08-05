@@ -338,29 +338,6 @@ constructs no anchor reaches — are documented in
       Existing `resolver_test.go` ambiguous cases unchanged. Error text stable enough
       for `--porcelain` consumers where applicable.
 
-- [ ] **Stronger ordinal-anchor warnings beyond commit.** `rgit commit` already
-      prints `[warning] anchor 'file:Foo#2' is positional; inserting a symbol above
-      it repoints it` for ordinals in the plan (`internal/app/commit.go`,
-      `internal/synth/stage.go` `plan.ordinals`). `rgit diff`, `blame`, and `log`
-      accept `Foo#N` silently today.
-
-      **Packages / files:** `internal/app/diff.go`, `internal/app/blame.go`,
-      `internal/app/log.go`, `internal/synth/stage.go` (ordinal detection),
-      `internal/resolve/resolver.go` (`ParseOrdinal`), `docs/ANCHORS.md`,
-      `cmd/rgit/rgit_e2e_test.go` (ordinal warning tests).
-
-      **Traps:** Warning must fire only for ordinal-resolved anchors, not
-      container-qualified or unique bare names. Do not fail the command — advisory
-      only, same as commit. `diff --porcelain` must not interleave warnings into
-      stdout records; stderr only. Do not warn on read-only commands if that would
-      spam agents on every `rgit log` — consider once-per-invocation or only when
-      the ordinal anchor is the explicit target.
-
-      **Acceptance criteria:** `rgit diff auth.go:Init#2` (fixture with duplicate
-      bare names) emits the ordinal warning on stderr and succeeds. Unique
-      `auth.go:ValidateToken` does not warn. Commit behaviour unchanged.
-      Documented in `docs/USAGE.md` § Warnings.
-
 ## Diff
 
 - [ ] **Batch git blob reads in the diff hot path.** `diff.Run` already uses one

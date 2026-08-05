@@ -51,6 +51,25 @@ func TestRun_LogAmbiguousAnchor(t *testing.T) {
 	qt.Assert(t, qt.StringContains(stderr, "ambiguous"))
 }
 
+// TestRun_LogOrdinalAnchorWarns mirrors blame's own case: log resolves
+// against HEAD, so the dup file must be committed before the ordinal anchor
+// warns.
+func TestRun_LogOrdinalAnchorWarns(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "dup.go", "package main\n\nfunc init() { println(1) }\n\nfunc init() { println(2) }\n")
+	gitOut(t, dir, "add", "dup.go")
+	gitOut(t, dir, "commit", "-m", "chore: two inits")
+
+	_, stderr, code := runApp(t, "log", "dup.go:init#2")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(stderr, "dup.go:init#2"))
+	qt.Assert(t, qt.StringContains(stderr, "positional"))
+
+	_, stderr, code = runApp(t, "log", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Not(qt.StringContains(stderr, "positional")))
+}
+
 // TestRun_LogUnsupportedLanguage pins exit 9 for a file with no grammar
 // registered at all, the same code blame and commit give an identical
 // anchor.

@@ -35,6 +35,12 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit diff --sym`, `rgit blame`, and `rgit log` now print the ordinal-anchor
+  advisory (`[warning] anchor '...' is positional; ...`) that `rgit commit`
+  already prints, for the identical anchor form on any command instead of
+  only at commit time. See
+  [`docs/USAGE.md`](docs/USAGE.md#ordinal-anchor-warnings).
+
 - `-p` as an alias for `--porcelain` on `rgit blame`, matching git blame's
   own flag exactly. See [`docs/USAGE.md`](docs/USAGE.md#blame).
 

@@ -144,6 +144,26 @@ func TestRun_BlamePorcelainReachesGit(t *testing.T) {
 	qt.Assert(t, qt.StringContains(stdout, "\nauthor "))
 }
 
+// TestRun_BlameOrdinalAnchorWarns pins docs/ANCHORS.md's ordinal-anchor
+// advisory beyond commit: an anchor resolved by position ("init#2") warns
+// on stderr, but only when the anchor is actually ordinal-shaped -- a
+// uniquely named anchor on the same file must stay silent.
+func TestRun_BlameOrdinalAnchorWarns(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "dup.go", "package main\n\nfunc init() { println(1) }\n\nfunc init() { println(2) }\n")
+	gitOut(t, dir, "add", "dup.go")
+
+	stdout, stderr, code := runApp(t, "blame", "dup.go:init#2")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(stdout, "println(2)"))
+	qt.Assert(t, qt.StringContains(stderr, "dup.go:init#2"))
+	qt.Assert(t, qt.StringContains(stderr, "positional"))
+
+	_, stderr, code = runApp(t, "blame", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Not(qt.StringContains(stderr, "positional")))
+}
+
 // TestRun_BlameShortPorcelainFlagMatchesGit pins that "-p" is accepted as an
 // alias for "--porcelain", exactly matching git blame's own flag (unlike
 // "git log -p" or "git diff -p", git blame's "-p" already means porcelain,
