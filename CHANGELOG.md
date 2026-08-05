@@ -53,6 +53,11 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `scripts/install.sh`: a checksum-verified install path for a machine with
+  only git — no Go toolchain, no zig. linux/amd64 and linux/arm64 only;
+  language servers stay opt-in, as everywhere else. See
+  [`docs/INSTALL.md`](docs/INSTALL.md#install-script).
+
 - `rgit doctor --deep` dials each on-PATH language server for real (the
   identical handshake `rgit diff`/`rgit commit` already perform) and reports
   `(reachable)` or `(degraded — handshake timed out or unanswered)` instead

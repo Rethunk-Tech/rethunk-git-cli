@@ -141,38 +141,6 @@ constructs no anchor reaches — are documented in
 
 ## Diff
 
-## Install / distribution
-
-- [ ] **Distribution packaging beyond raw release binaries.** Today users get
-      `dist/rgit-$VERSION-{linux,windows}-*.tar.gz` from `make cross` /
-      `.github/workflows/release.yml` and `cmd/rgit-install` for source builds
-      (`docs/INSTALL.md`). No Homebrew formula, system package, or curl-to-bash
-      installer that also handles `PATH`, shell completion, and optional
-      `-with-servers`.
-
-      **Packages / files:** `.github/workflows/release.yml`, `Makefile` (`cross`,
-      `install`), `cmd/rgit-install/`, `docs/INSTALL.md`, new packaging metadata
-      (e.g. `packaging/homebrew/`, `scripts/install.sh` — exact layout TBD at
-      implementation time).
-
-      **Traps:** cgo + tree-sitter means formulas must build from source on the
-      target arch or ship per-platform bottles — fat binaries are not an option.
-      darwin artifacts are not in `make cross` (SDK limitation per
-      `docs/LIMITATIONS.md`) — packaging must not promise macOS binaries the
-      release workflow does not produce unless a macOS CI job is added separately.
-      `rgit_sql` tag: release linux/amd64 includes SQL per CONTRIBUTING; other
-      targets may be SQL-less — document per artifact. Shell completion install
-      path differs bash vs zsh (`docs/INSTALL.md` § Shell completion). Keep
-      `rgit-install` stdlib-only — heavy logic stays in CI/packaging scripts,
-      not the installer's prerequisite chain.
-
-      **Acceptance criteria:** At least one supported distribution path documented
-      end-to-end in `docs/INSTALL.md` (e.g. Homebrew tap or verified install
-      script with checksum). Installed `rgit` and `rgit --version` work on a
-      clean machine with only git (and runtime deps the doc names). Optional
-      language-server install remains opt-in, not default. CI verifies the
-      packaging metadata (formula lint or install-script dry-run).
-
 ## Resolution
 
 ## Diff

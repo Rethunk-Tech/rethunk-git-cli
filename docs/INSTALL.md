@@ -304,6 +304,33 @@ zsh's `compdef` needs `compinit` to already have run, so `autoload -Uz
 compinit && compinit` must come first in `.zshrc` — the standard
 precondition for any zsh completion, not one of `rgit`'s own.
 
+## Install script
+
+For a machine with only git — no Go toolchain, no zig — `scripts/install.sh`
+downloads a release binary and verifies it against that release's own
+`SHA256SUMS` before installing it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Rethunk-Tech/rethunk-git-cli/main/scripts/install.sh | sh
+```
+
+`PREFIX` (default `$HOME/.local/bin`) and `VERSION` (default `latest`) are
+environment variables, not flags — `VERSION=v1.1.0 PREFIX=/usr/local/bin sh
+install.sh` installs that exact tag system-wide. `--dry-run` prints the plan
+(download URL, checksum source, install path) without touching the network
+at all, which is what CI runs to lint the script's own control flow on every
+push.
+
+**Scope is deliberately narrow.** Only linux/amd64 and linux/arm64: darwin
+is not cross-built at all (§ Cross builds above), and this script has no
+macOS fallback to offer beyond pointing at `## Build` for a source install.
+Language servers stay opt-in exactly as they are everywhere else — the
+script never installs one; it prints the `-with-servers` pointer as its
+last line instead. There is no Homebrew formula: `rgit` links tree-sitter
+through cgo, so a formula would need to build from source per-platform (a
+bottle per target) rather than fetch one, which is a materially bigger
+undertaking than this script covers, not a small addition to it.
+
 ## Verify
 
 ```bash

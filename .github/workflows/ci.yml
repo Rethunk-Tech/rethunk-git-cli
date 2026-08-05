@@ -84,3 +84,20 @@ jobs:
       # matters. Every live-server case in this package skips cleanly via
       # its own exec.LookPath guard when nothing is installed.
       - run: go test -race ./internal/lsp/...
+
+  install-script:
+    name: install script
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # shellcheck ships preinstalled on ubuntu-latest (actions/runner-images'
+      # own software manifest) -- no extra Action or install step needed, the
+      # same reasoning this file's own top comment gives for skipping a gcc
+      # setup step.
+      - run: shellcheck scripts/install.sh
+      # --dry-run never touches the network (docs/INSTALL.md § Install
+      # script): this is a lint of the script's own control flow -- flag
+      # parsing, OS/arch detection, the printed plan -- not a real download,
+      # so it needs nothing from the release it would otherwise fetch.
+      - run: VERSION=v1.1.0 sh scripts/install.sh --dry-run
