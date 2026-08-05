@@ -193,3 +193,96 @@ constructs no anchor reaches — are documented in
       lifetime if full kill is impossible on CI). Next dial succeeds without
       waiting for idle timeout. User-supplied socket path untouched. Design
       record updated with chosen mechanism and remaining best-effort bounds.
+
+## Context
+
+- [ ] **Expand `rgit context` beyond commits + diff rows.** The command is
+      intentionally flagless and fixed-shape today (`internal/app/context.go`):
+      `C` commit records (last 20), `F` rows reused from `rgit diff
+      --porcelain`, hard-capped at 16 KiB with an `X TRUNCATED` trailer.
+      Agents still need separate calls for branch name, upstream/ahead-behind,
+      `[ts-only]` resolution health, or a larger byte budget on huge trees.
+
+      **Packages / files:** `internal/app/context.go` (`buildContextStream`,
+      `contextByteBudget`, `contextRecentCommitLimit`), `internal/gitx/gitx.go`
+      (branch/tracking primitives if added), `internal/app/doctor.go` (reuse
+      health signal, do not duplicate probes), `docs/USAGE.md` § Context,
+      `docs/CODES.md` § Output records, `specs/design.md` § `rgit context`.
+
+      **Traps:** The original guardrail rejects a flag surface that turns context
+      into "git status with extra steps" — any expansion must stay one call with
+      a **fixed** record grammar (new record types, not flags). New records need
+      single-letter tags and tab separation like `C`/`F`/`X`. `[ts-only]` belongs
+      on stderr today (`tsOnlyNotice`); moving it into the stream is a contract
+      change parsers must opt into. Raising `contextByteBudget` affects every
+      agent turn — prefer new optional record kinds that appear only when
+      relevant (e.g. `B` branch) over unbounded growth. Must still compose over
+      `diffpkg.Run`, not re-walk files.
+
+      **Acceptance criteria:** At minimum one new record type documented in
+      `docs/CODES.md` (e.g. `B\t<branch>\t<upstream>\t<ahead>\t<behind>` or
+      `H\t<ts-only|ok>` for resolution health). Default stream still fits 16 KiB
+      in the fixture suite; truncation behaviour unchanged for `F` rows. `rgit
+      context` remains flagless. Unit tests for `buildContextStream` cover new
+      record types and budget interaction. `docs/USAGE.md` and
+      `specs/design.md` updated.
+
+## Diff
+
+- [ ] **Symbol-level `rgit diff` for untracked files.** `buildUntrackedReport`
+      (`internal/diff/run.go`) collapses each untracked path to a single
+      `(untracked)` row with a line count; it only sets `HintSymbol` to the
+      first declaration name as a hint, not per-symbol attribution. Comment
+      rationale: symbols do not exist at any revision to diff against — but
+      agents staging new files still want `new.go:NewFunc +15/-0` before commit.
+
+      **Packages / files:** `internal/diff/run.go` (`buildUntrackedReport`,
+      `Run` untracked path), `internal/diff/render.go`, `internal/diff/types.go`
+      (`StatusUntracked`, `HintSymbol`), `internal/resolve/` (`Open`,
+      `DeclOrder`), `docs/USAGE.md` § Commands, `docs/CODES.md`.
+
+      **Traps:** There is no HEAD blob — attribution is worktree-only vs empty
+      (all lines are insertions). Do not call `git diff --no-index` without
+      handling exit 1 on differences. `@header`/`@imports` on a new file overlap
+      with preamble staging semantics in `internal/synth/stage.go` — diff rows
+      must match what `rgit commit` would stage for the same symbols. Binary
+      files stay one row. Unsupported languages stay `(no symbols)` / file-level.
+      `rgit context` reuses porcelain rendering — shape must stay compatible.
+
+      **Acceptance criteria:** Untracked `new.go` with two functions emits two
+      `F` rows (or porcelain equivalent) with per-symbol `+N/-0`, not one
+      collapsed row. `rgit diff --sym new.go:SpecificFunc` filters to that
+      symbol. Tracked-file behaviour unchanged. Tests in `internal/diff/run_test.go`.
+      USAGE example updated (currently shows single `(untracked)` row).
+
+## Install / distribution
+
+- [ ] **Distribution packaging beyond raw release binaries.** Today users get
+      `dist/rgit-$VERSION-{linux,windows}-*.tar.gz` from `make cross` /
+      `.github/workflows/release.yml` and `cmd/rgit-install` for source builds
+      (`docs/INSTALL.md`). No Homebrew formula, system package, or curl-to-bash
+      installer that also handles `PATH`, shell completion, and optional
+      `-with-servers`.
+
+      **Packages / files:** `.github/workflows/release.yml`, `Makefile` (`cross`,
+      `install`), `cmd/rgit-install/`, `docs/INSTALL.md`, new packaging metadata
+      (e.g. `packaging/homebrew/`, `scripts/install.sh` — exact layout TBD at
+      implementation time).
+
+      **Traps:** cgo + tree-sitter means formulas must build from source on the
+      target arch or ship per-platform bottles — fat binaries are not an option.
+      darwin artifacts are not in `make cross` (SDK limitation per
+      `docs/LIMITATIONS.md`) — packaging must not promise macOS binaries the
+      release workflow does not produce unless a macOS CI job is added separately.
+      `rgit_sql` tag: release linux/amd64 includes SQL per CONTRIBUTING; other
+      targets may be SQL-less — document per artifact. Shell completion install
+      path differs bash vs zsh (`docs/INSTALL.md` § Shell completion). Keep
+      `rgit-install` stdlib-only — heavy logic stays in CI/packaging scripts,
+      not the installer's prerequisite chain.
+
+      **Acceptance criteria:** At least one supported distribution path documented
+      end-to-end in `docs/INSTALL.md` (e.g. Homebrew tap or verified install
+      script with checksum). Installed `rgit` and `rgit --version` work on a
+      clean machine with only git (and runtime deps the doc names). Optional
+      language-server install remains opt-in, not default. CI verifies the
+      packaging metadata (formula lint or install-script dry-run).
