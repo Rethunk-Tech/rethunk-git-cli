@@ -6,23 +6,7 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
-### Fixed
-
-- A symbol anchor into an **uninitialized submodule** (`git submodule
-  deinit`'s own shape: the directory survives, emptied of its own `.git`)
-  now refuses with exit 10, the same "submodule; name the path instead"
-  every initialized submodule already gets — previously it fell through to
-  a misleading exit 9 ("no grammar registered") once the empty directory's
-  contents turned out unparseable. See
-  [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md#symlinks-submodules-renames-and-content-filters).
-
-- Exit 3's "did you mean" suggestion now finds a close typo on a name that
-  exists only inside a container (e.g. `Gett` → `A.Get`): distance was
-  measured against the container-qualified string, which inflated it past
-  the match threshold for exactly the case that needed it most. Exit 4's
-  message also now says "qualify with one of: ..." instead of "did you
-  mean" for candidates that already resolve, just ambiguously. See
-  [`docs/CODES.md`](docs/CODES.md#exit-codes).
+## [1.2.0] — 2026-08-05
 
 ### Added
 
@@ -68,8 +52,6 @@ Notable changes to `rgit`. The format follows
   `HEAD`. `rgit diff`, `rgit blame`, and `rgit log` are unaffected — none of
   them writes a blob — and committing the same file by path still works.
   See [`docs/CODES.md`](docs/CODES.md#exit-12-is-commits-alone).
-
-### Added
 
 - `rgit diff A:f.go B:f.go` — exactly two `rev:path` positionals naming the
   identical path at two revisions — compares that file across revisions,
@@ -154,6 +136,24 @@ Notable changes to `rgit`. The format follows
   history could crowd out the unbounded, actionable diff section before the
   16 KiB budget was reached; diff rows now survive truncation first. See
   [`docs/USAGE.md`](docs/USAGE.md#context).
+
+### Fixed
+
+- A symbol anchor into an **uninitialized submodule** (`git submodule
+  deinit`'s own shape: the directory survives, emptied of its own `.git`)
+  now refuses with exit 10, the same "submodule; name the path instead"
+  every initialized submodule already gets — previously it fell through to
+  a misleading exit 9 ("no grammar registered") once the empty directory's
+  contents turned out unparseable. See
+  [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md#symlinks-submodules-renames-and-content-filters).
+
+- Exit 3's "did you mean" suggestion now finds a close typo on a name that
+  exists only inside a container (e.g. `Gett` → `A.Get`): distance was
+  measured against the container-qualified string, which inflated it past
+  the match threshold for exactly the case that needed it most. Exit 4's
+  message also now says "qualify with one of: ..." instead of "did you
+  mean" for candidates that already resolve, just ambiguously. See
+  [`docs/CODES.md`](docs/CODES.md#exit-codes).
 
 ## [1.1.0] — 2026-07-29
 
