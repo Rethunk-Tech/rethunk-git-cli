@@ -112,18 +112,53 @@ no.
 exactly as two `git add` runs do, and git's `index.lock` arbitrates.
 
 **Separator ownership beyond `@header`/`@imports` was considered and
-deferred, not built.** The rule that lets a new-file preamble's own regions
-each own their own trailing separator was verified to hold generally: it
-sums exactly for any chain of adjacent top-level declarations, since each
+deferred, not built — and a later pass confirmed the general path never
+needed it in the first place, through a different mechanism already
+shipped.** The rule that lets a new-file preamble's own regions each own
+their own trailing separator was verified to hold generally: it sums
+exactly for any chain of adjacent top-level declarations, since each
 non-final region absorbing its own trailing gap is offset by the final
 region's own missing trailing newline against the file's own EOF
-terminator. It was not extended to the general insertion path every other
-commit uses, on blast radius rather than correctness: generalizing it
-would change the insertion path used by every commit, not only the
-new-file preamble case it would improve. Go is the only language
-positioned to benefit — `OwnsTrailingSeparator` is an explicit `Language`
-method every adapter answers, and only Go answers true, because no other
-grammar here has a formatter-enforced blank-line convention to hang it on.
+terminator. Extending `resolve.ExtendThroughOwnedSeparator`/
+`OwnsTrailingSeparator` itself to the general insertion path was passed
+over on blast radius: generalizing it would touch the insertion path every
+commit uses, not only the new-file preamble case it would improve, and
+`OwnsTrailingSeparator` is Go-only (gofmt is the only formatter-enforced
+blank-line convention registered), so TypeScript and Python insertions
+would still be left out.
+
+That gap turned out to already be closed, one layer up, by
+`internal/diff/attribute.go`'s own hunk-to-symbol mapping —
+`TestAttribute_TopLevelSymbolOwnsOneSeparator`
+(`internal/diff/run_test.go`) pins it: a newly inserted top-level Go
+declaration's own diff row already claims its trailing blank line with no
+`(unanchorable)` remainder (`[Added MOD +4/-0]`, no residue), the identical
+deletion does the reverse (`[Doomed DELETED +0/-4]`), and — unlike
+`OwnsTrailingSeparator`, which only Go answers true to — TypeScript gets
+the same clean attribution with no adapter-specific code at all
+(`[h MOD +4/-0]`), because `attribute.go` derives ownership from the
+diff hunk itself, not from a language's own formatting convention. Python
+is the case that proves the mechanism is exactly "one separator", not
+"every adjacent blank line": PEP 8's own second blank line still surfaces
+as a genuine one-line `UNANCHORABLE` remainder
+(`[h MOD +3/-0][ UNANCHORABLE +1/-0]`), so nothing here silently widens to
+claim bytes a symbol does not actually own. Measured directly against a
+built binary too, beyond the pinned unit case: staging a brand-new Go
+function into an existing tracked file produces a blob byte-identical to
+the worktree, and `rgit diff`'s own row for it matches `git diff
+--numstat`'s raw count exactly across a single insertion, two adjacent
+insertions, an insertion with no preceding sibling, and one with no
+following sibling — every case this item's own acceptance criteria named.
+The one case that must stay `(unanchorable)` — whitespace changed between
+two already-tracked, otherwise-unmodified declarations, with no new or
+deleted symbol on either side — was confirmed still exactly that, the
+trap this deferral always meant to protect.
+
+Net effect: no code change was needed. `ExtendThroughOwnedSeparator` stays
+scoped to the new-file preamble, exactly as before — not because
+generalizing it remains too risky, but because the problem it would have
+solved for ordinary commits is already solved, more generally, by
+machinery that predates this investigation.
 
 ## Symbol resolution
 
