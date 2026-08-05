@@ -76,6 +76,14 @@ func (e *ResolveError) Error() string {
 	if len(e.Candidates) == 0 {
 		return fmt.Sprintf("resolve: %q: %s", e.Anchor, label)
 	}
+	if e.Code == exitcode.AnchorAmbiguous {
+		// Candidates here are exact matches, not guesses -- "did you mean"
+		// undersells it, and the honest instruction is what actually fixes
+		// it: qualify with one of them (docs/ANCHORS.md's qualification
+		// invariant).
+		return fmt.Sprintf("resolve: %q: %s -- qualify with one of: %s",
+			e.Anchor, label, strings.Join(e.Candidates, ", "))
+	}
 	return fmt.Sprintf("resolve: %q: %s (did you mean: %s?)",
 		e.Anchor, label, strings.Join(e.Candidates, ", "))
 }
@@ -327,28 +335,41 @@ func (idx *index) resolve(anchor string) (*Symbol, error) {
 
 // suggest returns up to three known anchors closest to anchor by edit
 // distance, for the exit-3 "did you mean" listing (docs/USAGE.md).
+//
+// Distance is measured against each symbol's own bare name, not its
+// Qualified spelling: a typo in a bare anchor ("sizY") is naturally close
+// to the bare name it meant ("sizeX"), but that bare name's Qualified form
+// carries a container prefix ("Box.sizeX") whenever one exists, and
+// measuring against the prefixed string inflates the distance past
+// maxDistance for exactly the case docs/ANCHORS.md's qualification
+// invariant cares about most — a name that exists only inside containers.
+// The candidate returned is still Qualified, never the bare name: the
+// "did you mean" suggestion must be something that actually resolves, and
+// a bare name that only exists container-qualified would not.
 func (idx *index) suggest(anchor string) []string {
 	const maxCandidates = 3
 	const maxDistance = 3
 
 	type scored struct {
-		name string
-		dist int
+		qualified string
+		dist      int
 	}
-	all := make([]scored, 0, len(idx.byQualified))
-	for name := range idx.byQualified {
-		all = append(all, scored{name, levenshtein(anchor, name)})
+	all := make([]scored, 0, len(idx.order))
+	for _, s := range idx.order {
+		all = append(all, scored{s.Qualified, levenshtein(anchor, s.Decl.Bare)})
 	}
 	slices.SortFunc(all, func(x, y scored) int {
-		return cmp.Or(cmp.Compare(x.dist, y.dist), cmp.Compare(x.name, y.name))
+		return cmp.Or(cmp.Compare(x.dist, y.dist), cmp.Compare(x.qualified, y.qualified))
 	})
 
+	// Symbol.Qualified is unique per symbol (assignQualifiedNames' whole
+	// point), so idx.order yields no duplicate candidates to filter here.
 	out := make([]string, 0, maxCandidates)
 	for _, s := range all {
 		if s.dist > maxDistance || len(out) >= maxCandidates {
 			break
 		}
-		out = append(out, s.name)
+		out = append(out, s.qualified)
 	}
 	return out
 }

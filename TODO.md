@@ -263,30 +263,6 @@ constructs no anchor reaches — are documented in
 
 ## Resolution
 
-- [ ] **Richer ambiguous-anchor remediation (exit 4 and near-miss exit 3).**
-      Exit 4 already lists each colliding symbol's `Qualified` form
-      (`internal/resolve/index.go` `resolve`). Exit 3 uses Levenshtein `suggest`
-      over qualified names only. AGENTS.md invariant: a bare name that exists only
-      inside containers should steer toward qualification, not a misleading
-      "unresolved" when the honest answer is "qualify it".
-
-      **Packages / files:** `internal/resolve/index.go` (`resolve`, `suggest`,
-      `ResolveError.Error`), `internal/synth/classify.go`, `docs/USAGE.md`,
-      `docs/ANCHORS.md` § Qualification, `cmd/rgit/resolver_test.go`.
-
-      **Traps:** Do not change exit codes — 3 vs 4 carry different remediations
-      (`docs/CODES.md`). Levenshtein suggestions must not mask true ambiguity.
-      Container-qualified forms differ by language (`Declaration.Sep` — CSS uses
-      different rules). HTML uses `tag#id`, not `Container.member`. Ordinal forms
-      (`#N`) are a last resort, not the primary suggestion.
-
-      **Acceptance criteria:** Fixture: two `Box.size` / `Circle.size` methods —
-      bare `size` → exit 4 with candidates `Box.size`, `Circle.size` and message
-      nudging qualification. Fixture: bare name absent but single container member
-      with close Levenshtein match → exit 3 candidates prefer `Container.name`.
-      Existing `resolver_test.go` ambiguous cases unchanged. Error text stable enough
-      for `--porcelain` consumers where applicable.
-
 ## Diff
 
 - [ ] **Batch git blob reads in the diff hot path.** `diff.Run` already uses one

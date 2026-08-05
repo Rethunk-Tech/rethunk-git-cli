@@ -172,6 +172,10 @@ func (b *B) Get() int { return 2 }
 	qt.Assert(t, qt.ErrorAs(err, &rerr))
 	qt.Assert(t, qt.Equals(rerr.Code, exitcode.AnchorAmbiguous))
 	qt.Assert(t, qt.DeepEquals(rerr.Candidates, []string{"A.Get", "B.Get"}))
+	// The remediation is a definite instruction, not a guess: qualify with
+	// one of the listed candidates, never "did you mean" (exit 3's own
+	// framing) for a name that already resolves, just ambiguously.
+	qt.Assert(t, qt.StringContains(rerr.Error(), "qualify with one of: A.Get, B.Get"))
 }
 
 func TestResolve_UnresolvableAnchorSuggestsCandidate(t *testing.T) {
@@ -187,6 +191,32 @@ func Foo() {}
 	qt.Assert(t, qt.ErrorAs(err, &rerr))
 	qt.Assert(t, qt.Equals(rerr.Code, exitcode.AnchorUnresolvable))
 	qt.Assert(t, qt.DeepEquals(rerr.Candidates, []string{"Foo"}))
+}
+
+// TestResolve_UnresolvableAnchorSuggestsContainerQualifiedCandidate pins the
+// docs/ANCHORS.md qualification invariant on exit 3, not just exit 4: a
+// bare typo close to a name that exists only inside a container must still
+// surface a candidate, and the candidate must be the qualified form that
+// actually resolves ("A.Get"), not the bare "Get" that would only bounce
+// back into ambiguity or non-existence. Distance is measured against the
+// bare name ("Gett" vs "Get"), which is what makes the match close at all --
+// measuring against the qualified string "A.Get" would push the distance
+// past suggest's own maxDistance and hide it.
+func TestResolve_UnresolvableAnchorSuggestsContainerQualifiedCandidate(t *testing.T) {
+	t.Parallel()
+	src := []byte(`package p
+
+type A struct{}
+
+func (a *A) Get() int { return 1 }
+`)
+
+	_, err := resolve.Resolve(resolverGoLang(t), src, "Gett")
+	qt.Assert(t, qt.IsNotNil(err))
+	var rerr *resolve.ResolveError
+	qt.Assert(t, qt.ErrorAs(err, &rerr))
+	qt.Assert(t, qt.Equals(rerr.Code, exitcode.AnchorUnresolvable))
+	qt.Assert(t, qt.DeepEquals(rerr.Candidates, []string{"A.Get"}))
 }
 
 func TestResolve_NestedFuncLiteralNotTopLevel(t *testing.T) {

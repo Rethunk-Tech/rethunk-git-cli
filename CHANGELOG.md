@@ -6,6 +6,16 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Exit 3's "did you mean" suggestion now finds a close typo on a name that
+  exists only inside a container (e.g. `Gett` → `A.Get`): distance was
+  measured against the container-qualified string, which inflated it past
+  the match threshold for exactly the case that needed it most. Exit 4's
+  message also now says "qualify with one of: ..." instead of "did you
+  mean" for candidates that already resolve, just ambiguously. See
+  [`docs/CODES.md`](docs/CODES.md#exit-codes).
+
 ### Added
 
 - `-p`/`--patch` on `rgit diff`, appending git's own real patch body after
