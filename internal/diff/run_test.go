@@ -380,6 +380,86 @@ func pathWithGitOnly(t *testing.T) string {
 	return bin
 }
 
+// countingGitWrapper installs a shell script named "git" ahead of the real
+// one on PATH, counting every "cat-file" invocation to countFile before
+// exec'ing straight through to it -- the concrete measurement
+// prefetchBlobs' own subprocess-count claim needs, not just a structural
+// argument that the code only calls BatchCatFile once. Skips cleanly (not
+// a hard failure) on a platform with no /bin/sh, matching this package's
+// own git-not-on-PATH skip precedent.
+func countingGitWrapper(t *testing.T) (bin, countFile string) {
+	t.Helper()
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skipf("sh not on PATH: %v", err)
+	}
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		t.Skipf("git not on PATH: %v", err)
+	}
+	bin = t.TempDir()
+	countFile = filepath.Join(t.TempDir(), "cat-file.count")
+	// Every call in this package goes through "-C <root> cat-file ...", not
+	// "cat-file" as $1 -- matched against the whole argument list, not a
+	// fixed position.
+	script := "#!/bin/sh\n" +
+		"case \" $* \" in *\\ cat-file\\ *) printf x >> " + shellQuote(countFile) + " ;; esac\n" +
+		"exec " + shellQuote(gitPath) + " \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return bin, countFile
+}
+
+func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
+
+// TestRun_BatchesGitCatFileAcrossManyChangedFiles is the measured half of
+// the batching claim: buildFileReport's own read of each side, for N
+// changed files each with a real content edit against a rev (not the
+// worktree, which never shells out to cat-file at all), used to cost one
+// `git cat-file` subprocess per file per side before prefetchBlobs existed
+// -- 2N invocations for N files. It now costs exactly one, regardless of N,
+// because Run's own loop calls prefetchBlobs (and so BatchCatFile) a single
+// time before the per-file loop even starts.
+func TestRun_BatchesGitCatFileAcrossManyChangedFiles(t *testing.T) {
+	// cannot Parallel because t.Setenv below
+	dir, repo := gittest.New(t)
+	const fileCount = 12
+	for i := range fileCount {
+		gittest.Write(t, dir, fmt.Sprintf("f%d.go", i), fmt.Sprintf("package p\n\nfunc F%d() int { return %d }\n", i, i))
+	}
+	gittest.Commit(t, dir, "chore: initial")
+	for i := range fileCount {
+		gittest.Write(t, dir, fmt.Sprintf("f%d.go", i), fmt.Sprintf("package p\n\nfunc F%d() int { return %d }\n", i, i+100))
+	}
+	gittest.Commit(t, dir, "chore: edit all")
+
+	bin, countFile := countingGitWrapper(t)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	// A rev-to-rev comparison: both sides are git-backed (sideRev), so
+	// every file's read would have gone through cat-file under the old,
+	// unbatched path -- the case the batching exists for.
+	report, err := Run(context.Background(), repo, dir, Options{Revisions: []string{"HEAD~1", "HEAD"}})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(report.Files) != fileCount {
+		t.Fatalf("len(report.Files) = %d; want %d", len(report.Files), fileCount)
+	}
+
+	countBytes, err := os.ReadFile(countFile)
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	// Exactly one: prefetchBlobs makes exactly one BatchCatFile call for the
+	// whole loop, regardless of how many files it covers -- not merely
+	// "fewer than fileCount", which a smaller but still per-file improvement
+	// would also satisfy.
+	if count := len(countBytes); count != 1 {
+		t.Errorf("cat-file invoked %d times for %d files; want exactly 1 (one batched call)", count, fileCount)
+	}
+}
+
 // TestRun_DegradedCrossCheckSetsTSOnly asserts the signal docs/INSTALL.md §
 // Verify's recipe greps for: crossCheckFile must propagate the degraded
 // bool CrossCheckExtents returns, so `rgit diff` reports [ts-only]

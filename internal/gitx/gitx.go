@@ -17,6 +17,7 @@
 package gitx
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -274,6 +275,132 @@ func (r *Repo) CatFileSample(ctx context.Context, rev, path string, limit int) (
 		return nil, false, &ExecError{Args: args, Err: werr}
 	}
 	return buf[:n], true, nil
+}
+
+// BatchCatFileRequest names one blob to read in a BatchCatFile call: rev
+// and path combine the same way CatFile's own rev+":"+path does.
+type BatchCatFileRequest struct {
+	Rev  string
+	Path string
+}
+
+// BatchCatFileResult is one BatchCatFile response, in the same order as its
+// requests. Exists mirrors CatFile's own convention -- false for a path
+// absent from rev, never an error.
+type BatchCatFileResult struct {
+	Content []byte
+	Exists  bool
+}
+
+// BatchCatFile reads every rev:path in requests through one `git cat-file
+// --batch` process instead of one `git cat-file -p` subprocess per blob --
+// the same content and the same exists convention CatFile itself returns,
+// batched for a caller reading many blobs in one pass (internal/diff's own
+// per-file scope reads). Results come back in request order.
+//
+// Writing and reading run concurrently on purpose: `--batch` answers each
+// request as it is read, so writing every request first and only then
+// reading any response risks a full pipe on either side deadlocking the
+// other once there are enough requests queued.
+func (r *Repo) BatchCatFile(ctx context.Context, requests []BatchCatFileRequest) ([]BatchCatFileResult, error) {
+	if len(requests) == 0 {
+		return nil, nil
+	}
+
+	args := []string{"cat-file", "--batch"}
+	full := append([]string{"-C", r.root}, args...)
+	cmd := exec.CommandContext(ctx, "git", full...)
+	cmd.Env = r.env
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, &ExecError{Args: args, Err: err}
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, &ExecError{Args: args, Err: err}
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Start(); err != nil {
+		return nil, &ExecError{Args: args, Err: err}
+	}
+
+	writeErrCh := make(chan error, 1)
+	go func() {
+		w := bufio.NewWriter(stdin)
+		for _, req := range requests {
+			if _, err := fmt.Fprintf(w, "%s:%s\n", req.Rev, req.Path); err != nil {
+				writeErrCh <- err
+				_ = stdin.Close()
+				return
+			}
+		}
+		err := w.Flush()
+		_ = stdin.Close()
+		writeErrCh <- err
+	}()
+
+	results, readErr := readCatFileBatchResponses(stdout, len(requests))
+
+	// The writer goroutine's own error only matters when reading did not
+	// already fail: a write failure past the point every response was
+	// already read (an early git exit, most commonly) is moot, and
+	// reporting it instead of the real read error would hide the cause.
+	writeErr := <-writeErrCh
+	if readErr != nil {
+		_ = cmd.Wait()
+		return nil, readErr
+	}
+	if writeErr != nil {
+		_ = cmd.Wait()
+		return nil, &ExecError{Args: args, Err: writeErr}
+	}
+	if err := cmd.Wait(); err != nil {
+		return nil, &ExecError{Args: args, Err: fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))}
+	}
+	return results, nil
+}
+
+// readCatFileBatchResponses parses exactly count responses off r, in the
+// two shapes `git cat-file --batch` ever writes: "<sha> <type> <size>\n"
+// followed by exactly size content bytes and a trailing newline, or
+// "<object> missing\n" with no content at all. The object name echoed back
+// in the missing case is the literal request string, which unlike a sha or
+// type may itself contain spaces (a pathspec with a space in it) -- tested
+// by suffix, not by a fixed field count, for exactly that reason.
+func readCatFileBatchResponses(r io.Reader, count int) ([]BatchCatFileResult, error) {
+	br := bufio.NewReader(r)
+	results := make([]BatchCatFileResult, count)
+	for i := range count {
+		header, err := br.ReadString('\n')
+		if err != nil {
+			return nil, fmt.Errorf("gitx: cat-file --batch: reading response %d of %d: %w", i+1, count, err)
+		}
+		header = strings.TrimSuffix(header, "\n")
+		if strings.HasSuffix(header, " missing") {
+			results[i] = BatchCatFileResult{Exists: false}
+			continue
+		}
+		fields := strings.Fields(header)
+		if len(fields) != 3 {
+			return nil, fmt.Errorf("gitx: cat-file --batch: malformed response header %q", header)
+		}
+		size, serr := strconv.Atoi(fields[2])
+		if serr != nil || size < 0 {
+			return nil, fmt.Errorf("gitx: cat-file --batch: malformed size in header %q", header)
+		}
+		content := make([]byte, size)
+		if _, err := io.ReadFull(br, content); err != nil {
+			return nil, fmt.Errorf("gitx: cat-file --batch: reading %d content bytes for response %d of %d: %w", size, i+1, count, err)
+		}
+		if _, err := br.Discard(1); err != nil { // the content's own trailing newline
+			return nil, fmt.Errorf("gitx: cat-file --batch: reading trailing newline for response %d of %d: %w", i+1, count, err)
+		}
+		results[i] = BatchCatFileResult{Content: content, Exists: true}
+	}
+	return results, nil
 }
 
 // HashObject writes content as a blob via `git hash-object -w --path

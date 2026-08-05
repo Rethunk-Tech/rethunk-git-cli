@@ -343,7 +343,31 @@ once per declaration per side, and synthesis walks declarations looking for the
 nearest one `HEAD` also has. Measured on a 200-member class, `rgit diff` took
 **0.78s** re-parsing and **0.02s** against a parse held open for the file's
 lifetime — a ~39× difference on one file, which is why `resolve.File` exists
-rather than the one-shot `Resolve` alone.
+rather than the one-shot `Resolve` alone. `internal/diff/bench_test.go`'s
+`BenchmarkAttribution_200MemberClass` is the regression gate for this number
+now that there is no re-parsing code path left to compare against directly
+(CONTRIBUTING.md § Tests § Benchmarks).
+
+**A second, orthogonal cost the held-open parse does not touch: each
+changed file paid for its own `git cat-file` subprocess.** The held parse
+is in-process CPU; reading a rev-side blob at all is still one `git`
+invocation per file per side (`contentSide.read`, `internal/diff/scope.go`)
+— N files meant up to 2N subprocesses before batching, linear git-exec
+overhead a large rename or a vendored dependency bump pays regardless of
+how cheap the parse itself became. `internal/gitx.Repo.BatchCatFile` reads
+every file's blob through one `git cat-file --batch` process instead,
+fed by `prefetchBlobs` (`internal/diff/scope.go`) before `Run`'s own
+per-file loop starts; `contentSide.read` checks the resulting cache first
+and only falls back to a live, single-file `CatFile` call when nothing was
+prefetched for it (`internal/app/diff.go`'s `--sym` validation path, which
+resolves a handful of explicit targets before the file loop runs, not one
+per changed file, and was left unbatched on purpose — nothing there scales
+with repository size). Worktree reads (`os.ReadFile`) were never a
+subprocess to begin with and are untouched. Measured directly:
+`TestRun_BatchesGitCatFileAcrossManyChangedFiles`
+(`internal/diff/run_test.go`) counts real `git cat-file` invocations via a
+PATH-shadowing wrapper script and pins the count at exactly one for a
+12-file, both-sides-git-backed fixture.
 
 **`@imports` node shape differs by language.** Go exposes a single
 `import_declaration` block; TypeScript and Python emit a separate

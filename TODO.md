@@ -137,32 +137,6 @@ constructs no anchor reaches — are documented in
       HEAD-name-only semantics. Porcelain `HASH<TAB>SUBJECT` shape unchanged.
       Documented limitation lifted or qualified in `docs/LIMITATIONS.md`.
 
-## Diff
-
-- [ ] **Batch git blob reads in the diff hot path.** `diff.Run` already uses one
-      `git diff --numstat` for enumeration (`internal/gitx/gitx.go`
-      `DiffNumstat`), but each changed file calls `scope.Old.read` / `scope.New.read`
-      separately in `buildFileReport` (`internal/diff/run.go`) — N files ⇒ N
-      `git cat-file` subprocesses (or equivalent). Large attribution runs (whole
-      tree, vendor bump) pay linear git overhead.
-
-      **Packages / files:** `internal/gitx/gitx.go` (new batch `cat-file` helper),
-      `internal/diff/run.go`, `internal/diff/scope.go` (`side.read`),
-      `specs/design.md` § Blob synthesis (held-parse gains are already in-process;
-      this is git I/O batching).
-
-      **Traps:** Batch protocol must handle missing blobs (deleted paths, renames
-      `old => new`). Scope sides differ: worktree reads may use `os.ReadFile` not
-      cat-file — only batch the git-backed sides. Revision-to-revision diffs need
-      both revs. Do not break `hash-object --path` invariants in synth (diff is
-      read-only). Streaming vs memory: batching loads all changed blobs — cap or
-      stream per path count if needed.
-
-      **Acceptance criteria:** Measured reduction in git subprocess count on a
-      fixture with ≥10 changed files (test can count `exec` invocations via hook or
-      wrapper). Identical `rgit diff --porcelain` output before/after. No regression
-      in rename/delete/symlink edge cases covered by `internal/diff/run_test.go`.
-
 ## Release
 
 - [ ] **Signed release artifacts.** `release.yml` publishes `dist/*` with

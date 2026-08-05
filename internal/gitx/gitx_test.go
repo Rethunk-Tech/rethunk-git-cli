@@ -363,6 +363,65 @@ func TestUpstreamAndAheadBehind(t *testing.T) {
 	}
 }
 
+// TestBatchCatFile pins the batch reader's own two response shapes and
+// ordering guarantee against a real `git cat-file --batch` process: found
+// blobs come back with their content, missing ones with Exists=false, in
+// request order regardless of which rev each one names -- the whole point
+// of batching many files' reads into one process (internal/diff's own
+// per-file scope.read loop).
+func TestBatchCatFile(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	gittest.Write(t, dir, "a.go", "package a\n")
+	gittest.Write(t, dir, "path with spaces.go", "package a\n")
+	gittest.Commit(t, dir, "chore: first")
+	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() {}\n")
+	gittest.Commit(t, dir, "chore: second")
+
+	results, err := repo.BatchCatFile(context.Background(), []gitx.BatchCatFileRequest{
+		{Rev: "HEAD", Path: "a.go"},
+		{Rev: "HEAD~1", Path: "a.go"},
+		{Rev: "HEAD", Path: "path with spaces.go"},
+		{Rev: "HEAD", Path: "does-not-exist.go"},
+	})
+	if err != nil {
+		t.Fatalf("BatchCatFile: %v", err)
+	}
+	if len(results) != 4 {
+		t.Fatalf("len(results) = %d; want 4", len(results))
+	}
+
+	want := []struct {
+		exists  bool
+		content string
+	}{
+		{true, "package a\n\nfunc A() {}\n"},
+		{true, "package a\n"},
+		{true, "package a\n"},
+		{false, ""},
+	}
+	for i, w := range want {
+		if results[i].Exists != w.exists {
+			t.Errorf("results[%d].Exists = %v; want %v", i, results[i].Exists, w.exists)
+		}
+		if w.exists && string(results[i].Content) != w.content {
+			t.Errorf("results[%d].Content = %q; want %q", i, results[i].Content, w.content)
+		}
+	}
+}
+
+// TestBatchCatFile_EmptyRequestIsANoop pins that zero requests never spawns
+// a process at all -- there is nothing for one to answer.
+func TestBatchCatFile_EmptyRequestIsANoop(t *testing.T) {
+	t.Parallel()
+	_, repo := gittest.New(t)
+
+	results, err := repo.BatchCatFile(context.Background(), nil)
+	if err != nil || results != nil {
+		t.Errorf("BatchCatFile(nil) = (%v, %v); want (nil, nil)", results, err)
+	}
+}
+
 // TestErrorMessagesNameTheCommand pins what a caller actually reads when
 // something goes wrong. Both types are surfaced verbatim by internal/app's
 // error mapping, so their text is the whole failure report -- and an

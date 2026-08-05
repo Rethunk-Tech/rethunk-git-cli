@@ -53,6 +53,12 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit diff` batches every changed file's git-backed blob read into one
+  `git cat-file --batch` process instead of one `git cat-file` subprocess
+  per file per side — a large rename or vendor bump no longer pays linear
+  git-exec overhead. Porcelain output is unaffected. See
+  [`specs/design.md`](specs/design.md#grammar-scope).
+
 - `scripts/install.sh`: a checksum-verified install path for a machine with
   only git — no Go toolchain, no zig. linux/amd64 and linux/arm64 only;
   language servers stay opt-in, as everywhere else. See

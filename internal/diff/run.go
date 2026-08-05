@@ -66,9 +66,23 @@ func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Repo
 	// visible instead of surfacing something a filtered view would hide.
 	symFiltered := len(canonicalSyms) > 0
 
-	for _, e := range entries {
-		oldPath, newPath := NumstatPath(e.Path)
-		fr, ferr := buildFileReport(ctx, repo, root, scope, oldPath, newPath, e.Added, e.Deleted, sess, report, symFiltered)
+	oldPaths := make([]string, len(entries))
+	newPaths := make([]string, len(entries))
+	for i, e := range entries {
+		oldPaths[i], newPaths[i] = NumstatPath(e.Path)
+	}
+	// One batched git-backed blob read for every changed file's Old and New
+	// side, instead of buildFileReport's own loop paying for a `git
+	// cat-file` subprocess per file per side -- internal/gitx.Repo.
+	// BatchCatFile's own doc comment has the batching itself; prefetchBlobs
+	// is just this call site's own (side, path) list.
+	cache, err := prefetchBlobs(ctx, repo, scope, oldPaths, newPaths)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, e := range entries {
+		fr, ferr := buildFileReport(ctx, repo, root, scope, oldPaths[i], newPaths[i], e.Added, e.Deleted, sess, report, symFiltered, cache)
 		if ferr != nil {
 			return nil, ferr
 		}
@@ -106,7 +120,7 @@ func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Repo
 // its own -- specs/design.md § Blob synthesis' held-parse gain, applied
 // here the same way internal/synth already holds one *resolve.File per
 // side across every anchor it resolves.
-func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Scope, oldPath, newPath, addedStr, deletedStr string, sess *lsp.Session, report *Report, symFiltered bool) (*FileReport, error) {
+func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Scope, oldPath, newPath, addedStr, deletedStr string, sess *lsp.Session, report *Report, symFiltered bool, cache *blobCache) (*FileReport, error) {
 	if addedStr == "-" && deletedStr == "-" {
 		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusBinary, Added: "-", Deleted: "-"}}}, nil
 	}
@@ -145,11 +159,11 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusNoSymbols, Added: addedStr, Deleted: deletedStr}}}, nil
 	}
 
-	oldSrc, _, err := scope.Old.read(ctx, repo, root, oldPath)
+	oldSrc, _, err := scope.Old.read(ctx, repo, root, oldPath, cache)
 	if err != nil {
 		return nil, err
 	}
-	newSrc, _, err := scope.New.read(ctx, repo, root, newPath)
+	newSrc, _, err := scope.New.read(ctx, repo, root, newPath, cache)
 	if err != nil {
 		return nil, err
 	}
@@ -394,12 +408,16 @@ func validateSym(ctx context.Context, repo *gitx.Repo, root string, scope Scope,
 		return "", &resolve.ResolveError{Code: exitcode.UnsupportedLanguage, Anchor: s.Name, Path: s.File}
 	}
 
-	src, exists, err := scope.New.read(ctx, repo, root, s.File)
+	// Unbatched: this validates the (typically few) explicit --sym targets
+	// before the main file loop even runs, not once per changed file, so
+	// there is nothing here worth batching the way buildFileReport's own
+	// loop is (prefetchBlobs, above).
+	src, exists, err := scope.New.read(ctx, repo, root, s.File, nil)
 	if err != nil {
 		return "", err
 	}
 	if !exists {
-		src, _, err = scope.Old.read(ctx, repo, root, s.File)
+		src, _, err = scope.Old.read(ctx, repo, root, s.File, nil)
 		if err != nil {
 			return "", err
 		}

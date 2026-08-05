@@ -39,15 +39,31 @@ func revSide(rev string) contentSide { return contentSide{kind: sideRev, rev: re
 // simply has no such path — new-in-this-diff and deleted-in-this-diff are
 // both ordinary outcomes here, not errors, matching gitx.CatFile's own
 // convention.
-func (s contentSide) read(ctx context.Context, repo *gitx.Repo, root, path string) (content []byte, exists bool, err error) {
+//
+// cache, when non-nil, is checked before falling back to a live CatFile
+// call — blobCache's own doc comment explains why a miss is a fallback and
+// never an error: a cache built from the same (side, path) pairs the
+// caller is about to read misses only when that invariant does not hold,
+// which is a caller bug to surface as a wrong answer, not a panic.
+func (s contentSide) read(ctx context.Context, repo *gitx.Repo, root, path string, cache *blobCache) (content []byte, exists bool, err error) {
 	switch s.kind {
 	case sideWorktree:
 		return util.ReadFileIfExists(filepath.Join(root, path))
 	case sideIndex:
 		// CatFile builds rev+":"+path; an empty rev yields ":path", which
 		// git reads as the index's stage-0 entry.
+		if cache != nil {
+			if res, ok := cache.lookup("", path); ok {
+				return res.Content, res.Exists, nil
+			}
+		}
 		return repo.CatFile(ctx, "", path)
 	default:
+		if cache != nil {
+			if res, ok := cache.lookup(s.rev, path); ok {
+				return res.Content, res.Exists, nil
+			}
+		}
 		return repo.CatFile(ctx, s.rev, path)
 	}
 }
@@ -74,6 +90,72 @@ func (s contentSide) mode(ctx context.Context, repo *gitx.Repo, root, path strin
 		}
 		return entry.Mode, true, nil
 	}
+}
+
+// blobCache holds every git-backed blob buildFileReport's own per-file loop
+// (run.go) is about to read, fetched once up front through
+// gitx.Repo.BatchCatFile instead of one `git cat-file` subprocess per file
+// per side -- the batching internal/gitx.BatchCatFile's own doc comment
+// describes, applied here at the one call site that reads N files in a
+// loop. Keyed by rev+":"+path, the identical string CatFile itself builds,
+// so sideIndex's own empty rev ("" -> ":path") and sideRev(rev)'s explicit
+// one never collide.
+//
+// A cache miss is never an error: prefetchBlobs only ever populates it from
+// the exact (side, path) pairs the same invocation is about to read, so a
+// miss reaching contentSide.read's fallback would mean prefetchBlobs and
+// the file loop disagreed about which paths matter -- a bug to keep
+// contentSide.read's live CatFile fallback available for, not a state this
+// cache needs to guard against with its own error path.
+type blobCache struct {
+	byKey map[string]gitx.BatchCatFileResult
+}
+
+func blobCacheKey(rev, path string) string { return rev + ":" + path }
+
+func (c *blobCache) lookup(rev, path string) (gitx.BatchCatFileResult, bool) {
+	if c == nil {
+		return gitx.BatchCatFileResult{}, false
+	}
+	res, ok := c.byKey[blobCacheKey(rev, path)]
+	return res, ok
+}
+
+// prefetchBlobs batches every git-backed read buildFileReport's own loop
+// (run.go) is about to make -- scope.Old and scope.New, for every changed
+// path, skipping sideWorktree entirely since that reads the local
+// filesystem directly and was never a subprocess to batch. oldPaths and
+// newPaths are parallel slices, one entry per changed file (a rename's two
+// names differ; every other change repeats the same path in both).
+func prefetchBlobs(ctx context.Context, repo *gitx.Repo, scope Scope, oldPaths, newPaths []string) (*blobCache, error) {
+	var requests []gitx.BatchCatFileRequest
+	addSide := func(s contentSide, path string) {
+		switch s.kind {
+		case sideWorktree:
+			return
+		case sideIndex:
+			requests = append(requests, gitx.BatchCatFileRequest{Path: path})
+		default:
+			requests = append(requests, gitx.BatchCatFileRequest{Rev: s.rev, Path: path})
+		}
+	}
+	for i := range oldPaths {
+		addSide(scope.Old, oldPaths[i])
+		addSide(scope.New, newPaths[i])
+	}
+	if len(requests) == 0 {
+		return &blobCache{byKey: map[string]gitx.BatchCatFileResult{}}, nil
+	}
+
+	results, err := repo.BatchCatFile(ctx, requests)
+	if err != nil {
+		return nil, err
+	}
+	byKey := make(map[string]gitx.BatchCatFileResult, len(requests))
+	for i, req := range requests {
+		byKey[blobCacheKey(req.Rev, req.Path)] = results[i]
+	}
+	return &blobCache{byKey: byKey}, nil
 }
 
 // Scope is one resolved rgit diff scope: the two sides to compare for
