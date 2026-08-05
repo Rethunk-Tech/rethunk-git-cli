@@ -47,9 +47,10 @@ stale. Also check `sqlGrammarVersion` in
 tags: `@latest` cannot track it, because that module gitignores `parser.c` at
 every tag ([`internal/resolve/sqlgrammar/grammar.go`](internal/resolve/sqlgrammar/grammar.go)),
 so this pin only ever moves by hand and nothing else reminds you to look. If
-a newer tag exists, bump the constant, then `make sql-parser` and `go build
--tags rgit_sql ./internal/resolve/sqlgrammar/...` to confirm the new grammar
-still generates and compiles before tagging.
+a newer tag exists, bump the constant, then `make sql-parser` and `go test
+-tags rgit_sql ./...` to confirm the new grammar still generates, compiles,
+and resolves — update any resolver fixtures whose anchor extents shifted —
+before tagging.
 
 ## Tests
 

@@ -682,32 +682,6 @@ constructs no anchor reaches — are documented in
       11 with stderr listing each `FILE:SYMBOL` or path skipped. `--allow-empty`
       still exits 0. Tests in `app_test.go` extended.
 
-## Build / dependencies
-
-- [ ] **SQL grammar pin bump workflow.** SQL adapter is generated from
-      `github.com/DerekStride/tree-sitter-sql` pinned at `v0.3.11` in
-      `cmd/rgit-install/main.go` (`sqlGrammarModule`, `sqlGrammarVersion`).
-      Parser C sources live in `internal/resolve/sqlgrammar/csrc/` (generated,
-      `generated_check.go` embed guard). Bumping the grammar is a multi-step
-      regen, not a one-line dep bump.
-
-      **Packages / files:** `cmd/rgit-install/main.go` (`generateSQLParser`,
-      `downloadSQLGrammarModule`), `internal/resolve/sqlgrammar/`,
-      `internal/resolve/lang_sql.go`, `Makefile` (`sql-parser`), `CONTRIBUTING.md`
-      release steps, `cmd/rgit/resolver_sql_test.go`.
-
-      **Traps:** Upstream module gitignores `parser.c` at tags — must run
-      tree-sitter CLI generate locally/CI. `go mod tidy` drops unpinned module
-      without import — version stays explicit constant. Release workflow requires
-      linux/amd64 artifact to grep `sql` row. Grammar changes can break anchor
-      shapes — full resolver test suite required. Non-`rgit_sql` builds unaffected.
-
-      **Acceptance criteria:** Documented bump checklist in `CONTRIBUTING.md`:
-      bump constant → `make sql-parser` → `go test -tags rgit_sql ./...` → update
-      fixtures if anchor extents shift. CI/release still verifies SQL in linux/amd64
-      binary. No manual steps omitted that leave `generated_check.go` passing but
-      stale parser.
-
 ## Performance
 
 - [ ] **Benchmark regression gate for diff attribution.** Design record measured
