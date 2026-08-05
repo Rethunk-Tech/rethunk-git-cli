@@ -361,29 +361,6 @@ constructs no anchor reaches — are documented in
       `auth.go:ValidateToken` does not warn. Commit behaviour unchanged.
       Documented in `docs/USAGE.md` § Warnings.
 
-- [ ] **`rgit languages` repo-scoped filter.** `rgit languages` lists every
-      grammar compiled into the binary (`internal/app/languages.go`,
-      `resolve.Languages()`), runtime-accurate for build tags (SQL). Agents in a
-      monorepo often want "which grammars appear in **this** repo's tracked files"
-      to decide whether symbol anchors are worth attempting.
-
-      **Packages / files:** `internal/app/languages.go`, `internal/gitx/gitx.go`
-      (`ls-files` or equivalent), `internal/resolve/lang.go` (`ForExtension`,
-      `ForPath`), `docs/USAGE.md`, `docs/CODES.md`.
-
-      **Traps:** Extension-only scan misses extensionless shebang scripts — reuse
-      `LanguageForWorktreePath` or bounded peek where practical, or document the
-      gap. Submodule/gitlink paths are not regular files — exclude per
-      `docs/ANCHORS.md` exit 10. Filter is advisory; binary still contains all
-      grammars. Do not require a git repo for plain `rgit languages` (breaks
-      install-time use).
-
-      **Acceptance criteria:** New flag (e.g. `rgit languages --in-repo` or
-      `--porcelain --filter=tracked`) lists only grammars with ≥1 matching tracked
-      path in CWD repo. Repo with only `.go` files omits `python` when Python
-      grammar is compiled in. Outside a repo, flag errors clearly or no-ops per
-      chosen contract (documented). Tests with temp repo fixtures.
-
 ## Diff
 
 - [ ] **Batch git blob reads in the diff hot path.** `diff.Run` already uses one

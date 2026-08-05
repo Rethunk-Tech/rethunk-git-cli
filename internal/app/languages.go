@@ -10,6 +10,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -19,7 +20,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
-const languagesHelp = `usage: rgit languages [--porcelain]
+const languagesHelp = `usage: rgit languages [--porcelain] [--in-repo]
 
 List every grammar compiled into this binary: name, file extensions, and
 whether it is present only because a build tag selected it (currently only
@@ -28,15 +29,21 @@ SQL, behind -tags rgit_sql -- see docs/INSTALL.md § SQL support).
 --porcelain lists stable tab-separated records instead: see
 docs/CODES.md#output-records.
 
+--in-repo filters that listing to grammars with at least one matching
+tracked file in the current repository -- advisory only, since the binary
+still contains every compiled-in grammar regardless. Requires a git repo;
+plain "rgit languages" does not.
+
 Full reference: docs/USAGE.md
 `
 
-// runLanguages's only flag is --porcelain, so it is parsed by hand rather
-// than pulling in pflag's machinery the way diff and commit's much larger
-// flag surfaces need -- matching doctor.go and completion.go's own minimal
-// style for a subcommand this small.
-func runLanguages(args []string, stdout, stderr io.Writer) exitcode.Code {
+// runLanguages's flag surface is small enough to parse by hand rather than
+// pulling in pflag's machinery the way diff and commit's much larger flag
+// surfaces need -- matching doctor.go and completion.go's own minimal style
+// for a subcommand this small.
+func runLanguages(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	porcelain := false
+	inRepo := false
 	for _, a := range args {
 		switch a {
 		case "--help", "-h":
@@ -44,6 +51,8 @@ func runLanguages(args []string, stdout, stderr io.Writer) exitcode.Code {
 			return exitcode.Success
 		case "--porcelain":
 			porcelain = true
+		case "--in-repo":
+			inRepo = true
 		default:
 			fmt.Fprintf(stderr, "rgit: languages: unrecognized argument %q\n", a)
 			fmt.Fprint(stderr, languagesHelp)
@@ -52,12 +61,55 @@ func runLanguages(args []string, stdout, stderr io.Writer) exitcode.Code {
 	}
 
 	langs := resolve.Languages()
+	if inRepo {
+		filtered, code := filterLanguagesInRepo(ctx, dir, langs, stderr)
+		if code != exitcode.Success {
+			return code
+		}
+		langs = filtered
+	}
 	if porcelain {
 		fmt.Fprint(stdout, renderLanguagesPorcelain(langs))
 	} else {
 		fmt.Fprint(stdout, renderLanguages(langs))
 	}
 	return exitcode.Success
+}
+
+// filterLanguagesInRepo narrows langs to the adapters with at least one
+// matching tracked file in the repository at dir. Extension-only would miss
+// extensionless shebang scripts, so it reuses
+// resolve.LanguageForWorktreePath -- the same extension-then-shebang
+// sequence every worktree file gets elsewhere in this codebase -- rather
+// than a second, narrower detection path. A gitlink or submodule directory
+// simply never matches any adapter (its "file" can't be opened as one),
+// so no separate exclusion is needed for those paths.
+func filterLanguagesInRepo(ctx context.Context, dir string, langs []resolve.LanguageInfo, stderr io.Writer) ([]resolve.LanguageInfo, exitcode.Code) {
+	root, _, repo, code := openRepo(ctx, dir, stderr)
+	if code != exitcode.Success {
+		return nil, code
+	}
+
+	tracked, err := repo.LsFilesTracked(ctx)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return nil, exitcode.GitFailure
+	}
+
+	present := map[string]bool{}
+	for _, path := range tracked {
+		if lang, ok, _ := resolve.LanguageForWorktreePath(root, path); ok {
+			present[lang.Name()] = true
+		}
+	}
+
+	filtered := make([]resolve.LanguageInfo, 0, len(langs))
+	for _, l := range langs {
+		if present[l.Name] {
+			filtered = append(filtered, l)
+		}
+	}
+	return filtered, exitcode.Success
 }
 
 // renderLanguages is the aligned NAME / EXTENSIONS / GATED layout, using the

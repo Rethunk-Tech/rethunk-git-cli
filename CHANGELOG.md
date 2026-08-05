@@ -35,6 +35,11 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit languages --in-repo` narrows the grammar listing to adapters with at
+  least one matching tracked file in the current repository, advisory only
+  (the binary still contains every compiled-in grammar). Requires a git
+  repo, unlike the plain form. See [`docs/USAGE.md`](docs/USAGE.md#languages).
+
 - `RGIT_LSP_DIAL_TIMEOUT` and `RGIT_LSP_QUERY_TIMEOUT` env vars override the
   language-server dial and query timeouts (defaults `150ms`/`2s`) without a
   rebuild, for slow hosts or a cold `gopls` index. Unset, malformed, zero, or

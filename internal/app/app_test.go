@@ -925,6 +925,32 @@ func TestRun_LanguagesPorcelain(t *testing.T) {
 	qt.Assert(t, qt.IsTrue(found))
 }
 
+// TestRun_LanguagesInRepo pins the advisory filter: a repo with only a
+// tracked .go file lists "go" and omits "python" (a grammar this binary
+// always compiles in, per TestRun_Languages's own always-present list),
+// even though the underlying binary still contains every grammar regardless.
+func TestRun_LanguagesInRepo(t *testing.T) {
+	chdirTempRepo(t) // commits a.go, a Go file, and nothing else
+
+	stdout, stderr, code := runApp(t, "languages", "--in-repo")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.StringContains(stdout, "go"))
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "python")))
+}
+
+// TestRun_LanguagesInRepoOutsideRepoErrors pins the other half of the
+// contract: --in-repo needs a real repository to scan, unlike plain
+// "rgit languages" (TestRun_Languages), and fails clearly rather than
+// silently listing nothing or every grammar.
+func TestRun_LanguagesInRepoOutsideRepoErrors(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	_, stderr, code := runApp(t, "languages", "--in-repo")
+	qt.Assert(t, qt.Not(qt.Equals(code, exitcode.Success)))
+	qt.Assert(t, qt.Not(qt.Equals(stderr, "")))
+}
+
 // TestRun_LanguagesHelpAndUsage covers the two non-listing paths: --help
 // prints and exits 0, and an unexpected argument is the usual usage error.
 func TestRun_LanguagesHelpAndUsage(t *testing.T) {

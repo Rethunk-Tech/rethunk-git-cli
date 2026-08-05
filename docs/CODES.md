@@ -208,6 +208,11 @@ There is no row at all for a grammar this build was not compiled with: a
 plain build's records have no `sql` line, matching `rgit languages`'s own
 human output and `rgit --version`'s second line.
 
+`--in-repo` narrows the same rows to grammars with a matching tracked file in
+the current repository (requires a git repo); the record shape is
+unchanged, only which rows appear. See
+[`USAGE.md`](USAGE.md#languages).
+
 ### `rgit blame --porcelain`
 
 Not a new record shape: `--porcelain` passes straight through to git's own

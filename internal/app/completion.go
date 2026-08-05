@@ -103,7 +103,7 @@ const rgitCommitFlags = "-m --message -F --message-file -s --signoff --trailer -
 // shell script's case statement had an entry for these commands.
 // TestCompletionFlags_MatchLiveFlagSets checks all of them against their
 // own --help output the same way.
-const rgitLanguagesFlags = "--porcelain -h --help"
+const rgitLanguagesFlags = "--porcelain --in-repo -h --help"
 const rgitDoctorFlags = "-h --help"
 const rgitCompletionFlags = "-h --help"
 const rgitBlameFlags = "--porcelain -h --help"

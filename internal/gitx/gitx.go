@@ -673,6 +673,21 @@ func (r *Repo) LsFilesOthers(ctx context.Context, extra ...string) ([]string, er
 	return strings.Split(string(trimmed), "\x00"), nil
 }
 
+// LsFilesTracked lists every tracked file via `git ls-files -z`,
+// NUL-terminated so no path-quoting rules apply. extra is appended after
+// the flags, for pathspec scoping (`-- <pathspec>`).
+func (r *Repo) LsFilesTracked(ctx context.Context, extra ...string) ([]string, error) {
+	out, err := r.checked(ctx, append([]string{"ls-files", "-z"}, extra...)...)
+	if err != nil {
+		return nil, err
+	}
+	trimmed := bytes.Trim(out, "\x00")
+	if len(trimmed) == 0 {
+		return nil, nil
+	}
+	return strings.Split(string(trimmed), "\x00"), nil
+}
+
 // LsFilesStage reads path's index-stage-0 mode via `git ls-files --stage`.
 // found is false when path is simply not in the index — the normal case
 // for a file that is untracked or staged-deleted, not a failure.

@@ -99,7 +99,7 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 	case "context":
 		return runContext(ctx, dir, args[1:], stdout, stderr)
 	case "languages":
-		return runLanguages(args[1:], stdout, stderr)
+		return runLanguages(ctx, dir, args[1:], stdout, stderr)
 	case "doctor":
 		return runDoctor(args[1:], stdout, stderr)
 	case "completion":

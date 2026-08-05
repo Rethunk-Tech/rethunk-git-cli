@@ -342,6 +342,15 @@ A `.sql` anchor on a binary built without `rgit_sql` still fails with exit 9
 but unlike one this resolver has never supported, the message also names the
 build tag and points at rebuilding.
 
+**`--in-repo` narrows the listing to grammars with at least one matching
+tracked file in the current repository** — advisory only, since the binary
+still contains every compiled-in grammar regardless of what a given repo
+happens to use. A monorepo with only `.go` files omits `python`, `css`, and
+the rest even though a Python or CSS anchor would resolve fine elsewhere.
+Detection reuses the same extension-then-shebang sequence every worktree file
+gets, so an extensionless Node script still counts. Requires a git repo,
+unlike the plain form above.
+
 ## Doctor
 
 `rgit doctor` reports environment health: git on `PATH` (the one thing rgit

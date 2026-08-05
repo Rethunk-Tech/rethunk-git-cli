@@ -167,7 +167,7 @@ func runCommitHelp() string {
 // takes a context.Context.
 func runLanguagesHelp() string {
 	var stdout, stderr strings.Builder
-	runLanguages([]string{"--help"}, &stdout, &stderr)
+	runLanguages(context.Background(), "", []string{"--help"}, &stdout, &stderr)
 	return stdout.String()
 }
 
