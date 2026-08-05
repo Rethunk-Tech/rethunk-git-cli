@@ -105,25 +105,3 @@ constructs no anchor reaches — are documented in
       names, newest first. Without the flag, behaviour matches today's
       HEAD-name-only semantics. Porcelain `HASH<TAB>SUBJECT` shape unchanged.
       Documented limitation lifted or qualified in `docs/LIMITATIONS.md`.
-
-## Release
-
-- [ ] **Signed release artifacts.** `release.yml` publishes `dist/*` with
-      `gh release create` and `SHA256SUMS` from `make cross` (`.github/workflows/release.yml`,
-      `Makefile`). No minisign/cosign attestations today — consumers verify checksum
-      only.
-
-      **Packages / files:** `.github/workflows/release.yml`, `Makefile` (`cross`
-      target, `SHA256SUMS`), `docs/INSTALL.md` (verify instructions), `SECURITY.md`
-      if key distribution is documented.
-
-      **Traps:** Sigstore/cosign needs OIDC `id-token: write` permission and a
-      documented public key or Rekor log for verification. Signing must not break
-      existing checksum-only workflow — add signatures alongside, not replace.
-      Windows `.exe` and Unix binaries need the same policy. Private fork PRs cannot
-      test OIDC fully — document manual verify path.
-
-      **Acceptance criteria:** Each release asset has a detached signature verifiable
-      with documented command (`cosign verify-blob` or `minisign -Vm`). `docs/INSTALL.md`
-      § Verify updated. CI job fails if signing step fails (no unsigned release on
-      tag push). `SHA256SUMS` still published.

@@ -26,6 +26,10 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- Release artifacts now carry a keyless cosign signature over `SHA256SUMS`
+  (`SHA256SUMS.sigstore.json`), verifiable against this repo's own release
+  workflow identity. See [`docs/INSTALL.md`](docs/INSTALL.md#verify).
+
 - `-p`/`--patch` on `rgit diff`, appending git's own real patch body after
   the aligned/porcelain report — unmodified, the same "not a second format
   `rgit` invents" convention `log -p` and `blame --porcelain` already use.

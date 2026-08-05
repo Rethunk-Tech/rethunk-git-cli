@@ -314,6 +314,20 @@ downloads a release binary and verifies it against that release's own
 curl -fsSL https://raw.githubusercontent.com/Rethunk-Tech/rethunk-git-cli/main/scripts/install.sh | sh
 ```
 
+Every release also publishes `SHA256SUMS.sigstore.json`, a keyless
+[cosign](https://docs.sigstore.dev/cosign/signing/overview/) signature over
+`SHA256SUMS` itself -- verifying it proves the checksums came from this
+repo's own release workflow, not just that a downloaded file matches *some*
+checksum file:
+
+```bash
+cosign verify-blob \
+  --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity-regexp 'https://github.com/Rethunk-Tech/rethunk-git-cli/.github/workflows/release.yml@.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  SHA256SUMS
+```
+
 `PREFIX` (default `$HOME/.local/bin`) and `VERSION` (default `latest`) are
 environment variables, not flags — `VERSION=v1.1.0 PREFIX=/usr/local/bin sh
 install.sh` installs that exact tag system-wide. `--dry-run` prints the plan
