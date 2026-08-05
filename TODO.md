@@ -479,3 +479,159 @@ constructs no anchor reaches — are documented in
       with documented command (`cosign verify-blob` or `minisign -Vm`). `docs/INSTALL.md`
       § Verify updated. CI job fails if signing step fails (no unsigned release on
       tag push). `SHA256SUMS` still published.
+
+## Commit
+
+- [ ] **Clearer exit-12 structured-data refusal.** `refuseStructuredDataAnchors`
+      (`internal/app/commit.go`) already prints
+      `structured-data file; commit it by path instead of a symbol anchor` and
+      returns `exitcode.StructuredDataAnchorRefused` (12). The message names the
+      file but not the copy-paste path alternative (`rgit commit -m … ci.yml`).
+
+      **Packages / files:** `internal/app/commit.go` (`refuseStructuredDataAnchors`),
+      `internal/resolve/lang.go` (`IsStructuredData`, `StructuredDataLanguage`),
+      `docs/CODES.md` § Exit 12, `internal/app/commit_test.go`,
+      `cmd/rgit/rgit_e2e_test.go`.
+
+      **Traps:** Exit 12 is commit-only — do not refuse on diff/blame/log.
+      Pathspec targets skip the check (`t.Pathspec != ""`). Language detection uses
+      `LanguageForWorktreePath` — extensionless structured-data files may not
+      trigger. Message must not suggest symbol anchors for partial paths.
+
+      **Acceptance criteria:** `rgit commit -m … ci.yml:jobs.build` stderr includes
+      the concrete path form (`rgit commit … ci.yml` or equivalent). Exit code
+      remains 12. `docs/CODES.md` example matches live output. Existing
+      `commit_test.go` case updated, not weakened.
+
+## Diff / context
+
+- [ ] **Diff stderr notices parity with commit.** `rgit diff` already prints
+      `tsOnlyNotice` and `[warning]` cross-check lines (`internal/app/diff.go`).
+      Commit additionally announces preamble (`@header`/`@imports` on new files),
+      container-new escalation, and ordinal anchors (`internal/app/commit.go`).
+      Diff reports new untracked files as a single `(untracked)` row without the
+      preamble story commit will apply.
+
+      **Packages / files:** `internal/app/diff.go`, `internal/diff/run.go`,
+      `internal/diff/types.go`, `internal/synth/stage.go` (reuse detection logic
+      or shared helper — avoid duplicating preamble/escalation rules),
+      `docs/USAGE.md`, `cmd/rgit/rgit_e2e_test.go`.
+
+      **Traps:** Notices are advisory — must not change exit codes or porcelain
+      stdout. `--quiet` suppresses report output, not diagnostics (existing rule).
+      Preamble detection needs HEAD vs worktree existence — same as synth.
+      Container escalation is commit-time staging semantics; on diff, phrase as
+      "would stage whole container" not "staging". Do not spam per-file on large
+      diffs — dedupe or cap.
+
+      **Acceptance criteria:** Fixture: new file with symbol change → diff stderr
+      `[notice]` that commit will also stage `@header`/`@imports`. Fixture: new
+      TypeScript class member → `[notice]` container escalation. Porcelain output
+      byte-identical aside from new stderr. Tests mirror commit e2e notice cases.
+
+- [ ] **Surface container-new escalation on `rgit diff`.** Sub-item of diff notice
+      parity, but independently useful: when a changed symbol is a class/container
+      member and HEAD lacks the container, commit widens to the whole container
+      (`internal/synth/stage.go` `escalated`, `docs/ANCHORS.md`). Diff attributes
+      the member symbol only today, hiding the widen commit will perform.
+
+      **Packages / files:** `internal/diff/attribute.go`, `internal/synth/classify.go`
+      (escalation detection), `internal/app/diff.go`, `docs/ANCHORS.md`,
+      `internal/synth/classify_test.go`.
+
+      **Traps:** Diff is read-only — warn, do not change row boundaries unless
+      product decision says diff should show container-level counts (would be a
+      larger behaviour change). HEAD-side resolution may fail while worktree succeeds.
+      Go receiver methods are never escalated — same rule as synth.
+
+      **Acceptance criteria:** `rgit diff` on `file.ts:NewMethod` where class is new
+      prints stderr notice naming container escalation; symbol row unchanged unless
+      spec explicitly widens. Commit on same tree still stages container. Test in
+      `classify_test.go` or diff lane.
+
+- [ ] **Context truncation priority — prefer `F` rows over `C` rows.** `runContext`
+      appends all `C` commit records before all `F` diff rows (`internal/app/context.go`);
+      `buildContextStream` truncates at the byte budget from the front of that list.
+      On a busy branch, 20 commits can crowd out the actionable diff section.
+
+      **Packages / files:** `internal/app/context.go` (`runContext`, `buildContextStream`),
+      `internal/app/context_test.go`, `docs/USAGE.md` § Context,
+      `specs/design.md` § `rgit context`.
+
+      **Traps:** Changing order is a contract change for parsers that assumed commits
+      first — document in `docs/CODES.md`. `X TRUNCATED` count must still be correct.
+      Commits are cheap (bounded 20); diff rows are unbounded — priority inversion
+      may drop old commits entirely, which is likely desired but must be explicit.
+      Do not add flags — fix the fixed shape.
+
+      **Acceptance criteria:** Fixture exceeding 16 KiB: every `F` row for the current
+      worktree change fits before any `C` row is omitted, or documented hybrid
+      (e.g. last N commits then all F until budget). `context_test.go` pins order
+      with small budget. Agent-oriented example in `docs/USAGE.md`.
+
+## LSP
+
+- [ ] **Configurable LSP dial/query timeouts via environment.** `dialBudget`
+      (150ms) and `queryDeadline` (2s) are constants in `internal/lsp/lsp.go`,
+      used by `internal/lsp/dial.go` and `internal/lsp/client.go`. Slow hosts or
+      cold `gopls` indexes may need a longer budget without recompiling.
+
+      **Packages / files:** `internal/lsp/lsp.go`, `internal/lsp/dial.go`,
+      `internal/lsp/client.go`, `docs/INSTALL.md` (env var table),
+      `internal/lsp/dial_test.go`, `specs/design.md` § Resolution model.
+
+      **Traps:** Parsing must fail closed on garbage values — use defaults.
+      Zero/negative durations must not disable timeouts entirely. Env vars apply
+      process-wide — document interaction with concurrent invocations. Do not
+      block commit on a longer default — degraded `[ts-only]` remains the fallback.
+      `RGIT_LSP_SOCKET` user sockets share the same handshake timeout.
+
+      **Acceptance criteria:** `RGIT_LSP_DIAL_TIMEOUT` and `RGIT_LSP_QUERY_TIMEOUT`
+      (names TBD, documented) override defaults when set to valid Go duration
+      strings. Unset → current 150ms / 2s behaviour. Unit test with env t.Setenv.
+      INSTALL.md lists vars alongside `RGIT_LSP_SOCKET`.
+
+## Synth / install
+
+- [ ] **Gitattributes and LFS filter audit.** `git hash-object -w --path` is
+      mandatory (`internal/gitx/gitx.go` `HashObject`, AGENTS.md invariant) so
+      clean/smudge filters run. `cmd/rgit/index_test.go`
+      `TestStage_GitattributesCleanFilterRequiresPath` covers a new `.go` file;
+      gaps may remain for renames, symlinks, submodules, binary attributes, and
+      LFS pointers.
+
+      **Packages / files:** `internal/gitx/gitx.go`, `internal/synth/stage.go`,
+      `cmd/rgit/index_test.go`, `docs/LIMITATIONS.md`, `specs/design.md` § Blob
+      synthesis.
+
+      **Traps:** Filters can change blob bytes vs worktree read — diff attribution
+      compares worktree text; staged blob must match what `git commit` would store.
+      LFS smudge on read vs clean on write asymmetry. Submodule gitlinks bypass
+      content filters. Do not bypass `--path` for "optimization".
+
+      **Acceptance criteria:** Documented matrix in `LIMITATIONS.md` or INSTALL.md
+      for: clean filter on new file, modified file, rename, symlink target, LFS
+      tracked extension. Each gap found → test + fix or explicit limitation.
+      Existing `TestStage_GitattributesCleanFilterRequiresPath` still passes.
+
+- [ ] **`rgit-install -with-servers` idempotency audit.** Server installs group by
+      manager/package (`cmd/rgit-install/servers_install.go` `buildInstallJobs`);
+      commands are documented idempotent (`go install`, `npm install -g`). Repeated
+      runs, partial failure mid-catalog, and PATH warnings need verification.
+
+      **Packages / files:** `cmd/rgit-install/servers_install.go`,
+      `cmd/rgit-install/servers.go`, `cmd/rgit-install/main.go`,
+      `cmd/rgit-install/servers_install_test.go`, `docs/INSTALL.md` § Installing
+      servers automatically.
+
+      **Traps:** `cargo install` rebuilds can be slow — timeout is 5m (`installTimeout`).
+      bun vs npm selection (`selectNPMManager`) may flip between runs. Partial install
+      must not leave rgit binary missing when `-with-servers` combined with main
+      install. `marksman` is managerNone — unmanaged hint only. Failed job should
+      not claim success.
+
+      **Acceptance criteria:** Test or scripted check: two consecutive `-with-servers`
+      dry-runs report no duplicate work or error. Simulated failure on job 2 of 3
+      leaves job 1 installed and exits non-zero with actionable message. Document
+      recovery steps in INSTALL.md. `main_test.go` covers ordering with
+      `-generate-only` — extend if gaps found.
