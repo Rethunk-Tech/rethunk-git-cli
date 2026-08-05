@@ -163,6 +163,12 @@ A `chmod +x` with no content edit produces no changed symbols, so `rgit diff`
 lists it as a `MODE` entry — the file is never falsely reported clean. Stage it
 with a pathspec (`rgit commit script.sh`); `--sym` cannot express a mode change.
 
+`--sym FILE:member` on a member of a class/container new to `HEAD` prints a
+`[warning]` on stderr: `rgit commit` would stage the whole container, not just
+the named member, since there is no way to add a member to a container that
+does not exist yet (see [`ANCHORS.md`](ANCHORS.md#qualification)). The
+unfiltered listing never warns — every sibling already has its own row there.
+
 `-p`/`--patch` appends git's own real patch body after the aligned/porcelain
 report, unmodified — not a second diff format `rgit` invents, the same
 framing as `log -p` and `blame --porcelain`. It covers the identical scope

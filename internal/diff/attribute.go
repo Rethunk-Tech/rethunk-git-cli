@@ -298,15 +298,15 @@ func indexRegions(regions []region) map[string]resolve.Extent {
 // file's true total" true by construction. It clamps at zero: isolated
 // per-symbol diffs and git's whole-file diff can align ambiguous content
 // (duplicate lines, say) differently.
-func attributeSymbols(lang resolve.Language, oldSrc, newSrc []byte, totalAdded, totalDeleted int) ([]Row, error) {
+func attributeSymbols(lang resolve.Language, oldSrc, newSrc []byte, totalAdded, totalDeleted int) ([]Row, []string, error) {
 	oldFile, err := resolve.Open(lang, oldSrc)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer oldFile.Close()
 	newFile, err := resolve.Open(lang, newSrc)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer newFile.Close()
 	return attributeSymbolsOpen(lang, oldSrc, newSrc, oldFile, newFile, totalAdded, totalDeleted)
@@ -321,19 +321,20 @@ func attributeSymbols(lang resolve.Language, oldSrc, newSrc []byte, totalAdded, 
 // measures for internal/synth (~39x, one parse per side instead of one per
 // anchor) -- attributeSymbols above stays the convenience form for a caller
 // (this package's own tests) with nothing already open to hand in.
-func attributeSymbolsOpen(lang resolve.Language, oldSrc, newSrc []byte, oldFile, newFile declResolver, totalAdded, totalDeleted int) ([]Row, error) {
+func attributeSymbolsOpen(lang resolve.Language, oldSrc, newSrc []byte, oldFile, newFile declResolver, totalAdded, totalDeleted int) ([]Row, []string, error) {
 	oldRegions, err := resolveRegions(lang, oldSrc, oldFile)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	newRegions, err := resolveRegions(lang, newSrc, newFile)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	oldByName := indexRegions(oldRegions)
 	newByName := indexRegions(newRegions)
 
 	var rows []Row
+	var notices []string
 	accAdded, accDeleted := 0, 0
 	seen := map[string]bool{}
 
@@ -377,6 +378,9 @@ func attributeSymbolsOpen(lang resolve.Language, oldSrc, newSrc []byte, oldFile,
 			added += separatorLines(newSrc, self, newRegions)
 			accAdded += added
 			rows = append(rows, Row{Symbol: name, Status: StatusMod, Added: itoa(added), Deleted: "0", pos: newExt.Start})
+			if container, isNew := newlyEscalatedContainer(lang, oldFile, newFile, name); isNew {
+				notices = append(notices, fmt.Sprintf("%s: %s is new; rgit commit would stage the whole container, not just %s", name, container, name))
+			}
 		}
 	}
 
@@ -406,7 +410,39 @@ func attributeSymbolsOpen(lang resolve.Language, oldSrc, newSrc []byte, oldFile,
 		rows = append(rows, Row{Status: StatusUnanchorable, Added: itoa(unAdded), Deleted: itoa(unDeleted)})
 	}
 
-	return rows, nil
+	return rows, notices, nil
+}
+
+// newlyEscalatedContainer reports whether name's enclosing container, if
+// any, would make internal/synth's own escalateToContainer (classify.go)
+// widen a `rgit commit` of this exact anchor to the whole container instead
+// of just the member -- the same condition, mirrored rather than shared,
+// because escalateToContainer is entangled with filePlan's staging state
+// (headExists, in-progress edit tracking) that diff has no equivalent of
+// and no reason to build just to ask this one read-only question.
+//
+// Mirrors escalateToContainer's two guards precisely, so this can never
+// warn on a case synth would not actually escalate: HTML's Container is the
+// element's own tag, not a real ancestor (FlatContainerLanguage), and a Go
+// receiver method's Container names a sibling type, not an enclosing one
+// (tested by extent containment, not by the mere presence of a container
+// name).
+func newlyEscalatedContainer(lang resolve.Language, oldFile, newFile declResolver, name string) (container string, isNew bool) {
+	if flat, ok := lang.(resolve.FlatContainerLanguage); ok && flat.FlatContainer() {
+		return "", false
+	}
+	member, err := newFile.Resolve(name)
+	if err != nil || member.Container == "" {
+		return "", false
+	}
+	outer, err := newFile.Resolve(member.Container)
+	if err != nil || outer.Extent.Start > member.Extent.Start || member.Extent.End > outer.Extent.End {
+		return "", false // sibling, not parent (Go receiver)
+	}
+	if _, err := oldFile.Resolve(member.Container); err == nil {
+		return "", false // container already exists on the old side
+	}
+	return member.Container, true
 }
 
 // LineCounts line-diffs two extents' own text in isolation and reports the

@@ -311,50 +311,6 @@ constructs no anchor reaches — are documented in
 
 ## Diff / context
 
-- [ ] **Diff stderr notices parity with commit.** `rgit diff` already prints
-      `tsOnlyNotice` and `[warning]` cross-check lines (`internal/app/diff.go`).
-      Commit additionally announces preamble (`@header`/`@imports` on new files),
-      container-new escalation, and ordinal anchors (`internal/app/commit.go`).
-      Diff reports new untracked files as a single `(untracked)` row without the
-      preamble story commit will apply.
-
-      **Packages / files:** `internal/app/diff.go`, `internal/diff/run.go`,
-      `internal/diff/types.go`, `internal/synth/stage.go` (reuse detection logic
-      or shared helper — avoid duplicating preamble/escalation rules),
-      `docs/USAGE.md`, `cmd/rgit/rgit_e2e_test.go`.
-
-      **Traps:** Notices are advisory — must not change exit codes or porcelain
-      stdout. `--quiet` suppresses report output, not diagnostics (existing rule).
-      Preamble detection needs HEAD vs worktree existence — same as synth.
-      Container escalation is commit-time staging semantics; on diff, phrase as
-      "would stage whole container" not "staging". Do not spam per-file on large
-      diffs — dedupe or cap.
-
-      **Acceptance criteria:** Fixture: new file with symbol change → diff stderr
-      `[notice]` that commit will also stage `@header`/`@imports`. Fixture: new
-      TypeScript class member → `[notice]` container escalation. Porcelain output
-      byte-identical aside from new stderr. Tests mirror commit e2e notice cases.
-
-- [ ] **Surface container-new escalation on `rgit diff`.** Sub-item of diff notice
-      parity, but independently useful: when a changed symbol is a class/container
-      member and HEAD lacks the container, commit widens to the whole container
-      (`internal/synth/stage.go` `escalated`, `docs/ANCHORS.md`). Diff attributes
-      the member symbol only today, hiding the widen commit will perform.
-
-      **Packages / files:** `internal/diff/attribute.go`, `internal/synth/classify.go`
-      (escalation detection), `internal/app/diff.go`, `docs/ANCHORS.md`,
-      `internal/synth/classify_test.go`.
-
-      **Traps:** Diff is read-only — warn, do not change row boundaries unless
-      product decision says diff should show container-level counts (would be a
-      larger behaviour change). HEAD-side resolution may fail while worktree succeeds.
-      Go receiver methods are never escalated — same rule as synth.
-
-      **Acceptance criteria:** `rgit diff` on `file.ts:NewMethod` where class is new
-      prints stderr notice naming container escalation; symbol row unchanged unless
-      spec explicitly widens. Commit on same tree still stages container. Test in
-      `classify_test.go` or diff lane.
-
 ## Synth / install
 
 - [ ] **Gitattributes and LFS filter audit.** `git hash-object -w --path` is

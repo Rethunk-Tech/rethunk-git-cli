@@ -71,7 +71,11 @@ The two nest differently, which matters when the container is new. A Go method
 sits beside its type rather than inside it, so staging one never drags the type
 along. A class encloses its members, so naming a member of a class absent from
 `HEAD` stages the whole class: there is no way to add a method to a class that
-does not exist yet. `rgit` says so on stderr rather than doing it quietly.
+does not exist yet. `rgit commit` says so on stderr rather than doing it
+quietly, and `rgit diff --sym` on that exact member warns too — narrowing the
+listing to one member would otherwise hide that its siblings are coming along
+with it. The unfiltered listing never warns: every sibling already has its own
+row there, so the notice would only repeat what is already visible.
 
 | Form | Example | Notes |
 | --- | --- | --- |

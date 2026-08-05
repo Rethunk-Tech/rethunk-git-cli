@@ -99,7 +99,7 @@ func TestAttributeSymbols_GoInlineMultiNameConstFallsBackUnanchorable(t *testing
 	oldSrc := []byte("package p\n\nconst a, b = 1, 2\n")
 	newSrc := []byte("package p\n\nconst a, b = 1, 3\n")
 
-	rows, err := attributeSymbols(lang, oldSrc, newSrc, 1, 1)
+	rows, _, err := attributeSymbols(lang, oldSrc, newSrc, 1, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestAttributeSymbols_MarkdownSectionOwnParagraphSurvivesNestedSetext(t *tes
 	newSrc := []byte("# Usage\n\n## Options\n\nFirst options.\n\n## Options\n\n" +
 		"Second options paragraph, edited.\n\nSetext Title\n============\n\nBody after.\n")
 
-	rows, err := attributeSymbols(lang, oldSrc, newSrc, 1, 1)
+	rows, _, err := attributeSymbols(lang, oldSrc, newSrc, 1, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

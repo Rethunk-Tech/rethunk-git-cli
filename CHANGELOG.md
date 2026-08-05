@@ -45,6 +45,13 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit diff --sym FILE:member`, when the container is new to `HEAD`, warns
+  that `rgit commit` would stage the whole container rather than just the
+  named member — the same case `rgit commit` itself already announces, now
+  visible before staging too. Fires only under `--sym`; the unfiltered
+  listing already shows every sibling as its own row. See
+  [`docs/ANCHORS.md`](docs/ANCHORS.md#qualification).
+
 - Extensionless shebang scripts naming `node`, `nodejs`, `tsx`, `ts-node`,
   or `bun` now route to the TypeScript adapter, including via `env -S` and
   through an `npx`/`bunx` package-runner wrapper (`#!/usr/bin/env npx

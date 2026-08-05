@@ -712,6 +712,44 @@ func TestRun_UntrackedFileAttributesPerSymbol(t *testing.T) {
 	}
 }
 
+// TestRun_ContainerEscalationNoticeOnlyUnderSymFilter pins the diff-side
+// half of internal/synth's own container escalation (classify.go's
+// escalateToContainer): committing a member of a class new to HEAD widens
+// staging to the whole class, and a --sym-filtered `rgit diff` on just that
+// member would otherwise hide that its sibling is coming along too. The
+// notice fires only under --sym -- the unfiltered listing already shows
+// every sibling as its own row, so repeating it there would just be noise.
+func TestRun_ContainerEscalationNoticeOnlyUnderSymFilter(t *testing.T) {
+	// cannot Parallel because t.Setenv below
+	dir, repo := gittest.New(t)
+	t.Setenv("PATH", pathWithGitOnly(t))
+	gittest.Write(t, dir, "new.ts", "class Widget {\n  foo(): number { return 1 }\n\n  bar(): number { return 2 }\n}\n")
+
+	unfiltered, err := Run(context.Background(), repo, dir, Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	for _, w := range unfiltered.Warnings {
+		if strings.Contains(w, "is new; rgit commit would stage the whole container") {
+			t.Errorf("unfiltered Warnings = %v; want no escalation notice with no --sym filter", unfiltered.Warnings)
+		}
+	}
+
+	filtered, err := Run(context.Background(), repo, dir, Options{Syms: []SymRef{{File: "new.ts", Name: "foo"}}})
+	if err != nil {
+		t.Fatalf("Run with --sym: %v", err)
+	}
+	found := false
+	for _, w := range filtered.Warnings {
+		if w == "new.ts: Widget.foo: Widget is new; rgit commit would stage the whole container, not just Widget.foo" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("filtered Warnings = %v; want the container-escalation notice for Widget", filtered.Warnings)
+	}
+}
+
 func findFile(files []FileReport, path string) (FileReport, bool) {
 	for _, f := range files {
 		if f.Path == path {

@@ -60,9 +60,15 @@ func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Repo
 		}
 		report.Patch = patch
 	}
+	// A container-escalation notice is only worth printing when --sym is
+	// narrowing the listing: with no filter every sibling member already
+	// has its own row, so the notice would just repeat what is already
+	// visible instead of surfacing something a filtered view would hide.
+	symFiltered := len(canonicalSyms) > 0
+
 	for _, e := range entries {
 		oldPath, newPath := NumstatPath(e.Path)
-		fr, ferr := buildFileReport(ctx, repo, root, scope, oldPath, newPath, e.Added, e.Deleted, sess, report)
+		fr, ferr := buildFileReport(ctx, repo, root, scope, oldPath, newPath, e.Added, e.Deleted, sess, report, symFiltered)
 		if ferr != nil {
 			return nil, ferr
 		}
@@ -77,7 +83,7 @@ func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Repo
 			return nil, uerr
 		}
 		for _, path := range untracked {
-			fr, ferr := buildUntrackedReport(ctx, root, path, sess, report)
+			fr, ferr := buildUntrackedReport(ctx, root, path, sess, report, symFiltered)
 			if ferr != nil {
 				return nil, ferr
 			}
@@ -100,7 +106,7 @@ func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Repo
 // its own -- specs/design.md § Blob synthesis' held-parse gain, applied
 // here the same way internal/synth already holds one *resolve.File per
 // side across every anchor it resolves.
-func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Scope, oldPath, newPath, addedStr, deletedStr string, sess *lsp.Session, report *Report) (*FileReport, error) {
+func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Scope, oldPath, newPath, addedStr, deletedStr string, sess *lsp.Session, report *Report, symFiltered bool) (*FileReport, error) {
 	if addedStr == "-" && deletedStr == "-" {
 		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusBinary, Added: "-", Deleted: "-"}}}, nil
 	}
@@ -165,9 +171,14 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 		report.Warnings = append(report.Warnings, warnings...)
 	}
 
-	rows, err := attributeSymbolsOpen(lang, oldSrc, newSrc, oldFile, newFile, added, deleted)
+	rows, notices, err := attributeSymbolsOpen(lang, oldSrc, newSrc, oldFile, newFile, added, deleted)
 	if err != nil {
 		return nil, err
+	}
+	if symFiltered {
+		for _, n := range notices {
+			report.Warnings = append(report.Warnings, newPath+": "+n)
+		}
 	}
 	if len(rows) == 0 {
 		return nil, nil
@@ -188,7 +199,7 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 // A binary file or one whose language has no grammar keeps the single
 // collapsed StatusUntracked row -- there is nothing to split out, and for
 // an unsupported language HintSymbol still points a caller at --sym/--file.
-func buildUntrackedReport(ctx context.Context, root, path string, sess *lsp.Session, report *Report) (*FileReport, error) {
+func buildUntrackedReport(ctx context.Context, root, path string, sess *lsp.Session, report *Report, symFiltered bool) (*FileReport, error) {
 	content, err := os.ReadFile(filepath.Join(root, path))
 	if err != nil {
 		return nil, err
@@ -223,9 +234,14 @@ func buildUntrackedReport(ctx context.Context, root, path string, sess *lsp.Sess
 		report.Warnings = append(report.Warnings, warnings...)
 	}
 
-	rows, err := attributeSymbolsOpen(lang, nil, content, oldFile, newFile, countLines(content), 0)
+	rows, notices, err := attributeSymbolsOpen(lang, nil, content, oldFile, newFile, countLines(content), 0)
 	if err != nil {
 		return nil, err
+	}
+	if symFiltered {
+		for _, n := range notices {
+			report.Warnings = append(report.Warnings, path+": "+n)
+		}
 	}
 	if len(rows) == 0 {
 		// No declarations at all (e.g. a comment-only or empty file): fall
