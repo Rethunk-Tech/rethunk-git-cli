@@ -658,6 +658,40 @@ func (r *Repo) HasUpstream(ctx context.Context) (bool, error) {
 	return ok, err
 }
 
+// Upstream reports the current branch's upstream tracking ref's own name
+// (e.g. "origin/main"), or ok=false when none is configured -- the same
+// "no upstream" is a normal negative answer, not a failure, HasUpstream
+// already established. Kept separate from HasUpstream rather than having
+// it report the name too: HasUpstream's one caller (commit.go's push hint)
+// only ever needed the bool, and changing its signature to thread a name
+// through that call site for no reason risks a behavior no test would
+// catch.
+func (r *Repo) Upstream(ctx context.Context) (name string, ok bool, err error) {
+	return r.optionalLine(ctx, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+}
+
+// AheadBehind reports how many commits the current branch is ahead of and
+// behind its upstream, via `git rev-list --left-right --count HEAD...@{u}`.
+// Callers check HasUpstream first -- with no upstream configured, `@{u}`
+// fails to resolve and this returns a *GitError like any other bad
+// revision, the same as every other rev-parse-backed query in this file.
+func (r *Repo) AheadBehind(ctx context.Context) (ahead, behind int, err error) {
+	line, err := r.checkedLine(ctx, "rev-list", "--left-right", "--count", "HEAD...@{u}")
+	if err != nil {
+		return 0, 0, err
+	}
+	fields := strings.Fields(line)
+	if len(fields) != 2 {
+		return 0, 0, fmt.Errorf("gitx: malformed rev-list --left-right --count output %q", line)
+	}
+	ahead, aerr := strconv.Atoi(fields[0])
+	behind, berr := strconv.Atoi(fields[1])
+	if aerr != nil || berr != nil {
+		return 0, 0, fmt.Errorf("gitx: malformed rev-list --left-right --count output %q", line)
+	}
+	return ahead, behind, nil
+}
+
 // LsFilesOthers lists untracked files via `git ls-files --others
 // --exclude-standard -z`, NUL-terminated so no path-quoting rules apply.
 // extra is appended after the flags, for pathspec scoping (`-- <pathspec>`).

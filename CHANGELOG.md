@@ -45,6 +45,11 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit context` gains a `B` record — current branch, upstream, and
+  ahead/behind counts — sorting first, ahead of `F` and `C`. Absent on an
+  unborn branch. See
+  [`docs/CODES.md`](docs/CODES.md#rgit-context).
+
 - `rgit diff --sym FILE:member`, when the container is new to `HEAD`, warns
   that `rgit commit` would stage the whole container rather than just the
   named member — the same case `rgit commit` itself already announces, now

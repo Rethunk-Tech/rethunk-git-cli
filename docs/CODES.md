@@ -264,6 +264,7 @@ tab-separated record stream, no header, no `--porcelain` flag to ask for it
 — see [`specs/design.md`](../specs/design.md#commands) for why.
 
 ```text
+B<TAB>main<TAB>origin/main<TAB>0<TAB>2
 F<TAB>auth.go<TAB>ValidateToken<TAB>MOD<TAB>12<TAB>3
 F<TAB>config.ini<TAB><TAB>UNTRACKED<TAB>4<TAB>0
 C<TAB>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2<TAB>fix(auth): reject expired tokens
@@ -271,22 +272,24 @@ C<TAB>9e8f7d6c5b4a9e8f7d6c5b4a9e8f7d6c5b4a9e8f<TAB>feat(auth): add ValidateToken
 X<TAB>TRUNCATED<TAB>3
 ```
 
-Three record types, distinguished by the first field:
+Four record types, distinguished by the first field:
 
 | Type | Fields after the type tag | Means |
 | --- | --- | --- |
+| `B` | `BRANCH`, `UPSTREAM`, `AHEAD`, `BEHIND` | At most one, always first: the current branch. `UPSTREAM` is empty and `AHEAD`/`BEHIND` are both `0` when no upstream is configured — a definite answer, not inferred from an absent column. Absent entirely on an unborn branch |
 | `F` | `FILE`, `SYMBOL`, `STATUS`, `ADDED`, `DELETED` | One `rgit diff --porcelain` row, identical fields — `STATUS` is the same six tokens § Output records defines above |
 | `C` | `HASH`, `SUBJECT` | One recent commit, newest first, bounded to the last 20 |
 | `X` | `TRUNCATED`, `COUNT` | At most one, always last: `COUNT` records were withheld to hold the 16 KiB byte budget |
 
-**`F` records always precede `C` records** — a breaking change from the
-original commits-first order — **and an `X` record, when present, is
-always the last line.** Diff rows are the unbounded, actionable half and
-survive truncation first; commit history is already bounded to 20 and cheap
-to drop, and is one `git log` call away if the caller needs it back. See
-[`USAGE.md`](USAGE.md#context) for the byte budget and
-[`../specs/design.md`](../specs/design.md#commands) for why it is 16 KiB and
-what happens at the boundary.
+**A `B` record, when present, always sorts first, `F` records always precede
+`C` records** — a breaking change from the original commits-first order —
+**and an `X` record, when present, is always the last line.** `B` is a
+single record and costs the budget almost nothing. Diff rows are the
+unbounded, actionable half and survive truncation next; commit history is
+already bounded to 20 and cheap to drop, and is one `git log` call away if
+the caller needs it back. See [`USAGE.md`](USAGE.md#context) for the byte
+budget and [`../specs/design.md`](../specs/design.md#commands) for why it is
+16 KiB and what happens at the boundary.
 
 ### `rgit log --porcelain`
 

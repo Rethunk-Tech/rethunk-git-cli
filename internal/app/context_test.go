@@ -82,9 +82,9 @@ func TestRun_ContextEmitsDiffRowsBeforeCommits(t *testing.T) {
 }
 
 // TestRun_ContextRecordsAreTabSeparatedWithExpectedFieldCounts pins the
-// three record shapes docs/CODES.md commits to: C has 3 fields, F has 6
-// (the same 5 rgit diff --porcelain emits, plus the leading type tag),
-// and neither ever carries a header.
+// four record shapes docs/CODES.md commits to: B has 5 fields, C has 3, F
+// has 6 (the same 5 rgit diff --porcelain emits, plus the leading type
+// tag), and none of them ever carries a header.
 func TestRun_ContextRecordsAreTabSeparatedWithExpectedFieldCounts(t *testing.T) {
 	dir := chdirTempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
@@ -92,9 +92,13 @@ func TestRun_ContextRecordsAreTabSeparatedWithExpectedFieldCounts(t *testing.T) 
 	stdout, _, code := runApp(t, "context")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 
+	sawBranch := false
 	for line := range strings.SplitSeq(strings.TrimRight(stdout, "\n"), "\n") {
 		fields := strings.Split(line, "\t")
 		switch fields[0] {
+		case "B":
+			sawBranch = true
+			qt.Assert(t, qt.Equals(len(fields), 5))
 		case "C":
 			qt.Assert(t, qt.Equals(len(fields), 3))
 		case "F":
@@ -105,6 +109,28 @@ func TestRun_ContextRecordsAreTabSeparatedWithExpectedFieldCounts(t *testing.T) 
 			t.Fatalf("unrecognized record type %q in line %q", fields[0], line)
 		}
 	}
+	qt.Assert(t, qt.IsTrue(sawBranch))
+}
+
+// TestRun_ContextBranchRecordSortsFirstAndReportsNoUpstream pins the B
+// record's own content and position: it names the current branch, carries
+// an empty UPSTREAM and 0/0 AHEAD/BEHIND when none is configured
+// (chdirTempRepo never pushes anywhere), and sorts before every F and C
+// record -- a single, cheap record ahead of the two budget-competing halves.
+func TestRun_ContextBranchRecordSortsFirstAndReportsNoUpstream(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "new.txt", "untracked content\n")
+
+	stdout, _, code := runApp(t, "context")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+
+	lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
+	qt.Assert(t, qt.IsTrue(len(lines) > 0))
+	qt.Assert(t, qt.StringContains(lines[0], "B\t"))
+	qt.Assert(t, qt.StringContains(lines[0], "\t\t0\t0"))
+
+	branch := strings.TrimSpace(gitOut(t, dir, "rev-parse", "--abbrev-ref", "HEAD"))
+	qt.Assert(t, qt.StringContains(lines[0], "B\t"+branch+"\t"))
 }
 
 // TestBuildContextStream unit-tests the byte-budget truncation boundary

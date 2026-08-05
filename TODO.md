@@ -166,37 +166,6 @@ constructs no anchor reaches — are documented in
 
 ## Context
 
-- [ ] **Expand `rgit context` beyond commits + diff rows.** The command is
-      intentionally flagless and fixed-shape today (`internal/app/context.go`):
-      `C` commit records (last 20), `F` rows reused from `rgit diff
-      --porcelain`, hard-capped at 16 KiB with an `X TRUNCATED` trailer.
-      Agents still need separate calls for branch name, upstream/ahead-behind,
-      `[ts-only]` resolution health, or a larger byte budget on huge trees.
-
-      **Packages / files:** `internal/app/context.go` (`buildContextStream`,
-      `contextByteBudget`, `contextRecentCommitLimit`), `internal/gitx/gitx.go`
-      (branch/tracking primitives if added), `internal/app/doctor.go` (reuse
-      health signal, do not duplicate probes), `docs/USAGE.md` § Context,
-      `docs/CODES.md` § Output records, `specs/design.md` § `rgit context`.
-
-      **Traps:** The original guardrail rejects a flag surface that turns context
-      into "git status with extra steps" — any expansion must stay one call with
-      a **fixed** record grammar (new record types, not flags). New records need
-      single-letter tags and tab separation like `C`/`F`/`X`. `[ts-only]` belongs
-      on stderr today (`tsOnlyNotice`); moving it into the stream is a contract
-      change parsers must opt into. Raising `contextByteBudget` affects every
-      agent turn — prefer new optional record kinds that appear only when
-      relevant (e.g. `B` branch) over unbounded growth. Must still compose over
-      `diffpkg.Run`, not re-walk files.
-
-      **Acceptance criteria:** At minimum one new record type documented in
-      `docs/CODES.md` (e.g. `B\t<branch>\t<upstream>\t<ahead>\t<behind>` or
-      `H\t<ts-only|ok>` for resolution health). Default stream still fits 16 KiB
-      in the fixture suite; truncation behaviour unchanged for `F` rows. `rgit
-      context` remains flagless. Unit tests for `buildContextStream` cover new
-      record types and budget interaction. `docs/USAGE.md` and
-      `specs/design.md` updated.
-
 ## Diff
 
 ## Install / distribution

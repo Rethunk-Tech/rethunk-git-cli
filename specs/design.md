@@ -1334,6 +1334,20 @@ the build order in `runContext` (diff rows appended to `records` before
 commit rows) — `buildContextStream` itself stays order-agnostic, keeping
 whatever prefix fits and dropping the rest.
 
+**A `B` record was added for branch/tracking status, sorting ahead of even
+the `F` rows.** The original guardrail against growing `context` into "git
+status with extra steps" is a flag surface, not a record-count one: a new
+record *kind* that appears only when relevant composes with the fixed-shape
+promise, where a new flag to select it would not. `B` answers a question no
+existing record could — the branch name and how far it has diverged from its
+upstream — via two new `internal/gitx` primitives (`Upstream`, `AheadBehind`)
+rather than growing `diffpkg.Run`'s own scope, which has nothing to do with
+branches at all. It is exactly one record, so placing it first costs the
+16 KiB budget almost nothing while guaranteeing it never gets truncated away.
+Absent entirely on an unborn branch (`CurrentBranch` fails when there is no
+`HEAD` yet) rather than emitted with blank fields — the same "no record when
+there is nothing to say" rule the whole stream already follows for `X`.
+
 ### `rgit restore FILE:SYMBOL`: an accepted design, deliberately not built
 
 This is the one candidate command from the original set that was designed

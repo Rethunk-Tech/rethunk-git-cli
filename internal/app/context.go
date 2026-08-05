@@ -38,6 +38,12 @@ select or narrow.
 
 Records, one per line, tab-separated, no header:
 
+  B<TAB>BRANCH<TAB>UPSTREAM<TAB>AHEAD<TAB>BEHIND
+      At most one, always first: the current branch, its upstream tracking
+      ref (empty when none is configured), and how many commits ahead/behind
+      it (both 0 when there is no upstream). Absent entirely on an unborn
+      branch, which has no current branch to report.
+
   F<TAB>FILE<TAB>SYMBOL<TAB>STATUS<TAB>ADDED<TAB>DELETED
       One per "rgit diff --porcelain" row -- identical fields, with this
       stream's own leading type tag. See docs/CODES.md#output-records for
@@ -50,11 +56,12 @@ Records, one per line, tab-separated, no header:
       At most one, always last: this many records were withheld because
       the stream reached its byte budget.
 
-The whole stream is capped at 16 KiB, and F rows come first so they survive
-truncation before C rows do: the diff section has no natural bound of its
-own, while commits are already bounded up front (the most recent 20, via
-git's own -n) and cost little to drop. The X record names how many rows
-were withheld. See specs/design.md#commands for the reasoning.
+The whole stream is capped at 16 KiB. B sorts first (a single record, cost
+next to nothing), then F rows so they survive truncation before C rows do:
+the diff section has no natural bound of its own, while commits are already
+bounded up front (the most recent 20, via git's own -n) and cost little to
+drop. The X record names how many rows were withheld. See
+specs/design.md#commands for the reasoning.
 
 Full reference: docs/USAGE.md
 `
@@ -101,6 +108,21 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 		return exitcode.GitFailure
 	}
 
+	// The B record is best-effort: an unborn branch (no HEAD yet) has no
+	// current branch to report, and that is not a reason to fail the whole
+	// command any more than an empty commits list is. Absent entirely from
+	// the stream rather than emitted with blank fields, matching "new
+	// records only when relevant" over unconditional growth.
+	branchRecord := ""
+	if branch, berr := repo.CurrentBranch(ctx); berr == nil && branch != "" {
+		upstream, hasUpstream, _ := repo.Upstream(ctx)
+		ahead, behind := 0, 0
+		if hasUpstream {
+			ahead, behind, _ = repo.AheadBehind(ctx)
+		}
+		branchRecord = fmt.Sprintf("B\t%s\t%s\t%d\t%d\n", branch, upstream, ahead, behind)
+	}
+
 	// The default "everything committable" scope -- staged + unstaged vs
 	// HEAD, plus untracked -- is exactly what a bare `rgit diff` already
 	// reports; no Options fields are set here, per specs/design.md §
@@ -121,12 +143,17 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 		fmt.Fprintf(stderr, "[warning] %s\n", w)
 	}
 
-	// F rows go first: they are the actionable, unbounded half of the
-	// stream, while the 20 commit subjects are cheap and expendable. Budget
-	// truncation below drops from the end of records, so this ordering is
-	// what makes a busy branch's commit history yield to the diff instead
-	// of crowding it out (docs/CODES.md#output-records).
-	records := make([]string, 0, len(commits)+len(report.Files))
+	// B, if present, sorts first: a single, tiny, always-useful record that
+	// costs the budget almost nothing. F rows go next: they are the
+	// actionable, unbounded half of the stream, while the 20 commit
+	// subjects are cheap and expendable. Budget truncation below drops from
+	// the end of records, so this ordering is what makes a busy branch's
+	// commit history yield to the diff instead of crowding it out
+	// (docs/CODES.md#output-records).
+	records := make([]string, 0, 1+len(commits)+len(report.Files))
+	if branchRecord != "" {
+		records = append(records, branchRecord)
+	}
 	// diffpkg.RenderPorcelain is the exact rendering `rgit diff --porcelain`
 	// already produces, reused verbatim and re-tagged per line -- not a
 	// second walk of report.Files that could drift from it.

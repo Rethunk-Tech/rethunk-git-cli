@@ -325,6 +325,44 @@ func TestLog_SinceExcludesEarlierCommits(t *testing.T) {
 	}
 }
 
+// TestUpstreamAndAheadBehind pins the rgit-context B record's own two
+// primitives: no upstream configured is a normal negative answer, not a
+// failure or a *GitError -- and once one is configured, AheadBehind counts
+// diverge correctly in both directions after a local-only commit.
+func TestUpstreamAndAheadBehind(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	gittest.Write(t, dir, "a.go", "package a\n")
+	gittest.Commit(t, dir, "chore: initial")
+
+	if _, ok, err := repo.Upstream(context.Background()); err != nil || ok {
+		t.Fatalf("Upstream() = (_, %v, %v); want ok=false with no upstream configured", ok, err)
+	}
+	if _, _, err := repo.AheadBehind(context.Background()); err == nil {
+		t.Error("AheadBehind() with no upstream configured; want an error, not a silent 0/0")
+	}
+
+	remote := t.TempDir()
+	gittest.Git(t, remote, "init", "-q", "--bare")
+	gittest.Git(t, dir, "remote", "add", "origin", remote)
+	gittest.Git(t, dir, "push", "-q", "-u", "origin", "main")
+
+	name, ok, err := repo.Upstream(context.Background())
+	if err != nil || !ok || name != "origin/main" {
+		t.Fatalf("Upstream() = (%q, %v, %v); want (\"origin/main\", true, nil)", name, ok, err)
+	}
+	if ahead, behind, err := repo.AheadBehind(context.Background()); err != nil || ahead != 0 || behind != 0 {
+		t.Fatalf("AheadBehind() = (%d, %d, %v); want (0, 0, nil) right after push", ahead, behind, err)
+	}
+
+	gittest.Write(t, dir, "b.go", "package a\n")
+	gittest.Commit(t, dir, "chore: local-only commit")
+
+	if ahead, behind, err := repo.AheadBehind(context.Background()); err != nil || ahead != 1 || behind != 0 {
+		t.Fatalf("AheadBehind() = (%d, %d, %v); want (1, 0, nil) one commit ahead", ahead, behind, err)
+	}
+}
+
 // TestErrorMessagesNameTheCommand pins what a caller actually reads when
 // something goes wrong. Both types are surfaced verbatim by internal/app's
 // error mapping, so their text is the whole failure report -- and an

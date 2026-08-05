@@ -269,6 +269,7 @@ exclusive with `--porcelain`.
 ## Context
 
 ```text
+B<TAB>main<TAB>origin/main<TAB>0<TAB>2
 F<TAB>auth.go<TAB>ValidateToken<TAB>MOD<TAB>12<TAB>3
 F<TAB>config.ini<TAB><TAB>UNTRACKED<TAB>4<TAB>0
 C<TAB>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2<TAB>fix(auth): reject expired tokens
@@ -276,19 +277,21 @@ C<TAB>9e8f7d6c5b4a9e8f7d6c5b4a9e8f7d6c5b4a9e8f<TAB>feat(auth): add ValidateToken
 ```
 
 `rgit context` is one-call repository orientation for an agent's first turn:
-the same per-file, per-symbol diffstat `rgit diff` itself reports for
-everything committable, then recent commit subjects — as a single,
-fixed-shape record stream. It replaces the separate `status`, `diff --stat`,
-`diff`, and `log` calls an agent would otherwise make before editing, each
-billed as its own subprocess call.
+the current branch and its upstream tracking status, then the same per-file,
+per-symbol diffstat `rgit diff` itself reports for everything committable,
+then recent commit subjects — as a single, fixed-shape record stream. It
+replaces the separate `status`, `diff --stat`, `diff`, and `log` calls an
+agent would otherwise make before editing, each billed as its own subprocess
+call.
 
 **The output shape is fixed and takes no flags beyond `--help`.** A command
 with options becomes `git status` with extra steps — see
 [`specs/design.md`](../specs/design.md#commands) for why the shape stays
-fixed rather than growing one. Three record types, tab-separated, no header:
+fixed rather than growing one. Four record types, tab-separated, no header:
 
 | Record | Fields | Meaning |
 | --- | --- | --- |
+| `B` | `BRANCH`, `UPSTREAM`, `AHEAD`, `BEHIND` | At most one, always first: the current branch. `UPSTREAM` is empty and `AHEAD`/`BEHIND` are both `0` with no upstream configured. Absent entirely on an unborn branch |
 | `C` | `HASH`, `SUBJECT` | One per recent commit, newest first, bounded to the last 20 |
 | `F` | `FILE`, `SYMBOL`, `STATUS`, `ADDED`, `DELETED` | One per `rgit diff --porcelain` row — identical fields, plus this stream's own leading type tag |
 | `X` | `TRUNCATED`, `COUNT` | At most one, always last: this many records were withheld to hold the byte budget |
@@ -297,8 +300,9 @@ The diff half is pure composition, not a second attribution path: it is
 literally `rgit diff`'s own default scope (everything committable), rendered
 through the same `--porcelain` records and re-tagged per line.
 
-**The whole stream is capped at 16 KiB, and `F` rows come first so they
-survive truncation before `C` rows do.** The diff section is the unbounded,
+**The whole stream is capped at 16 KiB.** `B`, when present, sorts first — a
+single record that costs the budget almost nothing — then `F` rows, so they
+survive truncation before `C` rows do. The diff section is the unbounded,
 actionable half and has no natural limit of its own; commits are already
 bounded up front (the most recent 20, via git's own history limit) and cost
 little to drop, so a busy branch sheds commit history before it ever
