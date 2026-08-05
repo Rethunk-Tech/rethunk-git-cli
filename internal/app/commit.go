@@ -403,7 +403,7 @@ func refuseStructuredDataAnchors(root string, targets []synth.Target, stderr io.
 		if !ok || !resolve.IsStructuredData(lang) {
 			continue
 		}
-		fmt.Fprintf(stderr, "rgit: %s: structured-data file; commit it by path instead of a symbol anchor\n", t.Symbol.Path)
+		fmt.Fprintf(stderr, "rgit: %s: structured-data file; commit it by path instead of a symbol anchor (e.g. rgit commit -m ... %s)\n", t.Symbol.Path, t.Symbol.Path)
 		return exitcode.StructuredDataAnchorRefused
 	}
 	return exitcode.Success

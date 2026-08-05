@@ -30,6 +30,9 @@ func TestRunCommit_RefusesSymbolAnchorOnStructuredData(t *testing.T) {
 	if !strings.Contains(stderr.String(), "package.json") {
 		t.Errorf("stderr = %q; want it to name package.json", stderr.String())
 	}
+	if !strings.Contains(stderr.String(), "rgit commit -m ... package.json") {
+		t.Errorf("stderr = %q; want the concrete path-form alternative", stderr.String())
+	}
 
 	stdout.Reset()
 	stderr.Reset()

@@ -480,29 +480,6 @@ constructs no anchor reaches — are documented in
       § Verify updated. CI job fails if signing step fails (no unsigned release on
       tag push). `SHA256SUMS` still published.
 
-## Commit
-
-- [ ] **Clearer exit-12 structured-data refusal.** `refuseStructuredDataAnchors`
-      (`internal/app/commit.go`) already prints
-      `structured-data file; commit it by path instead of a symbol anchor` and
-      returns `exitcode.StructuredDataAnchorRefused` (12). The message names the
-      file but not the copy-paste path alternative (`rgit commit -m … ci.yml`).
-
-      **Packages / files:** `internal/app/commit.go` (`refuseStructuredDataAnchors`),
-      `internal/resolve/lang.go` (`IsStructuredData`, `StructuredDataLanguage`),
-      `docs/CODES.md` § Exit 12, `internal/app/commit_test.go`,
-      `cmd/rgit/rgit_e2e_test.go`.
-
-      **Traps:** Exit 12 is commit-only — do not refuse on diff/blame/log.
-      Pathspec targets skip the check (`t.Pathspec != ""`). Language detection uses
-      `LanguageForWorktreePath` — extensionless structured-data files may not
-      trigger. Message must not suggest symbol anchors for partial paths.
-
-      **Acceptance criteria:** `rgit commit -m … ci.yml:jobs.build` stderr includes
-      the concrete path form (`rgit commit … ci.yml` or equivalent). Exit code
-      remains 12. `docs/CODES.md` example matches live output. Existing
-      `commit_test.go` case updated, not weakened.
-
 ## Diff / context
 
 - [ ] **Diff stderr notices parity with commit.** `rgit diff` already prints
