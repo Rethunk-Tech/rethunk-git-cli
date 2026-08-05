@@ -287,31 +287,6 @@ constructs no anchor reaches — are documented in
       language-server install remains opt-in, not default. CI verifies the
       packaging metadata (formula lint or install-script dry-run).
 
-## Doctor
-
-- [ ] **Machine-readable `rgit doctor`.** Output today is human-aligned
-      `[ok]`/`MISSING` lines via `internal/prereq.Print` (`internal/app/doctor.go`),
-      matching `cmd/rgit-install`'s install-time checks. Agents and CI want a
-      stable, parseable stream — same role `rgit languages --porcelain` and
-      `rgit diff --porcelain` already fill elsewhere (`docs/CODES.md`).
-
-      **Packages / files:** `internal/app/doctor.go`, `internal/prereq/prereq.go`,
-      `internal/lsp/servers.go`, `docs/USAGE.md`, `docs/CODES.md` § Output records,
-      `specs/design.md` (if doctor contract is recorded).
-
-      **Traps:** Exit code semantics must stay: non-zero only when rgit cannot
-      function (missing git), not when language servers are absent — `[ts-only]` is
-      normal. Do not conflate install-time fatal checks (go, CGO, C compiler) with
-      run-time doctor. Server rows are dynamic (`lsp.Servers()`); grammar list comes
-      from `resolve.Languages()`. A `--porcelain` flag is the likely surface — keep
-      default human output unchanged.
-
-      **Acceptance criteria:** `rgit doctor --porcelain` emits one tab-separated
-      record per check with stable columns (e.g. `KIND`, `NAME`, `STATUS`, `DETAIL`).
-      Documented in `docs/CODES.md`. Missing git → exit 128/129 per existing table;
-      missing `gopls` → exit 0 with `MISSING` in the record. `internal/app/doctor_test.go`
-      or `lanes_test.go` coverage. Completion/help updated if flag added.
-
 ## Resolution
 
 - [ ] **Richer ambiguous-anchor remediation (exit 4 and near-miss exit 3).**

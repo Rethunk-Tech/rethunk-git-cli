@@ -35,6 +35,12 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit doctor --porcelain` lists environment and language-server checks as
+  stable `KIND<TAB>NAME<TAB>STATUS<TAB>DETAIL` records instead of the
+  aligned human report, matching `rgit languages --porcelain`'s own
+  convention. Grammars stay excluded; `rgit languages --porcelain` already
+  covers them. See [`docs/CODES.md`](docs/CODES.md#rgit-doctor---porcelain).
+
 - `rgit diff --sym`, `rgit blame`, and `rgit log` now print the ordinal-anchor
   advisory (`[warning] anchor '...' is positional; ...`) that `rgit commit`
   already prints, for the identical anchor form on any command instead of

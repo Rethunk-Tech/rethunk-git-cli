@@ -366,6 +366,12 @@ exits 0 unless rgit genuinely cannot function — a missing language server or
 the tree-sitter CLI is informational, since degraded `[ts-only]` resolution
 is normal and documented, not an error (see [`CODES.md`](CODES.md)).
 
+`--porcelain` lists the environment and language-server checks as stable
+tab-separated records instead — see
+[`CODES.md`](CODES.md#rgit-doctor---porcelain) — for agents and CI that want
+a parseable stream rather than the aligned human report. It does not repeat
+the grammar listing; `rgit languages --porcelain` already owns that.
+
 ## Shell completion
 
 `rgit completion bash` and `rgit completion zsh` print a completion script

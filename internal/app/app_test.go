@@ -1024,6 +1024,44 @@ func TestRun_Doctor(t *testing.T) {
 	}
 }
 
+// TestRun_DoctorPorcelain pins docs/CODES.md's stable record shape: one
+// KIND/NAME/STATUS/DETAIL row per check, no header, and no grammar rows --
+// "rgit languages --porcelain" already owns that listing.
+func TestRun_DoctorPorcelain(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	stdout, stderr, code := runApp(t, "doctor", "--porcelain")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "Environment:")))
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "Grammars compiled in")))
+
+	sawGit := false
+	for line := range strings.SplitSeq(strings.TrimRight(stdout, "\n"), "\n") {
+		fields := strings.Split(line, "\t")
+		qt.Assert(t, qt.Equals(len(fields), 4))
+		qt.Assert(t, qt.IsTrue(fields[0] == "env" || fields[0] == "server"))
+		if fields[0] == "env" && fields[1] == "git" {
+			sawGit = true
+			qt.Assert(t, qt.Equals(fields[2], "ok"))
+		}
+	}
+	qt.Assert(t, qt.IsTrue(sawGit))
+}
+
+// TestRun_DoctorPorcelainMissingGitIsFatalWithMissingStatus pins that a
+// fatal check still gets its normal MISSING record, on top of the usual
+// exit 128 -- the porcelain stream is not suppressed by the failure.
+func TestRun_DoctorPorcelainMissingGitIsFatalWithMissingStatus(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("PATH", t.TempDir())
+
+	stdout, stderr, code := runApp(t, "doctor", "--porcelain")
+	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))
+	qt.Assert(t, qt.StringContains(stderr, "git"))
+	qt.Assert(t, qt.StringContains(stdout, "env\tgit\tMISSING\t"))
+}
+
 // TestRun_DoctorMissingGitIsFatal pins the one check doctor treats as fatal:
 // git is what rgit shells out to for everything, so its absence is the
 // "genuinely cannot function" case docs/CODES.md's exit 128 covers -- unlike

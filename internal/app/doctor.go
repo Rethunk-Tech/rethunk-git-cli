@@ -21,7 +21,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
-const doctorHelp = `usage: rgit doctor
+const doctorHelp = `usage: rgit doctor [--porcelain]
 
 Report environment health: git on PATH, the optional tree-sitter CLI (only
 needed to rebuild with SQL support), which language servers this binary can
@@ -31,18 +31,29 @@ Exits non-zero only when rgit genuinely cannot function -- a missing
 language server or the tree-sitter CLI is informational, since degraded
 [ts-only] resolution is normal and documented, not an error.
 
+--porcelain lists stable tab-separated records instead of the aligned
+human report: see docs/CODES.md#output-records. Grammars are not repeated
+here -- "rgit languages --porcelain" already covers them.
+
 Full reference: docs/USAGE.md
 `
 
-// --help wins wherever it appears in args (m12); doctor takes no other
-// arguments, so -- as in context.go -- that reduces to checking args[0].
+// runDoctor's flag surface is doctor.go's own precedent for a command this
+// small: hand-parsed rather than pulling in pflag.
 func runDoctor(args []string, stdout, stderr io.Writer) exitcode.Code {
-	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h") {
-		fmt.Fprint(stdout, doctorHelp)
-		return exitcode.Success
-	}
-	if len(args) != 0 {
-		return refuseExtraArgs("doctor", args, stderr, doctorHelp)
+	porcelain := false
+	for _, a := range args {
+		switch a {
+		case "--help", "-h":
+			fmt.Fprint(stdout, doctorHelp)
+			return exitcode.Success
+		case "--porcelain":
+			porcelain = true
+		default:
+			fmt.Fprintf(stderr, "rgit: doctor: unrecognized argument %q\n", a)
+			fmt.Fprint(stderr, doctorHelp)
+			return exitcode.InvalidUsage
+		}
 	}
 
 	essential, fatal := runEnvironmentChecks()
@@ -53,30 +64,62 @@ func runDoctor(args []string, stdout, stderr io.Writer) exitcode.Code {
 		servers = append(servers, prereq.LookPath(label, s.Bin, "not on PATH -- see docs/INSTALL.md § Language servers"))
 	}
 
-	// One width across both sections, not one per section: the language
-	// server names are far longer than git's, and measuring separately
-	// would leave the report's two blocks with detail columns that do not
-	// line up with each other.
-	width := prereq.Width(append(slices.Clip(essential), servers...)...)
+	if porcelain {
+		fmt.Fprint(stdout, renderDoctorPorcelain(essential, servers))
+	} else {
+		// One width across both sections, not one per section: the language
+		// server names are far longer than git's, and measuring separately
+		// would leave the report's two blocks with detail columns that do not
+		// line up with each other.
+		width := prereq.Width(append(slices.Clip(essential), servers...)...)
 
-	fmt.Fprintln(stdout, "Environment:")
-	for _, c := range essential {
-		prereq.Print(stdout, width, c)
+		fmt.Fprintln(stdout, "Environment:")
+		for _, c := range essential {
+			prereq.Print(stdout, width, c)
+		}
+
+		fmt.Fprintln(stdout, "\nLanguage servers (optional -- a missing one falls back to [ts-only]; install with docs/INSTALL.md § Language servers):")
+		for _, c := range servers {
+			prereq.Print(stdout, width, c)
+		}
+
+		fmt.Fprintln(stdout, "\nGrammars compiled in:")
+		fmt.Fprint(stdout, renderLanguages(resolve.Languages()))
 	}
-
-	fmt.Fprintln(stdout, "\nLanguage servers (optional -- a missing one falls back to [ts-only]; install with docs/INSTALL.md § Language servers):")
-	for _, c := range servers {
-		prereq.Print(stdout, width, c)
-	}
-
-	fmt.Fprintln(stdout, "\nGrammars compiled in:")
-	fmt.Fprint(stdout, renderLanguages(resolve.Languages()))
 
 	if fatal != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", fatal)
 		return exitcode.GitFailure
 	}
 	return exitcode.Success
+}
+
+// renderDoctorPorcelain renders essential and servers as docs/CODES.md's
+// stable tab-separated record: KIND<TAB>NAME<TAB>STATUS<TAB>DETAIL, one line
+// per check, no header. KIND is "env" for essential/optional environment
+// checks and "server" for language servers -- the same two sections the
+// human report prints, just machine-shaped. STATUS is "ok" or "MISSING",
+// matching the human report's own two spellings exactly, so a caller
+// grepping either output for one recognizes the other. Grammars are
+// deliberately excluded: "rgit languages --porcelain" already owns that
+// listing, and repeating it here would be a second place to keep in sync.
+func renderDoctorPorcelain(essential, servers []prereq.Check) string {
+	var buf strings.Builder
+	for _, c := range essential {
+		writeDoctorRecord(&buf, "env", c)
+	}
+	for _, c := range servers {
+		writeDoctorRecord(&buf, "server", c)
+	}
+	return buf.String()
+}
+
+func writeDoctorRecord(buf *strings.Builder, kind string, c prereq.Check) {
+	status := "ok"
+	if !c.OK {
+		status = "MISSING"
+	}
+	fmt.Fprintf(buf, "%s\t%s\t%s\t%s\n", kind, c.Name, status, c.Detail)
 }
 
 // runEnvironmentChecks probes what rgit needs to run at all, not to build

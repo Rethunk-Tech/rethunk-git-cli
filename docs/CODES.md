@@ -213,6 +213,30 @@ the current repository (requires a git repo); the record shape is
 unchanged, only which rows appear. See
 [`USAGE.md`](USAGE.md#languages).
 
+### `rgit doctor --porcelain`
+
+```text
+env<TAB>git<TAB>ok<TAB>/usr/bin/git
+env<TAB>tree-sitter CLI<TAB>MISSING<TAB>optional -- only needed to rebuild with SQL support, see docs/INSTALL.md § SQL support
+server<TAB>gopls (go)<TAB>ok<TAB>/home/user/go/bin/gopls
+server<TAB>vtsls (typescript, tsx)<TAB>MISSING<TAB>not on PATH -- see docs/INSTALL.md § Language servers
+```
+
+One record per check, tab-separated, no header:
+
+| Field | Meaning |
+| --- | --- |
+| `KIND` | `env` for git and the optional tree-sitter CLI, `server` for a language server |
+| `NAME` | The check's own name — a server's includes the languages it covers, matching the human report |
+| `STATUS` | `ok` or `MISSING`, the same two spellings the human `[ok]`/`MISSING` report uses |
+| `DETAIL` | The resolved path when `ok`, or a caller-facing note when `MISSING` |
+
+Grammars are not repeated here: `rgit languages --porcelain` above already
+owns that listing, and `rgit doctor` reusing a second copy would be one more
+place for the two to drift. Exit code is unaffected by `--porcelain` — a
+missing git is still fatal (exit 128), a missing language server or the
+tree-sitter CLI is still exit 0 with `MISSING` in its own record.
+
 ### `rgit blame --porcelain`
 
 Not a new record shape: `--porcelain` passes straight through to git's own
