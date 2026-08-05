@@ -229,32 +229,6 @@ constructs no anchor reaches — are documented in
 
 ## Diff
 
-- [ ] **Symbol-level `rgit diff` for untracked files.** `buildUntrackedReport`
-      (`internal/diff/run.go`) collapses each untracked path to a single
-      `(untracked)` row with a line count; it only sets `HintSymbol` to the
-      first declaration name as a hint, not per-symbol attribution. Comment
-      rationale: symbols do not exist at any revision to diff against — but
-      agents staging new files still want `new.go:NewFunc +15/-0` before commit.
-
-      **Packages / files:** `internal/diff/run.go` (`buildUntrackedReport`,
-      `Run` untracked path), `internal/diff/render.go`, `internal/diff/types.go`
-      (`StatusUntracked`, `HintSymbol`), `internal/resolve/` (`Open`,
-      `DeclOrder`), `docs/USAGE.md` § Commands, `docs/CODES.md`.
-
-      **Traps:** There is no HEAD blob — attribution is worktree-only vs empty
-      (all lines are insertions). Do not call `git diff --no-index` without
-      handling exit 1 on differences. `@header`/`@imports` on a new file overlap
-      with preamble staging semantics in `internal/synth/stage.go` — diff rows
-      must match what `rgit commit` would stage for the same symbols. Binary
-      files stay one row. Unsupported languages stay `(no symbols)` / file-level.
-      `rgit context` reuses porcelain rendering — shape must stay compatible.
-
-      **Acceptance criteria:** Untracked `new.go` with two functions emits two
-      `F` rows (or porcelain equivalent) with per-symbol `+N/-0`, not one
-      collapsed row. `rgit diff --sym new.go:SpecificFunc` filters to that
-      symbol. Tracked-file behaviour unchanged. Tests in `internal/diff/run_test.go`.
-      USAGE example updated (currently shows single `(untracked)` row).
-
 ## Install / distribution
 
 - [ ] **Distribution packaging beyond raw release binaries.** Today users get

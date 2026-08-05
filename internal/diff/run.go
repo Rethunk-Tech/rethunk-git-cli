@@ -77,7 +77,7 @@ func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Repo
 			return nil, uerr
 		}
 		for _, path := range untracked {
-			fr, ferr := buildUntrackedReport(root, path)
+			fr, ferr := buildUntrackedReport(ctx, root, path, sess, report)
 			if ferr != nil {
 				return nil, ferr
 			}
@@ -175,14 +175,20 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 	return &FileReport{Path: newPath, Rows: rows, lang: lang.Name()}, nil
 }
 
-// buildUntrackedReport renders a single collapsed row for a file git does
-// not track at all (docs/USAGE.md § Commands' "(untracked)" example): its
-// symbols are never split out, since none of them exist at any revision
-// rgit diff --sym could resolve against yet. Counted directly from the
-// worktree file rather than via `git diff --no-index`, whose exit-1-on-
-// differences convention (unlike every other `git diff` invocation this
-// package makes) would otherwise have to be special-cased.
-func buildUntrackedReport(root, path string) (*FileReport, error) {
+// buildUntrackedReport attributes a file git does not track at all by
+// symbol, the same MOD/(unanchorable) rows a brand-new tracked file gets
+// (buildFileReport's oldSrc==nil path): there is no HEAD blob to diff
+// against, so every declared symbol's own extent is wholly new, exactly
+// what attributeSymbolsOpen already computes when the old side is empty.
+// Counted directly from the worktree file rather than via `git diff
+// --no-index`, whose exit-1-on-differences convention (unlike every other
+// `git diff` invocation this package makes) would otherwise have to be
+// special-cased.
+//
+// A binary file or one whose language has no grammar keeps the single
+// collapsed StatusUntracked row -- there is nothing to split out, and for
+// an unsupported language HintSymbol still points a caller at --sym/--file.
+func buildUntrackedReport(ctx context.Context, root, path string, sess *lsp.Session, report *Report) (*FileReport, error) {
 	content, err := os.ReadFile(filepath.Join(root, path))
 	if err != nil {
 		return nil, err
@@ -191,17 +197,42 @@ func buildUntrackedReport(root, path string) (*FileReport, error) {
 		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: "-", Deleted: "-"}}}, nil
 	}
 
-	row := Row{Status: StatusUntracked, Added: itoa(countLines(content)), Deleted: "0"}
 	// content is already fully read above (needed for the binary check and
 	// line count regardless), so ForPath's shebang fallback costs nothing
 	// extra here -- unlike the other two call sites, there is no separate
 	// bounded peek to reason about.
-	if lang, ok := resolve.ForPath(path, content); ok {
-		if names, derr := resolve.DeclOrder(lang, content); derr == nil && len(names) > 0 {
-			row.HintSymbol = names[0]
-		}
+	lang, ok := resolve.ForPath(path, content)
+	if !ok {
+		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: itoa(countLines(content)), Deleted: "0"}}}, nil
 	}
-	return &FileReport{Path: path, Rows: []Row{row}}, nil
+
+	newFile, err := resolve.Open(lang, content)
+	if err != nil {
+		return nil, err
+	}
+	defer newFile.Close()
+	oldFile, err := resolve.Open(lang, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer oldFile.Close()
+
+	if sess != nil {
+		degraded, warnings := crossCheckFile(ctx, sess, lang, root, path, content, newFile)
+		report.TSOnly = report.TSOnly || degraded
+		report.Warnings = append(report.Warnings, warnings...)
+	}
+
+	rows, err := attributeSymbolsOpen(lang, nil, content, oldFile, newFile, countLines(content), 0)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		// No declarations at all (e.g. a comment-only or empty file): fall
+		// back to the collapsed row rather than an empty Rows slice.
+		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: itoa(countLines(content)), Deleted: "0"}}}, nil
+	}
+	return &FileReport{Path: path, Rows: rows, lang: lang.Name()}, nil
 }
 
 // formatModeNote renders "644->755"-shaped mode notes from git's full

@@ -35,6 +35,13 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit diff` now attributes an untracked file by symbol — `MOD` rows for
+  each declared symbol, exactly like a brand-new tracked file — instead of
+  collapsing it to a single `(untracked)` row. `--sym` filters it the same
+  way. The collapsed `UNTRACKED` row survives only for a binary file or one
+  whose language has no grammar. See
+  [`docs/CODES.md`](docs/CODES.md#rgit-diff---porcelain).
+
 - `rgit doctor --porcelain` lists environment and language-server checks as
   stable `KIND<TAB>NAME<TAB>STATUS<TAB>DETAIL` records instead of the
   aligned human report, matching `rgit languages --porcelain`'s own

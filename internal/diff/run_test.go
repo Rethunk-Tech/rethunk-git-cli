@@ -671,6 +671,56 @@ func TestRun_FileAndRowOrderIsPathThenPosition(t *testing.T) {
 	}
 }
 
+// TestRun_UntrackedFileAttributesPerSymbol pins buildUntrackedReport's own
+// per-symbol attribution: an untracked file with two functions emits two
+// MOD rows, not one collapsed (untracked) row, and --sym filters to just
+// one of them exactly like it would for a brand-new tracked file.
+func TestRun_UntrackedFileAttributesPerSymbol(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	gittest.Write(t, dir, "new.go", "package p\n\nfunc First() int { return 1 }\n\nfunc Second() int { return 2 }\n")
+	// Deliberately never `git add`ed -- LsFilesOthers is what surfaces it.
+
+	report, err := Run(context.Background(), repo, dir, Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	fr, ok := findFile(report.Files, "new.go")
+	if !ok {
+		t.Fatalf("Files = %+v; want new.go present", report.Files)
+	}
+	var symbols []string
+	for _, r := range fr.Rows {
+		if r.Status == StatusUntracked {
+			t.Errorf("row %+v; want per-symbol MOD rows, not a collapsed UNTRACKED row", r)
+		}
+		if r.Symbol != "" {
+			symbols = append(symbols, r.Symbol)
+		}
+	}
+	if !slices.Contains(symbols, "First") || !slices.Contains(symbols, "Second") {
+		t.Errorf("symbols = %v; want both First and Second", symbols)
+	}
+
+	filtered, err := Run(context.Background(), repo, dir, Options{Syms: []SymRef{{File: "new.go", Name: "Second"}}})
+	if err != nil {
+		t.Fatalf("Run with --sym: %v", err)
+	}
+	fr, ok = findFile(filtered.Files, "new.go")
+	if !ok || len(fr.Rows) != 1 || fr.Rows[0].Symbol != "Second" {
+		t.Fatalf("filtered Files = %+v; want exactly one Second row", filtered.Files)
+	}
+}
+
+func findFile(files []FileReport, path string) (FileReport, bool) {
+	for _, f := range files {
+		if f.Path == path {
+			return f, true
+		}
+	}
+	return FileReport{}, false
+}
+
 // TestRun_BinaryChangeReportsDashCounts pins run.go's binary short-circuit
 // (buildFileReport's addedStr == "-" && deletedStr == "-" branch) at the
 // unit lane: previously only rgit_e2e_test.go's

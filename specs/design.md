@@ -1293,10 +1293,13 @@ resolution machinery":
 
 **A staged-vs-unstaged split was considered and rejected as a second
 `diffpkg.Run` call for a marginal signal the default scope's own `STATUS`
-column mostly already carries** (`UNTRACKED` vs `MOD`/`DELETED`/`MODE`/
-`BINARY` already distinguishes "never committed" from "changed since
-`HEAD`"). A second call would double the git subprocess cost for the one
-bit it does not carry — whether a `MOD` row is specifically in the index —
+column only partly carries.** `UNTRACKED` used to distinguish "never
+committed" from "changed since `HEAD`" for every untracked file; since
+untracked per-symbol attribution shipped, an untracked file with a
+supported grammar reports ordinary `MOD` rows like any tracked change, and
+only a binary or ungrammared untracked file still surfaces `UNTRACKED`. A
+second call would double the git subprocess cost for the bit `STATUS` never
+carried either way — whether a `MOD` row is specifically in the index —
 which the token case this command exists to serve does not need on the
 very first turn. Left out on the "cheap or stop and report" instruction
 this command was built under, not overlooked.

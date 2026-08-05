@@ -128,7 +128,9 @@ FILE<TAB>SYMBOL<TAB>STATUS<TAB>ADDED<TAB>DELETED
 auth.go<TAB>ValidateToken<TAB>MOD<TAB>12<TAB>3
 auth.go<TAB>oldHelper<TAB>DELETED<TAB>0<TAB>14
 auth.go<TAB><TAB>UNANCHORABLE<TAB>2<TAB>0
-newfile.go<TAB><TAB>UNTRACKED<TAB>15<TAB>0
+newfile.go<TAB>@header<TAB>MOD<TAB>2<TAB>0
+newfile.go<TAB>NewFunc<TAB>MOD<TAB>13<TAB>0
+config.ini<TAB><TAB>UNTRACKED<TAB>4<TAB>0
 script.sh<TAB><TAB>MODE<TAB>0<TAB>0
 logo.png<TAB><TAB>BINARY<TAB>-<TAB>-
 ```
@@ -140,9 +142,18 @@ logo.png<TAB><TAB>BINARY<TAB>-<TAB>-
 | `MOD` | A changed symbol, or a changed file whose language has no grammar |
 | `DELETED` | A symbol present in `HEAD` and gone from the worktree |
 | `UNANCHORABLE` | Hunks in a supported file that no symbol owns |
-| `UNTRACKED` | A file git does not track; its symbols are never split out |
+| `UNTRACKED` | A file git does not track *and* cannot attribute by symbol — binary, or a language with no grammar |
 | `MODE` | A permission change with no content edit |
 | `BINARY` | A binary file; both counts are `-` |
+
+An untracked file with a supported grammar (`newfile.go` above) attributes
+per symbol exactly like a brand-new tracked file — there is no `HEAD` blob
+to diff against, so every declared symbol is wholly new and rows read `MOD`,
+not a distinct "new" token. `--sym` filters it the same way it filters any
+other file. `UNTRACKED` survives only as the collapsed fallback for a binary
+file or one whose language has no grammar to attribute by at all
+(`config.ini` above), where `HintSymbol`, when resolvable, still points a
+caller at `--sym`/`--file`.
 
 ### `rgit commit --porcelain`
 
@@ -254,7 +265,7 @@ tab-separated record stream, no header, no `--porcelain` flag to ask for it
 
 ```text
 F<TAB>auth.go<TAB>ValidateToken<TAB>MOD<TAB>12<TAB>3
-F<TAB>newfile.go<TAB><TAB>UNTRACKED<TAB>15<TAB>0
+F<TAB>config.ini<TAB><TAB>UNTRACKED<TAB>4<TAB>0
 C<TAB>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2<TAB>fix(auth): reject expired tokens
 C<TAB>9e8f7d6c5b4a9e8f7d6c5b4a9e8f7d6c5b4a9e8f<TAB>feat(auth): add ValidateToken
 X<TAB>TRUNCATED<TAB>3

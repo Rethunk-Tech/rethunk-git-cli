@@ -13,13 +13,21 @@ $ rgit diff
                @imports            +1/-0
                (unanchorable)      +2/-0   -> use --file auth.go
   README.md    (no symbols)        +2/-0
-  newfile.go   (untracked)         +15/-0  -> use --sym newfile.go:NewFunc or --file newfile.go
+  newfile.go   @header             +2/-0
+               NewFunc             +13/-0
+  config.ini   (untracked)         +4/-0   -> use --file config.ini
   script.sh    (mode 644->755)     +0/-0   -> use rgit commit script.sh
   logo.png     (binary)            -/-
 
 $ rgit commit -m "auth: reject expired tokens" \
     auth.go:ValidateToken auth.go:@imports
 ```
+
+`newfile.go` is untracked (never `git add`ed) but attributes per symbol
+exactly like a brand-new tracked file — there is no HEAD blob to diff
+against, so every declared symbol is wholly new. `config.ini` stays a single
+collapsed `(untracked)` row because it has no grammar to attribute by; a
+binary untracked file collapses the same way.
 
 ## Global flags
 
@@ -256,7 +264,7 @@ exclusive with `--porcelain`.
 
 ```text
 F<TAB>auth.go<TAB>ValidateToken<TAB>MOD<TAB>12<TAB>3
-F<TAB>newfile.go<TAB><TAB>UNTRACKED<TAB>15<TAB>0
+F<TAB>config.ini<TAB><TAB>UNTRACKED<TAB>4<TAB>0
 C<TAB>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2<TAB>fix(auth): reject expired tokens
 C<TAB>9e8f7d6c5b4a9e8f7d6c5b4a9e8f7d6c5b4a9e8f<TAB>feat(auth): add ValidateToken
 ```

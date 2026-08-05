@@ -216,12 +216,12 @@ func TestRun_DiffUnbornBranchListsEverythingCommittable(t *testing.T) {
 
 	stdout, _, code := runApp(t, "diff", "--porcelain")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	// staged.go is a brand-new file, so it attributes per symbol (its
-	// @header preamble plus the Staged function) rather than one aggregate
-	// MOD row -- the point here is that it appears at all against the
-	// empty-tree base, not its own attribution shape.
+	// staged.go and untracked.go are both brand-new files, so both attribute
+	// per symbol (each one's @header preamble plus its own function) rather
+	// than one aggregate row -- the point here is that both appear at all
+	// against the empty-tree base, not their own attribution shape.
 	qt.Assert(t, qt.StringContains(stdout, "staged.go\tStaged\tMOD\t"))
-	qt.Assert(t, qt.StringContains(stdout, "untracked.go\t\tUNTRACKED\t"))
+	qt.Assert(t, qt.StringContains(stdout, "untracked.go\tUntracked\tMOD\t"))
 }
 
 // TestRun_PushAfterSuccessfulCommit is m29: a successful --push (as
@@ -247,9 +247,10 @@ func TestRun_PushAfterSuccessfulCommit(t *testing.T) {
 }
 
 // TestRun_DiffUntrackedFileAndModeChange holds `rgit diff`'s untracked and
-// mode-only paths at the unit level: an untracked file (internal/diff's
-// buildUntrackedReport) and a mode-only change read from either the
-// worktree or the index (formatModeNote, and contentSide.mode on indexSide
+// mode-only paths at the unit level: an untracked file attributes per
+// symbol (internal/diff's buildUntrackedReport) exactly like a brand-new
+// tracked file, and a mode-only change reads from either the worktree or
+// the index (formatModeNote, and contentSide.mode on indexSide
 // specifically, which only --staged/--unstaged ever select).
 func TestRun_DiffUntrackedFileAndModeChange(t *testing.T) {
 	dir := chdirTempRepo(t)
@@ -262,7 +263,7 @@ func TestRun_DiffUntrackedFileAndModeChange(t *testing.T) {
 	// Default scope: worktree mode against HEAD's, plus the untracked file.
 	stdout, _, code := runApp(t, "diff", "--porcelain")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	qt.Assert(t, qt.StringContains(stdout, "untracked.go\t\tUNTRACKED\t"))
+	qt.Assert(t, qt.StringContains(stdout, "untracked.go\tU\tMOD\t"))
 	qt.Assert(t, qt.StringContains(stdout, "a.go\t\tMODE\t"))
 
 	// --staged: New is indexSide(), so staging the mode change routes its
