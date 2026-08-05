@@ -637,28 +637,6 @@ constructs no anchor reaches — are documented in
       in doctor exit code when git missing. Test with `internal/lsptest` mock or
       skipped live probe.
 
-## Commit
-
-- [ ] **Clearer exit-11 nothing-to-commit message.** Exit 11 fires when every
-      named target is unchanged (`internal/app/commit.go`, `exitcode.NothingToCommit`).
-      Stderr today is the generic git-style failure; callers listing multiple
-      symbols cannot see which targets were skipped vs already matched HEAD.
-
-      **Packages / files:** `internal/app/commit.go` (unchanged-target loop,
-      `targetLabel`), `internal/synth/stage.go` (`TargetResult.Outcome`),
-      `docs/USAGE.md` § Targets with nothing to commit, `docs/CODES.md`,
-      `internal/app/app_test.go`.
-
-      **Traps:** Mixed changed+unchanged targets must **not** exit 11 — only warn
-      and commit the rest (existing rule). `--allow-empty` suppresses 11 entirely.
-      `--dry-run` has its own preview shape — keep consistent. Porcelain mode may
-      need a machine-readable list of skipped targets, not only stderr prose.
-
-      **Acceptance criteria:** `rgit commit -m … a.go:Unchanged b.go:Changed` with
-      one unchanged target: commits `b`, warns on `a`, exit 0. All unchanged: exit
-      11 with stderr listing each `FILE:SYMBOL` or path skipped. `--allow-empty`
-      still exits 0. Tests in `app_test.go` extended.
-
 ## Performance
 
 - [ ] **Benchmark regression gate for diff attribution.** Design record measured

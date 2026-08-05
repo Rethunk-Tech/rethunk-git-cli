@@ -393,11 +393,12 @@ func TestRun_CommitExitCodes(t *testing.T) {
 		qt.Assert(t, qt.StringContains(stderr, "did you mean: DoesExist?"))
 	})
 
-	t.Run("every target unchanged is exit 11", func(t *testing.T) {
+	t.Run("every target unchanged is exit 11 and names each skipped target", func(t *testing.T) {
 		writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-		_, stderr, code := runApp(t, "commit", "-m", "fix(a): x", "a.go:A")
+		_, stderr, code := runApp(t, "commit", "-m", "fix(a): x", "a.go:A", "a.go:B")
 		qt.Assert(t, qt.Equals(code, exitcode.NothingToCommit))
-		qt.Assert(t, qt.StringContains(stderr, "has no uncommitted changes"))
+		qt.Assert(t, qt.StringContains(stderr, "target 'a.go:A' has no uncommitted changes"))
+		qt.Assert(t, qt.StringContains(stderr, "target 'a.go:B' has no uncommitted changes"))
 	})
 
 	t.Run("--allow-empty suppresses exit 11", func(t *testing.T) {
