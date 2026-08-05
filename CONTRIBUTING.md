@@ -166,6 +166,26 @@ into a profile before it is removed — `go tool covdata textfmt
 -i=<GOCOVERDIR> -o=e2e.out`, comparable to the two profiles above with
 `go tool cover -func=e2e.out | tail -1`.
 
+### Benchmarks
+
+`internal/diff/bench_test.go`'s `BenchmarkAttribution_200MemberClass` is a
+regression gate, not a comparison: `specs/design.md` § Blob synthesis
+measured a ~39× difference between re-parsing per declaration and holding
+one parse open per side on a 200-member class, and the held-open path is
+the only one that ships (`attributeSymbolsOpen`), so there is nothing left
+to re-parse-and-compare against in-process. Run it and compare `ns/op`
+against a prior run's own number:
+
+```bash
+go test -bench=Attribution -benchmem ./internal/diff/
+```
+
+cgo + tree-sitter makes absolute time machine-noisy — judge by ratio
+against a checked-in or previously recorded baseline, not an absolute
+threshold. Not run in CI: benchmarks are noisy on shared runners and a
+flaky gate is worse than no gate; run it by hand before and after a change
+to `internal/diff/attribute.go` or `internal/resolve`'s parse-caching path.
+
 ## Modernization
 
 Go 1.26's `go fix` is an analysis-driven modernizer, not the old import

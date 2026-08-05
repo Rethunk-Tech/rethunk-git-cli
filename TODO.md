@@ -137,12 +137,6 @@ constructs no anchor reaches — are documented in
       HEAD-name-only semantics. Porcelain `HASH<TAB>SUBJECT` shape unchanged.
       Documented limitation lifted or qualified in `docs/LIMITATIONS.md`.
 
-## Context
-
-## Diff
-
-## Resolution
-
 ## Diff
 
 - [ ] **Batch git blob reads in the diff hot path.** `diff.Run` already uses one
@@ -169,10 +163,6 @@ constructs no anchor reaches — are documented in
       wrapper). Identical `rgit diff --porcelain` output before/after. No regression
       in rename/delete/symlink edge cases covered by `internal/diff/run_test.go`.
 
-## Log / blame
-
-## Repository edges
-
 ## Release
 
 - [ ] **Signed release artifacts.** `release.yml` publishes `dist/*` with
@@ -194,31 +184,3 @@ constructs no anchor reaches — are documented in
       with documented command (`cosign verify-blob` or `minisign -Vm`). `docs/INSTALL.md`
       § Verify updated. CI job fails if signing step fails (no unsigned release on
       tag push). `SHA256SUMS` still published.
-
-## Diff / context
-
-## Synth / install
-
-## Performance
-
-- [ ] **Benchmark regression gate for diff attribution.** Design record measured
-      ~39× speedup holding a parse open vs re-parsing per declaration on a 200-member
-      class (`specs/design.md` § Grammar scope). `resolve.File` and `diff/run.go`
-      held-parse path ship, but there is no `testing.B` or CI gate to catch
-      regressions.
-
-      **Packages / files:** new `internal/diff/bench_test.go` or
-      `internal/resolve/bench_test.go`, `CONTRIBUTING.md` § Tests,
-      `.github/workflows/ci.yml` (optional `-bench` job or threshold),
-      `specs/design.md` (reference measurement).
-
-      **Traps:** Benchmarks must be `-short` skippable or bounded — CI budget
-      `<30s` suite rule. CGO + tree-sitter makes benches machine-noisy; compare
-      against baseline ratio, not absolute ms. Do not run benches on every PR if
-      flaky — nightly or manual `make bench` acceptable if documented. Fixture must
-      be repo-local, not download.
-
-      **Acceptance criteria:** `go test -bench=Attribution -benchmem ./internal/diff/`
-      (or chosen name) runs a large-class fixture and logs ns/op. CONTRIBUTING
-      documents how to run and interpret. Optional: CI step fails if >2× slower
-      than checked-in baseline file — only if stable on ubuntu-latest.
