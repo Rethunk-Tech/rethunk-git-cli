@@ -267,6 +267,8 @@ clean one instead of reading exit 0 either way.
 | Variable | Effect |
 | --- | --- |
 | `RGIT_LSP_SOCKET` | Path to an existing `gopls` socket. Checked before the default location. No effect on the stdio servers. |
+| `RGIT_LSP_DIAL_TIMEOUT` | Overrides how long `rgit` waits to reach a live language-server daemon before falling back to `[ts-only]` (default `150ms`). A Go duration string (e.g. `500ms`, `1s`); unset, malformed, zero, or negative values keep the default. |
+| `RGIT_LSP_QUERY_TIMEOUT` | Overrides the deadline for a single cross-check round trip once connected (default `2s`). Same duration-string and fail-closed rules as above. |
 | `XDG_RUNTIME_DIR` | Where `rgit` creates its private `rgit-<uid>/` subdirectory, holding `rgit-gopls.sock` and its spawn lock. Falls back to the system temp dir. |
 | `TMPDIR` | Consulted by the system-temp-dir fallback above when `XDG_RUNTIME_DIR` is unset (Go's own `os.TempDir()`, POSIX only), before it falls back further to `/tmp`. See § Uninstall for the exact lookup order. |
 | `GIT_TERMINAL_PROMPT` | Set to `0` automatically when stdin is not a terminal. Set it yourself to override. |

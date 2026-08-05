@@ -54,13 +54,13 @@ func dialSocket(ctx context.Context, spec serverSpec, repoRoot string) (*Client,
 			continue
 		}
 
-		dialer := net.Dialer{Timeout: dialBudget}
+		dialer := net.Dialer{Timeout: dialBudget()}
 		conn, err := dialer.DialContext(ctx, "unix", candidate)
 		if err != nil {
 			continue
 		}
 
-		handshakeCtx, cancel := context.WithTimeout(ctx, dialBudget+queryDeadline)
+		handshakeCtx, cancel := context.WithTimeout(ctx, dialBudget()+queryDeadline())
 		client, err := NewClient(handshakeCtx, conn, repoRoot)
 		cancel()
 		if err != nil {
@@ -293,7 +293,7 @@ func unlinkDeadSocket(sockPath string) {
 	if _, err := os.Stat(sockPath); err != nil {
 		return
 	}
-	conn, err := (&net.Dialer{Timeout: dialBudget}).DialContext(context.Background(), "unix", sockPath)
+	conn, err := (&net.Dialer{Timeout: dialBudget()}).DialContext(context.Background(), "unix", sockPath)
 	if err != nil {
 		_ = os.Remove(sockPath)
 		return
@@ -338,7 +338,7 @@ func dialStdio(ctx context.Context, spec serverSpec, repoRoot string) (*Client, 
 		return cmd.Wait()
 	}
 
-	handshakeCtx, cancel := context.WithTimeout(ctx, dialBudget+queryDeadline)
+	handshakeCtx, cancel := context.WithTimeout(ctx, dialBudget()+queryDeadline())
 	defer cancel()
 	client, err := NewClient(handshakeCtx, pipeRWC{stdout, stdin}, repoRoot)
 	if err != nil {

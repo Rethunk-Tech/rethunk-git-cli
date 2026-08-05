@@ -526,28 +526,6 @@ constructs no anchor reaches — are documented in
       spec explicitly widens. Commit on same tree still stages container. Test in
       `classify_test.go` or diff lane.
 
-## LSP
-
-- [ ] **Configurable LSP dial/query timeouts via environment.** `dialBudget`
-      (150ms) and `queryDeadline` (2s) are constants in `internal/lsp/lsp.go`,
-      used by `internal/lsp/dial.go` and `internal/lsp/client.go`. Slow hosts or
-      cold `gopls` indexes may need a longer budget without recompiling.
-
-      **Packages / files:** `internal/lsp/lsp.go`, `internal/lsp/dial.go`,
-      `internal/lsp/client.go`, `docs/INSTALL.md` (env var table),
-      `internal/lsp/dial_test.go`, `specs/design.md` § Resolution model.
-
-      **Traps:** Parsing must fail closed on garbage values — use defaults.
-      Zero/negative durations must not disable timeouts entirely. Env vars apply
-      process-wide — document interaction with concurrent invocations. Do not
-      block commit on a longer default — degraded `[ts-only]` remains the fallback.
-      `RGIT_LSP_SOCKET` user sockets share the same handshake timeout.
-
-      **Acceptance criteria:** `RGIT_LSP_DIAL_TIMEOUT` and `RGIT_LSP_QUERY_TIMEOUT`
-      (names TBD, documented) override defaults when set to valid Go duration
-      strings. Unset → current 150ms / 2s behaviour. Unit test with env t.Setenv.
-      INSTALL.md lists vars alongside `RGIT_LSP_SOCKET`.
-
 ## Synth / install
 
 - [ ] **Gitattributes and LFS filter audit.** `git hash-object -w --path` is

@@ -6,19 +6,24 @@
 // server here only verifies.
 package lsp
 
-import "time"
+import (
+	"os"
+	"time"
+)
 
-// dialBudget bounds how long Dial waits to reach a live daemon socket
-// before giving up and reporting degraded=true (specs/design.md).
+// defaultDialBudget bounds how long Dial waits to reach a live daemon socket
+// before giving up and reporting degraded=true (specs/design.md), unless
+// overridden by RGIT_LSP_DIAL_TIMEOUT.
 //
 // Unexported: no caller outside this package reaches Dial's timing directly
 // (n13 in the 2026-07-29 audit found none when this was still exported) --
 // internal/resolve calls CrossCheckExtent/CrossCheckExtents, never Dial or
 // these constants themselves.
-const dialBudget = 150 * time.Millisecond
+const defaultDialBudget = 150 * time.Millisecond
 
-// queryDeadline bounds a single textDocument/documentSymbol round trip once
-// connected (specs/design.md).
+// defaultQueryDeadline bounds a single textDocument/documentSymbol round
+// trip once connected (specs/design.md), unless overridden by
+// RGIT_LSP_QUERY_TIMEOUT.
 //
 // 2s, not a tighter budget: a warm gopls daemon answers in single-digit
 // milliseconds, but vtsls's first documentSymbol after didOpen can take
@@ -27,8 +32,34 @@ const dialBudget = 150 * time.Millisecond
 // occasionally -- a deadline that only ever fires is not a budget, it is a
 // disabled feature.
 //
-// Unexported alongside dialBudget -- see its comment.
-const queryDeadline = 2 * time.Second
+// Unexported alongside defaultDialBudget -- see its comment.
+const defaultQueryDeadline = 2 * time.Second
+
+// dialBudget and queryDeadline read their env override on every call, not
+// once at package init, so RGIT_LSP_DIAL_TIMEOUT/RGIT_LSP_QUERY_TIMEOUT
+// apply process-wide the instant they are set and t.Setenv works in tests.
+// Slow hosts or a cold gopls index may need more than the defaults without
+// recompiling (docs/INSTALL.md § Environment variables).
+func dialBudget() time.Duration { return durationEnv("RGIT_LSP_DIAL_TIMEOUT", defaultDialBudget) }
+
+func queryDeadline() time.Duration {
+	return durationEnv("RGIT_LSP_QUERY_TIMEOUT", defaultQueryDeadline)
+}
+
+// durationEnv fails closed: a missing var, a malformed value, or a
+// zero/negative duration all fall back to def rather than disabling the
+// timeout it exists to enforce.
+func durationEnv(name string, def time.Duration) time.Duration {
+	v := os.Getenv(name)
+	if v == "" {
+		return def
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d <= 0 {
+		return def
+	}
+	return d
+}
 
 // Symbol is one language-server-reported document symbol, flattened out of
 // LSP's DocumentSymbolResult union (a tree of DocumentSymbol or a flat list

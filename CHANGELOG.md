@@ -33,6 +33,14 @@ Notable changes to `rgit`. The format follows
   them writes a blob — and committing the same file by path still works.
   See [`docs/CODES.md`](docs/CODES.md#exit-12-is-commits-alone).
 
+### Added
+
+- `RGIT_LSP_DIAL_TIMEOUT` and `RGIT_LSP_QUERY_TIMEOUT` env vars override the
+  language-server dial and query timeouts (defaults `150ms`/`2s`) without a
+  rebuild, for slow hosts or a cold `gopls` index. Unset, malformed, zero, or
+  negative values keep the default. See
+  [`docs/INSTALL.md`](docs/INSTALL.md#environment-variables).
+
 ### Changed
 
 - `rgit context` now emits `F` (diff) records before `C` (commit) records,

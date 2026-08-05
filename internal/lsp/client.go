@@ -132,7 +132,7 @@ func (c *Client) Close() error {
 // wrapped in queryDeadline internally; callers do not need their own
 // timeout for this specific call.
 func (c *Client) DocumentSymbols(ctx context.Context, path string, src []byte) ([]Symbol, error) {
-	ctx, cancel := context.WithTimeout(ctx, queryDeadline)
+	ctx, cancel := context.WithTimeout(ctx, queryDeadline())
 	defer cancel()
 
 	langID, ok := LanguageKindFor(path)
@@ -169,7 +169,7 @@ func (c *Client) DocumentSymbols(ctx context.Context, path string, src []byte) (
 	// this notification exactly when a real server (not the deadline) is
 	// the reason it is late.
 	defer func() {
-		closeCtx, closeCancel := context.WithTimeout(context.Background(), queryDeadline)
+		closeCtx, closeCancel := context.WithTimeout(context.Background(), queryDeadline())
 		defer closeCancel()
 		_ = c.server.DidClose(closeCtx, &protocol.DidCloseTextDocumentParams{
 			TextDocument: protocol.TextDocumentIdentifier{URI: docURI},
