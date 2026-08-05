@@ -137,33 +137,6 @@ constructs no anchor reaches — are documented in
       HEAD-name-only semantics. Porcelain `HASH<TAB>SUBJECT` shape unchanged.
       Documented limitation lifted or qualified in `docs/LIMITATIONS.md`.
 
-## LSP
-
-- [ ] **Orphan daemon cleanup on handshake failure.** When a managed socket
-      answers but the LSP handshake fails, `internal/lsp/dial.go` unlinks the
-      path so the next invocation can respawn — but the old process may still
-      listen on the stranded inode until `-listen.timeout` idle shutdown
-      (`internal/lsp/servers.go` `daemonArgs`). Accepted gap in
-      `specs/design.md` § Resolution model.
-
-      **Packages / files:** `internal/lsp/dial.go`, `internal/lsp/client.go`,
-      `internal/lsp/servers.go`, `internal/lsp/dial_test.go`, `specs/design.md`.
-
-      **Traps:** No server wired into `Dial` exposes shutdown RPC or PID today
-      — any fix must discover a portable signal (e.g. pidfile written at spawn,
-      `lsp` shutdown where supported) without killing unrelated processes. Never
-      unlink or signal a user-supplied `$RGIT_LSP_SOCKET`. `owner_windows.go`
-      makes `sameOwner` a no-op — behaviour may differ by platform. Handshake
-      failure deep into `dialBudget+queryDeadline` is evidence of a stuck daemon,
-      but not proof — avoid killing a slow-but-healthy server on a loaded machine.
-
-      **Acceptance criteria:** Test in `internal/lsp/dial_test.go`: simulated
-      handshake failure on a managed socket leaves no listener on the path **and**
-      does not leak a process past test timeout (or documents bounded orphan
-      lifetime if full kill is impossible on CI). Next dial succeeds without
-      waiting for idle timeout. User-supplied socket path untouched. Design
-      record updated with chosen mechanism and remaining best-effort bounds.
-
 ## Context
 
 ## Diff
