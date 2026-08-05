@@ -282,27 +282,6 @@ constructs no anchor reaches — are documented in
 
 ## Synth / install
 
-- [ ] **Gitattributes and LFS filter audit.** `git hash-object -w --path` is
-      mandatory (`internal/gitx/gitx.go` `HashObject`, AGENTS.md invariant) so
-      clean/smudge filters run. `cmd/rgit/index_test.go`
-      `TestStage_GitattributesCleanFilterRequiresPath` covers a new `.go` file;
-      gaps may remain for renames, symlinks, submodules, binary attributes, and
-      LFS pointers.
-
-      **Packages / files:** `internal/gitx/gitx.go`, `internal/synth/stage.go`,
-      `cmd/rgit/index_test.go`, `docs/LIMITATIONS.md`, `specs/design.md` § Blob
-      synthesis.
-
-      **Traps:** Filters can change blob bytes vs worktree read — diff attribution
-      compares worktree text; staged blob must match what `git commit` would store.
-      LFS smudge on read vs clean on write asymmetry. Submodule gitlinks bypass
-      content filters. Do not bypass `--path` for "optimization".
-
-      **Acceptance criteria:** Documented matrix in `LIMITATIONS.md` or INSTALL.md
-      for: clean filter on new file, modified file, rename, symlink target, LFS
-      tracked extension. Each gap found → test + fix or explicit limitation.
-      Existing `TestStage_GitattributesCleanFilterRequiresPath` still passes.
-
 - [ ] **`rgit-install -with-servers` idempotency audit.** Server installs group by
       manager/package (`cmd/rgit-install/servers_install.go` `buildInstallJobs`);
       commands are documented idempotent (`go install`, `npm install -g`). Repeated

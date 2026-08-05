@@ -86,6 +86,40 @@ Full anchor and qualification rules: [`ANCHORS.md`](ANCHORS.md).
   is SQL-less, the same fallback `make install` makes. Detail:
   [`INSTALL.md`](INSTALL.md#cross-builds).
 
+## Symlinks, submodules, renames, and content filters
+
+A symbol anchor never addresses a symlink or a submodule directory — both
+refuse with exit 10 (`SpecialPathRefused`), the same code, rather than being
+misresolved as an ordinary file or silently producing an empty symbol set.
+Name the path instead: `rgit commit link.txt` and `rgit commit vendor/lib`
+stage them exactly as `git add` would, gitlink SHA and symlink target
+included — a pathspec target is delegated straight to `git add` and never
+touches `rgit`'s own byte synthesis at all (`internal/synth/stage.go`'s
+`Pathspec` targets vs. `Symbol` targets). See
+[`cmd/rgit/index_test.go`](../cmd/rgit/index_test.go)'s
+`TestStage_SubmoduleAndSymlinkPathStaging` for both the pathspec staging and
+the anchor refusal, on each of the two kinds.
+
+A **rename** staged by symbol anchor is not detected as one: `HEAD` simply
+has no blob at the new path, so an anchor into it stages as an ordinary new
+file, and git's own tree diff is what notices the rename after the fact
+(`R100` in `git status`/`git diff`, the same as any rename staged by hand).
+There is nothing `rgit`-specific to get wrong here — renames staged by
+pathspec go through `git add` unmodified, proven by
+`TestStage_RenameStagedAsTwoPathsYieldsR100`.
+
+Every synthesized blob is written via `git hash-object -w --path <path>`
+(`internal/gitx.HashObject`), never with `--path` omitted — the function
+signature requires a path, and its one call site (`internal/synth/stage.go`)
+always has one, so a `.gitattributes` clean filter always runs, whatever it
+is: `TestStage_GitattributesCleanFilterRequiresPath` proves it with a
+synthetic filter rather than requiring a real filter binary (`git-lfs`
+included) in the test environment — Git LFS's own clean filter is invoked
+through the identical mechanism, an ordinary `.gitattributes` `filter=`
+entry, with nothing rgit-specific to special-case for it. A binary file is
+refused for a symbol anchor the same way a symlink or submodule is (exit
+10) — there is no content to attribute a symbol's bytes within.
+
 ## History across renames
 
 `rgit log FILE:SYMBOL` runs `git log -L` bounded to the named file, which —

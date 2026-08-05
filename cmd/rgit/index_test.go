@@ -597,6 +597,14 @@ func TestStage_SubmoduleAndSymlinkPathStaging(t *testing.T) {
 	// misresolved (docs/ANCHORS.md § Paths that anchors cannot address).
 	err := synth.Stage(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("link.txt", "Foo")})
 	assertPathError(t, err, exitcode.SpecialPathRefused)
+
+	// A symbol anchor into the submodule directory is refused the same
+	// way, at this same full Stage() level -- special_test.go's own
+	// TestClassifyPath already proves classifyPath answers pathGitlink for
+	// it; this proves the refusal actually reaches a caller through the
+	// real staging path, not just the classifier in isolation.
+	err = synth.Stage(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("sub", "Foo")})
+	assertPathError(t, err, exitcode.SpecialPathRefused)
 }
 
 func TestStage_GitattributesCleanFilterRequiresPath(t *testing.T) {
