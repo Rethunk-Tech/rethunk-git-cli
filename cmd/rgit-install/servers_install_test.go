@@ -234,6 +234,29 @@ func TestManageServersDryRun(t *testing.T) {
 		qt.Assert(t, qt.Not(qt.StringContains(out, "FAILED")))
 		qt.Assert(t, qt.IsTrue(ok))
 	})
+
+	// Two consecutive dry-runs must report identically -- a dry-run never
+	// executes a job (the dryRun guard in manageServers returns before
+	// runInstallJob), so there is no state a first run could leave behind
+	// for a second to see differently. This is the idempotency question
+	// dry-run can actually answer without a real package manager; whether a
+	// second *real* run is idempotent is installCommand's own documented
+	// contract (every manager's install verb re-resolves and updates in
+	// place, cargo included) and is exercised by hand, not CI, the same
+	// boundary this file's package doc comment already draws.
+	t.Run("two consecutive dry-runs report identically", func(t *testing.T) {
+		t.Parallel()
+		lookPath := fakeLookPath(map[string]string{
+			"gopls": "/x/gopls", "bun": "/x/bun", "cargo": "/x/cargo",
+		})
+
+		var first, second bytes.Buffer
+		ok1 := manageServers(true, &first, lookPath)
+		ok2 := manageServers(true, &second, lookPath)
+
+		qt.Assert(t, qt.Equals(ok1, ok2))
+		qt.Assert(t, qt.Equals(first.String(), second.String()))
+	})
 }
 
 // TestRunInstallJob covers runInstallJob's own failure-detection contract

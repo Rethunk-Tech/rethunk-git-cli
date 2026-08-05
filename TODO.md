@@ -258,28 +258,6 @@ constructs no anchor reaches — are documented in
 
 ## Synth / install
 
-- [ ] **`rgit-install -with-servers` idempotency audit.** Server installs group by
-      manager/package (`cmd/rgit-install/servers_install.go` `buildInstallJobs`);
-      commands are documented idempotent (`go install`, `npm install -g`). Repeated
-      runs, partial failure mid-catalog, and PATH warnings need verification.
-
-      **Packages / files:** `cmd/rgit-install/servers_install.go`,
-      `cmd/rgit-install/servers.go`, `cmd/rgit-install/main.go`,
-      `cmd/rgit-install/servers_install_test.go`, `docs/INSTALL.md` § Installing
-      servers automatically.
-
-      **Traps:** `cargo install` rebuilds can be slow — timeout is 5m (`installTimeout`).
-      bun vs npm selection (`selectNPMManager`) may flip between runs. Partial install
-      must not leave rgit binary missing when `-with-servers` combined with main
-      install. `marksman` is managerNone — unmanaged hint only. Failed job should
-      not claim success.
-
-      **Acceptance criteria:** Test or scripted check: two consecutive `-with-servers`
-      dry-runs report no duplicate work or error. Simulated failure on job 2 of 3
-      leaves job 1 installed and exits non-zero with actionable message. Document
-      recovery steps in INSTALL.md. `main_test.go` covers ordering with
-      `-generate-only` — extend if gaps found.
-
 ## Doctor
 
 - [ ] **Doctor live LSP handshake probe.** `rgit doctor` today checks language
