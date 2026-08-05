@@ -286,3 +286,196 @@ constructs no anchor reaches — are documented in
       clean machine with only git (and runtime deps the doc names). Optional
       language-server install remains opt-in, not default. CI verifies the
       packaging metadata (formula lint or install-script dry-run).
+
+## Doctor
+
+- [ ] **Machine-readable `rgit doctor`.** Output today is human-aligned
+      `[ok]`/`MISSING` lines via `internal/prereq.Print` (`internal/app/doctor.go`),
+      matching `cmd/rgit-install`'s install-time checks. Agents and CI want a
+      stable, parseable stream — same role `rgit languages --porcelain` and
+      `rgit diff --porcelain` already fill elsewhere (`docs/CODES.md`).
+
+      **Packages / files:** `internal/app/doctor.go`, `internal/prereq/prereq.go`,
+      `internal/lsp/servers.go`, `docs/USAGE.md`, `docs/CODES.md` § Output records,
+      `specs/design.md` (if doctor contract is recorded).
+
+      **Traps:** Exit code semantics must stay: non-zero only when rgit cannot
+      function (missing git), not when language servers are absent — `[ts-only]` is
+      normal. Do not conflate install-time fatal checks (go, CGO, C compiler) with
+      run-time doctor. Server rows are dynamic (`lsp.Servers()`); grammar list comes
+      from `resolve.Languages()`. A `--porcelain` flag is the likely surface — keep
+      default human output unchanged.
+
+      **Acceptance criteria:** `rgit doctor --porcelain` emits one tab-separated
+      record per check with stable columns (e.g. `KIND`, `NAME`, `STATUS`, `DETAIL`).
+      Documented in `docs/CODES.md`. Missing git → exit 128/129 per existing table;
+      missing `gopls` → exit 0 with `MISSING` in the record. `internal/app/doctor_test.go`
+      or `lanes_test.go` coverage. Completion/help updated if flag added.
+
+## Resolution
+
+- [ ] **Richer ambiguous-anchor remediation (exit 4 and near-miss exit 3).**
+      Exit 4 already lists each colliding symbol's `Qualified` form
+      (`internal/resolve/index.go` `resolve`). Exit 3 uses Levenshtein `suggest`
+      over qualified names only. AGENTS.md invariant: a bare name that exists only
+      inside containers should steer toward qualification, not a misleading
+      "unresolved" when the honest answer is "qualify it".
+
+      **Packages / files:** `internal/resolve/index.go` (`resolve`, `suggest`,
+      `ResolveError.Error`), `internal/synth/classify.go`, `docs/USAGE.md`,
+      `docs/ANCHORS.md` § Qualification, `cmd/rgit/resolver_test.go`.
+
+      **Traps:** Do not change exit codes — 3 vs 4 carry different remediations
+      (`docs/CODES.md`). Levenshtein suggestions must not mask true ambiguity.
+      Container-qualified forms differ by language (`Declaration.Sep` — CSS uses
+      different rules). HTML uses `tag#id`, not `Container.member`. Ordinal forms
+      (`#N`) are a last resort, not the primary suggestion.
+
+      **Acceptance criteria:** Fixture: two `Box.size` / `Circle.size` methods —
+      bare `size` → exit 4 with candidates `Box.size`, `Circle.size` and message
+      nudging qualification. Fixture: bare name absent but single container member
+      with close Levenshtein match → exit 3 candidates prefer `Container.name`.
+      Existing `resolver_test.go` ambiguous cases unchanged. Error text stable enough
+      for `--porcelain` consumers where applicable.
+
+- [ ] **Stronger ordinal-anchor warnings beyond commit.** `rgit commit` already
+      prints `[warning] anchor 'file:Foo#2' is positional; inserting a symbol above
+      it repoints it` for ordinals in the plan (`internal/app/commit.go`,
+      `internal/synth/stage.go` `plan.ordinals`). `rgit diff`, `blame`, and `log`
+      accept `Foo#N` silently today.
+
+      **Packages / files:** `internal/app/diff.go`, `internal/app/blame.go`,
+      `internal/app/log.go`, `internal/synth/stage.go` (ordinal detection),
+      `internal/resolve/resolver.go` (`ParseOrdinal`), `docs/ANCHORS.md`,
+      `cmd/rgit/rgit_e2e_test.go` (ordinal warning tests).
+
+      **Traps:** Warning must fire only for ordinal-resolved anchors, not
+      container-qualified or unique bare names. Do not fail the command — advisory
+      only, same as commit. `diff --porcelain` must not interleave warnings into
+      stdout records; stderr only. Do not warn on read-only commands if that would
+      spam agents on every `rgit log` — consider once-per-invocation or only when
+      the ordinal anchor is the explicit target.
+
+      **Acceptance criteria:** `rgit diff auth.go:Init#2` (fixture with duplicate
+      bare names) emits the ordinal warning on stderr and succeeds. Unique
+      `auth.go:ValidateToken` does not warn. Commit behaviour unchanged.
+      Documented in `docs/USAGE.md` § Warnings.
+
+- [ ] **`rgit languages` repo-scoped filter.** `rgit languages` lists every
+      grammar compiled into the binary (`internal/app/languages.go`,
+      `resolve.Languages()`), runtime-accurate for build tags (SQL). Agents in a
+      monorepo often want "which grammars appear in **this** repo's tracked files"
+      to decide whether symbol anchors are worth attempting.
+
+      **Packages / files:** `internal/app/languages.go`, `internal/gitx/gitx.go`
+      (`ls-files` or equivalent), `internal/resolve/lang.go` (`ForExtension`,
+      `ForPath`), `docs/USAGE.md`, `docs/CODES.md`.
+
+      **Traps:** Extension-only scan misses extensionless shebang scripts — reuse
+      `LanguageForWorktreePath` or bounded peek where practical, or document the
+      gap. Submodule/gitlink paths are not regular files — exclude per
+      `docs/ANCHORS.md` exit 10. Filter is advisory; binary still contains all
+      grammars. Do not require a git repo for plain `rgit languages` (breaks
+      install-time use).
+
+      **Acceptance criteria:** New flag (e.g. `rgit languages --in-repo` or
+      `--porcelain --filter=tracked`) lists only grammars with ≥1 matching tracked
+      path in CWD repo. Repo with only `.go` files omits `python` when Python
+      grammar is compiled in. Outside a repo, flag errors clearly or no-ops per
+      chosen contract (documented). Tests with temp repo fixtures.
+
+## Diff
+
+- [ ] **Batch git blob reads in the diff hot path.** `diff.Run` already uses one
+      `git diff --numstat` for enumeration (`internal/gitx/gitx.go`
+      `DiffNumstat`), but each changed file calls `scope.Old.read` / `scope.New.read`
+      separately in `buildFileReport` (`internal/diff/run.go`) — N files ⇒ N
+      `git cat-file` subprocesses (or equivalent). Large attribution runs (whole
+      tree, vendor bump) pay linear git overhead.
+
+      **Packages / files:** `internal/gitx/gitx.go` (new batch `cat-file` helper),
+      `internal/diff/run.go`, `internal/diff/scope.go` (`side.read`),
+      `specs/design.md` § Blob synthesis (held-parse gains are already in-process;
+      this is git I/O batching).
+
+      **Traps:** Batch protocol must handle missing blobs (deleted paths, renames
+      `old => new`). Scope sides differ: worktree reads may use `os.ReadFile` not
+      cat-file — only batch the git-backed sides. Revision-to-revision diffs need
+      both revs. Do not break `hash-object --path` invariants in synth (diff is
+      read-only). Streaming vs memory: batching loads all changed blobs — cap or
+      stream per path count if needed.
+
+      **Acceptance criteria:** Measured reduction in git subprocess count on a
+      fixture with ≥10 changed files (test can count `exec` invocations via hook or
+      wrapper). Identical `rgit diff --porcelain` output before/after. No regression
+      in rename/delete/symlink edge cases covered by `internal/diff/run_test.go`.
+
+## Log / blame
+
+- [ ] **`rgit blame -p` / `--patch`.** `rgit log` already accepts `-p`/`--patch`
+      as opt-in patch output (`internal/app/log.go`). `rgit blame` supports
+      `--porcelain` only (`internal/app/blame.go`), forwarding to `git blame
+      --porcelain` over the symbol's line range.
+
+      **Packages / files:** `internal/app/blame.go`, `internal/app/shared.go`
+      (`parseAnchorCommandArgs`), `internal/app/completion.go` (`rgitBlameFlags`),
+      `docs/USAGE.md` § Blame, `docs/CODES.md`, `internal/app/blame_test.go`,
+      `internal/app/completion_test.go`.
+
+      **Traps:** Mutually exclusive with `--porcelain` if git treats them that way
+      — mirror `log`'s flag validation. Default stays human-readable blame.
+      Patch body is git's own format, unmodified (same convention as `diff -p`).
+      Line range comes from resolved extent — wrong anchor still exit 3/4/9, never
+      whole-file widen.
+
+      **Acceptance criteria:** `rgit blame -p file.go:Symbol` emits git's standard
+      patch-style blame for the symbol's lines only. `--porcelain` and `-p` together
+      → exit 129 with clear message. Help, completion, and USAGE updated.
+
+## Repository edges
+
+- [ ] **Submodule and sparse-checkout behaviour audit.** Symbol anchors on
+      submodules are refused (exit 10) per `docs/ANCHORS.md` § Paths that anchors
+      cannot address; staging uses gitlink SHA from submodule HEAD
+      (`internal/synth/special.go`). Sparse checkouts, partial clones, and
+      pathspecs that omit populated paths may leave surprising holes — unanchored
+      behaviour vs silent whole-file fallback needs a documented matrix.
+
+      **Packages / files:** `internal/synth/special.go`, `internal/cli/precedence.go`
+      (path existence checks), `internal/gitx/gitx.go`, `internal/diff/scope.go`,
+      `docs/ANCHORS.md`, `docs/LIMITATIONS.md`, `specs/design.md`.
+
+      **Traps:** `git rev-parse` / worktree existence checks differ for sparse
+      paths. Submodule in `.gitmodules` but not initialized — index vs worktree
+      SHA. `-C` subdirectory repos. Do not promise symbol resolution inside
+      submodules without explicit product decision. Fixes must match git's own
+      behaviour, not invent semantics (AGENTS.md invariant).
+
+      **Acceptance criteria:** Documented table in `docs/LIMITATIONS.md` or
+      `ANCHORS.md`: sparse path absent from worktree, uninitialized submodule,
+      symlink to file, nested submodule — for each, `diff`/`commit`/`blame` behaviour
+      and exit code. Gaps found during audit become fix tasks or explicit
+      limitations. Tests in `internal/synth/special_test.go` or e2e for any
+      behaviour change (not documentation-only if fixable).
+
+## Release
+
+- [ ] **Signed release artifacts.** `release.yml` publishes `dist/*` with
+      `gh release create` and `SHA256SUMS` from `make cross` (`.github/workflows/release.yml`,
+      `Makefile`). No minisign/cosign attestations today — consumers verify checksum
+      only.
+
+      **Packages / files:** `.github/workflows/release.yml`, `Makefile` (`cross`
+      target, `SHA256SUMS`), `docs/INSTALL.md` (verify instructions), `SECURITY.md`
+      if key distribution is documented.
+
+      **Traps:** Sigstore/cosign needs OIDC `id-token: write` permission and a
+      documented public key or Rekor log for verification. Signing must not break
+      existing checksum-only workflow — add signatures alongside, not replace.
+      Windows `.exe` and Unix binaries need the same policy. Private fork PRs cannot
+      test OIDC fully — document manual verify path.
+
+      **Acceptance criteria:** Each release asset has a detached signature verifiable
+      with documented command (`cosign verify-blob` or `minisign -Vm`). `docs/INSTALL.md`
+      § Verify updated. CI job fails if signing step fails (no unsigned release on
+      tag push). `SHA256SUMS` still published.
