@@ -173,7 +173,7 @@ func runLanguagesHelp() string {
 
 func runDoctorHelp() string {
 	var stdout, stderr strings.Builder
-	runDoctor([]string{"--help"}, &stdout, &stderr)
+	runDoctor(context.Background(), "", []string{"--help"}, &stdout, &stderr)
 	return stdout.String()
 }
 

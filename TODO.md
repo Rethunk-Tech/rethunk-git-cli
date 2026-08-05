@@ -231,30 +231,6 @@ constructs no anchor reaches — are documented in
 
 ## Synth / install
 
-## Doctor
-
-- [ ] **Doctor live LSP handshake probe.** `rgit doctor` today checks language
-      server binaries with `LookPath` only (`internal/app/doctor.go`) — presence
-      on PATH, not whether a daemon answers or completes `initialize`. `rgit diff`
-      / commit perform the real cross-check via `internal/lsp/dial.go`.
-
-      **Packages / files:** `internal/app/doctor.go`, `internal/lsp/dial.go`,
-      `internal/lsp/client.go`, `internal/prereq/prereq.go`, `docs/USAGE.md`,
-      `docs/INSTALL.md` § Language servers.
-
-      **Traps:** Doctor must not spawn daemons or block for seconds on a cold CI
-      host — optional quick probe with short timeout, or a separate `--deep` flag
-      vs default PATH-only. Missing server stays exit 0 (informational). Do not
-      conflate handshake failure with fatal exit. User `$RGIT_LSP_SOCKET` should be
-      reported but not unlinked. Overlap with planned `doctor --porcelain` — design
-      records together.
-
-      **Acceptance criteria:** Default doctor output distinguishes `on PATH` vs
-      `reachable` (handshake ok) vs `degraded` for at least one server (e.g.
-      gopls). CI without servers: still exit 0, `[ts-only]` explained. No regression
-      in doctor exit code when git missing. Test with `internal/lsptest` mock or
-      skipped live probe.
-
 ## Performance
 
 - [ ] **Benchmark regression gate for diff attribution.** Design record measured

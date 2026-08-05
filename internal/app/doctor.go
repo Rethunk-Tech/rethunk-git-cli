@@ -10,8 +10,10 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"os"
 	"slices"
 	"strings"
 
@@ -21,7 +23,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
-const doctorHelp = `usage: rgit doctor [--porcelain]
+const doctorHelp = `usage: rgit doctor [--porcelain] [--deep]
 
 Report environment health: git on PATH, the optional tree-sitter CLI (only
 needed to rebuild with SQL support), which language servers this binary can
@@ -30,6 +32,13 @@ reach for the extent cross-check, and which grammars it was compiled with.
 Exits non-zero only when rgit genuinely cannot function -- a missing
 language server or the tree-sitter CLI is informational, since degraded
 [ts-only] resolution is normal and documented, not an error.
+
+--deep dials each language server for real -- the identical handshake rgit
+diff/commit already perform for the cross-check -- and reports "reachable"
+or "degraded" in its detail column instead of the default's bare "on PATH"
+answer, which is not proof a server actually answers. Slower, and not the
+default for exactly that reason: a cold CI host with no servers installed
+should stay instant.
 
 --porcelain lists stable tab-separated records instead of the aligned
 human report: see docs/CODES.md#output-records. Grammars are not repeated
@@ -40,8 +49,8 @@ Full reference: docs/USAGE.md
 
 // runDoctor's flag surface is doctor.go's own precedent for a command this
 // small: hand-parsed rather than pulling in pflag.
-func runDoctor(args []string, stdout, stderr io.Writer) exitcode.Code {
-	porcelain := false
+func runDoctor(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
+	porcelain, deep := false, false
 	for _, a := range args {
 		switch a {
 		case "--help", "-h":
@@ -49,6 +58,8 @@ func runDoctor(args []string, stdout, stderr io.Writer) exitcode.Code {
 			return exitcode.Success
 		case "--porcelain":
 			porcelain = true
+		case "--deep":
+			deep = true
 		default:
 			fmt.Fprintf(stderr, "rgit: doctor: unrecognized argument %q\n", a)
 			fmt.Fprint(stderr, doctorHelp)
@@ -58,10 +69,20 @@ func runDoctor(args []string, stdout, stderr io.Writer) exitcode.Code {
 
 	essential, fatal := runEnvironmentChecks()
 
-	servers := make([]prereq.Check, 0, len(lsp.Servers()))
-	for _, s := range lsp.Servers() {
+	lspServers := lsp.Servers()
+	servers := make([]prereq.Check, 0, len(lspServers))
+	for _, s := range lspServers {
 		label := s.Bin + " (" + strings.Join(s.Languages, ", ") + ")"
 		servers = append(servers, prereq.LookPath(label, s.Bin, "not on PATH -- see docs/INSTALL.md § Language servers"))
+	}
+	if deep {
+		root := dir
+		if root == "" {
+			root, _ = os.Getwd()
+		}
+		for i, s := range lspServers {
+			deepenServerCheck(ctx, &servers[i], s, root)
+		}
 	}
 
 	if porcelain {
@@ -112,6 +133,29 @@ func renderDoctorPorcelain(essential, servers []prereq.Check) string {
 		writeDoctorRecord(&buf, "server", c)
 	}
 	return buf.String()
+}
+
+// deepenServerCheck upgrades check.Detail from a bare PATH answer to a real
+// handshake result for the identical dial rgit diff/commit already perform
+// for the extent cross-check (internal/lsp.Dial) -- "on PATH" is not proof
+// a server actually answers, only that a binary exists. A server not on
+// PATH at all is left alone: there is nothing to dial, and MISSING already
+// says everything --deep could add. Dial's own timeouts (dialBudget,
+// queryDeadline) already bound this, which is why --deep needs none of its
+// own here.
+func deepenServerCheck(ctx context.Context, check *prereq.Check, s lsp.ServerInfo, root string) {
+	if !check.OK || len(s.Languages) == 0 {
+		return
+	}
+	client, degraded := lsp.Dial(ctx, s.Languages[0], root)
+	if client != nil {
+		_ = client.Close()
+	}
+	if degraded {
+		check.Detail += " (degraded -- handshake timed out or unanswered)"
+		return
+	}
+	check.Detail += " (reachable)"
 }
 
 func writeDoctorRecord(buf *strings.Builder, kind string, c prereq.Check) {

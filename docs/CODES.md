@@ -229,7 +229,7 @@ unchanged, only which rows appear. See
 ```text
 env<TAB>git<TAB>ok<TAB>/usr/bin/git
 env<TAB>tree-sitter CLI<TAB>MISSING<TAB>optional -- only needed to rebuild with SQL support, see docs/INSTALL.md § SQL support
-server<TAB>gopls (go)<TAB>ok<TAB>/home/user/go/bin/gopls
+server<TAB>gopls (go)<TAB>ok<TAB>/home/user/go/bin/gopls (reachable)
 server<TAB>vtsls (typescript, tsx)<TAB>MISSING<TAB>not on PATH -- see docs/INSTALL.md § Language servers
 ```
 
@@ -239,8 +239,8 @@ One record per check, tab-separated, no header:
 | --- | --- |
 | `KIND` | `env` for git and the optional tree-sitter CLI, `server` for a language server |
 | `NAME` | The check's own name — a server's includes the languages it covers, matching the human report |
-| `STATUS` | `ok` or `MISSING`, the same two spellings the human `[ok]`/`MISSING` report uses |
-| `DETAIL` | The resolved path when `ok`, or a caller-facing note when `MISSING` |
+| `STATUS` | `ok` or `MISSING`, the same two spellings the human `[ok]`/`MISSING` report uses -- unaffected by `--deep`, which only ever adds detail, never changes this column |
+| `DETAIL` | The resolved path when `ok`, or a caller-facing note when `MISSING`. Under `--deep`, an `ok` server's path gains a trailing `(reachable)` or `(degraded -- handshake timed out or unanswered)` from a real dial (`internal/lsp.Dial`) |
 
 Grammars are not repeated here: `rgit languages --porcelain` above already
 owns that listing, and `rgit doctor` reusing a second copy would be one more

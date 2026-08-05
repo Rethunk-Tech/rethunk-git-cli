@@ -53,6 +53,13 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit doctor --deep` dials each on-PATH language server for real (the
+  identical handshake `rgit diff`/`rgit commit` already perform) and reports
+  `(reachable)` or `(degraded — handshake timed out or unanswered)` instead
+  of the default's bare "on PATH" answer. Not the default: a cold CI host
+  with nothing installed should stay instant. See
+  [`docs/USAGE.md`](docs/USAGE.md#doctor).
+
 - `rgit context` gains a `B` record — current branch, upstream, and
   ahead/behind counts — sorting first, ahead of `F` and `C`. Absent on an
   unborn branch. See

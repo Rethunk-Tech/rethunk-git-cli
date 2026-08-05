@@ -14,6 +14,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,6 +27,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsptest"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
@@ -1060,6 +1062,127 @@ func TestRun_DoctorPorcelainMissingGitIsFatalWithMissingStatus(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))
 	qt.Assert(t, qt.StringContains(stderr, "git"))
 	qt.Assert(t, qt.StringContains(stdout, "env\tgit\tMISSING\t"))
+}
+
+// isolatedPATHWithGopls returns a PATH containing only a real git (doctor's
+// one fatal check) and a fake "gopls" binary -- isolated rather than
+// prepended to the real PATH, so a language server that happens to be
+// installed on the machine running this test is never actually dialed or
+// spawned for real; gopls's own content is never executed either, since
+// --deep reaches it only via $RGIT_LSP_SOCKET, never a real exec.
+func isolatedPATHWithGopls(t *testing.T) string {
+	t.Helper()
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		t.Skipf("git not on PATH: %v", err)
+	}
+	bin := t.TempDir()
+	if err := os.Symlink(gitPath, filepath.Join(bin, "git")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bin, "gopls"), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return bin
+}
+
+// TestRun_DoctorDeepReportsReachable pins --deep's own success path: a
+// managed socket that actually completes the initialize/initialized
+// handshake reports "(reachable)" in the server's Detail column, on top of
+// the unchanged on-PATH check. lsptest.ServeMockLSP serves exactly that
+// handshake and nothing past it (dial.go's own Dial/Close never sends a
+// didOpen), so the mock loop returns cleanly the moment Close tears the
+// connection down.
+func TestRun_DoctorDeepReportsReachable(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("PATH", isolatedPATHWithGopls(t))
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir()) // never reach a real, already-running daemon at the managed default
+
+	sockPath := filepath.Join(t.TempDir(), "gopls.sock")
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = ln.Close() }()
+	go func() {
+		for {
+			conn, aerr := ln.Accept()
+			if aerr != nil {
+				return
+			}
+			go func() { _ = lsptest.ServeMockLSP(conn, "[]", lsptest.MockServerHooks{}) }()
+		}
+	}()
+	t.Setenv("RGIT_LSP_SOCKET", sockPath)
+
+	stdout, stderr, code := runApp(t, "doctor", "--porcelain", "--deep")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.StringContains(stdout, "gopls"))
+	qt.Assert(t, qt.StringContains(stdout, "(reachable)"))
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "degraded")))
+}
+
+// TestRun_DoctorDeepReportsDegraded is the other half: a socket that
+// accepts but never answers the handshake (the shape a stuck or
+// incompatible daemon leaves) reports "(degraded ...)" instead --
+// "on PATH" alone is not proof of reachability, which is the whole point
+// of --deep existing.
+func TestRun_DoctorDeepReportsDegraded(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("PATH", isolatedPATHWithGopls(t))
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir()) // never reach a real, already-running daemon at the managed default
+
+	sockPath := filepath.Join(t.TempDir(), "gopls.sock")
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = ln.Close() }()
+	go func() {
+		for {
+			conn, aerr := ln.Accept()
+			if aerr != nil {
+				return
+			}
+			_ = conn.Close() // accepts, then hangs up -- never speaks the handshake
+		}
+	}()
+	t.Setenv("RGIT_LSP_SOCKET", sockPath)
+
+	stdout, _, code := runApp(t, "doctor", "--porcelain", "--deep")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(stdout, "(degraded"))
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "(reachable)")))
+}
+
+// TestRun_DoctorDeepLeavesMissingServersUnchanged pins the skip guard: a
+// server not on PATH at all is never dialed under --deep either -- there is
+// nothing to dial, and MISSING already says everything --deep could add.
+func TestRun_DoctorDeepLeavesMissingServersUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		t.Skipf("git not on PATH: %v", err)
+	}
+	bin := t.TempDir()
+	if err := os.Symlink(gitPath, filepath.Join(bin, "git")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin) // git only -- no server binaries at all
+
+	stdout, _, code := runApp(t, "doctor", "--porcelain", "--deep")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	for line := range strings.SplitSeq(strings.TrimRight(stdout, "\n"), "\n") {
+		fields := strings.Split(line, "\t")
+		if fields[0] != "server" {
+			continue
+		}
+		qt.Assert(t, qt.Equals(fields[2], "MISSING"))
+		qt.Assert(t, qt.Not(qt.StringContains(fields[3], "reachable")))
+		qt.Assert(t, qt.Not(qt.StringContains(fields[3], "degraded")))
+	}
 }
 
 // TestRun_DoctorMissingGitIsFatal pins the one check doctor treats as fatal:

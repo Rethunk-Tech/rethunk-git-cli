@@ -390,6 +390,17 @@ tab-separated records instead — see
 a parseable stream rather than the aligned human report. It does not repeat
 the grammar listing; `rgit languages --porcelain` already owns that.
 
+**`--deep` dials each on-PATH server for real** — the identical
+initialize/initialized handshake `rgit diff`/`rgit commit` already perform
+for the cross-check — and appends `(reachable)` or `(degraded — handshake
+timed out or unanswered)` to its detail column. A binary being on `PATH` is
+not proof it actually answers; a stale daemon or a cold index both look
+identical to a plain `LookPath` check but differ under `--deep`. Slower than
+the default for exactly that reason, and not the default: a cold CI host
+with nothing installed should stay instant. A server not on `PATH` at all is
+never dialed — there is nothing to dial, and `MISSING` already says
+everything `--deep` could add.
+
 ## Shell completion
 
 `rgit completion bash` and `rgit completion zsh` print a completion script
