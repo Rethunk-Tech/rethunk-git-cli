@@ -333,6 +333,8 @@ func LanguageKindFor(path string) (kind protocol.LanguageKind, ok bool) {
 		return protocol.LanguageKindCSS, true
 	case ".md", ".markdown":
 		return protocol.LanguageKindMarkdown, true
+	case ".html", ".htm":
+		return protocol.LanguageKindHTML, true
 	default:
 		return "", false
 	}

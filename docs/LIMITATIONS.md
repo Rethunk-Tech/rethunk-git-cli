@@ -163,29 +163,33 @@ the worktree nor `HEAD`.
 ## Language-server coverage
 
 The extent cross-check is live for Go, TypeScript/TSX, Python, Shell, YAML,
-JSON, CSS, and Markdown. TOML, SQL, and HTML resolve with tree-sitter alone,
+JSON, CSS, Markdown, and HTML. TOML and SQL resolve with tree-sitter alone,
 permanently in `[ts-only]` mode — a supported result, not a degraded one:
 
 - **TOML** — `taplo` completes the LSP handshake, but its own ranges
   disagree with the extent `rgit` stages on an ordinary nested table, so
   installing it does not enable a cross-check.
 - **SQL** — no maintained tool speaks `documentSymbol` for SQL at all.
-- **HTML** — `vscode-html-language-server` completes the handshake and,
-  measured directly, names and ranges an ordinary id-bearing element exactly
-  the way `rgit` does (`div#app`) — but two things stop short of a real
-  cross-check. First, it names an element carrying a `class` attribute
-  `tag#id.class1.class2`, which never matches `rgit`'s own `tag#id` spelling,
-  so every class-bearing element degrades to `[ts-only]` on its own (a safe,
-  already-existing degrade, not a wrong match). Second, and load-bearing:
-  tree-sitter-html's own node for a void element (`<input>`, `<img>`, `<br>`,
-  and similarly self-closing-by-tag-name elements) measurably absorbs
-  trailing whitespace or text up to its next real sibling boundary when one
-  isn't immediately adjacent — the server's own range does not, so the two
-  disagree on a real byte range for exactly the elements a realistic fixture
-  exercises. Fixing that would mean widening `internal/resolve`'s
-  declaration-only extent (the one the cross-check compares) with a new
-  trim seam shared by every grammar, a bigger, riskier core change than this
-  language's own demand justifies — left unwired rather than forced.
+
+**HTML wires with two narrower, safe carve-outs, not a full unwiring.**
+`vscode-html-language-server` names and ranges an ordinary id-bearing
+element exactly the way `rgit` does (`div#app`) once two gaps are accounted
+for:
+
+- An element carrying a `class` attribute is named `tag#id.class1.class2`
+  by the server, which never matches `rgit`'s own `tag#id` spelling. That
+  one symbol degrades to `[ts-only]` on its own — a safe, already-existing
+  degrade (the server simply never names it), not a wrong match — rather
+  than blocking every other element in the file.
+- A void element (`<input>`, `<img>`, `<br>`, and similarly self-closing-
+  by-tag-name elements) measurably absorbs trailing whitespace or text up
+  to its next real sibling boundary into its own node's range when one
+  isn't immediately adjacent. That absorption is left alone in the extent
+  that actually gets staged — the grammar's own honest boundary, matching
+  TOML's own trailing-blank-line precedent — but trimmed back to the tag's
+  own end in the declaration-only extent the cross-check compares against
+  (`internal/resolve/lang_html.go`'s `trimDeclOnlyEnd`, an optional seam
+  scoped to this one adapter, not a change to every grammar's own extent).
 
 Install instructions and the full server table:
 [`INSTALL.md`](INSTALL.md#language-servers).

@@ -125,9 +125,10 @@ var serverCatalog = []serverEntry{
 		wantSpawnArgs: []string{"--stdio"},
 	},
 	{
-		// Same npm package as vscode-css-language-server below --
-		// buildInstallJobs (servers_install.go) groups them into one
-		// install, not two.
+		// Same npm package as vscode-css-language-server and
+		// vscode-html-language-server below -- buildInstallJobs
+		// (servers_install.go) groups all three into one install, not
+		// three.
 		bin:           "vscode-json-language-server",
 		manager:       managerNPM,
 		pkg:           "vscode-langservers-extracted",
@@ -135,6 +136,12 @@ var serverCatalog = []serverEntry{
 	},
 	{
 		bin:           "vscode-css-language-server",
+		manager:       managerNPM,
+		pkg:           "vscode-langservers-extracted",
+		wantSpawnArgs: []string{"--stdio"},
+	},
+	{
+		bin:           "vscode-html-language-server",
 		manager:       managerNPM,
 		pkg:           "vscode-langservers-extracted",
 		wantSpawnArgs: []string{"--stdio"},

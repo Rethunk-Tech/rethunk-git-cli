@@ -37,6 +37,17 @@ type Resolution struct {
 	// than assuming every language joins with ".". Empty means the default
 	// ".", the same zero-value convention Declaration.Sep itself uses.
 	Sep string
+
+	// Flat mirrors the resolving language's own FlatContainerLanguage
+	// answer (lang.go): true means Container is not a real ancestor, so a
+	// server-reported symbol's own containerName -- a genuine parent, for
+	// HTML the enclosing element -- must not be joined onto its name before
+	// comparing against Anchor the way qualifyLSPSymbol does for every other
+	// language. HTML already spells its own document-symbol Name exactly
+	// "tag#id", identical to Anchor, with no join needed at all; joining a
+	// real ancestor's name on top of that would produce a string HTML's own
+	// flat anchor space can never contain (crosscheck.go's matchLSPSymbol).
+	Flat bool
 }
 
 // File is one source parsed once and held open, so a caller with several
@@ -84,7 +95,11 @@ func (f *File) Resolve(anchor string) (*Resolution, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Resolution{Extent: sym.Full, DeclOnly: sym.DeclOnly, Anchor: sym.Qualified, Container: sym.Decl.Container, Sep: sym.Decl.Sep}, nil
+	flat := false
+	if fc, ok := f.lang.(FlatContainerLanguage); ok {
+		flat = fc.FlatContainer()
+	}
+	return &Resolution{Extent: sym.Full, DeclOnly: sym.DeclOnly, Anchor: sym.Qualified, Container: sym.Decl.Container, Sep: sym.Decl.Sep, Flat: flat}, nil
 }
 
 // DeclOrder returns the anchor rgit emits for each declaration, in source

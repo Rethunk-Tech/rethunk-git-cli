@@ -950,29 +950,53 @@ matching TOML's own "absorbs the blank line before the next section header,
 left as the grammar's own honest boundary" precedent, rather than building a
 new trimming seam for one adapter's own quirk.
 
-**That same absorption is the concrete, measured reason HTML's own
-cross-check stays unwired**, alongside a second, independent gap: measured
-directly against `vscode-html-language-server`, an ordinary id-bearing
-element without a `class` attribute names and ranges identically to what
-`rgit` itself resolves (`div#app`, `section#content`, exact line-range
-matches on a nested fixture) — but an element that also carries a `class`
-attribute is named `tag#id.class1.class2` by the server, which never
+**That same absorption was the concrete, measured reason HTML's own
+cross-check first stayed unwired**, alongside a second, independent gap:
+measured directly against `vscode-html-language-server`, an ordinary
+id-bearing element without a `class` attribute names and ranges identically
+to what `rgit` itself resolves (`div#app`, `section#content`, exact
+line-range matches on a nested fixture) — but an element that also carries a
+`class` attribute is named `tag#id.class1.class2` by the server, which never
 matches `rgit`'s own `tag#id` spelling, degrading that one symbol to
 `[ts-only]` on its own (an existing, safe degrade — § Cross-check
-exemptions' fourth case — not a wrong match). The blocking gap is the void-
-element absorption above: it corrupts `declOnlyExtent` — the node's own raw
-`StartByte()`/`EndByte()`, the exact byte range the cross-check compares —
-for precisely the id-bearing void elements a realistic fixture exercises,
-since `declOnlyExtent` has no trimming seam at all (unlike `fullExtent`,
-reached through `extentEnd`'s optional `trailingCommentTrimmer` interface,
-which YAML already implements for its own, differently-shaped defect).
-Extending `declOnlyExtent` to consult a trimming seam too would touch every
-adapter's cross-check path core-wide to accommodate one language's own
-grammar quirk — a bigger, riskier change than this feature's own demand
-justifies. Left unwired, the same considered "not wired" verdict this
-table's own TOML and SQL rows already record — not a placeholder for a
-follow-up that must happen, but one that a future change to
-`declOnlyExtent`'s own contract could revisit.
+exemptions' fourth case — not a wrong match, and still true post-wiring).
+
+**Wired since, via a seam scoped to `declOnlyExtent` alone, not `fullExtent`
+too.** `declOnlyExtent` gained its own optional `declOnlyEndTrimmer`
+interface (`internal/resolve/extent.go`) — deliberately not
+`trailingCommentTrimmer`, YAML's own seam for an unrelated defect (a comment
+misattached by the scanner, not a node absorbing trailing content) reused
+for `fullExtent`. `lang_html.go`'s `trimDeclOnlyEnd` is the sole
+implementer: for an element with no real `end_tag` and no explicit
+`self_closing_tag` — the implicit-void shape the absorption measurement
+above characterizes — it trims the declaration-only extent back to the
+`start_tag`'s own end; every other element (a real `end_tag`, or an explicit
+`<img .../>`) is returned unchanged, since neither ever absorbs trailing
+content in the first place. `fullExtent`, and the extent that actually gets
+staged, keep the grammar's own honest boundary untouched — matching TOML's
+own trailing-blank-line precedent, not building a second trim path for the
+same bytes two different callers read differently.
+
+**A second, unrelated gap surfaced only once dialling actually started:
+`matchLSPSymbol`'s own join assumed `Container` always names a real
+ancestor.** Every language wired before HTML does: `qualifyLSPSymbol` builds
+`Container + Sep + Name` and compares it against `Anchor`, and a server's own
+`containerName` agrees because it also names a real parent. HTML's own
+`Container` is `FlatContainerLanguage`'s self-referential trick (the
+element's own tag, not an ancestor, so `"div#app"` construction never
+touches nesting) — but the *server* still reports a genuine parent's name as
+`containerName` (`"div#app"` for a `<p id="after">` sitting inside it),
+which `qualifyLSPSymbol` would then join onto the server's own already-fully-
+qualified `Name` (`"p#after"`), producing `"div#app#p#after"` — a string
+`rgit`'s own flat anchor space can never contain, matching nothing, ever.
+Measured directly with the actual `CrossCheckExtent` entry point, not
+inferred: `div#app` itself degraded (found=false) even in the simplest
+single-element fixture, confirming this is not a nested-only edge case.
+Fixed by a new `Resolution.Flat` field (set from `FlatContainerLanguage` once
+per resolve, `resolver.go`) that `matchLSPSymbol` consults to compare
+against a server symbol's bare `Name` directly when true, skipping the join
+entirely — HTML's own server already spells `Name` exactly `"tag#id"`, so
+there is nothing left to join.
 
 **Rust, C, and C++ were checked against the same 51-repository survey and
 cleared no bar at all: zero of the surveyed repositories contained any.**
@@ -1009,7 +1033,7 @@ a server's own docs.
 | Markdown | `vscode-markdown-language-server` | stdio | — | — | — | Crashes on startup (measured) | Not wired |
 | TOML | `taplo` 0.10.0 | stdio | 3.9ms | 0.5–1.0ms | 0.2–0.4ms | Real disagreement on nested tables (measured) | Not wired |
 | SQL | none maintained | — | — | — | — | `sqlfluff` installed, no LSP surface | Not wired |
-| HTML | `vscode-html-language-server` | stdio | — | — | — | Exact match, id-bearing + class-less; real disagreement on void elements and on any class-bearing element's own name (both measured, § Grammar scope) | Not wired |
+| HTML | `vscode-html-language-server` | stdio | — | — | — | Exact match once `declOnlyEndTrimmer` and `Resolution.Flat` land (§ Grammar scope); a class-bearing element's own name still never matches, degrading safely | **Wired** |
 
 Method for the four that passed: a fixture per grammar exercising a nested
 container (so both a leaf declaration and a declaration whose own extent

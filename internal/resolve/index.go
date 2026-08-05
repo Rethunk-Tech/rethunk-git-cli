@@ -165,7 +165,7 @@ func buildIndex(lang Language, src []byte, root *ts.Node) *index {
 		syms[i] = &Symbol{
 			Decl:     d,
 			Full:     fullExtent(lang, src, d.Node),
-			DeclOnly: declOnlyExtent(d.Node),
+			DeclOnly: declOnlyExtent(lang, src, d.Node),
 		}
 	}
 

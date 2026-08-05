@@ -46,33 +46,3 @@ constructs no anchor reaches — are documented in
       change does not mis-attribute bytes to the wrong symbol. Unit coverage in
       `internal/synth/`; no regression in `cmd/rgit/index_test.go` preamble
       cases.
-
-## Resolution
-
-- [ ] **Wire HTML LSP cross-check.** `vscode-html-language-server` matches
-      `rgit`'s ranges for bare `tag#id` elements, but the cross-check stays
-      unwired because tree-sitter-html's void-element nodes absorb trailing
-      whitespace/text past the tag (`internal/resolve/lang_html.go`,
-      `specs/design.md` § Grammar scope, `docs/LIMITATIONS.md` § Language-server
-      coverage). A second, non-blocking gap: class-bearing elements are named
-      `tag#id.class1.class2` by the server, never matching `tag#id` — that case
-      can degrade to `[ts-only]` without blocking wiring for id-only elements.
-
-      **Packages / files:** `internal/resolve/extent.go` (`declOnlyExtent`,
-      `extentEnd`, `trailingCommentTrimmer` seam), `internal/resolve/lang_html.go`,
-      `internal/lsp/servers.go` (HTML server entry), `internal/lsp/wiring_test.go`,
-      `internal/resolve/crosscheck.go`, `docs/LIMITATIONS.md`, `docs/INSTALL.md`.
-
-      **Traps:** YAML's `trailingCommentTrimmer` trims the wrong edge for a
-      different defect — do not copy it blindly. Extending `declOnlyExtent` touches
-      **every** wired grammar's cross-check path; the trim seam must be optional
-      per-adapter. Void-element absorption affects `<input>`, `<img>`, `<br>`, etc.
-      Class-name normalization alone does not unblock void elements. Do not widen
-      HTML anchor scope (no class selectors).
-
-      **Acceptance criteria:** With `vscode-html-language-server` installed and
-      reachable, `rgit commit` on a fixture `div#app` element cross-checks without
-      `[ts-only]` and without exit 6. Void-element fixtures with id still
-      cross-check after the trim seam. Class-bearing `div#app.widget` continues
-      to degrade to `[ts-only]` (safe). `rgit doctor` reports HTML server status.
-      Design record and `docs/LIMITATIONS.md` updated to reflect wired status.

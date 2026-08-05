@@ -137,6 +137,40 @@ func (h *htmlLanguage) declarationsFor(src []byte, node *ts.Node) []Declaration 
 	return out
 }
 
+// trimDeclOnlyEnd implements declOnlyEndTrimmer: a void element (`<input>`,
+// `<img>`, `<br>`, and similarly self-closing-by-tag-name elements, with no
+// explicit `/>` and no real `end_tag`) has no node kind of its own bounding
+// where its tag ends -- tree-sitter-html's own `element` node keeps
+// absorbing whatever whitespace or plain text follows in scope as trailing
+// content until the next real sibling or its enclosing tag's close
+// (specs/design.md § Grammar scope, measured directly against a compiled
+// parse tree). A real language server's own range never includes that
+// absorbed content, so the declaration-only extent this compares against
+// must not either -- trimmed back to the start_tag's own end, the one
+// boundary both sides agree on.
+//
+// A node with a real end_tag (every element that is not void-shaped) or an
+// explicit self_closing_tag is returned unchanged: neither ever absorbs
+// trailing content the way an implicit void element does (same measurement),
+// so there is nothing here for either shape to trim.
+func (h *htmlLanguage) trimDeclOnlyEnd(src []byte, node *ts.Node) uint {
+	var startTagEnd uint
+	hasStartTag := false
+	for _, child := range namedChildren(node) {
+		switch child.Kind() {
+		case "end_tag", "self_closing_tag":
+			return node.EndByte()
+		case "start_tag":
+			startTagEnd = child.EndByte()
+			hasStartTag = true
+		}
+	}
+	if !hasStartTag {
+		return node.EndByte()
+	}
+	return startTagEnd
+}
+
 // htmlTagAndID reads node's own start_tag/self_closing_tag for its tag_name
 // and its first "id"-named attribute. Attribute names are ASCII
 // case-insensitive per the WHATWG HTML spec, so "id", "ID", and "Id" are all

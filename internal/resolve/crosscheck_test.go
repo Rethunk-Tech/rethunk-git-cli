@@ -91,6 +91,44 @@ func TestCrossCheckVerdict_AgreesPerAnchorAndBatch(t *testing.T) {
 	}
 }
 
+// TestMatchAndCompare_FlatContainerIgnoresServerContainerName pins HTML's
+// own reason for existing: a server-reported symbol's genuine containerName
+// (here "div#app", a real ancestor) must never be joined onto its Name
+// before comparing against a Flat resolution's Anchor, because HTML's own
+// Container/Sep pair is a formatting trick (tag#id), not a real ancestor --
+// joining a real one on top would produce a string the resolver's own flat
+// anchor space can never contain. Anchor and the server's own Name already
+// agree exactly; the join is what would have broken it.
+func TestMatchAndCompare_FlatContainerIgnoresServerContainerName(t *testing.T) {
+	t.Parallel()
+
+	src := []byte(`<input id="name">` + "\n")
+	symbols := []lsp.Symbol{
+		{Name: "input#name", Container: "div#app", StartLine: 0, EndLine: 0},
+	}
+	res := &Resolution{Anchor: "input#name", Sep: "#", Flat: true, DeclOnly: Extent{Start: 0, End: uint(len(src) - 1)}}
+
+	found, err := MatchAndCompare(src, res, symbols)
+	if !found {
+		t.Fatal("found = false; want true -- Flat must match on Name alone, ignoring the server's real containerName")
+	}
+	if err != nil {
+		t.Errorf("err = %v; want nil, ranges agree", err)
+	}
+
+	// The same symbol list with Flat left false (a non-HTML default) must
+	// NOT match, proving the test above exercises the Flat branch and not
+	// some other path that happened to already ignore Container.
+	notFlat := &Resolution{Anchor: "input#name", Sep: "#", DeclOnly: Extent{Start: 0, End: uint(len(src) - 1)}}
+	found, err = MatchAndCompare(src, notFlat, symbols)
+	if found {
+		t.Error("found = true with Flat unset; want false -- qualifyLSPSymbol's join should have produced \"div#app#input#name\", not a match")
+	}
+	if err != nil {
+		t.Errorf("err = %v; want nil (found=false never carries an error)", err)
+	}
+}
+
 // TestMatchAndCompare_CorruptedOffsetFailsLoudly guards lineOf's own bounds
 // check. Every DeclOnly offset this package hands MatchAndCompare today
 // comes from a Declaration parsed out of the exact src passed alongside it

@@ -149,7 +149,7 @@ func crossCheckVerdict(src []byte, list []*Resolution, symbols []lsp.Symbol) (de
 // CrossCheckExtent's doc on the fourth cross-check exemption); err is
 // non-nil only when a match was found and its range disagreed.
 func MatchAndCompare(src []byte, res *Resolution, symbols []lsp.Symbol) (found bool, err error) {
-	match, ok := matchLSPSymbol(res.Anchor, res.Sep, symbols)
+	match, ok := matchLSPSymbol(res.Anchor, res.Sep, res.Flat, symbols)
 	if !ok {
 		return false, nil
 	}
@@ -221,12 +221,22 @@ func formatRange(start, end uint32) string {
 // name -- so they fall back to matching the Nth same-named symbol in the
 // server's own reported order, which is source order for every grammar
 // rgit supports.
-func matchLSPSymbol(anchor, sep string, symbols []lsp.Symbol) (lsp.Symbol, bool) {
+// flat means res.Flat: the resolving language's own Container is not a real
+// ancestor (FlatContainerLanguage, lang.go's own doc comment), so a
+// server-reported symbol's genuine containerName must never be joined onto
+// its Name before comparing -- HTML already spells Name exactly "tag#id",
+// identical to what this resolver emits as Anchor, with nothing left to
+// join. qualifyLSPSymbol's join is for every other language, where
+// Container really is an ancestor a server also reports as one.
+func matchLSPSymbol(anchor, sep string, flat bool, symbols []lsp.Symbol) (lsp.Symbol, bool) {
 	bare, ordinal, hasOrdinal := ParseOrdinal(anchor)
 
 	var byBare []lsp.Symbol
 	for _, s := range symbols {
-		qualified := qualifyLSPSymbol(s, sep)
+		qualified := s.Name
+		if !flat {
+			qualified = qualifyLSPSymbol(s, sep)
+		}
 		if qualified == anchor {
 			return s, true
 		}

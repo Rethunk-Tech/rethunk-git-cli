@@ -11,16 +11,17 @@ import (
 // permanent [ts-only], with the reason a missing lsp.Servers() entry would
 // otherwise wrongly flag as drift (docs/LIMITATIONS.md § Language-server
 // coverage carries the fuller version of each): taplo's own ranges disagree
-// with tree-sitter-toml on nested tables (client.go's configClient doc
-// comment); no maintained tool speaks documentSymbol for SQL at all;
-// vscode-html-language-server's own class-attribute and doctype-prefix
-// naming never matches rgit's tag#id spelling. Add a language here only
-// with a measured reason, matching LIMITATIONS.md -- everything else in
-// Languages() is expected to have a wired server.
+// with tree-sitter-toml on nested tables; no maintained tool speaks
+// documentSymbol for SQL at all. HTML is wired (servers.go) -- an id-only
+// element cross-checks; a class-bearing one, named "tag#id.class1.class2" by
+// the server, degrades to [ts-only] on its own (the same safe "not named"
+// exemption any unfound symbol gets), not a reason to leave the whole
+// language unwired. Add a language here only with a measured reason,
+// matching LIMITATIONS.md -- everything else in Languages() is expected to
+// have a wired server.
 var neverWired = map[string]string{
 	"toml": "taplo completes the handshake but its ranges genuinely disagree with tree-sitter-toml on nested tables",
 	"sql":  "no maintained tool speaks documentSymbol for SQL",
-	"html": "vscode-html-language-server's class-attribute and doctype-prefix naming never matches rgit's own tag#id spelling",
 }
 
 // TestServersMap_CoversEveryResolveLanguage is the reverse of

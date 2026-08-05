@@ -906,6 +906,76 @@ func ValidateToken(t string) error {
 	qt.Assert(t, qt.Equals(rerr.Code, exitcode.ExtentMismatch))
 }
 
+// TestResolve_CrossCheckLiveHTML proves the wiring end to end against the
+// real installed vscode-html-language-server, the same "real dependency
+// over a double" bar TestResolve_CrossCheckLiveGopls holds gopls to
+// (CONTRIBUTING.md § Tests). Unlike gopls, HTML has no daemon to warm up --
+// every non-Go server here is spawned fresh per query and live on its first
+// invocation (docs/INSTALL.md § Language servers) -- so this needs no
+// polling loop, one attempt is the real behaviour.
+func TestResolve_CrossCheckLiveHTML(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("live language-server cross-check skipped under -short")
+	}
+	if _, err := exec.LookPath("vscode-html-language-server"); err != nil {
+		t.Skip("vscode-html-language-server not on PATH")
+	}
+
+	dir := t.TempDir()
+	src := []byte(`<!DOCTYPE html>
+<html>
+<body>
+<div id="app">
+<input id="name" type="text">   trailing text with no sibling to stop it
+<p id="after">next</p>
+</div>
+</body>
+</html>
+`)
+	path := filepath.Join(dir, "fixture.html")
+	if err := os.WriteFile(path, src, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	lang, ok := resolve.ForExtension(".html")
+	qt.Assert(t, qt.IsTrue(ok))
+	ctx := context.Background()
+
+	attempt := func(anchor string) (degraded bool, err error) {
+		res, rerr := resolve.Resolve(lang, src, anchor)
+		qt.Assert(t, qt.IsNil(rerr))
+		sess := lsp.NewSession()
+		defer sess.Close()
+		return resolve.CrossCheckExtent(ctx, sess, lang, dir, path, src, res)
+	}
+
+	// An id-bearing element, including the void-element case declOnlyExtent's
+	// own trim seam exists for, cross-checks clean against the real server --
+	// not merely a mock's idea of one.
+	for _, anchor := range []string{"div#app", "input#name", "p#after"} {
+		degraded, err := attempt(anchor)
+		qt.Assert(t, qt.IsFalse(degraded), qt.Commentf("anchor %q", anchor))
+		qt.Assert(t, qt.IsNil(err), qt.Commentf("anchor %q", anchor))
+	}
+
+	// A class-bearing element degrades safely (not found -- the server names
+	// it "tag#id.class1.class2", never a mismatch) rather than a real
+	// disagreement, docs/LIMITATIONS.md's own documented, permanent gap.
+	classSrc := []byte(`<div id="widget" class="foo bar">x</div>` + "\n")
+	classPath := filepath.Join(dir, "class.html")
+	if err := os.WriteFile(classPath, classSrc, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	classRes, err := resolve.Resolve(lang, classSrc, "div#widget")
+	qt.Assert(t, qt.IsNil(err))
+	sess := lsp.NewSession()
+	defer sess.Close()
+	degraded, cerr := resolve.CrossCheckExtent(ctx, sess, lang, dir, classPath, classSrc, classRes)
+	qt.Assert(t, qt.IsTrue(degraded))
+	qt.Assert(t, qt.IsNil(cerr))
+}
+
 func TestResolve_MembersSharingANameAreOrdinal(t *testing.T) {
 	t.Parallel()
 	// TestResolve_MembersSharingANameAreOrdinal guards against two members
@@ -1888,6 +1958,42 @@ func TestResolve_HTMLDuplicateIDIsAmbiguous(t *testing.T) {
 	qt.Assert(t, qt.Equals(ambiguous.Code, exitcode.AnchorAmbiguous))
 	qt.Assert(t, qt.DeepEquals(ambiguous.Candidates, []string{"div#hero#1", "div#hero#2"}))
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".html", src, "div#hero#1"), `<div id="hero"></div>`))
+}
+
+// TestResolve_HTMLVoidElementDeclOnlyTrimmed pins the seam declOnlyExtent
+// consults for HTML alone: a void element followed by inline text with no
+// enclosing tag or sibling element to stop it (unlike TestResolve_HTML's own
+// "<input ...>\n</div>" fixture, where the enclosing tag's own close already
+// bounds it) absorbs that text into its own node's EndByte() -- left alone
+// in the extent that gets staged (Extent, TestResolve_HTML's own coverage),
+// but trimmed back to the start_tag's own end in DeclOnly, the extent the
+// later LSP cross-check compares against a server that never reports that
+// absorbed text as part of the element either.
+func TestResolve_HTMLVoidElementDeclOnlyTrimmed(t *testing.T) {
+	t.Parallel()
+	src := []byte(`<div id="app">
+<input id="name" type="text">   trailing text with no sibling to stop it
+<p id="after">next</p>
+</div>
+`)
+	lang, ok := resolve.ForExtension(".html")
+	qt.Assert(t, qt.IsTrue(ok))
+
+	res, err := resolve.Resolve(lang, src, "input#name")
+	qt.Assert(t, qt.IsNil(err))
+
+	declOnly := string(src[res.DeclOnly.Start:res.DeclOnly.End])
+	qt.Assert(t, qt.Equals(declOnly, `<input id="name" type="text">`))
+
+	full := string(src[res.Extent.Start:res.Extent.End])
+	qt.Assert(t, qt.StringContains(full, "trailing text with no sibling to stop it"),
+		qt.Commentf("Extent (what gets staged) keeps the grammar's own absorption -- only DeclOnly (cross-check) is trimmed"))
+
+	// An element with a real end_tag is unaffected: DeclOnly and Extent
+	// agree, nothing to trim.
+	pRes, err := resolve.Resolve(lang, src, "p#after")
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(pRes.DeclOnly, pRes.Extent))
 }
 
 func TestResolve_ForPathShebangFallback(t *testing.T) {

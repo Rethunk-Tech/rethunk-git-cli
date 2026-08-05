@@ -172,9 +172,11 @@ cross-check, which catches build-tag, macro, and type-level mismatches.
 | JSON | `vscode-json-language-server` | `npm i -g vscode-langservers-extracted` | One-shot subprocess per query |
 | CSS | `vscode-css-language-server` | `npm i -g vscode-langservers-extracted` | One-shot subprocess per query |
 | Markdown | `marksman` | [GitHub release binary](https://github.com/artempyanykh/marksman/releases) — no package manager publishes it | One-shot subprocess per query |
+| HTML | `vscode-html-language-server` | `npm i -g vscode-langservers-extracted` | One-shot subprocess per query |
 
-JSON and CSS share one npm package, `vscode-langservers-extracted` — a single
-install produces both binaries. `marksman` is the one server in this table
+JSON, CSS, and HTML share one npm package, `vscode-langservers-extracted` — a
+single install produces all three binaries. `marksman` is the one server in
+this table
 [`-with-servers`](#installing-and-updating-servers-automatically) does not
 manage, for the same reason: nothing to shell out to.
 
@@ -187,11 +189,12 @@ kills it on close — nothing persists, and the cross-check is live on the
 first invocation. The transport survey behind this split is in
 [`specs/design.md`](../specs/design.md#transport-support-per-server).
 
-**TOML, SQL, and HTML stay `[ts-only]` permanently** — see
+**TOML and SQL stay `[ts-only]` permanently** — see
 [`LIMITATIONS.md`](LIMITATIONS.md#language-server-coverage) for why. `taplo`
 still completes the LSP handshake once built with `-with-servers`'
 `--features lsp`, and other tooling can use it; it just never drives
-`rgit`'s own cross-check.
+`rgit`'s own cross-check. HTML is wired, with a class-bearing element being
+the one case that still degrades to `[ts-only]` on its own (same section).
 
 ### Installing and updating servers automatically
 
@@ -213,7 +216,7 @@ release binaries itself:
 | `pyright-langserver` | npm/bun | `npm install -g pyright` |
 | `bash-language-server` | npm/bun | `npm install -g bash-language-server` |
 | `yaml-language-server` | npm/bun | `npm install -g yaml-language-server` |
-| `vscode-json-language-server`, `vscode-css-language-server` | npm/bun | `npm install -g vscode-langservers-extracted` (one package, both binaries) |
+| `vscode-json-language-server`, `vscode-css-language-server`, `vscode-html-language-server` | npm/bun | `npm install -g vscode-langservers-extracted` (one package, all three binaries) |
 | `taplo` | cargo | `cargo install taplo-cli --locked --features lsp` |
 
 Every row above except `taplo` is a server `rgit` dials for its own

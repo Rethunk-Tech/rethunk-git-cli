@@ -30,6 +30,13 @@ Notable changes to `rgit`. The format follows
   (`SHA256SUMS.sigstore.json`), verifiable against this repo's own release
   workflow identity. See [`docs/INSTALL.md`](docs/INSTALL.md#verify).
 
+- The LSP extent cross-check now covers **HTML**, via
+  `vscode-html-language-server`: an id-bearing element (`div#app`) verifies
+  against a live server the same way Go, TypeScript, Python, and five other
+  grammars already do. A class-bearing element still degrades to
+  `[ts-only]` on its own (the server names it differently, safely). See
+  [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md#language-server-coverage).
+
 - `--follow-rename` on `rgit log FILE:SYMBOL`, continuing a symbol's history
   past a rename `git log -L`'s own line-range tracking loses (a rename that
   also reorders the symbol within the file): the anchor is re-resolved with
