@@ -106,7 +106,7 @@ const rgitCommitFlags = "-m --message -F --message-file -s --signoff --trailer -
 const rgitLanguagesFlags = "--porcelain --in-repo -h --help"
 const rgitDoctorFlags = "-h --help"
 const rgitCompletionFlags = "-h --help"
-const rgitBlameFlags = "--porcelain -h --help"
+const rgitBlameFlags = "-p --porcelain -h --help"
 const rgitLogFlags = "--porcelain -p --patch --since --until -h --help"
 const rgitContextFlags = "-h --help"
 

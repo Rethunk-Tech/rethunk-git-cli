@@ -17,28 +17,31 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 )
 
-const blameHelp = `usage: rgit blame FILE:SYMBOL [--porcelain]
+const blameHelp = `usage: rgit blame FILE:SYMBOL [-p|--porcelain]
 
 Blame bounded to one symbol's own extent: git blame -L over just the lines
 the anchor resolves to in the current worktree file, never the whole file.
 An anchor that does not resolve is exit 3 (or 4 if ambiguous, 9 if the
 language has no grammar) -- never a silently widened, whole-file blame.
 
---porcelain passes straight through to git's own "git blame --porcelain"
-format (see docs/CODES.md#output-records); the default is git's own
-human-readable blame output, likewise unmodified.
+-p, --porcelain passes straight through to git's own "git blame --porcelain"
+format (see docs/CODES.md#output-records) -- both spellings, matching git
+blame's own flag exactly: unlike "git log -p" or "git diff -p", git blame's
+"-p" already means "--porcelain", not "patch" (blame has no patch mode of
+its own to opt into; it annotates lines, it does not diff them). The
+default is git's own human-readable blame output, likewise unmodified.
 
 Full reference: docs/USAGE.md
 `
 
 // runBlame's flag surface is exactly rgit languages': one positional
-// FILE:SYMBOL anchor plus --porcelain, hand-parsed via shared.go's
+// FILE:SYMBOL anchor plus -p/--porcelain, hand-parsed via shared.go's
 // parseAnchorCommandArgs rather than pulling in pflag for a command this
 // small (languages.go's own precedent).
 func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	porcelain := false
 	positional, code, done := parseAnchorCommandArgs("blame", args,
-		[]anchorCommandFlag{{tokens: []string{"--porcelain"}, set: &porcelain}},
+		[]anchorCommandFlag{{tokens: []string{"-p", "--porcelain"}, set: &porcelain}},
 		blameHelp, stdout, stderr)
 	if done {
 		return code

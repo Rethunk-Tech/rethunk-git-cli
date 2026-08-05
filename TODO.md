@@ -389,26 +389,6 @@ constructs no anchor reaches — are documented in
 
 ## Log / blame
 
-- [ ] **`rgit blame -p` / `--patch`.** `rgit log` already accepts `-p`/`--patch`
-      as opt-in patch output (`internal/app/log.go`). `rgit blame` supports
-      `--porcelain` only (`internal/app/blame.go`), forwarding to `git blame
-      --porcelain` over the symbol's line range.
-
-      **Packages / files:** `internal/app/blame.go`, `internal/app/shared.go`
-      (`parseAnchorCommandArgs`), `internal/app/completion.go` (`rgitBlameFlags`),
-      `docs/USAGE.md` § Blame, `docs/CODES.md`, `internal/app/blame_test.go`,
-      `internal/app/completion_test.go`.
-
-      **Traps:** Mutually exclusive with `--porcelain` if git treats them that way
-      — mirror `log`'s flag validation. Default stays human-readable blame.
-      Patch body is git's own format, unmodified (same convention as `diff -p`).
-      Line range comes from resolved extent — wrong anchor still exit 3/4/9, never
-      whole-file widen.
-
-      **Acceptance criteria:** `rgit blame -p file.go:Symbol` emits git's standard
-      patch-style blame for the symbol's lines only. `--porcelain` and `-p` together
-      → exit 129 with clear message. Help, completion, and USAGE updated.
-
 ## Repository edges
 
 - [ ] **Submodule and sparse-checkout behaviour audit.** Symbol anchors on

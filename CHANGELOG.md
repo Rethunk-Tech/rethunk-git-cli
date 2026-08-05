@@ -35,6 +35,9 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `-p` as an alias for `--porcelain` on `rgit blame`, matching git blame's
+  own flag exactly. See [`docs/USAGE.md`](docs/USAGE.md#blame).
+
 - `rgit languages --in-repo` narrows the grammar listing to adapters with at
   least one matching tracked file in the current repository, advisory only
   (the binary still contains every compiled-in grammar). Requires a git

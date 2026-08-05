@@ -143,3 +143,17 @@ func TestRun_BlamePorcelainReachesGit(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(stdout, "\nauthor "))
 }
+
+// TestRun_BlameShortPorcelainFlagMatchesGit pins that "-p" is accepted as an
+// alias for "--porcelain", exactly matching git blame's own flag (unlike
+// "git log -p" or "git diff -p", git blame's "-p" already means porcelain,
+// not patch -- blame has no patch mode to opt into).
+func TestRun_BlameShortPorcelainFlagMatchesGit(t *testing.T) {
+	chdirTempRepo(t)
+
+	long, _, longCode := runApp(t, "blame", "a.go:A", "--porcelain")
+	short, _, shortCode := runApp(t, "blame", "a.go:A", "-p")
+	qt.Assert(t, qt.Equals(shortCode, exitcode.Success))
+	qt.Assert(t, qt.Equals(shortCode, longCode))
+	qt.Assert(t, qt.Equals(short, long))
+}

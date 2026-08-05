@@ -182,6 +182,11 @@ blame — it is exit 3 (unresolvable), 4 (ambiguous), or 9 (unsupported
 language), the same codes `commit` and `diff --sym` already give the
 identical anchor. See [`CODES.md`](CODES.md#exit-codes).
 
+`-p` is accepted alongside `--porcelain` as its exact alias, matching git
+blame's own flag: unlike `git log -p` or `git diff -p`, git blame's own `-p`
+already means `--porcelain`, not "patch" — blame annotates lines, it does
+not diff them, so there is no separate patch mode to opt into.
+
 `--porcelain` passes straight through to git's own `git blame --porcelain`
 output, unmodified — not a second record format rgit invents. The default is
 likewise git's own human-readable blame output, unmodified. See
