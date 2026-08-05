@@ -30,6 +30,13 @@ Notable changes to `rgit`. The format follows
   (`SHA256SUMS.sigstore.json`), verifiable against this repo's own release
   workflow identity. See [`docs/INSTALL.md`](docs/INSTALL.md#verify).
 
+- `--follow-rename` on `rgit log FILE:SYMBOL`, continuing a symbol's history
+  past a rename `git log -L`'s own line-range tracking loses (a rename that
+  also reorders the symbol within the file): the anchor is re-resolved with
+  tree-sitter at each rename boundary instead of trusting that tracking, one
+  parse per rename rather than per commit. See
+  [`docs/USAGE.md`](docs/USAGE.md#log-across-renames).
+
 - `-p`/`--patch` on `rgit diff`, appending git's own real patch body after
   the aligned/porcelain report — unmodified, the same "not a second format
   `rgit` invents" convention `log -p` and `blame --porcelain` already use.

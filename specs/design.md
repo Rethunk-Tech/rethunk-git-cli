@@ -1248,23 +1248,50 @@ commit; it re-derives the touched line range at each commit *itself*, as
 part of its own diff engine — confirmed directly: editing a symbol whose
 line position had already shifted between commits still produced the
 correct single-commit-per-touch history with no help from this side, one
-subprocess exec, zero additional parses. `git log --follow` would have paid
-a tree-sitter parse per historical commit to get the one thing `-L` does not
-already do — track the symbol through a **rename** — which is the one case
-`-L` cannot reach at all (measured: `git log -L range:oldname` after a
+subprocess exec, zero additional parses. This diff-engine tracking turned
+out to already follow a **rename** too, whenever git's own content
+similarity detects one — measured directly: `git log -L range:newname` (the
+current name, queried the only way rgit's anchor resolution ever starts —
+against `HEAD`) continued reporting commits under `oldname` with no
+`--follow` and no help from this side. What genuinely fails is starting
+`-L` from a name `HEAD` does not have: `git log -L range:oldname` after a
 `git mv` + commit fails outright with `fatal: There is no path <oldname> in
-the commit`, since `-L`'s own range interpretation never crosses a rename
-boundary).
+the commit` — irrelevant to rgit, since an anchor always resolves against
+the current name first.
 
-Chosen: `git log -L`, resolved once. The per-commit re-resolution branch was
-not built, because the cheap branch already delivers the token case
-(`git log -L :func:file`'s flood, bounded to touching commits) for the
-overwhelming majority of history queries — a symbol that has never moved
-file. A renamed file loses its history under the old name
-(`docs/LIMITATIONS.md#history-across-renames`) — an explicit, documented
-gap, not a silent one, and cheaper to accept than to build around given how
-rarely a query needs to survive a rename its own caller does not yet know
-happened.
+Chosen: `git log -L`, resolved once, still. The one real gap this diff-based
+tracking leaves is accuracy, not reach: it follows *lines*, not the
+*symbol*, so a rename that also reshuffles the symbol's position in the
+file (a reorder, a surrounding refactor landing in the same commit) can
+lose the thread partway even though the rename itself was detected — a
+line-range heuristic has no notion of "this decl moved," only "this text
+moved." `--follow-rename` (below) covers exactly that gap; the plain,
+unflagged form stays resolved once, since it already carries the common
+case (a symbol whose file was never renamed, or renamed cleanly enough for
+git's own tracking) for one subprocess exec and zero additional parses.
+
+### `--follow-rename`: re-resolve at each rename boundary, not at each commit
+
+Per-commit re-resolution (`git log --follow` plus a tree-sitter parse at
+every historical commit) was rejected above for the plain form on cost —
+and stays rejected here: it pays a parse for every touching commit just to
+get the same handful of rename boundaries a much cheaper query already
+names outright. `gitx.FindRename` asks git directly for the nearest commit
+in a file's `--follow`ed history that git's own diff engine classified as a
+rename (`git log --follow --diff-filter=R --name-status --format=%H -1`) —
+one exec, no parsing on this side. Only *there* — at the boundary itself,
+not at every commit either side of it — does `--follow-rename` re-resolve
+the anchor with tree-sitter, against the old name's blob one commit before
+the boundary, then hands the segment back to `git log -L` (bounded to
+`boundary~1..segment-start`) exactly as the unflagged form does. One parse
+per rename, however many renames the file has had; zero parses for commits
+that only edited the symbol without renaming its file.
+
+This still cannot detect a rename git's own similarity heuristic misses (an
+old file gutted to near-nothing before or at the rename commit) — the same
+ceiling `git log --follow` has for a whole-file history, inherited rather
+than worked around, since working around it would mean walking every
+commit's tree speculatively, the per-commit cost rejected above.
 
 **The anchor resolves against `HEAD`, not the worktree — unlike `blame`.**
 `git log -L` walks `HEAD`'s own history and has no notion of the worktree at

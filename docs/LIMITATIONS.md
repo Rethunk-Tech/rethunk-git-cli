@@ -145,16 +145,20 @@ refused for a symbol anchor the same way a symlink or submodule is (exit
 
 ## History across renames
 
-`rgit log FILE:SYMBOL` runs `git log -L` bounded to the named file, which —
-unlike `git log --follow` — does not track the file across a rename. A
-symbol's history is reachable only under the name its file currently has;
-querying it under a prior name fails at argument classification, the same as
-naming any other path that exists under neither the worktree nor `HEAD`. This
-was a deliberate trade-off, not an oversight: following a rename correctly
-would mean re-resolving the symbol's extent at every commit that could have
-renamed the file, a parse per commit, for a case measurably rarer than the
-plain history lookup this command exists to serve. See
-[`../specs/design.md`](../specs/design.md#commands) for the reasoning.
+`rgit log FILE:SYMBOL` runs `git log -L` bounded to the named file. `-L`
+already tracks a line range across a rename on its own, the same content
+similarity detection `git log --follow` uses for a whole file — but it does
+so by following the diff, not by re-parsing the renamed file, so a rename
+that also moves the symbol within the file (reordering, a surrounding
+refactor) can lose the thread partway. `--follow-rename` covers that case by
+re-resolving the anchor with tree-sitter at each rename boundary instead —
+see [`USAGE.md`](USAGE.md#log-across-renames) — one parse per rename, not
+per commit, the trade-off `../specs/design.md`'s own reasoning settled on.
+
+Either way, a symbol's history is only reachable starting from the file's
+**current** name: querying it under a prior name directly fails at argument
+classification, the same as naming any other path that exists under neither
+the worktree nor `HEAD`.
 
 ## Language-server coverage
 

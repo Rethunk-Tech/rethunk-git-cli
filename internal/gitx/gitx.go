@@ -924,6 +924,36 @@ func (e *LineRangePathError) Error() string {
 	return fmt.Sprintf("gitx: %q: cannot be used with LogLineRange -- git log's own -L<range>:<path> argument joins the two with ':' and has no way to escape one inside path", e.Path)
 }
 
+// FindRename walks path's history backward from rev (via --follow, so
+// renames are tracked) for the nearest commit whose own diff renamed it,
+// used by `rgit log --follow-rename` to find each segment boundary without
+// walking commit-by-commit itself -- git's own --follow already re-derives
+// the rename chain, so there is nothing left for rgit to detect on its own
+// side, the same delegation --follow-rename's own design record entry
+// argues for.
+//
+// found is false when path was never renamed reaching back from rev (the
+// common case, and the terminal one for any --follow-rename walk): commit
+// and oldPath are then meaningless. When found, commit is the rename
+// commit's own hash and oldPath is the name path carried immediately
+// before it -- the caller resolves the anchor's extent against
+// commit+"~1":oldPath to continue the walk one segment further back.
+func (r *Repo) FindRename(ctx context.Context, rev, path string) (commit, oldPath string, found bool, err error) {
+	out, err := r.checked(ctx, "log", "--follow", "--diff-filter=R", "--name-status", "--format=%H", "-1", rev, "--", path)
+	if err != nil {
+		return "", "", false, err
+	}
+	lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+	if len(lines) < 3 || lines[0] == "" {
+		return "", "", false, nil
+	}
+	fields := strings.Split(lines[2], "\t")
+	if len(fields) != 3 || !strings.HasPrefix(fields[0], "R") {
+		return "", "", false, nil
+	}
+	return lines[0], fields[1], true, nil
+}
+
 // Log runs `git log`, optionally bounded by --since/--until and a path
 // filter, plus any extra flags/args (e.g. "--no-patch", "--format=...")
 // passed straight through -- rgit log's own time- and path-scoped shape

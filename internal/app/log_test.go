@@ -334,3 +334,76 @@ func TestRun_LogSurvivesWorktreeDeletion(t *testing.T) {
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.StringContains(stdout, "chore: initial"))
 }
+
+// TestRun_LogFollowRenameCrossesARenameThatReordersTheSymbol pins
+// --follow-rename's whole reason to exist: a rename landing in the same
+// commit as a reorder of the symbol within the file breaks git log -L's own
+// line-range tracking (it follows text, not the decl), so the unflagged
+// form stops at the rename commit while --follow-rename, re-resolving with
+// tree-sitter at the boundary, reaches the pre-rename commit under the old
+// name.
+func TestRun_LogFollowRenameCrossesARenameThatReordersTheSymbol(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "old.go", "package p\n\nfunc Foo() int {\n\treturn 1\n}\n\nfunc Bar() int {\n\treturn 100\n}\n")
+	gitOut(t, dir, "add", "old.go")
+	gitOut(t, dir, "commit", "-m", "feat: add old.go")
+
+	gitOut(t, dir, "mv", "old.go", "new.go")
+	writeAppFile(t, dir, "new.go", "package p\n\nfunc Bar() int {\n\treturn 100\n}\n\nfunc Foo() int {\n\treturn 2\n}\n")
+	gitOut(t, dir, "add", "-A")
+	gitOut(t, dir, "commit", "-m", "refactor: rename and reorder")
+
+	writeAppFile(t, dir, "new.go", "package p\n\nfunc Bar() int {\n\treturn 100\n}\n\nfunc Foo() int {\n\treturn 3\n}\n")
+	gitOut(t, dir, "add", "-A")
+	gitOut(t, dir, "commit", "-m", "fix: bump Foo")
+
+	t.Run("without the flag, history stops at the rename", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "log", "new.go:Foo")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "fix: bump Foo"))
+		qt.Assert(t, qt.StringContains(stdout, "refactor: rename and reorder"))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "feat: add old.go")))
+	})
+
+	t.Run("--follow-rename reaches the pre-rename commit", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "log", "new.go:Foo", "--follow-rename")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "fix: bump Foo"))
+		qt.Assert(t, qt.StringContains(stdout, "refactor: rename and reorder"))
+		qt.Assert(t, qt.StringContains(stdout, "feat: add old.go"))
+
+		lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
+		qt.Assert(t, qt.Equals(len(lines), 3))
+	})
+
+	t.Run("--follow-rename --porcelain keeps the two-field record shape across segments", func(t *testing.T) {
+		stdout, _, code := runApp(t, "log", "new.go:Foo", "--follow-rename", "--porcelain")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
+		qt.Assert(t, qt.Equals(len(lines), 3))
+		for _, line := range lines {
+			qt.Assert(t, qt.Equals(len(strings.Split(line, "\t")), 2))
+		}
+	})
+}
+
+// TestRun_LogFollowRenameNoRenameMatchesDefault pins that --follow-rename
+// changes nothing for a symbol whose file was never renamed -- the loop
+// runs exactly once, gitx.FindRename reports found=false, and output is
+// byte-identical to the unflagged form.
+func TestRun_LogFollowRenameNoRenameMatchesDefault(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	gitOut(t, dir, "add", "-A")
+	gitOut(t, dir, "commit", "-m", "fix(a): bump A")
+
+	withoutFlag, _, code := runApp(t, "log", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+
+	withFlag, _, code := runApp(t, "log", "a.go:A", "--follow-rename")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+
+	qt.Assert(t, qt.Equals(withFlag, withoutFlag))
+}

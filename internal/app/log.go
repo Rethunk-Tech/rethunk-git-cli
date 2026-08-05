@@ -22,17 +22,20 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/pflag"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
-const logHelp = `usage: rgit log FILE:SYMBOL [--porcelain | -p|--patch]
+const logHelp = `usage: rgit log FILE:SYMBOL [--follow-rename] [--porcelain | -p|--patch]
        rgit log --since=DATE [--until=DATE] [--porcelain | -p|--patch] [PATH...]
 
 History of one symbol: one record per commit whose own diff touched its
@@ -43,8 +46,9 @@ which is exactly the flood this command exists to avoid.
 The anchor is resolved once, against HEAD -- never the worktree -- since
 history is a question about what has already been committed, and git log
 -L itself walks HEAD's own history with no notion of the worktree at all.
-A file renamed since a commit loses its history under the old name; query
-it under its current name instead (docs/LIMITATIONS.md).
+A file renamed since a commit loses its history under the old name unless
+--follow-rename is given, which re-resolves the anchor's extent at each
+rename boundary and walks further back under the old name (docs/LIMITATIONS.md).
 
 --since=DATE switches to the second form: ordinary, non-anchored git
 history bounded by date and, optionally, one or more paths -- no symbol
@@ -54,6 +58,11 @@ accepts there ("2024-01-01", "2 weeks ago") works here too.
 --until=DATE bounds the same form's other end, alone or combined with
 --since. With no path and only one bound (or neither), it is the whole
 repository's history in that window, matching plain "git log --since=DATE".
+
+--follow-rename walks the file's rename history: at each commit that
+renamed it, the anchor's extent is re-resolved against the old name's blob
+just before the rename, and history continues under that name. Without it,
+history stops at the file's current name, matching plain "git log -L".
 
 --porcelain lists stable tab-separated HASH<TAB>SUBJECT records instead of
 the aligned "<abbrev-hash> <subject>" default.
@@ -101,10 +110,12 @@ func runLog(ctx context.Context, dir string, args []string, stdout, stderr io.Wr
 func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	porcelain := false
 	patch := false
+	followRename := false
 	positional, code, done := parseAnchorCommandArgs("log", args,
 		[]anchorCommandFlag{
 			{tokens: []string{"--porcelain"}, set: &porcelain},
 			{tokens: []string{"-p", "--patch"}, set: &patch},
+			{tokens: []string{"--follow-rename"}, set: &followRename},
 		},
 		logHelp, stdout, stderr)
 	if done {
@@ -137,10 +148,13 @@ func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr
 	}
 	warnIfOrdinalAnchor(stderr, file, anchorName)
 
-	start, end := lineRange(head, res.Extent)
-
 	extra := logFormatArgs(patch, porcelain)
 
+	if followRename {
+		return runLogFollowRename(ctx, repo, file, head, res, anchorName, extra, stdout, stderr)
+	}
+
+	start, end := lineRange(head, res.Extent)
 	out, err := repo.LogLineRange(ctx, file, start, end, extra...)
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
@@ -148,6 +162,77 @@ func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr
 	}
 	_, _ = stdout.Write(out)
 	return exitcode.Success
+}
+
+// runLogFollowRename walks file's rename history one segment at a time,
+// newest first: HEAD's own extent (already resolved by the caller as head/
+// res) covers the segment from HEAD back to the nearest rename boundary
+// (or, absent one, the file's whole history); each further segment
+// re-resolves the anchor against the old name's blob one commit before
+// that boundary and repeats, via gitx.FindRename. This is deliberately not
+// a per-commit tree-sitter re-parse (TODO.md's own tradeoff): git log -L
+// already re-derives how a fixed line range moves within one file's own
+// history, so only a rename crossing to a new path name -- found once per
+// segment, not once per commit -- needs a fresh resolve.
+func runLogFollowRename(ctx context.Context, repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, anchorName string, extra []string, stdout, stderr io.Writer) exitcode.Code {
+	rev := "HEAD"
+	for {
+		start, end := lineRange(src, res.Extent)
+
+		renameCommit, oldPath, found, err := repo.FindRename(ctx, rev, file)
+		if err != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return exitcode.GitFailure
+		}
+
+		// Bounded to the rename boundary when one was found -- otherwise
+		// this segment's own git log -L would walk straight through it and
+		// duplicate the history the next segment (under the old name) is
+		// about to report on its own.
+		segRev := rev
+		if found {
+			segRev = renameCommit + "~1.." + rev
+		}
+		segArgs := append([]string{segRev}, extra...)
+		out, err := repo.LogLineRange(ctx, file, start, end, segArgs...)
+		if err != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return exitcode.GitFailure
+		}
+		_, _ = stdout.Write(out)
+
+		if !found {
+			return exitcode.Success
+		}
+
+		rev = renameCommit + "~1"
+		file = oldPath
+		lang, ok := resolve.ForExtension(filepath.Ext(file))
+		if !ok {
+			fmt.Fprintf(stderr, "rgit: log: %q: unsupported language before the rename to its current name\n", file)
+			return exitcode.UnsupportedLanguage
+		}
+		var exists bool
+		src, exists, err = repo.CatFile(ctx, rev, file)
+		if err != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return exitcode.GitFailure
+		}
+		if !exists {
+			fmt.Fprintf(stderr, "rgit: log: %q does not exist at %s\n", file, rev)
+			return exitcode.AnchorUnresolvable
+		}
+		res, err = resolve.Resolve(lang, src, anchorName)
+		if err != nil {
+			var rerr *resolve.ResolveError
+			if errors.As(err, &rerr) {
+				fmt.Fprintf(stderr, "rgit: %s\n", rerr.Error())
+				return rerr.Code
+			}
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return exitcode.GitFailure
+		}
+	}
 }
 
 // runLogPathScoped is rgit log --since/--until's form: ordinary,

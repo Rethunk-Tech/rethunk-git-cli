@@ -76,32 +76,3 @@ constructs no anchor reaches — are documented in
       cross-check after the trim seam. Class-bearing `div#app.widget` continues
       to degrade to `[ts-only]` (safe). `rgit doctor` reports HTML server status.
       Design record and `docs/LIMITATIONS.md` updated to reflect wired status.
-
-## Log
-
-- [ ] **`rgit log FILE:SYMBOL` across file renames.** Today history is
-      `git log -L` bounded to the file's **current** name, resolved once against
-      HEAD (`internal/app/log.go`, `docs/LIMITATIONS.md` § History across
-      renames). Following a rename correctly requires re-resolving the symbol's
-      extent at every commit that could have renamed the file — a parse per
-      commit — traded off as rarer than plain history lookup (`specs/design.md` §
-      Commands).
-
-      **Packages / files:** `internal/app/log.go`, `internal/gitx/gitx.go`,
-      `internal/resolve/` (per-commit `Open` + `Resolve`), `docs/LIMITATIONS.md`,
-      `docs/USAGE.md`, `specs/design.md`.
-
-      **Traps:** `git log --follow` does not give symbol extents — cannot delegate
-      wholesale. Per-commit resolution must use the blob **at that commit**, not
-      HEAD's extent, or `-L` ranges will be wrong after the symbol moved lines.
-      Performance: large files × long history × tree-sitter parse — may need a
-      `--no-follow` default with opt-in `--follow-rename` rather than changing
-      default behaviour silently. Renames without content change still shift path.
-      Worktree is irrelevant (log is HEAD-only) — do not read worktree copies.
-
-      **Acceptance criteria:** Fixture: file `old.go:Foo` renamed to `new.go`,
-      symbol `Foo` edited before and after rename — `rgit log new.go:Foo
-      --follow-rename` (or chosen flag) lists commits touching `Foo` under both
-      names, newest first. Without the flag, behaviour matches today's
-      HEAD-name-only semantics. Porcelain `HASH<TAB>SUBJECT` shape unchanged.
-      Documented limitation lifted or qualified in `docs/LIMITATIONS.md`.

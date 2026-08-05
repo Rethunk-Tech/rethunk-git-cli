@@ -239,9 +239,16 @@ also means a symbol already deleted from the worktree, but still present in
 `HEAD`, keeps its history reachable — there is nothing to open on disk, so
 `rgit log` never needs to.
 
-A symbol's history stops at the commit that renamed its file: `git log -L`
-does not follow renames the way `git log --follow` does for a whole file.
-Query it under its current name; see
+`git log -L` already follows a rename on its own whenever git's own content
+similarity detects one, the same as `git log --follow` — but it tracks the
+*line range* through the rename by diff, not by re-parsing the old file, so
+a rename that also reshuffles the symbol's position (or otherwise breaks the
+line-level correspondence) can silently stop short. `--follow-rename`
+re-resolves the anchor with tree-sitter against the old name's blob at each
+rename boundary instead of trusting that line-tracking, and continues under
+the old name from there. Either way, the anchor must resolve at `HEAD`
+under the file's **current** name — querying by a prior name directly fails
+at argument classification. See
 [`LIMITATIONS.md`](LIMITATIONS.md#history-across-renames).
 
 An anchor that does not resolve is exit 3 (unresolvable), 4 (ambiguous), or 9
@@ -251,6 +258,22 @@ already give the identical anchor. See [`CODES.md`](CODES.md#exit-codes).
 `--porcelain` lists stable tab-separated `HASH<TAB>SUBJECT` records instead of
 the aligned `<abbrev-hash> <subject>` default, no header. Mutually exclusive
 with `-p`/`--patch`. See [`CODES.md`](CODES.md#output-records).
+
+### Log across renames
+
+```console
+$ rgit log new.go:Foo --follow-rename
+b6f3975 edit
+2793187 rename + reorder
+c8fdd8a init
+```
+
+`--follow-rename` continues a symbol's history past a rename that plain `log
+FILE:SYMBOL` stops at, one rename boundary at a time (not a per-commit
+re-parse): at each commit git's own follow detects as a rename, the anchor
+is re-resolved with tree-sitter against the old name's blob one commit
+earlier, and history continues under that name. Without the flag, behaviour
+is unchanged. See [`LIMITATIONS.md`](LIMITATIONS.md#history-across-renames).
 
 ### Log by date and path
 
