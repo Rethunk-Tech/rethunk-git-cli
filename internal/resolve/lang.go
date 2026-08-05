@@ -348,6 +348,17 @@ var shebangExtension = map[string]string{
 
 	"python3": ".py",
 	"python":  ".py",
+
+	// The whole Node/TypeScript ecosystem routes to the TypeScript adapter
+	// (.ts), never a new grammar: tree-sitter-typescript's own dialect
+	// already parses plain JS as a subset, and none of these interpreters
+	// is a JSX runner specifically -- a real ".tsx"/".jsx" file already
+	// carries its own extension and never reaches shebang sniffing at all.
+	"node":    ".ts",
+	"nodejs":  ".ts",
+	"tsx":     ".ts",
+	"ts-node": ".ts",
+	"bun":     ".ts",
 }
 
 // ForPath returns the adapter for path. Extension lookup is tried first and
@@ -386,12 +397,23 @@ func ForPath(path string, content []byte) (Language, bool) {
 //
 // "#!/usr/bin/env bash" and "#!/bin/bash" both resolve to "bash": the
 // "/usr/bin/env NAME" indirection is unwrapped to NAME, the same interpreter
-// a direct "#!/bin/NAME" spells directly. An env invocation carrying flags
-// of its own ("#!/usr/bin/env -S bash -x") is not unwrapped -- the first
-// field after "env" would be "-S", not the interpreter -- and is left
-// unmapped rather than guessed at; this is a known gap, not a silent
-// misparse, since an unrecognized interpreter falls through to the same
-// honest "no grammar registered" refusal every other unmapped shebang does.
+// a direct "#!/bin/NAME" spells directly. "#!/usr/bin/env -S NAME ..." is
+// unwrapped the same way, skipping the "-S" itself -- env's own "split the
+// rest of the line into multiple arguments" flag, needed for a NAME that
+// takes flags of its own ("#!/usr/bin/env -S node --import tsx"). Only that
+// one flag is recognized; "#!/usr/bin/env -S bash -x" unwraps to "bash",
+// but any other env flag before NAME is left unmapped rather than guessed
+// at, the same honest "no grammar registered" refusal every unrecognized
+// interpreter already falls through to.
+//
+// "npx NAME" and "bunx NAME" are unwrapped once more, to NAME itself: both
+// are package runners, not interpreters, and NAME is what actually decides
+// the language ("#!/usr/bin/env npx tsx" is TypeScript, not "npx"). A bare
+// "npx"/"bunx" with nothing after it stays unmapped -- there is no honest
+// guess for what it would have run. "bun" needs no such unwrap: unlike
+// npx/bunx it is a real JS/TS runtime in its own right, mapped directly in
+// shebangExtension, and a trailing subcommand ("bun run") is simply never
+// looked at.
 func shebangInterpreter(content []byte) (string, bool) {
 	line := content
 	if i := bytes.IndexByte(line, '\n'); i >= 0 {
@@ -405,9 +427,18 @@ func shebangInterpreter(content []byte) (string, bool) {
 	if len(fields) == 0 {
 		return "", false
 	}
-	interp := filepath.Base(fields[0])
-	if interp == "env" && len(fields) > 1 {
-		interp = filepath.Base(fields[1])
+
+	i := 0
+	interp := filepath.Base(fields[i])
+	if interp == "env" && len(fields) > i+1 {
+		i++
+		if fields[i] == "-S" && len(fields) > i+1 {
+			i++
+		}
+		interp = filepath.Base(fields[i])
+	}
+	if (interp == "npx" || interp == "bunx") && len(fields) > i+1 {
+		interp = filepath.Base(fields[i+1])
 	}
 	return interp, true
 }

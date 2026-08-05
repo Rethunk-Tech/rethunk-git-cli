@@ -45,6 +45,13 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- Extensionless shebang scripts naming `node`, `nodejs`, `tsx`, `ts-node`,
+  or `bun` now route to the TypeScript adapter, including via `env -S` and
+  through an `npx`/`bunx` package-runner wrapper (`#!/usr/bin/env npx
+  tsx`). No new grammar — these already resolved with a `.ts`/etc.
+  extension; only the extensionless case was gapped. See
+  [`docs/ANCHORS.md`](docs/ANCHORS.md#language-support).
+
 - `rgit diff` now attributes an untracked file by symbol — `MOD` rows for
   each declared symbol, exactly like a brand-new tracked file — instead of
   collapsing it to a single `(untracked)` row. `--sym` filters it the same

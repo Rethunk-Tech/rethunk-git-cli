@@ -177,3 +177,73 @@ func TestTSFamily_CachesLanguage(t *testing.T) {
 		t.Error("TypeScript and TSX must not share the same *ts.Language -- they are different grammars")
 	}
 }
+
+// TestShebangInterpreter_NodeJSEcosystem pins docs/ANCHORS.md's shebang
+// sniffing for the Node/TypeScript ecosystem: node/nodejs/tsx/ts-node/bun,
+// the "env -S NAME ..." unwrap, and the npx/bunx package-runner unwrap to
+// the tool they actually run. An interpreter this resolver has no adapter
+// for at all stays honestly unmapped rather than guessed at.
+func TestShebangInterpreter_NodeJSEcosystem(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		line string
+		want string
+		ok   bool
+	}{
+		{"direct node", "#!/usr/bin/env node\n", "node", true},
+		{"nodejs binary name", "#!/usr/bin/env nodejs\n", "nodejs", true},
+		{"env -S with a flag of its own", "#!/usr/bin/env -S node --import tsx\n", "node", true},
+		{"npx unwraps to its target", "#!/usr/bin/env npx tsx\n", "tsx", true},
+		{"bunx unwraps to its target", "#!/usr/bin/env bunx ts-node\n", "ts-node", true},
+		{"bun run stays bun, trailing subcommand ignored", "#!/usr/bin/env bun run\n", "bun", true},
+		{"bare npx with nothing after it stays unmapped by shebangExtension, but shebangInterpreter still reports it", "#!/usr/bin/env npx\n", "npx", true},
+		{"unrecognized interpreter still reports its name", "#!/usr/bin/perl\n", "perl", true},
+		{"not a shebang at all", "# just a comment\n", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, ok := shebangInterpreter([]byte(tt.line))
+			if ok != tt.ok || got != tt.want {
+				t.Errorf("shebangInterpreter(%q) = (%q, %v); want (%q, %v)", tt.line, got, ok, tt.want, tt.ok)
+			}
+		})
+	}
+}
+
+// TestForPath_NodeJSEcosystemRoutesToTypeScript pins the acceptance
+// criteria's own fixtures end-to-end through ForPath: each extensionless
+// shebang resolves via the TypeScript adapter, an unmapped interpreter
+// (perl) still refuses, and zsh -- excluded on purpose, tree-sitter-bash
+// mis-parses it -- stays unmapped rather than silently routed to the shell
+// adapter.
+func TestForPath_NodeJSEcosystemRoutesToTypeScript(t *testing.T) {
+	t.Parallel()
+
+	typescript, ok := ForExtension(".ts")
+	if !ok {
+		t.Fatal("ForExtension(.ts) not registered")
+	}
+
+	fixtures := []string{
+		"#!/usr/bin/env node\nconsole.log(1)\n",
+		"#!/usr/bin/env -S node --import tsx\nconsole.log(1)\n",
+		"#!/usr/bin/env npx tsx\nconsole.log(1)\n",
+		"#!/usr/bin/env bun run\nconsole.log(1)\n",
+	}
+	for _, content := range fixtures {
+		lang, ok := ForPath("script", []byte(content))
+		if !ok || lang.Name() != typescript.Name() {
+			t.Errorf("ForPath(%q) = (%v, %v); want the TypeScript adapter", content, lang, ok)
+		}
+	}
+
+	if _, ok := ForPath("script", []byte("#!/usr/bin/perl\nprint 1;\n")); ok {
+		t.Error(`ForPath with a perl shebang resolved; want exit-9 unmapped`)
+	}
+	if _, ok := ForPath("script", []byte("#!/usr/bin/env zsh\necho hi\n")); ok {
+		t.Error("ForPath with a zsh shebang resolved; zsh stays excluded (tree-sitter-bash mis-parse)")
+	}
+}

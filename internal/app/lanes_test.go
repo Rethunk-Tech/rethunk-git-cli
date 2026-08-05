@@ -301,6 +301,31 @@ func TestRun_CommitExtensionlessShebangResolvesShellSymbol(t *testing.T) {
 	qt.Assert(t, qt.StringContains(head, "echo bar")) // bar's edit stayed uncommitted
 }
 
+// TestRun_CommitExtensionlessNodeShebangResolvesTypeScriptSymbol pins the
+// Node/TypeScript ecosystem's own shebang routing (resolve.shebangExtension)
+// through a real commit, the same way
+// TestRun_CommitExtensionlessShebangResolvesShellSymbol above does for
+// shell: an extensionless script naming "npx tsx" via env resolves symbols
+// through the TypeScript adapter, and one named function stages while its
+// sibling's edit stays uncommitted.
+func TestRun_CommitExtensionlessNodeShebangResolvesTypeScriptSymbol(t *testing.T) {
+	dir, _ := gittest.New(t)
+	t.Chdir(dir)
+
+	writeAppFile(t, dir, "run", "#!/usr/bin/env npx tsx\n\nfunction foo(): void {\n  console.log('v1')\n}\n\nfunction bar(): void {\n  console.log('bar')\n}\n")
+	gitOut(t, dir, "add", "-A")
+	gitOut(t, dir, "commit", "-q", "-m", "init")
+
+	writeAppFile(t, dir, "run", "#!/usr/bin/env npx tsx\n\nfunction foo(): void {\n  console.log('v2')\n}\n\nfunction bar(): void {\n  console.log('changed too')\n}\n")
+
+	_, _, code := runApp(t, "commit", "-m", "fix: bump foo only", "run:foo")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+
+	head := gitOut(t, dir, "show", "HEAD:run")
+	qt.Assert(t, qt.StringContains(head, "v2"))
+	qt.Assert(t, qt.StringContains(head, "bar")) // bar's edit stayed uncommitted
+}
+
 // TestRun_CommitGoTSPythonSymbolGranularityInOneInvocation is M12: the
 // cross-grammar single-invocation guarantee (one `commit` naming a symbol
 // in each of three languages, each file's other symbol staying

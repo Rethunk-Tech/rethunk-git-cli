@@ -49,36 +49,6 @@ constructs no anchor reaches — are documented in
 
 ## Resolution
 
-- [ ] **Expand shebang sniffing for the JS/TS ecosystem — no new grammars.**
-      Extensionless scripts whose shebang names a Node/TypeScript runner should
-      route to the **existing** TypeScript adapter, not exit 9. Map at minimum:
-      `node`, `nodejs`, `tsx`, `ts-node`, and unwrap common launchers (`npx`,
-      `bunx`, `bun`) to the interpreter they execute — e.g.
-      `#!/usr/bin/env npx tsx` → TypeScript. Also handle `#!/usr/bin/env -S …`
-      (`shebangInterpreter` in `internal/resolve/lang.go` currently stops at
-      `-S` and leaves the line unmapped).
-
-      **Packages / files:** `internal/resolve/lang.go` (`shebangExtension`,
-      `shebangInterpreter`, `ForPath`, `LanguageForWorktreePath`),
-      `internal/resolve/lang_test.go`, `docs/ANCHORS.md` § Language support,
-      `specs/design.md` § Grammar scope (shebang-sniffing subsection).
-
-      **Traps:** Do **not** add Rust/C/C++/Ruby/Perl grammars — only map to
-      adapters already in the binary. `zsh` stays excluded (tree-sitter-bash
-      mis-parse). Wrappers like `npx`/`bunx` may carry package subcommands —
-      only unwrap when the resolved executable is unambiguously a known TS/JS
-      runner; otherwise fall through to honest refusal, not a wrong grammar.
-      `PeekShebangLine` reads the worktree only — HEAD-only paths stay
-      extension-only. Shebang peek is bounded to 256 bytes (`shebangPeekBytes`).
-
-      **Acceptance criteria:** Fixtures for `#!/usr/bin/env node`, `#!/usr/bin/env
-      -S node --import tsx`, `#!/usr/bin/env npx tsx`, and `#!/usr/bin/env bun
-      run` on extensionless paths resolve symbols via the TypeScript grammar in
-      the unit lane. Unmapped interpreters (e.g. `#!/usr/bin/perl`) still
-      refuse with exit 9. `rgit diff` and `rgit commit` on a fixture extensionless
-      `.ts` runner script attribute changes by symbol. Docs updated in
-      `docs/ANCHORS.md`.
-
 - [ ] **Wire HTML LSP cross-check.** `vscode-html-language-server` matches
       `rgit`'s ranges for bare `tag#id` elements, but the cross-check stays
       unwired because tree-sitter-html's void-element nodes absorb trailing

@@ -332,9 +332,18 @@ an extensionless `bin/` script or git hook is addressable like any other file.
 `bash` and `sh` resolve to the shell grammar and `python3`/`python` to Python,
 in both the `#!/bin/sh` and `#!/usr/bin/env sh` spellings. **`zsh` is
 deliberately excluded** — the bash grammar mis-parses zsh-specific syntax, and
-a wrong extent is worse than an honest refusal. `#!/usr/bin/env -S bash` is not
-unwrapped. The extension is always tried first, so this changes nothing for a
-file that has one.
+a wrong extent is worse than an honest refusal. The extension is always tried
+first, so this changes nothing for a file that has one.
+
+The Node/TypeScript ecosystem routes to the TypeScript adapter the same way:
+`node`, `nodejs`, `tsx`, `ts-node`, and `bun` all resolve to it, whether
+spelled directly (`#!/usr/bin/env node`) or via `env -S` with a flag of the
+interpreter's own (`#!/usr/bin/env -S node --import tsx`). `npx NAME` and
+`bunx NAME` unwrap once further to `NAME` itself — both are package runners,
+not interpreters, and `NAME` is what actually decides the language
+(`#!/usr/bin/env npx tsx` is TypeScript, not "npx"). No new grammar is added
+for any of this; every one of them was already routing to a language this
+resolver supports, just not yet from an extensionless shebang.
 
 The shebang is read from the worktree, so a script that exists only in `HEAD` —
 one being deleted, or a comparison between two revisions — falls back to a
