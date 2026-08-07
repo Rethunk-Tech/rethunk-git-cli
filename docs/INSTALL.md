@@ -3,7 +3,11 @@
 ## Prerequisites
 
 - **Go 1.26+** with cgo enabled — the tree-sitter grammars are C.
-- **git** on `PATH`. `rgit` shells out to it for everything git already does.
+- **git 2.32+** on `PATH`. `rgit` shells out to it for everything git already
+  does; 2.32 is the newest behaviour any code path relies on (`git commit
+  --trailer`, `internal/gitx.go`). `rgit doctor` checks the resolved
+  version, not just presence, and reports it as informational rather than
+  refusing to run below the floor.
 - Optionally, a **language server** per language you want cross-checked
   (see [Language servers](#language-servers)).
 - Optionally, the **tree-sitter CLI** for `.sql` anchors (see

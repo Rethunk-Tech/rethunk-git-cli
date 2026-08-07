@@ -185,6 +185,12 @@ func runEnvironmentChecks() (checks []prereq.Check, fatal error) {
 	checks = append(checks, git)
 	if !git.OK {
 		fatal = fmt.Errorf("git not found on PATH -- rgit cannot function without it")
+	} else {
+		// Informational, not fatal: an old git degrades individual commands
+		// with whatever error that git version produces rather than failing
+		// doctor outright, matching how a missing language server degrades
+		// rather than blocks.
+		checks = append(checks, prereq.CheckGitVersion(git.Detail, prereq.MinGitVersion))
 	}
 
 	ts := prereq.LookPath("tree-sitter CLI", "tree-sitter", "optional -- only needed to rebuild with SQL support, see docs/INSTALL.md § SQL support")

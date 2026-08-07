@@ -103,41 +103,6 @@ constructs no anchor reaches — are documented in
       e2e lane gets a fish-presence-gated smoke case matching the existing
       bash/zsh ones (skips cleanly when fish is absent from the runner).
 
-## Doctor / prerequisites
-
-- [ ] **`rgit doctor` checks that git is present but never checks its
-      version.** `internal/prereq.LookPath` (`internal/prereq/prereq.go`)
-      only probes presence via `exec.LookPath`. `rgit` shells out to git for
-      every write and relies on specific flag behaviour (`internal/gitx.go`'s
-      `hash-object --path`, `diff --numstat`, `log -L`, sparse-checkout
-      advice text) that an old-enough git may not support or may format
-      differently — the failure mode today is whatever cryptic error that
-      git version happens to produce, not a clear "git too old" from
-      `doctor`.
-
-      **Packages / files:** `internal/prereq/prereq.go` (new version-parsing
-      helper), `internal/app/doctor.go` (new check row), `internal/gitx/gitx.go`
-      (source of truth for which flags are actually relied on), `docs/CODES.md#rgit-doctor---porcelain`
-      (new `env` row).
-
-      **Traps:** `git --version` output has shipped multiple formats across
-      distros (`git version 2.43.0`, plus a `.windows.1`/Apple-git suffix on
-      some platforms) — parse defensively rather than a fixed-position
-      split. Determine the actual floor by auditing `internal/gitx` and
-      `internal/synth` for the newest flag/behaviour in use, don't guess a
-      round number. A version check that's too strict breaks `doctor` on
-      still-working older git; keep the check informational (`doctor`
-      reports it, doesn't refuse to run anything) matching how a missing
-      language server already degrades rather than blocks.
-
-      **Acceptance criteria:** `rgit doctor` gains an `env` row for git's
-      resolved version; below the documented floor it reports `MISSING`
-      (or a distinct degraded status) with the detected version and the
-      floor in `DETAIL`, and `rgit doctor --porcelain` carries the same
-      fact machine-readably. The floor itself is recorded once, in
-      `docs/INSTALL.md#prerequisites`, not duplicated between the check and
-      the docs.
-
 ## Resolution
 
 - [ ] **Survey demand for Vue and Svelte single-file-component anchors.**

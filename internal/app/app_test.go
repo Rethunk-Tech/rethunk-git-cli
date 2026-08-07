@@ -1051,6 +1051,22 @@ func TestRun_DoctorPorcelain(t *testing.T) {
 	qt.Assert(t, qt.IsTrue(sawGit))
 }
 
+// TestRun_DoctorReportsGitVersion pins that doctor checks git's version, not
+// only its presence: the real git on this machine (CONTRIBUTING.md's own
+// hard requirement) always meets internal/prereq.MinGitVersion, so both
+// output forms carry an "ok" git version row alongside the plain git row.
+func TestRun_DoctorReportsGitVersion(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	stdout, _, code := runApp(t, "doctor")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(stdout, "git version"))
+
+	stdout, _, code = runApp(t, "doctor", "--porcelain")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(stdout, "env\tgit version\tok\t"))
+}
+
 // TestRun_DoctorPorcelainMissingGitIsFatalWithMissingStatus pins that a
 // fatal check still gets its normal MISSING record, on top of the usual
 // exit 128 -- the porcelain stream is not suppressed by the failure.

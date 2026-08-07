@@ -410,12 +410,15 @@ unlike the plain form above.
 ## Doctor
 
 `rgit doctor` reports environment health: git on `PATH` (the one thing rgit
-cannot run without), the optional tree-sitter CLI, which language servers
-from [`INSTALL.md`](INSTALL.md#language-servers) answer on `PATH` for the
-extent cross-check, and the same grammar listing `rgit languages` prints. It
-exits 0 unless rgit genuinely cannot function — a missing language server or
-the tree-sitter CLI is informational, since degraded `[ts-only]` resolution
-is normal and documented, not an error (see [`CODES.md`](CODES.md)).
+cannot run without) and its resolved version against the floor
+[`INSTALL.md`](INSTALL.md#prerequisites) documents, the optional tree-sitter
+CLI, which language servers from
+[`INSTALL.md`](INSTALL.md#language-servers) answer on `PATH` for the extent
+cross-check, and the same grammar listing `rgit languages` prints. It exits
+0 unless rgit genuinely cannot function — a missing language server, the
+tree-sitter CLI, or a below-floor git version is informational, since
+degraded `[ts-only]` resolution is normal and documented, not an error (see
+[`CODES.md`](CODES.md)).
 
 `--porcelain` lists the environment and language-server checks as stable
 tab-separated records instead — see
