@@ -6,6 +6,14 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `rgit doctor` now checks git's resolved version against the floor
+  `rgit` relies on (`git commit --trailer`, git 2.32+), not just its
+  presence on `PATH`. Informational, like every other doctor check — a
+  below-floor git is reported, not refused. See
+  [`docs/INSTALL.md`](docs/INSTALL.md#prerequisites).
+
 ## [1.2.0] — 2026-08-05
 
 ### Added
