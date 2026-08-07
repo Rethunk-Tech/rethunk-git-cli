@@ -31,7 +31,7 @@ import (
 // than inherited: a developer's own init.defaultBranch or global
 // user.email would otherwise decide what these tests assert against, and
 // a repository with no identity cannot commit at all.
-func New(t *testing.T) (dir string, repo *gitx.Repo) {
+func New(t testing.TB) (dir string, repo *gitx.Repo) {
 	t.Helper()
 	dir = t.TempDir()
 
@@ -45,7 +45,7 @@ func New(t *testing.T) (dir string, repo *gitx.Repo) {
 // Git runs one git command in dir and returns its combined output, failing
 // the test if git does. The output is returned rather than discarded so a
 // caller can assert on it without a second spelling of this function.
-func Git(t *testing.T, dir string, args ...string) string {
+func Git(t testing.TB, dir string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
@@ -57,7 +57,7 @@ func Git(t *testing.T, dir string, args ...string) string {
 }
 
 // Write creates a file under dir, making any parent directories it needs.
-func Write(t *testing.T, dir, rel, content string) {
+func Write(t testing.TB, dir, rel, content string) {
 	t.Helper()
 	full := filepath.Join(dir, rel)
 	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
@@ -70,7 +70,7 @@ func Write(t *testing.T, dir, rel, content string) {
 
 // Commit stages everything and commits it, for a fixture whose starting
 // state matters but whose history does not.
-func Commit(t *testing.T, dir, message string) {
+func Commit(t testing.TB, dir, message string) {
 	t.Helper()
 	Git(t, dir, "add", "-A")
 	Git(t, dir, "commit", "-q", "-m", message)
@@ -80,7 +80,7 @@ func Commit(t *testing.T, dir, message string) {
 // e.g. a pre-commit hook that exits non-zero, to exercise AGENTS.md's "a
 // rejected commit leaves staging in place" rule against a real hook rather
 // than something rgit only believes git does with one.
-func InstallHook(t *testing.T, dir, name, script string) {
+func InstallHook(t testing.TB, dir, name, script string) {
 	t.Helper()
 	path := filepath.Join(dir, ".git", "hooks", name)
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {

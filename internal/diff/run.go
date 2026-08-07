@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
@@ -90,33 +91,103 @@ func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Repo
 		return nil, err
 	}
 
-	for i, e := range entries {
-		fr, ferr := buildFileReport(ctx, repo, root, scope, oldPaths[i], newPaths[i], e.Added, e.Deleted, sess, report, symFiltered, cache)
-		if ferr != nil {
-			return nil, ferr
-		}
-		if fr != nil {
-			report.Files = append(report.Files, *fr)
-		}
+	trackedFiles, trackedWarnings, trackedTSOnly, err := parallelFileReports(len(entries), func(i int) (*FileReport, []string, bool, error) {
+		return buildFileReport(ctx, repo, root, scope, oldPaths[i], newPaths[i], entries[i].Added, entries[i].Deleted, sess, symFiltered, cache)
+	})
+	if err != nil {
+		return nil, err
 	}
+	report.Files = append(report.Files, trackedFiles...)
+	report.Warnings = append(report.Warnings, trackedWarnings...)
+	report.TSOnly = report.TSOnly || trackedTSOnly
 
 	if scope.IncludeUntracked {
 		untracked, uerr := repo.LsFilesOthers(ctx, withPathspecs(nil, pathspecs)...)
 		if uerr != nil {
 			return nil, uerr
 		}
-		for _, path := range untracked {
-			fr, ferr := buildUntrackedReport(ctx, root, path, sess, report, symFiltered)
-			if ferr != nil {
-				return nil, ferr
-			}
-			report.Files = append(report.Files, *fr)
+		untrackedFiles, untrackedWarnings, untrackedTSOnly, uerr := parallelFileReports(len(untracked), func(i int) (*FileReport, []string, bool, error) {
+			return buildUntrackedReport(ctx, root, untracked[i], sess, symFiltered)
+		})
+		if uerr != nil {
+			return nil, uerr
 		}
+		report.Files = append(report.Files, untrackedFiles...)
+		report.Warnings = append(report.Warnings, untrackedWarnings...)
+		report.TSOnly = report.TSOnly || untrackedTSOnly
 	}
 
 	applyFilters(report, canonicalSyms)
 	sortReport(report)
 	return report, nil
+}
+
+// maxConcurrentFileReports bounds how many buildFileReport/buildUntrackedReport
+// calls parallelFileReports runs at once. Each one may hold a live LSP round
+// trip (crossCheckFile) in flight, so an unbounded fan-out on a commit
+// touching hundreds of files would launch hundreds of simultaneous
+// subprocess queries against a one-shot server (vtsls, pyright, ...).
+// ponytail: a fixed cap, not GOMAXPROCS-scaled -- the work here is I/O-bound
+// (LSP round trips, blob reads already prefetched), not CPU-bound, so there
+// is no reason to tie it to core count; revisit only if measurement shows a
+// wider commit wants more.
+const maxConcurrentFileReports = 8
+
+// parallelFileReports runs build(0)..build(n-1) with bounded concurrency and
+// merges their results in index order, so the caller's own report ordering
+// never depends on which goroutine happened to finish first --
+// docs/CODES.md's output-record ordering guarantee is upheld by sortReport
+// downstream regardless, but merging in order here keeps this function's own
+// behaviour deterministic and its error the same one a sequential loop would
+// have returned first.
+//
+// build's own callees -- resolve.Open (internal/resolve/resolver.go's
+// parserCacheMu), the cached blobCache (read-only once prefetchBlobs
+// returns), and a cached lsp.Session (internal/lsp/session.go's own mutex)
+// -- are each already safe for concurrent use; this function does not gain
+// any synchronization from being the caller, it exists only to bound
+// fan-out and merge results back into one, ordered set of return values.
+func parallelFileReports(n int, build func(i int) (*FileReport, []string, bool, error)) ([]FileReport, []string, bool, error) {
+	if n == 0 {
+		return nil, nil, false, nil
+	}
+
+	type result struct {
+		fr       *FileReport
+		warnings []string
+		tsOnly   bool
+		err      error
+	}
+	results := make([]result, n)
+
+	sem := make(chan struct{}, maxConcurrentFileReports)
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := range n {
+		sem <- struct{}{}
+		go func(i int) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			fr, warnings, tsOnly, err := build(i)
+			results[i] = result{fr: fr, warnings: warnings, tsOnly: tsOnly, err: err}
+		}(i)
+	}
+	wg.Wait()
+
+	var files []FileReport
+	var warnings []string
+	var tsOnly bool
+	for _, r := range results {
+		if r.err != nil {
+			return nil, nil, false, r.err
+		}
+		if r.fr != nil {
+			files = append(files, *r.fr)
+		}
+		warnings = append(warnings, r.warnings...)
+		tsOnly = tsOnly || r.tsOnly
+	}
+	return files, warnings, tsOnly, nil
 }
 
 // buildFileReport classifies one changed path and dispatches to the right
@@ -129,31 +200,38 @@ func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Repo
 // its own -- specs/design.md § Blob synthesis' held-parse gain, applied
 // here the same way internal/synth already holds one *resolve.File per
 // side across every anchor it resolves.
-func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Scope, oldPath, newPath, addedStr, deletedStr string, sess *lsp.Session, report *Report, symFiltered bool, cache *blobCache) (*FileReport, error) {
+//
+// warnings and tsOnly are returned rather than written into a shared
+// *Report directly: parallelFileReports runs many of these concurrently, and
+// a shared Report's Warnings slice/TSOnly bool would be a data race under
+// that fan-out (the sequential loop this replaced could get away with it,
+// concurrent callers cannot) -- the caller merges every call's own return
+// values back into the one Report once all of them have finished.
+func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Scope, oldPath, newPath, addedStr, deletedStr string, sess *lsp.Session, symFiltered bool, cache *blobCache) (fr *FileReport, warnings []string, tsOnly bool, err error) {
 	if addedStr == "-" && deletedStr == "-" {
-		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusBinary, Added: "-", Deleted: "-"}}}, nil
+		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusBinary, Added: "-", Deleted: "-"}}}, nil, false, nil
 	}
 
 	added, err := strconv.Atoi(addedStr)
 	if err != nil {
-		return nil, fmt.Errorf("diff: malformed numstat added count %q for %s", addedStr, newPath)
+		return nil, nil, false, fmt.Errorf("diff: malformed numstat added count %q for %s", addedStr, newPath)
 	}
 	deleted, err := strconv.Atoi(deletedStr)
 	if err != nil {
-		return nil, fmt.Errorf("diff: malformed numstat deleted count %q for %s", deletedStr, newPath)
+		return nil, nil, false, fmt.Errorf("diff: malformed numstat deleted count %q for %s", deletedStr, newPath)
 	}
 
 	if added == 0 && deleted == 0 {
 		oldMode, oldFound, merr := scope.Old.mode(ctx, repo, root, oldPath)
 		if merr != nil {
-			return nil, merr
+			return nil, nil, false, merr
 		}
 		newMode, newFound, merr := scope.New.mode(ctx, repo, root, newPath)
 		if merr != nil {
-			return nil, merr
+			return nil, nil, false, merr
 		}
 		note := formatModeNote(oldMode, oldFound, newMode, newFound)
-		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusMode, Added: "0", Deleted: "0", ModeNote: note}}}, nil
+		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusMode, Added: "0", Deleted: "0", ModeNote: note}}}, nil, false, nil
 	}
 
 	// A worktree copy of newPath may still carry a recognizable "#!" line --
@@ -165,48 +243,46 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 	// internal/resolve/lang.go's PeekShebangLine.
 	lang, ok, _ := resolve.LanguageForWorktreePath(root, newPath)
 	if !ok {
-		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusNoSymbols, Added: addedStr, Deleted: deletedStr}}}, nil
+		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusNoSymbols, Added: addedStr, Deleted: deletedStr}}}, nil, false, nil
 	}
 
 	oldSrc, _, err := scope.Old.read(ctx, repo, root, oldPath, cache)
 	if err != nil {
-		return nil, err
+		return nil, nil, false, err
 	}
 	newSrc, _, err := scope.New.read(ctx, repo, root, newPath, cache)
 	if err != nil {
-		return nil, err
+		return nil, nil, false, err
 	}
 
 	oldFile, err := resolve.Open(lang, oldSrc)
 	if err != nil {
-		return nil, err
+		return nil, nil, false, err
 	}
 	defer oldFile.Close()
 	newFile, err := resolve.Open(lang, newSrc)
 	if err != nil {
-		return nil, err
+		return nil, nil, false, err
 	}
 	defer newFile.Close()
 
 	if sess != nil {
-		degraded, warnings := crossCheckFile(ctx, sess, lang, root, newPath, newSrc, newFile)
-		report.TSOnly = report.TSOnly || degraded
-		report.Warnings = append(report.Warnings, warnings...)
+		tsOnly, warnings = crossCheckFile(ctx, sess, lang, root, newPath, newSrc, newFile)
 	}
 
 	rows, notices, err := attributeSymbolsOpen(lang, oldSrc, newSrc, oldFile, newFile, added, deleted)
 	if err != nil {
-		return nil, err
+		return nil, nil, false, err
 	}
 	if symFiltered {
 		for _, n := range notices {
-			report.Warnings = append(report.Warnings, newPath+": "+n)
+			warnings = append(warnings, newPath+": "+n)
 		}
 	}
 	if len(rows) == 0 {
-		return nil, nil
+		return nil, warnings, tsOnly, nil
 	}
-	return &FileReport{Path: newPath, Rows: rows, lang: lang.Name()}, nil
+	return &FileReport{Path: newPath, Rows: rows, lang: lang.Name()}, warnings, tsOnly, nil
 }
 
 // buildUntrackedReport attributes a file git does not track at all by
@@ -222,13 +298,17 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 // A binary file or one whose language has no grammar keeps the single
 // collapsed StatusUntracked row -- there is nothing to split out, and for
 // an unsupported language HintSymbol still points a caller at --sym/--file.
-func buildUntrackedReport(ctx context.Context, root, path string, sess *lsp.Session, report *Report, symFiltered bool) (*FileReport, error) {
+//
+// warnings and tsOnly are returned rather than written into a shared
+// *Report, the same reason buildFileReport's own signature does -- see its
+// doc comment.
+func buildUntrackedReport(ctx context.Context, root, path string, sess *lsp.Session, symFiltered bool) (fr *FileReport, warnings []string, tsOnly bool, err error) {
 	content, err := os.ReadFile(filepath.Join(root, path))
 	if err != nil {
-		return nil, err
+		return nil, nil, false, err
 	}
 	if util.LooksBinary(content) {
-		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: "-", Deleted: "-"}}}, nil
+		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: "-", Deleted: "-"}}}, nil, false, nil
 	}
 
 	// content is already fully read above (needed for the binary check and
@@ -237,41 +317,39 @@ func buildUntrackedReport(ctx context.Context, root, path string, sess *lsp.Sess
 	// bounded peek to reason about.
 	lang, ok := resolve.ForPath(path, content)
 	if !ok {
-		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: itoa(countLines(content)), Deleted: "0"}}}, nil
+		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: itoa(countLines(content)), Deleted: "0"}}}, nil, false, nil
 	}
 
 	newFile, err := resolve.Open(lang, content)
 	if err != nil {
-		return nil, err
+		return nil, nil, false, err
 	}
 	defer newFile.Close()
 	oldFile, err := resolve.Open(lang, nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, false, err
 	}
 	defer oldFile.Close()
 
 	if sess != nil {
-		degraded, warnings := crossCheckFile(ctx, sess, lang, root, path, content, newFile)
-		report.TSOnly = report.TSOnly || degraded
-		report.Warnings = append(report.Warnings, warnings...)
+		tsOnly, warnings = crossCheckFile(ctx, sess, lang, root, path, content, newFile)
 	}
 
 	rows, notices, err := attributeSymbolsOpen(lang, nil, content, oldFile, newFile, countLines(content), 0)
 	if err != nil {
-		return nil, err
+		return nil, nil, false, err
 	}
 	if symFiltered {
 		for _, n := range notices {
-			report.Warnings = append(report.Warnings, path+": "+n)
+			warnings = append(warnings, path+": "+n)
 		}
 	}
 	if len(rows) == 0 {
 		// No declarations at all (e.g. a comment-only or empty file): fall
 		// back to the collapsed row rather than an empty Rows slice.
-		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: itoa(countLines(content)), Deleted: "0"}}}, nil
+		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: itoa(countLines(content)), Deleted: "0"}}}, warnings, tsOnly, nil
 	}
-	return &FileReport{Path: path, Rows: rows, lang: lang.Name()}, nil
+	return &FileReport{Path: path, Rows: rows, lang: lang.Name()}, warnings, tsOnly, nil
 }
 
 // formatModeNote renders "644->755"-shaped mode notes from git's full
