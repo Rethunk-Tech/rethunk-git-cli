@@ -879,6 +879,16 @@ func TestRun_Completion(t *testing.T) {
 		assertShellParses(t, "zsh", stdout)
 	})
 
+	t.Run("fish", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "completion", "fish")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "complete -c rgit -f -a '(__rgit_complete)'"))
+		qt.Assert(t, qt.StringContains(stdout, "rgit diff --porcelain"))
+		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 9))
+		assertShellParses(t, "fish", stdout)
+	})
+
 	t.Run("--help prints usage and exits 0", func(t *testing.T) {
 		stdout, _, code := runApp(t, "completion", "--help")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
@@ -889,7 +899,7 @@ func TestRun_Completion(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"unknown shell", []string{"completion", "fish"}},
+		{"unknown shell", []string{"completion", "csh"}},
 		{"missing shell", []string{"completion"}},
 		{"too many args", []string{"completion", "bash", "zsh"}},
 	} {

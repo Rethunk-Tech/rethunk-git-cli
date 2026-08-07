@@ -439,14 +439,21 @@ everything `--deep` could add.
 
 ## Shell completion
 
-`rgit completion bash` and `rgit completion zsh` print a completion script
-for that shell to stdout; nothing else is written. It completes subcommands,
-each subcommand's own flags, plain file paths, and — the useful part —
-symbol names after `FILE:`, by shelling back out to `rgit diff --porcelain`
-and matching its `SYMBOL` column against `FILE` (record shape:
-[`CODES.md`](CODES.md#output-records)). If that call fails for any reason —
-the working directory is not a repository, `rgit` is not on `PATH`, anything
-— completion offers nothing rather than printing to the prompt.
+`rgit completion bash`, `rgit completion zsh`, and `rgit completion fish`
+print a completion script for that shell to stdout; nothing else is written.
+It completes subcommands, each subcommand's own flags, plain file paths, and
+— the useful part — symbol names after `FILE:`, by shelling back out to
+`rgit diff --porcelain` and matching its `SYMBOL` column against `FILE`
+(record shape: [`CODES.md`](CODES.md#output-records)). If that call fails
+for any reason — the working directory is not a repository, `rgit` is not on
+`PATH`, anything — completion offers nothing rather than printing to the
+prompt.
+
+The fish script drives the identical logic through fish's own completion
+model — one dynamic candidate function registered with `complete`, rather
+than bash's `COMPREPLY`/`compgen` or zsh's `compadd` — but completes the same
+things the same way, including the `-C <path>` walk and the `FILE:SYMBOL`
+lookup.
 
 An unrecognized or missing shell argument is a usage error, same table as
 everywhere else. Install instructions: [`INSTALL.md`](INSTALL.md#shell-completion).

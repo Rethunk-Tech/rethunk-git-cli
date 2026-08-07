@@ -1572,9 +1572,9 @@ framework — one dependency bought for a measured, specific defect.
 **Shell completion is hand-written, and a framework would not have shortened
 it.** The genuinely useful completion — symbols after `auth.go:` — is a dynamic
 function shelling out to `rgit diff --porcelain`, which every framework leaves
-hand-written anyway. `rgit completion bash|zsh` ships as exactly that: a script
-whose symbol completion parses `--porcelain` output, with no framework and no
-new dependency. The porcelain format is a machine contract with a shipped
+hand-written anyway. `rgit completion bash|zsh|fish` ships as exactly that: a
+script per shell whose symbol completion parses `--porcelain` output, with no
+framework and no new dependency. The porcelain format is a machine contract with a shipped
 in-repo consumer as a result ([`docs/CODES.md`](../docs/CODES.md)).
 
 ### The global `-C <path>`: git's own semantics, threaded rather than `chdir`ed

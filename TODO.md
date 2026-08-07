@@ -68,41 +68,6 @@ constructs no anchor reaches — are documented in
       the same way a missing SQL grammar already does today for
       linux/amd64.
 
-## Tooling
-
-- [ ] **Add `rgit completion fish`.** `internal/app/completion.go` only
-      emits bash and zsh (`docs/USAGE.md#shell-completion`,
-      `CONTRIBUTING.md`'s own test-lane table calls out "real bash and
-      zsh"). fish is a common third shell with its own completion DSL
-      (`complete -c rgit -n ...`), distinct enough from bash/zsh's
-      `compgen`/`compadd` model that it needs its own script, not a
-      translation.
-
-      **Packages / files:** `internal/app/completion.go` (new
-      `fishCompletionScript` const, `runCompletion`'s switch),
-      `internal/app/completion_test.go` (`TestCompletionFlags_MatchLiveFlagSets`
-      currently only checks bash/zsh's flag lists against live `--help`
-      output — fish needs the same drift guard, not a hand-copied list),
-      `docs/USAGE.md#shell-completion`, `docs/INSTALL.md#shell-completion`.
-
-      **Traps:** the dynamic `FILE:SYMBOL` completion (shelling out to
-      `rgit diff --porcelain` and cutting the SYMBOL column) has to be
-      reimplemented in fish's function syntax, not ported line-by-line from
-      the bash version — fish has no `compgen`/`COMPREPLY`. `rgitSubcommands`,
-      `rgitDiffFlags`, `rgitCommitFlags`, etc. are already shared string
-      constants; reuse them rather than hand-duplicating the flag lists a
-      third time. `-C <path>` sits before the subcommand the same way it
-      does for bash/zsh — fish completion must walk past it too or the
-      subcommand-conditioned (`-n`) completions never fire.
-
-      **Acceptance criteria:** `rgit completion fish` prints a script that,
-      loaded in a real fish shell, offers subcommands, per-subcommand
-      flags, and `FILE:SYMBOL` completion for `diff`/`commit`/`blame`/`log`
-      the same way the bash/zsh scripts do. A `TestCompletionFlags_MatchLiveFlagSets`-style
-      case guards fish's flag lists the same as the other two shells. CI's
-      e2e lane gets a fish-presence-gated smoke case matching the existing
-      bash/zsh ones (skips cleanly when fish is absent from the runner).
-
 ## Resolution
 
 - [ ] **Survey demand for Vue and Svelte single-file-component anchors.**

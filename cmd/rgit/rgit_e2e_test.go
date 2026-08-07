@@ -1299,3 +1299,110 @@ func TestCompletion_ZshDegradesSilentlyOutsideARepo(t *testing.T) {
 	got := runZshCompletion(t, notARepo, script.Stdout, "commit", "a.go:")
 	qt.Assert(t, qt.Equals(len(got), 0))
 }
+
+// runFishCompletion is runBashCompletion/runZshCompletion's fish
+// counterpart. Fish has no COMPREPLY/compadd equivalent to drive directly
+// outside a real line editor -- "commandline -opc"/"-ct", which
+// __rgit_complete calls, only work inside fish's own completion machinery
+// -- so this uses fish's documented non-interactive completion entry
+// point instead: `complete -C"<cmdline>"` runs the identical machinery a
+// real Tab press would and prints one candidate per line, filtered by
+// whatever prefix the last word already carries (fish, unlike bash's
+// compgen, applies that filtering itself).
+func runFishCompletion(t *testing.T, repo, fishScript string, words ...string) []string {
+	t.Helper()
+	fishPath, err := exec.LookPath("fish")
+	if err != nil {
+		t.Skip("fish not on PATH")
+	}
+
+	cmdline := "rgit " + strings.Join(words, " ")
+	driver := fishScript + "\n" +
+		`complete -C"` + strings.ReplaceAll(cmdline, `"`, `\"`) + `"` + "\n"
+
+	cmd := exec.Command(fishPath, "--no-config", "-c", driver)
+	cmd.Dir = repo
+	cmd.Env = append(os.Environ(), "PATH="+filepath.Dir(rgitBin)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("fish completion driver: %v: %s", err, out)
+	}
+	trimmed := strings.TrimRight(string(out), "\n")
+	if trimmed == "" {
+		return nil
+	}
+	return strings.Split(trimmed, "\n")
+}
+
+// TestCompletion_FishCompletesSymbolsFromPorcelain is
+// TestCompletion_BashCompletesSymbolsFromPorcelain's fish counterpart: the
+// fish script's own __rgit_symbols body reads the identical porcelain
+// stream the bash and zsh ones do, so this pins that fish's dynamic
+// FILE:SYMBOL completion resolves against real, live symbol names too.
+func TestCompletion_FishCompletesSymbolsFromPorcelain(t *testing.T) {
+	t.Parallel()
+	repo := initRepoWithFile(t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	gittest.Write(t, repo, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
+
+	script := runRgit(t, repo, "completion", "fish")
+	qt.Assert(t, qt.Equals(script.ExitCode, 0))
+
+	got := runFishCompletion(t, repo, script.Stdout, "commit", "a.go:")
+	qt.Assert(t, qt.DeepEquals(got, []string{"a.go:A", "a.go:B"}))
+
+	got = runFishCompletion(t, repo, script.Stdout, "commit", "a.go:A")
+	qt.Assert(t, qt.DeepEquals(got, []string{"a.go:A"}))
+}
+
+// TestCompletion_FishDegradesSilentlyOutsideARepo is the fish half of
+// TestCompletion_BashDegradesSilentlyOutsideARepo/
+// TestCompletion_ZshDegradesSilentlyOutsideARepo.
+func TestCompletion_FishDegradesSilentlyOutsideARepo(t *testing.T) {
+	t.Parallel()
+	notARepo := t.TempDir()
+
+	script := runRgit(t, notARepo, "completion", "fish")
+	qt.Assert(t, qt.Equals(script.ExitCode, 0))
+
+	got := runFishCompletion(t, notARepo, script.Stdout, "commit", "a.go:")
+	qt.Assert(t, qt.Equals(len(got), 0))
+}
+
+// TestCompletion_FishOffersSubcommandsAndFlags pins the parts of the fish
+// script bash/zsh have no equivalent for: the "-C <path>" pair walk uses
+// fish's own commandline -opc/-ct split (opc never contains the token the
+// cursor is still on, unlike bash's COMP_WORDS or zsh's words), so a
+// trailing, not-yet-paired "-C" must resolve to directory completion
+// rather than being mistaken for an already-consumed pair.
+func TestCompletion_FishOffersSubcommandsAndFlags(t *testing.T) {
+	t.Parallel()
+	repo := initRepoWithFile(t, "a.go", "package a\n")
+
+	script := runRgit(t, repo, "completion", "fish")
+	qt.Assert(t, qt.Equals(script.ExitCode, 0))
+
+	got := runFishCompletion(t, repo, script.Stdout, "")
+	qt.Assert(t, qt.SliceContains(got, "diff"))
+	qt.Assert(t, qt.SliceContains(got, "commit"))
+	qt.Assert(t, qt.SliceContains(got, "-C"))
+
+	got = runFishCompletion(t, repo, script.Stdout, "diff", "--")
+	qt.Assert(t, qt.SliceContains(got, "--porcelain"))
+	qt.Assert(t, qt.Not(qt.SliceContains(got, "-p")))
+
+	// A "-C" with no path after it yet completes as a directory, not the
+	// subcommand list -- the case the opc/ct split above makes non-obvious.
+	// __fish_complete_directories appends its own "\tDirectory" hint to
+	// each candidate, unlike this script's own plain printf'd ones, so the
+	// match is by prefix rather than exact equality.
+	qt.Assert(t, qt.IsNil(os.Mkdir(filepath.Join(repo, "sub"), 0o755)))
+	got = runFishCompletion(t, repo, script.Stdout, "-C", "")
+	sawSubdir := false
+	for _, c := range got {
+		if strings.HasPrefix(c, "sub/") {
+			sawSubdir = true
+		}
+	}
+	qt.Assert(t, qt.IsTrue(sawSubdir))
+	qt.Assert(t, qt.Not(qt.SliceContains(got, "diff")))
+}

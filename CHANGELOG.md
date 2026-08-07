@@ -14,6 +14,11 @@ Notable changes to `rgit`. The format follows
   below-floor git is reported, not refused. See
   [`docs/INSTALL.md`](docs/INSTALL.md#prerequisites).
 
+- `rgit completion fish`, alongside the existing bash and zsh scripts —
+  subcommands, per-subcommand flags, and live `FILE:SYMBOL` completion
+  through fish's own `complete`-driven model. See
+  [`docs/USAGE.md`](docs/USAGE.md#shell-completion).
+
 ## [1.2.0] — 2026-08-05
 
 ### Added

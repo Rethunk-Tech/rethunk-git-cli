@@ -286,14 +286,15 @@ the committing. Which settings that covers, and the one exception, is in
 
 ## Shell completion
 
-What `rgit completion bash|zsh` completes, and how the dynamic part works, is
-documented in [`USAGE.md`](USAGE.md#shell-completion).
+What `rgit completion bash|zsh|fish` completes, and how the dynamic part
+works, is documented in [`USAGE.md`](USAGE.md#shell-completion).
 
 **Load once per session:**
 
 ```bash
 source <(rgit completion bash)   # bash
 source <(rgit completion zsh)    # zsh, after compinit has run
+rgit completion fish | source    # fish
 ```
 
 **Persist across sessions:**
@@ -305,6 +306,9 @@ rgit completion bash > ~/.local/share/bash-completion/completions/rgit   # per-u
 
 # zsh -- write it anywhere already on $fpath, then start a new shell
 rgit completion zsh > "$fpath[1]/_rgit"
+
+# fish -- picked up automatically by every new fish session, no reload step
+rgit completion fish > ~/.config/fish/completions/rgit.fish
 ```
 
 zsh's `compdef` needs `compinit` to already have run, so `autoload -Uz
