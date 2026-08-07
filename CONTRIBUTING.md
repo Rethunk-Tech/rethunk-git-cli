@@ -35,13 +35,20 @@ not restate it: the tiered layout below is what keeps one authority per fact.
 
 Cutting a release: tag `vX.Y.Z`, which
 [`.github/workflows/release.yml`](.github/workflows/release.yml) turns into a
-GitHub release with the cross-built binaries and their `SHA256SUMS`. That
-workflow also fails the release outright if the linux/amd64 artifact's own
-`rgit languages` output has no `sql` row — a `-tags rgit_sql` regression on
-the one target the release is verified against. Move the
-unreleased entries under the new version heading, and bump the README's
-version badge — it is a static shield, so nothing else catches it going
-stale. Also check `sqlGrammarVersion` in
+GitHub release with the cross-built and natively-built binaries and their
+`SHA256SUMS`. That workflow also fails the release outright if any
+artifact's own `rgit languages` output has no `sql` row — a `-tags
+rgit_sql` regression on any artifact this actually reaches: linux/amd64
+and windows/amd64 execute directly (windows via Wine); linux/arm64 runs
+inside a matching arm64 container image under QEMU emulation, since it is
+dynamically linked against glibc and bare QEMU has no aarch64 sysroot to
+resolve that against; whichever darwin arch matches the `macos-latest`
+runner's own (arm64, as of this writing) executes directly in its own
+job — the other darwin artifact is checked by file type only, not
+executed. See [`docs/INSTALL.md`](docs/INSTALL.md#cross-builds).
+Move the unreleased entries under the new version heading, and bump the
+README's version badge — it is a static shield, so nothing else catches it
+going stale. Also check `sqlGrammarVersion` in
 [`cmd/rgit-install/main.go`](cmd/rgit-install/main.go) against
 [`tree-sitter-sql`](https://github.com/DerekStride/tree-sitter-sql)'s own
 tags: `@latest` cannot track it, because that module gitignores `parser.c` at

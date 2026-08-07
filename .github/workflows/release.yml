@@ -114,6 +114,65 @@ jobs:
             echo "::error::release artifact has no sql grammar"; exit 1;
           }
 
+      # linux/amd64 above is the runner's own native arch, execed directly.
+      # linux/arm64 cannot be: it is dynamically linked against glibc
+      # (rgit links tree-sitter through cgo, so this is not a static Go
+      # binary), and bare QEMU user-mode emulation has no aarch64 sysroot
+      # to resolve /lib/ld-linux-aarch64.so.1 against on an amd64 host --
+      # confirmed directly (`qemu-aarch64 ./rgit-...-linux-arm64` fails
+      # with exactly that "could not open" error). Registering QEMU's
+      # binfmt_misc handlers and running the binary *inside* a real
+      # arm64 container image is what actually works: the image supplies
+      # the matching glibc, and QEMU (via binfmt) transparently emulates
+      # the container's own arm64 process for it -- the same mechanism
+      # `docker buildx` uses for multi-arch image builds, just running a
+      # bare binary instead of a build. Verified directly against this
+      # exact artifact before writing this step, not assumed from how
+      # QEMU emulation is commonly described.
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+        with:
+          platforms: arm64
+
+      - name: verify the linux/arm64 artifact carries SQL
+        run: |
+          bin=$(find dist -name '*-linux-arm64' -type f)
+          docker run --rm --platform=linux/arm64 -v "$PWD/dist:/dist" debian:bookworm-slim \
+            /dist/"$(basename "$bin")" --version
+          docker run --rm --platform=linux/arm64 -v "$PWD/dist:/dist" debian:bookworm-slim \
+            /dist/"$(basename "$bin")" languages | grep -q '^sql' || {
+            echo "::error::release artifact has no sql grammar"; exit 1;
+          }
+
+      # Wine runs the windows/amd64 PE binary directly on the linux runner.
+      # Not preinstalled on ubuntu-latest (actions/runner-images' own
+      # software manifest), unlike shellcheck/sha256sum above -- installed
+      # here rather than via a marketplace action, since it is a single
+      # well-known apt package and this workflow already prefers plain
+      # `run:` steps over an action wherever apt covers it in one line.
+      # The apt package is "wine64" but the binary it installs is plain
+      # "wine" -- confirmed directly (`dpkg -L wine64` lists /usr/bin/wine,
+      # no wine64 binary at all on Ubuntu 24.04), a real trap the package
+      # name alone does not warn you about.
+      - name: install wine
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wine64
+
+      # First run is noisy on stderr -- wine lazily creates ~/.wine and
+      # spawns its own explorer/services helper processes, which complain
+      # about a missing display and missing 32-bit support (wine32,
+      # irrelevant to a console-only 64-bit exe like this one). That noise
+      # never reaches stdout, so it does not affect the grep below;
+      # confirmed directly rather than assumed, since a wall of "err:"
+      # lines looks alarming enough to mistake for a real failure.
+      - name: verify the windows/amd64 artifact carries SQL
+        run: |
+          bin=$(find dist -name '*-windows-amd64.exe' -type f)
+          wine "$bin" --version
+          wine "$bin" languages | grep -q '^sql' || {
+            echo "::error::release artifact has no sql grammar"; exit 1;
+          }
+
       - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: darwin-binaries
