@@ -19,6 +19,13 @@ Notable changes to `rgit`. The format follows
   through fish's own `complete`-driven model. See
   [`docs/USAGE.md`](docs/USAGE.md#shell-completion).
 
+- Release artifacts now include darwin/amd64 and darwin/arm64, built
+  natively on a `macos-latest` runner (`make cross-darwin`) rather than
+  cross-compiled — zig, what the linux/windows matrix uses, cannot supply a
+  macOS SDK. Covered by the same `SHA256SUMS` and cosign signature as the
+  other three artifacts. See
+  [`docs/INSTALL.md`](docs/INSTALL.md#cross-builds).
+
 ## [1.2.0] — 2026-08-05
 
 ### Added

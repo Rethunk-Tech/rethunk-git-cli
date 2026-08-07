@@ -24,7 +24,7 @@ os=$(uname -s)
 case "$os" in
   Linux) os_tag=linux ;;
   *)
-    echo "install.sh: unsupported OS '$os' -- darwin isn't cross-built (docs/LIMITATIONS.md), build from source instead" >&2
+    echo "install.sh: unsupported OS '$os' -- download the release binary directly (docs/INSTALL.md § Cross builds), or build from source instead" >&2
     exit 1
     ;;
 esac

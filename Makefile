@@ -29,7 +29,8 @@ SQL_TAGS = $(if $(wildcard $(SQL_CSRC)/parser.c),-tags rgit_sql,)
 
 .PHONY: help build install test test-short test-race cover cover-short \
         fix-diff fix lint clean sql-parser cross cross-linux-amd64 \
-        cross-linux-arm64 cross-windows-amd64
+        cross-linux-arm64 cross-windows-amd64 cross-darwin \
+        cross-darwin-amd64 cross-darwin-arm64
 
 help:
 	@echo "rgit build targets:"
@@ -44,6 +45,7 @@ help:
 	@echo "  fix                go fix ./... twice        (fixes can unlock fixes)"
 	@echo "  lint               golangci-lint run ./...   (.golangci.yml)"
 	@echo "  cross              cross-compile linux/amd64, linux/arm64, windows/amd64 into dist/, versioned, with SQL when generatable, plus SHA256SUMS"
+	@echo "  cross-darwin       native-compile darwin/amd64 and darwin/arm64 into dist/ -- run this ON a macOS host, not cross-compiled by cross above"
 	@echo "  clean              remove build outputs, including a generated SQL parser tree"
 
 build:
@@ -155,3 +157,23 @@ cross-windows-amd64:
 	mkdir -p $(DIST)
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC="$(ZIG) cc -target x86_64-windows-gnu" \
 		go build $(SQL_TAGS) -ldflags "$(LDFLAGS)" -o $(DIST)/rgit-$(CROSS_VERSION)-windows-amd64.exe ./cmd/rgit
+
+# darwin is deliberately not part of `cross` above (zig cannot supply a
+# macOS SDK -- docs/INSTALL.md § Cross builds). These two targets are the
+# native-compile counterpart: no CC override and no zig prerequisite,
+# because a real macOS host's own clang and SDK already handle both its
+# native arch and the other darwin arch (Xcode ships a universal SDK, the
+# same reason a Mac can build for either Apple Silicon or Intel without a
+# second toolchain) -- only useful run ON a macOS host, hence the separate
+# target rather than folding these into `cross`'s own linux/windows matrix.
+cross-darwin-amd64:
+	mkdir -p $(DIST)
+	GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 \
+		go build $(SQL_TAGS) -ldflags "$(LDFLAGS)" -o $(DIST)/rgit-$(CROSS_VERSION)-darwin-amd64 ./cmd/rgit
+
+cross-darwin-arm64:
+	mkdir -p $(DIST)
+	GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 \
+		go build $(SQL_TAGS) -ldflags "$(LDFLAGS)" -o $(DIST)/rgit-$(CROSS_VERSION)-darwin-arm64 ./cmd/rgit
+
+cross-darwin: sql-parser cross-darwin-amd64 cross-darwin-arm64
