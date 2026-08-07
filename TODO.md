@@ -67,37 +67,3 @@ constructs no anchor reaches — are documented in
       `release.yml` before signing; a broken cross-build fails the release
       the same way a missing SQL grammar already does today for
       linux/amd64.
-
-## Resolution
-
-- [ ] **Survey demand for Vue and Svelte single-file-component anchors.**
-      Every grammar this repository ships was prioritized by the same
-      demand survey over real repositories (`specs/design.md`'s governing
-      principle and grammar-scope reasoning) — Rust/C/C++ stayed unsupported
-      because none turned up. `.vue`/`.svelte` files are common in
-      TypeScript-heavy frontend repos this tool already targets and were not
-      part of the original survey's language set; re-run the same
-      methodology rather than assuming either a yes or a no.
-
-      **Packages / files:** `specs/design.md#grammar-scope` (record the
-      survey and its verdict, same as the existing per-language entries),
-      `internal/resolve/grammars.go`, `internal/resolve/lang.go` (registration
-      point, if the verdict is yes).
-
-      **Traps:** SFCs are not single-language files — a `.vue` file
-      interleaves `<template>`, `<script>`/`<script setup>`, and `<style>`
-      blocks, each its own grammar. This does not fit the existing
-      one-tree-sitter-language-per-extension model
-      (`internal/resolve/lang.go`'s `Adapter` interface) at all; a naive
-      "pick one grammar for the extension" answer would be wrong for the
-      dominant real-world shape of these files, not merely incomplete. The
-      survey has to answer whether composite parsing is worth building
-      *before* any resolver code changes, not after.
-
-      **Acceptance criteria:** `specs/design.md` records the survey
-      (repository count and hit rate, same form as the existing grammar
-      table's justification column) and its verdict. If the verdict is
-      "build it," this item is superseded by a new, separately-scoped TODO
-      entry describing the composite-parsing design; if "reject," the
-      verdict and reasoning join the other settled rejections in
-      `specs/design.md` and this entry is simply deleted.

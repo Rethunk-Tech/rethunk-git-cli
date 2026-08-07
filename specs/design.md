@@ -1042,6 +1042,30 @@ turned up real files to stage. Config and data files in a Rust/C/C++ tree
 still stage by path in the meantime, the same as any other file with no
 grammar behind it.
 
+**Vue and Svelte single-file components were checked against a different,
+smaller corpus — 47 repositories on the machine this survey ran on, not the
+original 51 — and cleared no bar either: zero contained a tracked `.vue` or
+`.svelte` file, and none named `vue`, `svelte`, `nuxt`, or `sveltekit` as a
+`package.json` dependency.** The original 51-repository corpus and its
+survey tooling are not available to this record, so this is a fresh survey
+against a different sample rather than a re-run of the same one — recorded
+as such rather than presented as the identical measurement. The corpus is
+not merely frontend-sparse: 18 of the 47 (38%) contain tracked `.tsx` files,
+so real frontend work is present and consistently chose React over Vue or
+Svelte, which is a more specific negative signal than "no frontend repos to
+check." As with Rust/C/C++ above, nothing here rules either in or out on
+principle — a survey turning up real `.vue`/`.svelte` files would admit
+them the same way any grammar here was admitted. Two structural facts any
+future survey (or implementation, if one is ever undertaken) needs to
+account for before building anything: a single-file component interleaves
+`<template>`, `<script>`/`<script setup>`, and `<style>` blocks, each its
+own grammar, which does not fit this resolver's one-tree-sitter-language-
+per-extension model (`internal/resolve/lang.go`'s `Adapter` interface) at
+all — the naive "pick one grammar for the `.vue`/`.svelte` extension"
+answer would be wrong for the dominant real-world shape of these files, not
+merely incomplete, so a survey clearing the demand bar would still leave
+composite parsing as an open design question, not a registration exercise.
+
 ### Cross-check coverage
 
 Markdown, YAML, CSS, JSON, TOML, and SQL were each checked for a real
