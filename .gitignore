@@ -26,3 +26,4 @@ coverage.html
 # for the next `git status` to puzzle over.
 /internal/resolve/sqlgrammar/csrc.tmp/
 
+.orchestrate/
