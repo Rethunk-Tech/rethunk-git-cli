@@ -144,15 +144,21 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 	}
 
 	// B, if present, sorts first: a single, tiny, always-useful record that
-	// costs the budget almost nothing. F rows go next: they are the
-	// actionable, unbounded half of the stream, while the 20 commit
-	// subjects are cheap and expendable. Budget truncation below drops from
-	// the end of records, so this ordering is what makes a busy branch's
+	// costs the budget almost nothing. W diagnostics follow it, then F rows:
+	// F rows are the actionable, unbounded half of the stream, while the 20
+	// commit subjects are cheap and expendable. Budget truncation below drops
+	// from the end of records, so this ordering is what makes a busy branch's
 	// commit history yield to the diff instead of crowding it out
 	// (docs/CODES.md#output-records).
-	records := make([]string, 0, 1+len(commits)+len(report.Files))
+	records := make([]string, 0, 1+1+len(report.Warnings)+len(commits)+len(report.Files))
 	if branchRecord != "" {
 		records = append(records, branchRecord)
+	}
+	if report.TSOnly {
+		records = append(records, "W\tts-only\n")
+	}
+	for _, w := range report.Warnings {
+		records = append(records, fmt.Sprintf("W\twarning\t%s\n", w))
 	}
 	// diffpkg.RenderPorcelain is the exact rendering `rgit diff --porcelain`
 	// already produces, reused verbatim and re-tagged per line -- not a
