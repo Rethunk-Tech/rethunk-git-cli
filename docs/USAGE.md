@@ -462,6 +462,26 @@ with nothing installed should stay instant. A server not on `PATH` at all is
 never dialed — there is nothing to dial, and `MISSING` already says
 everything `--deep` could add.
 
+## Symbols
+
+```console
+$ rgit symbols auth.go
+@imports
+ValidateToken
+```
+
+`rgit symbols [--for-commit] <file>` lists every declared symbol that can be
+resolved from the worktree file, one symbol per line. `--for-commit` omits
+structured-data symbols that `rgit commit` refuses; it still exits successfully
+without output when the file is a supported structured-data file.
+
+`--help`/`-h` prints the command's usage text and exits 0. Exactly one file
+argument is required; a missing or extra argument prints the usage text to
+stderr and exits with the invalid-usage code. A file that cannot be read or
+whose symbols cannot be resolved exits with the git-failure code, while an
+unsupported language exits with the unsupported-language code. See
+[`CODES.md`](CODES.md#exit-codes).
+
 ## Shell completion
 
 `rgit completion bash`, `rgit completion zsh`, and `rgit completion fish`
