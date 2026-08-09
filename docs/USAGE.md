@@ -203,6 +203,13 @@ the same file a bare `git blame FILE` would. When the file has been deleted
 from the worktree, rgit resolves the extent from `HEAD` and runs git blame
 against `HEAD` for that same blob and line range.
 
+`--follow-rename` follows the symbol across rename boundaries using the same
+rename-boundary re-resolution as `log --follow-rename`: when git identifies a
+rename, rgit resolves the symbol once against the old name's blob and blames
+that segment's line range. It does not re-parse once per commit. Without this
+flag, blame keeps the behavior above, including its `HEAD` fallback when the
+worktree file is gone.
+
 An anchor that does not resolve is **never** silently widened to a whole-file
 blame — it is exit 3 (unresolvable), 4 (ambiguous), or 9 (unsupported
 language), the same codes `commit` and `diff --sym` already give the
@@ -484,8 +491,10 @@ unsupported language exits with the unsupported-language code. See
 
 ## Shell completion
 
-`rgit completion bash`, `rgit completion zsh`, and `rgit completion fish`
-print a completion script for that shell to stdout; nothing else is written.
+`rgit completion bash`, `rgit completion zsh`, `rgit completion fish`, and
+`rgit completion pwsh` print a completion script for that shell to stdout;
+nothing else is written. PowerShell registration instructions are in
+[`INSTALL.md`](INSTALL.md#shell-completion).
 It completes subcommands, each subcommand's own flags, plain file paths, and
 — the useful part — symbol names after `FILE:`, by shelling back out to
 `rgit symbols FILE`. That read-only command lists every declared symbol in
