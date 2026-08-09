@@ -8,10 +8,11 @@ Limitations that ship — unsupported languages, excluded cross-build targets,
 constructs no anchor reaches — are documented in
 [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md), not listed here.
 
-Items below are the residual queue after a fenced wave landed
-`rgit completion pwsh`, `rgit blame --follow-rename`, Windows CI cosign
-exercise for `install.ps1`, and a dedicated `USAGE.md` Symbols section
-(plus wave-audit should-fix closeout).
+Items below are the residual queue after a fenced wave landed design-record
+alignment for `blame --follow-rename`, help/USAGE drift closeout for
+per-segment `--max-count` and `pwsh` in top-level help, and regression pins
+for dirty-worktree blame + per-segment log max-count (plus wave-audit
+should-fix closeout).
 Deliberately not queued: `rgit restore` (designed and held back —
 [`specs/design.md`](specs/design.md#rgit-restore-filesymbol-an-accepted-design-deliberately-not-built)),
 context staged/unstaged split, TOML taplo / SQL LSP cross-checks, Rust/C/C++/
