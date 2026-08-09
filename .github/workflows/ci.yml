@@ -149,3 +149,28 @@ jobs:
               exit 1
             }
           done
+  install-script-windows:
+    name: install script (windows)
+    runs-on: windows-latest
+    timeout-minutes: 5
+    env:
+      VERSION: v1.1.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Verify Windows dry-run output
+        shell: pwsh
+        run: |
+          $outputLines = @(& .\scripts\install.ps1 -DryRun)
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          $output = $outputLines -join [Environment]::NewLine
+          $output
+          foreach ($expected in @(
+              'rgit-v1.1.0-windows-amd64.exe',
+              'SHA256SUMS'
+          )) {
+            if (-not $output.Contains($expected)) {
+              throw "missing expected output: $expected"
+            }
+          }
