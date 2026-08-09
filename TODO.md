@@ -8,47 +8,22 @@ Limitations that ship — unsupported languages, excluded cross-build targets,
 constructs no anchor reaches — are documented in
 [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md), not listed here.
 
-Items below come from a multi-round gap survey after the prior TODO queue
-drained (darwin release artifacts, fish completion, doctor git-version check,
-Vue/Svelte survey, HTML LSP wiring, `--follow-rename`, `rev:path` diff, per-file
-cross-check parallelization). Deliberately not queued: `rgit restore` (designed
-and held back — [`specs/design.md`](specs/design.md#rgit-restore-filesymbol-an-accepted-design-deliberately-not-built)),
+Items below are the residual queue after a fenced wave landed darwin
+`install.sh`, HTML LSP class-suffix matching, `languages --porcelain`
+`CROSS-CHECK`, `commit --porcelain` `H` SHA, and path-scoped `log -n`.
+Deliberately not queued: `rgit restore` (designed and held back —
+[`specs/design.md`](specs/design.md#rgit-restore-filesymbol-an-accepted-design-deliberately-not-built)),
 context staged/unstaged split, TOML taplo / SQL LSP cross-checks, Rust/C/C++/
 Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
 
 ## Release / install
 
-- [ ] **Wire darwin download into `scripts/install.sh`.** Darwin
-      `rgit-v*-darwin-{amd64,arm64}` artifacts ship from the macOS release job
-      (`.github/workflows/release.yml`, `make cross-darwin`), but the install
-      script still hard-fails any non-Linux `uname` (`scripts/install.sh`
-      lines 23–30). Docs already name the gap
-      (`docs/INSTALL.md` § Install script; `docs/LIMITATIONS.md` § Build and
-      platform limits).
-
-      **Packages / files:** `scripts/install.sh`, `docs/INSTALL.md`,
-      `docs/LIMITATIONS.md`, `.github/workflows/ci.yml` (dry-run / shellcheck
-      coverage for the Darwin branch).
-
-      **Traps:** macOS has `shasum -a 256`, not always `sha256sum` — the
-      checksum step must be OS-aware or the Darwin path fails after a successful
-      download. Asset names must match the release job exactly
-      (`rgit-$tag-darwin-arm64`, no `.tar.gz`). Keep Linux behaviour byte-
-      identical. Do **not** pretend this POSIX script covers Windows — that is
-      a separate `install.ps1` item below.
-
-      **Acceptance criteria:** On a Darwin host (or under a mocked
-      `uname`/`arch` in CI), `VERSION=<tag> sh scripts/install.sh --dry-run`
-      prints the correct darwin URL and `SHA256SUMS` path; a real install
-      lands an executable whose `--version` matches the tag. Linux dry-run and
-      install paths are unchanged. `docs/LIMITATIONS.md` / `docs/INSTALL.md`
-      no longer say darwin has no download path.
-
 - [ ] **Add `scripts/install.ps1` for windows/amd64 release artifacts.**
       Releases publish `rgit-*-windows-amd64.exe`; there is no first-class
-      Windows installer — `install.sh` is Linux-only, and `cmd/rgit-install`
-      always builds from source. Distinct from the Darwin `install.sh` work:
-      PowerShell, `.exe` naming, and Windows PATH conventions.
+      Windows installer — `install.sh` covers Linux and Darwin, and
+      `cmd/rgit-install` always builds from source. Distinct from the Darwin
+      `install.sh` work: PowerShell, `.exe` naming, and Windows PATH
+      conventions.
 
       **Packages / files:** `scripts/install.ps1` (new), `docs/INSTALL.md`,
       `docs/LIMITATIONS.md`, CI lint/dry-run for the script if feasible on
@@ -68,9 +43,9 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
 
 - [ ] **Optional cosign verification in `scripts/install.sh`.** Releases
       already publish `SHA256SUMS.sigstore.json` (keyless cosign over
-      `SHA256SUMS`); the script verifies SHA256 integrity only
-      (`scripts/install.sh` lines 67–72). `docs/INSTALL.md` documents a
-      manual `cosign verify-blob` path that never runs during install.
+      `SHA256SUMS`); the script verifies SHA256 integrity only.
+      `docs/INSTALL.md` documents a manual `cosign verify-blob` path that
+      never runs during install.
 
       **Packages / files:** `scripts/install.sh`, `docs/INSTALL.md`, CI
       dry-run coverage.
@@ -88,6 +63,13 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
       bundle and refuses a tampered `SHA256SUMS` before installing. Without
       `cosign`, behaviour matches today's SHA256-only install. Docs describe
       both paths.
+
+- [ ] **Harden Darwin dry-run CI assertions.** The `install-script` job mocks
+      Darwin/`arm64` and only checks exit 0. Assert the dry-run stdout names
+      `rgit-$tag-darwin-arm64` and `SHA256SUMS`, and add a second mock for
+      `x86_64` → `darwin-amd64`.
+
+      **Packages / files:** `.github/workflows/ci.yml` (`install-script` job).
 
 ## Completion / tooling
 
@@ -160,7 +142,9 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
       HEAD blob. Line range must come from the **same** blob blamed, not a
       stale worktree parse. Do not silently blame the wrong revision when the
       worktree file exists but differs. LSP cross-check on a HEAD-only blob
-      is out of scope for blame (read-only git delegation).
+      is out of scope for blame (read-only git delegation). Absorbs the
+      shebang-from-HEAD work on `shared.go` if both land in one wave — one
+      owner for that file.
 
       **Acceptance criteria:** Fixture: delete `auth.go` from the worktree
       while `ValidateToken` remains in `HEAD` — `rgit blame
@@ -194,7 +178,9 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
       date-bounded path form selected by `--since`/`--until`
       (`internal/app/log.go`, `docs/USAGE.md` § Log by date and path). Agents
       often want “commits that touched this symbol in the last month” and
-      otherwise fall back to plain `git log`.
+      otherwise fall back to plain `git log`. Path-scoped `-n`/`--max-count`
+      already forwards; decide whether the same flag applies to the combined
+      anchor form in the same change.
 
       **Packages / files:** `internal/app/log.go` (`hasTimeRangeFlag` /
       `runLog` dispatch), `internal/gitx/gitx.go` (`LogLineRange` extra
@@ -212,23 +198,6 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
       `--porcelain` shape unchanged. `rgit log --since=… -- path` (no
       anchor) still works. Usage error when the combination is impossible
       stays exit 129 with a clear message.
-
-- [ ] **`-n` / `--max-count` on path-scoped `rgit log --since`.**
-      Path-scoped log forwards `since`/`until` only (`runLogPathScoped`);
-      unbounded history is a token trap. `rgit context` already bounds
-      commits via `RecentCommits` (`-n` 20).
-
-      **Packages / files:** `internal/app/log.go`, `internal/gitx/gitx.go`
-      (`Log`), `docs/USAGE.md`, completion flag lists.
-
-      **Traps:** Forward git's own `-n`/`--max-count`; do not truncate after
-      the fact in Go. Decide whether the flag also applies to the
-      `FILE:SYMBOL` form (likely yes, same forwarding). Keep `--porcelain`
-      / `-p` mutual exclusion.
-
-      **Acceptance criteria:** `rgit log --since=2024-01-01 -n 5 -- src`
-      emits at most five commits. Help and completion advertise the flag.
-      Default with no `-n` remains unbounded (git's own default).
 
 ## Resolution / LSP
 
@@ -248,78 +217,27 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
       still wins over shebang. Do not change mapped interpreters or re-admit
       `zsh`. Binary / missing-blob handling must match `CatFileSample`'s
       exists convention. Worktree present → keep today's worktree peek.
+      Shares `shared.go` with blame HEAD-fallback — serialize or one owner.
 
       **Acceptance criteria:** Extensionless `#!/usr/bin/env bash` (or
       `node`) file deleted from the worktree but present in `HEAD`:
       `rgit diff --sym` / `rgit log hooks/pre-commit:fn` still route via the
       correct grammar. Extensionless unmapped shebang still refuses exit 9.
 
-- [ ] **Normalize HTML LSP names for class-bearing `tag#id` elements.**
-      HTML cross-check is wired, but an element with a `class` attribute is
-      named `tag#id.class1.class2` by `vscode-html-language-server` and
-      never matches `rgit`'s `tag#id`, degrading that symbol alone to
-      `[ts-only]` (`docs/LIMITATIONS.md` § Language-server coverage;
-      `specs/design.md` § Grammar scope). Staging extents stay `tag#id` by
-      design — this is match normalization only.
+- [ ] **HTML class-suffix + ordinal unit case.** `matchLSPSymbol` strips
+      `.class…` on the flat path, but there is no ordinal + class-suffix
+      fixture (e.g. `div#app#2` vs server `div#app.widget`).
 
-      **Packages / files:** `internal/resolve/crosscheck.go`
-      (`matchLSPSymbol` / HTML flat path), `internal/resolve/lang_html.go`,
-      `internal/lsp/wiring_test.go`, `docs/LIMITATIONS.md`.
+      **Packages / files:** `internal/resolve/crosscheck_test.go`.
 
-      **Traps:** Do **not** widen staged HTML anchors to class selectors
-      (`docs/LIMITATIONS.md` / design survey). Match on id-bearing prefix /
-      strip `.class…` from the **server** name only. Duplicate ids remain
-      exit 4. Void-element `declOnlyEndTrimmer` seam stays independent.
+- [ ] **Refresh `specs/design.md` HTML class-suffix notes.** The design
+      record still describes class-bearing HTML as permanently degrading;
+      code and LIMITATIONS no longer do.
 
-      **Acceptance criteria:** Fixture `<div id="app" class="widget">`
-      cross-checks live (no `[ts-only]` for that symbol) with the server
-      reachable. Classless `div#app` unchanged. No change to the extent
-      `commit` stages.
+      **Packages / files:** `specs/design.md` (cross-check / Grammar scope
+      HTML rows).
 
 ## Doctor / machine contract
-
-- [ ] **Add a cross-check column to `rgit languages --porcelain`.** Porcelain
-      today is `NAME<TAB>EXTENSIONS<TAB>GATED` only (`docs/CODES.md`);
-      agents must correlate `doctor`, `LIMITATIONS.md`, and design tables to
-      learn which grammars are permanently `[ts-only]` (TOML, SQL) vs wired.
-      `doctor --porcelain` deliberately omits grammars.
-
-      **Packages / files:** `internal/app/languages.go`, `internal/lsp/`
-      (wired-server table), `docs/CODES.md`, `docs/USAGE.md`,
-      `specs/design.md` cross-check coverage table as the source of truth.
-
-      **Traps:** Column values must be stable machine tokens (`wired` /
-      `ts-only` / maybe `gated`), not prose. Do not claim a server is
-      reachable — that is `doctor`'s job; this column is compile-time /
-      design-time wiring, not dial status. Keep human `languages` output
-      readable; porcelain is the contract change.
-
-      **Acceptance criteria:** Every porcelain row gains a fourth column
-      matching the design record (TOML/SQL → `ts-only`; Go/TS/…/HTML →
-      `wired`). Docs updated. Existing three columns unchanged in meaning.
-
-- [ ] **Emit the new commit SHA from `rgit commit --porcelain`.** On
-      success, porcelain writes only per-target
-      `FILE<TAB>SYMBOL<TAB>ADDED<TAB>DELETED` records and explicitly omits
-      the SHA (“one `git rev-parse HEAD` away” — `internal/app/commit.go`).
-      Agent pipelines pay an extra subprocess for a fact the human summary
-      already prints.
-
-      **Packages / files:** `internal/app/commit.go`, `docs/CODES.md` §
-      `rgit commit --porcelain`, `docs/USAGE.md`.
-
-      **Traps:** Keep git's rule that `--porcelain` replaces the human
-      summary — add a **structured** record (e.g. leading `H<TAB>SHA`),
-      never prose. `--allow-empty` with no staged targets still creates a
-      commit: the SHA record must appear even when target rows are empty
-      (`docs/CODES.md` already warns empty output ≠ no commit). Dry-run
-      must not invent a SHA. Order: document whether `H` precedes or follows
-      target rows and pin it.
-
-      **Acceptance criteria:** Successful `rgit commit --porcelain …`
-      stdout includes a stable SHA record plus existing target rows; parsers
-      documented in `docs/CODES.md`. `--dry-run --porcelain` unchanged
-      (preview rows, no SHA). `--quiet` still silent on stdout.
 
 - [ ] **Fold stderr diagnostics into `rgit context`'s record stream.**
       `context` is the flagless first-turn orientation command, but
@@ -344,3 +262,10 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
       records for `[ts-only]` and each diff warning previously stderr-only,
       documented in `docs/CODES.md`. Byte budget and `F`-before-`C`
       truncation priority preserved. No new flags.
+
+- [ ] **Quiet-success unit coverage for `rgit commit -q`.** Porcelain and
+      quiet are mutually exclusive; a dedicated unit case that a quiet
+      successful commit writes nothing to stdout would pin the non-H path.
+
+      **Packages / files:** `internal/app/commit_porcelain_test.go` (or a
+      neighbouring commit unit test).
