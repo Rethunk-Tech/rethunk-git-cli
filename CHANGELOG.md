@@ -34,6 +34,10 @@ Notable changes to `rgit`. The format follows
   darwin/arm64 release artifacts on macOS, using `shasum` for checksum
   verification. See [`docs/INSTALL.md`](docs/INSTALL.md#install-script).
 
+- `scripts/install.ps1` adds a checksum-verified Windows/amd64 release
+  installer with a network-free `-DryRun` preview. See
+  [`docs/INSTALL.md`](docs/INSTALL.md#install-script).
+
 - `rgit log --since=DATE [--until=DATE] [PATH...]` now accepts
   `-n`/`--max-count` and forwards git's own commit-count limit; without it,
   the path-scoped history remains unbounded. See

@@ -81,7 +81,8 @@ Full anchor and qualification rules: [`ANCHORS.md`](ANCHORS.md).
   still built and published: the release workflow runs `make cross-darwin`
   natively on a `macos-latest` GitHub-hosted runner, a separate job from
   the cross-compiled linux/windows one. `scripts/install.sh` downloads and
-  verifies the matching artifact on a Mac. Detail:
+  verifies the matching artifact on a Mac; `scripts/install.ps1` does the
+  same for Windows/amd64. Detail:
   [`INSTALL.md`](INSTALL.md#cross-builds).
 - **SQL ships only behind the `rgit_sql` build tag.** A plain build works
   identically without it; a `.sql` anchor then exits 9 like any other

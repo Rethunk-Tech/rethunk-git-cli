@@ -343,6 +343,23 @@ downloads a release binary and verifies it against that release's own
 curl -fsSL https://raw.githubusercontent.com/Rethunk-Tech/rethunk-git-cli/main/scripts/install.sh | sh
 ```
 
+On Windows/amd64, `scripts/install.ps1` provides the equivalent
+release-download and checksum-verification path:
+
+```powershell
+$env:VERSION = 'v1.1.0'  # optional; defaults to latest
+.\scripts\install.ps1
+```
+
+It installs `rgit.exe` to `$HOME\.local\bin` by default; set `$env:PREFIX` to
+override the destination. `-DryRun` prints the download URL, checksum source,
+and install path without touching the network:
+
+```powershell
+$env:VERSION = 'v1.1.0'
+.\scripts\install.ps1 -DryRun
+```
+
 Every release also publishes `SHA256SUMS.sigstore.json`, a keyless
 [cosign](https://docs.sigstore.dev/cosign/signing/overview/) signature over
 `SHA256SUMS` itself -- verifying it proves the checksums came from this
@@ -364,13 +381,14 @@ install.sh` installs that exact tag system-wide. `--dry-run` prints the plan
 at all, which is what CI runs to lint the script's own control flow on every
 push.
 
-**Scope is deliberately narrow.** The script supports linux/amd64, linux/arm64,
-darwin/amd64, and darwin/arm64. Linux verifies the release line with
-`sha256sum`; macOS uses its native `shasum -a 256`. There is no Windows path —
-build from source there instead, as described in [Build](#build).
-Language servers stay opt-in exactly as they are everywhere else — the
-script never installs one; it prints the `-with-servers` pointer as its
-last line instead. There is no Homebrew formula: `rgit` links tree-sitter
+**Scope is deliberately narrow.** `scripts/install.sh` supports
+linux/amd64, linux/arm64, darwin/amd64, and darwin/arm64; `install.ps1`
+supports Windows/amd64. Linux verifies the release line with `sha256sum`;
+macOS uses its native `shasum -a 256`. Language servers stay opt-in exactly
+as they are everywhere else — neither installer installs one. The shell
+script prints the `-with-servers` pointer as its last line, while the
+PowerShell script points at this documentation. There is no Homebrew formula:
+`rgit` links tree-sitter
 through cgo, so a formula would need to build from source per-platform (a
 bottle per target) rather than fetch one, which is a materially bigger
 undertaking than this script covers, not a small addition to it.
