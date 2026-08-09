@@ -278,7 +278,7 @@ is unchanged. See [`LIMITATIONS.md`](LIMITATIONS.md#history-across-renames).
 ### Log by date and path
 
 ```console
-$ rgit log --since=2024-01-01 -- src/auth
+$ rgit log --since=2024-01-01 -n 5 -- src/auth
 a1b2c3d fix(auth): reject expired tokens
 ```
 
@@ -289,6 +289,10 @@ Values are forwarded to git's own `--since`/`--until` unparsed, so anything
 git accepts there (`"2024-01-01"`, `"2 weeks ago"`) works here too. With no
 paths, it is the whole repository's history in that window, matching plain
 `git log --since=DATE`.
+
+`-n N`/`--max-count=N` limits this path-scoped history to at most `N`
+commits, forwarding git's own count limit. Without either spelling, the
+history remains unbounded.
 
 This is the one `git log` carve-out `rgit`'s own "the tree is only ever
 inspected through `rgit`" convention otherwise has to make for a plain
@@ -506,6 +510,7 @@ argument; `context`'s fixed output shape is the point — § Context above).
 | `--quiet` | (`diff`) Implies `--exit-code` and suppresses output. |
 | `-p`, `--patch` | (`diff`) Append git's own real patch body after the report. Suppressed by `--quiet`, mutually exclusive with `--porcelain`. |
 | `--since DATE`, `--until DATE` | (`log`) Switch to date-bounded, unanchored history; presence of either selects this shape over `FILE:SYMBOL`. Forwarded to git's own `--since`/`--until` unparsed. |
+| `-n N`, `--max-count=N` | (`log`, path-scoped) Limit history to at most `N` commits. Forwarded to git's own count limit; omitted by default, so history is unbounded. |
 
 `commit` requires a message (`-m` or `-F`) and at least one target, unless
 `--amend`, `--fixup`, or `--squash` is given with neither — each generates its
