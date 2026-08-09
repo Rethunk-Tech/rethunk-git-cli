@@ -240,4 +240,27 @@ func TestBuildContextStream(t *testing.T) {
 		qt.Assert(t, qt.Not(qt.StringContains(got, "subject one")))
 		qt.Assert(t, qt.Not(qt.StringContains(got, "subject two")))
 	})
+
+	t.Run("W diagnostics consume budget before F rows", func(t *testing.T) {
+		records := []string{
+			"B\tmain\t\t0\t0\n",
+			"W\tts-only\n",
+			"F\ta.go\tA\tMOD\t1\t0\n",
+			"F\ta.go\tB\tMOD\t1\t0\n",
+			"F\ta.go\tC\tMOD\t1\t0\n",
+			"F\ta.go\tD\tMOD\t1\t0\n",
+			"C\th1\tsubject one\n",
+			"C\th2\tsubject two\n",
+		}
+		markerBytes := len("X\tTRUNCATED\t0\n")
+		budget := len(records[0]) + len(records[2]) + len(records[3]) + markerBytes
+
+		got := buildContextStream(records, budget)
+		want := records[0] + records[1] + records[2] + "X\tTRUNCATED\t5\n"
+		qt.Assert(t, qt.Equals(got, want))
+
+		withoutW := append([]string{records[0]}, records[2:]...)
+		withoutWGot := buildContextStream(withoutW, budget)
+		qt.Assert(t, qt.StringContains(withoutWGot, records[3]))
+	})
 }
