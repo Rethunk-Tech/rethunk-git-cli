@@ -1484,6 +1484,16 @@ Absent entirely on an unborn branch (`CurrentBranch` fails when there is no
 `HEAD` yet) rather than emitted with blank fields — the same "no record when
 there is nothing to say" rule the whole stream already follows for `X`.
 
+**`W` records fold the diff report's existing diagnostics into the stream.**
+`report.TSOnly` becomes one `W<TAB>ts-only` record, and each
+`report.Warnings` entry becomes `W<TAB>warning<TAB>TEXT`, with the human
+`[ts-only]` and `[warning]` stderr lines retained as mirrors. They sort after
+`B` and before `F`, so machine callers see degraded verification and
+non-fatal disagreements without parsing stderr while the actionable diff
+section keeps its priority over commit history. This adds no container-
+escalation signal: context still folds only what its existing unfiltered
+`diffpkg.Run` report produces.
+
 ### `rgit restore FILE:SYMBOL`: an accepted design, deliberately not built
 
 This is the one candidate command from the original set that was designed

@@ -44,6 +44,14 @@ Records, one per line, tab-separated, no header:
       it (both 0 when there is no upstream). Absent entirely on an unborn
       branch, which has no current branch to report.
 
+  W<TAB>ts-only
+      One when at least one file had symbols to cross-check but no live
+      language server was reached.
+
+  W<TAB>warning<TAB>TEXT
+      One per non-fatal diff diagnostic. TEXT omits the human [warning]
+      prefix that remains on stderr.
+
   F<TAB>FILE<TAB>SYMBOL<TAB>STATUS<TAB>ADDED<TAB>DELETED
       One per "rgit diff --porcelain" row -- identical fields, with this
       stream's own leading type tag. See docs/CODES.md#output-records for
@@ -57,11 +65,11 @@ Records, one per line, tab-separated, no header:
       the stream reached its byte budget.
 
 The whole stream is capped at 16 KiB. B sorts first (a single record, cost
-next to nothing), then F rows so they survive truncation before C rows do:
-the diff section has no natural bound of its own, while commits are already
-bounded up front (the most recent 20, via git's own -n) and cost little to
-drop. The X record names how many rows were withheld. See
-specs/design.md#commands for the reasoning.
+next to nothing), then W diagnostics, F rows, and C rows. F rows survive
+truncation before C rows do: the diff section has no natural bound of its own,
+while commits are already bounded up front (the most recent 20, via git's own
+-n) and cost little to drop. The X record names how many rows were withheld.
+See specs/design.md#commands for the reasoning.
 
 Full reference: docs/USAGE.md
 `
