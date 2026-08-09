@@ -217,6 +217,29 @@ func TestRun_LogPathScopedSinceAndUntil(t *testing.T) {
 	})
 }
 
+func TestRun_LogAnchorSince(t *testing.T) {
+	dir := chdirTempRepo(t)
+
+	t.Setenv("GIT_AUTHOR_DATE", "2020-01-01T00:00:00")
+	t.Setenv("GIT_COMMITTER_DATE", "2020-01-01T00:00:00")
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 10\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	gitOut(t, dir, "add", "a.go")
+	gitOut(t, dir, "commit", "-m", "fix(a): old anchor change")
+
+	t.Setenv("GIT_AUTHOR_DATE", "2030-01-01T00:00:00")
+	t.Setenv("GIT_COMMITTER_DATE", "2030-01-01T00:00:00")
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 20\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	gitOut(t, dir, "add", "a.go")
+	gitOut(t, dir, "commit", "-m", "fix(a): new anchor change")
+
+	stdout, stderr, code := runApp(t, "log", "a.go:A", "--since=2029-01-01")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.StringContains(stdout, "fix(a): new anchor change"))
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "fix(a): old anchor change")))
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "chore: initial")))
+}
+
 // TestRun_LogPathScopedPaths pins the other half of the second shape: zero
 // or more trailing positionals are pathspecs, not an anchor, narrowing
 // history the same way plain `git log -- path` does.
