@@ -1959,6 +1959,18 @@ func TestResolve_HTMLDuplicateIDIsAmbiguous(t *testing.T) {
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".html", src, "div#hero#1"), `<div id="hero"></div>`))
 }
 
+func TestResolve_HTMLDuplicateTagIDOrdinal(t *testing.T) {
+	t.Parallel()
+	src := []byte(`<div id="app">first</div>
+<div id="app">second</div>
+`)
+
+	qt.Assert(t, qt.Equals(
+		mustResolveExt(t, ".html", src, "div#app#2"),
+		`<div id="app">second</div>`,
+	))
+}
+
 // TestResolve_HTMLVoidElementDeclOnlyTrimmed pins the seam declOnlyExtent
 // consults for HTML alone: a void element followed by inline text with no
 // enclosing tag or sibling element to stop it (unlike TestResolve_HTML's own
