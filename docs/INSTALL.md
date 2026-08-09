@@ -364,11 +364,10 @@ install.sh` installs that exact tag system-wide. `--dry-run` prints the plan
 at all, which is what CI runs to lint the script's own control flow on every
 push.
 
-**Scope is deliberately narrow.** Only linux/amd64 and linux/arm64: darwin
-binaries are published (§ Cross builds above) but this POSIX shell script
-has no macOS download path wired to them, and no Windows one either — this
-script has no fallback to offer beyond pointing at `## Build` for a source
-install on either platform.
+**Scope is deliberately narrow.** The script supports linux/amd64, linux/arm64,
+darwin/amd64, and darwin/arm64. Linux verifies the release line with
+`sha256sum`; macOS uses its native `shasum -a 256`. There is no Windows path —
+build from source there instead, as described in [Build](#build).
 Language servers stay opt-in exactly as they are everywhere else — the
 script never installs one; it prints the `-with-servers` pointer as its
 last line instead. There is no Homebrew formula: `rgit` links tree-sitter

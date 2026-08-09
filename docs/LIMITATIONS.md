@@ -80,9 +80,8 @@ Full anchor and qualification rules: [`ANCHORS.md`](ANCHORS.md).
   `make cross`'s own zig-based matrix stays linux/windows only. They are
   still built and published: the release workflow runs `make cross-darwin`
   natively on a `macos-latest` GitHub-hosted runner, a separate job from
-  the cross-compiled linux/windows one. `scripts/install.sh` has no
-  download path wired to the darwin artifacts yet, though — download one
-  directly from the release page on a Mac. Detail:
+  the cross-compiled linux/windows one. `scripts/install.sh` downloads and
+  verifies the matching artifact on a Mac. Detail:
   [`INSTALL.md`](INSTALL.md#cross-builds).
 - **SQL ships only behind the `rgit_sql` build tag.** A plain build works
   identically without it; a `.sql` anchor then exits 9 like any other

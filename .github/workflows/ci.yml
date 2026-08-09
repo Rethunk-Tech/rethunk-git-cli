@@ -101,3 +101,16 @@ jobs:
       # parsing, OS/arch detection, the printed plan -- not a real download,
       # so it needs nothing from the release it would otherwise fetch.
       - run: VERSION=v1.1.0 sh scripts/install.sh --dry-run
+      # Exercise Darwin's asset and checksum selection without needing a Mac
+      # runner or touching the network.
+      - run: |
+          mock_bin="$(mktemp -d)"
+          trap 'rm -rf "$mock_bin"' EXIT
+          printf '%s\n' \
+            '#!/bin/sh' \
+            'case "$1" in' \
+            '  -s) printf "%s\n" Darwin ;;' \
+            '  -m) printf "%s\n" arm64 ;;' \
+            'esac' >"$mock_bin/uname"
+          chmod +x "$mock_bin/uname"
+          PATH="$mock_bin:$PATH" VERSION=v1.1.0 sh scripts/install.sh --dry-run
