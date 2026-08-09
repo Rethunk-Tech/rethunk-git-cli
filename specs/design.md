@@ -489,21 +489,16 @@ only when extension lookup finds nothing, reading at most 256 bytes of the
 file's first line — enough for a real interpreter line, never enough to
 force a full read of a large or binary file just to learn it has none.
 `shebangExtension` maps `bash`/`sh` to the shell grammar and `python3`/
-`python` to Python, unwrapping `#!/usr/bin/env NAME` to `NAME` the same way
-a direct `#!/bin/NAME` already resolves; every other interpreter (`perl`,
-`ruby`, `node`, a project's own wrapper) is left unmapped rather than
-guessed at. Three limits are deliberate, not oversights: `zsh` stays
-excluded here too, the same mis-parse risk as the extension case above;
-`#!/usr/bin/env -S bash -x` is not unwrapped, since the first field after
-`env` is `-S`, not the interpreter, and an unrecognized interpreter already
-has an honest fallback to fall into; and the peek reads the **worktree**
-copy only (`PeekShebangLine`), so a path that exists only in `HEAD` — a
-deletion, or a revision-to-revision comparison that never touches the
-worktree — falls back to a whole-file entry rather than fetching a blob
-through `git cat-file` just to sniff one line. `LanguageForWorktreePath` is
-the one entry point `internal/synth` and `internal/diff` both call rather
-than repeating the extension-then-peek sequence themselves. Live behavior:
-[`../docs/ANCHORS.md`](../docs/ANCHORS.md#language-support).
+`python` to Python, and unwraps the supported `env`, `env -S`, `npx`, and
+`bunx` forms; every other interpreter (`perl`, `ruby`, a project's own
+wrapper) is left unmapped rather than guessed at. `zsh` stays excluded
+because the bash grammar mis-parses zsh-only syntax. The shared
+`LanguageForPath` resolver reads the worktree first; when that copy is absent,
+the caller supplies a `git cat-file` sample of `HEAD` bounded to the same 256
+bytes. This keeps deleted extensionless scripts and revision comparisons
+addressable without a full blob read. `LanguageForWorktreePath` remains the
+worktree-only entry point for callers that have no HEAD fallback. Live
+behavior: [`../docs/ANCHORS.md`](../docs/ANCHORS.md#language-support).
 
 **YAML earns its place on measured demand, not popularity: 49% of the 51
 surveyed repositories, second only to Markdown.** The unit that matters is one

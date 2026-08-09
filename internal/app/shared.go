@@ -231,7 +231,9 @@ type anchorSourceFunc func(ctx context.Context, repo *gitx.Repo, root, file stri
 // require it land on a FILE:SYMBOL anchor (cli.KindAnchor), resolve the
 // file's language (with the same worktree-shebang fallback internal/diff's
 // own validateSym uses), fetch source via fetchSource, and resolve the
-// anchor's extent against it.
+// anchor's extent against it. Language lookup uses the worktree first and
+// falls back to a bounded HEAD sample for extensionless paths whose worktree
+// copy is absent.
 //
 // cmdName and help supply each command's own "<cmdName> requires a
 // FILE:SYMBOL anchor[, not a plain path]" wording and usage text -- kept
@@ -279,14 +281,12 @@ func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, posi
 		return nil, "", nil, nil, "", exitcode.InvalidUsage
 	}
 
-	lang, ok := resolve.ForExtension(filepath.Ext(file))
-	if !ok {
-		// Same worktree-shebang fallback as internal/diff's validateSym: an
-		// extensionless script only resolves if its worktree copy is there
-		// to peek a shebang line from.
-		if line, peeked := resolve.PeekShebangLine(filepath.Join(root, file)); peeked {
-			lang, ok = resolve.ForPath(file, line)
-		}
+	lang, ok, _, err := resolve.LanguageForPath(root, file, func() ([]byte, bool, error) {
+		return repo.CatFileSample(ctx, "HEAD", file, resolve.ShebangPeekBytes)
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return nil, "", nil, nil, "", exitcode.GitFailure
 	}
 	if !ok {
 		rerr := &resolve.ResolveError{Code: exitcode.UnsupportedLanguage, Anchor: c.Anchor.Name}

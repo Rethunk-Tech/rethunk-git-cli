@@ -486,12 +486,14 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 	ext := filepath.Ext(path)
 	// Extension lookup found nothing; a worktree copy may still carry a
 	// recognizable "#!" interpreter line -- the case an extensionless git
-	// hook or bin/ entry is in. resolve.LanguageForWorktreePath bounds the
-	// read to its own first line, so a large or binary file with no early
-	// newline is never slurped just to decide it has no shebang. A path
-	// with no worktree copy at all (shebangSniffed == false) falls straight
-	// through to the same refusal as before.
-	lang, ok, shebangSniffed := resolve.LanguageForWorktreePath(root, path)
+	// hook or bin/ entry is in. When that copy is absent, the shared resolver
+	// samples HEAD instead, so a deleted script can still resolve its anchors.
+	lang, ok, shebangSniffed, langErr := resolve.LanguageForPath(root, path, func() ([]byte, bool, error) {
+		return repo.CatFileSample(ctx, "HEAD", path, resolve.ShebangPeekBytes)
+	})
+	if langErr != nil {
+		return nil, langErr
+	}
 	if !ok {
 		return nil, &PathError{Code: exitcode.UnsupportedLanguage, Path: path, Reason: unsupportedLanguageReason(path, ext, shebangSniffed)}
 	}

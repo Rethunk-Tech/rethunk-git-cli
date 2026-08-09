@@ -349,10 +349,11 @@ not interpreters, and `NAME` is what actually decides the language
 for any of this; every one of them was already routing to a language this
 resolver supports, just not yet from an extensionless shebang.
 
-The shebang is read from the worktree, so a script that exists only in `HEAD` —
-one being deleted, or a comparison between two revisions — falls back to a
-whole-file entry. Deliberate: reading it from a blob instead would buy one
-uncommon case at the cost of a bounded read through `git cat-file`.
+The shebang is read from the worktree when that copy exists. If the worktree
+copy is absent, the resolver samples the first 256 bytes of the `HEAD` blob
+through `git cat-file` instead, so a deleted script or a revision comparison
+can still use its grammar and symbol extents. The extension still wins, and an
+unmapped shebang remains exit 9.
 
 The language-server cross-check covers Go, TypeScript/TSX, Python, Shell,
 YAML, JSON, CSS, Markdown, and HTML

@@ -198,8 +198,10 @@ $ rgit blame auth.go:ValidateToken
 `rgit blame FILE:SYMBOL` resolves the anchor exactly like `commit` and `diff
 --sym` do, then runs `git blame -L start,end -- FILE` bounded to just that
 symbol's own extent in the current worktree file — never the whole file.
-There is no revision argument: blame always reads the worktree copy, the same
-file a bare `git blame FILE` would.
+There is no revision argument. When the worktree copy exists, blame reads it,
+the same file a bare `git blame FILE` would. When the file has been deleted
+from the worktree, rgit resolves the extent from `HEAD` and runs git blame
+against `HEAD` for that same blob and line range.
 
 An anchor that does not resolve is **never** silently widened to a whole-file
 blame — it is exit 3 (unresolvable), 4 (ambiguous), or 9 (unsupported
@@ -466,11 +468,12 @@ everything `--deep` could add.
 print a completion script for that shell to stdout; nothing else is written.
 It completes subcommands, each subcommand's own flags, plain file paths, and
 — the useful part — symbol names after `FILE:`, by shelling back out to
-`rgit diff --porcelain` and matching its `SYMBOL` column against `FILE`
-(record shape: [`CODES.md`](CODES.md#output-records)). If that call fails
-for any reason — the working directory is not a repository, `rgit` is not on
-`PATH`, anything — completion offers nothing rather than printing to the
-prompt.
+`rgit symbols FILE`. That read-only command lists every declared symbol in
+the worktree file, so completion works for both clean and dirty files. If
+that call fails for any reason — the working directory is not a repository,
+`rgit` is not on `PATH`, anything — completion offers nothing rather than
+printing to the prompt. `rgit symbols FILE` itself prints one anchor per
+line and is useful for scripts that need the same list.
 
 The fish script drives the identical logic through fish's own completion
 model — one dynamic candidate function registered with `complete`, rather

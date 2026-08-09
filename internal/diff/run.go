@@ -235,13 +235,15 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 	}
 
 	// A worktree copy of newPath may still carry a recognizable "#!" line --
-	// an extensionless git hook or bin/ entry, resolve.ForPath's case. There
-	// is none to peek for a deletion (newPath no longer exists in the
-	// worktree) or a rev-to-rev comparison that never touches it; that
-	// degrades to the same whole-file row as any other unsupported
-	// extension, deliberately -- not a corner case missed, see
-	// internal/resolve/lang.go's PeekShebangLine.
-	lang, ok, _ := resolve.LanguageForWorktreePath(root, newPath)
+	// an extensionless git hook or bin/ entry, resolve.ForPath's case. When
+	// the worktree copy is absent, the shared resolver samples HEAD instead,
+	// so deleted extensionless scripts retain their grammar.
+	lang, ok, _, langErr := resolve.LanguageForPath(root, newPath, func() ([]byte, bool, error) {
+		return repo.CatFileSample(ctx, "HEAD", newPath, resolve.ShebangPeekBytes)
+	})
+	if langErr != nil {
+		return nil, nil, false, langErr
+	}
 	if !ok {
 		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusNoSymbols, Added: addedStr, Deleted: deletedStr}}}, nil, false, nil
 	}
@@ -478,11 +480,14 @@ func validateSyms(ctx context.Context, repo *gitx.Repo, root string, scope Scope
 // the same anchor (internal/resolve.ResolveError), so a missing file and a
 // missing symbol need no separate message shape.
 func validateSym(ctx context.Context, repo *gitx.Repo, root string, scope Scope, s SymRef) (string, error) {
-	// Same worktree-shebang fallback as buildFileReport: a --sym anchor
-	// naming an extensionless script is only resolvable if its worktree
-	// copy is there to peek. A since-deleted or rev-only file has none, and
-	// degrades to the exit-9 refusal below.
-	lang, ok, _ := resolve.LanguageForWorktreePath(root, s.File)
+	// Same shared shebang fallback as buildFileReport: a --sym anchor
+	// naming an extensionless script uses HEAD when its worktree copy is gone.
+	lang, ok, _, langErr := resolve.LanguageForPath(root, s.File, func() ([]byte, bool, error) {
+		return repo.CatFileSample(ctx, "HEAD", s.File, resolve.ShebangPeekBytes)
+	})
+	if langErr != nil {
+		return "", langErr
+	}
 	if !ok {
 		// No grammar to resolve against at all -- rgit commit's own exit 9
 		// ("unsupported language for a symbol anchor") is the closer match

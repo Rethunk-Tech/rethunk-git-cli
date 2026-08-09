@@ -448,6 +448,10 @@ func shebangInterpreter(content []byte) (string, bool) {
 // headroom for one, not an attempt to capture more.
 const shebangPeekBytes = 256
 
+// ShebangPeekBytes is the bound callers use when sampling a HEAD blob for an
+// extensionless path whose worktree copy is absent.
+const ShebangPeekBytes = shebangPeekBytes
+
 // PeekShebangLine reads at most shebangPeekBytes from the worktree file at
 // fullPath and returns its first line, for ForPath's shebang fallback. ok is
 // false when fullPath cannot be opened at all -- most commonly, no worktree
@@ -489,32 +493,51 @@ func PeekShebangLine(fullPath string) ([]byte, bool) {
 	return []byte(raw), true
 }
 
-// LanguageForWorktreePath resolves relPath's language the way a worktree
-// file gets one anywhere in this codebase: extension lookup first, then a
-// bounded shebang peek of the worktree copy at filepath.Join(root, relPath)
-// when the extension alone matched nothing. It is the three-call sequence
-// internal/synth/stage.go and internal/diff/run.go each used to repeat
-// (ForExtension, then PeekShebangLine, then ForPath) collapsed into one
-// call -- but each of those sites has its own reason the worktree copy the
-// peek needs might not be there (a deletion, a rev-to-rev comparison that
-// never touches the worktree, a since-deleted --sym target), and that
-// reasoning stays at the call site, not here.
+// HeadShebangSample supplies a bounded sample of a path's HEAD blob. It is a
+// callback rather than a gitx dependency so resolve stays independent of the
+// git execution layer.
+type HeadShebangSample func() (sample []byte, exists bool, err error)
+
+// LanguageForPath resolves relPath's language from its extension, then a
+// bounded shebang peek. An existing worktree copy always wins the shebang
+// lookup; only when that copy is absent does headSample get called for a
+// bounded HEAD-blob peek. Extension lookup never calls either source.
 //
-// peeked reports whether a worktree copy was actually found and its first
-// line inspected, independent of ok: a file that peeks clean (no "#!" line,
-// or an unmapped interpreter) still has peeked=true, because a caller
-// building an error message needs to distinguish "checked and found no
-// match" from "nothing there to check" (stage.go's shebangSniffed, and its
-// unsupportedLanguageReason wording, is the reason this is a third return
-// rather than folded into ok).
-func LanguageForWorktreePath(root, relPath string) (lang Language, ok bool, peeked bool) {
+// peeked reports whether a source was actually found and inspected,
+// independent of ok: a source with no shebang or an unmapped interpreter
+// still has peeked=true. headSample may be nil when HEAD fallback is not
+// available.
+func LanguageForPath(root, relPath string, headSample HeadShebangSample) (lang Language, ok bool, peeked bool, err error) {
 	if lang, ok := ForExtension(filepath.Ext(relPath)); ok {
-		return lang, true, false
+		return lang, true, false, nil
 	}
-	line, peeked := PeekShebangLine(filepath.Join(root, relPath))
-	if !peeked {
-		return nil, false, false
+	fullPath := filepath.Join(root, relPath)
+	line, peeked := PeekShebangLine(fullPath)
+	if peeked {
+		lang, ok = ForPath(relPath, line)
+		return lang, ok, true, nil
+	}
+	if _, statErr := os.Stat(fullPath); statErr == nil || !errors.Is(statErr, os.ErrNotExist) {
+		return nil, false, false, nil
+	}
+	if headSample == nil {
+		return nil, false, false, nil
+	}
+	line, exists, err := headSample()
+	if err != nil {
+		return nil, false, false, err
+	}
+	if !exists {
+		return nil, false, false, nil
 	}
 	lang, ok = ForPath(relPath, line)
-	return lang, ok, true
+	return lang, ok, true, nil
+}
+
+// LanguageForWorktreePath resolves relPath from its extension or a bounded
+// shebang peek of the worktree copy. Callers that can fall back to a HEAD blob
+// use LanguageForPath directly.
+func LanguageForWorktreePath(root, relPath string) (lang Language, ok bool, peeked bool) {
+	lang, ok, peeked, _ = LanguageForPath(root, relPath, nil)
+	return lang, ok, peeked
 }

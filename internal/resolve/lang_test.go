@@ -250,3 +250,44 @@ func TestForPath_NodeJSEcosystemRoutesToTypeScript(t *testing.T) {
 		t.Error("ForPath with a zsh shebang resolved; zsh stays excluded (tree-sitter-bash mis-parse)")
 	}
 }
+
+func TestLanguageForPath_UsesHEADWhenWorktreeIsAbsent(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	var calls int
+	lang, ok, peeked, err := LanguageForPath(root, "hook", func() ([]byte, bool, error) {
+		calls++
+		return []byte("#!/usr/bin/env bash\n"), true, nil
+	})
+	if err != nil {
+		t.Fatalf("LanguageForPath: %v", err)
+	}
+	if !ok || lang.Name() != "shell" {
+		t.Fatalf("LanguageForPath() = (%v, %v); want shell, true", lang, ok)
+	}
+	if !peeked {
+		t.Error("LanguageForPath() peeked = false; want true for HEAD sample")
+	}
+	if calls != 1 {
+		t.Errorf("HEAD sample calls = %d; want 1", calls)
+	}
+
+	if err := os.WriteFile(filepath.Join(root, "hook"), []byte("#!/usr/bin/perl\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	calls = 0
+	lang, ok, peeked, err = LanguageForPath(root, "hook", func() ([]byte, bool, error) {
+		calls++
+		return []byte("#!/usr/bin/env bash\n"), true, nil
+	})
+	if err != nil {
+		t.Fatalf("LanguageForPath(worktree): %v", err)
+	}
+	if ok || lang != nil || !peeked {
+		t.Errorf("LanguageForPath(worktree) = (%v, %v, %v); want nil, false, true", lang, ok, peeked)
+	}
+	if calls != 0 {
+		t.Errorf("HEAD sample calls with worktree = %d; want 0", calls)
+	}
+}
