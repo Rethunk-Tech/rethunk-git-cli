@@ -355,6 +355,8 @@ jobs:
               throw 'cosign marker was not written by the cosign path'
             }
           } finally {
+            $env:PATH = $oldPath
+            $env:PREFIX = $null
             Remove-Item -LiteralPath @(
               $fixture,
               $mockBin,
