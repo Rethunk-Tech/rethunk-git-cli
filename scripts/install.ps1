@@ -30,11 +30,15 @@ $asset = "rgit-$tag-windows-amd64.exe"
 $baseUrl = "https://github.com/$repo/releases/download/$tag"
 $assetUrl = "$baseUrl/$asset"
 $checksumsUrl = "$baseUrl/SHA256SUMS"
+$sigstoreUrl = "$baseUrl/SHA256SUMS.sigstore.json"
 $installPath = Join-Path $prefix 'rgit.exe'
 
 if ($DryRun) {
     Write-Output "would download: $assetUrl"
     Write-Output "would verify against: $checksumsUrl"
+    if (Get-Command cosign -ErrorAction SilentlyContinue) {
+        Write-Output "would verify checksum signature with: $sigstoreUrl"
+    }
     Write-Output "would install to: $installPath"
     exit 0
 }
@@ -47,6 +51,19 @@ try {
     $checksumsPath = Join-Path $temp 'SHA256SUMS'
     Invoke-WebRequest -Uri $assetUrl -OutFile $assetPath
     Invoke-WebRequest -Uri $checksumsUrl -OutFile $checksumsPath
+
+    if (Get-Command cosign -ErrorAction SilentlyContinue) {
+        $sigstorePath = Join-Path $temp 'SHA256SUMS.sigstore.json'
+        Invoke-WebRequest -Uri $sigstoreUrl -OutFile $sigstorePath
+        & cosign verify-blob `
+            --bundle $sigstorePath `
+            --certificate-identity-regexp 'https://github.com/Rethunk-Tech/rethunk-git-cli/.github/workflows/release.yml@.*' `
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com `
+            $checksumsPath
+        if ($LASTEXITCODE -ne 0) {
+            throw 'install.ps1: cosign verification failed for SHA256SUMS'
+        }
+    }
 
     $escapedAsset = [regex]::Escape($asset)
     $checksumPattern = "^\s*([0-9a-fA-F]{64})\s+\*?$escapedAsset\s*$"
