@@ -129,6 +129,24 @@ func TestMatchAndCompare_FlatContainerIgnoresServerContainerName(t *testing.T) {
 	}
 }
 
+func TestMatchAndCompare_FlatHTMLClassSuffix(t *testing.T) {
+	t.Parallel()
+
+	src := []byte(`<div id="app" class="widget">` + "\n")
+	symbols := []lsp.Symbol{
+		{Name: "div#app.widget", StartLine: 0, EndLine: 0},
+	}
+	res := &Resolution{Anchor: "div#app", Sep: "#", Flat: true, DeclOnly: Extent{Start: 0, End: uint(len(src) - 1)}}
+
+	found, err := MatchAndCompare(src, res, symbols)
+	if !found {
+		t.Fatal("found = false; want true -- Flat HTML must ignore server class suffixes")
+	}
+	if err != nil {
+		t.Errorf("err = %v; want nil, ranges agree", err)
+	}
+}
+
 // TestMatchAndCompare_CorruptedOffsetFailsLoudly guards lineOf's own bounds
 // check. Every DeclOnly offset this package hands MatchAndCompare today
 // comes from a Declaration parsed out of the exact src passed alongside it

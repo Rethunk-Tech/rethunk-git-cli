@@ -224,17 +224,22 @@ func formatRange(start, end uint32) string {
 // flat means res.Flat: the resolving language's own Container is not a real
 // ancestor (FlatContainerLanguage, lang.go's own doc comment), so a
 // server-reported symbol's genuine containerName must never be joined onto
-// its Name before comparing -- HTML already spells Name exactly "tag#id",
-// identical to what this resolver emits as Anchor, with nothing left to
-// join. qualifyLSPSymbol's join is for every other language, where
-// Container really is an ancestor a server also reports as one.
+// its Name before comparing. HTML's resolver emits "tag#id", while the
+// language server may append ".class" selectors to that same Name; strip
+// those server-only suffixes before comparing. qualifyLSPSymbol's join is for
+// every other language, where Container really is an ancestor a server also
+// reports as one.
 func matchLSPSymbol(anchor, sep string, flat bool, symbols []lsp.Symbol) (lsp.Symbol, bool) {
 	bare, ordinal, hasOrdinal := ParseOrdinal(anchor)
 
 	var byBare []lsp.Symbol
 	for _, s := range symbols {
 		qualified := s.Name
-		if !flat {
+		if flat {
+			if classStart := strings.IndexByte(qualified, '.'); classStart >= 0 {
+				qualified = qualified[:classStart]
+			}
+		} else {
 			qualified = qualifyLSPSymbol(s, sep)
 		}
 		if qualified == anchor {
