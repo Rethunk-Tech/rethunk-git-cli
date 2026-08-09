@@ -236,7 +236,9 @@ command exists to avoid. Pass `-p`/`--patch` to see it anyway — git's own
 `FILE:SYMBOL` positional keeps its symbol-scoped meaning, and the bounds are
 forwarded to git's own `git log -L`. `-n N`/`--max-count=N` can be combined
 with it as well. `--follow-rename` may be combined with either date bound;
-each rename segment receives the same filters.
+each rename segment receives the same filters. Under `--follow-rename`,
+`-n`/`--max-count` applies independently to each rename segment, so the total
+can exceed `N` when history crosses multiple renames.
 
 Unlike `blame`, the anchor is resolved against **`HEAD`, not the worktree**:
 history is a question about what has already been committed, and `git log -L`
