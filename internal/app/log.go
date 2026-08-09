@@ -11,8 +11,8 @@
 //   - `rgit log --since=DATE [--until=DATE] [PATH...]` -- time- and
 //     path-scoped history with no symbol at all, the shape the operator's
 //     own tooling otherwise has to fall back to plain `git log --since=...
-//     -- <paths>` for. Selected by the presence of --since/--until; every
-//     positional is a pathspec, not an anchor.
+//     -- <paths>` for. Selected by the presence of --since/--until when no
+//     positional is a FILE:SYMBOL anchor; every positional is a pathspec.
 //
 // specs/design.md § Commands's own guardrail is non-negotiable for both:
 // patches are opt-in (-p/--patch), never default -- the default stream is
@@ -36,7 +36,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
-const logHelp = `usage: rgit log FILE:SYMBOL [--follow-rename] [--porcelain | -p|--patch]
+const logHelp = `usage: rgit log FILE:SYMBOL [--since=DATE] [--until=DATE] [-n N|--max-count=N] [--follow-rename] [--porcelain | -p|--patch]
        rgit log --since=DATE [--until=DATE] [-n N|--max-count=N] [--porcelain | -p|--patch] [PATH...]
 
 History of one symbol: one record per commit whose own diff touched its
@@ -51,17 +51,19 @@ A file renamed since a commit loses its history under the old name unless
 --follow-rename is given, which re-resolves the anchor's extent at each
 rename boundary and walks further back under the old name (docs/LIMITATIONS.md).
 
---since=DATE switches to the second form: ordinary, non-anchored git
-history bounded by date and, optionally, one or more paths -- no symbol
-anchor at all. Forwarded to git's own --since unparsed, so anything git
-accepts there ("2024-01-01", "2 weeks ago") works here too.
+--since=DATE bounds either form. With a FILE:SYMBOL positional, the
+anchor remains the symbol-scoped form; otherwise this is ordinary,
+non-anchored git history with, optionally, one or more paths. Forwarded to
+git's own --since unparsed, so anything git accepts there ("2024-01-01",
+"2 weeks ago") works here too.
 
---until=DATE bounds the same form's other end, alone or combined with
---since. With no path and only one bound (or neither), it is the whole
-repository's history in that window, matching plain "git log --since=DATE".
+--until=DATE bounds the selected form's other end, alone or combined with
+--since. With no path and only one bound (or neither), the unanchored form
+is the whole repository's history in that window, matching plain
+"git log --since=DATE".
 
--n, --max-count=N limits the path-scoped form to at most N commits,
-forwarded to git's own count limit. Without it, history is unbounded.
+-n, --max-count=N limits either form to at most N commits, forwarded to
+git's own count limit. Without it, history is unbounded.
 
 --follow-rename walks the file's rename history: at each commit that
 renamed it, the anchor's extent is re-resolved against the old name's blob
@@ -80,13 +82,7 @@ Full reference: docs/USAGE.md
 
 // hasTimeRangeFlag reports whether args names --since or --until, in
 // either of git's own two spellings for a long option taking a value
-// ("--since VALUE" or "--since=VALUE"). This is what picks between rgit
-// log's two invocation shapes (the package doc comment above): the
-// anchor form's arity (exactly one required FILE:SYMBOL positional,
-// parsed by shared.go's parseAnchorCommandArgs) and the path-scoped
-// form's (zero or more path positionals, parsed by pflag below) are
-// different enough that one loop cannot serve both, so this decides which
-// one even runs.
+// ("--since VALUE" or "--since=VALUE").
 func hasTimeRangeFlag(args []string) bool {
 	for _, a := range args {
 		if a == "--since" || a == "--until" || strings.HasPrefix(a, "--since=") || strings.HasPrefix(a, "--until=") {
@@ -96,36 +92,46 @@ func hasTimeRangeFlag(args []string) bool {
 	return false
 }
 
+// hasLogAnchor reports whether a positional has FILE:SYMBOL shape. A leading
+// colon is git pathspec magic, and -- makes every following token a pathspec,
+// so neither can select the anchor form.
+func hasLogAnchor(args []string) bool {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			return false
+		}
+		switch {
+		case a == "--since" || a == "--until" || a == "-n" || a == "--max-count":
+			i++
+			continue
+		case strings.HasPrefix(a, "--since="), strings.HasPrefix(a, "--until="), strings.HasPrefix(a, "-n"), strings.HasPrefix(a, "--max-count="):
+			continue
+		case a == "--porcelain", a == "-p", a == "--patch", a == "--follow-rename", a == "--help", a == "-h":
+			continue
+		case strings.Contains(a, ":") && !strings.HasPrefix(a, ":"):
+			return true
+		}
+	}
+	return false
+}
+
 func runLog(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
-	if hasTimeRangeFlag(args) {
+	if hasTimeRangeFlag(args) && !hasLogAnchor(args) {
 		return runLogPathScoped(ctx, dir, args, stdout, stderr)
 	}
 	return runLogAnchor(ctx, dir, args, stdout, stderr)
 }
 
-// runLogAnchor is rgit log's original FILE:SYMBOL form, unchanged: its
-// flag surface is hand-parsed via shared.go's parseAnchorCommandArgs
-// (m10: the same loop blame.go shares, rather than each command keeping
-// its own copy a future flag could land on and miss), the same minimal
-// style blame.go and languages.go already use for a command this small.
-// hasTimeRangeFlag above is what keeps this reachable only when neither
-// --since nor --until was given, so its behavior -- including its exact
-// error wording -- is identical to before the path-scoped form existed.
+// runLogAnchor is rgit log's FILE:SYMBOL form. Its small flag surface is
+// hand-parsed here because date and count flags take values while the shared
+// anchor parser only accepts booleans.
 func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
-	porcelain := false
-	patch := false
-	followRename := false
-	positional, code, done := parseAnchorCommandArgs("log", args,
-		[]anchorCommandFlag{
-			{tokens: []string{"--porcelain"}, set: &porcelain},
-			{tokens: []string{"-p", "--patch"}, set: &patch},
-			{tokens: []string{"--follow-rename"}, set: &followRename},
-		},
-		logHelp, stdout, stderr)
+	opts, code, done := parseLogAnchorArgs(args, stdout, stderr)
 	if done {
 		return code
 	}
-	if porcelain && patch {
+	if opts.porcelain && opts.patch {
 		fmt.Fprintln(stderr, "rgit: --porcelain and --patch are mutually exclusive")
 		fmt.Fprint(stderr, logHelp)
 		return exitcode.InvalidUsage
@@ -136,7 +142,7 @@ func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr
 	// against HEAD's own blob is what keeps the derived line range
 	// meaningful to `git log -L`, which walks HEAD's own history and knows
 	// nothing about the worktree at all (specs/design.md § Commands).
-	repo, file, head, res, anchorName, code := resolveAnchorExtent(ctx, dir, stderr, positional, "log", logHelp,
+	repo, file, head, res, anchorName, code := resolveAnchorExtent(ctx, dir, stderr, opts.positional, "log", logHelp,
 		func(ctx context.Context, repo *gitx.Repo, _, file string) ([]byte, string, bool, error) {
 			head, exists, err := repo.CatFile(ctx, "HEAD", file)
 			if err != nil {
@@ -152,9 +158,9 @@ func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr
 	}
 	warnIfOrdinalAnchor(stderr, file, anchorName)
 
-	extra := logFormatArgs(patch, porcelain)
+	extra := logDateArgs(opts.since, opts.until, opts.maxCount, opts.maxCountSet, logFormatArgs(opts.patch, opts.porcelain))
 
-	if followRename {
+	if opts.followRename {
 		return runLogFollowRename(ctx, repo, file, head, res, anchorName, extra, stdout, stderr)
 	}
 
@@ -166,6 +172,119 @@ func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr
 	}
 	_, _ = stdout.Write(out)
 	return exitcode.Success
+}
+
+type logAnchorOptions struct {
+	since        string
+	until        string
+	maxCount     int
+	maxCountSet  bool
+	porcelain    bool
+	patch        bool
+	followRename bool
+	positional   string
+}
+
+func parseLogAnchorArgs(args []string, stdout, stderr io.Writer) (logAnchorOptions, exitcode.Code, bool) {
+	var opts logAnchorOptions
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "--help" || a == "-h":
+			fmt.Fprint(stdout, logHelp)
+			return logAnchorOptions{}, exitcode.Success, true
+		case a == "--porcelain":
+			opts.porcelain = true
+		case a == "-p" || a == "--patch":
+			opts.patch = true
+		case a == "--follow-rename":
+			opts.followRename = true
+		case a == "--since" || a == "--until":
+			if i+1 >= len(args) {
+				fmt.Fprintf(stderr, "rgit: log: option %q requires a value\n", a)
+				fmt.Fprint(stderr, logHelp)
+				return logAnchorOptions{}, exitcode.InvalidUsage, true
+			}
+			i++
+			if a == "--since" {
+				opts.since = args[i]
+			} else {
+				opts.until = args[i]
+			}
+		case strings.HasPrefix(a, "--since="):
+			opts.since = strings.TrimPrefix(a, "--since=")
+		case strings.HasPrefix(a, "--until="):
+			opts.until = strings.TrimPrefix(a, "--until=")
+		case a == "-n" || a == "--max-count":
+			if i+1 >= len(args) {
+				fmt.Fprintf(stderr, "rgit: log: option %q requires a value\n", a)
+				fmt.Fprint(stderr, logHelp)
+				return logAnchorOptions{}, exitcode.InvalidUsage, true
+			}
+			i++
+			if !setLogMaxCount(&opts, a, args[i], stderr) {
+				fmt.Fprint(stderr, logHelp)
+				return logAnchorOptions{}, exitcode.InvalidUsage, true
+			}
+		case strings.HasPrefix(a, "-n") && len(a) > 2:
+			if !setLogMaxCount(&opts, "-n", a[2:], stderr) {
+				fmt.Fprint(stderr, logHelp)
+				return logAnchorOptions{}, exitcode.InvalidUsage, true
+			}
+		case strings.HasPrefix(a, "--max-count="):
+			if !setLogMaxCount(&opts, "--max-count", strings.TrimPrefix(a, "--max-count="), stderr) {
+				fmt.Fprint(stderr, logHelp)
+				return logAnchorOptions{}, exitcode.InvalidUsage, true
+			}
+		case a == "--":
+			if opts.positional != "" {
+				fmt.Fprintf(stderr, "rgit: log: unrecognized argument %q\n", a)
+				fmt.Fprint(stderr, logHelp)
+				return logAnchorOptions{}, exitcode.InvalidUsage, true
+			}
+			opts.positional = a
+		case strings.HasPrefix(a, "-"):
+			fmt.Fprintf(stderr, "rgit: log: unrecognized argument %q\n", a)
+			fmt.Fprint(stderr, logHelp)
+			return logAnchorOptions{}, exitcode.InvalidUsage, true
+		case opts.positional != "":
+			fmt.Fprintf(stderr, "rgit: log: unrecognized argument %q\n", a)
+			fmt.Fprint(stderr, logHelp)
+			return logAnchorOptions{}, exitcode.InvalidUsage, true
+		default:
+			opts.positional = a
+		}
+	}
+	if opts.positional == "" {
+		fmt.Fprintln(stderr, "rgit: log requires a FILE:SYMBOL anchor")
+		fmt.Fprint(stderr, logHelp)
+		return logAnchorOptions{}, exitcode.InvalidUsage, true
+	}
+	return opts, exitcode.Success, false
+}
+
+func setLogMaxCount(opts *logAnchorOptions, flag, value string, stderr io.Writer) bool {
+	maxCount, err := strconv.Atoi(value)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: log: invalid value %q for %s\n", value, flag)
+		return false
+	}
+	opts.maxCount = maxCount
+	opts.maxCountSet = true
+	return true
+}
+
+func logDateArgs(since, until string, maxCount int, maxCountSet bool, extra []string) []string {
+	if maxCountSet {
+		extra = append([]string{"--max-count=" + strconv.Itoa(maxCount)}, extra...)
+	}
+	if until != "" {
+		extra = append([]string{"--until=" + until}, extra...)
+	}
+	if since != "" {
+		extra = append([]string{"--since=" + since}, extra...)
+	}
+	return extra
 }
 
 // runLogFollowRename walks file's rename history one segment at a time,
