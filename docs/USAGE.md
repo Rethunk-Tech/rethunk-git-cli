@@ -558,7 +558,7 @@ argument; `context`'s fixed output shape is the point — § Context above).
 | `--quiet` | (`diff`) Implies `--exit-code` and suppresses output. |
 | `-p`, `--patch` | (`diff`) Append git's own real patch body after the report. Suppressed by `--quiet`, mutually exclusive with `--porcelain`. |
 | `--since DATE`, `--until DATE` | (`log`) Bound history by date. A `FILE:SYMBOL` positional keeps the anchor form; otherwise these select unanchored path-scoped history. Forwarded to git's own `--since`/`--until` unparsed. |
-| `-n N`, `--max-count=N` | (`log`) Limit either history form to at most `N` commits. Forwarded to git's own count limit; omitted by default, so history is unbounded. |
+| `-n N`, `--max-count=N` | (`log`) Limit either history form to at most `N` commits; under `--follow-rename`, applies independently per rename segment, so the total may exceed `N`. Forwarded to git's own count limit; omitted by default, so history is unbounded. |
 
 `commit` requires a message (`-m` or `-F`) and at least one target, unless
 `--amend`, `--fixup`, or `--squash` is given with neither — each generates its
