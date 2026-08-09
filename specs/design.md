@@ -991,10 +991,11 @@ measured directly against `vscode-html-language-server`, an ordinary
 id-bearing element without a `class` attribute names and ranges identically
 to what `rgit` itself resolves (`div#app`, `section#content`, exact
 line-range matches on a nested fixture) — but an element that also carries a
-`class` attribute is named `tag#id.class1.class2` by the server, which never
-matches `rgit`'s own `tag#id` spelling, degrading that one symbol to
-`[ts-only]` on its own (an existing, safe degrade — § Cross-check
-exemptions' fourth case — not a wrong match, and still true post-wiring).
+`class` attribute is named `tag#id.class1.class2` by the server, which does
+not match `rgit`'s own `tag#id` spelling until the flat HTML match path strips
+the server's `.class…` suffix before comparison. Class-bearing and class-free
+elements therefore both match the same `tag#id` anchor; the suffix is removed
+for cross-check matching only, not from the staged extent.
 
 **Wired since, via a seam scoped to `declOnlyExtent` alone, not `fullExtent`
 too.** `declOnlyExtent` gained its own optional `declOnlyEndTrimmer`
@@ -1030,8 +1031,9 @@ single-element fixture, confirming this is not a nested-only edge case.
 Fixed by a new `Resolution.Flat` field (set from `FlatContainerLanguage` once
 per resolve, `resolver.go`) that `matchLSPSymbol` consults to compare
 against a server symbol's bare `Name` directly when true, skipping the join
-entirely — HTML's own server already spells `Name` exactly `"tag#id"`, so
-there is nothing left to join.
+entirely — HTML's own server spells `Name` in flat `tag#id` form, or appends
+`.class…` for a class-bearing element; the same flat path strips that suffix
+before comparing, so there is nothing left to join.
 
 **Rust, C, and C++ were checked against the same 51-repository survey and
 cleared no bar at all: zero of the surveyed repositories contained any.**
@@ -1092,9 +1094,9 @@ a server's own docs.
 | Markdown | `vscode-markdown-language-server` | stdio | — | — | — | Crashes on startup (measured) | Not wired |
 | TOML | `taplo` 0.10.0 | stdio | 3.9ms | 0.5–1.0ms | 0.2–0.4ms | Real disagreement on nested tables (measured) | Not wired |
 | SQL | none maintained | — | — | — | — | `sqlfluff` installed, no LSP surface | Not wired |
-| HTML | `vscode-html-language-server` | stdio | — | — | — | Exact match once `declOnlyEndTrimmer` and `Resolution.Flat` land (§ Grammar scope); a class-bearing element's own name still never matches, degrading safely | **Wired** |
+| HTML | `vscode-html-language-server` | stdio | — | — | — | Exact match with `declOnlyEndTrimmer` and `Resolution.Flat` (§ Grammar scope); flat matching strips server-reported `.class…` suffixes, so class-bearing elements match too | **Wired** |
 
-Method for the four that passed: a fixture per grammar exercising a nested
+Method for the five that passed: a fixture per grammar exercising a nested
 container (so both a leaf declaration and a declaration whose own extent
 encloses another get compared) and, where the grammar has comment syntax, a
 leading comment with **no** blank line before the symbol — the doc-comment-
@@ -1300,13 +1302,13 @@ SQL tool present; its own `--help` lists `dialects`, `fix`, `format`, `lint`,
 sqlfluff-lsp` reports no such package. `sqls` and `sql-language-server` are
 absent from every location checked. `.sql` stays `[ts-only]`.
 
-**Net: YAML, JSON, CSS, and Markdown (via `marksman`) are wired; TOML, SQL,
-and HTML are not — on measured range disagreement, measured unavailability,
-and a measured extent-corruption blocker respectively (above), not on a
-documentation assumption either way.** 9 of 12 grammars cross-check against
-a live server (Go, TypeScript, TSX, Python, Shell, YAML, JSON, CSS,
-Markdown) — 9 of 11 on a build without `-tags rgit_sql` — leaving TOML,
-SQL, and HTML permanently `[ts-only]`.
+**Net: YAML, JSON, CSS, Markdown (via `marksman`), and HTML are wired; TOML
+and SQL remain not wired — on measured range disagreement and measured
+unavailability respectively (above), not on a documentation assumption
+either way.** 10 of 12 grammars cross-check against a live server (Go,
+TypeScript, TSX, Python, Shell, YAML, JSON, CSS, Markdown, HTML) — 10 of 11
+on a build without `-tags rgit_sql` — leaving TOML and SQL as the only
+grammars in this set that remain `[ts-only]`.
 
 ## Commands
 
