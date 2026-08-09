@@ -8,9 +8,10 @@ Limitations that ship — unsupported languages, excluded cross-build targets,
 constructs no anchor reaches — are documented in
 [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md), not listed here.
 
-Items below are the residual queue after a fenced wave landed darwin
-`install.sh`, HTML LSP class-suffix matching, `languages --porcelain`
-`CROSS-CHECK`, `commit --porcelain` `H` SHA, and path-scoped `log -n`.
+Items below are the residual queue after a fenced wave landed
+`scripts/install.ps1`, Darwin dry-run CI asset assertions, HTML
+ordinal+class-suffix cross-check coverage, `ParseOrdinal` trailing-`#N`
+parsing, design-record HTML refresh, and quiet-commit empty-stdout coverage.
 Deliberately not queued: `rgit restore` (designed and held back —
 [`specs/design.md`](specs/design.md#rgit-restore-filesymbol-an-accepted-design-deliberately-not-built)),
 context staged/unstaged split, TOML taplo / SQL LSP cross-checks, Rust/C/C++/
@@ -18,37 +19,15 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
 
 ## Release / install
 
-- [ ] **Add `scripts/install.ps1` for windows/amd64 release artifacts.**
-      Releases publish `rgit-*-windows-amd64.exe`; there is no first-class
-      Windows installer — `install.sh` covers Linux and Darwin, and
-      `cmd/rgit-install` always builds from source. Distinct from the Darwin
-      `install.sh` work: PowerShell, `.exe` naming, and Windows PATH
-      conventions.
-
-      **Packages / files:** `scripts/install.ps1` (new), `docs/INSTALL.md`,
-      `docs/LIMITATIONS.md`, CI lint/dry-run for the script if feasible on
-      `windows-latest`.
-
-      **Traps:** Asset is `rgit-$tag-windows-amd64.exe` — install must rename
-      or symlink to `rgit.exe` on PATH. Checksum verification needs a native
-      equivalent of `sha256sum -c` (`Get-FileHash` + compare against the
-      matching `SHA256SUMS` line). Do not force users through WSL just to run
-      the POSIX script. Keep language-server install out of scope (same as
-      `install.sh`).
-
-      **Acceptance criteria:** `.\scripts\install.ps1 -DryRun` prints the
-      windows/amd64 download URL and checksum source; a real run installs a
-      binary that answers `rgit --version`. Documented beside `install.sh` in
-      `docs/INSTALL.md`.
-
 - [ ] **Optional cosign verification in `scripts/install.sh`.** Releases
       already publish `SHA256SUMS.sigstore.json` (keyless cosign over
       `SHA256SUMS`); the script verifies SHA256 integrity only.
       `docs/INSTALL.md` documents a manual `cosign verify-blob` path that
-      never runs during install.
+      never runs during install. Same optional path for `install.ps1` once
+      the shell script lands it (or a paired change).
 
-      **Packages / files:** `scripts/install.sh`, `docs/INSTALL.md`, CI
-      dry-run coverage.
+      **Packages / files:** `scripts/install.sh`, optionally
+      `scripts/install.ps1`, `docs/INSTALL.md`, CI dry-run coverage.
 
       **Traps:** `cosign` is often absent — absence must keep today's
       SHA256-only path (no hard fail). When present, verify the **checksum
@@ -64,12 +43,20 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
       `cosign`, behaviour matches today's SHA256-only install. Docs describe
       both paths.
 
-- [ ] **Harden Darwin dry-run CI assertions.** The `install-script` job mocks
-      Darwin/`arm64` and only checks exit 0. Assert the dry-run stdout names
-      `rgit-$tag-darwin-arm64` and `SHA256SUMS`, and add a second mock for
-      `x86_64` → `darwin-amd64`.
+- [ ] **Windows CI dry-run for `scripts/install.ps1`.** The POSIX
+      `install-script` job now asserts Darwin asset names; there is still no
+      `windows-latest` job that runs `.\scripts\install.ps1 -DryRun` and
+      asserts the windows/amd64 URL plus `SHA256SUMS`.
 
-      **Packages / files:** `.github/workflows/ci.yml` (`install-script` job).
+      **Packages / files:** `.github/workflows/ci.yml` (new job or step on
+      `windows-latest`).
+
+      **Traps:** Set `VERSION=v1.1.0` (or pinned tag) — `-DryRun` refuses
+      default `latest` so it stays network-free. Pin `actions/checkout` like
+      sibling jobs. Do not attempt a real download in CI.
+
+      **Acceptance criteria:** CI fails if dry-run stdout omits
+      `rgit-v1.1.0-windows-amd64.exe` or `SHA256SUMS`.
 
 ## Completion / tooling
 
@@ -224,18 +211,13 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
       `rgit diff --sym` / `rgit log hooks/pre-commit:fn` still route via the
       correct grammar. Extensionless unmapped shebang still refuses exit 9.
 
-- [ ] **HTML class-suffix + ordinal unit case.** `matchLSPSymbol` strips
-      `.class…` on the flat path, but there is no ordinal + class-suffix
-      fixture (e.g. `div#app#2` vs server `div#app.widget`).
+- [ ] **Resolver-level HTML ordinal fixture.** Unit coverage exists for
+      `MatchAndCompare` on `div#app#2` with class-suffixed LSP names; there
+      is still no end-to-end `Resolve` / `cmd/rgit` fixture that an HTML
+      file with two same-id elements addresses as `div#app#2`.
 
-      **Packages / files:** `internal/resolve/crosscheck_test.go`.
-
-- [ ] **Refresh `specs/design.md` HTML class-suffix notes.** The design
-      record still describes class-bearing HTML as permanently degrading;
-      code and LIMITATIONS no longer do.
-
-      **Packages / files:** `specs/design.md` (cross-check / Grammar scope
-      HTML rows).
+      **Packages / files:** `cmd/rgit/resolver_test.go` (or neighbouring
+      resolve integration test).
 
 ## Doctor / machine contract
 
@@ -263,9 +245,10 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
       documented in `docs/CODES.md`. Byte budget and `F`-before-`C`
       truncation priority preserved. No new flags.
 
-- [ ] **Quiet-success unit coverage for `rgit commit -q`.** Porcelain and
-      quiet are mutually exclusive; a dedicated unit case that a quiet
-      successful commit writes nothing to stdout would pin the non-H path.
+- [ ] **Changelog errata for `[1.2.0]` HTML class-bearing note.** The
+      `[1.2.0]` Added bullet still says class-bearing HTML degrades to
+      `[ts-only]`; Unreleased Fixed and LIMITATIONS contradict it. Prefer a
+      short errata line under that release (or leave historical notes alone
+      if the project policy is never to rewrite past entries).
 
-      **Packages / files:** `internal/app/commit_porcelain_test.go` (or a
-      neighbouring commit unit test).
+      **Packages / files:** `CHANGELOG.md` (`[1.2.0]` only).
