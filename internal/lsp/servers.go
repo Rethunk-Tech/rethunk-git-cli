@@ -126,9 +126,6 @@ var servers = map[string]serverSpec{
 	// ("div#app") once void-element trailing absorption is trimmed
 	// (internal/resolve/lang_html.go's declEndTrimmer) -- measured against
 	// the installed binary, not assumed (specs/design.md § Grammar scope).
-	// Class-bearing elements still never match (the server names them
-	// "tag.class1.class2", this resolver never emits a class selector) and
-	// degrade to [ts-only] the same safe way any unnamed symbol does.
 	"html": {
 		name:      "vscode-html-language-server",
 		bin:       "vscode-html-language-server",

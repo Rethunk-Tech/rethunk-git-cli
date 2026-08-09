@@ -176,16 +176,11 @@ permanently in `[ts-only]` mode — a supported result, not a degraded one:
   installing it does not enable a cross-check.
 - **SQL** — no maintained tool speaks `documentSymbol` for SQL at all.
 
-**HTML wires with two narrower, safe carve-outs, not a full unwiring.**
+**HTML wires with one narrower, safe carve-out, not a full unwiring.**
 `vscode-html-language-server` names and ranges an ordinary id-bearing
-element exactly the way `rgit` does (`div#app`) once two gaps are accounted
-for:
+element exactly the way `rgit` does (`div#app`) once void-element trailing
+absorption is accounted for:
 
-- An element carrying a `class` attribute is named `tag#id.class1.class2`
-  by the server, which never matches `rgit`'s own `tag#id` spelling. That
-  one symbol degrades to `[ts-only]` on its own — a safe, already-existing
-  degrade (the server simply never names it), not a wrong match — rather
-  than blocking every other element in the file.
 - A void element (`<input>`, `<img>`, `<br>`, and similarly self-closing-
   by-tag-name elements) measurably absorbs trailing whitespace or text up
   to its next real sibling boundary into its own node's range when one

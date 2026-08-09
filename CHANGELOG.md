@@ -163,6 +163,11 @@ Notable changes to `rgit`. The format follows
 
 ### Fixed
 
+- HTML language-server cross-checks now match class-bearing elements by
+  stripping the server's `.class` suffix before comparing its `tag#id` name;
+  staged HTML extents remain unchanged. See
+  [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md#language-server-coverage).
+
 - A symbol anchor into an **uninitialized submodule** (`git submodule
   deinit`'s own shape: the directory survives, emptied of its own `.git`)
   now refuses with exit 10, the same "submodule; name the path instead"
