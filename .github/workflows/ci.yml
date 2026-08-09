@@ -247,17 +247,120 @@ jobs:
       - name: Verify Windows dry-run output
         shell: pwsh
         run: |
-          $outputLines = @(& .\scripts\install.ps1 -DryRun)
-          if ($LASTEXITCODE -ne 0) {
+          $mockBin = Join-Path $env:RUNNER_TEMP "rgit-cosign-dry-run-$([guid]::NewGuid().ToString('N'))"
+          New-Item -ItemType Directory -Path $mockBin | Out-Null
+          try {
+            Set-Content -LiteralPath (Join-Path $mockBin 'cosign.cmd') `
+              -Value @('@echo off', 'exit /b 0') -Encoding ascii
+            $oldPath = $env:PATH
+            $env:PATH = "$mockBin;$oldPath"
+            $outputLines = @(& .\scripts\install.ps1 -DryRun)
+          } finally {
+            $env:PATH = $oldPath
+            Remove-Item -LiteralPath $mockBin -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
           $output = $outputLines -join [Environment]::NewLine
           $output
           foreach ($expected in @(
               'rgit-v1.1.0-windows-amd64.exe',
-              'SHA256SUMS'
+              'SHA256SUMS',
+              'cosign/Sigstore bundle'
           )) {
             if (-not $output.Contains($expected)) {
               throw "missing expected output: $expected"
             }
+          }
+      - name: Verify optional cosign branch without network
+        shell: pwsh
+        run: |
+          $fixture = Join-Path $env:RUNNER_TEMP "rgit-install-fixture-$([guid]::NewGuid().ToString('N'))"
+          $mockBin = Join-Path $env:RUNNER_TEMP "rgit-cosign-$([guid]::NewGuid().ToString('N'))"
+          $noCosignBin = Join-Path $env:RUNNER_TEMP "rgit-no-cosign-$([guid]::NewGuid().ToString('N'))"
+          $noCosignPrefix = Join-Path $env:RUNNER_TEMP "rgit-no-cosign-prefix-$([guid]::NewGuid().ToString('N'))"
+          $cosignPrefix = Join-Path $env:RUNNER_TEMP "rgit-cosign-prefix-$([guid]::NewGuid().ToString('N'))"
+          $marker = Join-Path $env:RUNNER_TEMP "rgit-cosign-marker-$([guid]::NewGuid().ToString('N'))"
+          $asset = 'rgit-v1.1.0-windows-amd64.exe'
+
+          foreach ($directory in @(
+              $fixture,
+              $mockBin,
+              $noCosignBin,
+              $noCosignPrefix,
+              $cosignPrefix
+          )) {
+            New-Item -ItemType Directory -Path $directory | Out-Null
+          }
+          [IO.File]::WriteAllText($marker, '')
+          Copy-Item -LiteralPath (Join-Path $env:SystemRoot 'System32\where.exe') `
+            -Destination (Join-Path $fixture $asset)
+          $digest = (Get-FileHash -LiteralPath (Join-Path $fixture $asset) -Algorithm SHA256).Hash
+          Set-Content -LiteralPath (Join-Path $fixture 'SHA256SUMS') `
+            -Value "$digest  $asset" -Encoding ascii
+          Set-Content -LiteralPath (Join-Path $fixture 'SHA256SUMS.sigstore.json') `
+            -Value '{"mock":true}' -Encoding ascii
+
+          function Invoke-WebRequest {
+            param(
+              [string]$Uri,
+              [string]$OutFile
+            )
+            $name = [IO.Path]::GetFileName(([Uri]$Uri).AbsolutePath)
+            Copy-Item -LiteralPath (Join-Path $env:COSIGN_FIXTURE $name) `
+              -Destination $OutFile -Force
+          }
+
+          $cosignScript = @(
+            '@echo off'
+            'if /i not "%~1"=="verify-blob" exit /b 1'
+            'if /i not "%~2"=="--bundle" exit /b 1'
+            'if /i not "%~nx3"=="SHA256SUMS.sigstore.json" exit /b 1'
+            'if not exist "%~3" exit /b 1'
+            'if /i not "%~4"=="--certificate-identity-regexp" exit /b 1'
+            'if not "%~5"=="https://github.com/Rethunk-Tech/rethunk-git-cli/.github/workflows/release.yml@.*" exit /b 1'
+            'if /i not "%~6"=="--certificate-oidc-issuer" exit /b 1'
+            'if not "%~7"=="https://token.actions.githubusercontent.com" exit /b 1'
+            'if /i not "%~nx8"=="SHA256SUMS" exit /b 1'
+            'if not exist "%~8" exit /b 1'
+            '> "%COSIGN_MARKER%" echo verified'
+            'exit /b 0'
+          )
+          Set-Content -LiteralPath (Join-Path $mockBin 'cosign.cmd') `
+            -Value $cosignScript -Encoding ascii
+
+          $oldPath = $env:PATH
+          try {
+            $env:COSIGN_FIXTURE = $fixture
+            $env:COSIGN_MARKER = $marker
+
+            $env:PATH = $noCosignBin
+            $env:PREFIX = $noCosignPrefix
+            & .\scripts\install.ps1
+            if (-not (Test-Path -LiteralPath (Join-Path $noCosignPrefix 'rgit.exe'))) {
+              throw 'Windows install without cosign did not produce rgit.exe'
+            }
+            if ((Get-Item -LiteralPath $marker).Length -ne 0) {
+              throw 'cosign marker was written on the no-cosign path'
+            }
+
+            $env:PATH = "$mockBin;$env:SystemRoot\System32"
+            $env:PREFIX = $cosignPrefix
+            & .\scripts\install.ps1
+            if (-not (Test-Path -LiteralPath (Join-Path $cosignPrefix 'rgit.exe'))) {
+              throw 'Windows install with cosign did not produce rgit.exe'
+            }
+            if ((Get-Content -LiteralPath $marker -Raw).Trim() -ne 'verified') {
+              throw 'cosign marker was not written by the cosign path'
+            }
+          } finally {
+            Remove-Item -LiteralPath @(
+              $fixture,
+              $mockBin,
+              $noCosignBin,
+              $noCosignPrefix,
+              $cosignPrefix,
+              $marker
+            ) -Recurse -Force -ErrorAction SilentlyContinue
           }
