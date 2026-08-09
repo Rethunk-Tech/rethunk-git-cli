@@ -347,13 +347,14 @@ On Windows/amd64, `scripts/install.ps1` provides the equivalent
 release-download and checksum-verification path:
 
 ```powershell
-$env:VERSION = 'v1.1.0'  # optional; defaults to latest
+$env:VERSION = 'v1.1.0'  # optional on a real install; defaults to latest
 .\scripts\install.ps1
 ```
 
 It installs `rgit.exe` to `$HOME\.local\bin` by default; set `$env:PREFIX` to
 override the destination. `-DryRun` prints the download URL, checksum source,
-and install path without touching the network:
+and install path without touching the network, so it requires an explicit
+`VERSION` tag — there is no latest-tag lookup on that path:
 
 ```powershell
 $env:VERSION = 'v1.1.0'

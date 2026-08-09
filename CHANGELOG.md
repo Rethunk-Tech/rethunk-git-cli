@@ -35,7 +35,8 @@ Notable changes to `rgit`. The format follows
   verification. See [`docs/INSTALL.md`](docs/INSTALL.md#install-script).
 
 - `scripts/install.ps1` adds a checksum-verified Windows/amd64 release
-  installer with a network-free `-DryRun` preview. See
+  installer. `-DryRun` previews the plan without network access and requires
+  an explicit `VERSION` tag. See
   [`docs/INSTALL.md`](docs/INSTALL.md#install-script).
 
 - `rgit log --since=DATE [--until=DATE] [PATH...]` now accepts

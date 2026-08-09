@@ -9,7 +9,14 @@ $repo = 'Rethunk-Tech/rethunk-git-cli'
 $prefix = if ($env:PREFIX) { $env:PREFIX } else { Join-Path $HOME '.local/bin' }
 $version = if ($env:VERSION) { $env:VERSION } else { 'latest' }
 
-if ($version -eq 'latest' -and -not $DryRun) {
+# -DryRun must stay network-free (docs/INSTALL.md § Install script). A
+# default VERSION=latest cannot print a real asset URL without resolving
+# the tag, so DryRun requires an explicit release tag.
+if ($DryRun -and $version -eq 'latest') {
+    throw 'install.ps1: -DryRun requires VERSION set to a release tag (e.g. v1.1.0)'
+}
+
+if ($version -eq 'latest') {
     $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest"
     $tag = $release.tag_name
     if ([string]::IsNullOrWhiteSpace($tag)) {

@@ -177,11 +177,15 @@ permanently in `[ts-only]` mode — a supported result, not a degraded one:
   installing it does not enable a cross-check.
 - **SQL** — no maintained tool speaks `documentSymbol` for SQL at all.
 
-**HTML wires with one narrower, safe carve-out, not a full unwiring.**
+**HTML wires with two narrower, safe carve-outs, not a full unwiring.**
 `vscode-html-language-server` names and ranges an ordinary id-bearing
-element exactly the way `rgit` does (`div#app`) once void-element trailing
-absorption is accounted for:
+element exactly the way `rgit` does (`div#app`) once the points below are
+accounted for:
 
+- The server appends `.class…` selectors to the same `tag#id` name when the
+  element carries a class. Flat matching strips those server-only suffixes
+  before comparing, so class-bearing elements cross-check; staged extents
+  stay the grammar's own boundary and never grow to include class text.
 - A void element (`<input>`, `<img>`, `<br>`, and similarly self-closing-
   by-tag-name elements) measurably absorbs trailing whitespace or text up
   to its next real sibling boundary into its own node's range when one
