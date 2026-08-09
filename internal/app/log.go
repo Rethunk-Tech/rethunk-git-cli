@@ -47,9 +47,10 @@ which is exactly the flood this command exists to avoid.
 The anchor is resolved once, against HEAD -- never the worktree -- since
 history is a question about what has already been committed, and git log
 -L itself walks HEAD's own history with no notion of the worktree at all.
-A file renamed since a commit loses its history under the old name unless
---follow-rename is given, which re-resolves the anchor's extent at each
-rename boundary and walks further back under the old name (docs/LIMITATIONS.md).
+Plain git log -L already follows a rename when git's similarity heuristic
+detects one, but a rename that also reshuffles the symbol can silently stop
+short. --follow-rename re-resolves the anchor's extent at each rename
+boundary and continues under the old name (docs/LIMITATIONS.md).
 
 --since=DATE bounds either form. With a FILE:SYMBOL positional, the
 anchor remains the symbol-scoped form; otherwise this is ordinary,
@@ -63,12 +64,14 @@ is the whole repository's history in that window, matching plain
 "git log --since=DATE".
 
 -n, --max-count=N limits either form to at most N commits, forwarded to
-git's own count limit. Without it, history is unbounded.
+git's own count limit. Under --follow-rename the limit applies per rename
+segment, so the total can exceed N. Without -n, history is unbounded.
 
 --follow-rename walks the file's rename history: at each commit that
 renamed it, the anchor's extent is re-resolved against the old name's blob
 just before the rename, and history continues under that name. Without it,
-history stops at the file's current name, matching plain "git log -L".
+plain "git log -L" rename following still applies when similarity detects
+the rename, but reordering across the boundary can still lose the thread.
 
 --porcelain lists stable tab-separated HASH<TAB>SUBJECT records instead of
 the aligned "<abbrev-hash> <subject>" default.
