@@ -150,8 +150,7 @@ _rgit_languages_flags="` + rgitLanguagesFlags + `"
 _rgit_doctor_flags="` + rgitDoctorFlags + `"
 _rgit_completion_flags="` + rgitCompletionFlags + `"
 
-# rgit diff --porcelain and awk -F'\t' report changed records, not the
-# complete declaration list; symbol candidates come from rgit symbols FILE.
+# Symbol candidates come from rgit symbols FILE (commit uses --for-commit).
 _rgit_symbols() {
     if [[ "$2" == "commit" ]]; then
         rgit symbols --for-commit "$1" 2>/dev/null
@@ -240,8 +239,7 @@ _rgit_languages_flags=(` + rgitLanguagesFlags + `)
 _rgit_doctor_flags=(` + rgitDoctorFlags + `)
 _rgit_completion_flags=(` + rgitCompletionFlags + `)
 
-# rgit diff --porcelain and awk -F'\t' report changed records, not the
-# complete declaration list; symbol candidates come from rgit symbols FILE.
+# Symbol candidates come from rgit symbols FILE (commit uses --for-commit).
 _rgit_symbols() {
     if [[ "$2" == "commit" ]]; then
         rgit symbols --for-commit "$1" 2>/dev/null
@@ -347,8 +345,7 @@ function __rgit_languages_flags; string split ' ' -- '` + rgitLanguagesFlags + `
 function __rgit_doctor_flags; string split ' ' -- '` + rgitDoctorFlags + `'; end
 function __rgit_completion_flags; string split ' ' -- '` + rgitCompletionFlags + `'; end
 
-# rgit diff --porcelain and awk -F'\t' report changed records, not the
-# complete declaration list; symbol candidates come from rgit symbols FILE.
+# Symbol candidates come from rgit symbols FILE (commit uses --for-commit).
 function __rgit_symbols
     if test "$argv[2]" = commit
         rgit symbols --for-commit "$argv[1]" 2>/dev/null
