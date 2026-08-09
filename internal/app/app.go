@@ -16,7 +16,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 )
 
-const usageLine = "usage: rgit [--version] [-C <path>] <diff|commit|blame|log|context|languages|doctor|completion> [flags] [target...]"
+const usageLine = "usage: rgit [--version] [-C <path>] <diff|commit|blame|log|context|languages|doctor|completion|symbols> [flags] [target...]"
 
 // tsOnlyNotice is what any command that runs the diff cross-check --
 // currently rgit diff, rgit commit, and rgit context -- prints when no live
@@ -44,6 +44,7 @@ Commands:
   languages   List grammars compiled into this binary
   doctor      Report environment health (language servers, grammars, git)
   completion  Print a shell completion script (bash, zsh, fish)
+  symbols     List declared symbols in a worktree file
 
 Global flags (before the command):
   -C <path>    run as if rgit was started in <path>
@@ -104,6 +105,8 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 		return runDoctor(ctx, dir, args[1:], stdout, stderr)
 	case "completion":
 		return runCompletion(args[1:], stdout, stderr)
+	case "symbols":
+		return runSymbols(ctx, dir, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "rgit: unknown command %q\n", args[0])
 		fmt.Fprintln(stderr, usageLine)

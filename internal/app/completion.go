@@ -85,7 +85,7 @@ func runCompletion(args []string, stdout, stderr io.Writer) exitcode.Code {
 // checks it against topLevelHelp's own Commands section, generated at
 // test time rather than copied, so a new subcommand missing here fails
 // the suite instead of only being missing from a shell's tab completion.
-const rgitSubcommands = "diff commit blame log context languages doctor completion help -C -h --help --version"
+const rgitSubcommands = "diff commit blame log context languages doctor completion symbols help -C -h --help --version"
 
 // rgitDiffFlags and rgitCommitFlags are the static parts of completion:
 // each subcommand's own flag surface, mirroring docs/USAGE.md § Flags plus
