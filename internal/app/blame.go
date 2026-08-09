@@ -47,13 +47,20 @@ func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.
 		return code
 	}
 
-	// Blame operates on the worktree file, not HEAD: there is nothing to
-	// resolve or blame in a revision this command never names.
+	headOnly := false
 	repo, file, src, res, anchorName, code := resolveAnchorExtent(ctx, dir, stderr, positional, "blame", blameHelp,
-		func(_ context.Context, _ *gitx.Repo, root, file string) ([]byte, string, bool, error) {
+		func(ctx context.Context, repo *gitx.Repo, root, file string) ([]byte, string, bool, error) {
 			src, err := os.ReadFile(filepath.Join(root, file))
 			if err != nil {
 				if os.IsNotExist(err) {
+					src, exists, err := repo.CatFile(ctx, "HEAD", file)
+					if err != nil {
+						return nil, "", false, err
+					}
+					if exists {
+						headOnly = true
+						return src, "", true, nil
+					}
 					return nil, "no longer exists in the worktree", false, nil
 				}
 				return nil, "", false, err
@@ -71,7 +78,13 @@ func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.
 	if porcelain {
 		extra = append(extra, "--porcelain")
 	}
-	out, err := repo.Blame(ctx, file, start, end, extra...)
+	var out []byte
+	var err error
+	if headOnly {
+		out, err = repo.BlameRevision(ctx, "HEAD", file, start, end, extra...)
+	} else {
+		out, err = repo.Blame(ctx, file, start, end, extra...)
+	}
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.GitFailure

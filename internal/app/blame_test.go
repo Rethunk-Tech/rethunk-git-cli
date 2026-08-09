@@ -3,11 +3,14 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/go-quicktest/qt"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
 )
 
 // assertAnchorUsageRefusals runs the usage-refusal matrix blame_test.go and
@@ -127,6 +130,25 @@ func TestRun_BlameBoundsToTheSymbolExtent(t *testing.T) {
 	chdirTempRepo(t)
 
 	stdout, stderr, code := runApp(t, "blame", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.StringContains(stdout, "return 1"))
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "return 2")))
+}
+
+// TestRun_BlameDeletedWorktreeUsesHEAD keeps blame and its line range tied to
+// the same HEAD blob when the worktree copy has been removed.
+func TestRun_BlameDeletedWorktreeUsesHEAD(t *testing.T) {
+	dir, _ := gittest.New(t)
+	writeAppFile(t, dir, "gone.go", "package gone\n\nfunc Gone() int {\n\treturn 1\n}\n\nfunc Other() int {\n\treturn 2\n}\n")
+	gittest.Commit(t, dir, "chore: add gone.go")
+	t.Chdir(dir)
+
+	if err := os.Remove(filepath.Join(dir, "gone.go")); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := runApp(t, "blame", "gone.go:Gone")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.StringContains(stdout, "return 1"))

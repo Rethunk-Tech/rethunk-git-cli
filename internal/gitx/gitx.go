@@ -878,7 +878,20 @@ func (r *Repo) LsFilesStage(ctx context.Context, path string) (mode string, foun
 // -- an invalid range or a path git cannot blame is a genuine failure -- so
 // any non-zero exit is a *GitError like every other checked method.
 func (r *Repo) Blame(ctx context.Context, path string, start, end int, extra ...string) ([]byte, error) {
+	return r.blame(ctx, "", path, start, end, extra...)
+}
+
+// BlameRevision runs `git blame` against rev rather than the worktree, with
+// the same bounded line range and pass-through flags as Blame.
+func (r *Repo) BlameRevision(ctx context.Context, rev, path string, start, end int, extra ...string) ([]byte, error) {
+	return r.blame(ctx, rev, path, start, end, extra...)
+}
+
+func (r *Repo) blame(ctx context.Context, rev, path string, start, end int, extra ...string) ([]byte, error) {
 	args := append([]string{"blame", fmt.Sprintf("-L%d,%d", start, end)}, extra...)
+	if rev != "" {
+		args = append(args, rev)
+	}
 	args = append(args, "--", path)
 	return r.checked(ctx, args...)
 }
