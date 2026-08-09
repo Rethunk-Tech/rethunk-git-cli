@@ -26,6 +26,10 @@ Notable changes to `rgit`. The format follows
   other three artifacts. See
   [`docs/INSTALL.md`](docs/INSTALL.md#cross-builds).
 
+- `scripts/install.sh` now downloads and verifies the darwin/amd64 and
+  darwin/arm64 release artifacts on macOS, using `shasum` for checksum
+  verification. See [`docs/INSTALL.md`](docs/INSTALL.md#install-script).
+
 ## [1.2.0] — 2026-08-05
 
 ### Added

@@ -1,8 +1,8 @@
 #!/bin/sh
 # Downloads a release binary from GitHub, verifies it against the release's
 # own SHA256SUMS, and installs it to PREFIX. See docs/INSTALL.md § Install
-# script for what this does and does not cover -- darwin and language
-# servers are both out of scope here on purpose.
+# script for what this does and does not cover. Language servers stay out of
+# scope here on purpose.
 set -eu
 
 repo="Rethunk-Tech/rethunk-git-cli"
@@ -23,6 +23,7 @@ done
 os=$(uname -s)
 case "$os" in
   Linux) os_tag=linux ;;
+  Darwin) os_tag=darwin ;;
   *)
     echo "install.sh: unsupported OS '$os' -- download the release binary directly (docs/INSTALL.md § Cross builds), or build from source instead" >&2
     exit 1
@@ -68,7 +69,10 @@ curl -fsSL -o "$tmp/SHA256SUMS" "$base_url/SHA256SUMS"
 
 (
   cd "$tmp"
-  grep " $asset\$" SHA256SUMS | sha256sum -c -
+  case "$os_tag" in
+    linux) grep " $asset\$" SHA256SUMS | sha256sum -c - ;;
+    darwin) grep " $asset\$" SHA256SUMS | shasum -a 256 -c - ;;
+  esac
 )
 
 mkdir -p "$prefix"
