@@ -353,13 +353,21 @@ $env:VERSION = 'v1.1.0'  # optional on a real install; defaults to latest
 
 It installs `rgit.exe` to `$HOME\.local\bin` by default; set `$env:PREFIX` to
 override the destination. `-DryRun` prints the download URL, checksum source,
-and install path without touching the network, so it requires an explicit
-`VERSION` tag — there is no latest-tag lookup on that path:
+and install path without touching the network, plus the planned signature
+source when `cosign` is available. It requires an explicit `VERSION` tag —
+there is no latest-tag lookup on that path:
 
 ```powershell
 $env:VERSION = 'v1.1.0'
 .\scripts\install.ps1 -DryRun
 ```
+
+When `cosign` is on `PATH`, `install.ps1` also downloads
+`SHA256SUMS.sigstore.json` and verifies `SHA256SUMS` with the identity and OIDC
+issuer shown below before checking the binary's SHA256. Without `cosign`, it
+keeps the SHA256-only path. `-DryRun` stays network-free; when `cosign` is
+available, it reports the planned signature verification without downloading
+the bundle.
 
 Every release also publishes `SHA256SUMS.sigstore.json`, a keyless
 [cosign](https://docs.sigstore.dev/cosign/signing/overview/) signature over
@@ -375,12 +383,12 @@ cosign verify-blob \
   SHA256SUMS
 ```
 
-When `cosign` is on `PATH`, `scripts/install.sh` performs this verification
-automatically: it downloads `SHA256SUMS.sigstore.json` beside `SHA256SUMS` and
-verifies the checksum file before checking the binary's SHA256. A failed
-verification stops the install. Without `cosign`, the script retains its
-SHA256-only path. `--dry-run` exits before any download, so it never fetches the
-signature bundle.
+When `cosign` is on `PATH`, `scripts/install.sh` and `scripts/install.ps1`
+perform this verification automatically: they download
+`SHA256SUMS.sigstore.json` beside `SHA256SUMS` and verify the checksum file
+before checking the binary's SHA256. A failed verification stops the install.
+Without `cosign`, both installers retain their SHA256-only paths. `--dry-run`
+and `-DryRun` exit before any download, so neither fetches the signature bundle.
 
 `PREFIX` (default `$HOME/.local/bin`) and `VERSION` (default `latest`) are
 environment variables, not flags — `VERSION=v1.1.0 PREFIX=/usr/local/bin sh
