@@ -35,6 +35,36 @@ func TestRunSymbolsListsCleanWorktreeDeclarations(t *testing.T) {
 	}
 }
 
+func TestRunSymbolsStructuredDataCommitMode(t *testing.T) {
+	root := t.TempDir()
+	source := []byte("{\n  \"name\": \"demo\",\n  \"enabled\": true\n}\n")
+	symbolsTestGit(t, root, "init", "--quiet")
+	if err := os.WriteFile(filepath.Join(root, "config.json"), source, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	symbolsTestGit(t, root, "add", "config.json")
+	symbolsTestGit(t, root, "-c", "user.name=rgit test", "-c", "user.email=rgit@example.invalid", "commit", "--quiet", "-m", "initial")
+
+	var stdout, stderr strings.Builder
+	code := runSymbols(context.Background(), root, []string{"config.json"}, &stdout, &stderr)
+	if code != exitcode.Success {
+		t.Fatalf("runSymbols() = %d, stderr = %q", code, stderr.String())
+	}
+	if !containsString(strings.Fields(stdout.String()), "name") {
+		t.Fatalf("runSymbols() omitted structured-data symbol from %q", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = runSymbols(context.Background(), root, []string{"--for-commit", "config.json"}, &stdout, &stderr)
+	if code != exitcode.Success {
+		t.Fatalf("runSymbols(--for-commit) = %d, stderr = %q", code, stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("runSymbols(--for-commit) = %q, want empty stdout", stdout.String())
+	}
+}
+
 func symbolsTestGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", args...)

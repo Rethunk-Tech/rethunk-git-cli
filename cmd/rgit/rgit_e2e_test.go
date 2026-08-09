@@ -1120,12 +1120,11 @@ func TestCommit_PorcelainEmitsRecords(t *testing.T) {
 //
 // internal/app/completion_test.go-equivalent coverage (in app_test.go)
 // proves the emitted script parses and contains the right pieces; it
-// cannot prove the dynamic half actually works, because that half is awk
-// and compgen text with no Go behind it once emitted. This is the one
-// thing only a real shell process running the real binary can show: that
-// "auth.go:" really does complete to the real, live symbol names
-// `rgit diff --porcelain` reports for that file -- a gap CONTRIBUTING.md
-// says to measure rather than assume.
+// cannot prove the dynamic half actually works, because that half is shell
+// text with no Go behind it once emitted. This is the one thing only a real
+// shell process running the real binary can show: that "auth.go:" really
+// does complete to the live symbol names `rgit symbols` reports for that
+// file -- a gap CONTRIBUTING.md says to measure rather than assume.
 
 // runBashCompletion sources bashScript, then simulates typing
 // "rgit <words...>" with the cursor on the final word and prints one
@@ -1170,11 +1169,11 @@ func shellQuoteAll(words []string) string {
 	return strings.Join(quoted, " ")
 }
 
-// TestCompletion_BashCompletesSymbolsFromPorcelain is the dynamic half of
+// TestCompletion_BashCompletesSymbolsFromSymbols is the dynamic half of
 // shell completion coverage: completing the token after "FILE:" has to
 // name a symbol `rgit commit` will really accept, for a file with more
 // than one candidate and a worktree that has not been committed yet.
-func TestCompletion_BashCompletesSymbolsFromPorcelain(t *testing.T) {
+func TestCompletion_BashCompletesSymbolsFromSymbols(t *testing.T) {
 	t.Parallel()
 	repo := initRepoWithFile(t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 	gittest.Write(t, repo, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
@@ -1193,9 +1192,9 @@ func TestCompletion_BashCompletesSymbolsFromPorcelain(t *testing.T) {
 
 // TestCompletion_BashDegradesSilentlyOutsideARepo pins the failure mode
 // docs/USAGE.md § Shell completion promises: a cwd with no repository (so
-// `rgit diff --porcelain` itself exits non-zero) must not put anything on
-// the completion prompt, and the driver above would surface a bash error
-// as a non-empty, non-candidate line if the function leaked one.
+// `rgit symbols` itself exits non-zero) must not put anything on the
+// completion prompt, and the driver above would surface a bash error as a
+// non-candidate line if the function leaked one.
 func TestCompletion_BashDegradesSilentlyOutsideARepo(t *testing.T) {
 	t.Parallel()
 	notARepo := t.TempDir()
@@ -1268,12 +1267,12 @@ func runZshCompletion(t *testing.T, repo, zshScript string, words ...string) []s
 	return strings.Split(trimmed, "\n")
 }
 
-// TestCompletion_ZshCompletesSymbolsFromPorcelain is
-// TestCompletion_BashCompletesSymbolsFromPorcelain's zsh counterpart: the
-// two scripts share an identical _rgit_symbols body, so this pins that the
-// zsh half of the emitted pair reads and prefixes the same porcelain
-// output correctly, not just that it parses.
-func TestCompletion_ZshCompletesSymbolsFromPorcelain(t *testing.T) {
+// TestCompletion_ZshCompletesSymbolsFromSymbols is
+// TestCompletion_BashCompletesSymbolsFromSymbols's zsh counterpart: the
+// two scripts share the same _rgit_symbols contract, so this pins that the
+// zsh half of the emitted pair reads and prefixes the same symbol output
+// correctly, not just that it parses.
+func TestCompletion_ZshCompletesSymbolsFromSymbols(t *testing.T) {
 	t.Parallel()
 	repo := initRepoWithFile(t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 	gittest.Write(t, repo, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
@@ -1286,9 +1285,9 @@ func TestCompletion_ZshCompletesSymbolsFromPorcelain(t *testing.T) {
 }
 
 // TestCompletion_ZshDegradesSilentlyOutsideARepo is the zsh half of
-// TestCompletion_BashDegradesSilentlyOutsideARepo: `rgit diff --porcelain`
-// failing outside a repository must still leave compadd with nothing to
-// add, not an error on the prompt.
+// TestCompletion_BashDegradesSilentlyOutsideARepo: `rgit symbols` failing
+// outside a repository must still leave compadd with nothing to add, not an
+// error on the prompt.
 func TestCompletion_ZshDegradesSilentlyOutsideARepo(t *testing.T) {
 	t.Parallel()
 	notARepo := t.TempDir()
@@ -1334,12 +1333,12 @@ func runFishCompletion(t *testing.T, repo, fishScript string, words ...string) [
 	return strings.Split(trimmed, "\n")
 }
 
-// TestCompletion_FishCompletesSymbolsFromPorcelain is
-// TestCompletion_BashCompletesSymbolsFromPorcelain's fish counterpart: the
-// fish script's own __rgit_symbols body reads the identical porcelain
-// stream the bash and zsh ones do, so this pins that fish's dynamic
-// FILE:SYMBOL completion resolves against real, live symbol names too.
-func TestCompletion_FishCompletesSymbolsFromPorcelain(t *testing.T) {
+// TestCompletion_FishCompletesSymbolsFromSymbols is
+// TestCompletion_BashCompletesSymbolsFromSymbols's fish counterpart: the
+// fish script's own __rgit_symbols body reads the same symbol list the bash
+// and zsh ones do, so this pins that fish's dynamic FILE:SYMBOL completion
+// resolves against real, live symbol names too.
+func TestCompletion_FishCompletesSymbolsFromSymbols(t *testing.T) {
 	t.Parallel()
 	repo := initRepoWithFile(t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 	gittest.Write(t, repo, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")

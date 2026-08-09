@@ -473,7 +473,9 @@ the worktree file, so completion works for both clean and dirty files. If
 that call fails for any reason — the working directory is not a repository,
 `rgit` is not on `PATH`, anything — completion offers nothing rather than
 printing to the prompt. `rgit symbols FILE` itself prints one anchor per
-line and is useful for scripts that need the same list.
+line and is useful for scripts that need the same list. Completion for
+`commit` uses `rgit symbols --for-commit FILE`, which omits structured-data
+symbols that `commit` refuses; other commands use the complete list.
 
 The fish script drives the identical logic through fish's own completion
 model — one dynamic candidate function registered with `complete`, rather

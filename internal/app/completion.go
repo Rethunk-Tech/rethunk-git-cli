@@ -123,10 +123,10 @@ const rgitContextFlags = "-h --help"
 
 // bashCompletionScript is emitted verbatim by `rgit completion bash`. The
 // one dynamic piece -- symbol names after "FILE:" -- shells back out to
-// `rgit symbols FILE`, which lists every declaration the worktree resolver
-// can accept. Any failure of that call (not a repo, rgit not on PATH,
-// anything) is swallowed by the 2>/dev/null and leaves the candidate list
-// empty -- completion must never put an error on the prompt.
+// `rgit symbols FILE`, or its commit-safe mode for `commit`, lists declarations
+// the corresponding command can accept. Any failure of that call (not a repo,
+// rgit not on PATH, anything) is swallowed by the 2>/dev/null and leaves the
+// candidate list empty -- completion must never put an error on the prompt.
 //
 // Symbol completion only fires for diff, commit, blame, and log -- the
 // four commands that actually take a FILE:SYMBOL anchor. context takes no
@@ -149,7 +149,11 @@ _rgit_completion_flags="` + rgitCompletionFlags + `"
 # rgit diff --porcelain and awk -F'\t' report changed records, not the
 # complete declaration list; symbol candidates come from rgit symbols FILE.
 _rgit_symbols() {
-    rgit symbols "$1" 2>/dev/null
+    if [[ "$2" == "commit" ]]; then
+        rgit symbols --for-commit "$1" 2>/dev/null
+    else
+        rgit symbols "$1" 2>/dev/null
+    fi
 }
 
 _rgit_completion() {
@@ -200,7 +204,7 @@ _rgit_completion() {
         case "$cmd" in
             diff|commit|blame|log)
                 local file="${cur%:*}" symprefix="${cur##*:}"
-                COMPREPLY=( $(compgen -P "${file}:" -W "$(_rgit_symbols "$file")" -- "$symprefix") )
+                COMPREPLY=( $(compgen -P "${file}:" -W "$(_rgit_symbols "$file" "$cmd")" -- "$symprefix") )
                 return 0
                 ;;
         esac
@@ -235,7 +239,11 @@ _rgit_completion_flags=(` + rgitCompletionFlags + `)
 # rgit diff --porcelain and awk -F'\t' report changed records, not the
 # complete declaration list; symbol candidates come from rgit symbols FILE.
 _rgit_symbols() {
-    rgit symbols "$1" 2>/dev/null
+    if [[ "$2" == "commit" ]]; then
+        rgit symbols --for-commit "$1" 2>/dev/null
+    else
+        rgit symbols "$1" 2>/dev/null
+    fi
 }
 
 _rgit() {
@@ -286,7 +294,7 @@ _rgit() {
             diff|commit|blame|log)
                 local file="${cur%:*}"
                 local out
-                out="$(_rgit_symbols "$file")"
+                out="$(_rgit_symbols "$file" "$cmd")"
                 # Splitting "" with (f) still yields one empty element, not
                 # zero -- guard it, or a file with no candidates offers a
                 # bare "FILE:". Narrowing candidates against what's already
@@ -338,7 +346,11 @@ function __rgit_completion_flags; string split ' ' -- '` + rgitCompletionFlags +
 # rgit diff --porcelain and awk -F'\t' report changed records, not the
 # complete declaration list; symbol candidates come from rgit symbols FILE.
 function __rgit_symbols
-    rgit symbols "$argv[1]" 2>/dev/null
+    if test "$argv[2]" = commit
+        rgit symbols --for-commit "$argv[1]" 2>/dev/null
+    else
+        rgit symbols "$argv[1]" 2>/dev/null
+    end
 end
 
 function __rgit_complete
@@ -403,7 +415,7 @@ function __rgit_complete
     # bash and zsh scripts' own restriction.
     if string match -q -- '*:*' $cur; and contains $cmd diff commit blame log
         set -l file (string split -m1 -r ':' -- $cur)[1]
-        for s in (__rgit_symbols $file)
+        for s in (__rgit_symbols "$file" "$cmd")
             printf '%s:%s\n' $file $s
         end
         return
