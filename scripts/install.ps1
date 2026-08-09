@@ -37,7 +37,7 @@ if ($DryRun) {
     Write-Output "would download: $assetUrl"
     Write-Output "would verify against: $checksumsUrl"
     if (Get-Command cosign -ErrorAction SilentlyContinue) {
-        Write-Output "would verify checksum signature with: $sigstoreUrl"
+        Write-Output "would verify with cosign/Sigstore bundle: $sigstoreUrl"
     }
     Write-Output "would install to: $installPath"
     exit 0
