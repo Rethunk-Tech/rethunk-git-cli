@@ -1373,18 +1373,18 @@ ceiling `git log --follow` has for a whole-file history, inherited rather
 than worked around, since working around it would mean walking every
 commit's tree speculatively, the per-commit cost rejected above.
 
-**The anchor resolves against `HEAD`, not the worktree — unlike `blame`.**
-`git log -L` walks `HEAD`'s own history and has no notion of the worktree at
-all (measured: an uncommitted edit to the file, including one that shifts
-the target symbol's own line numbers, changes nothing about `git log -L`'s
-output for a range computed against `HEAD`). Resolving against the worktree
-instead — the way `blame.go` does, since `blame` genuinely has nothing else
-to blame — would hand `-L` a line range computed against the *wrong*
-revision's line numbers the moment an uncommitted edit shifted anything above
-the symbol, silently pointing history at the wrong lines. A side effect of
-this choice, also measured: a symbol already deleted from the worktree but
-still present in `HEAD` keeps its history reachable, since nothing here ever
-needs to open a worktree file at all.
+**Resolution differs by command mode.** `git log -L` walks `HEAD`'s own
+history and has no notion of the worktree at all (measured: an uncommitted edit
+to the file, including one that shifts the target symbol's own line numbers,
+changes nothing about `git log -L`'s output for a range computed against
+`HEAD`). `blame --follow-rename` uses the same `HEAD`-blob rule, even when the
+worktree file exists and is dirty, so its rename-boundary ranges describe the
+revision whose history it is attributing. Default `blame` resolves from the
+worktree first, falling back to the `HEAD` blob when the file is gone, because
+that mode attributes the current file. A side effect of the HEAD-based choices,
+also measured: a symbol already deleted from the worktree but still present in
+`HEAD` keeps its history reachable, since neither history mode needs to open a
+worktree file.
 
 **Patches are opt-in (`-p`/`--patch`), never default — `--no-patch` measured
 to coexist with `-L`'s own commit-filtering.** Plain `git log -L` always
@@ -1396,8 +1396,17 @@ two of which touched the named range, emitted exactly two records. Default
 output uses `--format='%h %s'` (abbreviated hash, for a human to read);
 `--porcelain` uses `--format='%H%x09%s'` (the full object id, tab-separated,
 for a caller to paste elsewhere) — the same "abbreviated for humans, full and
-stable for machines" split every other rgit command's two output modes
-already draw.
+stable for machines" split every other rgit command's two output modes already
+draw.
+
+### `rgit blame`: worktree by default, HEAD under `--follow-rename`
+
+Default `blame` resolves its anchor from the worktree and falls back to the
+`HEAD` blob when the file is gone. Under `--follow-rename`, it always resolves
+from the `HEAD` blob instead — never from a dirty worktree — so the line ranges
+stay aligned with the history being attributed. Rename boundaries use
+`gitx.FindRename`, the same delegated query as `log --follow-rename`, and the
+anchor is re-parsed once per boundary rather than once per touching commit.
 
 ### `rgit context`: one `diffpkg.Run` call, one new `git log -n` primitive, no second attribution path
 
