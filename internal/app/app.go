@@ -43,7 +43,7 @@ Commands:
   context     One-call repository orientation, as a record stream
   languages   List grammars compiled into this binary
   doctor      Report environment health (language servers, grammars, git)
-  completion  Print a shell completion script (bash, zsh, fish)
+  completion  Print a shell completion script (bash, zsh, fish, pwsh)
   symbols     List declared symbols in a worktree file
 
 Global flags (before the command):
