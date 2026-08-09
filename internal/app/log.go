@@ -247,7 +247,9 @@ func parseLogAnchorArgs(args []string, stdout, stderr io.Writer) (logAnchorOptio
 				fmt.Fprint(stderr, logHelp)
 				return logAnchorOptions{}, exitcode.InvalidUsage, true
 			}
-			opts.positional = a
+			fmt.Fprintln(stderr, `rgit: log: "--" cannot be used as a FILE:SYMBOL anchor; log requires a FILE:SYMBOL anchor`)
+			fmt.Fprint(stderr, logHelp)
+			return logAnchorOptions{}, exitcode.InvalidUsage, true
 		case strings.HasPrefix(a, "-"):
 			fmt.Fprintf(stderr, "rgit: log: unrecognized argument %q\n", a)
 			fmt.Fprint(stderr, logHelp)

@@ -265,6 +265,14 @@ func TestRun_LogAnchorBeforeSeparatorKeepsAnchorShape(t *testing.T) {
 	qt.Assert(t, qt.StringContains(stderr, `unrecognized argument "--"`))
 }
 
+func TestRun_LogRejectsLoneSeparatorAnchor(t *testing.T) {
+	chdirTempRepo(t)
+
+	_, stderr, code := runApp(t, "log", "--")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, `cannot be used as a FILE:SYMBOL anchor`))
+}
+
 // TestRun_LogPathScopedPaths pins the other half of the second shape: zero
 // or more trailing positionals are pathspecs, not an anchor, narrowing
 // history the same way plain `git log -- path` does.
