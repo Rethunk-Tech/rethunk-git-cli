@@ -304,7 +304,7 @@ the committing. Which settings that covers, and the one exception, is in
 
 ## Shell completion
 
-What `rgit completion bash|zsh|fish` completes, and how the dynamic part
+What `rgit completion bash|zsh|fish|pwsh` completes, and how the dynamic part
 works, is documented in [`USAGE.md`](USAGE.md#shell-completion).
 
 **Load once per session:**
@@ -313,6 +313,7 @@ works, is documented in [`USAGE.md`](USAGE.md#shell-completion).
 source <(rgit completion bash)   # bash
 source <(rgit completion zsh)    # zsh, after compinit has run
 rgit completion fish | source    # fish
+rgit completion pwsh | Invoke-Expression  # PowerShell 7
 ```
 
 **Persist across sessions:**
@@ -327,6 +328,9 @@ rgit completion zsh > "$fpath[1]/_rgit"
 
 # fish -- picked up automatically by every new fish session, no reload step
 rgit completion fish > ~/.config/fish/completions/rgit.fish
+
+# PowerShell 7 -- add this line to $PROFILE
+Add-Content -Path $PROFILE -Value 'Invoke-Expression (rgit completion pwsh | Out-String)'
 ```
 
 zsh's `compdef` needs `compinit` to already have run, so `autoload -Uz
