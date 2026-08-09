@@ -519,3 +519,42 @@ func TestRun_LogFollowRenameNoRenameMatchesDefault(t *testing.T) {
 
 	qt.Assert(t, qt.Equals(withFlag, withoutFlag))
 }
+
+// TestRun_LogFollowRenameMaxCountAppliesPerSegment pins that -n is forwarded
+// to each rename segment: one global remaining budget must not hide history
+// under an earlier path.
+func TestRun_LogFollowRenameMaxCountAppliesPerSegment(t *testing.T) {
+	dir := chdirTempRepo(t)
+
+	writeAppFile(t, dir, "old.go", "package p\n\nfunc Foo() int {\n\treturn 1\n}\n\nfunc Bar() int {\n\treturn 100\n}\n")
+	gitOut(t, dir, "add", "old.go")
+	gitOut(t, dir, "commit", "-m", "feat: add old.go")
+
+	gitOut(t, dir, "mv", "old.go", "middle.go")
+	writeAppFile(t, dir, "middle.go", "package p\n\nfunc Bar() int {\n\treturn 100\n}\n\nfunc Foo() int {\n\treturn 2\n}\n")
+	gitOut(t, dir, "add", "-A")
+	gitOut(t, dir, "commit", "-m", "refactor: rename old to middle")
+
+	writeAppFile(t, dir, "middle.go", "package p\n\nfunc Bar() int {\n\treturn 100\n}\n\nfunc Foo() int {\n\treturn 3\n}\n")
+	gitOut(t, dir, "add", "-A")
+	gitOut(t, dir, "commit", "-m", "fix: bump middle Foo")
+
+	gitOut(t, dir, "mv", "middle.go", "new.go")
+	writeAppFile(t, dir, "new.go", "package p\n\nfunc Foo() int {\n\treturn 4\n}\n\nfunc Bar() int {\n\treturn 100\n}\n")
+	gitOut(t, dir, "add", "-A")
+	gitOut(t, dir, "commit", "-m", "refactor: rename middle to new")
+
+	writeAppFile(t, dir, "new.go", "package p\n\nfunc Foo() int {\n\treturn 5\n}\n\nfunc Bar() int {\n\treturn 100\n}\n")
+	gitOut(t, dir, "add", "-A")
+	gitOut(t, dir, "commit", "-m", "fix: bump new Foo")
+
+	stdout, stderr, code := runApp(t, "log", "new.go:Foo", "--follow-rename", "-n", "1")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.StringContains(stdout, "fix: bump new Foo"))
+	qt.Assert(t, qt.StringContains(stdout, "fix: bump middle Foo"))
+	qt.Assert(t, qt.StringContains(stdout, "feat: add old.go"))
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "refactor: rename old to middle")))
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "refactor: rename middle to new")))
+	qt.Assert(t, qt.Equals(len(strings.Split(strings.TrimRight(stdout, "\n"), "\n")), 3))
+}
