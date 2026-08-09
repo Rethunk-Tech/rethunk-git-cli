@@ -245,6 +245,14 @@ func TestRun_BlameFollowRenameCrossesARenameThatReordersTheSymbol(t *testing.T) 
 		qt.Assert(t, qt.StringContains(stdout, "return 3"))
 		qt.Assert(t, qt.StringContains(stdout, "return 1"))
 	})
+
+	t.Run("--follow-rename preserves porcelain across segments", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "blame", "new.go:Foo", "--follow-rename", "--porcelain")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.Not(qt.Equals(stdout, "")))
+		qt.Assert(t, qt.StringContains(stdout, "return 1"))
+	})
 }
 
 // TestRun_BlameFollowRenameNoRenameMatchesDefault pins the no-rename path:
