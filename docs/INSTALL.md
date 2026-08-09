@@ -215,8 +215,8 @@ first invocation. The transport survey behind this split is in
 [`LIMITATIONS.md`](LIMITATIONS.md#language-server-coverage) for why. `taplo`
 still completes the LSP handshake once built with `-with-servers`'
 `--features lsp`, and other tooling can use it; it just never drives
-`rgit`'s own cross-check. HTML is wired, with a class-bearing element being
-the one case that still degrades to `[ts-only]` on its own (same section).
+`rgit`'s own cross-check. HTML is wired; void elements still need a
+`declOnlyEndTrimmer` seam (same section), not a class-suffix mismatch.
 
 ### Installing and updating servers automatically
 

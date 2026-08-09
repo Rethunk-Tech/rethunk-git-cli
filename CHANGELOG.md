@@ -44,6 +44,13 @@ Notable changes to `rgit`. The format follows
   rows. Dry runs remain target-only, while `--allow-empty` still reports the
   created commit. See [`docs/CODES.md`](docs/CODES.md#rgit-commit---porcelain).
 
+### Fixed
+
+- HTML language-server cross-checks now match class-bearing elements by
+  stripping the server's `.class` suffix before comparing its `tag#id` name;
+  staged HTML extents remain unchanged. See
+  [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md#language-server-coverage).
+
 ## [1.2.0] — 2026-08-05
 
 ### Added
@@ -176,11 +183,6 @@ Notable changes to `rgit`. The format follows
   [`docs/USAGE.md`](docs/USAGE.md#context).
 
 ### Fixed
-
-- HTML language-server cross-checks now match class-bearing elements by
-  stripping the server's `.class` suffix before comparing its `tag#id` name;
-  staged HTML extents remain unchanged. See
-  [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md#language-server-coverage).
 
 - A symbol anchor into an **uninitialized submodule** (`git submodule
   deinit`'s own shape: the directory survives, emptied of its own `.git`)

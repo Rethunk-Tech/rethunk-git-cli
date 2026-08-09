@@ -12,13 +12,11 @@ import (
 // otherwise wrongly flag as drift (docs/LIMITATIONS.md § Language-server
 // coverage carries the fuller version of each): taplo's own ranges disagree
 // with tree-sitter-toml on nested tables; no maintained tool speaks
-// documentSymbol for SQL at all. HTML is wired (servers.go) -- an id-only
-// element cross-checks; a class-bearing one, named "tag#id.class1.class2" by
-// the server, degrades to [ts-only] on its own (the same safe "not named"
-// exemption any unfound symbol gets), not a reason to leave the whole
-// language unwired. Add a language here only with a measured reason,
-// matching LIMITATIONS.md -- everything else in Languages() is expected to
-// have a wired server.
+// documentSymbol for SQL at all. HTML is wired (servers.go) -- id-only and
+// class-bearing elements both cross-check once the server's ".class…"
+// suffix is stripped from its Name for matching. Add a language here only
+// with a measured reason, matching LIMITATIONS.md -- everything else in
+// Languages() is expected to have a wired server.
 var neverWired = map[string]string{
 	"toml": "taplo completes the handshake but its ranges genuinely disagree with tree-sitter-toml on nested tables",
 	"sql":  "no maintained tool speaks documentSymbol for SQL",
@@ -30,7 +28,7 @@ var neverWired = map[string]string{
 // does not know about; nothing previously caught the opposite drift -- a
 // newly registered resolve grammar landing with no server wired for it,
 // which would silently stay [ts-only] forever with no test ever failing for
-// it. neverWired above is the allowlist for the three languages that are
+// it. neverWired above is the allowlist for the languages that are
 // [ts-only] on purpose; everything else must be wired.
 //
 // This is package lsp_test (an external test), not package lsp, and reads

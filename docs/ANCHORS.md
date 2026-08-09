@@ -355,10 +355,10 @@ whole-file entry. Deliberate: reading it from a blob instead would buy one
 uncommon case at the cost of a bounded read through `git cat-file`.
 
 The language-server cross-check covers Go, TypeScript/TSX, Python, Shell,
-YAML, JSON, CSS, and Markdown
-([`docs/INSTALL.md#language-servers`](INSTALL.md#language-servers)). TOML,
-SQL, and HTML stay `[ts-only]` permanently instead, which is a supported
-result, not a degraded one — see
+YAML, JSON, CSS, Markdown, and HTML
+([`docs/INSTALL.md#language-servers`](INSTALL.md#language-servers)). TOML
+and SQL stay `[ts-only]` permanently instead, which is a supported result,
+not a degraded one — see
 [`LIMITATIONS.md`](LIMITATIONS.md#language-server-coverage) for why. Exit 9
 is reserved for a language with no grammar at all — see
 [`LIMITATIONS.md`](LIMITATIONS.md#unsupported-languages) for the current

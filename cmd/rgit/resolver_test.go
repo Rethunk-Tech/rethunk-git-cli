@@ -959,9 +959,8 @@ func TestResolve_CrossCheckLiveHTML(t *testing.T) {
 		qt.Assert(t, qt.IsNil(err), qt.Commentf("anchor %q", anchor))
 	}
 
-	// A class-bearing element degrades safely (not found -- the server names
-	// it "tag#id.class1.class2", never a mismatch) rather than a real
-	// disagreement, docs/LIMITATIONS.md's own documented, permanent gap.
+	// Class-bearing elements cross-check once the server's ".class…" suffix is
+	// stripped from its Name; staged anchors stay tag#id.
 	classSrc := []byte(`<div id="widget" class="foo bar">x</div>` + "\n")
 	classPath := filepath.Join(dir, "class.html")
 	if err := os.WriteFile(classPath, classSrc, 0o644); err != nil {
@@ -972,7 +971,7 @@ func TestResolve_CrossCheckLiveHTML(t *testing.T) {
 	sess := lsp.NewSession()
 	defer sess.Close()
 	degraded, cerr := resolve.CrossCheckExtent(ctx, sess, lang, dir, classPath, classSrc, classRes)
-	qt.Assert(t, qt.IsTrue(degraded))
+	qt.Assert(t, qt.IsFalse(degraded))
 	qt.Assert(t, qt.IsNil(cerr))
 }
 
