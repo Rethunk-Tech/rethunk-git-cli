@@ -393,6 +393,13 @@ yaml        .yaml .yml
 This sample is from a `-tags rgit_sql` build; a plain `go build`/`go install`
 omits the `sql` row entirely (see [`INSTALL.md`](INSTALL.md#sql-support)).
 
+`--porcelain` replaces the aligned listing with stable
+`NAME<TAB>EXTENSIONS<TAB>GATED<TAB>CROSS-CHECK` records; the first three
+columns retain the meanings above. `CROSS-CHECK` is `wired` for grammars with
+a language-server catalog entry and `ts-only` for TOML and SQL. It reports
+compile-time design wiring, not whether a server is reachable in this
+invocation; `rgit doctor` reports that environment status.
+
 A `.sql` anchor on a binary built without `rgit_sql` still fails with exit 9
 ("no grammar registered"), the same as any genuinely unsupported language —
 but unlike one this resolver has never supported, the message also names the
@@ -487,7 +494,7 @@ argument; `context`'s fixed output shape is the point — § Context above).
 | `--author <author>` | Override the commit author. Plain forwarding. |
 | `--date <date>` | Override the commit date. Plain forwarding. |
 | `--reset-author` | Take the author identity from the committer instead of carrying the original forward. Plain forwarding; git accepts it only with `--amend` or `--fixup=amend:`, and `rgit` does not police the combination. |
-| `--porcelain` | (`commit`) List staged targets as stable tab-separated records instead of the aligned listing. Replaces `git commit`'s own summary rather than adding to it, exactly as `git commit --porcelain` does. Works with `--dry-run`, which then emits records alone with no preamble. |
+| `--porcelain` | (`commit`) After a successful real commit, emit a leading `H<TAB>SHA` record with the full commit object id, followed by stable tab-separated target records instead of the aligned listing. Replaces `git commit`'s own summary rather than adding to it, exactly as `git commit --porcelain` does. Works with `--dry-run`, which emits target records alone with no `H` record or preamble. |
 | `-q`, `--quiet` | (`commit`) Suppress the summary and the target listing. stdout is empty; warnings, notices and hook output still go to stderr, as under git's own `-q`. |
 | `-S`, `-S<key-id>`, `--gpg-sign`, `--gpg-sign=<key-id>` | GPG-sign the commit, with the configured default key or an explicit one. See the note below on how `-S` is parsed. |
 | `--no-gpg-sign` | Do not GPG-sign, overriding `commit.gpgsign=true`. |
@@ -521,14 +528,19 @@ output is passed through too. `--dry-run` prints the same listing, so a preview
 and the commit it previews are comparable line for line, and neither needs a
 follow-up `git show` or `rgit diff` to interpret.
 
-`--porcelain` replaces both with stable tab-separated records — schema and
-rationale in [`CODES.md`](CODES.md#output-records):
+`--porcelain` replaces both with stable tab-separated records — a successful
+real commit starts with its full commit object id, then the target rows. The
+schema and rationale are in [`CODES.md`](CODES.md#output-records):
 
 ```text
+H<TAB>SHA
+H<TAB>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
 auth.go<TAB>ValidateToken<TAB>12<TAB>3
 ```
 
-The records are identical for `--dry-run` and for the commit it previews.
+The target records are identical for `--dry-run` and for the commit it
+previews. Dry-run output has no `H` record; an `--allow-empty` commit emits
+`H` even when it has no target rows. `--quiet` continues to leave stdout empty.
 
 Repeatable `-m` gives subject and body without embedding newlines in one shell
 argument:

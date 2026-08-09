@@ -158,10 +158,18 @@ caller at `--sym`/`--file`.
 ### `rgit commit --porcelain`
 
 ```text
+H<TAB>SHA
 FILE<TAB>SYMBOL<TAB>ADDED<TAB>DELETED
+H<TAB>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
 auth.go<TAB>ValidateToken<TAB>12<TAB>3
 package.json<TAB><TAB>4<TAB>1
 ```
+
+The leading `H` record is emitted after every successful real commit and
+contains the full commit object id. It precedes all target rows, so a caller
+can learn the committed revision without a follow-up `git rev-parse HEAD`.
+`--dry-run --porcelain` emits target rows only and never invents an `H` record.
+An `--allow-empty` commit still emits `H` even when no target rows follow it.
 
 **A pathspec produces one record per file it stages, not one for the
 pathspec.** Naming a directory stages everything under it, so `rgit commit
@@ -175,33 +183,33 @@ nothing keeps one record naming the pathspec itself, so `git add`'s own "did
 not match any files" is still what answers for it.
 
 There is no `STATUS` column: an unchanged target is omitted from the listing
-entirely (it gets its own stderr warning instead), so every record would carry
-the same value. Records are identical for `--dry-run` and for the commit it
-previews, and `--porcelain` replaces `git commit`'s own summary rather than
+entirely (it gets its own stderr warning instead), so every target record would
+carry the same value. Target records are identical for `--dry-run` and for the
+commit it previews; a successful real commit additionally has the leading `H`
+record above. `--porcelain` replaces `git commit`'s own summary rather than
 adding to it — exactly as `git commit --porcelain` does.
 
-Because unchanged targets are omitted, `--porcelain --allow-empty` writes **no
-records at all** while still creating a commit and exiting 0: nothing was
-staged, so there is nothing to report. A caller that needs to distinguish that
-from "no commit happened" should read the exit code, or `git rev-parse HEAD`
-before and after — empty output on its own does not mean nothing was done.
+Because unchanged targets are omitted, `--porcelain --allow-empty` writes only
+the leading `H` record while still creating a commit and exiting 0. The full
+object id is the committed revision, so no before-and-after `git rev-parse
+HEAD` comparison is needed.
 
 ### `rgit languages --porcelain`
 
 ```text
-NAME<TAB>EXTENSIONS<TAB>GATED
-css<TAB>.css<TAB>0
-go<TAB>.go<TAB>0
-html<TAB>.html .htm<TAB>0
-json<TAB>.json<TAB>0
-markdown<TAB>.md .markdown<TAB>0
-python<TAB>.py .pyi<TAB>0
-shell<TAB>.sh .bash<TAB>0
-sql<TAB>.sql<TAB>1
-toml<TAB>.toml<TAB>0
-tsx<TAB>.tsx .jsx .js .mjs .cjs<TAB>0
-typescript<TAB>.ts .mts .cts<TAB>0
-yaml<TAB>.yaml .yml<TAB>0
+NAME<TAB>EXTENSIONS<TAB>GATED<TAB>CROSS-CHECK
+css<TAB>.css<TAB>0<TAB>wired
+go<TAB>.go<TAB>0<TAB>wired
+html<TAB>.html .htm<TAB>0<TAB>wired
+json<TAB>.json<TAB>0<TAB>wired
+markdown<TAB>.md .markdown<TAB>0<TAB>wired
+python<TAB>.py .pyi<TAB>0<TAB>wired
+shell<TAB>.sh .bash<TAB>0<TAB>wired
+sql<TAB>.sql<TAB>1<TAB>ts-only
+toml<TAB>.toml<TAB>0<TAB>ts-only
+tsx<TAB>.tsx .jsx .js .mjs .cjs<TAB>0<TAB>wired
+typescript<TAB>.ts .mts .cts<TAB>0<TAB>wired
+yaml<TAB>.yaml .yml<TAB>0<TAB>wired
 ```
 
 Sampled from a `-tags rgit_sql` build; a plain build has no `sql` row (see
@@ -214,6 +222,11 @@ tag selected it (SQL alone, `-tags rgit_sql`; see
 [`INSTALL.md`](INSTALL.md#sql-support)) and `0` otherwise, present on every
 row rather than only the gated ones, so a reader always gets a definite
 answer instead of inferring "not gated" from an absent column.
+`CROSS-CHECK` is `wired` when the language has a compile-time entry in the
+language-server catalog and `ts-only` when it does not (currently TOML and
+SQL). This is design-time wiring, not reachability: a `wired` language still
+degrades to `[ts-only]` when its server is missing, cold, or unreachable; see
+`rgit doctor` for environment and server status.
 
 There is no row at all for a grammar this build was not compiled with: a
 plain build's records have no `sql` line, matching `rgit languages`'s own
