@@ -113,4 +113,39 @@ jobs:
             '  -m) printf "%s\n" arm64 ;;' \
             'esac' >"$mock_bin/uname"
           chmod +x "$mock_bin/uname"
-          PATH="$mock_bin:$PATH" VERSION=v1.1.0 sh scripts/install.sh --dry-run
+          output="$(
+            PATH="$mock_bin:$PATH" VERSION=v1.1.0 sh scripts/install.sh --dry-run
+          )"
+          printf '%s\n' "$output"
+          for expected in \
+            rgit-v1.1.0-darwin-arm64 \
+            SHA256SUMS
+          do
+            printf '%s\n' "$output" | grep -Fq "$expected" || {
+              printf 'missing expected output: %s\n' "$expected" >&2
+              exit 1
+            }
+          done
+      - run: |
+          mock_bin="$(mktemp -d)"
+          trap 'rm -rf "$mock_bin"' EXIT
+          printf '%s\n' \
+            '#!/bin/sh' \
+            'case "$1" in' \
+            '  -s) printf "%s\n" Darwin ;;' \
+            '  -m) printf "%s\n" x86_64 ;;' \
+            'esac' >"$mock_bin/uname"
+          chmod +x "$mock_bin/uname"
+          output="$(
+            PATH="$mock_bin:$PATH" VERSION=v1.1.0 sh scripts/install.sh --dry-run
+          )"
+          printf '%s\n' "$output"
+          for expected in \
+            rgit-v1.1.0-darwin-amd64 \
+            SHA256SUMS
+          do
+            printf '%s\n' "$output" | grep -Fq "$expected" || {
+              printf 'missing expected output: %s\n' "$expected" >&2
+              exit 1
+            }
+          done
