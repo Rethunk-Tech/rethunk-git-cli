@@ -267,6 +267,47 @@ func TestRun_LogPathScopedPaths(t *testing.T) {
 	})
 }
 
+// TestRun_LogPathScopedMaxCount pins git's own count limit on the
+// path-scoped form, including both spellings and the unbounded default.
+func TestRun_LogPathScopedMaxCount(t *testing.T) {
+	dir := chdirTempRepo(t)
+	for i, subject := range []string{"fix: second", "fix: third", "fix: fourth"} {
+		writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn "+string(rune('2'+i))+"\n}\n")
+		gitOut(t, dir, "add", "a.go")
+		gitOut(t, dir, "commit", "-m", subject)
+	}
+
+	t.Run("-n limits output", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "log", "--since=2000-01-01", "-n", "2", "a.go")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "fix: fourth"))
+		qt.Assert(t, qt.StringContains(stdout, "fix: third"))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "fix: second")))
+		qt.Assert(t, qt.Equals(len(strings.Split(strings.TrimRight(stdout, "\n"), "\n")), 2))
+	})
+
+	t.Run("--max-count limits output", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "log", "--since=2000-01-01", "--max-count=1", "a.go")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "fix: fourth"))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "fix: third")))
+		qt.Assert(t, qt.Equals(len(strings.Split(strings.TrimRight(stdout, "\n"), "\n")), 1))
+	})
+
+	t.Run("without max-count output remains unbounded", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "log", "--since=2000-01-01", "a.go")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "fix: fourth"))
+		qt.Assert(t, qt.StringContains(stdout, "fix: third"))
+		qt.Assert(t, qt.StringContains(stdout, "fix: second"))
+		qt.Assert(t, qt.StringContains(stdout, "chore: initial"))
+		qt.Assert(t, qt.Equals(len(strings.Split(strings.TrimRight(stdout, "\n"), "\n")), 4))
+	})
+}
+
 // TestRun_LogPathScopedOutputModes covers --porcelain and -p/--patch on the
 // path-scoped shape, and that the two remain mutually exclusive there the
 // same as on the anchor shape (TestRun_LogHelpAndUsage covers that one).

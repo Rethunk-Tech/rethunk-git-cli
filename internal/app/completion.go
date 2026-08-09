@@ -118,7 +118,7 @@ const rgitLanguagesFlags = "--porcelain --in-repo -h --help"
 const rgitDoctorFlags = "--porcelain --deep -h --help"
 const rgitCompletionFlags = "-h --help"
 const rgitBlameFlags = "-p --porcelain -h --help"
-const rgitLogFlags = "--porcelain -p --patch --follow-rename --since --until -h --help"
+const rgitLogFlags = "--porcelain -p --patch --follow-rename --since --until -n --max-count -h --help"
 const rgitContextFlags = "-h --help"
 
 // bashCompletionScript is emitted verbatim by `rgit completion bash`. The

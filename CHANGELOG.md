@@ -8,6 +8,10 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit languages --porcelain` now includes a fourth `CROSS-CHECK` column:
+  `wired` for compile-time language-server wiring and `ts-only` for TOML and
+  SQL. This reports design-time coverage, not server reachability.
+
 - `rgit doctor` now checks git's resolved version against the floor
   `rgit` relies on (`git commit --trailer`, git 2.32+), not just its
   presence on `PATH`. Informational, like every other doctor check — a
@@ -29,6 +33,16 @@ Notable changes to `rgit`. The format follows
 - `scripts/install.sh` now downloads and verifies the darwin/amd64 and
   darwin/arm64 release artifacts on macOS, using `shasum` for checksum
   verification. See [`docs/INSTALL.md`](docs/INSTALL.md#install-script).
+
+- `rgit log --since=DATE [--until=DATE] [PATH...]` now accepts
+  `-n`/`--max-count` and forwards git's own commit-count limit; without it,
+  the path-scoped history remains unbounded. See
+  [`docs/USAGE.md`](docs/USAGE.md#log-by-date-and-path).
+
+- Successful `rgit commit --porcelain` output now starts with an
+  `H<TAB>SHA` record containing the full commit object id, before any target
+  rows. Dry runs remain target-only, while `--allow-empty` still reports the
+  created commit. See [`docs/CODES.md`](docs/CODES.md#rgit-commit---porcelain).
 
 ## [1.2.0] — 2026-08-05
 

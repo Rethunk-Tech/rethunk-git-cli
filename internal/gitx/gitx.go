@@ -955,7 +955,8 @@ func (r *Repo) FindRename(ctx context.Context, rev, path string) (commit, oldPat
 }
 
 // Log runs `git log`, optionally bounded by --since/--until and a path
-// filter, plus any extra flags/args (e.g. "--no-patch", "--format=...")
+// filter, plus any extra flags/args (e.g. "--no-patch", "--format=...",
+// "-n", "5")
 // passed straight through -- rgit log's own time- and path-scoped shape
 // (docs/USAGE.md § Log), distinct from LogLineRange's single-symbol -L
 // form. since and until are forwarded to git's own --since/--until

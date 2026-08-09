@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -36,7 +37,7 @@ import (
 )
 
 const logHelp = `usage: rgit log FILE:SYMBOL [--follow-rename] [--porcelain | -p|--patch]
-       rgit log --since=DATE [--until=DATE] [--porcelain | -p|--patch] [PATH...]
+       rgit log --since=DATE [--until=DATE] [-n N|--max-count=N] [--porcelain | -p|--patch] [PATH...]
 
 History of one symbol: one record per commit whose own diff touched its
 current extent, newest first. Patch-free by default -- plain
@@ -58,6 +59,9 @@ accepts there ("2024-01-01", "2 weeks ago") works here too.
 --until=DATE bounds the same form's other end, alone or combined with
 --since. With no path and only one bound (or neither), it is the whole
 repository's history in that window, matching plain "git log --since=DATE".
+
+-n, --max-count=N limits the path-scoped form to at most N commits,
+forwarded to git's own count limit. Without it, history is unbounded.
 
 --follow-rename walks the file's rename history: at each commit that
 renamed it, the anchor's extent is re-resolved against the old name's blob
@@ -244,6 +248,7 @@ func runLogFollowRename(ctx context.Context, repo *gitx.Repo, file string, src [
 // does not fit its "exactly one positional" rule regardless.
 func runLogPathScoped(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	var since, until string
+	var maxCount int
 	var porcelain, patch bool
 
 	fs := pflag.NewFlagSet("log", pflag.ContinueOnError)
@@ -251,6 +256,7 @@ func runLogPathScoped(ctx context.Context, dir string, args []string, stdout, st
 	fs.SetOutput(io.Discard)
 	fs.StringVar(&since, "since", "", "only commits at or after this date (forwarded to git)")
 	fs.StringVar(&until, "until", "", "only commits at or before this date (forwarded to git)")
+	fs.IntVarP(&maxCount, "max-count", "n", 0, "maximum number of commits (forwarded to git)")
 	fs.BoolVar(&porcelain, "porcelain", false, "stable tab-separated HASH<TAB>SUBJECT records")
 	fs.BoolVarP(&patch, "patch", "p", false, "include the real patch body")
 
@@ -278,7 +284,12 @@ func runLogPathScoped(ctx context.Context, dir string, args []string, stdout, st
 		paths = append(paths, resolved)
 	}
 
-	out, err := repo.Log(ctx, since, until, paths, logFormatArgs(patch, porcelain)...)
+	extra := logFormatArgs(patch, porcelain)
+	if fs.Changed("max-count") {
+		extra = append([]string{"--max-count=" + strconv.Itoa(maxCount)}, extra...)
+	}
+
+	out, err := repo.Log(ctx, since, until, paths, extra...)
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.GitFailure

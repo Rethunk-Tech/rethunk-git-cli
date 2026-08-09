@@ -325,6 +325,30 @@ func TestLog_SinceExcludesEarlierCommits(t *testing.T) {
 	}
 }
 
+// TestLog_MaxCount pins that Log forwards git's own count limit through its
+// existing extra-argument path rather than truncating output in Go.
+func TestLog_MaxCount(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	ctx := context.Background()
+
+	gittest.Write(t, dir, "f.txt", "one\n")
+	gittest.Commit(t, dir, "chore: first commit")
+	gittest.Write(t, dir, "f.txt", "two\n")
+	gittest.Commit(t, dir, "chore: second commit")
+	gittest.Write(t, dir, "f.txt", "three\n")
+	gittest.Commit(t, dir, "chore: third commit")
+
+	out, err := repo.Log(ctx, "", "", []string{"f.txt"}, "-n", "1", "--no-patch", "--format=%s")
+	if err != nil {
+		t.Fatalf("Log: %v", err)
+	}
+	got := string(out)
+	if got != "chore: third commit\n" {
+		t.Errorf("Log(max-count=1) = %q; want only the newest commit", got)
+	}
+}
+
 // TestUpstreamAndAheadBehind pins the rgit-context B record's own two
 // primitives: no upstream configured is a normal negative answer, not a
 // failure or a *GitError -- and once one is configured, AheadBehind counts
