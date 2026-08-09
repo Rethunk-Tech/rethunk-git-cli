@@ -166,6 +166,10 @@ Either way, a symbol's history is only reachable starting from the file's
 classification, the same as naming any other path that exists under neither
 the worktree nor `HEAD`.
 
+`rgit blame FILE:SYMBOL` stops at the current file name by default. With
+`--follow-rename`, it reads HEAD history, re-resolves the symbol at each rename
+boundary, and emits git's bounded blame for each path segment.
+
 ## Language-server coverage
 
 The extent cross-check is live for Go, TypeScript/TSX, Python, Shell, YAML,
