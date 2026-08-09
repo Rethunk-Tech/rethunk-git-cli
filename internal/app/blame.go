@@ -23,11 +23,13 @@ const blameHelp = `usage: rgit blame FILE:SYMBOL [--follow-rename] [-p|--porcela
 
 Blame bounded to one symbol's own extent: git blame -L over just the lines
 the anchor resolves to in the current worktree file, never the whole file.
+If the worktree file is gone, the default resolves against its HEAD blob.
 An anchor that does not resolve is exit 3 (or 4 if ambiguous, 9 if the
 language has no grammar) -- never a silently widened, whole-file blame.
 
 --follow-rename walks the file's rename history, re-resolving the symbol at
-each rename boundary. Without it, blame stops at the current file name.
+each rename boundary against the HEAD blob, never the dirty worktree.
+Without it, blame stops at the current file name.
 
 -p, --porcelain passes straight through to git's own "git blame --porcelain"
 format (see docs/CODES.md#output-records) -- both spellings, matching git
