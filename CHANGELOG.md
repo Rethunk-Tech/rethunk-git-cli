@@ -67,9 +67,12 @@ Notable changes to `rgit`. The format follows
 - The LSP extent cross-check now covers **HTML**, via
   `vscode-html-language-server`: an id-bearing element (`div#app`) verifies
   against a live server the same way Go, TypeScript, Python, and five other
-  grammars already do. A class-bearing element still degrades to
-  `[ts-only]` on its own (the server names it differently, safely). See
+  grammars already do. See
   [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md#language-server-coverage).
+
+  **Errata:** the original note claimed class-bearing HTML elements degrade to
+  `[ts-only]`; they do not — the cross-check strips the server's `.class`
+  suffix before comparing `tag#id` names (see Unreleased Fixed).
 
 - `--follow-rename` on `rgit log FILE:SYMBOL`, continuing a symbol's history
   past a rename `git log -L`'s own line-range tracking loses (a rename that
