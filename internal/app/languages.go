@@ -17,6 +17,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
@@ -133,12 +134,13 @@ func renderLanguages(langs []resolve.LanguageInfo) string {
 }
 
 // renderLanguagesPorcelain renders langs as docs/CODES.md's stable
-// tab-separated record: NAME<TAB>EXTENSIONS<TAB>GATED, one line per
-// language sorted by NAME (resolve.Languages() already returns them sorted,
-// so no further sort is needed here), no header -- the same "no STATUS
-// column when every row would carry the same shape of value" economy
-// rgit commit --porcelain already applies (docs/CODES.md), except GATED
-// really does vary per row, so it stays.
+// tab-separated record: NAME<TAB>EXTENSIONS<TAB>GATED<TAB>CROSS-CHECK, one line
+// per language sorted by NAME (resolve.Languages() already returns them sorted,
+// so no further sort is needed here), no header -- the same "no STATUS column
+// when every row would carry the same shape of value" economy rgit commit
+// --porcelain already applies (docs/CODES.md), except GATED really does vary
+// per row, so it stays. CROSS-CHECK is derived from the lsp package's server
+// catalog and reports compile-time wiring, not server reachability.
 //
 // EXTENSIONS joins with a single space, matching renderLanguages's own
 // human-readable join: unambiguous, since a real extension is always
@@ -149,12 +151,22 @@ func renderLanguages(langs []resolve.LanguageInfo) string {
 // inferred from a column's absence.
 func renderLanguagesPorcelain(langs []resolve.LanguageInfo) string {
 	var buf strings.Builder
+	wired := map[string]struct{}{}
+	for _, server := range lsp.Servers() {
+		for _, name := range server.Languages {
+			wired[name] = struct{}{}
+		}
+	}
 	for _, l := range langs {
 		gated := "0"
 		if l.Gated {
 			gated = "1"
 		}
-		fmt.Fprintf(&buf, "%s\t%s\t%s\n", l.Name, strings.Join(l.Extensions, " "), gated)
+		crossCheck := "ts-only"
+		if _, ok := wired[l.Name]; ok {
+			crossCheck = "wired"
+		}
+		fmt.Fprintf(&buf, "%s\t%s\t%s\t%s\n", l.Name, strings.Join(l.Extensions, " "), gated, crossCheck)
 	}
 	return buf.String()
 }

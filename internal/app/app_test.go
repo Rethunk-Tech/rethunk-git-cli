@@ -929,7 +929,7 @@ func TestRun_Languages(t *testing.T) {
 }
 
 // TestRun_LanguagesPorcelain pins the record shape docs/CODES.md commits to
-// -- three tab-separated fields, no header -- against the "go" entry every
+// -- four tab-separated fields, no header -- against the "go" entry every
 // build carries, so this case holds regardless of -tags rgit_sql. Whether a
 // "sql" record appears, and what its GATED field reads, is build-specific
 // and covered separately (languages_sql_test.go, languages_nosql_test.go).
@@ -945,11 +945,12 @@ func TestRun_LanguagesPorcelain(t *testing.T) {
 	found := false
 	for line := range strings.SplitSeq(strings.TrimRight(stdout, "\n"), "\n") {
 		fields := strings.Split(line, "\t")
-		qt.Assert(t, qt.Equals(len(fields), 3))
+		qt.Assert(t, qt.Equals(len(fields), 4))
 		if fields[0] == "go" {
 			found = true
 			qt.Assert(t, qt.Equals(fields[1], ".go"))
 			qt.Assert(t, qt.Equals(fields[2], "0"))
+			qt.Assert(t, qt.Equals(fields[3], "wired"))
 		}
 	}
 	qt.Assert(t, qt.IsTrue(found))

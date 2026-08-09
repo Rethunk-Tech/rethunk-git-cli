@@ -33,15 +33,14 @@ func TestRun_LanguagesListsSQLWhenTagged(t *testing.T) {
 	qt.Assert(t, qt.StringContains(version, "optional grammars: sql"))
 }
 
-// TestRun_LanguagesPorcelainMarksSQLGatedWhenTagged pins the GATED column's
-// build-specific half: with the grammar compiled in, its record reads "1",
-// the exact record docs/CODES.md's own example shows.
+// TestRun_LanguagesPorcelainMarksSQLGatedWhenTagged pins SQL's build-specific
+// fields: with the grammar compiled in, its record reads "1" and "ts-only".
 func TestRun_LanguagesPorcelainMarksSQLGatedWhenTagged(t *testing.T) {
 	t.Chdir(t.TempDir())
 
 	stdout, _, code := runApp(t, "languages", "--porcelain")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	qt.Assert(t, qt.StringContains(stdout, "sql\t.sql\t1\n"))
+	qt.Assert(t, qt.StringContains(stdout, "sql\t.sql\t1\tts-only\n"))
 }
 
 // TestRun_DoctorListsSQLWhenTagged is doctor's own agreement with the two
