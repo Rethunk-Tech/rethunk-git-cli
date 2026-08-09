@@ -77,6 +77,11 @@ func assertAnchorUsageRefusals(t *testing.T, cmd string) {
 
 func TestRun_BlameHelpAndUsage(t *testing.T) {
 	assertAnchorUsageRefusals(t, "blame")
+
+	t.Chdir(t.TempDir())
+	stdout, _, code := runApp(t, "blame", "--help")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(stdout, "--follow-rename"))
 }
 
 // TestRun_BlameUnresolvableAnchorNeverWidensToWholeFile pins the guardrail
@@ -198,4 +203,60 @@ func TestRun_BlameShortPorcelainFlagMatchesGit(t *testing.T) {
 	qt.Assert(t, qt.Equals(shortCode, exitcode.Success))
 	qt.Assert(t, qt.Equals(shortCode, longCode))
 	qt.Assert(t, qt.Equals(short, long))
+}
+
+// TestRun_BlameFollowRenameCrossesARenameThatReordersTheSymbol pins the
+// rename boundary: a reordered symbol needs a fresh extent in the old blob,
+// so --follow-rename reaches the old path while the default form remains
+// bounded to the current path.
+func TestRun_BlameFollowRenameCrossesARenameThatReordersTheSymbol(t *testing.T) {
+	dir := chdirTempRepo(t)
+	t.Setenv("GIT_AUTHOR_DATE", "2020-01-01T00:00:00")
+	t.Setenv("GIT_COMMITTER_DATE", "2020-01-01T00:00:00")
+	writeAppFile(t, dir, "old.go", "package p\n\nfunc Foo() int {\n\treturn 1\n}\n\nfunc Bar() int {\n\treturn 100\n}\n")
+	gitOut(t, dir, "add", "old.go")
+	gitOut(t, dir, "commit", "-m", "feat: add old.go")
+
+	gitOut(t, dir, "mv", "old.go", "new.go")
+	t.Setenv("GIT_AUTHOR_DATE", "2025-01-01T00:00:00")
+	t.Setenv("GIT_COMMITTER_DATE", "2025-01-01T00:00:00")
+	writeAppFile(t, dir, "new.go", "package p\n\nfunc Bar() int {\n\treturn 100\n}\n\nfunc Foo() int {\n\treturn 2\n}\n")
+	gitOut(t, dir, "add", "-A")
+	gitOut(t, dir, "commit", "-m", "refactor: rename and reorder")
+
+	t.Setenv("GIT_AUTHOR_DATE", "2030-01-01T00:00:00")
+	t.Setenv("GIT_COMMITTER_DATE", "2030-01-01T00:00:00")
+	writeAppFile(t, dir, "new.go", "package p\n\nfunc Bar() int {\n\treturn 100\n}\n\nfunc Foo() int {\n\treturn 3\n}\n")
+	gitOut(t, dir, "add", "-A")
+	gitOut(t, dir, "commit", "-m", "fix: bump Foo")
+
+	t.Run("without the flag, blame stops at the current name", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "blame", "new.go:Foo")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "return 3"))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "return 1")))
+	})
+
+	t.Run("--follow-rename reaches the pre-rename path", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "blame", "new.go:Foo", "--follow-rename")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "return 3"))
+		qt.Assert(t, qt.StringContains(stdout, "return 1"))
+	})
+}
+
+// TestRun_BlameFollowRenameNoRenameMatchesDefault pins the no-rename path:
+// the flag adds no second output segment when FindRename reports no boundary.
+func TestRun_BlameFollowRenameNoRenameMatchesDefault(t *testing.T) {
+	chdirTempRepo(t)
+
+	withoutFlag, _, code := runApp(t, "blame", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+
+	withFlag, _, code := runApp(t, "blame", "a.go:A", "--follow-rename")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+
+	qt.Assert(t, qt.Equals(withFlag, withoutFlag))
 }
