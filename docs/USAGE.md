@@ -250,12 +250,13 @@ each rename segment receives the same filters. Under `--follow-rename`,
 `-n`/`--max-count` applies independently to each rename segment, so the total
 can exceed `N` when history crosses multiple renames.
 
-Unlike `blame`, the anchor is resolved against **`HEAD`, not the worktree**:
-history is a question about what has already been committed, and `git log -L`
-itself walks `HEAD`'s own history with no notion of the worktree at all. This
-also means a symbol already deleted from the worktree, but still present in
-`HEAD`, keeps its history reachable — there is nothing to open on disk, so
-`rgit log` never needs to.
+Unlike default `blame` (worktree first), the anchor is resolved against
+**`HEAD`, not the worktree**: history is a question about what has already
+been committed, and `git log -L` itself walks `HEAD`'s own history with no
+notion of the worktree at all. (`blame --follow-rename` uses the same
+`HEAD`-blob rule.) This also means a symbol already deleted from the
+worktree, but still present in `HEAD`, keeps its history reachable — there
+is nothing to open on disk, so `rgit log` never needs to.
 
 `git log -L` already follows a rename on its own whenever git's own content
 similarity detects one, the same as `git log --follow` — but it tracks the
