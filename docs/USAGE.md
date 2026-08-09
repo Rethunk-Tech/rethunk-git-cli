@@ -232,6 +232,12 @@ patch body for every touching commit, which is precisely the flood this
 command exists to avoid. Pass `-p`/`--patch` to see it anyway — git's own
 `git log -L` output, unmodified, not a second patch format rgit invents.
 
+`--since=DATE` and `--until=DATE` may be added to this anchor form; the
+`FILE:SYMBOL` positional keeps its symbol-scoped meaning, and the bounds are
+forwarded to git's own `git log -L`. `-n N`/`--max-count=N` can be combined
+with it as well. `--follow-rename` may be combined with either date bound;
+each rename segment receives the same filters.
+
 Unlike `blame`, the anchor is resolved against **`HEAD`, not the worktree**:
 history is a question about what has already been committed, and `git log -L`
 itself walks `HEAD`'s own history with no notion of the worktree at all. This
@@ -282,17 +288,17 @@ $ rgit log --since=2024-01-01 -n 5 -- src/auth
 a1b2c3d fix(auth): reject expired tokens
 ```
 
-`--since=DATE` or `--until=DATE` (either alone, or together) switches `log`
-to a second, unanchored shape: ordinary git history bounded by date and,
-optionally, one or more trailing path positionals — no `FILE:SYMBOL` at all.
-Values are forwarded to git's own `--since`/`--until` unparsed, so anything
-git accepts there (`"2024-01-01"`, `"2 weeks ago"`) works here too. With no
-paths, it is the whole repository's history in that window, matching plain
-`git log --since=DATE`.
+`--since=DATE` or `--until=DATE` (either alone, or together) selects ordinary
+git history bounded by date only when no positional is a `FILE:SYMBOL`
+anchor. With an anchor, the symbol-scoped form above remains selected.
+Otherwise, one or more trailing positionals are pathspecs. Values are
+forwarded to git's own `--since`/`--until` unparsed, so anything git accepts
+there (`"2024-01-01"`, `"2 weeks ago"`) works here too. With no paths, the
+unanchored form is the whole repository's history in that window, matching
+plain `git log --since=DATE`.
 
-`-n N`/`--max-count=N` limits this path-scoped history to at most `N`
-commits, forwarding git's own count limit. Without either spelling, the
-history remains unbounded.
+`-n N`/`--max-count=N` limits either form to at most `N` commits, forwarding
+git's own count limit. Without either spelling, the history remains unbounded.
 
 This is the one `git log` carve-out `rgit`'s own "the tree is only ever
 inspected through `rgit`" convention otherwise has to make for a plain
@@ -307,6 +313,8 @@ exclusive with `--porcelain`.
 
 ```text
 B<TAB>main<TAB>origin/main<TAB>0<TAB>2
+W<TAB>ts-only
+W<TAB>warning<TAB>extent disagreement reported on stderr
 F<TAB>auth.go<TAB>ValidateToken<TAB>MOD<TAB>12<TAB>3
 F<TAB>config.ini<TAB><TAB>UNTRACKED<TAB>4<TAB>0
 C<TAB>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2<TAB>fix(auth): reject expired tokens
@@ -324,13 +332,15 @@ call.
 **The output shape is fixed and takes no flags beyond `--help`.** A command
 with options becomes `git status` with extra steps — see
 [`specs/design.md`](../specs/design.md#commands) for why the shape stays
-fixed rather than growing one. Four record types, tab-separated, no header:
+fixed rather than growing one. Five record types, tab-separated, no header:
 
 | Record | Fields | Meaning |
 | --- | --- | --- |
 | `B` | `BRANCH`, `UPSTREAM`, `AHEAD`, `BEHIND` | At most one, always first: the current branch. `UPSTREAM` is empty and `AHEAD`/`BEHIND` are both `0` with no upstream configured. Absent entirely on an unborn branch |
-| `C` | `HASH`, `SUBJECT` | One per recent commit, newest first, bounded to the last 20 |
+| `W` | `ts-only` | One when at least one file had symbols to cross-check but no live language server was reached. The identical `[ts-only]` notice remains on stderr |
+| `W` | `warning`, `TEXT` | One per non-fatal diff warning. `TEXT` is the warning body without the human `[warning]` prefix; the identical `[warning] TEXT` line remains on stderr |
 | `F` | `FILE`, `SYMBOL`, `STATUS`, `ADDED`, `DELETED` | One per `rgit diff --porcelain` row — identical fields, plus this stream's own leading type tag |
+| `C` | `HASH`, `SUBJECT` | One per recent commit, newest first, bounded to the last 20 |
 | `X` | `TRUNCATED`, `COUNT` | At most one, always last: this many records were withheld to hold the byte budget |
 
 The diff half is pure composition, not a second attribution path: it is
@@ -338,11 +348,11 @@ literally `rgit diff`'s own default scope (everything committable), rendered
 through the same `--porcelain` records and re-tagged per line.
 
 **The whole stream is capped at 16 KiB.** `B`, when present, sorts first — a
-single record that costs the budget almost nothing — then `F` rows, so they
-survive truncation before `C` rows do. The diff section is the unbounded,
-actionable half and has no natural limit of its own; commits are already
-bounded up front (the most recent 20, via git's own history limit) and cost
-little to drop, so a busy branch sheds commit history before it ever
+single record that costs the budget almost nothing — then `W` diagnostics and
+`F` rows. `F` rows survive truncation before `C` rows do. The diff section is
+the unbounded, actionable half and has no natural limit of its own; commits
+are already bounded up front (the most recent 20, via git's own history limit)
+and cost little to drop, so a busy branch sheds commit history before it ever
 shortens the diff. Truncation happens at the byte boundary, with a trailing
 `X` record naming how many rows were withheld. See
 [`../specs/design.md`](../specs/design.md#commands) for the reasoning. See
@@ -509,8 +519,8 @@ argument; `context`'s fixed output shape is the point — § Context above).
 | `--exit-code` | (`diff`) Exit 1 when anything is committable, 0 when clean. |
 | `--quiet` | (`diff`) Implies `--exit-code` and suppresses output. |
 | `-p`, `--patch` | (`diff`) Append git's own real patch body after the report. Suppressed by `--quiet`, mutually exclusive with `--porcelain`. |
-| `--since DATE`, `--until DATE` | (`log`) Switch to date-bounded, unanchored history; presence of either selects this shape over `FILE:SYMBOL`. Forwarded to git's own `--since`/`--until` unparsed. |
-| `-n N`, `--max-count=N` | (`log`, path-scoped) Limit history to at most `N` commits. Forwarded to git's own count limit; omitted by default, so history is unbounded. |
+| `--since DATE`, `--until DATE` | (`log`) Bound history by date. A `FILE:SYMBOL` positional keeps the anchor form; otherwise these select unanchored path-scoped history. Forwarded to git's own `--since`/`--until` unparsed. |
+| `-n N`, `--max-count=N` | (`log`) Limit either history form to at most `N` commits. Forwarded to git's own count limit; omitted by default, so history is unbounded. |
 
 `commit` requires a message (`-m` or `-F`) and at least one target, unless
 `--amend`, `--fixup`, or `--squash` is given with neither — each generates its

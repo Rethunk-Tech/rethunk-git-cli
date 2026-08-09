@@ -8,6 +8,10 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit context` now emits `W` records for degraded `[ts-only]` resolution
+  and non-fatal diff warnings, while retaining the matching stderr
+  diagnostics. See [`docs/CODES.md`](docs/CODES.md#rgit-context).
+
 - `rgit languages --porcelain` now includes a fourth `CROSS-CHECK` column:
   `wired` for compile-time language-server wiring and `ts-only` for TOML and
   SQL. This reports design-time coverage, not server reachability.
@@ -48,6 +52,11 @@ Notable changes to `rgit`. The format follows
   `-n`/`--max-count` and forwards git's own commit-count limit; without it,
   the path-scoped history remains unbounded. See
   [`docs/USAGE.md`](docs/USAGE.md#log-by-date-and-path).
+
+- `rgit log FILE:SYMBOL` now accepts `--since`/`--until` and
+  `-n`/`--max-count` without losing symbol scope. The same date bounds apply
+  to every segment of `--follow-rename`. See
+  [`docs/USAGE.md`](docs/USAGE.md#log).
 
 - Successful `rgit commit --porcelain` output now starts with an
   `H<TAB>SHA` record containing the full commit object id, before any target
