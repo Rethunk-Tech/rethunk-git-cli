@@ -67,6 +67,18 @@ trap 'rm -rf "$tmp"' EXIT
 curl -fsSL -o "$tmp/$asset" "$base_url/$asset"
 curl -fsSL -o "$tmp/SHA256SUMS" "$base_url/SHA256SUMS"
 
+if command -v cosign >/dev/null 2>&1; then
+  curl -fsSL -o "$tmp/SHA256SUMS.sigstore.json" "$base_url/SHA256SUMS.sigstore.json"
+  (
+    cd "$tmp"
+    cosign verify-blob \
+      --bundle SHA256SUMS.sigstore.json \
+      --certificate-identity-regexp 'https://github.com/Rethunk-Tech/rethunk-git-cli/.github/workflows/release.yml@.*' \
+      --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+      SHA256SUMS
+  )
+fi
+
 (
   cd "$tmp"
   case "$os_tag" in
