@@ -8,10 +8,11 @@ Limitations that ship — unsupported languages, excluded cross-build targets,
 constructs no anchor reaches — are documented in
 [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md), not listed here.
 
-Items below are the residual queue after a fenced wave landed
-`scripts/install.ps1`, Darwin dry-run CI asset assertions, HTML
-ordinal+class-suffix cross-check coverage, `ParseOrdinal` trailing-`#N`
-parsing, design-record HTML refresh, and quiet-commit empty-stdout coverage.
+Items below are the residual queue after a fenced wave landed optional
+cosign verification in `scripts/install.sh`, Windows CI dry-run for
+`install.ps1`, `rgit log FILE:SYMBOL` with `--since`/`--until`, `rgit
+context` `W` diagnostic records, HTML ordinal `Resolve` coverage for
+`div#app#2`, and a `[1.2.0]` CHANGELOG errata for class-bearing HTML.
 Deliberately not queued: `rgit restore` (designed and held back —
 [`specs/design.md`](specs/design.md#rgit-restore-filesymbol-an-accepted-design-deliberately-not-built)),
 context staged/unstaged split, TOML taplo / SQL LSP cross-checks, Rust/C/C++/
@@ -19,44 +20,31 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
 
 ## Release / install
 
-- [ ] **Optional cosign verification in `scripts/install.sh`.** Releases
-      already publish `SHA256SUMS.sigstore.json` (keyless cosign over
-      `SHA256SUMS`); the script verifies SHA256 integrity only.
-      `docs/INSTALL.md` documents a manual `cosign verify-blob` path that
-      never runs during install. Same optional path for `install.ps1` once
-      the shell script lands it (or a paired change).
+- [ ] **Optional cosign verification in `scripts/install.ps1`.** The POSIX
+      installer now auto-verifies `SHA256SUMS` with cosign when present;
+      Windows still SHA256-only. Pair the same optional bundle path
+      (`SHA256SUMS.sigstore.json`, identity regexp + OIDC issuer from
+      `docs/INSTALL.md`) without hard-failing when cosign is absent.
 
-      **Packages / files:** `scripts/install.sh`, optionally
-      `scripts/install.ps1`, `docs/INSTALL.md`, CI dry-run coverage.
+      **Packages / files:** `scripts/install.ps1`, `docs/INSTALL.md`,
+      optionally CI dry-run notes.
 
-      **Traps:** `cosign` is often absent — absence must keep today's
-      SHA256-only path (no hard fail). When present, verify the **checksum
-      file** with `--bundle SHA256SUMS.sigstore.json`,
-      `--certificate-identity-regexp` matching the release workflow, and
-      `--certificate-oidc-issuer https://token.actions.githubusercontent.com`
-      (same args `docs/INSTALL.md` already prints). Do not invent a second
-      identity string that drifts from the workflow path. Network: fetch the
-      bundle alongside `SHA256SUMS`.
+      **Traps:** Absence of cosign must keep today's SHA256-only path. Do not
+      invent a second identity string. `-DryRun` stays network-free (no
+      bundle fetch).
 
-      **Acceptance criteria:** With `cosign` on `PATH`, install downloads the
-      bundle and refuses a tampered `SHA256SUMS` before installing. Without
-      `cosign`, behaviour matches today's SHA256-only install. Docs describe
-      both paths.
+      **Acceptance criteria:** With cosign on `PATH`, install.ps1 verifies
+      the checksum file before installing; without cosign, behaviour matches
+      today. Docs describe both paths.
 
-- [ ] **Windows CI dry-run for `scripts/install.ps1`.** The POSIX
-      `install-script` job now asserts Darwin asset names; there is still no
-      `windows-latest` job that runs `.\scripts\install.ps1 -DryRun` and
-      asserts the windows/amd64 URL plus `SHA256SUMS`.
+- [ ] **CI exercise for the cosign install path.** The Linux `install-script`
+      job only dry-runs; nothing asserts the live `cosign verify-blob` branch
+      (mock cosign on PATH + fixture bundle, or equivalent). Optional polish:
+      dry-run could mention the sigstore plan when cosign is present without
+      fetching.
 
-      **Packages / files:** `.github/workflows/ci.yml` (new job or step on
-      `windows-latest`).
-
-      **Traps:** Set `VERSION=v1.1.0` (or pinned tag) — `-DryRun` refuses
-      default `latest` so it stays network-free. Pin `actions/checkout` like
-      sibling jobs. Do not attempt a real download in CI.
-
-      **Acceptance criteria:** CI fails if dry-run stdout omits
-      `rgit-v1.1.0-windows-amd64.exe` or `SHA256SUMS`.
+      **Packages / files:** `.github/workflows/ci.yml`, possibly
+      `scripts/install.sh` dry-run messaging.
 
 ## Completion / tooling
 
@@ -160,31 +148,19 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
       where plain blame stops. Without the flag, behaviour matches today.
       Completion / help list the new flag; drift test updated.
 
-- [ ] **Combine `rgit log FILE:SYMBOL` with `--since` / `--until`.** The two
-      log shapes are mutually exclusive today: an anchor form, or a
-      date-bounded path form selected by `--since`/`--until`
-      (`internal/app/log.go`, `docs/USAGE.md` § Log by date and path). Agents
-      often want “commits that touched this symbol in the last month” and
-      otherwise fall back to plain `git log`. Path-scoped `-n`/`--max-count`
-      already forwards; decide whether the same flag applies to the combined
-      anchor form in the same change.
+- [ ] **Document or tighten `--max-count` under `--follow-rename`.** With
+      `--follow-rename`, `-n`/`--max-count` applies per `git log -L` segment,
+      not as a global cap across rename boundaries. Docs already say bounds
+      apply per segment; call out the surprise explicitly, or change to a
+      global remaining budget if that is preferred.
 
-      **Packages / files:** `internal/app/log.go` (`hasTimeRangeFlag` /
-      `runLog` dispatch), `internal/gitx/gitx.go` (`LogLineRange` extra
-      args), `docs/USAGE.md`, `docs/CODES.md`.
+      **Packages / files:** `internal/app/log.go`, `docs/USAGE.md`.
 
-      **Traps:** `--since` currently *switches* shapes — combining must not
-      reclassify positionals as pathspecs when an anchor is present. Forward
-      date flags through to `git log -L` rather than inventing a filter.
-      Do not reintroduce per-commit re-parse cost. `--porcelain` /
-      `-p` exclusivity unchanged. Interaction with `--follow-rename` must be
-      defined (both allowed, or documented refusal).
+- [ ] **Clearer error for lone `--` as log anchor positional.**
+      `parseLogAnchorArgs` can leave positional=`--`, which fails later at
+      resolve with an opaque message.
 
-      **Acceptance criteria:** `rgit log auth.go:ValidateToken --since="2
-      weeks ago"` returns only touching commits inside the window;
-      `--porcelain` shape unchanged. `rgit log --since=… -- path` (no
-      anchor) still works. Usage error when the combination is impossible
-      stays exit 129 with a clear message.
+      **Packages / files:** `internal/app/log.go`.
 
 ## Resolution / LSP
 
@@ -211,44 +187,8 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
       `rgit diff --sym` / `rgit log hooks/pre-commit:fn` still route via the
       correct grammar. Extensionless unmapped shebang still refuses exit 9.
 
-- [ ] **Resolver-level HTML ordinal fixture.** Unit coverage exists for
-      `MatchAndCompare` on `div#app#2` with class-suffixed LSP names; there
-      is still no end-to-end `Resolve` / `cmd/rgit` fixture that an HTML
-      file with two same-id elements addresses as `div#app#2`.
+## Docs
 
-      **Packages / files:** `cmd/rgit/resolver_test.go` (or neighbouring
-      resolve integration test).
-
-## Doctor / machine contract
-
-- [ ] **Fold stderr diagnostics into `rgit context`'s record stream.**
-      `context` is the flagless first-turn orientation command, but
-      `[ts-only]` and diff warnings still go to stderr only
-      (`internal/app/context.go`), while agents parse the fixed `B`/`F`/`C`/`X`
-      stdout stream. Precedent: `B` was added as a new record kind without
-      growing a flag surface (`specs/design.md` § Commands).
-
-      **Packages / files:** `internal/app/context.go`, `internal/diff/`
-      (warning / TSOnly surfaces), `docs/CODES.md`, `docs/USAGE.md`,
-      `specs/design.md`.
-
-      **Traps:** Do **not** reintroduce a staged/unstaged split (rejected in
-      design). New record kinds must stay within the 16 KiB budget and the
-      existing truncation / `X` rules — diagnostics should not crowd out `F`
-      rows. Keep stderr mirrors optional or drop them only after porcelain
-      consumers exist. Container-escalation warnings are `--sym`-only on
-      `diff` today; decide whether `context` invents an equivalent signal
-      or only folds warnings `Run` already produces.
-
-      **Acceptance criteria:** `rgit context` stdout carries machine-readable
-      records for `[ts-only]` and each diff warning previously stderr-only,
-      documented in `docs/CODES.md`. Byte budget and `F`-before-`C`
-      truncation priority preserved. No new flags.
-
-- [ ] **Changelog errata for `[1.2.0]` HTML class-bearing note.** The
-      `[1.2.0]` Added bullet still says class-bearing HTML degrades to
-      `[ts-only]`; Unreleased Fixed and LIMITATIONS contradict it. Prefer a
-      short errata line under that release (or leave historical notes alone
-      if the project policy is never to rewrite past entries).
-
-      **Packages / files:** `CHANGELOG.md` (`[1.2.0]` only).
+- [ ] **`HUMANS.md` mention of context `W` records and anchor log date
+      bounds.** Machine contract (`USAGE`/`CODES`/`CHANGELOG` Unreleased) is
+      current; the human-facing tier is silent on both.
