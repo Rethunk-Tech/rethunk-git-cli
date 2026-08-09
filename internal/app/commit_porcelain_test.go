@@ -55,3 +55,20 @@ func TestRunCommit_PorcelainEmitsCommitSHA(t *testing.T) {
 		t.Errorf("allow-empty porcelain = %q; want one H record", stdout.String())
 	}
 }
+
+func TestRunCommit_QuietSuccessEmptyStdout(t *testing.T) {
+	dir, _ := gittest.New(t)
+	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n")
+	gittest.Commit(t, dir, "feat: add A")
+	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 2\n}\n")
+	t.Chdir(dir)
+
+	var stdout, stderr strings.Builder
+	code := runCommit(context.Background(), "", []string{"--quiet", "-m", "fix: update A", "a.go"}, &stdout, &stderr)
+	if code != exitcode.Success {
+		t.Fatalf("quiet commit = %v; stdout: %s; stderr: %s", code, stdout.String(), stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("quiet stdout = %q; want empty", stdout.String())
+	}
+}
