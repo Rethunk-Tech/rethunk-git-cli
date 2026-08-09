@@ -274,11 +274,11 @@ func qualifyLSPSymbol(s lsp.Symbol, sep string) string {
 }
 
 // ParseOrdinal parses docs/ANCHORS.md's positional "Bare#N" anchor form:
-// "init#2" separates into ("init", 2, true). ok=false means anchor does not
-// use this form at all -- no "#", an empty bare name before it, or a suffix
-// that is not a positive integer -- and bare/n are meaningless. No
-// identifier in a supported grammar contains "#", so a suffix that parses
-// as a positive integer is unambiguous.
+// "init#2" separates into ("init", 2, true); "div#app#2" into ("div#app", 2,
+// true) because HTML's own Sep is "#" and the bare name already contains
+// one. The split is on the *last* "#": only a trailing positive-integer
+// suffix is the ordinal. ok=false means no such suffix (no "#", empty bare,
+// or a non-positive / non-integer tail) -- bare/n are meaningless then.
 //
 // Exported so internal/synth's own ordinal check (stage.go's
 // isOrdinalAnchor) can share this one parse instead of maintaining a
@@ -286,10 +286,11 @@ func qualifyLSPSymbol(s lsp.Symbol, sep string) string {
 // this replaces: isOrdinalAnchor required n > 0 and a non-empty bare name,
 // matchLSPSymbol's own former splitOrdinal checked neither.
 func ParseOrdinal(anchor string) (bare string, n int, ok bool) {
-	before, after, hasHash := strings.Cut(anchor, "#")
-	if !hasHash || before == "" {
+	i := strings.LastIndexByte(anchor, '#')
+	if i <= 0 {
 		return "", 0, false
 	}
+	before, after := anchor[:i], anchor[i+1:]
 	parsed, err := strconv.Atoi(after)
 	if err != nil || parsed <= 0 {
 		return "", 0, false

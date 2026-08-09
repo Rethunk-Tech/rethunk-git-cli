@@ -127,6 +127,9 @@ func TestParseOrdinal(t *testing.T) {
 		wantOK   bool
 	}{
 		{anchor: "init#2", wantBare: "init", wantN: 2, wantOK: true},
+		{anchor: "Box.size#2", wantBare: "Box.size", wantN: 2, wantOK: true},
+		{anchor: "div#app#2", wantBare: "div#app", wantN: 2, wantOK: true},
+		{anchor: "div#app", wantOK: false},
 		{anchor: "init", wantOK: false},
 		{anchor: "init#", wantOK: false},
 		{anchor: "init#abc", wantOK: false},
