@@ -316,7 +316,17 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		// git's own --porcelain replaces its human summary rather than
 		// adding to it, and the same rule applies here: relaying the
 		// summary would leave a caller parsing records interleaved with
-		// prose. The SHA is still one `git rev-parse HEAD` away.
+		// prose.
+		sha, ok, revErr := repo.RevParseVerify(ctx, "HEAD")
+		if revErr != nil {
+			fmt.Fprintf(stderr, "rgit: resolving committed SHA: %v\n", revErr)
+			return exitcode.GitFailure
+		}
+		if !ok {
+			fmt.Fprintln(stderr, "rgit: resolving committed SHA: HEAD is unavailable")
+			return exitcode.GitFailure
+		}
+		fmt.Fprintf(stdout, "H\t%s\n", sha)
 		writeTargetRecords(stdout, plan.Results())
 	case f.quiet:
 		// Nothing on stdout. Hook output and every warning above still
