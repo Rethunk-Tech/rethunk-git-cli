@@ -847,6 +847,40 @@ func assertShellParses(t *testing.T, shell, script string) {
 	}
 }
 
+// assertPwshParses asks PowerShell's own parser to validate the emitted script.
+// PowerShell has no shellcheck-style -n switch, so this uses the parser API
+// without executing the registration or completer.
+func assertPwshParses(t *testing.T, script string) {
+	t.Helper()
+	path, err := exec.LookPath("pwsh")
+	if err != nil {
+		t.Skip("pwsh not on PATH")
+	}
+
+	file := filepath.Join(t.TempDir(), "rgit-completion.ps1")
+	if err := os.WriteFile(file, []byte(script), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	const parseScript = `
+$tokens = $null
+$errors = $null
+[void][System.Management.Automation.Language.Parser]::ParseFile(
+    $env:RGIT_COMPLETION_SCRIPT,
+    [ref]$tokens,
+    [ref]$errors)
+if ($null -ne $errors -and $errors.Count -gt 0) {
+    $errors | ForEach-Object { $_.ToString() }
+    exit 1
+}
+`
+	cmd := exec.Command(path, "-NoProfile", "-NonInteractive", "-Command", parseScript)
+	cmd.Env = append(os.Environ(), "RGIT_COMPLETION_SCRIPT="+file)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("pwsh parser: %v: %s", err, output)
+	}
+}
+
 // TestRun_Completion covers the completion subcommand: a script for each
 // supported shell, syntactically valid by its own shell's judgment, and
 // the usage error docs/CODES.md gives every other malformed argument for
@@ -898,6 +932,7 @@ func TestRun_Completion(t *testing.T) {
 		qt.Assert(t, qt.StringContains(stdout, "[System.Management.Automation.CompletionResult]::new"))
 		qt.Assert(t, qt.StringContains(stdout, "--follow-rename"))
 		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 9))
+		assertPwshParses(t, stdout)
 	})
 
 	t.Run("--help prints usage and exits 0", func(t *testing.T) {
