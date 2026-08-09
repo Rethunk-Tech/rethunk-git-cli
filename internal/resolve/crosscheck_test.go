@@ -147,6 +147,26 @@ func TestMatchAndCompare_FlatHTMLClassSuffix(t *testing.T) {
 	}
 }
 
+func TestMatchAndCompare_FlatHTMLOrdinalClassSuffix(t *testing.T) {
+	t.Parallel()
+
+	src := []byte(`<div id="app" class="widget">` + "\n" + `<div id="app" class="other">` + "\n")
+	symbols := []lsp.Symbol{
+		{Name: "div#app.widget", StartLine: 0, EndLine: 0},
+		{Name: "div#app.other", StartLine: 1, EndLine: 1},
+	}
+	second := []byte(`<div id="app" class="widget">` + "\n")
+	res := &Resolution{Anchor: "div#app#2", Sep: "#", Flat: true, DeclOnly: Extent{Start: uint(len(second)), End: uint(len(src) - 1)}}
+
+	found, err := MatchAndCompare(src, res, symbols)
+	if !found {
+		t.Fatal("found = false; want true -- Flat HTML ordinals must select the second class-suffixed symbol")
+	}
+	if err != nil {
+		t.Errorf("err = %v; want nil, ranges agree", err)
+	}
+}
+
 // TestMatchAndCompare_CorruptedOffsetFailsLoudly guards lineOf's own bounds
 // check. Every DeclOnly offset this package hands MatchAndCompare today
 // comes from a Declaration parsed out of the exact src passed alongside it
