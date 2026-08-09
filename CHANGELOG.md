@@ -34,6 +34,11 @@ Notable changes to `rgit`. The format follows
   darwin/arm64 release artifacts on macOS, using `shasum` for checksum
   verification. See [`docs/INSTALL.md`](docs/INSTALL.md#install-script).
 
+- `scripts/install.sh` automatically verifies `SHA256SUMS` with cosign when
+  cosign is available, while retaining the SHA256-only fallback when it is
+  absent. Dry runs never fetch the signature bundle. See
+  [`docs/INSTALL.md`](docs/INSTALL.md#install-script).
+
 - `scripts/install.ps1` adds a checksum-verified Windows/amd64 release
   installer. `-DryRun` previews the plan without network access and requires
   an explicit `VERSION` tag. See

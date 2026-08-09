@@ -375,6 +375,13 @@ cosign verify-blob \
   SHA256SUMS
 ```
 
+When `cosign` is on `PATH`, `scripts/install.sh` performs this verification
+automatically: it downloads `SHA256SUMS.sigstore.json` beside `SHA256SUMS` and
+verifies the checksum file before checking the binary's SHA256. A failed
+verification stops the install. Without `cosign`, the script retains its
+SHA256-only path. `--dry-run` exits before any download, so it never fetches the
+signature bundle.
+
 `PREFIX` (default `$HOME/.local/bin`) and `VERSION` (default `latest`) are
 environment variables, not flags — `VERSION=v1.1.0 PREFIX=/usr/local/bin sh
 install.sh` installs that exact tag system-wide. `--dry-run` prints the plan
