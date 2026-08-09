@@ -108,6 +108,16 @@ func TestCompletionFlags_MatchLiveFlagSets(t *testing.T) {
 		{"doctor", runDoctorHelp(), rgitDoctorFlags, []string{"-h", "--help"}},
 		{"completion", runCompletionHelpText(), rgitCompletionFlags, []string{"-h", "--help"}},
 	}
+	pwshFlagVariables := map[string]string{
+		"diff":       "$rgitDiffFlags",
+		"commit":     "$rgitCommitFlags",
+		"blame":      "$rgitBlameFlags",
+		"log":        "$rgitLogFlags",
+		"context":    "$rgitContextFlags",
+		"languages":  "$rgitLanguagesFlags",
+		"doctor":     "$rgitDoctorFlags",
+		"completion": "$rgitCompletionFlags",
+	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -133,6 +143,11 @@ func TestCompletionFlags_MatchLiveFlagSets(t *testing.T) {
 				if !live[tok] {
 					t.Errorf("%s: completion constant has %q, which is not a live flag -- stale entry?", tt.name, tok)
 				}
+			}
+
+			wantAssignment := pwshFlagVariables[tt.name] + " = '" + tt.constant + "'.Split(' ')"
+			if !strings.Contains(pwshCompletionScript, wantAssignment) {
+				t.Errorf("%s: pwsh script does not embed the completion flag list", tt.name)
 			}
 		})
 	}

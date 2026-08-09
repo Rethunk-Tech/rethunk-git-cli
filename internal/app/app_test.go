@@ -889,10 +889,22 @@ func TestRun_Completion(t *testing.T) {
 		assertShellParses(t, "fish", stdout)
 	})
 
+	t.Run("pwsh", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "completion", "pwsh")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "Register-ArgumentCompleter -Native -CommandName rgit"))
+		qt.Assert(t, qt.StringContains(stdout, "param($wordToComplete, $commandAst, $cursorPosition)"))
+		qt.Assert(t, qt.StringContains(stdout, "[System.Management.Automation.CompletionResult]::new"))
+		qt.Assert(t, qt.StringContains(stdout, "--follow-rename"))
+		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 9))
+	})
+
 	t.Run("--help prints usage and exits 0", func(t *testing.T) {
 		stdout, _, code := runApp(t, "completion", "--help")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.StringContains(stdout, "usage: rgit completion"))
+		qt.Assert(t, qt.StringContains(stdout, "pwsh"))
 	})
 
 	for _, tc := range []struct {
@@ -908,6 +920,9 @@ func TestRun_Completion(t *testing.T) {
 			qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 			qt.Assert(t, qt.Equals(stdout, ""))
 			qt.Assert(t, qt.Not(qt.Equals(stderr, "")))
+			if tc.name == "unknown shell" {
+				qt.Assert(t, qt.StringContains(stderr, "pwsh"))
+			}
 		})
 	}
 }
