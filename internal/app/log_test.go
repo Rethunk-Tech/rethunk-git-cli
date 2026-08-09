@@ -238,6 +238,31 @@ func TestRun_LogAnchorSince(t *testing.T) {
 	qt.Assert(t, qt.StringContains(stdout, "fix(a): new anchor change"))
 	qt.Assert(t, qt.Not(qt.StringContains(stdout, "fix(a): old anchor change")))
 	qt.Assert(t, qt.Not(qt.StringContains(stdout, "chore: initial")))
+
+	stdout, stderr, code = runApp(t, "log", "a.go:A", "--until=2025-01-01")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.StringContains(stdout, "fix(a): old anchor change"))
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "fix(a): new anchor change")))
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "chore: initial")))
+
+	for _, args := range [][]string{{"-n", "1"}, {"--max-count=1"}} {
+		t.Run("anchor max-count "+strings.Join(args, " "), func(t *testing.T) {
+			stdout, stderr, code := runApp(t, append([]string{"log", "a.go:A"}, args...)...)
+			qt.Assert(t, qt.Equals(code, exitcode.Success))
+			qt.Assert(t, qt.Equals(stderr, ""))
+			qt.Assert(t, qt.StringContains(stdout, "fix(a): new anchor change"))
+			qt.Assert(t, qt.Equals(len(strings.Split(strings.TrimRight(stdout, "\n"), "\n")), 1))
+		})
+	}
+}
+
+func TestRun_LogAnchorBeforeSeparatorKeepsAnchorShape(t *testing.T) {
+	chdirTempRepo(t)
+
+	_, stderr, code := runApp(t, "log", "a.go:A", "--since=2000-01-01", "--")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, `unrecognized argument "--"`))
 }
 
 // TestRun_LogPathScopedPaths pins the other half of the second shape: zero
@@ -408,15 +433,21 @@ func TestRun_LogSurvivesWorktreeDeletion(t *testing.T) {
 // name.
 func TestRun_LogFollowRenameCrossesARenameThatReordersTheSymbol(t *testing.T) {
 	dir := chdirTempRepo(t)
+	t.Setenv("GIT_AUTHOR_DATE", "2020-01-01T00:00:00")
+	t.Setenv("GIT_COMMITTER_DATE", "2020-01-01T00:00:00")
 	writeAppFile(t, dir, "old.go", "package p\n\nfunc Foo() int {\n\treturn 1\n}\n\nfunc Bar() int {\n\treturn 100\n}\n")
 	gitOut(t, dir, "add", "old.go")
 	gitOut(t, dir, "commit", "-m", "feat: add old.go")
 
 	gitOut(t, dir, "mv", "old.go", "new.go")
+	t.Setenv("GIT_AUTHOR_DATE", "2025-01-01T00:00:00")
+	t.Setenv("GIT_COMMITTER_DATE", "2025-01-01T00:00:00")
 	writeAppFile(t, dir, "new.go", "package p\n\nfunc Bar() int {\n\treturn 100\n}\n\nfunc Foo() int {\n\treturn 2\n}\n")
 	gitOut(t, dir, "add", "-A")
 	gitOut(t, dir, "commit", "-m", "refactor: rename and reorder")
 
+	t.Setenv("GIT_AUTHOR_DATE", "2030-01-01T00:00:00")
+	t.Setenv("GIT_COMMITTER_DATE", "2030-01-01T00:00:00")
 	writeAppFile(t, dir, "new.go", "package p\n\nfunc Bar() int {\n\treturn 100\n}\n\nfunc Foo() int {\n\treturn 3\n}\n")
 	gitOut(t, dir, "add", "-A")
 	gitOut(t, dir, "commit", "-m", "fix: bump Foo")
@@ -450,6 +481,15 @@ func TestRun_LogFollowRenameCrossesARenameThatReordersTheSymbol(t *testing.T) {
 		for _, line := range lines {
 			qt.Assert(t, qt.Equals(len(strings.Split(line, "\t")), 2))
 		}
+	})
+
+	t.Run("--follow-rename forwards date bounds across segments", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "log", "new.go:Foo", "--follow-rename", "--since=2021-01-01")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "fix: bump Foo"))
+		qt.Assert(t, qt.StringContains(stdout, "refactor: rename and reorder"))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "feat: add old.go")))
 	})
 }
 
