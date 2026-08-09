@@ -206,7 +206,8 @@ against `HEAD` for that same blob and line range.
 `--follow-rename` follows the symbol across rename boundaries using the same
 rename-boundary re-resolution as `log --follow-rename`: when git identifies a
 rename, rgit resolves the symbol once against the old name's blob and blames
-that segment's line range. It does not re-parse once per commit. Without this
+that segment's line range. It does not re-parse once per commit. With this flag,
+every resolution uses the `HEAD` blob, never the dirty worktree. Without this
 flag, blame keeps the behavior above, including its `HEAD` fallback when the
 worktree file is gone.
 
@@ -506,11 +507,11 @@ line and is useful for scripts that need the same list. Completion for
 `commit` uses `rgit symbols --for-commit FILE`, which omits structured-data
 symbols that `commit` refuses; other commands use the complete list.
 
-The fish script drives the identical logic through fish's own completion
-model — one dynamic candidate function registered with `complete`, rather
-than bash's `COMPREPLY`/`compgen` or zsh's `compadd` — but completes the same
-things the same way, including the `-C <path>` walk and the `FILE:SYMBOL`
-lookup.
+The fish and pwsh scripts drive the identical logic through their shells' own
+completion models — fish's dynamic candidate function registered with
+`complete` and PowerShell's native completer, rather than bash's
+`COMPREPLY`/`compgen` or zsh's `compadd` — but complete the same things the
+same way, including the `-C <path>` walk and the `FILE:SYMBOL` lookup.
 
 An unrecognized or missing shell argument is a usage error, same table as
 everywhere else. Install instructions: [`INSTALL.md`](INSTALL.md#shell-completion).
@@ -518,8 +519,9 @@ everywhere else. Install instructions: [`INSTALL.md`](INSTALL.md#shell-completio
 ## Flags
 
 `commit` and `diff`'s own flags — the two subcommands with a real flag
-surface. `blame` and `languages` each take only `--porcelain`/`--help` (§
-Blame and § Languages above, [`CODES.md`](CODES.md#output-records)); `log`
+surface. `blame` takes `--porcelain`, `--follow-rename`, and `--help`;
+`languages` takes only `--porcelain`/`--help` (§ Blame and § Languages above,
+[`CODES.md`](CODES.md#output-records)); `log`
 additionally takes `-p`/`--patch`, mutually exclusive with `--porcelain`, and
 — only in its `--since`/`--until` shape — `--since`/`--until` themselves (§
 Log and § Log by date and path above); `doctor`, `completion`, and `context`
