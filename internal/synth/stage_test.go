@@ -54,7 +54,7 @@ func TestOpenFilePlan_UnsupportedLanguageReason(t *testing.T) {
 		}
 	})
 
-	t.Run("extensionless path deleted from the worktree has no shebang to sniff", func(t *testing.T) {
+	t.Run("extensionless path deleted from the worktree samples HEAD", func(t *testing.T) {
 		t.Parallel()
 		dir, repo := gittest.New(t)
 		gittest.Write(t, dir, "bin/hook", "echo hi\n")
@@ -69,7 +69,7 @@ func TestOpenFilePlan_UnsupportedLanguageReason(t *testing.T) {
 		if !errors.As(err, &perr) {
 			t.Fatalf("openFilePlan error = %v; want *PathError", err)
 		}
-		want := `no grammar registered for bin/hook (extension "", no worktree file to sniff a shebang from)`
+		want := `no grammar registered for bin/hook (extension "", shebang unmapped)`
 		if perr.Reason != want {
 			t.Errorf("Reason = %q; want %q", perr.Reason, want)
 		}

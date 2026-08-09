@@ -236,10 +236,8 @@ func TestRun_ExtensionlessShebangEnumeratesSymbols(t *testing.T) {
 		t.Errorf("canonical anchor = %q; want %q", canonical, "foo")
 	}
 
-	// A deleted extensionless script has no worktree copy left to peek --
-	// PeekShebangLine returns ok=false, and this degrades to the same
-	// whole-file row any other unsupported extension already gets, not a
-	// missed case.
+	// A deleted extensionless script has no worktree copy left to peek, so the
+	// resolver samples HEAD and keeps the script's grammar.
 	if err := os.Remove(filepath.Join(dir, "pre-commit")); err != nil {
 		t.Fatal(err)
 	}
@@ -256,8 +254,14 @@ func TestRun_ExtensionlessShebangEnumeratesSymbols(t *testing.T) {
 	if got == nil {
 		t.Fatalf("no report for deleted pre-commit; report.Files = %+v", report.Files)
 	}
-	if len(got.Rows) != 1 || got.Rows[0].Symbol != "" || got.Rows[0].Status != StatusNoSymbols {
-		t.Errorf("deleted pre-commit rows = %+v; want one whole-file StatusNoSymbols row", got.Rows)
+	wantSymbols := []string{"@header", "foo", "bar"}
+	if len(got.Rows) != len(wantSymbols) {
+		t.Fatalf("deleted pre-commit rows = %+v; want symbols %v", got.Rows, wantSymbols)
+	}
+	for i, want := range wantSymbols {
+		if got.Rows[i].Symbol != want || got.Rows[i].Status != StatusDeleted {
+			t.Errorf("deleted pre-commit row %d = %+v; want deleted %q", i, got.Rows[i], want)
+		}
 	}
 }
 
