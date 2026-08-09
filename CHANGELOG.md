@@ -48,6 +48,26 @@ Notable changes to `rgit`. The format follows
   an explicit `VERSION` tag. See
   [`docs/INSTALL.md`](docs/INSTALL.md#install-script).
 
+- `scripts/install.ps1` optionally verifies `SHA256SUMS` with cosign when
+  cosign is on `PATH`, using the same Sigstore bundle and release-workflow
+  identity as `scripts/install.sh`. Without cosign, the SHA256-only path is
+  unchanged. `-DryRun` stays network-free. See
+  [`docs/INSTALL.md`](docs/INSTALL.md#install-script).
+
+- `rgit symbols FILE` lists every declared symbol the worktree resolver can
+  see; bash/zsh/fish `FILE:SYMBOL` completion uses it so clean files still
+  complete. `commit` completion calls `rgit symbols --for-commit` so
+  structured-data anchors commit would refuse are never suggested. See
+  [`docs/USAGE.md`](docs/USAGE.md#shell-completion).
+
+- `rgit blame FILE:SYMBOL` falls back to the `HEAD` blob when the worktree
+  file is gone, matching `rgit log`'s HEAD resolution for deleted paths. See
+  [`docs/USAGE.md`](docs/USAGE.md#blame).
+
+- Extensionless shebang sniffing can peek the `HEAD` blob when the worktree
+  file is absent, so deleted hooks/scripts keep grammar routing. See
+  [`docs/ANCHORS.md`](docs/ANCHORS.md).
+
 - `rgit log --since=DATE [--until=DATE] [PATH...]` now accepts
   `-n`/`--max-count` and forwards git's own commit-count limit; without it,
   the path-scoped history remains unbounded. See
@@ -69,6 +89,9 @@ Notable changes to `rgit`. The format follows
   stripping the server's `.class` suffix before comparing its `tag#id` name;
   staged HTML extents remain unchanged. See
   [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md#language-server-coverage).
+
+- `rgit log` rejects a lone `--` positional with a clear usage error instead
+  of failing later during anchor resolve.
 
 ## [1.2.0] — 2026-08-05
 

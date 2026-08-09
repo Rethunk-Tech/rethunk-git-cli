@@ -43,8 +43,9 @@ Its `W` records report degraded resolution or non-fatal warnings; see
 [`docs/CODES.md`](docs/CODES.md#output-records) for the machine format.
 
 Everything else stays plain `git`. `rgit` has two staging commands — plus
-`blame`, `log`, `context`, `languages`, `doctor`, and `completion` for
-everything around them — and no opinions about the rest of your workflow.
+`blame`, `log`, `context`, `languages`, `doctor`, `completion`, and
+`symbols` for everything around them — and no opinions about the rest of
+your workflow.
 
 Commands and flags are in [`docs/USAGE.md`](docs/USAGE.md); anchor syntax is
 in [`docs/ANCHORS.md`](docs/ANCHORS.md); exit codes and the `--porcelain`
