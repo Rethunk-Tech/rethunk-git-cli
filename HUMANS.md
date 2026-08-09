@@ -31,13 +31,16 @@ instead of the whole file.
 
 `rgit log FILE:SYMBOL` shows that symbol's own history — one line per
 touching commit, patch-free unless you ask for one with `-p`. Give `--since`
-or `--until` instead of an anchor for ordinary, date-bounded history over
-one or more paths — the `git log --since=... -- <paths>` you would otherwise
-have had to fall back to plain `git` for.
+or `--until` with the anchor to bound that symbol's history; without an
+anchor, those flags select ordinary, date-bounded history over one or more
+paths — the `git log --since=... -- <paths>` you would otherwise have had to
+fall back to plain `git` for. See [`docs/USAGE.md`](docs/USAGE.md#log).
 
 `rgit context` is one-call orientation for a fresh session: recent commits,
 plus the same per-symbol diffstat `rgit diff` reports, as a single record
 stream — instead of a status, a diffstat, a diff, and a log call separately.
+Its `W` records report degraded resolution or non-fatal warnings; see
+[`docs/CODES.md`](docs/CODES.md#output-records) for the machine format.
 
 Everything else stays plain `git`. `rgit` has two staging commands — plus
 `blame`, `log`, `context`, `languages`, `doctor`, and `completion` for
