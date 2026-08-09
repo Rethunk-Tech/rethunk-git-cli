@@ -57,6 +57,9 @@ base_url="https://github.com/$repo/releases/download/$tag"
 if [ "$dry_run" = 1 ]; then
   echo "would download: $base_url/$asset"
   echo "would verify against: $base_url/SHA256SUMS"
+  if command -v cosign >/dev/null 2>&1; then
+    echo "would verify with cosign/Sigstore bundle: $base_url/SHA256SUMS.sigstore.json"
+  fi
   echo "would install to: $prefix/rgit"
   exit 0
 fi

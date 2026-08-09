@@ -101,6 +101,23 @@ jobs:
       # parsing, OS/arch detection, the printed plan -- not a real download,
       # so it needs nothing from the release it would otherwise fetch.
       - run: VERSION=v1.1.0 sh scripts/install.sh --dry-run
+      - name: Show cosign plan in dry-run
+        run: |
+          mock_bin="$(mktemp -d)"
+          trap 'rm -rf "$mock_bin"' EXIT
+          printf '%s\n' \
+            '#!/bin/sh' \
+            'exit 0' >"$mock_bin/cosign"
+          chmod +x "$mock_bin/cosign"
+          output="$(
+            PATH="$mock_bin:/usr/bin:/bin" VERSION=v1.1.0 \
+              sh scripts/install.sh --dry-run
+          )"
+          printf '%s\n' "$output"
+          printf '%s\n' "$output" | grep -Fq 'cosign/Sigstore bundle' || {
+            printf '%s\n' 'missing cosign/Sigstore dry-run plan' >&2
+            exit 1
+          }
       # Exercise Darwin's asset and checksum selection without needing a Mac
       # runner or touching the network.
       - run: |
