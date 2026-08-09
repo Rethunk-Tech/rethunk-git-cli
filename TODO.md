@@ -16,13 +16,3 @@ Deliberately not queued: `rgit restore` (designed and held back —
 [`specs/design.md`](specs/design.md#rgit-restore-filesymbol-an-accepted-design-deliberately-not-built)),
 context staged/unstaged split, TOML taplo / SQL LSP cross-checks, Rust/C/C++/
 Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
-
-## Docs / design record
-
-- [ ] **Record `blame --follow-rename` in `specs/design.md`.** Log's
-      rename-boundary section still contrasts HEAD resolution as “unlike
-      `blame`” (`specs/design.md` § `--follow-rename`); blame now uses HEAD
-      under the flag (`internal/app/blame.go`). Add a short blame entry and
-      retarget that contrast so the design record matches shipped behaviour.
-      Docs in `USAGE.md` / `LIMITATIONS.md` already describe the HEAD-blob
-      rule — this is the design-record lag only.

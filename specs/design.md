@@ -1601,9 +1601,9 @@ ordering routinely.
 
 pflag is the only option with both interspersed parsing and free control of the
 exit code (Cobra hardcodes 1, Kong exits 80). A full framework stays rejected:
-`rgit` must own its positional precedence regardless, and eight dispatched
-commands — `diff`, `commit`, `blame`, `log`, `context`, `languages`,
-`doctor`, `completion` — still sits below the bar set in
+`rgit` must own its positional precedence regardless, and nine dispatched
+commands — `diff`, `commit`, `blame`, `log`, `context`, `languages`, `doctor`,
+`completion`, `symbols` — still sits below the bar set in
 `claude-format-hooks`: none of them carries an independent subcommand tree,
 shared persistent flags, or generated multi-level help, which is the
 machinery a framework actually buys. pflag is a flag parser, not a
@@ -1611,10 +1611,11 @@ framework — one dependency bought for a measured, specific defect.
 
 **Shell completion is hand-written, and a framework would not have shortened
 it.** The genuinely useful completion — symbols after `auth.go:` — is a dynamic
-function shelling out to `rgit diff --porcelain`, which every framework leaves
-hand-written anyway. `rgit completion bash|zsh|fish` ships as exactly that: a
-script per shell whose symbol completion parses `--porcelain` output, with no
-framework and no new dependency. The porcelain format is a machine contract with a shipped
+function shelling out to `rgit symbols` (or `rgit symbols --for-commit` for
+commit targets), which every framework leaves hand-written anyway. `rgit
+completion bash|zsh|fish|pwsh` ships as exactly that: a script per shell whose
+symbol completion delegates to those enumerators, with no framework and no new
+dependency. The porcelain format is a machine contract with a shipped
 in-repo consumer as a result ([`docs/CODES.md`](../docs/CODES.md)).
 
 ### The global `-C <path>`: git's own semantics, threaded rather than `chdir`ed
