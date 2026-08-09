@@ -96,10 +96,15 @@ func hasTimeRangeFlag(args []string) bool {
 // colon is git pathspec magic, and -- makes every following token a pathspec,
 // so neither can select the anchor form.
 func hasLogAnchor(args []string) bool {
+	afterSeparator := false
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		if a == "--" {
-			return false
+			afterSeparator = true
+			continue
+		}
+		if afterSeparator {
+			continue
 		}
 		switch {
 		case a == "--since" || a == "--until" || a == "-n" || a == "--max-count":
