@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
@@ -56,6 +57,11 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 	lang, ok, _ := resolve.LanguageForWorktreePath(root, path)
 	if !ok {
 		fmt.Fprintf(stderr, "rgit: unsupported language for %q\n", args[0])
+		return exitcode.UnsupportedLanguage
+	}
+	switch strings.ToLower(lang.Name()) {
+	case "json", "yaml", "toml":
+		fmt.Fprintf(stderr, "rgit: symbol anchors are not supported for %q\n", args[0])
 		return exitcode.UnsupportedLanguage
 	}
 

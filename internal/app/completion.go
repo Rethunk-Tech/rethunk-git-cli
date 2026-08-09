@@ -123,12 +123,10 @@ const rgitContextFlags = "-h --help"
 
 // bashCompletionScript is emitted verbatim by `rgit completion bash`. The
 // one dynamic piece -- symbol names after "FILE:" -- shells back out to
-// `rgit diff --porcelain` and cuts its SYMBOL column for the matching FILE
-// (docs/CODES.md § Output records), so completion can never name a symbol
-// `rgit commit` would not itself accept. Any failure of that call (not a
-// repo, rgit not on PATH, anything) is swallowed by the 2>/dev/null and
-// leaves the candidate list empty -- completion must never put an error on
-// the prompt.
+// `rgit symbols FILE`, which lists every declaration the worktree resolver
+// can accept. Any failure of that call (not a repo, rgit not on PATH,
+// anything) is swallowed by the 2>/dev/null and leaves the candidate list
+// empty -- completion must never put an error on the prompt.
 //
 // Symbol completion only fires for diff, commit, blame, and log -- the
 // four commands that actually take a FILE:SYMBOL anchor. context takes no
@@ -148,8 +146,10 @@ _rgit_languages_flags="` + rgitLanguagesFlags + `"
 _rgit_doctor_flags="` + rgitDoctorFlags + `"
 _rgit_completion_flags="` + rgitCompletionFlags + `"
 
+# rgit diff --porcelain and awk -F'\t' report changed records, not the
+# complete declaration list; symbol candidates come from rgit symbols FILE.
 _rgit_symbols() {
-    rgit diff --porcelain 2>/dev/null | awk -F'\t' -v f="$1" '$1 == f && $2 != "" { print $2 }'
+    rgit symbols "$1" 2>/dev/null
 }
 
 _rgit_completion() {
@@ -232,8 +232,10 @@ _rgit_languages_flags=(` + rgitLanguagesFlags + `)
 _rgit_doctor_flags=(` + rgitDoctorFlags + `)
 _rgit_completion_flags=(` + rgitCompletionFlags + `)
 
+# rgit diff --porcelain and awk -F'\t' report changed records, not the
+# complete declaration list; symbol candidates come from rgit symbols FILE.
 _rgit_symbols() {
-    rgit diff --porcelain 2>/dev/null | awk -F'\t' -v f="$1" '$1 == f && $2 != "" { print $2 }'
+    rgit symbols "$1" 2>/dev/null
 }
 
 _rgit() {
@@ -333,8 +335,10 @@ function __rgit_languages_flags; string split ' ' -- '` + rgitLanguagesFlags + `
 function __rgit_doctor_flags; string split ' ' -- '` + rgitDoctorFlags + `'; end
 function __rgit_completion_flags; string split ' ' -- '` + rgitCompletionFlags + `'; end
 
+# rgit diff --porcelain and awk -F'\t' report changed records, not the
+# complete declaration list; symbol candidates come from rgit symbols FILE.
 function __rgit_symbols
-    rgit diff --porcelain 2>/dev/null | awk -F'\t' -v f="$argv[1]" '$1 == f && $2 != "" { print $2 }'
+    rgit symbols "$argv[1]" 2>/dev/null
 end
 
 function __rgit_complete
