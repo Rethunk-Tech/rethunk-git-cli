@@ -268,3 +268,23 @@ func TestRun_BlameFollowRenameNoRenameMatchesDefault(t *testing.T) {
 
 	qt.Assert(t, qt.Equals(withFlag, withoutFlag))
 }
+
+// TestRun_BlameFollowRenameResolvesAgainstHEADNotWorktree pins the extent
+// source independently from the blame output source: a dirty leading edit
+// must not shift the range passed to git blame for the HEAD blob.
+func TestRun_BlameFollowRenameResolvesAgainstHEADNotWorktree(t *testing.T) {
+	dir := chdirTempRepo(t)
+
+	clean, stderr, code := runApp(t, "blame", "a.go:A", "--follow-rename")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+
+	src, err := os.ReadFile(filepath.Join(dir, "a.go"))
+	qt.Assert(t, qt.IsNil(err))
+	writeAppFile(t, dir, "a.go", "// dirty leading edit\n\n"+string(src))
+
+	dirty, stderr, code := runApp(t, "blame", "a.go:A", "--follow-rename")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.Equals(dirty, clean))
+}
