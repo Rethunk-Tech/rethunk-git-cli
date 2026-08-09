@@ -3,6 +3,8 @@
 package app
 
 import (
+	"net"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -10,6 +12,7 @@ import (
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsptest"
 )
 
 func TestRun_ContextHelpAndUsage(t *testing.T) {
@@ -62,13 +65,17 @@ func TestRun_ContextEmptyRepoEmitsNothing(t *testing.T) {
 // truncation before the cheap, bounded C rows do (docs/CODES.md#output-records).
 func TestRun_ContextEmitsDiffRowsBeforeCommits(t *testing.T) {
 	dir := chdirTempRepo(t) // "chore: initial" commits a.go with A and B
+	t.Setenv("PATH", isolatedPATHWithGopls(t))
+	t.Setenv("XDG_RUNTIME_DIR", filepath.Join(t.TempDir(), "missing-runtime"))
 
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 	writeAppFile(t, dir, "new.txt", "untracked content\n")
 
-	stdout, _, code := runApp(t, "context")
+	stdout, stderr, code := runApp(t, "context")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 
+	qt.Assert(t, qt.StringContains(stdout, "W\tts-only\n"))
+	qt.Assert(t, qt.StringContains(stderr, tsOnlyNotice))
 	qt.Assert(t, qt.StringContains(stdout, "chore: initial"))
 	qt.Assert(t, qt.StringContains(stdout, "F\ta.go\tA\tMOD\t"))
 	qt.Assert(t, qt.StringContains(stdout, "new.txt"))
@@ -81,10 +88,55 @@ func TestRun_ContextEmitsDiffRowsBeforeCommits(t *testing.T) {
 	qt.Assert(t, qt.IsTrue(diffIdx < commitIdx))
 }
 
+// TestRun_ContextEmitsWarningRecords pins report.Warnings' machine form:
+// the warning body follows the W tag without the human [warning] prefix, and
+// the same body remains mirrored on stderr.
+func TestRun_ContextEmitsWarningRecords(t *testing.T) {
+	dir := chdirTempRepo(t)
+	t.Setenv("PATH", isolatedPATHWithGopls(t))
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+
+	sockPath := filepath.Join(t.TempDir(), "gopls.sock")
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = ln.Close() }()
+
+	const resultJSON = `[
+		{"name":"A","kind":12,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}},
+		{"name":"B","kind":12,"range":{"start":{"line":7,"character":0},"end":{"line":9,"character":1}},"selectionRange":{"start":{"line":7,"character":0},"end":{"line":7,"character":5}}}
+	]`
+	go func() {
+		for {
+			conn, acceptErr := ln.Accept()
+			if acceptErr != nil {
+				return
+			}
+			go func() { _ = lsptest.ServeMockLSP(conn, resultJSON, lsptest.MockServerHooks{}) }()
+		}
+	}()
+	t.Setenv("RGIT_LSP_SOCKET", sockPath)
+
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+
+	stdout, stderr, code := runApp(t, "context")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+
+	warning := `a.go: resolve: "A":`
+	qt.Assert(t, qt.StringContains(stdout, "W\twarning\t"+warning))
+	qt.Assert(t, qt.StringContains(stderr, "[warning] "+warning))
+	warningIdx := strings.Index(stdout, "W\twarning\t")
+	diffIdx := strings.Index(stdout, "F\t")
+	qt.Assert(t, qt.IsTrue(warningIdx >= 0))
+	qt.Assert(t, qt.IsTrue(diffIdx >= 0))
+	qt.Assert(t, qt.IsTrue(warningIdx < diffIdx))
+}
+
 // TestRun_ContextRecordsAreTabSeparatedWithExpectedFieldCounts pins the
-// four record shapes docs/CODES.md commits to: B has 5 fields, C has 3, F
-// has 6 (the same 5 rgit diff --porcelain emits, plus the leading type
-// tag), and none of them ever carries a header.
+// record shapes docs/CODES.md commits to: B has 5 fields, C has 3, F has 6
+// (the same 5 rgit diff --porcelain emits, plus the leading type tag), W has
+// either 2 or 3, and none of them ever carries a header.
 func TestRun_ContextRecordsAreTabSeparatedWithExpectedFieldCounts(t *testing.T) {
 	dir := chdirTempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
@@ -103,6 +155,8 @@ func TestRun_ContextRecordsAreTabSeparatedWithExpectedFieldCounts(t *testing.T) 
 			qt.Assert(t, qt.Equals(len(fields), 3))
 		case "F":
 			qt.Assert(t, qt.Equals(len(fields), 6))
+		case "W":
+			qt.Assert(t, qt.IsTrue(len(fields) == 2 || len(fields) == 3))
 		case "X":
 			qt.Assert(t, qt.Equals(len(fields), 3))
 		default:
