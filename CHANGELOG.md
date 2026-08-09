@@ -64,6 +64,26 @@ Notable changes to `rgit`. The format follows
   file is gone, matching `rgit log`'s HEAD resolution for deleted paths. See
   [`docs/USAGE.md`](docs/USAGE.md#blame).
 
+- `rgit blame --follow-rename` re-resolves the symbol at each rename boundary
+  (same one-parse-per-rename trade-off as `log --follow-rename`) and always
+  reads the `HEAD` blob under the flag. See
+  [`docs/USAGE.md`](docs/USAGE.md#blame).
+
+- `rgit completion pwsh` emits a PowerShell 7 native completer
+  (`Register-ArgumentCompleter -Native`) with the same subcommand, flag, and
+  `FILE:SYMBOL` surface as bash/zsh/fish. See
+  [`docs/USAGE.md`](docs/USAGE.md#shell-completion) and
+  [`docs/INSTALL.md`](docs/INSTALL.md#shell-completion).
+
+- `rgit symbols` has a dedicated command section in
+  [`docs/USAGE.md`](docs/USAGE.md#symbols) (usage, `--for-commit`, exit
+  behaviour), separate from the shell-completion notes.
+
+- Windows CI now exercises the optional cosign verify path for
+  `scripts/install.ps1` with mocked downloads (parity with the Linux
+  install-script job). Dry-run plan wording matches the Linux
+  `cosign/Sigstore bundle` phrase.
+
 - Extensionless shebang sniffing can peek the `HEAD` blob when the worktree
   file is absent, so deleted hooks/scripts keep grammar routing. See
   [`docs/ANCHORS.md`](docs/ANCHORS.md).
