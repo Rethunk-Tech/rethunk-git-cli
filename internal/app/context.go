@@ -1,7 +1,7 @@
 // The `rgit context` command surface: one-call repository orientation for
-// an agent's first turn -- recent commit subjects, then the same per-file,
-// per-symbol diffstat `rgit diff` itself reports for everything
-// committable, as a single fixed-shape record stream.
+// an agent's first turn -- branch and upstream, optional diagnostics,
+// committable diff rows, then recent commit subjects, as a single
+// fixed-shape record stream.
 //
 // Pure read composition over internal/gitx and internal/diff, per
 // specs/design.md § Commands: no new resolution or attribution machinery.
