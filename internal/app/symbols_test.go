@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-quicktest/qt"
+
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 )
 
