@@ -51,8 +51,9 @@ Global flags (before the command):
   --version    print the version and exit
   -h, --help   show this help and exit
 
-Run 'rgit <command> --help' for that command's own flags -- blame, log, and
-languages each have a real flag surface too, not only diff and commit.
+Run 'rgit <command> --help' for that command's own flags -- blame, log,
+languages, and symbols each have a real flag surface too, not only diff and
+commit.
 Full reference: docs/USAGE.md
 `
 
