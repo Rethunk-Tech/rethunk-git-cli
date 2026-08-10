@@ -27,6 +27,15 @@ func TestRun_SymbolsHelpAndUsage(t *testing.T) {
 	qt.Assert(t, qt.StringContains(stderr, "usage: rgit symbols"))
 }
 
+func TestRun_SymbolsUnsupportedLanguage(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "main.rs", "fn main() {}\n")
+
+	_, stderr, code := runApp(t, "symbols", "main.rs")
+	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
+	qt.Assert(t, qt.StringContains(stderr, "unsupported language"))
+}
+
 func TestRunSymbolsListsCleanWorktreeDeclarations(t *testing.T) {
 	root := t.TempDir()
 	source := []byte("package demo\n\nconst answer = 42\n\nfunc First() {}\n\ntype Thing struct{}\n\nfunc (Thing) Method() {}\n")
