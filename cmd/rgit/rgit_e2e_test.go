@@ -1093,11 +1093,12 @@ func TestCommit_PushWithNoUpstreamNamesTheFix(t *testing.T) {
 // --porcelain's own record shape (a pathspec target's empty SYMBOL column
 // included, per TestRun_PathspecMatchingNothingStillListsItself,
 // internal/app/app_test.go) is already pinned in-process. What only two
-// separately exec'd binary invocations can show is kept: a dry-run
-// preview's porcelain stream is byte-identical to what the real commit it
-// previews actually emits, and the real commit's own --porcelain output
-// never lets git's human summary leak into it (docs/CODES.md's "no header,
-// no summary" record contract).
+// separately exec'd binary invocations can show is kept: a real commit's
+// target rows are byte-identical to what its dry-run preview showed, the
+// real commit additionally leads with an `H<TAB>SHA` record the dry run
+// never invents (docs/CODES.md#rgit-commit---porcelain), and the real
+// commit's own --porcelain output never lets git's human summary leak into
+// it (docs/CODES.md's "no header, no summary" record contract).
 func TestCommit_PorcelainEmitsRecords(t *testing.T) {
 	t.Parallel()
 	repo, _ := gittest.New(t)
@@ -1112,7 +1113,9 @@ func TestCommit_PorcelainEmitsRecords(t *testing.T) {
 	real := runRgit(t, repo, "commit", "--porcelain",
 		"-m", "feat(g): add G", "g.go:G", "notes.txt")
 	qt.Assert(t, qt.Equals(real.ExitCode, 0))
-	qt.Assert(t, qt.Equals(real.Stdout, dry.Stdout))
+
+	sha := strings.TrimSpace(gittest.Git(t, repo, "rev-parse", "HEAD"))
+	qt.Assert(t, qt.Equals(real.Stdout, "H\t"+sha+"\n"+dry.Stdout))
 	qt.Assert(t, qt.Equals(strings.Contains(real.Stdout, "file changed"), false))
 }
 
