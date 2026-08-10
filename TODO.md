@@ -8,12 +8,34 @@ Limitations that ship — unsupported languages, excluded cross-build targets,
 constructs no anchor reaches — are documented in
 [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md), not listed here.
 
-Items below are the residual queue after a fenced wave landed design-record
-alignment for `blame --follow-rename`, help/USAGE drift closeout for
-per-segment `--max-count` and `pwsh` in top-level help, and regression pins
-for dirty-worktree blame + per-segment log max-count (plus wave-audit
-should-fix closeout).
+Items below are the residual queue after a fenced wave landed README HTML
+cross-check alignment, HUMANS `--follow-rename` notes, CI/INSTALL `v1.2.0`
+pin bumps, `symbols` completion flag wiring + drift pins, and wave-audit
+should-fix closeout (install.ps1 DryRun example, top-level help, USAGE Flags
+intro).
 Deliberately not queued: `rgit restore` (designed and held back —
 [`specs/design.md`](specs/design.md#rgit-restore-filesymbol-an-accepted-design-deliberately-not-built)),
 context staged/unstaged split, TOML taplo / SQL LSP cross-checks, Rust/C/C++/
 Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
+
+## Completion / tooling
+
+- [ ] **pwsh e2e completion pins (symbols + silent degrade).** bash/zsh/fish
+      already have dynamic `FILE:SYMBOL` e2e coverage in
+      `cmd/rgit/rgit_e2e_test.go`; pwsh only has parser validation in
+      `internal/app/app_test.go`. Optional sibling: one bash/fish case that
+      `symbols --` offers `--for-commit`.
+
+      **Packages / files:** `cmd/rgit/rgit_e2e_test.go` (mirror fish/bash
+      patterns), optionally `CONTRIBUTING.md` e2e table once pwsh is real.
+
+      **Acceptance criteria:** `go test ./cmd/rgit -run 'TestCompletion_Pwsh'`
+      (or equivalent) proves symbol completion and silent failure outside a
+      repo; CONTRIBUTING may then list pwsh beside bash/zsh/fish.
+
+## Docs
+
+- [ ] **USAGE Flags intro still under-describes `languages`.** The intro says
+      `languages` takes only `--porcelain`/`--help`, but the live surface and
+      completion constant also expose `--in-repo`. Align the sentence with
+      § Languages / `rgitLanguagesFlags`.
