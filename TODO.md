@@ -8,11 +8,12 @@ Limitations that ship — unsupported languages, excluded cross-build targets,
 constructs no anchor reaches — are documented in
 [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md), not listed here.
 
-Items below are the residual queue after a fenced wave landed README HTML
-cross-check alignment, HUMANS `--follow-rename` notes, CI/INSTALL `v1.2.0`
-pin bumps, `symbols` completion flag wiring + drift pins, and wave-audit
-should-fix closeout (install.ps1 DryRun example, top-level help, USAGE Flags
-intro).
+Items below are the residual queue after a fenced wave landed USAGE Flags /
+Help alignment (`languages --in-repo`, doctor, blame `-p`, log extras,
+`symbols --help`), top-level help naming doctor, README meta `symbols`,
+`symbolsHelp` Full-reference footer, context/blame comment corrections, and
+wave-audit should-fix closeout (Flags opener no longer claims only
+commit/diff have a flag surface).
 Deliberately not queued: `rgit restore` (designed and held back —
 [`specs/design.md`](specs/design.md#rgit-restore-filesymbol-an-accepted-design-deliberately-not-built)),
 context staged/unstaged split, TOML taplo / SQL LSP cross-checks, Rust/C/C++/
@@ -35,7 +36,20 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
 
 ## Docs
 
-- [ ] **USAGE Flags intro still under-describes `languages`.** The intro says
-      `languages` takes only `--porcelain`/`--help`, but the live surface and
-      completion constant also expose `--in-repo`. Align the sentence with
-      § Languages / `rgitLanguagesFlags`.
+- [ ] **`completionHelp` missing Full-reference footer.** Every other
+      hand-parsed subcommand help ends with `Full reference: docs/USAGE.md`;
+      `internal/app/completion.go`'s `completionHelp` stops at the INSTALL
+      line. Append the same footer.
+
+      **Packages / files:** `internal/app/completion.go`
+
+      **Acceptance criteria:** `rgit completion --help` prints the footer;
+      siblings remain unchanged.
+
+- [ ] **`symbolsHelp` Full-reference glued to `--for-commit` line.**
+      Siblings put a blank line before `Full reference: docs/USAGE.md`;
+      `internal/app/symbols.go` does not. Insert the blank line.
+
+      **Packages / files:** `internal/app/symbols.go`
+
+      **Acceptance criteria:** `symbolsHelp` matches sibling footer spacing.
