@@ -100,7 +100,7 @@ jobs:
       # script): this is a lint of the script's own control flow -- flag
       # parsing, OS/arch detection, the printed plan -- not a real download,
       # so it needs nothing from the release it would otherwise fetch.
-      - run: VERSION=v1.1.0 sh scripts/install.sh --dry-run
+      - run: VERSION=v1.2.0 sh scripts/install.sh --dry-run
       - name: Show cosign plan in dry-run
         run: |
           mock_bin="$(mktemp -d)"
@@ -110,7 +110,7 @@ jobs:
             'exit 0' >"$mock_bin/cosign"
           chmod +x "$mock_bin/cosign"
           output="$(
-            PATH="$mock_bin:/usr/bin:/bin" VERSION=v1.1.0 \
+            PATH="$mock_bin:/usr/bin:/bin" VERSION=v1.2.0 \
               sh scripts/install.sh --dry-run
           )"
           printf '%s\n' "$output"
@@ -131,11 +131,11 @@ jobs:
             'esac' >"$mock_bin/uname"
           chmod +x "$mock_bin/uname"
           output="$(
-            PATH="$mock_bin:$PATH" VERSION=v1.1.0 sh scripts/install.sh --dry-run
+            PATH="$mock_bin:$PATH" VERSION=v1.2.0 sh scripts/install.sh --dry-run
           )"
           printf '%s\n' "$output"
           for expected in \
-            rgit-v1.1.0-darwin-arm64 \
+            rgit-v1.2.0-darwin-arm64 \
             SHA256SUMS
           do
             printf '%s\n' "$output" | grep -Fq "$expected" || {
@@ -154,11 +154,11 @@ jobs:
             'esac' >"$mock_bin/uname"
           chmod +x "$mock_bin/uname"
           output="$(
-            PATH="$mock_bin:$PATH" VERSION=v1.1.0 sh scripts/install.sh --dry-run
+            PATH="$mock_bin:$PATH" VERSION=v1.2.0 sh scripts/install.sh --dry-run
           )"
           printf '%s\n' "$output"
           for expected in \
-            rgit-v1.1.0-darwin-amd64 \
+            rgit-v1.2.0-darwin-amd64 \
             SHA256SUMS
           do
             printf '%s\n' "$output" | grep -Fq "$expected" || {
@@ -174,10 +174,10 @@ jobs:
           cosign_prefix="$(mktemp -d)"
           cosign_marker="$(mktemp)"
           trap 'rm -rf "$fixture" "$mock_bin" "$no_cosign_prefix" "$cosign_prefix" "$cosign_marker"' EXIT
-          asset="rgit-v1.1.0-linux-amd64"
+          asset="rgit-v1.2.0-linux-amd64"
           printf '%s\n' \
             '#!/bin/sh' \
-            'printf "%s\n" "rgit v1.1.0"' >"$fixture/$asset"
+            'printf "%s\n" "rgit v1.2.0"' >"$fixture/$asset"
           chmod +x "$fixture/$asset"
           asset_digest="$(sha256sum "$fixture/$asset" | cut -d' ' -f1)"
           printf '%s  %s\n' "$asset_digest" "$asset" >"$fixture/SHA256SUMS"
@@ -199,12 +199,12 @@ jobs:
             "case \"\$url\" in" \
             "  */SHA256SUMS.sigstore.json) cp \"\$COSIGN_FIXTURE/SHA256SUMS.sigstore.json\" \"\$out\" ;;" \
             "  */SHA256SUMS) cp \"\$COSIGN_FIXTURE/SHA256SUMS\" \"\$out\" ;;" \
-            "  */rgit-v1.1.0-linux-amd64) cp \"\$COSIGN_FIXTURE/rgit-v1.1.0-linux-amd64\" \"\$out\" ;;" \
+            "  */rgit-v1.2.0-linux-amd64) cp \"\$COSIGN_FIXTURE/rgit-v1.2.0-linux-amd64\" \"\$out\" ;;" \
             '  *) exit 1 ;;' \
             'esac' >"$mock_bin/curl"
           chmod +x "$mock_bin/curl"
           PATH="$mock_bin:/usr/bin:/bin" \
-            PREFIX="$no_cosign_prefix" VERSION=v1.1.0 \
+            PREFIX="$no_cosign_prefix" VERSION=v1.2.0 \
             sh scripts/install.sh
           test ! -s "$cosign_marker"
           printf '%s\n' \
@@ -233,7 +233,7 @@ jobs:
             "printf \"%s\n\" verified >\"\$COSIGN_MARKER\"" >"$mock_bin/cosign"
           chmod +x "$mock_bin/cosign"
           PATH="$mock_bin:/usr/bin:/bin" \
-            PREFIX="$cosign_prefix" VERSION=v1.1.0 \
+            PREFIX="$cosign_prefix" VERSION=v1.2.0 \
             sh scripts/install.sh
           grep -Fqx verified "$cosign_marker"
   install-script-windows:
@@ -241,7 +241,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 5
     env:
-      VERSION: v1.1.0
+      VERSION: v1.2.0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Verify Windows dry-run output
@@ -265,7 +265,7 @@ jobs:
           $output = $outputLines -join [Environment]::NewLine
           $output
           foreach ($expected in @(
-              'rgit-v1.1.0-windows-amd64.exe',
+              'rgit-v1.2.0-windows-amd64.exe',
               'SHA256SUMS',
               'cosign/Sigstore bundle'
           )) {
@@ -282,7 +282,7 @@ jobs:
           $noCosignPrefix = Join-Path $env:RUNNER_TEMP "rgit-no-cosign-prefix-$([guid]::NewGuid().ToString('N'))"
           $cosignPrefix = Join-Path $env:RUNNER_TEMP "rgit-cosign-prefix-$([guid]::NewGuid().ToString('N'))"
           $marker = Join-Path $env:RUNNER_TEMP "rgit-cosign-marker-$([guid]::NewGuid().ToString('N'))"
-          $asset = 'rgit-v1.1.0-windows-amd64.exe'
+          $asset = 'rgit-v1.2.0-windows-amd64.exe'
 
           foreach ($directory in @(
               $fixture,
