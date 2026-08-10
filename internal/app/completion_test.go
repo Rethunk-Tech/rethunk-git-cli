@@ -79,11 +79,11 @@ func subcommandNamesFromHelp(t *testing.T, help string) []string {
 // mistaken for a second flag declaration.
 var flagTokenRe = regexp.MustCompile(`(?m)^\s*(?:-(\w), )?--([\w-]+)`)
 
-// TestCompletionFlags_MatchLiveFlagSets checks rgitDiffFlags and
-// rgitCommitFlags against each command's own --help output. diff.go and
-// commit.go build their pflag.FlagSet as a local variable and never
-// return it, so this reads pflag's own FlagUsages rendering back out of
-// --help rather than reconstructing flag registration a third time.
+// TestCompletionFlags_MatchLiveFlagSets checks each completion flag constant
+// against its command's own --help output. diff.go and commit.go build their
+// pflag.FlagSet as a local variable and never return it, so this reads
+// pflag's own FlagUsages rendering back out of --help rather than
+// reconstructing flag registration a third time.
 //
 // Two tokens can never appear in that output and are documented,
 // per-command exceptions rather than a false failure: "-h"/"--help" are
@@ -107,6 +107,7 @@ func TestCompletionFlags_MatchLiveFlagSets(t *testing.T) {
 		{"languages", runLanguagesHelp(), rgitLanguagesFlags, []string{"-h", "--help"}},
 		{"doctor", runDoctorHelp(), rgitDoctorFlags, []string{"-h", "--help"}},
 		{"completion", runCompletionHelpText(), rgitCompletionFlags, []string{"-h", "--help"}},
+		{"symbols", runSymbolsHelpText(), rgitSymbolsFlags, []string{"-h", "--help"}},
 	}
 	pwshFlagVariables := map[string]string{
 		"diff":       "$rgitDiffFlags",
@@ -117,6 +118,7 @@ func TestCompletionFlags_MatchLiveFlagSets(t *testing.T) {
 		"languages":  "$rgitLanguagesFlags",
 		"doctor":     "$rgitDoctorFlags",
 		"completion": "$rgitCompletionFlags",
+		"symbols":    "$rgitSymbolsFlags",
 	}
 
 	for _, tt := range tests {
@@ -176,10 +178,10 @@ func runCommitHelp() string {
 	return stdout.String()
 }
 
-// runLanguagesHelp, runDoctorHelp, and runCompletionHelpText are
-// runDiffHelp/runCommitHelp's counterparts for the three subcommands small
-// enough to parse their own args by hand rather than via pflag -- none
-// takes a context.Context.
+// runLanguagesHelp, runDoctorHelp, runCompletionHelpText, and
+// runSymbolsHelpText are runDiffHelp/runCommitHelp's counterparts for the
+// four subcommands small enough to parse their own args by hand rather than
+// via pflag -- none takes a context.Context.
 func runLanguagesHelp() string {
 	var stdout, stderr strings.Builder
 	runLanguages(context.Background(), "", []string{"--help"}, &stdout, &stderr)
@@ -222,5 +224,11 @@ func runLogHelpText() string {
 func runContextHelpText() string {
 	var stdout, stderr strings.Builder
 	runContext(context.Background(), "", []string{"--help"}, &stdout, &stderr)
+	return stdout.String()
+}
+
+func runSymbolsHelpText() string {
+	var stdout, stderr strings.Builder
+	runSymbols(context.Background(), "", []string{"--help"}, &stdout, &stderr)
 	return stdout.String()
 }
