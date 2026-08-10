@@ -11,6 +11,22 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 )
 
+func TestRun_SymbolsHelpAndUsage(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	stdout, _, code := runApp(t, "symbols", "--help")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(stdout, "usage: rgit symbols"))
+
+	_, stderr, code := runApp(t, "symbols")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "usage: rgit symbols"))
+
+	_, stderr, code = runApp(t, "symbols", "a.go", "b.go")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "usage: rgit symbols"))
+}
+
 func TestRunSymbolsListsCleanWorktreeDeclarations(t *testing.T) {
 	root := t.TempDir()
 	source := []byte("package demo\n\nconst answer = 42\n\nfunc First() {}\n\ntype Thing struct{}\n\nfunc (Thing) Method() {}\n")
