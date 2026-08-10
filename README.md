@@ -23,7 +23,7 @@ and nothing more. Hooks run, filters apply, pre-staged work comes along, trailer
 and signing work — because git does all of it. Two staging commands
 (`diff`, `commit`), `blame` bounded to a symbol's own extent, `log` for its
 patch-free history, `context` for one-call repository orientation, plus
-meta subcommands (`languages`, `doctor`, `completion`); everything else
+meta subcommands (`languages`, `doctor`, `completion`, `symbols`); everything else
 stays plain `git`.
 
 Start with [HUMANS.md](HUMANS.md) to run it, or
