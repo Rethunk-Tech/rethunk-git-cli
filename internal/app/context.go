@@ -88,8 +88,7 @@ const contextRecentCommitLimit = 20
 // repository size (specs/design.md § Commands).
 const contextByteBudget = 16384
 
-// runContext takes no flags beyond --help, matching doctor.go's own
-// arg-count-driven style for a command with no real flag surface at all.
+// runContext is hand-parsed and has no runtime flag surface beyond --help.
 //
 // --help wins wherever it appears in args, not only as the sole argument
 // (m12: every hand-parsed command follows the same rule now, matching
