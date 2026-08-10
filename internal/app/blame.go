@@ -41,10 +41,8 @@ default is git's own human-readable blame output, likewise unmodified.
 Full reference: docs/USAGE.md
 `
 
-// runBlame's flag surface is exactly rgit languages': one positional
-// FILE:SYMBOL anchor plus -p/--porcelain, hand-parsed via shared.go's
-// parseAnchorCommandArgs rather than pulling in pflag for a command this
-// small (languages.go's own precedent).
+// runBlame's flag surface is one FILE:SYMBOL anchor plus -p/--porcelain and
+// --follow-rename, hand-parsed via parseAnchorCommandArgs.
 func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	porcelain := false
 	followRename := false
