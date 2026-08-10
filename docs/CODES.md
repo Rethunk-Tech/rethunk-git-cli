@@ -117,11 +117,12 @@ command's own default is git's or `rgit`'s aligned human-readable layout
 (`diff`, `commit`, `blame`, `log`, `languages`). `--porcelain` replaces
 that with stable tab-separated records, no header.
 
-This is not a hypothetical contract: `rgit completion`'s own shell completion
-scripts (`internal/app/completion.go`) shell out to `rgit diff --porcelain`
-and cut its `FILE` and `SYMBOL` columns by position with `awk -F'\t'` to offer
-symbol names after `FILE:`. Reordering or adding a column here is a breaking
-change for that consumer, not just for external scripts.
+This is not a hypothetical contract: shell completion scripts call `rgit
+symbols` and `rgit symbols --for-commit` (`internal/app/completion.go`), while
+`rgit context`'s `F` records reuse the same field layout as `rgit diff
+--porcelain` (`internal/app/context.go`). Reordering or adding a column here is
+a breaking change for the context `F` records and `rgit diff --porcelain`, not
+just for external scripts.
 
 ### `rgit diff --porcelain`
 
