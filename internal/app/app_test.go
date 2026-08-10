@@ -895,11 +895,11 @@ func TestRun_Completion(t *testing.T) {
 		qt.Assert(t, qt.StringContains(stdout, "complete -F _rgit_completion rgit"))
 		qt.Assert(t, qt.StringContains(stdout, "rgit symbols"))
 		// docs/USAGE.md § Help: -h is --help's equivalent at the top level
-		// and on every subcommand -- nine word lists (rgitSubcommands, and
-		// each of diff/commit/blame/log/context/languages/doctor/completion's
-		// own flags), so nine occurrences of the pair in the order
+		// and on every subcommand -- ten word lists (rgitSubcommands, and
+		// each of diff/commit/blame/log/context/languages/doctor/completion/
+		// symbols' own flags), so ten occurrences of the pair in the order
 		// completion offers them.
-		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 9))
+		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 10))
 		assertShellParses(t, "bash", stdout)
 	})
 
@@ -909,7 +909,7 @@ func TestRun_Completion(t *testing.T) {
 		qt.Assert(t, qt.Equals(stderr, ""))
 		qt.Assert(t, qt.StringContains(stdout, "compdef _rgit rgit"))
 		qt.Assert(t, qt.StringContains(stdout, "rgit symbols"))
-		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 9))
+		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 10))
 		assertShellParses(t, "zsh", stdout)
 	})
 
@@ -919,7 +919,7 @@ func TestRun_Completion(t *testing.T) {
 		qt.Assert(t, qt.Equals(stderr, ""))
 		qt.Assert(t, qt.StringContains(stdout, "complete -c rgit -f -a '(__rgit_complete)'"))
 		qt.Assert(t, qt.StringContains(stdout, "rgit symbols"))
-		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 9))
+		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 10))
 		assertShellParses(t, "fish", stdout)
 	})
 
@@ -931,7 +931,7 @@ func TestRun_Completion(t *testing.T) {
 		qt.Assert(t, qt.StringContains(stdout, "param($wordToComplete, $commandAst, $cursorPosition)"))
 		qt.Assert(t, qt.StringContains(stdout, "[System.Management.Automation.CompletionResult]::new"))
 		qt.Assert(t, qt.StringContains(stdout, "--follow-rename"))
-		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 9))
+		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 10))
 		assertPwshParses(t, stdout)
 	})
 
