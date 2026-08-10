@@ -519,8 +519,9 @@ everywhere else. Install instructions: [`INSTALL.md`](INSTALL.md#shell-completio
 
 ## Flags
 
-`commit` and `diff`'s own flags — the two subcommands with a real flag
-surface. `blame` takes `-p`/`--porcelain`, `--follow-rename`, and
+`commit` and `diff` document their flags in the table below; hand-parsed meta
+commands carry smaller surfaces of their own: `blame` takes
+`-p`/`--porcelain`, `--follow-rename`, and
 `--help`; `languages` takes `--porcelain`, `--in-repo`, and `--help` (§
 Blame and § Languages above, [`CODES.md`](CODES.md#output-records)); `log`
 additionally takes `-p`/`--patch`, mutually exclusive with `--porcelain`,
