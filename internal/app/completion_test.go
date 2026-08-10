@@ -232,3 +232,31 @@ func runSymbolsHelpText() string {
 	runSymbols(context.Background(), "", []string{"--help"}, &stdout, &stderr)
 	return stdout.String()
 }
+
+func TestHandWrittenHelpFullReferenceFooter(t *testing.T) {
+	tests := []struct {
+		name                string
+		help                string
+		wantBlankLineBefore bool
+	}{
+		{"blame", runBlameHelpText(), false},
+		{"log", runLogHelpText(), false},
+		{"context", runContextHelpText(), false},
+		{"languages", runLanguagesHelp(), false},
+		{"doctor", runDoctorHelp(), false},
+		{"completion", runCompletionHelpText(), true},
+		{"symbols", runSymbolsHelpText(), true},
+	}
+
+	const footer = "Full reference: docs/USAGE.md"
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if !strings.Contains(tt.help, footer) {
+				t.Fatalf("help does not contain %q", footer)
+			}
+			if tt.wantBlankLineBefore && !strings.Contains(tt.help, "\n\n"+footer) {
+				t.Fatalf("help does not contain a blank line immediately before %q", footer)
+			}
+		})
+	}
+}
