@@ -14,7 +14,7 @@ import (
 const symbolsHelp = `usage: rgit symbols [--for-commit] <file>
 
 List every declared symbol that can be resolved from the worktree file.
-With --for-commit, omit structured-data symbols that commit refuses.
+--for-commit  Omit structured-data symbols that commit refuses.
 `
 
 func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
