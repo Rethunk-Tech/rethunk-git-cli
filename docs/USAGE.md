@@ -525,7 +525,8 @@ surface. `blame` takes `--porcelain`, `--follow-rename`, and `--help`;
 [`CODES.md`](CODES.md#output-records)); `log`
 additionally takes `-p`/`--patch`, mutually exclusive with `--porcelain`, and
 — only in its `--since`/`--until` shape — `--since`/`--until` themselves (§
-Log and § Log by date and path above); `doctor`, `completion`, and `context`
+Log and § Log by date and path above); `symbols` takes `--for-commit` and
+`--help` (§ Symbols above); `doctor`, `completion`, and `context`
 take no flags beyond `--help`/`-h` (`completion` also takes its shell
 argument; `context`'s fixed output shape is the point — § Context above).
 
