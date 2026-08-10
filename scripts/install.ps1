@@ -13,7 +13,7 @@ $version = if ($env:VERSION) { $env:VERSION } else { 'latest' }
 # default VERSION=latest cannot print a real asset URL without resolving
 # the tag, so DryRun requires an explicit release tag.
 if ($DryRun -and $version -eq 'latest') {
-    throw 'install.ps1: -DryRun requires VERSION set to a release tag (e.g. v1.1.0)'
+    throw 'install.ps1: -DryRun requires VERSION set to a release tag (e.g. v1.2.0)'
 }
 
 if ($version -eq 'latest') {
