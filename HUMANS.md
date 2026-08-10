@@ -27,14 +27,16 @@ attributes, and body — and leaves every other edit in the file uncommitted.
 `rgit commit` accepts, so the output of one is the input of the other.
 
 `rgit blame FILE:SYMBOL` bounds `git blame` to just that symbol's own lines
-instead of the whole file.
+instead of the whole file. Use `--follow-rename` to follow it across a file
+rename; see [`docs/USAGE.md`](docs/USAGE.md#blame).
 
 `rgit log FILE:SYMBOL` shows that symbol's own history — one line per
 touching commit, patch-free unless you ask for one with `-p`. Give `--since`
 or `--until` with the anchor to bound that symbol's history; without an
 anchor, those flags select ordinary, date-bounded history over one or more
 paths — the `git log --since=... -- <paths>` you would otherwise have had to
-fall back to plain `git` for. See [`docs/USAGE.md`](docs/USAGE.md#log).
+fall back to plain `git` for. Use `--follow-rename` to follow it across file
+renames; see [`docs/USAGE.md`](docs/USAGE.md#log).
 
 `rgit context` is one-call orientation for a fresh session: recent commits,
 plus the same per-symbol diffstat `rgit diff` reports, as a single record
