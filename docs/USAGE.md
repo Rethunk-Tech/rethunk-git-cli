@@ -377,10 +377,10 @@ shortens the diff. Truncation happens at the byte boundary, with a trailing
 stdout and exit 0. `rgit diff --help` / `-h` and `rgit commit --help` / `-h`
 print that command's own flags the same way, generated from the flag set itself
 so the two cannot drift. `rgit blame --help`, `rgit log --help`, `rgit
-context --help`, `rgit languages --help`, `rgit doctor --help`, and `rgit
-completion --help` (each also accepting `-h`) print their own hand-written
-usage text instead — surfaces small enough that a generated rendering was
-not worth building. A bare `rgit` (no command at all)
+context --help`, `rgit languages --help`, `rgit doctor --help`, `rgit
+symbols --help`, and `rgit completion --help` (each also accepting `-h`)
+print their own hand-written usage text instead — surfaces small enough that a
+generated rendering was not worth building. A bare `rgit` (no command at all)
 is a usage error, not a help request — see § Exit codes.
 
 `rgit --version` prints `rgit <version>` on its first line and exits 0. The
@@ -520,15 +520,17 @@ everywhere else. Install instructions: [`INSTALL.md`](INSTALL.md#shell-completio
 ## Flags
 
 `commit` and `diff`'s own flags — the two subcommands with a real flag
-surface. `blame` takes `--porcelain`, `--follow-rename`, and `--help`;
-`languages` takes only `--porcelain`/`--help` (§ Blame and § Languages above,
-[`CODES.md`](CODES.md#output-records)); `log`
-additionally takes `-p`/`--patch`, mutually exclusive with `--porcelain`, and
-— only in its `--since`/`--until` shape — `--since`/`--until` themselves (§
-Log and § Log by date and path above); `symbols` takes `--for-commit` and
-`--help` (§ Symbols above); `doctor`, `completion`, and `context`
-take no flags beyond `--help`/`-h` (`completion` also takes its shell
-argument; `context`'s fixed output shape is the point — § Context above).
+surface. `blame` takes `-p`/`--porcelain`, `--follow-rename`, and
+`--help`; `languages` takes `--porcelain`, `--in-repo`, and `--help` (§
+Blame and § Languages above, [`CODES.md`](CODES.md#output-records)); `log`
+additionally takes `-p`/`--patch`, mutually exclusive with `--porcelain`,
+`--follow-rename`, `-n`/`--max-count`, and — only in its
+`--since`/`--until` shape — `--since`/`--until` themselves (§ Log and § Log
+by date and path above); `symbols` takes `--for-commit` and `--help` (§
+Symbols above); `doctor` takes `--porcelain`, `--deep`, and `--help`;
+`completion` and `context` take no flags beyond `--help`/`-h`
+(`completion` also takes its shell argument; `context`'s fixed output shape
+is the point — § Context above).
 
 | Flag | Behavior |
 | --- | --- |
