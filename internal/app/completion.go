@@ -21,6 +21,8 @@ Print a shell completion script for that shell to stdout.
   pwsh: rgit completion pwsh | Invoke-Expression
 
 Persistent installation: docs/INSTALL.md § Shell completion.
+
+Full reference: docs/USAGE.md
 `
 
 // runCompletion's --help check is a loop rather than a sole-argument test
