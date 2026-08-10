@@ -15,6 +15,7 @@ const symbolsHelp = `usage: rgit symbols [--for-commit] <file>
 
 List every declared symbol that can be resolved from the worktree file.
 --for-commit  Omit structured-data symbols that commit refuses.
+
 Full reference: docs/USAGE.md
 `
 
