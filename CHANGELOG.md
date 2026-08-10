@@ -113,6 +113,13 @@ Notable changes to `rgit`. The format follows
 - `rgit log` rejects a lone `--` positional with a clear usage error instead
   of failing later during anchor resolve.
 
+- `rgit diff`/`rgit commit` no longer error with "malformed response header"
+  in a repo with submodules whose pointer changed. `git cat-file --batch`
+  answers a gitlink path with a third response shape (`<sha> submodule`,
+  no content) the batched blob reader didn't recognize; it is now treated
+  as `Exists=false`, matching the non-batch `CatFile` path's existing
+  behaviour for the same case.
+
 ## [1.2.0] — 2026-08-05
 
 ### Added

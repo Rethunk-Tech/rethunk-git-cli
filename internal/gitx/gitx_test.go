@@ -434,6 +434,50 @@ func TestBatchCatFile(t *testing.T) {
 	}
 }
 
+// TestBatchCatFile_SubmodulePathIsExistsFalse pins the third response shape
+// `git cat-file --batch` writes for a gitlink entry: "<sha> submodule\n",
+// no size field and no content bytes -- unlike the "<sha> <type> <size>"
+// shape TestBatchCatFile above already covers. CatFile (singular, "-p")
+// already reports a submodule path as Exists=false, because `cat-file -p
+// rev:path` on a gitlink exits non-zero ("Not a valid object name") and
+// that non-zero exit hits CatFile's own exists=false convention. BatchCatFile
+// has to agree: prefetchBlobs' blobCache doc comment requires a cache hit
+// and contentSide.read's live CatFile fallback to answer identically for the
+// same (rev, path), and a submodule path reached this exact request shape
+// unhandled in production -- rgit diff/commit on any repo with a submodule
+// whose pointer changed (docs/USAGE.md's own numstat scope includes gitlink
+// entries) errored "malformed response header" instead of treating the
+// pointer bump like any other whole-file change.
+func TestBatchCatFile_SubmodulePathIsExistsFalse(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	gittest.Write(t, dir, "a.go", "package a\n")
+	gittest.Commit(t, dir, "chore: first")
+	gittest.Git(t, dir, "update-index", "--add", "--cacheinfo",
+		"160000,0123456789abcdef0123456789abcdef01234567,mysub")
+	gittest.Git(t, dir, "commit", "-q", "-m", "chore: add gitlink")
+
+	results, err := repo.BatchCatFile(context.Background(), []gitx.BatchCatFileRequest{
+		{Rev: "HEAD", Path: "mysub"},
+		{Rev: "HEAD", Path: "a.go"},
+	})
+	if err != nil {
+		t.Fatalf("BatchCatFile: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("len(results) = %d; want 2", len(results))
+	}
+	if results[0].Exists {
+		t.Errorf("results[0] (submodule path) Exists = true; want false, matching CatFile's own convention")
+	}
+	if len(results[0].Content) != 0 {
+		t.Errorf("results[0] (submodule path) Content = %q; want empty", results[0].Content)
+	}
+	if !results[1].Exists || string(results[1].Content) != "package a\n" {
+		t.Errorf("results[1] (a.go) = (%v, %q); want (true, %q)", results[1].Exists, results[1].Content, "package a\n")
+	}
+}
+
 // TestBatchCatFile_EmptyRequestIsANoop pins that zero requests never spawns
 // a process at all -- there is nothing for one to answer.
 func TestBatchCatFile_EmptyRequestIsANoop(t *testing.T) {

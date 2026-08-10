@@ -364,12 +364,22 @@ func (r *Repo) BatchCatFile(ctx context.Context, requests []BatchCatFileRequest)
 }
 
 // readCatFileBatchResponses parses exactly count responses off r, in the
-// two shapes `git cat-file --batch` ever writes: "<sha> <type> <size>\n"
-// followed by exactly size content bytes and a trailing newline, or
-// "<object> missing\n" with no content at all. The object name echoed back
-// in the missing case is the literal request string, which unlike a sha or
-// type may itself contain spaces (a pathspec with a space in it) -- tested
-// by suffix, not by a fixed field count, for exactly that reason.
+// three shapes `git cat-file --batch` ever writes: "<sha> <type> <size>\n"
+// followed by exactly size content bytes and a trailing newline; "<object>
+// missing\n" with no content at all; or "<sha> submodule\n", also with no
+// content -- git's answer for a gitlink entry (mode 160000), which has no
+// blob to read. The object name echoed back in the missing case is the
+// literal request string, which unlike a sha or type may itself contain
+// spaces (a pathspec with a space in it) -- tested by suffix, not by a
+// fixed field count, for exactly that reason.
+//
+// The submodule shape is treated as Exists=false, not a fourth outcome:
+// CatFile (singular, "-p") already reports a submodule path that way,
+// because `cat-file -p rev:path` on a gitlink exits non-zero and that hits
+// CatFile's own exists=false convention. Answering differently here would
+// let prefetchBlobs' cache and contentSide.read's live CatFile fallback
+// disagree about the same (rev, path) -- see blobCache's own doc comment
+// in internal/diff/scope.go.
 func readCatFileBatchResponses(r io.Reader, count int) ([]BatchCatFileResult, error) {
 	br := bufio.NewReader(r)
 	results := make([]BatchCatFileResult, count)
@@ -384,6 +394,10 @@ func readCatFileBatchResponses(r io.Reader, count int) ([]BatchCatFileResult, er
 			continue
 		}
 		fields := strings.Fields(header)
+		if len(fields) == 2 && fields[1] == "submodule" {
+			results[i] = BatchCatFileResult{Exists: false}
+			continue
+		}
 		if len(fields) != 3 {
 			return nil, fmt.Errorf("gitx: cat-file --batch: malformed response header %q", header)
 		}
