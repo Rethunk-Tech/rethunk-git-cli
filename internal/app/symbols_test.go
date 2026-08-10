@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-quicktest/qt"
-
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 )
 
@@ -17,16 +15,34 @@ func TestRun_SymbolsHelpAndUsage(t *testing.T) {
 	t.Chdir(t.TempDir())
 
 	stdout, _, code := runApp(t, "symbols", "--help")
-	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	qt.Assert(t, qt.StringContains(stdout, "usage: rgit symbols"))
+	if code != exitcode.Success {
+		t.Fatalf("symbols --help exit code = %d, want %d", code, exitcode.Success)
+	}
+	if !strings.Contains(stdout, "usage: rgit symbols") {
+		t.Fatalf("symbols --help stdout = %q, want usage", stdout)
+	}
 
-	_, stderr, code := runApp(t, "symbols")
-	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-	qt.Assert(t, qt.StringContains(stderr, "usage: rgit symbols"))
+	stdout, stderr, code := runApp(t, "symbols")
+	if code != exitcode.InvalidUsage {
+		t.Fatalf("symbols exit code = %d, want %d", code, exitcode.InvalidUsage)
+	}
+	if stdout != "" {
+		t.Fatalf("symbols stdout = %q, want empty", stdout)
+	}
+	if !strings.Contains(stderr, "usage: rgit symbols") {
+		t.Fatalf("symbols stderr = %q, want usage", stderr)
+	}
 
-	_, stderr, code = runApp(t, "symbols", "a.go", "b.go")
-	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-	qt.Assert(t, qt.StringContains(stderr, "usage: rgit symbols"))
+	stdout, stderr, code = runApp(t, "symbols", "a.go", "b.go")
+	if code != exitcode.InvalidUsage {
+		t.Fatalf("symbols with two files exit code = %d, want %d", code, exitcode.InvalidUsage)
+	}
+	if stdout != "" {
+		t.Fatalf("symbols with two files stdout = %q, want empty", stdout)
+	}
+	if !strings.Contains(stderr, "usage: rgit symbols") {
+		t.Fatalf("symbols with two files stderr = %q, want usage", stderr)
+	}
 }
 
 func TestRun_SymbolsUnsupportedLanguage(t *testing.T) {
@@ -34,8 +50,12 @@ func TestRun_SymbolsUnsupportedLanguage(t *testing.T) {
 	writeAppFile(t, dir, "main.rs", "fn main() {}\n")
 
 	_, stderr, code := runApp(t, "symbols", "main.rs")
-	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
-	qt.Assert(t, qt.StringContains(stderr, "unsupported language"))
+	if code != exitcode.UnsupportedLanguage {
+		t.Fatalf("symbols unsupported-language exit code = %d, want %d", code, exitcode.UnsupportedLanguage)
+	}
+	if !strings.Contains(stderr, "unsupported language") {
+		t.Fatalf("symbols unsupported-language stderr = %q, want unsupported language", stderr)
+	}
 }
 
 func TestRunSymbolsListsCleanWorktreeDeclarations(t *testing.T) {
