@@ -8,12 +8,11 @@ Limitations that ship — unsupported languages, excluded cross-build targets,
 constructs no anchor reaches — are documented in
 [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md), not listed here.
 
-Items below are the residual queue after a fenced wave aligned
-`runCommit` structured-data pins with the `runApp` sibling (empty stdout on
-refuse; path listing + HEAD content on success), hoisted help-only `Chdir`
-outside the shared-anchor and context help flag loops, and moved
-`containsString` into `test_helpers_test.go` (post-audit CLEAN — no
-must/should — wave-18). E2e skipped this wave. Deliberately not queued:
+Items below are the residual queue after a fenced wave pinned exact
+languages unrecognized-argument usage stderr, and tightened structured-data
+`runCommit` path-success pins (per-format HEAD via `TrimRight(tc.after)` plus
+empty stderr on both the table and runApp sibling) (post-audit CLEAN — no
+must/should — wave-19). E2e skipped this wave. Deliberately not queued:
 `rgit restore` (designed and held back —
 [`specs/design.md`](specs/design.md#rgit-restore-filesymbol-an-accepted-design-deliberately-not-built)),
 context staged/unstaged split, TOML taplo / SQL LSP cross-checks, Rust/C/C++/
@@ -36,35 +35,13 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
 
 ## Tests
 
-- [ ] **Languages usage-only help path (optional residual).**
-      `TestRun_LanguagesHelpAndUsage` in `app_test.go` was outside the
-      wave-16 help-scaffold fence; already qt, not an equality pin.
-
-      **Packages / files:** `internal/app/app_test.go`.
-
-      **Acceptance criteria:** only if a future sweep wants every help
-      entrypoint named in one matrix — not required for contract parity.
-
-- [ ] **Per-format HEAD content pins on structured-data `runCommit` (optional).**
-      Table success path asserts `strings.Contains(got, "after")` for every
-      format; the `runApp` sibling pins `` `"after"` `` for JSON only.
-      Contract-intentional for wave-18; tighten only if per-format blobs
-      need distinct substrings.
+- [ ] **Align runApp structured-data HEAD pin with trimmed fixture (optional).**
+      Table path-success now uses `strings.Contains(got, strings.TrimRight(tc.after, "\n"))`;
+      `TestRun_CommitRefusesStructuredDataSymbolViaRunApp` still checks only
+      `` `"after"` `` for JSON.
 
       **Packages / files:** `internal/app/commit_test.go`
-      (`TestRunCommit_RefusesSymbolAnchorOnStructuredData`).
+      (`TestRun_CommitRefusesStructuredDataSymbolViaRunApp`).
 
-      **Acceptance criteria:** each table case pins a format-appropriate
-      HEAD substring (or stays on the shared `after` token with a brief
-      comment why that is enough).
-
-- [ ] **Pin empty stderr on structured-data `runCommit` path success (optional).**
-      Refuse path pins empty stdout; path-success still leaves stderr
-      unpinned. Mirror the `runApp` sibling or pin `stderr == ""` if that
-      path must never emit warnings.
-
-      **Packages / files:** `internal/app/commit_test.go`
-      (`TestRunCommit_RefusesSymbolAnchorOnStructuredData`).
-
-      **Acceptance criteria:** path-success asserts empty stderr (or
-      documents why warnings remain allowed).
+      **Acceptance criteria:** path-success HEAD Contains the trimmed JSON
+      fixture blob (or documents why the quoted token alone is enough).
