@@ -8,58 +8,33 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-quicktest/qt"
+
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 )
 
 func TestRun_SymbolsHelpAndUsage(t *testing.T) {
 	t.Chdir(t.TempDir())
 
-	stdout, stderr, code := runApp(t, "symbols", "--help")
-	if code != exitcode.Success {
-		t.Fatalf("symbols --help exit code = %d, want %d", code, exitcode.Success)
-	}
-	if stdout != symbolsHelp {
-		t.Fatalf("symbols --help stdout = %q, want %q", stdout, symbolsHelp)
-	}
-	if stderr != "" {
-		t.Fatalf("symbols --help stderr = %q, want empty", stderr)
+	for _, arg := range []string{"--help", "-h"} {
+		t.Run(arg, func(t *testing.T) {
+			stdout, stderr, code := runApp(t, "symbols", arg)
+			qt.Assert(t, qt.Equals(code, exitcode.Success))
+			qt.Assert(t, qt.Equals(stdout, symbolsHelp))
+			qt.Assert(t, qt.Equals(stderr, ""))
+		})
 	}
 
-	t.Run("-h", func(t *testing.T) {
-		stdout, stderr, code := runApp(t, "symbols", "-h")
-		if code != exitcode.Success {
-			t.Fatalf("symbols -h exit code = %d, want %d", code, exitcode.Success)
-		}
-		if stdout != symbolsHelp {
-			t.Fatalf("symbols -h stdout = %q, want %q", stdout, symbolsHelp)
-		}
-		if stderr != "" {
-			t.Fatalf("symbols -h stderr = %q, want empty", stderr)
-		}
-	})
-
-	stdout, stderr, code = runApp(t, "symbols")
-	if code != exitcode.InvalidUsage {
-		t.Fatalf("symbols exit code = %d, want %d", code, exitcode.InvalidUsage)
-	}
-	if stdout != "" {
-		t.Fatalf("symbols stdout = %q, want empty", stdout)
-	}
+	stdout, stderr, code := runApp(t, "symbols")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.Equals(stdout, ""))
 	wantUsage := "rgit: symbols requires exactly one file argument\n" + symbolsHelp
-	if stderr != wantUsage {
-		t.Fatalf("symbols stderr = %q, want %q", stderr, wantUsage)
-	}
+	qt.Assert(t, qt.Equals(stderr, wantUsage))
 
 	stdout, stderr, code = runApp(t, "symbols", "a.go", "b.go")
-	if code != exitcode.InvalidUsage {
-		t.Fatalf("symbols with two files exit code = %d, want %d", code, exitcode.InvalidUsage)
-	}
-	if stdout != "" {
-		t.Fatalf("symbols with two files stdout = %q, want empty", stdout)
-	}
-	if stderr != wantUsage {
-		t.Fatalf("symbols with two files stderr = %q, want %q", stderr, wantUsage)
-	}
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.Equals(stdout, ""))
+	qt.Assert(t, qt.Equals(stderr, wantUsage))
 }
 
 func TestRun_SymbolsUnsupportedLanguage(t *testing.T) {
