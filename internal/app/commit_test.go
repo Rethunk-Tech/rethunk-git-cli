@@ -12,31 +12,64 @@ import (
 
 // TestRunCommit_RefusesSymbolAnchorOnStructuredData pins the end-to-end
 // behaviour of the structured-data guard: a FILE:SYMBOL anchor into a
-// package.json is refused at exit 12 naming the file, and the identical
-// change committed by path still works -- the guard must never make a
-// structured-data file uncommittable, only unaddressable by symbol.
+// JSON, YAML, or TOML file is refused at exit 12 naming the file, and the
+// identical change committed by path still works -- the guard must never make
+// a structured-data file uncommittable, only unaddressable by symbol.
 func TestRunCommit_RefusesSymbolAnchorOnStructuredData(t *testing.T) {
-	dir, _ := gittest.New(t)
-	gittest.Write(t, dir, "package.json", `{"name": "before"}`+"\n")
-	gittest.Commit(t, dir, "chore: add package.json")
-	gittest.Write(t, dir, "package.json", `{"name": "after"}`+"\n")
-	t.Chdir(dir)
+	for _, tc := range []struct {
+		name       string
+		path       string
+		before     string
+		after      string
+		anchorName string
+	}{
+		{
+			name:       "JSON",
+			path:       "package.json",
+			before:     `{"name": "before"}` + "\n",
+			after:      `{"name": "after"}` + "\n",
+			anchorName: "name",
+		},
+		{
+			name:       "YAML",
+			path:       "config.yaml",
+			before:     "name: before\n",
+			after:      "name: after\n",
+			anchorName: "name",
+		},
+		{
+			name:       "TOML",
+			path:       "config.toml",
+			before:     "title = \"before\"\n",
+			after:      "title = \"after\"\n",
+			anchorName: "title",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, _ := gittest.New(t)
+			gittest.Write(t, dir, tc.path, tc.before)
+			gittest.Commit(t, dir, "chore: add structured data")
+			gittest.Write(t, dir, tc.path, tc.after)
+			t.Chdir(dir)
 
-	var stdout, stderr strings.Builder
-	code := runCommit(context.Background(), "", []string{"-m", "chore: bump", "package.json:name"}, &stdout, &stderr)
-	if code != exitcode.StructuredDataAnchorRefused {
-		t.Fatalf("runCommit FILE:SYMBOL = %v; want exitcode.StructuredDataAnchorRefused; stderr: %s", code, stderr.String())
-	}
-	wantStderr := "rgit: package.json: structured-data file; commit it by path instead of a symbol anchor (e.g. rgit commit -m ... package.json)\n"
-	if stderr.String() != wantStderr {
-		t.Errorf("stderr = %q; want %q", stderr.String(), wantStderr)
-	}
+			var stdout, stderr strings.Builder
+			anchor := tc.path + ":" + tc.anchorName
+			code := runCommit(context.Background(), "", []string{"-m", "chore: bump", anchor}, &stdout, &stderr)
+			if code != exitcode.StructuredDataAnchorRefused {
+				t.Fatalf("runCommit FILE:SYMBOL = %v; want exitcode.StructuredDataAnchorRefused; stderr: %s", code, stderr.String())
+			}
+			wantStderr := "rgit: " + tc.path + ": structured-data file; commit it by path instead of a symbol anchor (e.g. rgit commit -m ... " + tc.path + ")\n"
+			if stderr.String() != wantStderr {
+				t.Errorf("stderr = %q; want %q", stderr.String(), wantStderr)
+			}
 
-	stdout.Reset()
-	stderr.Reset()
-	code = runCommit(context.Background(), "", []string{"-m", "chore: bump", "package.json"}, &stdout, &stderr)
-	if code != exitcode.Success {
-		t.Fatalf("runCommit by path = %v; want exitcode.Success; stderr: %s", code, stderr.String())
+			stdout.Reset()
+			stderr.Reset()
+			code = runCommit(context.Background(), "", []string{"-m", "chore: bump", tc.path}, &stdout, &stderr)
+			if code != exitcode.Success {
+				t.Fatalf("runCommit by path = %v; want exitcode.Success; stderr: %s", code, stderr.String())
+			}
+		})
 	}
 }
 
