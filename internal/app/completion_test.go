@@ -257,8 +257,8 @@ func TestHandWrittenHelpFullReferenceFooter(t *testing.T) {
 			if !strings.Contains(tt.help, footer) {
 				t.Fatalf("help does not contain %q", footer)
 			}
-			if tt.wantBlankLineBefore && !strings.Contains(tt.help, "\n\n"+footer) {
-				t.Fatalf("help does not contain a blank line immediately before %q", footer)
+			if tt.wantBlankLineBefore && !strings.HasSuffix(tt.help, "\n\n"+footer+"\n") {
+				t.Fatalf("help does not end with a blank line immediately before %q", footer)
 			}
 		})
 	}
