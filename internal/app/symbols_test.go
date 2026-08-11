@@ -25,6 +25,19 @@ func TestRun_SymbolsHelpAndUsage(t *testing.T) {
 		t.Fatalf("symbols --help stderr = %q, want empty", stderr)
 	}
 
+	t.Run("-h", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "symbols", "-h")
+		if code != exitcode.Success {
+			t.Fatalf("symbols -h exit code = %d, want %d", code, exitcode.Success)
+		}
+		if stdout != symbolsHelp {
+			t.Fatalf("symbols -h stdout = %q, want %q", stdout, symbolsHelp)
+		}
+		if stderr != "" {
+			t.Fatalf("symbols -h stderr = %q, want empty", stderr)
+		}
+	})
+
 	stdout, stderr, code = runApp(t, "symbols")
 	if code != exitcode.InvalidUsage {
 		t.Fatalf("symbols exit code = %d, want %d", code, exitcode.InvalidUsage)
