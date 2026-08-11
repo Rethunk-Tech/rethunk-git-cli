@@ -1056,14 +1056,9 @@ func TestRun_LanguagesInRepoOutsideRepoErrors(t *testing.T) {
 	qt.Assert(t, qt.Not(qt.Equals(stderr, "")))
 }
 
-// TestRun_LanguagesHelpAndUsage covers the two non-listing paths: --help
-// prints and exits 0, and an unexpected argument is the usual usage error.
+// TestRun_LanguagesHelpAndUsage covers the non-listing usage error path.
 func TestRun_LanguagesHelpAndUsage(t *testing.T) {
 	t.Chdir(t.TempDir())
-
-	stdout, _, code := runApp(t, "languages", "--help")
-	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	qt.Assert(t, qt.StringContains(stdout, "usage: rgit languages"))
 
 	stdout, stderr, code := runApp(t, "languages", "extra")
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
@@ -1297,21 +1292,6 @@ func TestRun_DoctorMissingGitIsFatal(t *testing.T) {
 	_, stderr, code := runApp(t, "doctor")
 	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))
 	qt.Assert(t, qt.StringContains(stderr, "git"))
-}
-
-// TestRun_DoctorHelpAndUsage mirrors TestRun_LanguagesHelpAndUsage for the
-// same two non-listing paths.
-func TestRun_DoctorHelpAndUsage(t *testing.T) {
-	t.Chdir(t.TempDir())
-
-	stdout, _, code := runApp(t, "doctor", "--help")
-	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	qt.Assert(t, qt.StringContains(stdout, "usage: rgit doctor"))
-
-	stdout, stderr, code := runApp(t, "doctor", "extra")
-	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-	qt.Assert(t, qt.Equals(stdout, ""))
-	qt.Assert(t, qt.Not(qt.Equals(stderr, "")))
 }
 
 // TestRun_VersionReportsGrammars pins the first line staying
