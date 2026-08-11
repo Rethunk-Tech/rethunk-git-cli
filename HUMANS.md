@@ -41,7 +41,7 @@ renames; see [`docs/USAGE.md`](docs/USAGE.md#log).
 `rgit context` is one-call orientation for a fresh session: branch/upstream,
 then committable diff rows, then recent commit subjects, as a single `B` → `W`
 → `F` → `C` record stream — instead of a status, a diffstat, a diff, and a log
-call separately.
+call separately. A `B` record, when present, always sorts first.
 Its `W` records report degraded resolution or non-fatal warnings; see
 [`docs/CODES.md`](docs/CODES.md#output-records) for the machine format.
 
