@@ -8,13 +8,13 @@ Limitations that ship — unsupported languages, excluded cross-build targets,
 constructs no anchor reaches — are documented in
 [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md), not listed here.
 
-Items below are the residual queue after a fenced wave landed completion
-help-after-shell pins for all shells, HUMANS/CHANGELOG context-order
-clarifications (including B-first and W-in-order), Full-reference footer
-coverage for diff/commit/top-level plus suffix-strict blank-line pins on
-hand-written helps, and post-audit should-fixes (wave-11; adversarial audit
-closed — no must-fix; should-fixes landed). E2e skipped this wave.
-Deliberately not queued: `rgit restore` (designed and held back —
+Items below are the residual queue after a fenced wave strengthened
+completion help-after-shell pins to full `completionHelp` equality plus
+empty stderr, and tightened Full-reference footer pins so blank-line vs
+single-newline terminal layouts are distinguished (diff/commit blank-line;
+top-level single-newline exclusive) with post-audit must-fix closed
+(wave-12). E2e skipped this wave. Deliberately not queued: `rgit restore`
+(designed and held back —
 [`specs/design.md`](specs/design.md#rgit-restore-filesymbol-an-accepted-design-deliberately-not-built)),
 context staged/unstaged split, TOML taplo / SQL LSP cross-checks, Rust/C/C++/
 Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
@@ -33,27 +33,3 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
       **Acceptance criteria:** `go test ./cmd/rgit -run 'TestCompletion_Pwsh'`
       (or equivalent) proves symbol completion and silent failure outside a
       repo; CONTRIBUTING may then list pwsh beside bash/zsh/fish.
-
-- [ ] **Strengthen m12 help-after-shell pin signal.** Wave-11 table covers
-      `{bash,zsh,fish,pwsh}` × `{--help,-h}` but asserts only exit 0 plus two
-      substrings. Optional: pin empty stderr and/or fuller `completionHelp`
-      equality / per-shell token.
-
-      **Packages / files:** `internal/app/app_test.go` (`TestRun_Completion`).
-
-      **Acceptance criteria:** a help-path regression that still prints a
-      partial usage string fails the focused short test.
-
-## Tests
-
-- [ ] **Tighten footer pin for pflag/top-level helps beyond Contains.**
-      Diff/commit/top-level rows in `TestHandWrittenHelpFullReferenceFooter`
-      still use `strings.Contains` only (`wantBlankLineBefore: false`). Low
-      risk while the footer string is unique; a mid-body coincidence would
-      still pass.
-
-      **Packages / files:** `internal/app/completion_test.go`.
-
-      **Acceptance criteria:** assertion fails unless the footer appears in the
-      help's expected terminal position for those rows (without requiring the
-      hand-written blank-line suffix layout).
