@@ -1063,7 +1063,8 @@ func TestRun_LanguagesHelpAndUsage(t *testing.T) {
 	stdout, stderr, code := runApp(t, "languages", "extra")
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.Equals(stdout, ""))
-	qt.Assert(t, qt.Not(qt.Equals(stderr, "")))
+	wantUsage := "rgit: languages: unrecognized argument \"extra\"\n" + languagesHelp
+	qt.Assert(t, qt.Equals(stderr, wantUsage))
 }
 
 // TestRun_Doctor covers the happy path: every section prints, and a real
