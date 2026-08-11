@@ -18,9 +18,10 @@ import (
 func TestRun_ContextHelpAndUsage(t *testing.T) {
 	t.Run("--help", func(t *testing.T) {
 		t.Chdir(t.TempDir())
-		stdout, _, code := runApp(t, "context", "--help")
+		stdout, stderr, code := runApp(t, "context", "--help")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
-		qt.Assert(t, qt.StringContains(stdout, "usage: rgit context"))
+		qt.Assert(t, qt.Equals(stdout, contextHelp))
+		qt.Assert(t, qt.Equals(stderr, ""))
 	})
 
 	// docs/USAGE.md § Context's own guardrail: "a command with options
