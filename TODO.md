@@ -8,11 +8,12 @@ Limitations that ship — unsupported languages, excluded cross-build targets,
 constructs no anchor reaches — are documented in
 [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md), not listed here.
 
-Items below are the residual queue after a fenced wave pinned exit 12 in the
-exitcode table, exact structured-data refusal stderr, and full help equality
-for symbols/context/languages (post-audit should-fix closed — wave-13). E2e
-skipped this wave. Deliberately not queued: `rgit restore` (designed and held
-back —
+Items below are the residual queue after a fenced wave pinned full help
+equality for doctor/blame/log (including path-scoped log help), languages
+Contains dedup, YAML/TOML structured-data exit-12 refusals, and `-h` alias
+equality for context/symbols/languages (post-audit should-fix closed —
+wave-14). E2e skipped this wave. Deliberately not queued: `rgit restore`
+(designed and held back —
 [`specs/design.md`](specs/design.md#rgit-restore-filesymbol-an-accepted-design-deliberately-not-built)),
 context staged/unstaged split, TOML taplo / SQL LSP cross-checks, Rust/C/C++/
 Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
@@ -34,48 +35,38 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
 
 ## Tests
 
-- [ ] **Doctor `--help` full equality.** `TestRun_DoctorHelpAndUsage` still
-      uses `StringContains`; upgrade to `qt.Equals(stdout, doctorHelp)` plus
-      empty stderr (mirror wave-13 context/languages).
+- [ ] **`assertAnchorUsageRefusals` help empty-stderr.** The shared refusal
+      matrix still Contains-pins `--help` stdout and discards stderr; dedicated
+      equality tests cover full pins, but a regression that leaked help to
+      stderr would slip if those equality tests were removed.
 
-      **Packages / files:** `internal/app/app_test.go` (or a dedicated
-      `doctor_test.go` if keeping `app_test.go` thin).
+      **Packages / files:** `internal/app/blame_test.go`
+      (`assertAnchorUsageRefusals`).
 
-      **Acceptance criteria:** `go test -short ./internal/app -run
-      'TestRun_DoctorHelp'`.
+      **Acceptance criteria:** the shared `--help` subtest asserts empty
+      stderr (and ideally keeps the weak usage-prefix Contains).
 
-- [ ] **Blame/log `--help` full equality.** `TestRun_BlameHelpAndUsage` /
-      `assertAnchorUsageRefusals` pin usage prefixes only; upgrade to
-      `blameHelp` / `logHelp` equality plus empty stderr.
-
-      **Packages / files:** `internal/app/blame_test.go`, and the log help
-      path that shares the helper.
-
-      **Acceptance criteria:** focused short tests fail unless stdout equals
-      the hand-written help const.
-
-- [ ] **Dedup languages `--help` Contains pin.** `TestRun_LanguagesHelpAndUsage`
-      in `app_test.go` still Contains-pins usage after
-      `TestRun_LanguagesHelpEquality` covers full equality.
-
-      **Packages / files:** `internal/app/app_test.go`.
-
-      **Acceptance criteria:** one help-equality path remains; the weak
-      Contains duplicate is gone or reduced to usage-error coverage only.
-
-- [ ] **Structured-data refusal matrix beyond JSON.** Commit exit-12 pin
-      covers `package.json` only; YAML/TOML share `IsStructuredData`.
+- [ ] **Structured-data refusal depth.** Wave-14 table-drives JSON/YAML/TOML
+      via `runCommit` with `.yaml` only; `IsStructuredData` never runs the
+      resolver, so fixture keys are illustrative. Optional deepenings: `.yml`
+      extension, a `runApp(t, "commit", …)` dispatch pin, and/or a positive
+      that a resolvable key would have been addressable absent the guard.
 
       **Packages / files:** `internal/app/commit_test.go`.
 
-      **Acceptance criteria:** at least one YAML and one TOML `FILE:SYMBOL`
-      case refuse with exit 12 and the path-form alternative still succeeds.
+      **Acceptance criteria:** at least one additional path (`.yml`, `runApp`,
+      or resolvable-key proof) fails unless the guard still refuses exit 12
+      with the exact stderr template and path-form commit still succeeds.
 
-- [ ] **`-h` alias pins for hand-parsed helps.** symbols/context/languages
-      accept `-h` on the same path as `--help`; wave-13 pinned `--help` only.
+- [ ] **Help-pin style / doctor usage strength.** Cross-file help tests mix
+      `qt` loops, nested `t.Run`, and `t.Fatalf`; doctor usage-error still
+      only checks non-empty stderr while symbols pins exact wording. Uniformity
+      and a stronger doctor usage pin are polish, not coverage gaps.
 
-      **Packages / files:** `internal/app/symbols_test.go`,
-      `context_test.go`, `languages_crosscheck_test.go`.
+      **Packages / files:** `internal/app/doctor_test.go`,
+      `context_test.go`, `symbols_test.go`, `languages_crosscheck_test.go`,
+      `blame_test.go`, `log_test.go`.
 
-      **Acceptance criteria:** parallel `-h` cases assert the same equality
-      as `--help`.
+      **Acceptance criteria:** doctor `"extra"` asserts the exact usage
+      stderr shape (mirror symbols); optional follow-on normalizes help-test
+      scaffolding without changing the equality contracts.
