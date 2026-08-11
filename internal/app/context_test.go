@@ -16,9 +16,9 @@ import (
 )
 
 func TestRun_ContextHelpAndUsage(t *testing.T) {
+	t.Chdir(t.TempDir())
 	for _, arg := range []string{"--help", "-h"} {
 		t.Run(arg, func(t *testing.T) {
-			t.Chdir(t.TempDir())
 			stdout, stderr, code := runApp(t, "context", arg)
 			qt.Assert(t, qt.Equals(code, exitcode.Success))
 			qt.Assert(t, qt.Equals(stdout, contextHelp))
