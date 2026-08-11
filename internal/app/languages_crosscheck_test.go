@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-quicktest/qt"
 
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
@@ -13,7 +14,7 @@ func TestRun_LanguagesHelpEquality(t *testing.T) {
 	t.Chdir(t.TempDir())
 
 	stdout, stderr, code := runApp(t, "languages", "--help")
-	qt.Assert(t, qt.Equals(code, 0))
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stdout, languagesHelp))
 	qt.Assert(t, qt.Equals(stderr, ""))
 }
