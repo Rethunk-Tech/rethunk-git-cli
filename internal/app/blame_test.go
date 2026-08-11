@@ -31,6 +31,14 @@ func assertAnchorUsageRefusals(t *testing.T, cmd string) {
 		qt.Assert(t, qt.StringContains(stdout, "usage: rgit "+cmd))
 	})
 
+	t.Run("-h", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		stdout, stderr, code := runApp(t, cmd, "-h")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "usage: rgit "+cmd))
+	})
+
 	t.Run("no arguments", func(t *testing.T) {
 		t.Chdir(t.TempDir())
 		_, stderr, code := runApp(t, cmd)
