@@ -25,8 +25,9 @@ func assertAnchorUsageRefusals(t *testing.T, cmd string) {
 
 	t.Run("--help", func(t *testing.T) {
 		t.Chdir(t.TempDir())
-		stdout, _, code := runApp(t, cmd, "--help")
+		stdout, stderr, code := runApp(t, cmd, "--help")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
 		qt.Assert(t, qt.StringContains(stdout, "usage: rgit "+cmd))
 	})
 
