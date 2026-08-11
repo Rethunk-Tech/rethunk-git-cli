@@ -8,12 +8,11 @@ Limitations that ship — unsupported languages, excluded cross-build targets,
 constructs no anchor reaches — are documented in
 [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md), not listed here.
 
-Items below are the residual queue after a fenced wave pinned full help
-equality for doctor/blame/log (including path-scoped log help), languages
-Contains dedup, YAML/TOML structured-data exit-12 refusals, and `-h` alias
-equality for context/symbols/languages (post-audit should-fix closed —
-wave-14). E2e skipped this wave. Deliberately not queued: `rgit restore`
-(designed and held back —
+Items below are the residual queue after a fenced wave pinned shared
+`assertAnchorUsageRefusals` `--help` empty-stderr, a `.yml` structured-data
+refusal row, and exact doctor unrecognized-argument usage stderr (post-audit
+clean — wave-15). E2e skipped this wave. Deliberately not queued: `rgit
+restore` (designed and held back —
 [`specs/design.md`](specs/design.md#rgit-restore-filesymbol-an-accepted-design-deliberately-not-built)),
 context staged/unstaged split, TOML taplo / SQL LSP cross-checks, Rust/C/C++/
 Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
@@ -35,38 +34,29 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
 
 ## Tests
 
-- [ ] **`assertAnchorUsageRefusals` help empty-stderr.** The shared refusal
-      matrix still Contains-pins `--help` stdout and discards stderr; dedicated
-      equality tests cover full pins, but a regression that leaked help to
-      stderr would slip if those equality tests were removed.
-
-      **Packages / files:** `internal/app/blame_test.go`
-      (`assertAnchorUsageRefusals`).
-
-      **Acceptance criteria:** the shared `--help` subtest asserts empty
-      stderr (and ideally keeps the weak usage-prefix Contains).
-
-- [ ] **Structured-data refusal depth.** Wave-14 table-drives JSON/YAML/TOML
-      via `runCommit` with `.yaml` only; `IsStructuredData` never runs the
-      resolver, so fixture keys are illustrative. Optional deepenings: `.yml`
-      extension, a `runApp(t, "commit", …)` dispatch pin, and/or a positive
-      that a resolvable key would have been addressable absent the guard.
+- [ ] **Structured-data refusal depth (remainder).** Wave-15 added a
+      `config.yml` table row beside JSON/YAML/TOML; the matrix still calls
+      `runCommit` directly and fixture keys remain illustrative because
+      `IsStructuredData` never runs the resolver. Optional deepenings: a
+      `runApp(t, "commit", …)` dispatch pin, and/or a positive that a
+      resolvable key would have been addressable absent the guard.
 
       **Packages / files:** `internal/app/commit_test.go`.
 
-      **Acceptance criteria:** at least one additional path (`.yml`, `runApp`,
-      or resolvable-key proof) fails unless the guard still refuses exit 12
+      **Acceptance criteria:** at least one additional path (`runApp` or
+      resolvable-key proof) fails unless the guard still refuses exit 12
       with the exact stderr template and path-form commit still succeeds.
 
-- [ ] **Help-pin style / doctor usage strength.** Cross-file help tests mix
-      `qt` loops, nested `t.Run`, and `t.Fatalf`; doctor usage-error still
-      only checks non-empty stderr while symbols pins exact wording. Uniformity
-      and a stronger doctor usage pin are polish, not coverage gaps.
+- [ ] **Help-pin scaffolding uniformity.** Doctor `"extra"` now pins exact
+      usage stderr; cross-file help tests still mix `qt` loops, nested
+      `t.Run`, and `t.Fatalf`. Optional: extend the shared refusal matrix
+      empty-stderr pin from `--help` alone to also cover `-h` (dedicated
+      equality tests already pin `-h`).
 
       **Packages / files:** `internal/app/doctor_test.go`,
       `context_test.go`, `symbols_test.go`, `languages_crosscheck_test.go`,
       `blame_test.go`, `log_test.go`.
 
-      **Acceptance criteria:** doctor `"extra"` asserts the exact usage
-      stderr shape (mirror symbols); optional follow-on normalizes help-test
-      scaffolding without changing the equality contracts.
+      **Acceptance criteria:** help-test scaffolding is normalized without
+      changing the equality contracts; optional shared-matrix `-h` empty
+      stderr if not already covered by dedicated equality tests alone.
