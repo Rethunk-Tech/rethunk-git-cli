@@ -23,5 +23,6 @@ func TestRun_DoctorHelpAndUsage(t *testing.T) {
 	stdout, stderr, code := runApp(t, "doctor", "extra")
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.Equals(stdout, ""))
-	qt.Assert(t, qt.Not(qt.Equals(stderr, "")))
+	wantUsage := "rgit: doctor: unrecognized argument \"extra\"\n" + doctorHelp
+	qt.Assert(t, qt.Equals(stderr, wantUsage))
 }
