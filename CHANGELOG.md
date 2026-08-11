@@ -297,8 +297,8 @@ Notable changes to `rgit`. The format follows
   turn. As shipped in 1.1.0, recent commit subjects came first, followed by
   the same per-file, per-symbol diffstat `rgit diff` itself reports for
   everything committable, as a single fixed-shape `C`/`F`/`X` record stream.
-  Later, 1.2.0 added `B` and moved `F` before `C`; Unreleased adds `W`
-  records. Pure read composition over `internal/gitx` and `internal/diff` —
+  Later, 1.2.0 added `B` and moved `F` before `C`. Pure read composition over
+  `internal/gitx` and `internal/diff` —
   no new resolution or attribution machinery, and no flags beyond `--help`:
   the shape is fixed and capped at 16 KiB, truncated with a trailing `X`
   record rather than growing without bound. See
