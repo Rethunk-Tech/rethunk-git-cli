@@ -8,12 +8,13 @@ Limitations that ship — unsupported languages, excluded cross-build targets,
 constructs no anchor reaches — are documented in
 [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md), not listed here.
 
-Items below are the residual queue after a fenced wave tightened the
-structured-data `runApp` pin (discrete key token, refuse empty stdout,
-default path-commit listing + HEAD content — no `--quiet` graft) and
-collapsed `assertAnchorUsageRefusals` `--help`/`-h` into one loop
-(post-audit should-fixes closed — wave-17). E2e skipped this wave.
-Deliberately not queued: `rgit restore` (designed and held back —
+Items below are the residual queue after a fenced wave aligned
+`runCommit` structured-data pins with the `runApp` sibling (empty stdout on
+refuse; path listing + HEAD content on success), hoisted help-only `Chdir`
+outside the shared-anchor and context help flag loops, and moved
+`containsString` into `test_helpers_test.go` (post-audit CLEAN — no
+must/should — wave-18). E2e skipped this wave. Deliberately not queued:
+`rgit restore` (designed and held back —
 [`specs/design.md`](specs/design.md#rgit-restore-filesymbol-an-accepted-design-deliberately-not-built)),
 context staged/unstaged split, TOML taplo / SQL LSP cross-checks, Rust/C/C++/
 Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
@@ -35,18 +36,6 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
 
 ## Tests
 
-- [ ] **Align sibling structured-data `runCommit` pins with runApp (optional).**
-      `TestRunCommit_RefusesSymbolAnchorOnStructuredData` still pins refuse
-      exit + exact stderr only (no empty stdout) and path-success exit only
-      (no listing / HEAD content). Wave-17 tightened only the `runApp`
-      variant.
-
-      **Packages / files:** `internal/app/commit_test.go`.
-
-      **Acceptance criteria:** refuse pins empty stdout; path success pins
-      listing and/or `HEAD:<path>` content without `--quiet`, matching
-      `TestRun_CommitRefusesStructuredDataSymbolViaRunApp`.
-
 - [ ] **Languages usage-only help path (optional residual).**
       `TestRun_LanguagesHelpAndUsage` in `app_test.go` was outside the
       wave-16 help-scaffold fence; already qt, not an equality pin.
@@ -56,24 +45,26 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
       **Acceptance criteria:** only if a future sweep wants every help
       entrypoint named in one matrix — not required for contract parity.
 
-- [ ] **Hoist help-only `Chdir` outside flag loops (optional hygiene).**
-      `assertAnchorUsageRefusals` (and `TestRun_ContextHelpAndUsage`) call
-      `t.Chdir(t.TempDir())` inside each `--help`/`-h` subtest; doctor and
-      symbols help loops chdir once outside. Not a contract gap.
+- [ ] **Per-format HEAD content pins on structured-data `runCommit` (optional).**
+      Table success path asserts `strings.Contains(got, "after")` for every
+      format; the `runApp` sibling pins `` `"after"` `` for JSON only.
+      Contract-intentional for wave-18; tighten only if per-format blobs
+      need distinct substrings.
 
-      **Packages / files:** `internal/app/blame_test.go`, optionally
-      `internal/app/context_test.go`.
+      **Packages / files:** `internal/app/commit_test.go`
+      (`TestRunCommit_RefusesSymbolAnchorOnStructuredData`).
 
-      **Acceptance criteria:** help-only loops share one tempdir chdir;
-      blame/log HelpAndUsage still pass.
+      **Acceptance criteria:** each table case pins a format-appropriate
+      HEAD substring (or stays on the shared `after` token with a brief
+      comment why that is enough).
 
-- [ ] **Move `containsString` to shared test helper (optional).**
-      `commit_test.go` now calls `containsString` defined in
-      `symbols_test.go` (same package). Fine today; extract if more commit
-      tests adopt it.
+- [ ] **Pin empty stderr on structured-data `runCommit` path success (optional).**
+      Refuse path pins empty stdout; path-success still leaves stderr
+      unpinned. Mirror the `runApp` sibling or pin `stderr == ""` if that
+      path must never emit warnings.
 
-      **Packages / files:** new `internal/app/test_helpers_test.go` (or
-      similar), `internal/app/symbols_test.go`, callers.
+      **Packages / files:** `internal/app/commit_test.go`
+      (`TestRunCommit_RefusesSymbolAnchorOnStructuredData`).
 
-      **Acceptance criteria:** helper has one definition; symbols and
-      commit tests still compile and pass.
+      **Acceptance criteria:** path-success asserts empty stderr (or
+      documents why warnings remain allowed).
