@@ -8,11 +8,12 @@ Limitations that ship — unsupported languages, excluded cross-build targets,
 constructs no anchor reaches — are documented in
 [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md), not listed here.
 
-Items below are the residual queue after a fenced wave pinned shared
-`assertAnchorUsageRefusals` `--help` empty-stderr, a `.yml` structured-data
-refusal row, and exact doctor unrecognized-argument usage stderr (post-audit
-clean — wave-15). E2e skipped this wave. Deliberately not queued: `rgit
-restore` (designed and held back —
+Items below are the residual queue after a fenced wave pinned structured-data
+refusal via `runApp` (plus symbols resolvable-key contrast), doctor-style
+help loops for context/languages/symbols, and shared
+`assertAnchorUsageRefusals` `-h` empty-stderr beside `--help` (post-audit
+clean — wave-16; no must/should findings). E2e skipped this wave.
+Deliberately not queued: `rgit restore` (designed and held back —
 [`specs/design.md`](specs/design.md#rgit-restore-filesymbol-an-accepted-design-deliberately-not-built)),
 context staged/unstaged split, TOML taplo / SQL LSP cross-checks, Rust/C/C++/
 Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
@@ -34,29 +35,34 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
 
 ## Tests
 
-- [ ] **Structured-data refusal depth (remainder).** Wave-15 added a
-      `config.yml` table row beside JSON/YAML/TOML; the matrix still calls
-      `runCommit` directly and fixture keys remain illustrative because
-      `IsStructuredData` never runs the resolver. Optional deepenings: a
-      `runApp(t, "commit", …)` dispatch pin, and/or a positive that a
-      resolvable key would have been addressable absent the guard.
+- [ ] **Tighten structured-data runApp pin assertions (optional).**
+      `TestRun_CommitRefusesStructuredDataSymbolViaRunApp` uses
+      `strings.Contains(stdout, "name")` rather than a fields/line-exact
+      check, and omits empty stdout/stderr on refuse/path success the way
+      some sibling pins do. Style-only godoc on the new test is also absent.
 
       **Packages / files:** `internal/app/commit_test.go`.
 
-      **Acceptance criteria:** at least one additional path (`runApp` or
-      resolvable-key proof) fails unless the guard still refuses exit 12
-      with the exact stderr template and path-form commit still succeeds.
+      **Acceptance criteria:** key presence asserted as a discrete symbol
+      token (e.g. fields membership); refuse/path outcomes pin empty
+      streams where that matches neighbouring commit pins; brief godoc
+      states the dispatch + resolvable-key invariant.
 
-- [ ] **Help-pin scaffolding uniformity.** Doctor `"extra"` now pins exact
-      usage stderr; cross-file help tests still mix `qt` loops, nested
-      `t.Run`, and `t.Fatalf`. Optional: extend the shared refusal matrix
-      empty-stderr pin from `--help` alone to also cover `-h` (dedicated
-      equality tests already pin `-h`).
+- [ ] **Collapse shared help-matrix `--help`/`-h` into one loop (optional).**
+      `assertAnchorUsageRefusals` mirrors the two flags as duplicate
+      subtests; doctor-style `for` would DRY without changing contracts.
 
-      **Packages / files:** `internal/app/doctor_test.go`,
-      `context_test.go`, `symbols_test.go`, `languages_crosscheck_test.go`,
-      `blame_test.go`, `log_test.go`.
+      **Packages / files:** `internal/app/blame_test.go`.
 
-      **Acceptance criteria:** help-test scaffolding is normalized without
-      changing the equality contracts; optional shared-matrix `-h` empty
-      stderr if not already covered by dedicated equality tests alone.
+      **Acceptance criteria:** one loop covers `--help` and `-h` with the
+      same Success / empty-stderr / `usage: rgit `+cmd assertions; blame
+      and log HelpAndUsage still pass.
+
+- [ ] **Languages usage-only help path (optional residual).**
+      `TestRun_LanguagesHelpAndUsage` in `app_test.go` was outside the
+      wave-16 help-scaffold fence; already qt, not an equality pin.
+
+      **Packages / files:** `internal/app/app_test.go`.
+
+      **Acceptance criteria:** only if a future sweep wants every help
+      entrypoint named in one matrix — not required for contract parity.
