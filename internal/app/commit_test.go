@@ -79,10 +79,13 @@ func TestRunCommit_RefusesSymbolAnchorOnStructuredData(t *testing.T) {
 			if code != exitcode.Success {
 				t.Fatalf("runCommit by path = %v; want exitcode.Success; stderr: %s", code, stderr.String())
 			}
+			if stderr.String() != "" {
+				t.Errorf("stderr = %q; want empty", stderr.String())
+			}
 			if !strings.Contains(stdout.String(), tc.path) {
 				t.Errorf("stdout = %q; want package listing", stdout.String())
 			}
-			if got := gitOut(t, dir, "cat-file", "-p", "HEAD:"+tc.path); !strings.Contains(got, "after") {
+			if got := gitOut(t, dir, "cat-file", "-p", "HEAD:"+tc.path); !strings.Contains(got, strings.TrimRight(tc.after, "\n")) {
 				t.Errorf("HEAD:%s = %q; want updated content", tc.path, got)
 			}
 		})
@@ -121,6 +124,9 @@ func TestRun_CommitRefusesStructuredDataSymbolViaRunApp(t *testing.T) {
 	stdout, stderr, code = runApp(t, "commit", "-m", "chore: bump", "package.json")
 	if code != exitcode.Success {
 		t.Fatalf("runApp commit by path = %v; want exitcode.Success; stderr: %s", code, stderr)
+	}
+	if stderr != "" {
+		t.Errorf("stderr = %q; want empty", stderr)
 	}
 	if !strings.Contains(stdout, "package.json") {
 		t.Errorf("stdout = %q; want package listing", stdout)
