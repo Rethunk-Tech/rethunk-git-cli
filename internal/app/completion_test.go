@@ -243,8 +243,8 @@ func TestHandWrittenHelpFullReferenceFooter(t *testing.T) {
 		{"blame", runBlameHelpText(), true},
 		{"log", runLogHelpText(), true},
 		{"context", runContextHelpText(), true},
-		{"diff", runDiffHelp(), false},
-		{"commit", runCommitHelp(), false},
+		{"diff", runDiffHelp(), true},
+		{"commit", runCommitHelp(), true},
 		{"top-level", topLevelHelp, false},
 		{"languages", runLanguagesHelp(), true},
 		{"doctor", runDoctorHelp(), true},
@@ -263,13 +263,17 @@ func TestHandWrittenHelpFullReferenceFooter(t *testing.T) {
 }
 
 func assertHelpFooterSuffix(help, footer string, wantBlankLineBefore bool) error {
-	prefix := "\n"
 	if wantBlankLineBefore {
-		prefix = "\n\n"
+		if !strings.HasSuffix(help, "\n\n"+footer+"\n") {
+			return fmt.Errorf("help does not end with blank-line footer suffix %q", "\n\n"+footer+"\n")
+		}
+		return nil
 	}
-	suffix := prefix + footer + "\n"
-	if !strings.HasSuffix(help, suffix) {
-		return fmt.Errorf("help does not end with expected footer suffix %q", suffix)
+	if !strings.HasSuffix(help, "\n"+footer+"\n") {
+		return fmt.Errorf("help does not end with single-newline footer suffix %q", "\n"+footer+"\n")
+	}
+	if strings.HasSuffix(help, "\n\n"+footer+"\n") {
+		return fmt.Errorf("help ends with blank-line footer suffix %q", "\n\n"+footer+"\n")
 	}
 	return nil
 }
