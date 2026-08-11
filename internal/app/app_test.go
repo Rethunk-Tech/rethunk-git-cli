@@ -943,10 +943,27 @@ func TestRun_Completion(t *testing.T) {
 	})
 
 	t.Run("help after shell prints usage and exits 0", func(t *testing.T) {
-		stdout, _, code := runApp(t, "completion", "bash", "--help")
-		qt.Assert(t, qt.Equals(code, exitcode.Success))
-		qt.Assert(t, qt.StringContains(stdout, "usage: rgit completion"))
-		qt.Assert(t, qt.StringContains(stdout, "pwsh"))
+		for _, tc := range []struct {
+			name  string
+			shell string
+			help  string
+		}{
+			{"bash --help", "bash", "--help"},
+			{"bash -h", "bash", "-h"},
+			{"zsh --help", "zsh", "--help"},
+			{"zsh -h", "zsh", "-h"},
+			{"fish --help", "fish", "--help"},
+			{"fish -h", "fish", "-h"},
+			{"pwsh --help", "pwsh", "--help"},
+			{"pwsh -h", "pwsh", "-h"},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				stdout, _, code := runApp(t, "completion", tc.shell, tc.help)
+				qt.Assert(t, qt.Equals(code, exitcode.Success))
+				qt.Assert(t, qt.StringContains(stdout, "usage: rgit completion"))
+				qt.Assert(t, qt.StringContains(stdout, "pwsh"))
+			})
+		}
 	})
 
 	for _, tc := range []struct {
