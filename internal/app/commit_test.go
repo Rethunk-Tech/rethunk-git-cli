@@ -38,6 +38,13 @@ func TestRunCommit_RefusesSymbolAnchorOnStructuredData(t *testing.T) {
 			anchorName: "name",
 		},
 		{
+			name:       "YML",
+			path:       "config.yml",
+			before:     "name: before\n",
+			after:      "name: after\n",
+			anchorName: "name",
+		},
+		{
 			name:       "TOML",
 			path:       "config.toml",
 			before:     "title = \"before\"\n",
