@@ -9,6 +9,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"slices"
 	"strings"
@@ -254,12 +255,21 @@ func TestHandWrittenHelpFullReferenceFooter(t *testing.T) {
 	const footer = "Full reference: docs/USAGE.md"
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if !strings.Contains(tt.help, footer) {
-				t.Fatalf("help does not contain %q", footer)
-			}
-			if tt.wantBlankLineBefore && !strings.HasSuffix(tt.help, "\n\n"+footer+"\n") {
-				t.Fatalf("help does not end with a blank line immediately before %q", footer)
+			if err := assertHelpFooterSuffix(tt.help, footer, tt.wantBlankLineBefore); err != nil {
+				t.Fatal(err)
 			}
 		})
 	}
+}
+
+func assertHelpFooterSuffix(help, footer string, wantBlankLineBefore bool) error {
+	prefix := "\n"
+	if wantBlankLineBefore {
+		prefix = "\n\n"
+	}
+	suffix := prefix + footer + "\n"
+	if !strings.HasSuffix(help, suffix) {
+		return fmt.Errorf("help does not end with expected footer suffix %q", suffix)
+	}
+	return nil
 }
