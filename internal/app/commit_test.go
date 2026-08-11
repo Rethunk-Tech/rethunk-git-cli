@@ -27,11 +27,9 @@ func TestRunCommit_RefusesSymbolAnchorOnStructuredData(t *testing.T) {
 	if code != exitcode.StructuredDataAnchorRefused {
 		t.Fatalf("runCommit FILE:SYMBOL = %v; want exitcode.StructuredDataAnchorRefused; stderr: %s", code, stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "package.json") {
-		t.Errorf("stderr = %q; want it to name package.json", stderr.String())
-	}
-	if !strings.Contains(stderr.String(), "rgit commit -m ... package.json") {
-		t.Errorf("stderr = %q; want the concrete path-form alternative", stderr.String())
+	wantStderr := "rgit: package.json: structured-data file; commit it by path instead of a symbol anchor (e.g. rgit commit -m ... package.json)\n"
+	if stderr.String() != wantStderr {
+		t.Errorf("stderr = %q; want %q", stderr.String(), wantStderr)
 	}
 
 	stdout.Reset()
