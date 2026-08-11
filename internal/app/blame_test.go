@@ -23,9 +23,9 @@ import (
 func assertAnchorUsageRefusals(t *testing.T, cmd string) {
 	t.Helper()
 
+	t.Chdir(t.TempDir())
 	for _, flag := range []string{"--help", "-h"} {
 		t.Run(flag, func(t *testing.T) {
-			t.Chdir(t.TempDir())
 			stdout, stderr, code := runApp(t, cmd, flag)
 			qt.Assert(t, qt.Equals(code, exitcode.Success))
 			qt.Assert(t, qt.Equals(stderr, ""))
