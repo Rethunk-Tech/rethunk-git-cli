@@ -80,6 +80,36 @@ func TestRunCommit_RefusesSymbolAnchorOnStructuredData(t *testing.T) {
 	}
 }
 
+func TestRun_CommitRefusesStructuredDataSymbolViaRunApp(t *testing.T) {
+	dir, _ := gittest.New(t)
+	gittest.Write(t, dir, "package.json", `{"name": "before"}`+"\n")
+	gittest.Commit(t, dir, "chore: add structured data")
+	t.Chdir(dir)
+
+	stdout, stderr, code := runApp(t, "symbols", "package.json")
+	if code != exitcode.Success {
+		t.Fatalf("runApp symbols = %v; want exitcode.Success; stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "name") {
+		t.Errorf("symbols stdout = %q; want key %q", stdout, "name")
+	}
+
+	gittest.Write(t, dir, "package.json", `{"name": "after"}`+"\n")
+	_, stderr, code = runApp(t, "commit", "-m", "chore: bump", "package.json:name")
+	if code != exitcode.StructuredDataAnchorRefused {
+		t.Fatalf("runApp commit FILE:SYMBOL = %v; want exitcode.StructuredDataAnchorRefused; stderr: %s", code, stderr)
+	}
+	wantStderr := "rgit: package.json: structured-data file; commit it by path instead of a symbol anchor (e.g. rgit commit -m ... package.json)\n"
+	if stderr != wantStderr {
+		t.Errorf("stderr = %q; want %q", stderr, wantStderr)
+	}
+
+	_, stderr, code = runApp(t, "commit", "-m", "chore: bump", "package.json")
+	if code != exitcode.Success {
+		t.Fatalf("runApp commit by path = %v; want exitcode.Success; stderr: %s", code, stderr)
+	}
+}
+
 // TestRunCommit_CountingWarningsReachStderr proves synth.Plan's
 // CountingWarnings actually reaches a caller now that commit.go reads it,
 // rather than staying dead code. An untracked file on an unborn branch is
