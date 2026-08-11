@@ -14,23 +14,27 @@ import (
 func TestRun_SymbolsHelpAndUsage(t *testing.T) {
 	t.Chdir(t.TempDir())
 
-	stdout, _, code := runApp(t, "symbols", "--help")
+	stdout, stderr, code := runApp(t, "symbols", "--help")
 	if code != exitcode.Success {
 		t.Fatalf("symbols --help exit code = %d, want %d", code, exitcode.Success)
 	}
-	if !strings.Contains(stdout, "usage: rgit symbols") {
-		t.Fatalf("symbols --help stdout = %q, want usage", stdout)
+	if stdout != symbolsHelp {
+		t.Fatalf("symbols --help stdout = %q, want %q", stdout, symbolsHelp)
+	}
+	if stderr != "" {
+		t.Fatalf("symbols --help stderr = %q, want empty", stderr)
 	}
 
-	stdout, stderr, code := runApp(t, "symbols")
+	stdout, stderr, code = runApp(t, "symbols")
 	if code != exitcode.InvalidUsage {
 		t.Fatalf("symbols exit code = %d, want %d", code, exitcode.InvalidUsage)
 	}
 	if stdout != "" {
 		t.Fatalf("symbols stdout = %q, want empty", stdout)
 	}
-	if !strings.Contains(stderr, "usage: rgit symbols") {
-		t.Fatalf("symbols stderr = %q, want usage", stderr)
+	wantUsage := "rgit: symbols requires exactly one file argument\n" + symbolsHelp
+	if stderr != wantUsage {
+		t.Fatalf("symbols stderr = %q, want %q", stderr, wantUsage)
 	}
 
 	stdout, stderr, code = runApp(t, "symbols", "a.go", "b.go")
@@ -40,8 +44,8 @@ func TestRun_SymbolsHelpAndUsage(t *testing.T) {
 	if stdout != "" {
 		t.Fatalf("symbols with two files stdout = %q, want empty", stdout)
 	}
-	if !strings.Contains(stderr, "usage: rgit symbols") {
-		t.Fatalf("symbols with two files stderr = %q, want usage", stderr)
+	if stderr != wantUsage {
+		t.Fatalf("symbols with two files stderr = %q, want %q", stderr, wantUsage)
 	}
 }
 
@@ -53,8 +57,9 @@ func TestRun_SymbolsUnsupportedLanguage(t *testing.T) {
 	if code != exitcode.UnsupportedLanguage {
 		t.Fatalf("symbols unsupported-language exit code = %d, want %d", code, exitcode.UnsupportedLanguage)
 	}
-	if !strings.Contains(stderr, "unsupported language") {
-		t.Fatalf("symbols unsupported-language stderr = %q, want unsupported language", stderr)
+	want := "rgit: unsupported language for \"main.rs\"\n"
+	if stderr != want {
+		t.Fatalf("symbols unsupported-language stderr = %q, want %q", stderr, want)
 	}
 }
 
