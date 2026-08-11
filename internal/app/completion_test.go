@@ -239,14 +239,14 @@ func TestHandWrittenHelpFullReferenceFooter(t *testing.T) {
 		help                string
 		wantBlankLineBefore bool
 	}{
-		{"blame", runBlameHelpText(), false},
-		{"log", runLogHelpText(), false},
-		{"context", runContextHelpText(), false},
+		{"blame", runBlameHelpText(), true},
+		{"log", runLogHelpText(), true},
+		{"context", runContextHelpText(), true},
 		{"diff", runDiffHelp(), false},
 		{"commit", runCommitHelp(), false},
 		{"top-level", topLevelHelp, false},
-		{"languages", runLanguagesHelp(), false},
-		{"doctor", runDoctorHelp(), false},
+		{"languages", runLanguagesHelp(), true},
+		{"doctor", runDoctorHelp(), true},
 		{"completion", runCompletionHelpText(), true},
 		{"symbols", runSymbolsHelpText(), true},
 	}
