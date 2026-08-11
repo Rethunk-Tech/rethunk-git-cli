@@ -24,6 +24,19 @@ func TestRun_LogHelpAndUsage(t *testing.T) {
 	})
 }
 
+func TestRun_LogHelpEquality(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	for _, flag := range []string{"--help", "-h"} {
+		t.Run(flag, func(t *testing.T) {
+			stdout, stderr, code := runApp(t, "log", flag)
+			qt.Assert(t, qt.Equals(code, exitcode.Success))
+			qt.Assert(t, qt.Equals(stdout, logHelp))
+			qt.Assert(t, qt.Equals(stderr, ""))
+		})
+	}
+}
+
 // TestRun_LogUnresolvableAnchor pins the same exit-3 refusal blame.go
 // already gives an anchor absent from the resolved source -- here, HEAD's
 // blob rather than the worktree file, since history is a question about
