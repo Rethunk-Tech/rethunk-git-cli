@@ -8,10 +8,12 @@ Limitations that ship — unsupported languages, excluded cross-build targets,
 constructs no anchor reaches — are documented in
 [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md), not listed here.
 
-Items below are the residual queue after a fenced wave landed CODES/HUMANS
-context-order doc fixes, symbols/completion unit pins, hand-written help
-footer regression coverage, and post-audit should-fixes (wave-10; adversarial
-audit closed — no must-fix; should-fixes landed).
+Items below are the residual queue after a fenced wave landed completion
+help-after-shell pins for all shells, HUMANS/CHANGELOG context-order
+clarifications (including B-first and W-in-order), Full-reference footer
+coverage for diff/commit/top-level plus suffix-strict blank-line pins on
+hand-written helps, and post-audit should-fixes (wave-11; adversarial audit
+closed — no must-fix; should-fixes landed). E2e skipped this wave.
 Deliberately not queued: `rgit restore` (designed and held back —
 [`specs/design.md`](specs/design.md#rgit-restore-filesymbol-an-accepted-design-deliberately-not-built)),
 context staged/unstaged split, TOML taplo / SQL LSP cross-checks, Rust/C/C++/
@@ -32,55 +34,26 @@ Vue/Svelte grammars, SCSS/zsh, and orphan-gopls handshake cleanup.
       (or equivalent) proves symbol completion and silent failure outside a
       repo; CONTRIBUTING may then list pwsh beside bash/zsh/fish.
 
-- [ ] **Broaden m12 completion help pin beyond bash.**
-      `TestRun_Completion` pins `completion bash --help` only; `runCompletion`
-      treats help wherever it appears for every shell. Optional table over
-      `{bash,zsh,fish,pwsh}` × `{--help,-h}`.
+- [ ] **Strengthen m12 help-after-shell pin signal.** Wave-11 table covers
+      `{bash,zsh,fish,pwsh}` × `{--help,-h}` but asserts only exit 0 plus two
+      substrings. Optional: pin empty stderr and/or fuller `completionHelp`
+      equality / per-shell token.
 
       **Packages / files:** `internal/app/app_test.go` (`TestRun_Completion`).
 
-      **Acceptance criteria:** `go test -short ./internal/app -run 'TestRun_Completion$'`
-      covers help-after-shell for each supported shell.
-
-## Docs / help
-
-- [ ] **HUMANS.md: optional "B sorts first" clause.** Wave-10 context prose
-      documents `B → W → F → C` but omits that `B` is always first when present
-      (`docs/CODES.md`, `docs/USAGE.md`).
-
-      **Packages / files:** `HUMANS.md`.
-
-      **Acceptance criteria:** one clause matching CODES/USAGE without restating
-      the full record grammar.
-
-- [ ] **CHANGELOG context stream order drift.** Older release-note wording may
-      still describe commits-before-diff for `rgit context`; not touched in
-      wave-10.
-
-      **Packages / files:** `CHANGELOG.md` (spot-check historical entries only if
-      still user-facing as current behaviour).
-
-      **Acceptance criteria:** no present-tense claim that contradicts live
-      `B → W → F → C` order.
+      **Acceptance criteria:** a help-path regression that still prints a
+      partial usage string fails the focused short test.
 
 ## Tests
 
-- [ ] **Extend Full-reference footer pin to diff/commit/top-level help.**
-      `TestHandWrittenHelpFullReferenceFooter` covers hand-parsed helps only;
-      `runDiffHelp` / `runCommitHelp` / top-level already carry the footer.
+- [ ] **Tighten footer pin for pflag/top-level helps beyond Contains.**
+      Diff/commit/top-level rows in `TestHandWrittenHelpFullReferenceFooter`
+      still use `strings.Contains` only (`wantBlankLineBefore: false`). Low
+      risk while the footer string is unique; a mid-body coincidence would
+      still pass.
 
       **Packages / files:** `internal/app/completion_test.go`.
 
-      **Acceptance criteria:** table includes diff, commit, and top-level with
-      `wantBlankLineBefore: false`; `go test -short ./internal/app -run
-      'TestHandWrittenHelpFullReferenceFooter'`.
-
-- [ ] **Tighten footer blank-line assertion to suffix.** Current check is
-      `strings.Contains(help, "\n\n"+footer)`; prefer a suffix-strict form so a
-      mid-body double-newline coincidence cannot pass.
-
-      **Packages / files:** `internal/app/completion_test.go`
-      (`TestHandWrittenHelpFullReferenceFooter`).
-
-      **Acceptance criteria:** fails if the footer is not preceded by a blank
-      line at end-of-help for completion/symbols.
+      **Acceptance criteria:** assertion fails unless the footer appears in the
+      help's expected terminal position for those rows (without requiring the
+      hand-written blank-line suffix layout).
