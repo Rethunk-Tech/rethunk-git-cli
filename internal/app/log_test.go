@@ -35,6 +35,15 @@ func TestRun_LogHelpEquality(t *testing.T) {
 			qt.Assert(t, qt.Equals(stderr, ""))
 		})
 	}
+
+	for _, flag := range []string{"--help", "-h"} {
+		t.Run("path-scoped "+flag, func(t *testing.T) {
+			stdout, stderr, code := runApp(t, "log", "--since=2000-01-01", flag)
+			qt.Assert(t, qt.Equals(code, exitcode.Success))
+			qt.Assert(t, qt.Equals(stdout, logHelp))
+			qt.Assert(t, qt.Equals(stderr, ""))
+		})
+	}
 }
 
 // TestRun_LogUnresolvableAnchor pins the same exit-3 refusal blame.go
