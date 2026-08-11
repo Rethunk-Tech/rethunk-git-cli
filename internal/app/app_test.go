@@ -936,10 +936,10 @@ func TestRun_Completion(t *testing.T) {
 	})
 
 	t.Run("--help prints usage and exits 0", func(t *testing.T) {
-		stdout, _, code := runApp(t, "completion", "--help")
+		stdout, stderr, code := runApp(t, "completion", "--help")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
-		qt.Assert(t, qt.StringContains(stdout, "usage: rgit completion"))
-		qt.Assert(t, qt.StringContains(stdout, "pwsh"))
+		qt.Assert(t, qt.Equals(stdout, completionHelp))
+		qt.Assert(t, qt.Equals(stderr, ""))
 	})
 
 	t.Run("help after shell prints usage and exits 0", func(t *testing.T) {
@@ -958,10 +958,10 @@ func TestRun_Completion(t *testing.T) {
 			{"pwsh -h", "pwsh", "-h"},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
-				stdout, _, code := runApp(t, "completion", tc.shell, tc.help)
+				stdout, stderr, code := runApp(t, "completion", tc.shell, tc.help)
 				qt.Assert(t, qt.Equals(code, exitcode.Success))
-				qt.Assert(t, qt.StringContains(stdout, "usage: rgit completion"))
-				qt.Assert(t, qt.StringContains(stdout, "pwsh"))
+				qt.Assert(t, qt.Equals(stdout, completionHelp))
+				qt.Assert(t, qt.Equals(stderr, ""))
 			})
 		}
 	})
