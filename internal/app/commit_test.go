@@ -69,12 +69,21 @@ func TestRunCommit_RefusesSymbolAnchorOnStructuredData(t *testing.T) {
 			if stderr.String() != wantStderr {
 				t.Errorf("stderr = %q; want %q", stderr.String(), wantStderr)
 			}
+			if stdout.String() != "" {
+				t.Errorf("stdout = %q; want empty", stdout.String())
+			}
 
 			stdout.Reset()
 			stderr.Reset()
 			code = runCommit(context.Background(), "", []string{"-m", "chore: bump", tc.path}, &stdout, &stderr)
 			if code != exitcode.Success {
 				t.Fatalf("runCommit by path = %v; want exitcode.Success; stderr: %s", code, stderr.String())
+			}
+			if !strings.Contains(stdout.String(), tc.path) {
+				t.Errorf("stdout = %q; want package listing", stdout.String())
+			}
+			if got := gitOut(t, dir, "cat-file", "-p", "HEAD:"+tc.path); !strings.Contains(got, "after") {
+				t.Errorf("HEAD:%s = %q; want updated content", tc.path, got)
 			}
 		})
 	}
