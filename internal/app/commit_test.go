@@ -109,15 +109,15 @@ func TestRun_CommitRefusesStructuredDataSymbolViaRunApp(t *testing.T) {
 		t.Errorf("stderr = %q; want %q", stderr, wantStderr)
 	}
 
-	stdout, stderr, code = runApp(t, "commit", "-m", "chore: bump", "--quiet", "package.json")
+	stdout, stderr, code = runApp(t, "commit", "-m", "chore: bump", "package.json")
 	if code != exitcode.Success {
 		t.Fatalf("runApp commit by path = %v; want exitcode.Success; stderr: %s", code, stderr)
 	}
-	if stdout != "" {
-		t.Errorf("stdout = %q; want empty", stdout)
+	if !strings.Contains(stdout, "package.json") {
+		t.Errorf("stdout = %q; want package listing", stdout)
 	}
-	if stderr != "" {
-		t.Errorf("stderr = %q; want empty", stderr)
+	if got := gitOut(t, dir, "cat-file", "-p", "HEAD:package.json"); !strings.Contains(got, `"after"`) {
+		t.Errorf("HEAD:package.json = %q; want updated content", got)
 	}
 }
 
