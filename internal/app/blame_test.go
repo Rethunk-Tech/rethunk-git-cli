@@ -77,11 +77,19 @@ func assertAnchorUsageRefusals(t *testing.T, cmd string) {
 
 func TestRun_BlameHelpAndUsage(t *testing.T) {
 	assertAnchorUsageRefusals(t, "blame")
+}
 
+func TestRun_BlameHelpEquality(t *testing.T) {
 	t.Chdir(t.TempDir())
-	stdout, _, code := runApp(t, "blame", "--help")
-	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	qt.Assert(t, qt.StringContains(stdout, "--follow-rename"))
+
+	for _, flag := range []string{"--help", "-h"} {
+		t.Run(flag, func(t *testing.T) {
+			stdout, stderr, code := runApp(t, "blame", flag)
+			qt.Assert(t, qt.Equals(code, exitcode.Success))
+			qt.Assert(t, qt.Equals(stdout, blameHelp))
+			qt.Assert(t, qt.Equals(stderr, ""))
+		})
+	}
 }
 
 // TestRun_BlameUnresolvableAnchorNeverWidensToWholeFile pins the guardrail
