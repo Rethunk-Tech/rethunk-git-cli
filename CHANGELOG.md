@@ -8,6 +8,14 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit commit` now reuses Git's generated message during an in-progress
+  merge, cherry-pick, or revert when no `-m`/`-F` is given, matching
+  `git commit --no-edit`; explicit messages still override it.
+
+- `rgit context` now emits `H` records for detached `HEAD` and `S` records
+  for active merge, cherry-pick, revert, rebase, and bisect operations, with
+  the existing byte budget and record ordering preserved.
+
 - `rgit context` now emits `W` records for degraded `[ts-only]` resolution
   and non-fatal diff warnings, while retaining the matching stderr
   diagnostics. See [`docs/CODES.md`](docs/CODES.md#rgit-context).
@@ -104,6 +112,10 @@ Notable changes to `rgit`. The format follows
   created commit. See [`docs/CODES.md`](docs/CODES.md#rgit-commit---porcelain).
 
 ### Fixed
+
+- Symbol anchors on paths with unmerged index entries now refuse with exit 10;
+  naming the path delegates conflict staging to Git. `rgit diff` reads the
+  worktree's conflict-marker content for those paths.
 
 - HTML language-server cross-checks now match class-bearing elements by
   stripping the server's `.class` suffix before comparing its `tag#id` name;
