@@ -253,6 +253,19 @@ func ForExtension(ext string) (Language, bool) {
 	return l, ok
 }
 
+// ForExtensionFolding returns the adapter claiming ext. It preserves exact
+// lookup first and only folds case when the caller explicitly requests it.
+func ForExtensionFolding(ext string, fold bool) (Language, bool) {
+	if l, ok := ForExtension(ext); ok {
+		return l, true
+	}
+	if fold {
+		l, ok := ForExtension(strings.ToLower(ext))
+		return l, ok
+	}
+	return nil, false
+}
+
 // buildTagGated is an optional refinement of Language, the same seam shape
 // as ImportMatcher above and trailingCommentTrimmer (extent.go): a Language
 // implements it only when it needs to answer something most adapters never

@@ -305,6 +305,33 @@ func TestShebangExtensionLookup_VersionedFamilies(t *testing.T) {
 	}
 }
 
+func TestForExtensionFolding(t *testing.T) {
+	t.Parallel()
+
+	goLang, ok := ForExtension(".go")
+	if !ok {
+		t.Fatal("ForExtension(.go) not registered")
+	}
+
+	if got, ok := ForExtensionFolding(".GO", true); !ok || got != goLang {
+		t.Errorf("ForExtensionFolding(.GO, true) = (%v, %v); want Go, true", got, ok)
+	}
+	if got, ok := ForExtensionFolding(".GO", false); ok || got != nil {
+		t.Errorf("ForExtensionFolding(.GO, false) = (%v, %v); want nil, false", got, ok)
+	}
+	if got, ok := ForExtension(".GO"); ok || got != nil {
+		t.Errorf("ForExtension(.GO) = (%v, %v); want nil, false", got, ok)
+	}
+
+	ext := filepath.Ext("file.d.ts")
+	if ext != ".ts" {
+		t.Fatalf("filepath.Ext(file.d.ts) = %q; want .ts", ext)
+	}
+	if got, ok := ForExtensionFolding(ext, true); !ok || got.Name() != "typescript" {
+		t.Errorf("ForExtensionFolding(filepath.Ext(file.d.ts), true) = (%v, %v); want TypeScript, true", got, ok)
+	}
+}
+
 func TestLanguageForPath_UsesHEADWhenWorktreeIsAbsent(t *testing.T) {
 	t.Parallel()
 
