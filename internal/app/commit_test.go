@@ -131,7 +131,7 @@ func TestRun_CommitRefusesStructuredDataSymbolViaRunApp(t *testing.T) {
 	if !strings.Contains(stdout, "package.json") {
 		t.Errorf("stdout = %q; want package listing", stdout)
 	}
-	if got := gitOut(t, dir, "cat-file", "-p", "HEAD:package.json"); !strings.Contains(got, `"after"`) {
+	if got := gitOut(t, dir, "cat-file", "-p", "HEAD:package.json"); !strings.Contains(got, strings.TrimRight(`{"name": "after"}`+"\n", "\n")) {
 		t.Errorf("HEAD:package.json = %q; want updated content", got)
 	}
 }
