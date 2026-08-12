@@ -172,10 +172,6 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 
 	root, prefix, repo, code := openRepo(ctx, dir, stderr)
 	if code != exitcode.Success {
-		if len(f.messages) == 0 && f.msgFile == "" && !autoMessage {
-			fmt.Fprintln(stderr, "rgit: commit requires a message (-m or -F)")
-			return exitcode.InvalidUsage
-		}
 		return code
 	}
 

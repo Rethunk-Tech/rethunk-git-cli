@@ -143,6 +143,16 @@ func TestRun_CherryPickWithNoMessageUsesCherryPickMessage(t *testing.T) {
 	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), "feat: cherry-pick source\n"))
 }
 
+func TestRun_CommitWithoutMessageOutsideSequencerIsUsageError(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 2 }\n")
+
+	_, stderr, code := runApp(t, "commit", "--no-verify", "a.go")
+
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "commit requires a message"))
+}
+
 func TestRun_RevertWithNoMessageUsesRevertMessage(t *testing.T) {
 	dir := chdirTempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 2 }\n")

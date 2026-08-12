@@ -130,8 +130,9 @@ func TestRun_SubcommandHelp(t *testing.T) {
 
 // TestRun_UsageErrors covers every validation that fires before a
 // repository is opened. They share one case list because they share one
-// exit code: docs/CODES.md gives 129 to bad flags, missing messages, no
-// targets and invalid combinations alike.
+// exit code: docs/CODES.md gives 129 to bad flags, no targets and invalid
+// combinations alike. A missing commit message is checked after openRepo
+// (TestRun_CommitWithoutMessageOutsideSequencerIsUsageError).
 func TestRun_UsageErrors(t *testing.T) {
 	t.Chdir(t.TempDir())
 
@@ -151,10 +152,6 @@ func TestRun_UsageErrors(t *testing.T) {
 		name: "commit: --porcelain and --quiet are mutually exclusive",
 		args: []string{"commit", "--porcelain", "--quiet", "-m", "feat(x): y", "a.go"},
 		want: "--porcelain and --quiet are mutually exclusive",
-	}, {
-		name: "commit: a message is required",
-		args: []string{"commit", "a.go"},
-		want: "commit requires a message",
 	}, {
 		name: "commit: at least one target is required",
 		args: []string{"commit", "-m", "feat(x): y"},
