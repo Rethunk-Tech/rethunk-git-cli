@@ -12,9 +12,9 @@ import (
 )
 
 // PathError is a target refused before any resolution was attempted on
-// it: a symlink, gitlink, or binary path a symbol anchor cannot address
-// (exit 10), a gitignored-and-untracked path (exit 7), or a symbol anchor
-// naming a language with no grammar in this build (exit 9).
+// it: a symlink, gitlink, binary, or unmerged path a symbol anchor cannot
+// address (exit 10), a gitignored-and-untracked path (exit 7), or a symbol
+// anchor naming a language with no grammar in this build (exit 9).
 // docs/ANCHORS.md and
 // docs/USAGE.md's exit-code table are authoritative; Code is set to
 // match directly rather than requiring callers to pattern-match text.
@@ -37,6 +37,7 @@ const (
 	pathSymlink
 	pathGitlink
 	pathBinary
+	pathUnmerged
 )
 
 // classifyPath determines a path's kind by preferring the worktree entry
@@ -48,6 +49,14 @@ const (
 // diagnosing "does not exist", which resolve.Resolve already does with
 // the right exit code.
 func classifyPath(ctx context.Context, repo *gitx.Repo, root, path string) (pathKind, error) {
+	unmerged, err := repo.IsUnmerged(ctx, path)
+	if err != nil {
+		return pathRegular, err
+	}
+	if unmerged {
+		return pathUnmerged, nil
+	}
+
 	full := filepath.Join(root, path)
 	info, statErr := os.Lstat(full)
 	switch {
@@ -139,6 +148,8 @@ func refusalFor(path string, kind pathKind) error {
 		return &PathError{Code: exitcode.SpecialPathRefused, Path: path, Reason: "submodule; name the path instead of a symbol"}
 	case pathBinary:
 		return &PathError{Code: exitcode.SpecialPathRefused, Path: path, Reason: "binary; name the path instead of a symbol"}
+	case pathUnmerged:
+		return &PathError{Code: exitcode.SpecialPathRefused, Path: path, Reason: "unmerged; name the path instead of a symbol"}
 	default:
 		return nil
 	}

@@ -52,12 +52,26 @@ func (s contentSide) read(ctx context.Context, repo *gitx.Repo, root, path strin
 	case sideIndex:
 		// CatFile builds rev+":"+path; an empty rev yields ":path", which
 		// git reads as the index's stage-0 entry.
+		unmerged, err := repo.IsUnmerged(ctx, path)
+		if err != nil {
+			return nil, false, err
+		}
+		if unmerged {
+			return util.ReadFileIfExists(filepath.Join(root, path))
+		}
 		if cache != nil {
 			if res, ok := cache.lookup("", path); ok {
-				return res.Content, res.Exists, nil
+				if res.Exists {
+					return res.Content, true, nil
+				}
+				return readUnmergedWorktree(ctx, repo, root, path)
 			}
 		}
-		return repo.CatFile(ctx, "", path)
+		content, exists, err := repo.CatFile(ctx, "", path)
+		if err != nil || exists {
+			return content, exists, err
+		}
+		return readUnmergedWorktree(ctx, repo, root, path)
 	default:
 		if cache != nil {
 			if res, ok := cache.lookup(s.rev, path); ok {
@@ -66,6 +80,17 @@ func (s contentSide) read(ctx context.Context, repo *gitx.Repo, root, path strin
 		}
 		return repo.CatFile(ctx, s.rev, path)
 	}
+}
+
+func readUnmergedWorktree(ctx context.Context, repo *gitx.Repo, root, path string) ([]byte, bool, error) {
+	unmerged, err := repo.IsUnmerged(ctx, path)
+	if err != nil {
+		return nil, false, err
+	}
+	if !unmerged {
+		return nil, false, nil
+	}
+	return util.ReadFileIfExists(filepath.Join(root, path))
 }
 
 // mode returns the git file mode recorded for path on this side, for

@@ -3,6 +3,8 @@ package diff
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -193,6 +195,41 @@ func TestCommittableBase_UnbornBranchFallsBackToEmptyTree(t *testing.T) {
 	const emptyTreeSHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 	if base != emptyTreeSHA {
 		t.Errorf("base = %q; want the empty tree %q, not a literal \"HEAD\" (branch is unborn)", base, emptyTreeSHA)
+	}
+}
+
+func TestContentSideRead_UnmergedFallsBackToWorktree(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	gittest.Write(t, dir, "conflict.txt", "base\n")
+	gittest.Commit(t, dir, "chore: add conflict fixture")
+	gittest.Write(t, dir, "conflict.txt", "<<<<<<< ours\nworktree\n>>>>>>> theirs\n")
+
+	blob := strings.TrimSpace(gittest.Git(t, dir, "rev-parse", "HEAD:conflict.txt"))
+	setUnmergedIndex(t, dir, blob, "conflict.txt")
+
+	content, exists, err := indexSide().read(context.Background(), repo, dir, "conflict.txt", nil)
+	if err != nil {
+		t.Fatalf("indexSide.read: %v", err)
+	}
+	if !exists {
+		t.Fatal("indexSide.read exists = false; want true")
+	}
+	want := "<<<<<<< ours\nworktree\n>>>>>>> theirs\n"
+	if string(content) != want {
+		t.Errorf("indexSide.read content = %q; want %q", content, want)
+	}
+}
+
+func setUnmergedIndex(t *testing.T, dir, blob, path string) {
+	t.Helper()
+	cmd := exec.Command("git", "-C", dir, "update-index", "--index-info")
+	cmd.Stdin = strings.NewReader(fmt.Sprintf(
+		"100644 %s 1\t%s\n100644 %s 2\t%s\n100644 %s 3\t%s\n",
+		blob, path, blob, path, blob, path,
+	))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git update-index --index-info: %v: %s", err, out)
 	}
 }
 

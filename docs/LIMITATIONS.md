@@ -106,6 +106,11 @@ touches `rgit`'s own byte synthesis at all (`internal/synth/stage.go`'s
 `TestStage_SubmoduleAndSymlinkPathStaging` for both the pathspec staging and
 the anchor refusal, on each of the two kinds.
 
+An **unmerged path** likewise refuses a symbol anchor with exit 10
+(`SpecialPathRefused`). Name the path instead so Git can stage the conflict
+entries and their conflict-marker content without rgit attempting a symbol
+splice. Pathspec targets remain delegated to `git add`.
+
 **An uninitialized submodule refuses the identical anchor the same way** —
 `git submodule deinit` leaves the directory in place, emptied of its own
 `.git`, and `classifyPath` (`internal/synth/special.go`) cross-checks HEAD's

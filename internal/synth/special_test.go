@@ -2,8 +2,12 @@ package synth
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
@@ -231,4 +235,43 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 			t.Errorf("kind = %v; want pathRegular", kind)
 		}
 	})
+}
+
+func TestStage_RefusesUnmergedSymbol(t *testing.T) {
+	t.Parallel()
+	dir, repo := newSpecialTestRepo(t)
+	gittest.Write(t, dir, "conflict.go", "package p\n\nfunc Keep() {}\n")
+	gittest.Commit(t, dir, "chore: add conflict fixture")
+
+	blob := strings.TrimSpace(gittest.Git(t, dir, "rev-parse", "HEAD:conflict.go"))
+	setUnmergedIndex(t, dir, blob, "conflict.go")
+
+	err := Stage(context.Background(), repo, dir, []Target{AnchorTarget("conflict.go", "Keep")})
+	var pathErr *PathError
+	if !errors.As(err, &pathErr) {
+		t.Fatalf("Stage error = %v (%T); want *PathError", err, err)
+	}
+	if pathErr.Code != exitcode.SpecialPathRefused {
+		t.Errorf("Code = %v; want SpecialPathRefused", pathErr.Code)
+	}
+	if pathErr.Reason != "unmerged; name the path instead of a symbol" {
+		t.Errorf("Reason = %q; want unmerged refusal", pathErr.Reason)
+	}
+	if unmerged, err := repo.IsUnmerged(context.Background(), "conflict.go"); err != nil {
+		t.Fatalf("IsUnmerged after refusal: %v", err)
+	} else if !unmerged {
+		t.Error("IsUnmerged after refusal = false; want true")
+	}
+}
+
+func setUnmergedIndex(t *testing.T, dir, blob, path string) {
+	t.Helper()
+	cmd := exec.Command("git", "-C", dir, "update-index", "--index-info")
+	cmd.Stdin = strings.NewReader(fmt.Sprintf(
+		"100644 %s 1\t%s\n100644 %s 2\t%s\n100644 %s 3\t%s\n",
+		blob, path, blob, path, blob, path,
+	))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git update-index --index-info: %v: %s", err, out)
+	}
 }
