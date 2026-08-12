@@ -27,6 +27,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 
 	"golang.org/x/term"
 )
@@ -34,8 +35,11 @@ import (
 // Repo wraps git invocations rooted at a working directory. dir need not be
 // the top of the worktree; git resolves that itself via -C.
 type Repo struct {
-	root string
-	env  []string
+	root           string
+	env            []string
+	ignoreCaseOnce sync.Once
+	ignoreCase     bool
+	ignoreCaseErr  error
 }
 
 // New returns a Repo rooted at dir.
@@ -557,6 +561,63 @@ func (r *Repo) RevParseVerify(ctx context.Context, rev string) (sha string, ok b
 	return r.optionalLine(ctx, "rev-parse", "--verify", "--quiet", rev)
 }
 
+// IsUnmerged reports whether path has any unmerged index entries, via
+// `git ls-files -u`. An empty result is the normal clean-index answer.
+func (r *Repo) IsUnmerged(ctx context.Context, path string) (bool, error) {
+	out, err := r.checked(ctx, "ls-files", "-u", "--", path)
+	if err != nil {
+		return false, err
+	}
+	return len(bytes.TrimSpace(out)) > 0, nil
+}
+
+// SequencerOp reports the active git operation, if any. The pseudo-refs are
+// checked in precedence order because git can leave more than one around
+// while an operation is being continued.
+func (r *Repo) SequencerOp(ctx context.Context) (op string, ok bool, err error) {
+	refs := []struct {
+		ref string
+		op  string
+	}{
+		{ref: "MERGE_HEAD", op: "merge"},
+		{ref: "CHERRY_PICK_HEAD", op: "cherry-pick"},
+		{ref: "REVERT_HEAD", op: "revert"},
+		{ref: "REBASE_HEAD", op: "rebase"},
+		{ref: "BISECT_HEAD", op: "bisect"},
+	}
+	for _, candidate := range refs {
+		if _, found, err := r.RevParseVerify(ctx, candidate.ref); err != nil {
+			return "", false, err
+		} else if found {
+			return candidate.op, true, nil
+		}
+	}
+	return "", false, nil
+}
+
+// IgnoreCase reports git's core.ignorecase setting. The result is cached for
+// the lifetime of this Repo because the setting is repository configuration,
+// not invocation state.
+func (r *Repo) IgnoreCase(ctx context.Context) (bool, error) {
+	r.ignoreCaseOnce.Do(func() {
+		args := []string{"config", "--bool", "--get", "core.ignorecase"}
+		res, err := r.run(ctx, nil, args...)
+		if err != nil {
+			r.ignoreCaseErr = err
+			return
+		}
+		switch res.ExitCode {
+		case 0:
+			r.ignoreCase = strings.EqualFold(strings.TrimSpace(string(res.Stdout)), "true")
+		case 1:
+			r.ignoreCase = false
+		default:
+			r.ignoreCaseErr = gitError(args, res)
+		}
+	})
+	return r.ignoreCase, r.ignoreCaseErr
+}
+
 // DiffNumstat runs `git diff --numstat` with the given extra arguments
 // (revision ranges, --staged, pathspecs, ...) and returns each line's raw
 // fields. Added/Deleted stay strings because git prints "-" for a binary
@@ -871,19 +932,24 @@ func (r *Repo) LsFilesStage(ctx context.Context, path string) (mode string, foun
 	if err != nil {
 		return "", false, err
 	}
-	line := strings.TrimRight(string(out), "\n")
-	if line == "" {
+	trimmed := strings.TrimRight(string(out), "\n")
+	if trimmed == "" {
 		return "", false, nil
 	}
-	// git's own shape is "<mode> <sha> <stage>\t<path>" (measured directly),
-	// four fields once strings.Fields splits on the tab too -- never fewer
-	// than 1, so the previous "< 1" check could not fail on a line already
-	// known non-empty and was never reachable.
-	fields := strings.Fields(line)
-	if len(fields) < 4 {
-		return "", false, fmt.Errorf("gitx: malformed ls-files --stage line %q", line)
+	for line := range strings.SplitSeq(trimmed, "\n") {
+		before, _, ok := strings.Cut(line, "\t")
+		if !ok {
+			return "", false, fmt.Errorf("gitx: malformed ls-files --stage line %q", line)
+		}
+		fields := strings.Fields(before)
+		if len(fields) != 3 {
+			return "", false, fmt.Errorf("gitx: malformed ls-files --stage line %q", line)
+		}
+		if fields[2] == "0" {
+			return fields[0], true, nil
+		}
 	}
-	return fields[0], true, nil
+	return "", false, nil
 }
 
 // Blame runs `git blame` on path, bounded to the 1-based, inclusive line

@@ -7,7 +7,9 @@ package gitx_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -41,6 +43,21 @@ func TestLsFilesStageAndMergeBase(t *testing.T) {
 		t.Errorf("expected tracked file to be found in stage, got mode=%q found=%v", mode, found)
 	}
 
+	gittest.Write(t, dir, "conflict.txt", "conflict\n")
+	blob := hashObject(t, dir, "conflict\n")
+	setUnmergedIndex(t, dir, blob, "conflict.txt")
+
+	if unmerged, err := repo.IsUnmerged(ctx, "conflict.txt"); err != nil {
+		t.Fatalf("IsUnmerged error: %v", err)
+	} else if !unmerged {
+		t.Error("IsUnmerged = false; want true")
+	}
+	if mode, found, err := repo.LsFilesStage(ctx, "conflict.txt"); err != nil {
+		t.Fatalf("LsFilesStage(unmerged) error: %v", err)
+	} else if found || mode != "" {
+		t.Errorf("LsFilesStage(unmerged) = (%q, %v); want (empty, false)", mode, found)
+	}
+
 	// Commit initial commit for MergeBase testing
 	gittest.Commit(t, dir, "initial")
 	branch1SHA, _, err := repo.RevParseVerify(ctx, "HEAD")
@@ -59,6 +76,64 @@ func TestLsFilesStageAndMergeBase(t *testing.T) {
 	}
 	if mbSHA != branch1SHA {
 		t.Errorf("MergeBase SHA = %q; want %q", mbSHA, branch1SHA)
+	}
+}
+
+func TestSequencerOpAndIgnoreCase(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	ctx := context.Background()
+
+	gittest.Write(t, dir, "file.txt", "content\n")
+	gittest.Commit(t, dir, "initial")
+	sha, ok, err := repo.RevParseVerify(ctx, "HEAD")
+	if err != nil || !ok {
+		t.Fatalf("RevParseVerify(HEAD) = (%q, %v, %v)", sha, ok, err)
+	}
+
+	if op, found, err := repo.SequencerOp(ctx); err != nil || found || op != "" {
+		t.Fatalf("SequencerOp(clean) = (%q, %v, %v); want empty", op, found, err)
+	}
+	if err := os.WriteFile(dir+"/.git/MERGE_HEAD", []byte(sha+"\n"), 0o644); err != nil {
+		t.Fatalf("write MERGE_HEAD: %v", err)
+	}
+	if op, found, err := repo.SequencerOp(ctx); err != nil || !found || op != "merge" {
+		t.Fatalf("SequencerOp(merge) = (%q, %v, %v); want merge", op, found, err)
+	}
+	if err := os.Remove(dir + "/.git/MERGE_HEAD"); err != nil {
+		t.Fatalf("remove MERGE_HEAD: %v", err)
+	}
+
+	gittest.Git(t, dir, "config", "core.ignorecase", "true")
+	if ignoreCase, err := repo.IgnoreCase(ctx); err != nil || !ignoreCase {
+		t.Fatalf("IgnoreCase() = (%v, %v); want true", ignoreCase, err)
+	}
+	gittest.Git(t, dir, "config", "core.ignorecase", "false")
+	if ignoreCase, err := repo.IgnoreCase(ctx); err != nil || !ignoreCase {
+		t.Fatalf("IgnoreCase() after config change = (%v, %v); want cached true", ignoreCase, err)
+	}
+}
+
+func hashObject(t *testing.T, dir, content string) string {
+	t.Helper()
+	cmd := exec.Command("git", "-C", dir, "hash-object", "-w", "--stdin")
+	cmd.Stdin = strings.NewReader(content)
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("git hash-object: %v", err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func setUnmergedIndex(t *testing.T, dir, blob, path string) {
+	t.Helper()
+	cmd := exec.Command("git", "-C", dir, "update-index", "--index-info")
+	cmd.Stdin = strings.NewReader(fmt.Sprintf(
+		"100644 %s 1\t%s\n100644 %s 2\t%s\n100644 %s 3\t%s\n",
+		blob, path, blob, path, blob, path,
+	))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git update-index --index-info: %v: %s", err, out)
 	}
 }
 
