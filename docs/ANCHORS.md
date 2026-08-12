@@ -334,20 +334,23 @@ element's own tag-qualified spelling as a candidate.
 A file whose extension claims no grammar is matched by its shebang instead, so
 an extensionless `bin/` script or git hook is addressable like any other file.
 `bash` and `sh` resolve to the shell grammar and `python3`/`python` to Python,
-in both the `#!/bin/sh` and `#!/usr/bin/env sh` spellings. **`zsh` is
-deliberately excluded** — the bash grammar mis-parses zsh-specific syntax, and
-a wrong extent is worse than an honest refusal. The extension is always tried
-first, so this changes nothing for a file that has one.
+in both the `#!/bin/sh` and `#!/usr/bin/env sh` spellings. Versioned Python 3
+interpreters such as `python3.12` and `python3.13` resolve the same way;
+Python 2 names remain unsupported. **`zsh` is deliberately excluded** — the
+bash grammar mis-parses zsh-specific syntax, and a wrong extent is worse than
+an honest refusal. The extension is always tried first, so this changes
+nothing for a file that has one.
 
 The Node/TypeScript ecosystem routes to the TypeScript adapter the same way:
-`node`, `nodejs`, `tsx`, `ts-node`, and `bun` all resolve to it, whether
+`node`, `nodejs`, `tsx`, `ts-node`, `bun`, and `deno` all resolve to it, whether
 spelled directly (`#!/usr/bin/env node`) or via `env -S` with a flag of the
 interpreter's own (`#!/usr/bin/env -S node --import tsx`). `npx NAME` and
 `bunx NAME` unwrap once further to `NAME` itself — both are package runners,
 not interpreters, and `NAME` is what actually decides the language
-(`#!/usr/bin/env npx tsx` is TypeScript, not "npx"). No new grammar is added
-for any of this; every one of them was already routing to a language this
-resolver supports, just not yet from an extensionless shebang.
+(`#!/usr/bin/env npx tsx` is TypeScript, not "npx"). Versioned Node and Bun
+names such as `node20` and `bun1.2` resolve to TypeScript too. No new grammar
+is added for any of this; every one of them routes to a language this resolver
+supports from an extensionless shebang.
 
 The shebang is read from the worktree when that copy exists. If the worktree
 copy is absent, the resolver samples the first 256 bytes of the `HEAD` blob

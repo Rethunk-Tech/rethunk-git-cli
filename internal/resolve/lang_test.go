@@ -232,6 +232,7 @@ func TestForPath_NodeJSEcosystemRoutesToTypeScript(t *testing.T) {
 
 	fixtures := []string{
 		"#!/usr/bin/env node\nconsole.log(1)\n",
+		"#!/usr/bin/node20\nconsole.log(1)\n",
 		"#!/usr/bin/env -S node --import tsx\nconsole.log(1)\n",
 		"#!/usr/bin/env npx tsx\nconsole.log(1)\n",
 		"#!/usr/bin/env bun run\nconsole.log(1)\n",
@@ -248,6 +249,59 @@ func TestForPath_NodeJSEcosystemRoutesToTypeScript(t *testing.T) {
 	}
 	if _, ok := ForPath("script", []byte("#!/usr/bin/env zsh\necho hi\n")); ok {
 		t.Error("ForPath with a zsh shebang resolved; zsh stays excluded (tree-sitter-bash mis-parse)")
+	}
+}
+
+func TestForPath_VersionedPythonShebangsRouteToPython(t *testing.T) {
+	t.Parallel()
+
+	fixtures := []string{
+		"#!/usr/bin/python3.12\nprint(1)\n",
+		"#!/usr/bin/env -S python3.13 -u\nprint(1)\n",
+	}
+	for _, content := range fixtures {
+		lang, ok := ForPath("script", []byte(content))
+		if !ok || lang.Name() != "python" {
+			t.Errorf("ForPath(%q) = (%v, %v); want the Python adapter", content, lang, ok)
+		}
+	}
+
+	for _, content := range []string{
+		"#!/usr/bin/python2\nprint 1\n",
+		"#!/usr/bin/python2.7\nprint 1\n",
+	} {
+		if _, ok := ForPath("script", []byte(content)); ok {
+			t.Errorf("ForPath(%q) resolved; want Python 2 to remain unmapped", content)
+		}
+	}
+}
+
+func TestShebangExtensionLookup_VersionedFamilies(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		interp string
+		want   string
+		ok     bool
+	}{
+		{"python3.12", ".py", true},
+		{"python3.13", ".py", true},
+		{"python2", "", false},
+		{"python2.7", "", false},
+		{"node20", ".ts", true},
+		{"bun1.2", ".ts", true},
+		{"deno", ".ts", true},
+		{"node-20", "", false},
+		{"zsh", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.interp, func(t *testing.T) {
+			t.Parallel()
+			got, ok := shebangExtensionLookup(tt.interp)
+			if got != tt.want || ok != tt.ok {
+				t.Errorf("shebangExtensionLookup(%q) = (%q, %v); want (%q, %v)", tt.interp, got, ok, tt.want, tt.ok)
+			}
+		})
 	}
 }
 

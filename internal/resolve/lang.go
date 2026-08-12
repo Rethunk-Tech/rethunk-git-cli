@@ -359,6 +359,7 @@ var shebangExtension = map[string]string{
 	"tsx":     ".ts",
 	"ts-node": ".ts",
 	"bun":     ".ts",
+	"deno":    ".ts",
 }
 
 // ForPath returns the adapter for path. Extension lookup is tried first and
@@ -383,11 +384,57 @@ func ForPath(path string, content []byte) (Language, bool) {
 	if !ok {
 		return nil, false
 	}
-	ext, ok := shebangExtension[interp]
+	ext, ok := shebangExtensionLookup(interp)
 	if !ok {
 		return nil, false
 	}
 	return ForExtension(ext)
+}
+
+// shebangExtensionLookup keeps the interpreter table exact by default, then
+// recognizes versions only for runtimes whose mapped family is unambiguous.
+// Python 2 is intentionally excluded: accepting every numeric Python suffix
+// would route its syntax to the Python 3 grammar.
+func shebangExtensionLookup(interp string) (string, bool) {
+	if ext, ok := shebangExtension[interp]; ok {
+		return ext, true
+	}
+
+	if strings.HasPrefix(interp, "python3") && versionSuffix(interp[len("python3"):], true) {
+		return shebangExtension["python3"], true
+	}
+	for _, family := range []string{"node", "bun"} {
+		if strings.HasPrefix(interp, family) && versionSuffix(interp[len(family):], false) {
+			return shebangExtension[family], true
+		}
+	}
+	return "", false
+}
+
+func versionSuffix(suffix string, dottedOnly bool) bool {
+	if suffix == "" {
+		return false
+	}
+	if dottedOnly && suffix[0] != '.' {
+		return false
+	}
+	if dottedOnly {
+		suffix = suffix[1:]
+	}
+	if !dottedOnly && suffix[0] == '-' {
+		return false
+	}
+	for _, part := range strings.Split(suffix, ".") {
+		if part == "" {
+			return false
+		}
+		for _, r := range part {
+			if r < '0' || r > '9' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // shebangInterpreter reads the interpreter name off content's own first
