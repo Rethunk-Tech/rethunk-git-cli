@@ -13,7 +13,7 @@ import (
 
 const symbolsHelp = `usage: rgit symbols [--for-commit] <file>
 
-List every declared symbol that can be resolved from the worktree file.
+List every declared symbol that can be resolved from the worktree file or its HEAD blob.
 --for-commit  Omit structured-data symbols that commit refuses.
 
 Full reference: docs/USAGE.md
@@ -39,7 +39,7 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 		return exitcode.InvalidUsage
 	}
 
-	root, prefix, _, code := openRepo(ctx, dir, stderr)
+	root, prefix, repo, code := openRepo(ctx, dir, stderr)
 	if code != exitcode.Success {
 		return code
 	}
@@ -58,12 +58,31 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 	path = filepath.Clean(path)
 
 	src, err := os.ReadFile(filepath.Join(root, path))
+	var headSrc []byte
+	headExists := false
+	if err != nil {
+		if os.IsNotExist(err) {
+			worktreeErr := err
+			headSrc, headExists, err = repo.CatFile(ctx, "HEAD", path)
+			if err == nil && headExists {
+				src = headSrc
+			} else if err == nil {
+				err = worktreeErr
+			}
+		}
+		if err != nil || !headExists {
+			fmt.Fprintf(stderr, "rgit: cannot read %q: %v\n", positionals[0], err)
+			return exitcode.GitFailure
+		}
+	}
+
+	lang, ok, _, err := resolve.LanguageForPath(root, path, func() ([]byte, bool, error) {
+		return headSrc, headExists, nil
+	})
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: cannot read %q: %v\n", positionals[0], err)
 		return exitcode.GitFailure
 	}
-
-	lang, ok, _ := resolve.LanguageForWorktreePath(root, path)
 	if !ok {
 		fmt.Fprintf(stderr, "rgit: unsupported language for %q\n", positionals[0])
 		return exitcode.UnsupportedLanguage

@@ -75,6 +75,43 @@ func TestRunSymbolsListsCleanWorktreeDeclarations(t *testing.T) {
 	}
 }
 
+func TestRun_SymbolsListsHeadDeclarationsWhenWorktreeFileIsGone(t *testing.T) {
+	root := t.TempDir()
+	source := []byte("package demo\n\nfunc Foo() {}\n")
+	symbolsTestGit(t, root, "init", "--quiet")
+	if err := os.WriteFile(filepath.Join(root, "a.go"), source, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	symbolsTestGit(t, root, "add", "a.go")
+	symbolsTestGit(t, root, "-c", "user.name=rgit test", "-c", "user.email=rgit@example.invalid", "commit", "--quiet", "-m", "initial")
+	if err := os.Remove(filepath.Join(root, "a.go")); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr strings.Builder
+	code := runSymbols(context.Background(), root, []string{"a.go"}, &stdout, &stderr)
+	if code != exitcode.Success {
+		t.Fatalf("runSymbols() = %d, stderr = %q", code, stderr.String())
+	}
+	if !containsString(strings.Fields(stdout.String()), "Foo") {
+		t.Fatalf("runSymbols() omitted HEAD symbol from %q", stdout.String())
+	}
+}
+
+func TestRun_SymbolsMissingUntrackedFileStillErrors(t *testing.T) {
+	root := t.TempDir()
+	symbolsTestGit(t, root, "init", "--quiet")
+
+	var stdout, stderr strings.Builder
+	code := runSymbols(context.Background(), root, []string{"missing.go"}, &stdout, &stderr)
+	if code != exitcode.GitFailure {
+		t.Fatalf("runSymbols() = %d, want %d", code, exitcode.GitFailure)
+	}
+	if !strings.Contains(stderr.String(), `rgit: cannot read "missing.go":`) {
+		t.Fatalf("runSymbols() stderr = %q, want cannot-read error", stderr.String())
+	}
+}
+
 func TestRunSymbolsStructuredDataCommitMode(t *testing.T) {
 	root := t.TempDir()
 	source := []byte("{\n  \"name\": \"demo\",\n  \"enabled\": true\n}\n")
