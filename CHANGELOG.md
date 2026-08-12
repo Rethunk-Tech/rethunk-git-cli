@@ -16,6 +16,14 @@ Notable changes to `rgit`. The format follows
   for active merge, cherry-pick, revert, rebase, and bisect operations, with
   the existing byte budget and record ordering preserved.
 
+- `rgit symbols` lists declarations from `HEAD` when a tracked worktree file
+  is gone. See [`docs/USAGE.md`](docs/USAGE.md#symbols).
+
+- Extensionless shebangs now map versioned Python 3, Node, and Bun
+  interpreters (`python3.12`, `node20`, `bun1.2`) plus `deno` to the existing
+  grammars. Python 2 remains unmapped. See
+  [`docs/ANCHORS.md`](docs/ANCHORS.md#language-support).
+
 - `rgit context` now emits `W` records for degraded `[ts-only]` resolution
   and non-fatal diff warnings, while retaining the matching stderr
   diagnostics. See [`docs/CODES.md`](docs/CODES.md#rgit-context).

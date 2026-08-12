@@ -72,8 +72,8 @@ Records, one per line, tab-separated, no header:
       At most one, always last: this many records were withheld because
       the stream reached its byte budget.
 
-The whole stream is capped at 16 KiB. B sorts first (a single record, cost
-next to nothing), then W diagnostics, F rows, and C rows. F rows survive
+The whole stream is capped at 16 KiB. B or H sorts first (a single record, cost
+next to nothing), then S, W diagnostics, F rows, and C rows. F rows survive
 truncation before C rows do: the diff section has no natural bound of its own,
 while commits are already bounded up front (the most recent 20, via git's own
 -n) and cost little to drop. The X record names how many rows were withheld.

@@ -185,6 +185,7 @@ binary or non-parseable files. Name the path instead. Behaviour per kind:
 | Symlink | The target string, mode `120000` |
 | Rename | Nothing special — name both paths; git detects the rename at diff time |
 | Gitignored | Refused (exit 7) unless already tracked, matching `git add` |
+| Unmerged index path | `FILE:SYMBOL` refused with exit 10; name the path instead |
 
 A `FILE:SYMBOL` anchor into JSON, YAML, or TOML resolves fine for `diff`,
 `blame`, and `log` — all three read-only — but `rgit commit` refuses it (exit

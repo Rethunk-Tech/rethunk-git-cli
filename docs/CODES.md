@@ -282,7 +282,6 @@ tab-separated record stream, no header, no `--porcelain` flag to ask for it
 
 ```text
 B<TAB>main<TAB>origin/main<TAB>0<TAB>2
-H<TAB>1a2b3c4d5e6f1a2b3c4d5e6f1a2b3c4d5e6f
 S<TAB>merge
 W<TAB>ts-only
 W<TAB>warning<TAB>extent disagreement reported on stderr

@@ -326,7 +326,6 @@ exclusive with `--porcelain`.
 
 ```text
 B<TAB>main<TAB>origin/main<TAB>0<TAB>2
-H<TAB>1a2b3c4d5e6f1a2b3c4d5e6f1a2b3c4d5e6f
 S<TAB>merge
 W<TAB>ts-only
 W<TAB>warning<TAB>extent disagreement reported on stderr
@@ -507,7 +506,8 @@ nothing else is written. PowerShell registration instructions are in
 It completes subcommands, each subcommand's own flags, plain file paths, and
 — the useful part — symbol names after `FILE:`, by shelling back out to
 `rgit symbols FILE`. That read-only command lists every declared symbol in
-the worktree file, so completion works for both clean and dirty files. If
+the worktree file, or the `HEAD` blob when that copy is gone, so completion
+works for clean, dirty, and deleted-but-tracked files. If
 that call fails for any reason — the working directory is not a repository,
 `rgit` is not on `PATH`, anything — completion offers nothing rather than
 printing to the prompt. `rgit symbols FILE` itself prints one anchor per
