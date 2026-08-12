@@ -149,16 +149,13 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	// neither -m nor -F is given: --amend reuses HEAD's via --no-edit
 	// (docs/USAGE.md: rgit never opens an editor), and --fixup/--squash
 	// generate "fixup!"/"squash! <original subject>" the same way plain
-	// `git commit` does. Every other no-message invocation is still a
-	// usage error. -m/-F given alongside --fixup or --squash is not a
+	// `git commit` does. An in-progress merge, cherry-pick, or revert may
+	// also supply git's generated message; that probe happens after the
+	// repository opens. -m/-F given alongside --fixup or --squash is not a
 	// conflict: git appends it as an extra body paragraph rather than
 	// rejecting or silently dropping it.
 	autoMessage := f.amend || f.fixup != "" || f.squash != ""
 	noEdit := f.amend && len(f.messages) == 0 && f.msgFile == ""
-	if len(f.messages) == 0 && f.msgFile == "" && !autoMessage {
-		fmt.Fprintln(stderr, "rgit: commit requires a message (-m or -F)")
-		return exitcode.InvalidUsage
-	}
 
 	positionalsGiven := fs.Args()
 	if len(positionalsGiven)+len(f.syms)+len(f.files) == 0 {
@@ -175,7 +172,25 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 
 	root, prefix, repo, code := openRepo(ctx, dir, stderr)
 	if code != exitcode.Success {
+		if len(f.messages) == 0 && f.msgFile == "" && !autoMessage {
+			fmt.Fprintln(stderr, "rgit: commit requires a message (-m or -F)")
+			return exitcode.InvalidUsage
+		}
 		return code
+	}
+
+	if len(f.messages) == 0 && f.msgFile == "" && !autoMessage {
+		op, ok, err := repo.SequencerOp(ctx)
+		if err != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return exitcode.GitFailure
+		}
+		if ok && (op == "merge" || op == "cherry-pick" || op == "revert") {
+			noEdit = true
+		} else {
+			fmt.Fprintln(stderr, "rgit: commit requires a message (-m or -F)")
+			return exitcode.InvalidUsage
+		}
 	}
 
 	classified, err := cli.ClassifyArgs(ctx, restoreDoubleDash(fs), false, cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}, cli.GitRevisionResolver{Repo: repo})

@@ -569,6 +569,10 @@ is the point — § Context above).
 `--amend`, `--fixup`, or `--squash` is given with neither — each generates its
 own message (`--amend` reuses HEAD's via `--no-edit`; `--fixup`/`--squash`
 generate `fixup!`/`squash! <subject>`, exactly as plain `git commit` does).
+During an in-progress merge, cherry-pick, or revert, omitting `-m` and `-F`
+also reuses Git's generated message via `--no-edit`; `-m` or `-F` overrides
+that behavior. An in-progress rebase remains a `git rebase --continue`
+operation and still requires a message here.
 
 `-S` is accepted in git's own spellings: bare `-S`, or `-S<key-id>` with the
 key attached. It is rewritten to the long form before the flag parser runs,
@@ -637,7 +641,8 @@ the commit proceeds.
 - A hook rejecting the commit **leaves staging in place**; nothing is rolled back.
 - Hooks are not policed — a hook may stage paths you did not name, exactly as
   under plain `git commit`. Use `--no-verify` to disable them.
-- Merges and rebases are not special-cased.
+- During an in-progress merge, cherry-pick, or revert, omitting `-m` and `-F`
+  uses Git's `--no-edit` message reuse; rebase remains `git rebase --continue`.
 - `commit.cleanup` and `commit.gpgsign` are honoured as configuration, and
   `--gpg-sign`/`--no-gpg-sign` override either. `commit.template` is **not**
   honoured — templates prefill an editor and `rgit` never opens one.

@@ -19,6 +19,7 @@ package app
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -102,6 +103,68 @@ func TestRun_AmendWithNoMessageReusesHeadSubject(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), before))
 	qt.Assert(t, qt.StringContains(gitOut(t, dir, "cat-file", "-p", "HEAD:a.go"), "return 111"))
+}
+
+func TestRun_MergeWithNoMessageUsesMergeMessage(t *testing.T) {
+	dir := chdirTempRepo(t)
+	gitOut(t, dir, "checkout", "-q", "-b", "feature")
+	writeAppFile(t, dir, "feature.txt", "feature\n")
+	gitOut(t, dir, "add", "--", "feature.txt")
+	gitOut(t, dir, "commit", "-q", "-m", "feat: add feature")
+	gitOut(t, dir, "checkout", "-q", "main")
+	gitOut(t, dir, "merge", "--no-ff", "--no-commit", "feature")
+
+	_, stderr, code := runApp(t, "commit", "--no-verify", "feature.txt")
+
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Not(qt.StringContains(stderr, "requires a message")))
+	parents := strings.Fields(gitOut(t, dir, "rev-list", "--parents", "-n", "1", "HEAD"))
+	qt.Assert(t, qt.HasLen(parents, 3))
+	qt.Assert(t, qt.StringContains(gitOut(t, dir, "log", "-1", "--format=%s"), "Merge branch 'feature'"))
+}
+
+func TestRun_CherryPickWithNoMessageUsesCherryPickMessage(t *testing.T) {
+	dir := chdirTempRepo(t)
+	gitOut(t, dir, "checkout", "-q", "-b", "cherry-pick-source")
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 2 }\n")
+	gitOut(t, dir, "add", "--", "a.go")
+	gitOut(t, dir, "commit", "-q", "-m", "feat: cherry-pick source")
+	source := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	gitOut(t, dir, "checkout", "-q", "main")
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 3 }\n")
+	gitOut(t, dir, "commit", "-qam", "feat: main divergence")
+	expectGitFailure(t, dir, "cherry-pick", source)
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 2 }\n")
+
+	_, stderr, code := runApp(t, "commit", "--no-verify", "a.go")
+
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Not(qt.StringContains(stderr, "requires a message")))
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), "feat: cherry-pick source\n"))
+}
+
+func TestRun_RevertWithNoMessageUsesRevertMessage(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 2 }\n")
+	gitOut(t, dir, "commit", "-qam", "feat: revert target")
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 3 }\n")
+	gitOut(t, dir, "commit", "-qam", "feat: later change")
+	expectGitFailure(t, dir, "revert", "HEAD~1")
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 1 }\n")
+
+	_, stderr, code := runApp(t, "commit", "--no-verify", "a.go")
+
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Not(qt.StringContains(stderr, "requires a message")))
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), "Revert \"feat: revert target\"\n"))
+}
+
+func expectGitFailure(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	if err := cmd.Run(); err == nil {
+		t.Fatalf("git %v succeeded; want failure", args)
+	}
 }
 
 // TestRun_FixupAndSquashGenerateAutosquashMessages pins docs/USAGE.md:
