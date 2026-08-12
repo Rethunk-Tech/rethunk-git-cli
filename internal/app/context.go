@@ -39,10 +39,18 @@ select or narrow.
 Records, one per line, tab-separated, no header:
 
   B<TAB>BRANCH<TAB>UPSTREAM<TAB>AHEAD<TAB>BEHIND
-      At most one, always first: the current branch, its upstream tracking
-      ref (empty when none is configured), and how many commits ahead/behind
-      it (both 0 when there is no upstream). Absent entirely on an unborn
-      branch, which has no current branch to report.
+      At most one, first when present: the current branch, its upstream
+      tracking ref (empty when none is configured), and how many commits
+      ahead/behind it (both 0 when there is no upstream). Absent entirely on
+      an unborn branch or detached HEAD.
+
+  H<TAB>SHA
+      One detached-HEAD record with the full commit object id. Absent on an
+      unborn branch.
+
+  S<TAB>OP
+      One active sequencer operation: merge, cherry-pick, revert, rebase, or
+      bisect.
 
   W<TAB>ts-only
       One when at least one file had symbols to cross-check but no live
@@ -115,19 +123,32 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 		return exitcode.GitFailure
 	}
 
-	// The B record is best-effort: an unborn branch (no HEAD yet) has no
-	// current branch to report, and that is not a reason to fail the whole
-	// command any more than an empty commits list is. Absent entirely from
-	// the stream rather than emitted with blank fields, matching "new
-	// records only when relevant" over unconditional growth.
-	branchRecord := ""
+	// Branch identity is best-effort: an unborn branch has no commit to
+	// identify, while detached HEAD is represented by its full object id
+	// rather than the literal branch name "HEAD".
+	branchRecord, detachedRecord := "", ""
 	if branch, berr := repo.CurrentBranch(ctx); berr == nil && branch != "" {
-		upstream, hasUpstream, _ := repo.Upstream(ctx)
-		ahead, behind := 0, 0
-		if hasUpstream {
-			ahead, behind, _ = repo.AheadBehind(ctx)
+		if branch == "HEAD" {
+			if sha, ok, rerr := repo.RevParseVerify(ctx, "HEAD"); rerr != nil {
+				fmt.Fprintf(stderr, "rgit: %v\n", rerr)
+				return exitcode.GitFailure
+			} else if ok {
+				detachedRecord = fmt.Sprintf("H\t%s\n", sha)
+			}
+		} else {
+			upstream, hasUpstream, _ := repo.Upstream(ctx)
+			ahead, behind := 0, 0
+			if hasUpstream {
+				ahead, behind, _ = repo.AheadBehind(ctx)
+			}
+			branchRecord = fmt.Sprintf("B\t%s\t%s\t%d\t%d\n", branch, upstream, ahead, behind)
 		}
-		branchRecord = fmt.Sprintf("B\t%s\t%s\t%d\t%d\n", branch, upstream, ahead, behind)
+	}
+
+	sequencerOp, sequencerActive, err := repo.SequencerOp(ctx)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return exitcode.GitFailure
 	}
 
 	// The default "everything committable" scope -- staged + unstaged vs
@@ -150,16 +171,23 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 		fmt.Fprintf(stderr, "[warning] %s\n", w)
 	}
 
-	// B, if present, sorts first: a single, tiny, always-useful record that
-	// costs the budget almost nothing. W diagnostics follow it, then F rows:
+	// B or H, if present, sorts first: a single, tiny, always-useful record
+	// that costs the budget almost nothing. S follows it, then W diagnostics
+	// and F rows:
 	// F rows are the actionable, unbounded half of the stream, while the 20
 	// commit subjects are cheap and expendable. Budget truncation below drops
 	// from the end of records, so this ordering is what makes a busy branch's
 	// commit history yield to the diff instead of crowding it out
 	// (docs/CODES.md#output-records).
-	records := make([]string, 0, 1+1+len(report.Warnings)+len(commits)+len(report.Files))
+	records := make([]string, 0, 2+1+len(report.Warnings)+len(commits)+len(report.Files))
 	if branchRecord != "" {
 		records = append(records, branchRecord)
+	}
+	if detachedRecord != "" {
+		records = append(records, detachedRecord)
+	}
+	if sequencerActive {
+		records = append(records, fmt.Sprintf("S\t%s\n", sequencerOp))
 	}
 	if report.TSOnly {
 		records = append(records, "W\tts-only\n")

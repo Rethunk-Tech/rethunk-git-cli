@@ -326,6 +326,8 @@ exclusive with `--porcelain`.
 
 ```text
 B<TAB>main<TAB>origin/main<TAB>0<TAB>2
+H<TAB>1a2b3c4d5e6f1a2b3c4d5e6f1a2b3c4d5e6f
+S<TAB>merge
 W<TAB>ts-only
 W<TAB>warning<TAB>extent disagreement reported on stderr
 F<TAB>auth.go<TAB>ValidateToken<TAB>MOD<TAB>12<TAB>3
@@ -345,11 +347,13 @@ call.
 **The output shape is fixed and takes no flags beyond `--help`.** A command
 with options becomes `git status` with extra steps — see
 [`specs/design.md`](../specs/design.md#commands) for why the shape stays
-fixed rather than growing one. Five record types, tab-separated, no header:
+fixed rather than growing one. Seven record types, tab-separated, no header:
 
 | Record | Fields | Meaning |
 | --- | --- | --- |
-| `B` | `BRANCH`, `UPSTREAM`, `AHEAD`, `BEHIND` | At most one, always first: the current branch. `UPSTREAM` is empty and `AHEAD`/`BEHIND` are both `0` with no upstream configured. Absent entirely on an unborn branch |
+| `B` | `BRANCH`, `UPSTREAM`, `AHEAD`, `BEHIND` | At most one, first when present: the current branch. `UPSTREAM` is empty and `AHEAD`/`BEHIND` are both `0` with no upstream configured. Absent on an unborn branch and replaced by `H` on detached HEAD |
+| `H` | `SHA` | One detached-HEAD record with the full commit object id; absent on an unborn branch |
+| `S` | `OP` | One active sequencer operation: `merge`, `cherry-pick`, `revert`, `rebase`, or `bisect` |
 | `W` | `ts-only` | One when at least one file had symbols to cross-check but no live language server was reached. The identical `[ts-only]` notice remains on stderr |
 | `W` | `warning`, `TEXT` | One per non-fatal diff warning. `TEXT` is the warning body without the human `[warning]` prefix; the identical `[warning] TEXT` line remains on stderr |
 | `F` | `FILE`, `SYMBOL`, `STATUS`, `ADDED`, `DELETED` | One per `rgit diff --porcelain` row — identical fields, plus this stream's own leading type tag |
@@ -360,9 +364,9 @@ The diff half is pure composition, not a second attribution path: it is
 literally `rgit diff`'s own default scope (everything committable), rendered
 through the same `--porcelain` records and re-tagged per line.
 
-**The whole stream is capped at 16 KiB.** `B`, when present, sorts first — a
-single record that costs the budget almost nothing — then `W` diagnostics and
-`F` rows. `F` rows survive truncation before `C` rows do. The diff section is
+**The whole stream is capped at 16 KiB.** `B` or `H`, when present, sorts first
+— a single record that costs the budget almost nothing — then `S`, `W`
+diagnostics and `F` rows. `F` rows survive truncation before `C` rows do. The diff section is
 the unbounded, actionable half and has no natural limit of its own; commits
 are already bounded up front (the most recent 20, via git's own history limit)
 and cost little to drop, so a busy branch sheds commit history before it ever
@@ -480,15 +484,18 @@ ValidateToken
 ```
 
 `rgit symbols [--for-commit] <file>` lists every declared symbol that can be
-resolved from the worktree file, one symbol per line. `--for-commit` omits
-structured-data symbols that `rgit commit` refuses; it still exits successfully
-without output when the file is a supported structured-data file.
+resolved from the worktree file, or from the file's `HEAD` blob when the
+worktree copy has been deleted, one symbol per line. A path present in neither
+the worktree nor `HEAD` still errors. `--for-commit` omits structured-data
+symbols that `rgit commit` refuses; it still exits successfully without output
+when the file is a supported structured-data file.
 
 `--help`/`-h` prints the command's usage text and exits 0. Exactly one file
 argument is required; a missing or extra argument prints the usage text to
-stderr and exits with the invalid-usage code. A file that cannot be read or
-whose symbols cannot be resolved exits with the git-failure code, while an
-unsupported language exits with the unsupported-language code. See
+stderr and exits with the invalid-usage code. A file that cannot be read from
+either source or whose symbols cannot be resolved exits with the git-failure
+code, while an unsupported language exits with the unsupported-language code.
+See
 [`CODES.md`](CODES.md#exit-codes).
 
 ## Shell completion

@@ -4,6 +4,7 @@ package app
 
 import (
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -154,6 +155,8 @@ func TestRun_ContextRecordsAreTabSeparatedWithExpectedFieldCounts(t *testing.T) 
 		case "B":
 			sawBranch = true
 			qt.Assert(t, qt.Equals(len(fields), 5))
+		case "H", "S":
+			qt.Assert(t, qt.Equals(len(fields), 2))
 		case "C":
 			qt.Assert(t, qt.Equals(len(fields), 3))
 		case "F":
@@ -188,6 +191,41 @@ func TestRun_ContextBranchRecordSortsFirstAndReportsNoUpstream(t *testing.T) {
 
 	branch := strings.TrimSpace(gitOut(t, dir, "rev-parse", "--abbrev-ref", "HEAD"))
 	qt.Assert(t, qt.StringContains(lines[0], "B\t"+branch+"\t"))
+}
+
+func TestRun_ContextDetachedHeadEmitsHashRecord(t *testing.T) {
+	dir := chdirTempRepo(t)
+	sha := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	gitOut(t, dir, "checkout", "-q", "--detach", "HEAD")
+
+	stdout, _, code := runApp(t, "context")
+
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
+	qt.Assert(t, qt.IsTrue(len(lines) > 0))
+	qt.Assert(t, qt.Equals(lines[0], "H\t"+sha))
+	for _, line := range lines {
+		if strings.HasPrefix(line, "B\t") {
+			t.Errorf("detached context emitted branch record %q", line)
+		}
+	}
+}
+
+func TestRun_ContextSequencerRecordSortsAfterBranch(t *testing.T) {
+	dir := chdirTempRepo(t)
+	sha := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	if err := os.WriteFile(filepath.Join(dir, ".git", "MERGE_HEAD"), []byte(sha+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(filepath.Join(dir, ".git", "MERGE_HEAD")) })
+
+	stdout, _, code := runApp(t, "context")
+
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
+	qt.Assert(t, qt.IsTrue(len(lines) > 1))
+	qt.Assert(t, qt.StringContains(lines[0], "B\t"))
+	qt.Assert(t, qt.Equals(lines[1], "S\tmerge"))
 }
 
 // TestBuildContextStream unit-tests the byte-budget truncation boundary

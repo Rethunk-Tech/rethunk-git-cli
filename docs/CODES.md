@@ -19,7 +19,7 @@ For the flags that produce these, see [`USAGE.md`](USAGE.md).
 | 7 | Refused path — gitignored and untracked |
 | 8 | Commit succeeded; `--push` failed |
 | 9 | Unsupported / deferred language for a symbol anchor |
-| 10 | Symbol anchor refused on a special path (symlink, gitlink, binary) |
+| 10 | Symbol anchor refused on a special path (symlink, gitlink, binary, unmerged) |
 | 11 | All named targets resolve but have no uncommitted changes |
 | 12 | Symbol anchor refused on a structured-data file (JSON, YAML, TOML) (`commit` only) |
 | 128 | Fatal git / system failure (includes hook rejection, GPG failure, a `-C` directory that cannot be entered) |
@@ -282,6 +282,8 @@ tab-separated record stream, no header, no `--porcelain` flag to ask for it
 
 ```text
 B<TAB>main<TAB>origin/main<TAB>0<TAB>2
+H<TAB>1a2b3c4d5e6f1a2b3c4d5e6f1a2b3c4d5e6f
+S<TAB>merge
 W<TAB>ts-only
 W<TAB>warning<TAB>extent disagreement reported on stderr
 F<TAB>auth.go<TAB>ValidateToken<TAB>MOD<TAB>12<TAB>3
@@ -291,19 +293,21 @@ C<TAB>9e8f7d6c5b4a9e8f7d6c5b4a9e8f7d6c5b4a9e8f<TAB>feat(auth): add ValidateToken
 X<TAB>TRUNCATED<TAB>3
 ```
 
-Five record types, distinguished by the first field:
+Seven record types, distinguished by the first field:
 
 | Type | Fields after the type tag | Means |
 | --- | --- | --- |
-| `B` | `BRANCH`, `UPSTREAM`, `AHEAD`, `BEHIND` | At most one, always first: the current branch. `UPSTREAM` is empty and `AHEAD`/`BEHIND` are both `0` when no upstream is configured — a definite answer, not inferred from an absent column. Absent entirely on an unborn branch |
+| `B` | `BRANCH`, `UPSTREAM`, `AHEAD`, `BEHIND` | At most one, first when present: the current branch. `UPSTREAM` is empty and `AHEAD`/`BEHIND` are both `0` when no upstream is configured — a definite answer, not inferred from an absent column. Absent on an unborn branch and replaced by `H` on detached HEAD |
+| `H` | `SHA` | One detached-HEAD record with the full commit object id; absent on an unborn branch |
+| `S` | `OP` | One active sequencer operation: `merge`, `cherry-pick`, `revert`, `rebase`, or `bisect` |
 | `W` | `ts-only` | One when at least one file had symbols to cross-check but no live language server was reached. The identical `[ts-only]` notice remains on stderr |
 | `W` | `warning`, `TEXT` | One per non-fatal diff warning. `TEXT` is the warning body without the human `[warning]` prefix; the identical `[warning] TEXT` line remains on stderr |
 | `F` | `FILE`, `SYMBOL`, `STATUS`, `ADDED`, `DELETED` | One `rgit diff --porcelain` row, identical fields — `STATUS` is the same six tokens § Output records defines above |
 | `C` | `HASH`, `SUBJECT` | One recent commit, newest first, bounded to the last 20 |
 | `X` | `TRUNCATED`, `COUNT` | At most one, always last: `COUNT` records were withheld to hold the 16 KiB byte budget |
 
-**A `B` record, when present, always sorts first, `W` diagnostics follow it,
-and `F` records always precede `C` records** — a breaking change from the
+**A `B` or `H` record, when present, always sorts first, `S` follows it, `W`
+diagnostics follow that, and `F` records always precede `C` records** — a breaking change from the
 original commits-first order — **while an `X` record, when present, is always
 the last line.** `B` is a single record and costs the budget almost nothing.
 Diagnostics are emitted before the actionable, unbounded diff rows; commit
