@@ -114,6 +114,19 @@ func TestRun_OnlyWithNoTargetsRefusesWithoutAmend(t *testing.T) {
 	qt.Assert(t, qt.StringContains(status, "A  sibling.txt"))
 }
 
+func TestRun_OnlyAmendWithNoTargetsLeavesOtherStagedWork(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "sibling.txt", "staged separately\n")
+	gitOut(t, dir, "add", "--", "sibling.txt")
+
+	_, _, code := runApp(t, "commit", "--only", "--amend")
+
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	head := gitOut(t, dir, "ls-tree", "-r", "--name-only", "HEAD")
+	qt.Assert(t, qt.Not(qt.StringContains(head, "sibling.txt")))
+	qt.Assert(t, qt.StringContains(gitOut(t, dir, "status", "--porcelain"), "A  sibling.txt"))
+}
+
 // TestRun_HookRejectionLeavesStagingIntact pins AGENTS.md's other inherited
 // behaviour: a hook that rejects the commit must never roll staging back.
 // This is deliberately covered in both lanes (rgit_e2e_test.go's own
