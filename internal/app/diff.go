@@ -191,8 +191,7 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 
 	report, err := diffpkg.Run(ctx, repo, root, opts)
 	if err != nil {
-		var uerr *diffpkg.UsageError
-		if errors.As(err, &uerr) {
+		if uerr, ok := errors.AsType[*diffpkg.UsageError](err); ok {
 			fmt.Fprintf(stderr, "rgit: %v\n", uerr)
 			return exitcode.InvalidUsage
 		}
@@ -201,8 +200,7 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 		// for the identical anchor, mapped through its own Code field rather
 		// than a second table of what each code means (mapStageError in
 		// internal/app/commit.go does the equivalent dispatch for commit).
-		var rerr *resolve.ResolveError
-		if errors.As(err, &rerr) {
+		if rerr, ok := errors.AsType[*resolve.ResolveError](err); ok {
 			msg := rerr.Error()
 			if rerr.Code == exitcode.UnsupportedLanguage {
 				// Unlike synth.PathError (commit.go's mapStageError),

@@ -143,12 +143,10 @@ func TestResolveRangeScope_MergeBaseExecFailureIsNotAUsageError(t *testing.T) {
 	cancel()
 
 	_, err := resolveRangeScope(ctx, repo, "main...feature")
-	var uerr *UsageError
-	if errors.As(err, &uerr) {
+	if _, ok := errors.AsType[*UsageError](err); ok {
 		t.Fatalf("resolveRangeScope error = %v; want a *gitx.ExecError, not *UsageError", err)
 	}
-	var execErr *gitx.ExecError
-	if !errors.As(err, &execErr) {
+	if _, ok := errors.AsType[*gitx.ExecError](err); !ok {
 		t.Fatalf("resolveRangeScope error = %v (%T); want *gitx.ExecError", err, err)
 	}
 }
@@ -291,8 +289,7 @@ func TestExtractRangeToken_DetectsRangeNotAPath(t *testing.T) {
 		// TestRun_ScopeUsageErrorsAreTyped) -- this is a caller mistake
 		// (exit 129), never a git-level failure (exit 128), and internal/app
 		// maps the two exit codes by this exact type.
-		var uerr *UsageError
-		if !errors.As(err, &uerr) {
+		if _, ok := errors.AsType[*UsageError](err); !ok {
 			t.Errorf("err = %v (%T); want *UsageError", err, err)
 		}
 	})

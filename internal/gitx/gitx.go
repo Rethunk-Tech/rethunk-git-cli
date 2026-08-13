@@ -121,8 +121,7 @@ func (r *Repo) run(ctx context.Context, stdin io.Reader, args ...string) (Result
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			return Result{Stdout: stdout.Bytes(), Stderr: stderr.Bytes(), ExitCode: exitErr.ExitCode()}, nil
 		}
 		return Result{}, &ExecError{Args: args, Err: err}
@@ -310,8 +309,7 @@ func (r *Repo) CatFileSample(ctx context.Context, rev, path string, limit int) (
 	}
 
 	if werr := cmd.Wait(); werr != nil {
-		var exitErr *exec.ExitError
-		if errors.As(werr, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](werr); ok {
 			res := Result{ExitCode: exitErr.ExitCode(), Stderr: stderr.Bytes()}
 			exists, err := r.catFileFailure(ctx, rev, path, args, res)
 			return nil, exists, err
@@ -402,8 +400,7 @@ func (r *Repo) BatchCatFile(ctx context.Context, requests []BatchCatFileRequest)
 		return nil, &ExecError{Args: args, Err: writeErr}
 	}
 	if err := cmd.Wait(); err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			return nil, &GitError{Args: args, ExitCode: exitErr.ExitCode(), Stderr: stderr.Bytes()}
 		}
 		return nil, &ExecError{Args: args, Err: fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))}
@@ -595,8 +592,7 @@ func (r *Repo) LsTree(ctx context.Context, rev, path string) (entry LsTreeEntry,
 func (r *Repo) LsTreeTolerant(ctx context.Context, rev, path string) (LsTreeEntry, bool, error) {
 	entry, found, err := r.LsTree(ctx, rev, path)
 	if err != nil {
-		var execErr *ExecError
-		if errors.As(err, &execErr) {
+		if _, ok := errors.AsType[*ExecError](err); ok {
 			return LsTreeEntry{}, false, err
 		}
 		return LsTreeEntry{}, false, nil

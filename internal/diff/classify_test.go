@@ -73,8 +73,7 @@ func TestBucketClassified_SortsEveryKind(t *testing.T) {
 			{Kind: cli.KindRevPath, RevPath: cli.RevPath{Rev: "HEAD~1", Path: "a.go"}},
 			{Kind: cli.KindRevPath, RevPath: cli.RevPath{Rev: "HEAD", Path: "b.go"}},
 		})
-		var uerr *UsageError
-		if !errors.As(err, &uerr) {
+		if _, ok := errors.AsType[*UsageError](err); !ok {
 			t.Fatalf("BucketClassified error = %v (%T); want *UsageError", err, err)
 		}
 	})
@@ -86,8 +85,7 @@ func TestBucketClassified_SortsEveryKind(t *testing.T) {
 			{Kind: cli.KindRevPath, RevPath: cli.RevPath{Rev: "HEAD~1", Path: "a.go"}},
 			{Kind: cli.KindRevPath, RevPath: cli.RevPath{Rev: "HEAD", Path: "a.go"}},
 		})
-		var uerr *UsageError
-		if !errors.As(err, &uerr) {
+		if _, ok := errors.AsType[*UsageError](err); !ok {
 			t.Fatalf("BucketClassified error = %v (%T); want *UsageError", err, err)
 		}
 	})

@@ -537,8 +537,7 @@ func validateSym(ctx context.Context, repo *gitx.Repo, root string, scope Scope,
 		// that path is in scope for this particular failure, so it is
 		// filled in here rather than left for every caller of Resolve to
 		// do without.
-		var rerr *resolve.ResolveError
-		if errors.As(err, &rerr) {
+		if rerr, ok := errors.AsType[*resolve.ResolveError](err); ok {
 			rerr.Path = s.File
 		}
 		return "", err

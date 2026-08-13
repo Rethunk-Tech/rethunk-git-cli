@@ -167,8 +167,7 @@ func runBlameFollowRename(ctx context.Context, repo *gitx.Repo, file string, src
 		}
 		res, err = resolve.Resolve(lang, src, anchorName)
 		if err != nil {
-			var rerr *resolve.ResolveError
-			if errors.As(err, &rerr) {
+			if rerr, ok := errors.AsType[*resolve.ResolveError](err); ok {
 				fmt.Fprintf(stderr, "rgit: %s\n", rerr.Error())
 				return rerr.Code
 			}

@@ -104,7 +104,7 @@ func readPathspecFile(path string, nul bool) ([]string, error) {
 		separator = "\x00"
 	}
 	targets := make([]string, 0)
-	for _, target := range strings.Split(string(data), separator) {
+	for target := range strings.SplitSeq(string(data), separator) {
 		if target != "" {
 			targets = append(targets, target)
 		}
@@ -343,8 +343,7 @@ func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, posi
 
 	res, err = resolve.Resolve(lang, src, c.Anchor.Name)
 	if err != nil {
-		var rerr *resolve.ResolveError
-		if errors.As(err, &rerr) {
+		if rerr, ok := errors.AsType[*resolve.ResolveError](err); ok {
 			fmt.Fprintf(stderr, "rgit: %s\n", rerr.Error())
 			return nil, "", nil, nil, "", rerr.Code
 		}

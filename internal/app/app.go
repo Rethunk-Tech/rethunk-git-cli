@@ -173,8 +173,7 @@ func parseChdir(args []string, stderr io.Writer) (dir string, rest []string, cod
 		// The errno alone, matching git's own "cannot change to '<path>':
 		// No such file or directory". os.Stat's wrapper would repeat the
 		// path back and name a syscall the caller never asked for.
-		var pathErr *fs.PathError
-		if errors.As(err, &pathErr) {
+		if pathErr, ok := errors.AsType[*fs.PathError](err); ok {
 			err = pathErr.Err
 		}
 		fmt.Fprintf(stderr, "rgit: cannot change to %q: %v\n", dir, err)

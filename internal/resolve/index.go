@@ -98,8 +98,7 @@ func (e *ResolveError) Error() string {
 // than each carrying its own copy the way internal/synth's classify.go used
 // to (isResolveError/asResolveError, now deleted in its favor).
 func AsResolveError(err error) (*ResolveError, bool) {
-	var rerr *ResolveError
-	if errors.As(err, &rerr) {
+	if rerr, ok := errors.AsType[*ResolveError](err); ok {
 		return rerr, true
 	}
 	return nil, false

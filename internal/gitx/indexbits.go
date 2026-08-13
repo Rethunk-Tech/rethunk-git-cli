@@ -11,7 +11,7 @@ func (r *Repo) IndexWorktreeBits(ctx context.Context, path string) (skip, assume
 	if err != nil {
 		return false, false, false, err
 	}
-	for _, line := range bytes.Split(out, []byte{'\n'}) {
+	for line := range bytes.SplitSeq(out, []byte{'\n'}) {
 		if len(line) == 0 {
 			continue
 		}

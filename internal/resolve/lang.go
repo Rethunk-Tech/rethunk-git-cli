@@ -444,7 +444,7 @@ func versionSuffix(suffix string, dottedOnly bool) bool {
 	if !dottedOnly && suffix[0] == '-' {
 		return false
 	}
-	for _, part := range strings.Split(suffix, ".") {
+	for part := range strings.SplitSeq(suffix, ".") {
 		if part == "" {
 			return false
 		}

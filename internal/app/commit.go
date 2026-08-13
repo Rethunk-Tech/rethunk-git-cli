@@ -532,8 +532,7 @@ func targetResultPaths(results []synth.TargetResult) []string {
 // own Code field and format their own message via Error(), so this is a
 // pure dispatch, not a second source of truth about what each code means.
 func mapStageError(err error) (exitcode.Code, string) {
-	var perr *synth.PathError
-	if errors.As(err, &perr) {
+	if perr, ok := errors.AsType[*synth.PathError](err); ok {
 		msg := perr.Error()
 		if perr.Code == exitcode.UnsupportedLanguage {
 			// synth/stage.go's own error names the extension in its Path,
@@ -543,8 +542,7 @@ func mapStageError(err error) (exitcode.Code, string) {
 		}
 		return perr.Code, msg
 	}
-	var rerr *resolve.ResolveError
-	if errors.As(err, &rerr) {
+	if rerr, ok := errors.AsType[*resolve.ResolveError](err); ok {
 		return rerr.Code, rerr.Error()
 	}
 	// Anything else reaching here ran through gitx (hash-object,

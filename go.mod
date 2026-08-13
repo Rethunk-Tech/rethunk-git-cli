@@ -1,6 +1,6 @@
 module github.com/Rethunk-Tech/rethunk-git-cli
 
-go 1.26
+go 1.26.5
 
 require (
 	github.com/aymanbagabas/go-udiff v0.4.1
