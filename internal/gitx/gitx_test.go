@@ -713,6 +713,25 @@ func TestCommit_SignoffAppendsTrailer(t *testing.T) {
 	}
 }
 
+func TestCommit_TrailerForwarded(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	gittest.Write(t, dir, "a.txt", "content\n")
+	gittest.Commit(t, dir, "chore: initial")
+	gittest.Write(t, dir, "a.txt", "updated content\n")
+	gittest.Git(t, dir, "add", "a.txt")
+
+	if _, err := repo.Commit(context.Background(), gitx.CommitOptions{
+		Messages: []string{"feat: trailer"},
+		Trailers: []string{"Refs: #1"},
+	}); err != nil {
+		t.Fatalf("Commit(--trailer): %v", err)
+	}
+	if got := gittest.Git(t, dir, "log", "-1", "--format=%b"); !strings.Contains(got, "Refs: #1") {
+		t.Errorf("commit body = %q; want trailer", got)
+	}
+}
+
 func TestCommitOnlyUsesTemporaryIndex(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t)
