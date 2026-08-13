@@ -176,6 +176,29 @@ func TestRun_CherryPickWithNoMessageUsesCherryPickMessage(t *testing.T) {
 	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), "feat: cherry-pick source\n"))
 }
 
+func TestRun_RebaseWithNoMessageRequiresMessage(t *testing.T) {
+	dir := chdirTempRepo(t)
+	gitOut(t, dir, "checkout", "-q", "-b", "rebase-source")
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 2 }\n")
+	gitOut(t, dir, "commit", "-qam", "feat: rebase source")
+	gitOut(t, dir, "checkout", "-q", "main")
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 3 }\n")
+	gitOut(t, dir, "commit", "-qam", "feat: main change")
+	gitOut(t, dir, "checkout", "-q", "rebase-source")
+	expectGitFailure(t, dir, "rebase", "main")
+
+	_, stderr, code := runApp(t, "commit", "--no-verify", "a.go")
+
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "requires a message"))
+
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 2 }\n")
+	_, _, code = runApp(t, "commit", "--no-verify", "-m", "fix: continue rebase", "a.go")
+
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), "fix: continue rebase\n"))
+}
+
 func TestRun_CommitWithoutMessageOutsideSequencerIsUsageError(t *testing.T) {
 	dir := chdirTempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 2 }\n")
