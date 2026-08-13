@@ -171,7 +171,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		return exitcode.InvalidUsage
 	}
 
-	if (f.reuseMessage == "" || len(f.messages) > 0 || f.msgFile != "") && !hasConventionalShape(f.messages) {
+	if f.reuseMessage == "" && !hasConventionalShape(f.messages) {
 		// [warning], not "rgit: warning:" -- every other advisory in this
 		// command (below) and in diff.go already uses the bracketed form;
 		// one spelling for "advisory, not a refusal" across the surface.
@@ -219,7 +219,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		if code := pathAnchorContradiction(paths, anchorFiles, stderr); code != exitcode.Success {
 			return code
 		}
-		if code := refuseStructuredDataAnchors(root, targets, stderr); code != exitcode.Success {
+		if code := refuseStructuredDataAnchors(ctx, repo, root, targets, stderr); code != exitcode.Success {
 			return code
 		}
 
@@ -436,12 +436,17 @@ func targetPaths(targets []synth.Target) (paths, anchorFiles []string) {
 // languages -- internal/synth's own tests still stage them directly to
 // prove the machinery correct, and rgit diff, blame, and log all resolve
 // the identical anchor fine, since none of them writes a blob.
-func refuseStructuredDataAnchors(root string, targets []synth.Target, stderr io.Writer) exitcode.Code {
+func refuseStructuredDataAnchors(ctx context.Context, repo *gitx.Repo, root string, targets []synth.Target, stderr io.Writer) exitcode.Code {
+	fold, err := repo.IgnoreCase(ctx)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return exitcode.GitFailure
+	}
 	for _, t := range targets {
 		if t.Pathspec != "" {
 			continue
 		}
-		lang, ok, _ := resolve.LanguageForWorktreePath(root, t.Symbol.Path)
+		lang, ok, _ := resolve.LanguageForWorktreePathFolding(root, t.Symbol.Path, fold)
 		if !ok || !resolve.IsStructuredData(lang) {
 			continue
 		}

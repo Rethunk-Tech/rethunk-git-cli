@@ -508,6 +508,15 @@ func TestRun_ReuseMessageWithChdir(t *testing.T) {
 	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), "chore: initial\n"))
 }
 
+func TestRun_ReuseMessageWithExplicitMessageUsesGitFailure(t *testing.T) {
+	chdirTempRepo(t)
+
+	_, stderr, code := runApp(t, "commit", "--reuse-message=HEAD", "-m", "extra", "--allow-empty")
+
+	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))
+	qt.Assert(t, qt.Not(qt.StringContains(stderr, "[warning] message does not look like")))
+}
+
 func TestRun_ReeditMessageRefused(t *testing.T) {
 	chdirTempRepo(t)
 
