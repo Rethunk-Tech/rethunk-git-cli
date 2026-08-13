@@ -24,7 +24,7 @@ import (
 //	a.go                 committed, exists at HEAD and in the worktree
 //	src/notes:draft.md   a legal path that itself contains a colon
 //	gone.go              committed, then deleted from the worktree
-func newClassifyRepo(t *testing.T) (root string, checker GitPathChecker, revs GitRevisionResolver, ctx context.Context) {
+func newClassifyRepo(t *testing.T) (root string, checker *GitPathChecker, revs GitRevisionResolver, ctx context.Context) {
 	t.Helper()
 	root, repo := gittest.New(t)
 
@@ -36,7 +36,7 @@ func newClassifyRepo(t *testing.T) (root string, checker GitPathChecker, revs Gi
 		t.Fatal(err)
 	}
 
-	return root, GitPathChecker{Root: root, Repo: repo}, GitRevisionResolver{Repo: repo}, context.Background()
+	return root, &GitPathChecker{Root: root, Repo: repo}, GitRevisionResolver{Repo: repo}, context.Background()
 }
 
 // TestClassifyArgs_PrecedenceTable walks docs/USAGE.md § Argument shape's
@@ -146,6 +146,36 @@ func TestClassifyArgs_Rule6ListsWhatItTried(t *testing.T) {
 	_, err = ClassifyArgs(ctx, []string{"HEAD:a.go"}, false, checker, revs)
 	qt.Assert(t, qt.IsTrue(errors.As(err, &uerr)))
 	qt.Assert(t, qt.Equals(uerr.Arg, "HEAD:a.go"))
+}
+
+func TestGitPathChecker_IndexOnlyPathExists(t *testing.T) {
+	t.Parallel()
+	root, repo := gittest.New(t)
+	gittest.Write(t, root, "new.go", "package p\n\nfunc New() {}\n")
+	gittest.Git(t, root, "add", "new.go")
+	if err := os.Remove(filepath.Join(root, "new.go")); err != nil {
+		t.Fatal(err)
+	}
+
+	checker := &GitPathChecker{Root: root, Repo: repo}
+	exists, err := checker.ExistsInWorktreeOrHEAD(context.Background(), "new.go")
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsTrue(exists))
+}
+
+func TestGitPathChecker_IntentToAddIgnoredPathExists(t *testing.T) {
+	t.Parallel()
+	root, repo := gittest.New(t)
+	gittest.Write(t, root, ".gitignore", "skip-me.go\n")
+	gittest.Write(t, root, "skip-me.go", "package p\n")
+	gittest.Git(t, root, "add", ".gitignore")
+	gittest.Commit(t, root, "chore: add ignore rule")
+	gittest.Git(t, root, "add", "-f", "-N", "skip-me.go")
+
+	checker := &GitPathChecker{Root: root, Repo: repo}
+	exists, err := checker.ExistsInWorktreeOrHEAD(context.Background(), "skip-me.go")
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsTrue(exists))
 }
 
 // TestPrefixPath covers the subdirectory rule docs/USAGE.md calls out as

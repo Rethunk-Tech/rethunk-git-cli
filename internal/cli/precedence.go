@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 )
@@ -54,8 +55,8 @@ type Classification struct {
 	Anchor   Anchor
 }
 
-// PathChecker answers rule 4 and rule 5's "exists in the worktree or at
-// HEAD" test.
+// PathChecker answers rule 4 and rule 5's "exists in the worktree, index, or
+// at HEAD" test.
 type PathChecker interface {
 	ExistsInWorktreeOrHEAD(ctx context.Context, path string) (bool, error)
 }
@@ -91,7 +92,7 @@ func (e *UnresolvedArgError) Error() string {
 //     verbatim.
 //  3. (diff only, gated by allowRevisions) A token git's own rev-parse
 //     resolves is a revision, a rev:path blob reference, or a range.
-//  4. A token naming a path that exists in the worktree or at HEAD is a
+//  4. A token naming a path that exists in the worktree, index, or at HEAD is a
 //     pathspec.
 //  5. A token that splits at its last ":" into an existing path and a
 //     name is a symbol anchor.
@@ -192,21 +193,42 @@ func PrefixPath(prefix, path string) string {
 }
 
 // GitPathChecker is the real PathChecker: worktree existence via the
-// filesystem, HEAD existence via gitx. Prefix is the current directory
-// relative to Root (gitx.Repo.ShowPrefix), so rules 4 and 5 test the
-// same path git would.
+// filesystem, index existence via gitx, and HEAD existence via gitx. Prefix is
+// the current directory relative to Root (gitx.Repo.ShowPrefix), so rules 4
+// and 5 test the same path git would.
 type GitPathChecker struct {
-	Root   string
-	Prefix string
-	Repo   *gitx.Repo
+	Root       string
+	Prefix     string
+	Repo       *gitx.Repo
+	indexOnce  sync.Once
+	indexPaths map[string]struct{}
+	indexErr   error
 }
 
-func (c GitPathChecker) ExistsInWorktreeOrHEAD(ctx context.Context, path string) (bool, error) {
+func (c *GitPathChecker) ExistsInWorktreeOrHEAD(ctx context.Context, path string) (bool, error) {
 	rel := PrefixPath(c.Prefix, path)
 	if _, err := os.Stat(filepath.Join(c.Root, rel)); err == nil {
 		return true, nil
 	} else if !os.IsNotExist(err) {
 		return false, err
+	}
+
+	c.indexOnce.Do(func() {
+		paths, err := c.Repo.LsFilesTracked(ctx)
+		if err != nil {
+			c.indexErr = err
+			return
+		}
+		c.indexPaths = make(map[string]struct{}, len(paths))
+		for _, path := range paths {
+			c.indexPaths[path] = struct{}{}
+		}
+	})
+	if c.indexErr != nil {
+		return false, c.indexErr
+	}
+	if _, found := c.indexPaths[rel]; found {
+		return true, nil
 	}
 
 	_, found, err := c.Repo.LsTreeTolerant(ctx, "HEAD", rel)
