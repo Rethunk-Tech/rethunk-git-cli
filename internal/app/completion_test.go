@@ -156,6 +156,21 @@ func TestCompletionFlags_MatchLiveFlagSets(t *testing.T) {
 	}
 }
 
+func TestPwshCompletion_SymbolAndSilentDegrade(t *testing.T) {
+	t.Parallel()
+
+	for _, want := range []string{
+		"--for-commit",
+		"2>$null",
+		"catch {\n            return",
+		"$command -in @('diff', 'commit', 'blame', 'log')",
+	} {
+		if !strings.Contains(pwshCompletionScript, want) {
+			t.Errorf("pwsh completion script does not contain %q", want)
+		}
+	}
+}
+
 func tokenSet(s string) map[string]bool {
 	out := map[string]bool{}
 	for tok := range strings.FieldsSeq(s) {
