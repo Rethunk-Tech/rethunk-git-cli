@@ -889,7 +889,7 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 
 	commitRepo := r
 	var tempIndex string
-	if opts.Only && len(opts.OnlyPaths) > 0 {
+	if opts.Only {
 		file, err := os.CreateTemp("", "rgit-index-*")
 		if err != nil {
 			return Result{}, &ExecError{Args: args, Err: err}

@@ -712,3 +712,28 @@ func TestCommitOnlyUsesTemporaryIndex(t *testing.T) {
 		t.Errorf("cached paths after --only commit = %q; want b.txt only", got)
 	}
 }
+
+func TestCommitOnlyWithNoPathsLeavesOtherStagedWork(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	gittest.Write(t, dir, "base.txt", "base\n")
+	gittest.Commit(t, dir, "chore: initial")
+	gittest.Write(t, dir, "extra.txt", "staged only\n")
+	gittest.Git(t, dir, "add", "extra.txt")
+
+	if _, err := repo.Commit(context.Background(), gitx.CommitOptions{
+		Only:      true,
+		Amend:     true,
+		NoEdit:    true,
+		OnlyPaths: nil,
+	}); err != nil {
+		t.Fatalf("Commit(Only, no paths): %v", err)
+	}
+
+	if got := gittest.Git(t, dir, "ls-tree", "HEAD", "--", "extra.txt"); got != "" {
+		t.Errorf("HEAD extra.txt = %q; want absent from amended tree", got)
+	}
+	if got := gittest.Git(t, dir, "diff", "--cached", "--name-only"); got != "extra.txt\n" {
+		t.Errorf("cached paths after --only amend = %q; want extra.txt only", got)
+	}
+}

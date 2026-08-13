@@ -560,10 +560,8 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 
 // unsupportedLanguageReason builds openFilePlan's exit-9 PathError message.
 // An extensionless path (a git hook, a bin/ entry) or an unmapped shebang
-// leaves ext == "", which the old "no grammar registered for " + ext
-// message rendered as a dangling "... for " with no sign that shebang
-// sniffing was even attempted -- this names the path plainly and says
-// which of the two lookups actually ran.
+// leaves ext == ""; this names the path plainly and says which of the two
+// lookups actually ran.
 func unsupportedLanguageReason(path, ext string, shebangSniffed bool) string {
 	shebang := "no worktree file to sniff a shebang from"
 	if shebangSniffed {
