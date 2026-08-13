@@ -422,17 +422,9 @@ func (r *Repo) BatchCatFile(ctx context.Context, requests []BatchCatFileRequest)
 		// --batch reports a promisor miss without fetching. Retry through
 		// the singular form so an available promisor remote can satisfy it;
 		// an unreachable remote then returns git's real exit-128 failure.
-		content, exists, err := r.CatFile(ctx, req.Rev, req.Path)
+		content, _, err := r.CatFile(ctx, req.Rev, req.Path)
 		if err != nil {
 			return nil, err
-		}
-		if !exists {
-			retryArgs := []string{"cat-file", "-p", req.Rev + ":" + req.Path}
-			retryRes, retryErr := r.run(ctx, nil, retryArgs...)
-			if retryErr != nil {
-				return nil, retryErr
-			}
-			return nil, gitError(retryArgs, retryRes)
 		}
 		results[i] = BatchCatFileResult{Content: content, Exists: true}
 	}
