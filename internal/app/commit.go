@@ -166,7 +166,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 
 	positionalsGiven := fs.Args()
 	targetCount := len(positionalsGiven) + len(f.syms) + len(f.files)
-	if targetCount == 0 && !f.amend && !f.allowEmpty && f.fixup == "" && f.squash == "" {
+	if targetCount == 0 && !f.amend && !f.allowEmpty && f.fixup == "" && f.squash == "" && f.reuseMessage == "" {
 		fmt.Fprintln(stderr, "rgit: commit requires at least one target")
 		return exitcode.InvalidUsage
 	}

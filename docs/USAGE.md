@@ -586,7 +586,8 @@ is the point — § Context above).
 (`--amend` reuses HEAD's via `--no-edit`; `--fixup`/`--squash` generate
 `fixup!`/`squash! <subject>`; `--reuse-message` takes the named commit's,
 exactly as plain `git commit` does). It also requires at least one target,
-unless `--amend`, `--allow-empty`, `--fixup`, or `--squash` is set: zero
+unless `--amend`, `--allow-empty`, `--fixup`, `--squash`, or
+`--reuse-message` is set: zero
 targets means skip staging and operate on the index as it stands, not
 `git add -A`.
 During an in-progress merge, cherry-pick, or revert, omitting `-m` and `-F`

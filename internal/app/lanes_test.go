@@ -508,6 +508,19 @@ func TestRun_ReuseMessageWithChdir(t *testing.T) {
 	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), "chore: initial\n"))
 }
 
+func TestRun_ReuseMessageWithNoTargetsUsesIndex(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 222\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	gitOut(t, dir, "add", "--", "a.go")
+
+	_, stderr, code := runApp(t, "commit", "--reuse-message=HEAD")
+
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), "chore: initial\n"))
+	qt.Assert(t, qt.StringContains(gitOut(t, dir, "cat-file", "-p", "HEAD:a.go"), "return 222"))
+}
+
 func TestRun_ReuseMessageWithExplicitMessageUsesGitFailure(t *testing.T) {
 	chdirTempRepo(t)
 
