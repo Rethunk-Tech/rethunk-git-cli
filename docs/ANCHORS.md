@@ -175,9 +175,9 @@ own.
 
 ## Paths that anchors cannot address
 
-Symbol anchors are refused (exit 10) on symlinks, gitlinks/submodules,
-binary or non-parseable files, and paths marked skip-worktree or
-assume-unchanged. Name the path instead. Behaviour per kind:
+Symbol anchors in `commit` and `diff` are refused (exit 10) on symlinks,
+gitlinks/submodules, binary, unmerged, skip-worktree, and assume-unchanged
+paths. Name the path instead. Behaviour per kind:
 
 | Kind | How it stages |
 | --- | --- |

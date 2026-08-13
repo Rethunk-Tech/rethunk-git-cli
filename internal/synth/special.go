@@ -11,14 +11,12 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/util"
 )
 
-// PathError is a target refused before any resolution was attempted on
-// it: a symlink, gitlink, binary, unmerged, skip-worktree, or
-// assume-unchanged path a symbol anchor cannot address (exit 10), a
+// PathError is a target refused before any resolution was attempted on it:
+// a special path a symbol anchor cannot address (exit 10), a
 // gitignored-and-untracked path (exit 7), or a symbol anchor naming a
-// language with no grammar in this build (exit 9).
-// docs/ANCHORS.md and
-// docs/USAGE.md's exit-code table are authoritative; Code is set to
-// match directly rather than requiring callers to pattern-match text.
+// language with no grammar in this build (exit 9). See docs/CODES.md and
+// docs/ANCHORS.md; Code is set to match directly rather than requiring
+// callers to pattern-match text.
 type PathError struct {
 	Code   exitcode.Code
 	Path   string

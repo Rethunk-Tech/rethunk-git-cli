@@ -19,7 +19,7 @@ For the flags that produce these, see [`USAGE.md`](USAGE.md).
 | 7 | Refused path — gitignored and untracked |
 | 8 | Commit succeeded; `--push` failed |
 | 9 | Unsupported / deferred language for a symbol anchor |
-| 10 | Symbol anchor refused on a special path (symlink, gitlink, binary, unmerged) |
+| 10 | `commit` or `diff` symbol anchor refused on a special path (symlink, gitlink, binary, unmerged, skip-worktree, assume-unchanged) |
 | 11 | All named targets resolve but have no uncommitted changes |
 | 12 | Symbol anchor refused on a structured-data file (JSON, YAML, TOML) (`commit` only) |
 | 128 | Fatal git / system failure (includes hook rejection, GPG failure, a `-C` directory that cannot be entered) |
