@@ -109,7 +109,7 @@ const rgitDiffFlags = "--unstaged --staged --cached --range --porcelain --exit-c
 
 const rgitCommitFlags = "-m --message -F --message-file -s --signoff --trailer --amend --allow-empty --push " +
 	"--dry-run --no-verify --fixup --squash --reuse-message --reedit-message --author --date --reset-author --porcelain -q --quiet " +
-	"-S --gpg-sign --no-gpg-sign --pathspec-from-file --pathspec-file-nul --sym --file -h --help"
+	"-S --gpg-sign --no-gpg-sign -o --only --pathspec-from-file --pathspec-file-nul --sym --file -h --help"
 
 // rgitLanguagesFlags, rgitDoctorFlags, rgitCompletionFlags, rgitBlameFlags,
 // rgitLogFlags, rgitContextFlags, and rgitSymbolsFlags are the same kind of static mirror as

@@ -559,6 +559,7 @@ is the point — § Context above).
 | `--trailer TOKEN:VALUE` | Append a trailer (`Refs:`, `Co-authored-by:`). Repeatable, forwarded. |
 | `--amend` | Amend the previous commit. Anchors stage into it as they would a new commit. With neither `-m` nor `-F`, reuses HEAD's message unchanged (`--no-edit`) — `rgit` never opens an editor, so that is the only message an unattended `--amend` can have. Give `-m`/`-F` to replace it as usual. With no targets, skips staging and amends the index as it stands. |
 | `--allow-empty` | Permit a commit with no changes. Suppresses exit 11. With no targets, skips staging and commits the index as it stands; still requires `-m`/`-F` unless another auto-message flag is set. |
+| `-o`, `--only` | Commit only the named targets, leaving other staged paths in the index. Requires at least one target; anchors still synthesize their named extents before the commit. |
 | `--reuse-message=<commit>` | Reuse that commit's log message and authorship (`git commit --reuse-message`). Long form only — global `-C` is directory chdir and stays before the command. Mutually exclusive with `-m` the way git is (`-m` and `-C` cannot be used together). Does not require a separate `-m`. |
 | `--reedit-message` | Refused (exit 129). `rgit` never opens an editor; use `--reuse-message`. |
 | `--push` | Push upstream after a successful commit. No rollback on push failure. If the branch has no upstream configured, the exit-8 message names it and the fix (`git push -u origin <branch>`, or `push.autoSetupRemote`) — `rgit` never adds `-u` itself. |

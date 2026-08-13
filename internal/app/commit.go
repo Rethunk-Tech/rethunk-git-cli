@@ -40,6 +40,7 @@ type commitFlags struct {
 	noGPGSign    bool
 	porcelain    bool
 	quiet        bool
+	only         bool
 	pathspecFile string
 	pathspecNUL  bool
 	syms         []string
@@ -120,6 +121,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	fs.BoolVar(&f.resetAuthor, "reset-author", false, "take the author identity from the committer (with --amend)")
 	fs.BoolVar(&f.porcelain, "porcelain", false, "list staged targets as stable tab-separated records")
 	fs.BoolVarP(&f.quiet, "quiet", "q", false, "suppress the commit summary and target listing")
+	fs.BoolVarP(&f.only, "only", "o", false, "commit only named targets")
 	// -S is not registered as a shorthand here; expandGPGSignShorthand
 	// rewrites it before Parse, for the pflag reason documented there.
 	fs.StringVar(&f.gpgSignKey, "gpg-sign", "", "GPG-sign the commit; -S/-S<key-id>/--gpg-sign=<key-id>")
@@ -218,6 +220,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	}
 
 	var targetResults []synth.TargetResult
+	var onlyPaths []string
 	if targetCount > 0 {
 		checker := &cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}
 		classified, err := cli.ClassifyArgs(ctx, positionalsGiven, false, checker, cli.GitRevisionResolver{Repo: repo})
@@ -311,6 +314,9 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 			fmt.Fprintf(stderr, "rgit: %s\n", msg)
 			return code
 		}
+		if f.only {
+			onlyPaths = targetResultPaths(targetResults)
+		}
 	} else if f.dryRun {
 		if f.porcelain {
 			return exitcode.Success
@@ -338,6 +344,8 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		GPGSign:      f.gpgSignKey != "",
 		GPGSignKeyID: gpgSignKeyID(f.gpgSignKey),
 		NoGPGSign:    f.noGPGSign,
+		Only:         f.only,
+		OnlyPaths:    onlyPaths,
 	}
 	if f.msgFile == "-" {
 		data, rerr := io.ReadAll(os.Stdin)
@@ -497,6 +505,22 @@ func targetLabel(t synth.Target) string {
 		return t.Pathspec
 	}
 	return t.Symbol.Path + ":" + t.Symbol.Anchor
+}
+
+func targetResultPaths(results []synth.TargetResult) []string {
+	seen := make(map[string]struct{}, len(results))
+	paths := make([]string, 0, len(results))
+	for _, result := range results {
+		if result.Outcome == synth.Unchanged || result.Path == "" {
+			continue
+		}
+		if _, ok := seen[result.Path]; ok {
+			continue
+		}
+		seen[result.Path] = struct{}{}
+		paths = append(paths, result.Path)
+	}
+	return paths
 }
 
 // mapStageError turns a synth/resolve error into the exit code

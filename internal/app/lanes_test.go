@@ -61,6 +61,22 @@ func TestRun_PreStagedSiblingFileComesAlong(t *testing.T) {
 	qt.Assert(t, qt.StringContains(show, "sibling.txt"))
 }
 
+func TestRun_OnlyLeavesOtherStagedWorkUncommitted(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	writeAppFile(t, dir, "sibling.txt", "staged separately\n")
+	gitOut(t, dir, "add", "--", "sibling.txt")
+
+	_, _, code := runApp(t, "commit", "--only", "-m", "fix(a): update A", "a.go:A")
+
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	head := gitOut(t, dir, "ls-tree", "-r", "--name-only", "HEAD")
+	qt.Assert(t, qt.StringContains(head, "a.go"))
+	qt.Assert(t, qt.Not(qt.StringContains(head, "sibling.txt")))
+	qt.Assert(t, qt.StringContains(gitOut(t, dir, "show", "HEAD:a.go"), "return 111"))
+	qt.Assert(t, qt.StringContains(gitOut(t, dir, "status", "--porcelain"), "A  sibling.txt"))
+}
+
 // TestRun_HookRejectionLeavesStagingIntact pins AGENTS.md's other inherited
 // behaviour: a hook that rejects the commit must never roll staging back.
 // This is deliberately covered in both lanes (rgit_e2e_test.go's own
