@@ -56,6 +56,12 @@ Records, one per line, tab-separated, no header:
       One when at least one file had symbols to cross-check but no live
       language server was reached.
 
+  W<TAB>stash
+      One when the repository has a stash ref.
+
+  W<TAB>sparse
+      One when core.sparseCheckout is true.
+
   W<TAB>warning<TAB>TEXT
       One per non-fatal diff diagnostic. TEXT omits the human [warning]
       prefix that remains on stderr.
@@ -151,6 +157,17 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 		return exitcode.GitFailure
 	}
 
+	hasStash, err := repo.HasStash(ctx)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return exitcode.GitFailure
+	}
+	sparseCheckout, err := repo.SparseCheckout(ctx)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return exitcode.GitFailure
+	}
+
 	// The default "everything committable" scope -- staged + unstaged vs
 	// HEAD, plus untracked -- is exactly what a bare `rgit diff` already
 	// reports; no Options fields are set here, per specs/design.md §
@@ -188,6 +205,12 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 	}
 	if sequencerActive {
 		records = append(records, fmt.Sprintf("S\t%s\n", sequencerOp))
+	}
+	if hasStash {
+		records = append(records, "W\tstash\n")
+	}
+	if sparseCheckout {
+		records = append(records, "W\tsparse\n")
 	}
 	if report.TSOnly {
 		records = append(records, "W\tts-only\n")

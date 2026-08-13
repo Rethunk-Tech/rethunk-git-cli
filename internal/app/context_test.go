@@ -228,6 +228,27 @@ func TestRun_ContextSequencerRecordSortsAfterBranch(t *testing.T) {
 	qt.Assert(t, qt.Equals(lines[1], "S\tmerge"))
 }
 
+func TestRun_ContextStashAndSparseRecords(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 3\n}\n")
+	gitOut(t, dir, "stash", "push", "-m", "context-test")
+	gitOut(t, dir, "config", "core.sparseCheckout", "true")
+
+	stdout, _, code := runApp(t, "context")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	stashIdx := strings.Index(stdout, "W\tstash\n")
+	sparseIdx := strings.Index(stdout, "W\tsparse\n")
+	qt.Assert(t, qt.IsTrue(stashIdx >= 0))
+	qt.Assert(t, qt.IsTrue(sparseIdx > stashIdx))
+
+	gitOut(t, dir, "stash", "drop")
+	gitOut(t, dir, "config", "--unset", "core.sparseCheckout")
+	stdout, _, code = runApp(t, "context")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "W\tstash\n")))
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "W\tsparse\n")))
+}
+
 // TestBuildContextStream unit-tests the byte-budget truncation boundary
 // directly against a tiny budget, rather than building a repository large
 // enough to exceed the real 16 KiB one (specs/design.md § Commands).
