@@ -25,15 +25,17 @@ const diffCommittable exitcode.Code = 1
 
 // diffFlags mirrors the `rgit diff` flag surface in docs/USAGE.md § Flags.
 type diffFlags struct {
-	unstaged  bool
-	staged    bool
-	rangeFlag string
-	porcelain bool
-	exitCode  bool
-	quiet     bool
-	patch     bool
-	syms      []string
-	files     []string
+	unstaged     bool
+	staged       bool
+	rangeFlag    string
+	porcelain    bool
+	exitCode     bool
+	quiet        bool
+	patch        bool
+	pathspecFile string
+	pathspecNUL  bool
+	syms         []string
+	files        []string
 }
 
 func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
@@ -47,6 +49,8 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 	fs.BoolVar(&f.exitCode, "exit-code", false, "exit 1 when anything is committable")
 	fs.BoolVar(&f.quiet, "quiet", false, "implies --exit-code and suppresses output")
 	fs.BoolVarP(&f.patch, "patch", "p", false, "include the real patch body")
+	fs.StringVar(&f.pathspecFile, "pathspec-from-file", "", "read targets from a file, or - for stdin")
+	fs.BoolVar(&f.pathspecNUL, "pathspec-file-nul", false, "separate pathspec-file targets with NUL")
 
 	help := "usage: rgit diff [flags] [target...]\n\n" +
 		"Show what is committable -- staged, unstaged, and untracked -- broken\n" +
@@ -76,6 +80,20 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 		fmt.Fprintln(stderr, "rgit: --porcelain and --patch are mutually exclusive")
 		return exitcode.InvalidUsage
 	}
+	if f.pathspecNUL && f.pathspecFile == "" {
+		fmt.Fprintln(stderr, "rgit: --pathspec-file-nul requires --pathspec-from-file")
+		return exitcode.InvalidUsage
+	}
+
+	positionals := restoreDoubleDash(fs)
+	if f.pathspecFile != "" {
+		pathspecs, err := readPathspecFile(f.pathspecFile, f.pathspecNUL)
+		if err != nil {
+			fmt.Fprintf(stderr, "rgit: reading pathspec file: %v\n", err)
+			return exitcode.GitFailure
+		}
+		positionals = append(positionals, pathspecs...)
+	}
 
 	root, prefix, repo, code := openRepo(ctx, dir, stderr)
 	if code != exitcode.Success {
@@ -84,7 +102,7 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 
 	checker := cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}
 
-	rangeToken, rest, err := diffpkg.ExtractRangeToken(ctx, restoreDoubleDash(fs), checker)
+	rangeToken, rest, err := diffpkg.ExtractRangeToken(ctx, positionals, &checker)
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.InvalidUsage
@@ -98,7 +116,7 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 		return exitcode.InvalidUsage
 	}
 
-	classified, err := cli.ClassifyArgs(ctx, rest, true, checker, cli.GitRevisionResolver{Repo: repo})
+	classified, err := cli.ClassifyArgs(ctx, rest, true, &checker, cli.GitRevisionResolver{Repo: repo})
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.InvalidUsage

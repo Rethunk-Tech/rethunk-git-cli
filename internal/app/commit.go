@@ -40,6 +40,8 @@ type commitFlags struct {
 	noGPGSign    bool
 	porcelain    bool
 	quiet        bool
+	pathspecFile string
+	pathspecNUL  bool
 	syms         []string
 	files        []string
 }
@@ -123,6 +125,8 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	fs.StringVar(&f.gpgSignKey, "gpg-sign", "", "GPG-sign the commit; -S/-S<key-id>/--gpg-sign=<key-id>")
 	fs.Lookup("gpg-sign").NoOptDefVal = gpgSignBare
 	fs.BoolVar(&f.noGPGSign, "no-gpg-sign", false, "do not GPG-sign, overriding commit.gpgsign")
+	fs.StringVar(&f.pathspecFile, "pathspec-from-file", "", "read targets from a file, or - for stdin")
+	fs.BoolVar(&f.pathspecNUL, "pathspec-file-nul", false, "separate pathspec-file targets with NUL")
 
 	help := "usage: rgit commit [flags] [target...]\n\n" +
 		"Stage named targets -- pathspecs and/or FILE:NAME symbol anchors\n" +
@@ -152,6 +156,14 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		fmt.Fprintln(stderr, "rgit: --porcelain and --quiet are mutually exclusive")
 		return exitcode.InvalidUsage
 	}
+	if f.pathspecNUL && f.pathspecFile == "" {
+		fmt.Fprintln(stderr, "rgit: --pathspec-file-nul requires --pathspec-from-file")
+		return exitcode.InvalidUsage
+	}
+	if f.msgFile == "-" && f.pathspecFile == "-" {
+		fmt.Fprintln(stderr, "rgit: -F - and --pathspec-from-file=- are mutually exclusive")
+		return exitcode.InvalidUsage
+	}
 	// --amend, --fixup, and --squash each generate their own message when
 	// neither -m nor -F is given: --amend reuses HEAD's via --no-edit
 	// (docs/USAGE.md: rgit never opens an editor), and --fixup/--squash
@@ -164,7 +176,15 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	autoMessage := f.amend || f.fixup != "" || f.squash != "" || f.reuseMessage != ""
 	noEdit := f.amend && len(f.messages) == 0 && f.msgFile == ""
 
-	positionalsGiven := fs.Args()
+	positionalsGiven := restoreDoubleDash(fs)
+	if f.pathspecFile != "" {
+		pathspecs, err := readPathspecFile(f.pathspecFile, f.pathspecNUL)
+		if err != nil {
+			fmt.Fprintf(stderr, "rgit: reading pathspec file: %v\n", err)
+			return exitcode.GitFailure
+		}
+		positionalsGiven = append(positionalsGiven, pathspecs...)
+	}
 	targetCount := len(positionalsGiven) + len(f.syms) + len(f.files)
 	if targetCount == 0 && !f.amend && !f.allowEmpty && f.fixup == "" && f.squash == "" && f.reuseMessage == "" {
 		fmt.Fprintln(stderr, "rgit: commit requires at least one target")
@@ -199,7 +219,8 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 
 	var targetResults []synth.TargetResult
 	if targetCount > 0 {
-		classified, err := cli.ClassifyArgs(ctx, restoreDoubleDash(fs), false, cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}, cli.GitRevisionResolver{Repo: repo})
+		checker := &cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}
+		classified, err := cli.ClassifyArgs(ctx, positionalsGiven, false, checker, cli.GitRevisionResolver{Repo: repo})
 		if err != nil {
 			fmt.Fprintf(stderr, "rgit: %v\n", err)
 			return exitcode.InvalidUsage

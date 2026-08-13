@@ -145,6 +145,10 @@ func TestRun_UsageErrors(t *testing.T) {
 		args: []string{"commit", "-m", "feat(x): y", "-F", "msg.txt", "a.go"},
 		want: "-m and -F are mutually exclusive",
 	}, {
+		name: "commit: -F - and --pathspec-from-file=- are mutually exclusive",
+		args: []string{"commit", "-F", "-", "--pathspec-from-file=-"},
+		want: "-F - and --pathspec-from-file=- are mutually exclusive",
+	}, {
 		name: "commit: --dry-run and --push are mutually exclusive",
 		args: []string{"commit", "--dry-run", "--push", "-m", "feat(x): y", "a.go"},
 		want: "--dry-run and --push are mutually exclusive",

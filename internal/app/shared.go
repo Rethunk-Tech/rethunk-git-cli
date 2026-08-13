@@ -82,6 +82,36 @@ func newTargetFlagSet(name string, syms, files *[]string) *pflag.FlagSet {
 	return fs
 }
 
+// readPathspecFile reads git's pathspec-file format. Each non-empty line (or
+// NUL-delimited record) is returned as one target; records are appended to the
+// command's positionals and are never parsed as flags.
+func readPathspecFile(path string, nul bool) ([]string, error) {
+	var (
+		data []byte
+		err  error
+	)
+	if path == "-" {
+		data, err = io.ReadAll(os.Stdin)
+	} else {
+		data, err = os.ReadFile(path)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	separator := "\n"
+	if nul {
+		separator = "\x00"
+	}
+	targets := make([]string, 0)
+	for _, target := range strings.Split(string(data), separator) {
+		if target != "" {
+			targets = append(targets, target)
+		}
+	}
+	return targets, nil
+}
+
 // parseFlagsOrHelp runs fs.Parse for both subcommands, reporting a parse
 // failure as docs/USAGE.md's exit 129 with the same message shape on
 // either, and handling -h/--help. pflag's ContinueOnError returns
@@ -255,7 +285,7 @@ func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, posi
 	// name after it) must be refused the same way rather than silently
 	// misread as an anchor with an empty name.
 	checker := cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}
-	classified, err := cli.ClassifyArgs(ctx, []string{positional}, false, checker, cli.GitRevisionResolver{Repo: repo})
+	classified, err := cli.ClassifyArgs(ctx, []string{positional}, false, &checker, cli.GitRevisionResolver{Repo: repo})
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return nil, "", nil, nil, "", exitcode.InvalidUsage

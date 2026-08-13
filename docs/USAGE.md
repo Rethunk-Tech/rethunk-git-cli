@@ -551,6 +551,8 @@ is the point — § Context above).
 | --- | --- |
 | `--sym FILE:NAME` | Explicit anchor form; equivalent to a bare `FILE:NAME` positional. Repeatable. |
 | `--file PATH` | Explicit pathspec form; equivalent to a bare positional. Repeatable. |
+| `--pathspec-from-file FILE` | (`commit`, `diff`) Read one target per line from `FILE`, or from stdin when `FILE` is `-`. Empty lines are skipped; targets use the same precedence rules as positionals. |
+| `--pathspec-file-nul` | (`commit`, `diff`) Read NUL-delimited targets from `--pathspec-from-file` instead of newline-delimited lines. Empty records are skipped. |
 | `-m MSG`, `--message MSG` | Commit message. **Repeatable** — values join as blank-line-separated paragraphs, as git does. |
 | `-F FILE`, `--message-file FILE` | Read the message from a file, or `-` for stdin. Mutually exclusive with `-m`. |
 | `-s`, `--signoff` | Append `Signed-off-by:`. Forwarded to `git commit`. |

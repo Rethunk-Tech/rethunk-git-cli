@@ -105,11 +105,11 @@ const rgitSubcommands = "diff commit blame log context languages doctor completi
 // output (pflag's own FlagUsages rendering of the live FlagSet, not a
 // second hand copy) and fails the suite the moment either list drifts from
 // what diff.go or commit.go actually registers.
-const rgitDiffFlags = "--unstaged --staged --cached --range --porcelain --exit-code --quiet -p --patch --sym --file -h --help"
+const rgitDiffFlags = "--unstaged --staged --cached --range --porcelain --exit-code --quiet -p --patch --pathspec-from-file --pathspec-file-nul --sym --file -h --help"
 
 const rgitCommitFlags = "-m --message -F --message-file -s --signoff --trailer --amend --allow-empty --push " +
 	"--dry-run --no-verify --fixup --squash --reuse-message --reedit-message --author --date --reset-author --porcelain -q --quiet " +
-	"-S --gpg-sign --no-gpg-sign --sym --file -h --help"
+	"-S --gpg-sign --no-gpg-sign --pathspec-from-file --pathspec-file-nul --sym --file -h --help"
 
 // rgitLanguagesFlags, rgitDoctorFlags, rgitCompletionFlags, rgitBlameFlags,
 // rgitLogFlags, rgitContextFlags, and rgitSymbolsFlags are the same kind of static mirror as
