@@ -1451,8 +1451,10 @@ func TestCompletion_FishOffersSubcommandsAndFlags(t *testing.T) {
 	qt.Assert(t, qt.SliceContains(got, "--porcelain"))
 	qt.Assert(t, qt.Not(qt.SliceContains(got, "-p")))
 
-	got = runFishCompletion(t, repo, script.Stdout, "symbols", "--")
-	qt.Assert(t, qt.SliceContains(got, "--for-commit"))
+	t.Run("symbols offers --for-commit", func(t *testing.T) {
+		got := runFishCompletion(t, repo, script.Stdout, "symbols", "--")
+		qt.Assert(t, qt.SliceContains(got, "--for-commit"))
+	})
 
 	// A "-C" with no path after it yet completes as a directory, not the
 	// subcommand list -- the case the opc/ct split above makes non-obvious.
