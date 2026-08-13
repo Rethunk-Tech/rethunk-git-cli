@@ -188,14 +188,12 @@ func checkGitignoreRefusal(ctx context.Context, repo *gitx.Repo, path string) er
 		return nil
 	}
 
-	indexPaths, err := repo.LsFilesTracked(ctx)
+	_, found, err := repo.LsFilesStage(ctx, path)
 	if err != nil {
 		return err
 	}
-	for _, indexPath := range indexPaths {
-		if indexPath == path {
-			return nil
-		}
+	if found {
+		return nil
 	}
 
 	_, tracked, err := repo.LsTreeTolerant(ctx, "HEAD", path)
