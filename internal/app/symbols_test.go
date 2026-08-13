@@ -75,6 +75,32 @@ func TestRunSymbolsListsCleanWorktreeDeclarations(t *testing.T) {
 	}
 }
 
+func TestRunSymbolsHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
+	root := t.TempDir()
+	symbolsTestGit(t, root, "init", "--quiet")
+	symbolsTestGit(t, root, "config", "core.ignorecase", "true")
+	if err := os.WriteFile(filepath.Join(root, "Foo.GO"), []byte("package demo\n\nfunc First() {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr strings.Builder
+	code := runSymbols(context.Background(), root, []string{"Foo.GO"}, &stdout, &stderr)
+	if code != exitcode.Success {
+		t.Fatalf("runSymbols(Foo.GO) with core.ignorecase=true = %d, stderr = %q", code, stderr.String())
+	}
+	if !containsString(strings.Fields(stdout.String()), "First") {
+		t.Fatalf("runSymbols(Foo.GO) omitted First from %q", stdout.String())
+	}
+
+	symbolsTestGit(t, root, "config", "core.ignorecase", "false")
+	stdout.Reset()
+	stderr.Reset()
+	code = runSymbols(context.Background(), root, []string{"Foo.GO"}, &stdout, &stderr)
+	if code != exitcode.UnsupportedLanguage {
+		t.Fatalf("runSymbols(Foo.GO) with core.ignorecase=false = %d, want %d", code, exitcode.UnsupportedLanguage)
+	}
+}
+
 func TestRun_SymbolsListsHeadDeclarationsWhenWorktreeFileIsGone(t *testing.T) {
 	root := t.TempDir()
 	source := []byte("package demo\n\nfunc Foo() {}\n")

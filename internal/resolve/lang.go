@@ -390,7 +390,14 @@ var shebangExtension = map[string]string{
 // meaning no bytes were available to peek (e.g. the path exists only in
 // HEAD, not the worktree); ForPath then behaves exactly like ForExtension.
 func ForPath(path string, content []byte) (Language, bool) {
-	if l, ok := ForExtension(filepath.Ext(path)); ok {
+	return ForPathFolding(path, content, false)
+}
+
+// ForPathFolding resolves path with optional case folding for its extension.
+// The path itself remains byte-for-byte unchanged; only the extension lookup
+// is folded when fold is true. Shebang lookup is unchanged.
+func ForPathFolding(path string, content []byte, fold bool) (Language, bool) {
+	if l, ok := ForExtensionFolding(filepath.Ext(path), fold); ok {
 		return l, true
 	}
 	interp, ok := shebangInterpreter(content)
@@ -571,13 +578,20 @@ type HeadShebangSample func() (sample []byte, exists bool, err error)
 // still has peeked=true. headSample may be nil when HEAD fallback is not
 // available.
 func LanguageForPath(root, relPath string, headSample HeadShebangSample) (lang Language, ok bool, peeked bool, err error) {
-	if lang, ok := ForExtension(filepath.Ext(relPath)); ok {
+	return LanguageForPathFolding(root, relPath, false, headSample)
+}
+
+// LanguageForPathFolding is LanguageForPath with optional case folding for
+// extension lookup. The path remains unchanged, and shebang lookup follows
+// the same rules as LanguageForPath.
+func LanguageForPathFolding(root, relPath string, fold bool, headSample HeadShebangSample) (lang Language, ok bool, peeked bool, err error) {
+	if lang, ok := ForExtensionFolding(filepath.Ext(relPath), fold); ok {
 		return lang, true, false, nil
 	}
 	fullPath := filepath.Join(root, relPath)
 	line, peeked := PeekShebangLine(fullPath)
 	if peeked {
-		lang, ok = ForPath(relPath, line)
+		lang, ok = ForPathFolding(relPath, line, fold)
 		return lang, ok, true, nil
 	}
 	if _, statErr := os.Stat(fullPath); statErr == nil || !errors.Is(statErr, os.ErrNotExist) {
@@ -593,7 +607,7 @@ func LanguageForPath(root, relPath string, headSample HeadShebangSample) (lang L
 	if !exists {
 		return nil, false, false, nil
 	}
-	lang, ok = ForPath(relPath, line)
+	lang, ok = ForPathFolding(relPath, line, fold)
 	return lang, ok, true, nil
 }
 

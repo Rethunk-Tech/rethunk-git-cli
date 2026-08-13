@@ -43,6 +43,11 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 	if code != exitcode.Success {
 		return code
 	}
+	ignoreCase, err := repo.IgnoreCase(ctx)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: cannot read core.ignorecase: %v\n", err)
+		return exitcode.GitFailure
+	}
 
 	path := positionals[0]
 	if filepath.IsAbs(path) {
@@ -76,7 +81,7 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 		}
 	}
 
-	lang, ok, _, err := resolve.LanguageForPath(root, path, func() ([]byte, bool, error) {
+	lang, ok, _, err := resolve.LanguageForPathFolding(root, path, ignoreCase, func() ([]byte, bool, error) {
 		return headSrc, headExists, nil
 	})
 	if err != nil {

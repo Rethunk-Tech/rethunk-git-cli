@@ -336,6 +336,17 @@ func TestForExtensionFolding(t *testing.T) {
 	}
 }
 
+func TestForPathFolding(t *testing.T) {
+	t.Parallel()
+
+	if got, ok := ForPathFolding("file.GO", nil, true); !ok || got.Name() != "go" {
+		t.Errorf("ForPathFolding(file.GO, true) = (%v, %v); want Go, true", got, ok)
+	}
+	if got, ok := ForPathFolding("file.GO", nil, false); ok || got != nil {
+		t.Errorf("ForPathFolding(file.GO, false) = (%v, %v); want nil, false", got, ok)
+	}
+}
+
 func TestLanguageForPath_UsesHEADWhenWorktreeIsAbsent(t *testing.T) {
 	t.Parallel()
 
