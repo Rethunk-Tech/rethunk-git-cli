@@ -121,18 +121,17 @@ this repository's index either way — only the immediate gitlink entry at
 its own path is ever visible from here, nested or not, so it needs no
 different treatment.
 
-**A sparse-checkout-excluded path** is handled entirely by delegation, not
-special-cased: the default diff scope is a real `git diff --numstat`
+**A sparse-checkout-excluded path** is handled by Git's skip-worktree bit.
+The default diff scope is a real `git diff --numstat`
 (`internal/gitx.DiffNumstat`), and git itself never reports a skip-worktree
 path as changed, so it never reaches `rgit`'s own attribution at all in the
-ordinary case. Naming it explicitly is the only way to reach `rgit`'s own
-code: `--sym`/an anchor on a path materialized nowhere refuses at
-resolution with the same exit 3 (unresolvable) a deleted file gets — there is
-nothing rgit-specific to distinguish "sparse-excluded" from "genuinely
-absent", and inventing that distinction would mean asking `git
-sparse-checkout` questions this tool has no other reason to. A pathspec
-target reaches real `git add`, which refuses on its own with the advice text
-it already prints for exactly this case (`git config advice.updateSparsePath`).
+ordinary case. An explicit `FILE:SYMBOL` anchor on a path marked
+skip-worktree refuses with exit 10 before blob synthesis; the bit is left
+unchanged. The same refusal applies to an assume-unchanged path. A pathspec
+target still reaches real `git add`, which handles Git's own sparse-path
+advice (`git config advice.updateSparsePath`) without `rgit` special-casing it.
+If a path is absent from the index rather than marked with either bit, anchor
+resolution retains its ordinary exit 3 (unresolvable) behavior.
 
 A **rename** staged by symbol anchor is not detected as one: `HEAD` simply
 has no blob at the new path, so an anchor into it stages as an ordinary new
