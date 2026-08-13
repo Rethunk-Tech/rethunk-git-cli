@@ -8,6 +8,27 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit languages --in-repo` now counts untracked files and deleted tracked
+  files whose grammar is only visible from `HEAD`. See
+  [`docs/USAGE.md`](docs/USAGE.md#languages).
+
+- `rgit context` now emits `W\tstash` when `refs/stash` exists and
+  `W\tsparse` when `core.sparseCheckout` is true. See
+  [`docs/CODES.md`](docs/CODES.md#rgit-context).
+
+- `rgit commit --amend` / `--allow-empty` / `--fixup` / `--squash` may omit
+  targets and operate on the index as it stands. `--reuse-message=<commit>`
+  forwards git's long form of `-C`; `--reedit-message` is refused. See
+  [`docs/USAGE.md`](docs/USAGE.md#flags).
+
+- `rgit symbols` honors `core.ignorecase` for extension lookup. Extensionless
+  shebangs strip a trailing `.exe` from the interpreter name. See
+  [`docs/ANCHORS.md`](docs/ANCHORS.md#language-support).
+
+- `FILE:SYMBOL` on a skip-worktree or assume-unchanged path is refused
+  (exit 10) before synthesis. See
+  [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md#symlinks-submodules-renames-and-content-filters).
+
 - `rgit commit` now reuses Git's generated message during an in-progress
   merge, cherry-pick, or revert when no `-m`/`-F` is given, matching
   `git commit --no-edit`; explicit messages still override it.

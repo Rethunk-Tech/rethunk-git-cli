@@ -354,6 +354,8 @@ fixed rather than growing one. Seven record types, tab-separated, no header:
 | `H` | `SHA` | One detached-HEAD record with the full commit object id; absent on an unborn branch |
 | `S` | `OP` | One active sequencer operation: `merge`, `cherry-pick`, `revert`, `rebase`, or `bisect` |
 | `W` | `ts-only` | One when at least one file had symbols to cross-check but no live language server was reached. The identical `[ts-only]` notice remains on stderr |
+| `W` | `stash` | One when `refs/stash` exists. Absent when the stash is empty |
+| `W` | `sparse` | One when `core.sparseCheckout` is true. Absent on a full checkout |
 | `W` | `warning`, `TEXT` | One per non-fatal diff warning. `TEXT` is the warning body without the human `[warning]` prefix; the identical `[warning] TEXT` line remains on stderr |
 | `F` | `FILE`, `SYMBOL`, `STATUS`, `ADDED`, `DELETED` | One per `rgit diff --porcelain` row — identical fields, plus this stream's own leading type tag |
 | `C` | `HASH`, `SUBJECT` | One per recent commit, newest first, bounded to the last 20 |
@@ -436,13 +438,14 @@ but unlike one this resolver has never supported, the message also names the
 build tag and points at rebuilding.
 
 **`--in-repo` narrows the listing to grammars with at least one matching
-tracked file in the current repository** — advisory only, since the binary
+file in the current repository** — advisory only, since the binary
 still contains every compiled-in grammar regardless of what a given repo
 happens to use. A monorepo with only `.go` files omits `python`, `css`, and
 the rest even though a Python or CSS anchor would resolve fine elsewhere.
 Detection reuses the same extension-then-shebang sequence every worktree file
-gets, so an extensionless Node script still counts. Requires a git repo,
-unlike the plain form above.
+gets; tracked files fall back to a bounded `HEAD` sample when their worktree
+copy is absent, and untracked files (excluding ignored ones) count too.
+Requires a git repo, unlike the plain form above.
 
 ## Doctor
 
@@ -548,8 +551,10 @@ is the point — § Context above).
 | `-F FILE`, `--message-file FILE` | Read the message from a file, or `-` for stdin. Mutually exclusive with `-m`. |
 | `-s`, `--signoff` | Append `Signed-off-by:`. Forwarded to `git commit`. |
 | `--trailer TOKEN:VALUE` | Append a trailer (`Refs:`, `Co-authored-by:`). Repeatable, forwarded. |
-| `--amend` | Amend the previous commit. Anchors stage into it as they would a new commit. With neither `-m` nor `-F`, reuses HEAD's message unchanged (`--no-edit`) — `rgit` never opens an editor, so that is the only message an unattended `--amend` can have. Give `-m`/`-F` to replace it as usual. |
-| `--allow-empty` | Permit a commit with no changes. Suppresses exit 11. |
+| `--amend` | Amend the previous commit. Anchors stage into it as they would a new commit. With neither `-m` nor `-F`, reuses HEAD's message unchanged (`--no-edit`) — `rgit` never opens an editor, so that is the only message an unattended `--amend` can have. Give `-m`/`-F` to replace it as usual. With no targets, skips staging and amends the index as it stands. |
+| `--allow-empty` | Permit a commit with no changes. Suppresses exit 11. With no targets, skips staging and commits the index as it stands; still requires `-m`/`-F` unless another auto-message flag is set. |
+| `--reuse-message=<commit>` | Reuse that commit's log message and authorship (`git commit --reuse-message`). Long form only — global `-C` is directory chdir and stays before the command. Mutually exclusive with `-m` the way git is (`-m` and `-C` cannot be used together). Does not require a separate `-m`. |
+| `--reedit-message` | Refused (exit 129). `rgit` never opens an editor; use `--reuse-message`. |
 | `--push` | Push upstream after a successful commit. No rollback on push failure. If the branch has no upstream configured, the exit-8 message names it and the fix (`git push -u origin <branch>`, or `push.autoSetupRemote`) — `rgit` never adds `-u` itself. |
 | `--dry-run` | Preview only. Writes no objects, stages nothing, runs no hooks. Lists each target it resolved with that symbol's `+N/-M`, using the same counts as `rgit diff`. |
 | `--no-verify` | Skip git hooks (standard git meaning). Hooks run by default. |
@@ -572,10 +577,14 @@ is the point — § Context above).
 | `--since DATE`, `--until DATE` | (`log`) Bound history by date. A `FILE:SYMBOL` positional keeps the anchor form; otherwise these select unanchored path-scoped history. Forwarded to git's own `--since`/`--until` unparsed. |
 | `-n N`, `--max-count=N` | (`log`) Limit either history form to at most `N` commits; under `--follow-rename`, applies independently per rename segment, so the total may exceed `N`. Forwarded to git's own count limit; omitted by default, so history is unbounded. |
 
-`commit` requires a message (`-m` or `-F`) and at least one target, unless
-`--amend`, `--fixup`, or `--squash` is given with neither — each generates its
-own message (`--amend` reuses HEAD's via `--no-edit`; `--fixup`/`--squash`
-generate `fixup!`/`squash! <subject>`, exactly as plain `git commit` does).
+`commit` requires a message (`-m` or `-F`) unless `--amend`, `--fixup`,
+`--squash`, or `--reuse-message` is given — each supplies its own message
+(`--amend` reuses HEAD's via `--no-edit`; `--fixup`/`--squash` generate
+`fixup!`/`squash! <subject>`; `--reuse-message` takes the named commit's,
+exactly as plain `git commit` does). It also requires at least one target,
+unless `--amend`, `--allow-empty`, `--fixup`, or `--squash` is set: zero
+targets means skip staging and operate on the index as it stands, not
+`git add -A`.
 During an in-progress merge, cherry-pick, or revert, omitting `-m` and `-F`
 also reuses Git's generated message via `--no-edit`; `-m` or `-F` overrides
 that behavior. An in-progress rebase remains a `git rebase --continue`

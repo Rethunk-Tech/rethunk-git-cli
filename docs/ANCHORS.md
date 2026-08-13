@@ -175,8 +175,9 @@ own.
 
 ## Paths that anchors cannot address
 
-Symbol anchors are refused (exit 10) on symlinks, gitlinks/submodules, and
-binary or non-parseable files. Name the path instead. Behaviour per kind:
+Symbol anchors are refused (exit 10) on symlinks, gitlinks/submodules,
+binary or non-parseable files, and paths marked skip-worktree or
+assume-unchanged. Name the path instead. Behaviour per kind:
 
 | Kind | How it stages |
 | --- | --- |
@@ -186,6 +187,7 @@ binary or non-parseable files. Name the path instead. Behaviour per kind:
 | Rename | Nothing special — name both paths; git detects the rename at diff time |
 | Gitignored | Refused (exit 7) unless already tracked, matching `git add` |
 | Unmerged index path | `FILE:SYMBOL` refused with exit 10; name the path instead |
+| Skip-worktree / assume-unchanged | `FILE:SYMBOL` refused with exit 10; bits left unchanged. Name the path instead |
 
 A `FILE:SYMBOL` anchor into JSON, YAML, or TOML resolves fine for `diff`,
 `blame`, and `log` — all three read-only — but `rgit commit` refuses it (exit
