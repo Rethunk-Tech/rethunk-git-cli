@@ -52,7 +52,7 @@ func TestRun_CommitSignoffAppendsSignedOffBy(t *testing.T) {
 	_, _, code := runApp(t, "commit", "-s", "-m", "fix(a): signoff", "a.go:A")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	qt.Assert(t, qt.StringContains(gitOut(t, dir, "log", "-1", "--format=%b"), "Signed-off-by:"))
+	qt.Assert(t, qt.StringContains(gitOut(t, dir, "log", "-1", "--format=%b"), "Signed-off-by: rgit Test <rgit-test@example.com>"))
 }
 
 func TestRun_CommitTrailerForwardsToGit(t *testing.T) {
