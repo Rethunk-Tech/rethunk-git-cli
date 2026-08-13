@@ -185,7 +185,8 @@ Notable changes to `rgit`. The format follows
   [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md#partial-clones-without-a-reachable-promisor-remote).
 
 - Index existence honors `core.ignorecase`, matching worktree and `HEAD`
-  lookup.
+  lookup. A gitignored path already in the index is recognized under a
+  folded name the same way, so it is not exit 7.
 
 ## [1.2.0] — 2026-08-05
 
