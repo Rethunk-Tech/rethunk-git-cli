@@ -615,6 +615,12 @@ func LanguageForPathFolding(root, relPath string, fold bool, headSample HeadSheb
 // shebang peek of the worktree copy. Callers that can fall back to a HEAD blob
 // use LanguageForPath directly.
 func LanguageForWorktreePath(root, relPath string) (lang Language, ok bool, peeked bool) {
-	lang, ok, peeked, _ = LanguageForPath(root, relPath, nil)
+	return LanguageForWorktreePathFolding(root, relPath, false)
+}
+
+// LanguageForWorktreePathFolding resolves relPath from its extension or a
+// bounded shebang peek of the worktree copy, optionally folding its extension.
+func LanguageForWorktreePathFolding(root, relPath string, fold bool) (lang Language, ok bool, peeked bool) {
+	lang, ok, peeked, _ = LanguageForPathFolding(root, relPath, fold, nil)
 	return lang, ok, peeked
 }
