@@ -21,8 +21,10 @@ Notable changes to `rgit`. The format follows
   forwards git's long form of `-C`; `--reedit-message` is refused. See
   [`docs/USAGE.md`](docs/USAGE.md#flags).
 
-- `rgit symbols` honors `core.ignorecase` for extension lookup. Extensionless
-  shebangs strip a trailing `.exe` from the interpreter name. See
+- Extension lookup honors `core.ignorecase` for `symbols`, `commit`,
+  `diff`, `blame`, `log`, and `languages`. Extensionless shebangs strip
+  a trailing `.exe` from the interpreter name. See
+  [`docs/USAGE.md`](docs/USAGE.md#symbols) and
   [`docs/ANCHORS.md`](docs/ANCHORS.md#language-support).
 
 - `FILE:SYMBOL` on a skip-worktree or assume-unchanged path is refused
