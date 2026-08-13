@@ -694,6 +694,25 @@ func TestCommit_ReuseMessageForwarded(t *testing.T) {
 	}
 }
 
+func TestCommit_SignoffAppendsTrailer(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	gittest.Write(t, dir, "a.txt", "content\n")
+	gittest.Commit(t, dir, "chore: initial")
+	gittest.Write(t, dir, "a.txt", "updated content\n")
+	gittest.Git(t, dir, "add", "a.txt")
+
+	if _, err := repo.Commit(context.Background(), gitx.CommitOptions{
+		Messages: []string{"feat: signoff"},
+		Signoff:  true,
+	}); err != nil {
+		t.Fatalf("Commit(--signoff): %v", err)
+	}
+	if got := gittest.Git(t, dir, "log", "-1", "--format=%b"); !strings.Contains(got, "Signed-off-by: rgit Test <rgit-test@example.com>") {
+		t.Errorf("commit body = %q; want signoff trailer", got)
+	}
+}
+
 func TestCommitOnlyUsesTemporaryIndex(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t)
