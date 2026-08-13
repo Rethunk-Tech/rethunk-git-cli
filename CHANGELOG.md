@@ -16,10 +16,26 @@ Notable changes to `rgit`. The format follows
   `W\tsparse` when `core.sparseCheckout` is true. See
   [`docs/CODES.md`](docs/CODES.md#rgit-context).
 
-- `rgit commit --amend` / `--allow-empty` / `--fixup` / `--squash` may omit
-  targets and operate on the index as it stands. `--reuse-message=<commit>`
-  forwards git's long form of `-C`; `--reedit-message` is refused. See
+- `rgit commit --amend` / `--allow-empty` / `--fixup` / `--squash` /
+  `--reuse-message` may omit targets and operate on the index as it stands.
+  `--reuse-message=<commit>` forwards git's long form of `-C`;
+  `--reedit-message` is refused. See
   [`docs/USAGE.md`](docs/USAGE.md#flags).
+
+- `rgit commit --only` / `-o` commits named targets (synthesized extents
+  included) and leaves other staged paths in the index. Zero targets are
+  refused unless combined with `--amend`. See
+  [`docs/USAGE.md`](docs/USAGE.md#flags).
+
+- `rgit commit` and `rgit diff` accept `--pathspec-from-file` and
+  `--pathspec-file-nul`. `-F -` together with `--pathspec-from-file=-`
+  is refused (exit 129). See [`docs/USAGE.md`](docs/USAGE.md#flags).
+
+- Argument classification treats a path in the index as existing, same
+  order as git: worktree, then index, then `HEAD`. Gitignored paths that
+  are already in the index are not exit 7. See
+  [`docs/USAGE.md`](docs/USAGE.md#argument-shape) and
+  [`docs/ANCHORS.md`](docs/ANCHORS.md).
 
 - Extension lookup honors `core.ignorecase` for `symbols`, `commit`,
   `diff`, `blame`, `log`, and `languages`. Extensionless shebangs strip
@@ -162,6 +178,14 @@ Notable changes to `rgit`. The format follows
   no content) the batched blob reader didn't recognize; it is now treated
   as `Exists=false`, matching the non-batch `CatFile` path's existing
   behaviour for the same case.
+
+- A path that exists in the tree but whose blob was not fetched (partial
+  clone, promisor remote unreachable) is a git failure (exit 128), not an
+  absent path. See
+  [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md#partial-clones-without-a-reachable-promisor-remote).
+
+- Index existence honors `core.ignorecase`, matching worktree and `HEAD`
+  lookup.
 
 ## [1.2.0] — 2026-08-05
 
