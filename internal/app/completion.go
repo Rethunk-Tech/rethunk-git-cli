@@ -108,7 +108,7 @@ const rgitSubcommands = "diff commit blame log context languages doctor completi
 const rgitDiffFlags = "--unstaged --staged --cached --range --porcelain --exit-code --quiet -p --patch --sym --file -h --help"
 
 const rgitCommitFlags = "-m --message -F --message-file -s --signoff --trailer --amend --allow-empty --push " +
-	"--dry-run --no-verify --fixup --squash --author --date --reset-author --porcelain -q --quiet " +
+	"--dry-run --no-verify --fixup --squash --reuse-message --reedit-message --author --date --reset-author --porcelain -q --quiet " +
 	"-S --gpg-sign --no-gpg-sign --sym --file -h --help"
 
 // rgitLanguagesFlags, rgitDoctorFlags, rgitCompletionFlags, rgitBlameFlags,
