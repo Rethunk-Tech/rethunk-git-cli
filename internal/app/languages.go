@@ -89,6 +89,12 @@ func filterLanguagesInRepo(ctx context.Context, dir string, langs []resolve.Lang
 		return nil, code
 	}
 
+	ignoreCase, err := repo.IgnoreCase(ctx)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: cannot read core.ignorecase: %v\n", err)
+		return nil, exitcode.GitFailure
+	}
+
 	tracked, err := repo.LsFilesTracked(ctx)
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
@@ -103,7 +109,7 @@ func filterLanguagesInRepo(ctx context.Context, dir string, langs []resolve.Lang
 
 	present := map[string]bool{}
 	for _, path := range tracked {
-		lang, ok, _, err := resolve.LanguageForPath(root, path, func() ([]byte, bool, error) {
+		lang, ok, _, err := resolve.LanguageForPathFolding(root, path, ignoreCase, func() ([]byte, bool, error) {
 			return repo.CatFileSample(ctx, "HEAD", path, resolve.ShebangPeekBytes)
 		})
 		if err != nil {
@@ -115,7 +121,7 @@ func filterLanguagesInRepo(ctx context.Context, dir string, langs []resolve.Lang
 		}
 	}
 	for _, path := range others {
-		if lang, ok, _ := resolve.LanguageForWorktreePath(root, path); ok {
+		if lang, ok, _ := resolve.LanguageForWorktreePathFolding(root, path, ignoreCase); ok {
 			present[lang.Name()] = true
 		}
 	}

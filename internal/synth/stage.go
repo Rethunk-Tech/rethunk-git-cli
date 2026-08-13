@@ -474,6 +474,10 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 	if err := checkGitignoreRefusal(ctx, repo, path); err != nil {
 		return nil, err
 	}
+	ignoreCase, err := repo.IgnoreCase(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	kind, err := classifyPath(ctx, repo, root, path)
 	if err != nil {
@@ -488,7 +492,7 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 	// recognizable "#!" interpreter line -- the case an extensionless git
 	// hook or bin/ entry is in. When that copy is absent, the shared resolver
 	// samples HEAD instead, so a deleted script can still resolve its anchors.
-	lang, ok, shebangSniffed, langErr := resolve.LanguageForPath(root, path, func() ([]byte, bool, error) {
+	lang, ok, shebangSniffed, langErr := resolve.LanguageForPathFolding(root, path, ignoreCase, func() ([]byte, bool, error) {
 		return repo.CatFileSample(ctx, "HEAD", path, resolve.ShebangPeekBytes)
 	})
 	if langErr != nil {

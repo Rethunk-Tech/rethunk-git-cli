@@ -122,6 +122,12 @@ func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.
 // rename, the next segment starts from the old path's parent commit and
 // resolves the anchor against that blob.
 func runBlameFollowRename(ctx context.Context, repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, anchorName string, extra []string, stdout, stderr io.Writer) exitcode.Code {
+	ignoreCase, err := repo.IgnoreCase(ctx)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: cannot read core.ignorecase: %v\n", err)
+		return exitcode.GitFailure
+	}
+
 	rev := "HEAD"
 	for {
 		start, end := lineRange(src, res.Extent)
@@ -145,7 +151,7 @@ func runBlameFollowRename(ctx context.Context, repo *gitx.Repo, file string, src
 
 		rev = renameCommit + "~1"
 		file = oldPath
-		lang, ok := resolve.ForExtension(filepath.Ext(file))
+		lang, ok := resolve.ForExtensionFolding(filepath.Ext(file), ignoreCase)
 		if !ok {
 			fmt.Fprintf(stderr, "rgit: blame: %q: unsupported language before the rename to its current name\n", file)
 			return exitcode.UnsupportedLanguage

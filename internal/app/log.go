@@ -308,6 +308,12 @@ func logDateArgs(since, until string, maxCount int, maxCountSet bool, extra []st
 // history, so only a rename crossing to a new path name -- found once per
 // segment, not once per commit -- needs a fresh resolve.
 func runLogFollowRename(ctx context.Context, repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, anchorName string, extra []string, stdout, stderr io.Writer) exitcode.Code {
+	ignoreCase, err := repo.IgnoreCase(ctx)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: cannot read core.ignorecase: %v\n", err)
+		return exitcode.GitFailure
+	}
+
 	rev := "HEAD"
 	for {
 		start, end := lineRange(src, res.Extent)
@@ -340,7 +346,7 @@ func runLogFollowRename(ctx context.Context, repo *gitx.Repo, file string, src [
 
 		rev = renameCommit + "~1"
 		file = oldPath
-		lang, ok := resolve.ForExtension(filepath.Ext(file))
+		lang, ok := resolve.ForExtensionFolding(filepath.Ext(file), ignoreCase)
 		if !ok {
 			fmt.Fprintf(stderr, "rgit: log: %q: unsupported language before the rename to its current name\n", file)
 			return exitcode.UnsupportedLanguage

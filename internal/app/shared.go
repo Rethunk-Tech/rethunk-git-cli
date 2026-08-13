@@ -281,7 +281,13 @@ func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, posi
 		return nil, "", nil, nil, "", exitcode.InvalidUsage
 	}
 
-	lang, ok, _, err := resolve.LanguageForPath(root, file, func() ([]byte, bool, error) {
+	ignoreCase, err := repo.IgnoreCase(ctx)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: cannot read core.ignorecase: %v\n", err)
+		return nil, "", nil, nil, "", exitcode.GitFailure
+	}
+
+	lang, ok, _, err := resolve.LanguageForPathFolding(root, file, ignoreCase, func() ([]byte, bool, error) {
 		return repo.CatFileSample(ctx, "HEAD", file, resolve.ShebangPeekBytes)
 	})
 	if err != nil {

@@ -234,11 +234,16 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusMode, Added: "0", Deleted: "0", ModeNote: note}}}, nil, false, nil
 	}
 
+	ignoreCase, err := repo.IgnoreCase(ctx)
+	if err != nil {
+		return nil, nil, false, err
+	}
+
 	// A worktree copy of newPath may still carry a recognizable "#!" line --
 	// an extensionless git hook or bin/ entry, resolve.ForPath's case. When
 	// the worktree copy is absent, the shared resolver samples HEAD instead,
 	// so deleted extensionless scripts retain their grammar.
-	lang, ok, _, langErr := resolve.LanguageForPath(root, newPath, func() ([]byte, bool, error) {
+	lang, ok, _, langErr := resolve.LanguageForPathFolding(root, newPath, ignoreCase, func() ([]byte, bool, error) {
 		return repo.CatFileSample(ctx, "HEAD", newPath, resolve.ShebangPeekBytes)
 	})
 	if langErr != nil {
@@ -480,9 +485,14 @@ func validateSyms(ctx context.Context, repo *gitx.Repo, root string, scope Scope
 // the same anchor (internal/resolve.ResolveError), so a missing file and a
 // missing symbol need no separate message shape.
 func validateSym(ctx context.Context, repo *gitx.Repo, root string, scope Scope, s SymRef) (string, error) {
+	ignoreCase, err := repo.IgnoreCase(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	// Same shared shebang fallback as buildFileReport: a --sym anchor
 	// naming an extensionless script uses HEAD when its worktree copy is gone.
-	lang, ok, _, langErr := resolve.LanguageForPath(root, s.File, func() ([]byte, bool, error) {
+	lang, ok, _, langErr := resolve.LanguageForPathFolding(root, s.File, ignoreCase, func() ([]byte, bool, error) {
 		return repo.CatFileSample(ctx, "HEAD", s.File, resolve.ShebangPeekBytes)
 	})
 	if langErr != nil {
