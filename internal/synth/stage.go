@@ -92,8 +92,12 @@ type filePlan struct {
 	headExists bool
 	workSrc    []byte
 	workExists bool
-	workOrder  []string // qualified anchor names in worktree declaration order
-	ops        []editOp
+	// worktreeExists is the worktree copy specifically. Index-backed
+	// current bytes still set workExists so anchors can resolve, but
+	// resolveMode must not os.Stat a path that is only in the index.
+	worktreeExists bool
+	workOrder      []string // qualified anchor names in worktree declaration order
+	ops            []editOp
 
 	// headFile and workFile are the two sources parsed once and held open;
 	// every anchor in this file resolves against them rather than re-parsing.
@@ -479,11 +483,24 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 		return nil, err
 	}
 
-	workSrc, workExists, err := util.ReadFileIfExists(filepath.Join(root, path))
+	kind, err := classifyPath(ctx, repo, root, path)
 	if err != nil {
 		return nil, err
 	}
-	if !workExists {
+	if err := refusalFor(path, kind); err != nil {
+		return nil, err
+	}
+
+	workSrc, worktreeExists, err := util.ReadFileIfExists(filepath.Join(root, path))
+	if err != nil {
+		return nil, err
+	}
+	headSrc, headExists, err := repo.CatFile(ctx, "HEAD", path)
+	if err != nil {
+		return nil, err
+	}
+	workExists := worktreeExists
+	if !workExists && !headExists {
 		indexSrc, indexExists, err := repo.CatFile(ctx, "", path)
 		if err != nil {
 			return nil, err
@@ -498,14 +515,6 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 			}
 			workSrc, workExists = indexSrc, true
 		}
-	}
-
-	kind, err := classifyPath(ctx, repo, root, path)
-	if err != nil {
-		return nil, err
-	}
-	if err := refusalFor(path, kind); err != nil {
-		return nil, err
 	}
 
 	ext := filepath.Ext(path)
@@ -530,18 +539,14 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 		return nil, &PathError{Code: exitcode.UnsupportedLanguage, Path: path, Reason: unsupportedLanguageReason(path, ext, shebangSniffed)}
 	}
 
-	headSrc, headExists, err := repo.CatFile(ctx, "HEAD", path)
-	if err != nil {
-		return nil, err
-	}
-
 	fp := &filePlan{
-		path:       path,
-		lang:       lang,
-		headSrc:    headSrc,
-		headExists: headExists,
-		workSrc:    workSrc,
-		workExists: workExists,
+		path:           path,
+		lang:           lang,
+		headSrc:        headSrc,
+		headExists:     headExists,
+		workSrc:        workSrc,
+		workExists:     workExists,
+		worktreeExists: worktreeExists,
 	}
 	if headExists {
 		if fp.headFile, err = resolve.Open(lang, headSrc); err != nil {
@@ -619,7 +624,7 @@ func (p *stagePlan) apply(ctx context.Context, repo *gitx.Repo, root string) err
 	for _, fp := range p.files {
 		content := inheritEOF(fp, applyEdits(fp.headSrc, fp.ops))
 
-		mode, err := resolveMode(ctx, repo, root, fp.path, fp.workExists)
+		mode, err := resolveMode(ctx, repo, root, fp.path, fp.worktreeExists)
 		if err != nil {
 			return err
 		}
@@ -653,17 +658,24 @@ func inheritEOF(fp *filePlan, content []byte) []byte {
 }
 
 // resolveMode reports the git file mode the staged blob should carry:
-// os.Stat's executable bit when the worktree has the file, or the mode
-// already recorded at HEAD when it does not -- staging a symbol deletion
-// from a file that was itself deleted has no worktree entry to stat
-// (AGENTS.md's invariant table).
-func resolveMode(ctx context.Context, repo *gitx.Repo, root, path string, workExists bool) (string, error) {
-	if workExists {
+// os.Stat's executable bit when the worktree has the file, otherwise the
+// index stage-0 mode, otherwise HEAD. A deleted worktree copy has no
+// entry to stat (AGENTS.md's mode-inheritance invariant).
+func resolveMode(ctx context.Context, repo *gitx.Repo, root, path string, worktreeExists bool) (string, error) {
+	if worktreeExists {
 		info, err := os.Stat(filepath.Join(root, path))
 		if err != nil {
 			return "", err
 		}
 		return util.GitFileMode(info), nil
+	}
+
+	mode, found, err := repo.LsFilesStage(ctx, path)
+	if err != nil {
+		return "", err
+	}
+	if found {
+		return mode, nil
 	}
 
 	entry, found, err := repo.LsTree(ctx, "HEAD", path)
