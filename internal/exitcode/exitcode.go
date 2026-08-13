@@ -43,8 +43,8 @@ const (
 	// UnsupportedLanguage means no grammar; naming the path still works.
 	UnsupportedLanguage Code = 9
 
-	// SpecialPathRefused means a commit/diff symbol anchor hit a special path;
-	// not PathRefused. See docs/CODES.md.
+	// SpecialPathRefused means a commit symbol anchor hit a special path; not
+	// PathRefused. See docs/CODES.md.
 	SpecialPathRefused Code = 10
 
 	// NothingToCommit means EVERY named target was unchanged, not some.

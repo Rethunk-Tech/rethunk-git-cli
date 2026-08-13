@@ -94,22 +94,22 @@ Full anchor and qualification rules: [`ANCHORS.md`](ANCHORS.md).
 
 ## Symlinks, submodules, renames, and content filters
 
-In `commit` and `diff`, a symbol anchor never addresses a symlink or a
-submodule directory — both refuse with exit 10 (`SpecialPathRefused`), the
-same code, rather than being misresolved as an ordinary file or silently
-producing an empty symbol set. Name the path instead: `rgit commit link.txt`
-and `rgit commit vendor/lib` stage them exactly as `git add` would, gitlink SHA
-and symlink target included — a pathspec target is delegated straight to
-`git add` and never touches `rgit`'s own byte synthesis at all
+In `commit`, a symbol anchor never addresses a symlink or a submodule
+directory — both refuse with exit 10 (`SpecialPathRefused`), the same code,
+rather than being misresolved as an ordinary file or silently producing an
+empty symbol set. Name the path instead: `rgit commit link.txt` and `rgit
+commit vendor/lib` stage them exactly as `git add` would, gitlink SHA and
+symlink target included — a pathspec target is delegated straight to `git add`
+and never touches `rgit`'s own byte synthesis at all
 (`internal/synth/stage.go`'s `Pathspec` targets vs. `Symbol` targets). See
 [`cmd/rgit/index_test.go`](../cmd/rgit/index_test.go)'s
 `TestStage_SubmoduleAndSymlinkPathStaging` for both the pathspec staging and
 the anchor refusal, on each of the two kinds.
 
 An **unmerged path** likewise refuses a symbol anchor with exit 10
-(`SpecialPathRefused`) in `commit` and `diff`. Name the path instead so Git
-can stage the conflict entries and their conflict-marker content without rgit
-attempting a symbol splice. Pathspec targets remain delegated to `git add`.
+(`SpecialPathRefused`) in `commit`. Name the path instead so Git can stage the
+conflict entries and their conflict-marker content without rgit attempting a
+symbol splice. Pathspec targets remain delegated to `git add`.
 
 **An uninitialized submodule refuses the identical anchor the same way** —
 `git submodule deinit` leaves the directory in place, emptied of its own
@@ -127,10 +127,10 @@ The default diff scope is a real `git diff --numstat`
 path as changed, so it never reaches `rgit`'s own attribution at all in the
 ordinary case. An explicit `FILE:SYMBOL` anchor on a path marked
 skip-worktree refuses with exit 10 before blob synthesis; the bit is left
-unchanged. The same refusal applies to an assume-unchanged path, in `commit`
-and `diff`. A pathspec target still reaches real `git add`, which handles
-Git's own sparse-path advice (`git config advice.updateSparsePath`) without
-rgit special-casing it.
+unchanged. The same refusal applies to an assume-unchanged path, in `commit`.
+A pathspec target still reaches real `git add`, which handles Git's own
+sparse-path advice (`git config advice.updateSparsePath`) without rgit
+special-casing it.
 If a path is absent from the index rather than marked with either bit, anchor
 resolution retains its ordinary exit 3 (unresolvable) behavior.
 
@@ -151,9 +151,8 @@ synthetic filter rather than requiring a real filter binary (`git-lfs`
 included) in the test environment — Git LFS's own clean filter is invoked
 through the identical mechanism, an ordinary `.gitattributes` `filter=`
 entry, with nothing rgit-specific to special-case for it. A binary file is
-refused for a symbol anchor in `commit` and `diff` the same way a symlink or
-submodule is (exit 10) — there is no content to attribute a symbol's bytes
-within.
+refused for a symbol anchor in `commit` the same way a symlink or submodule
+is (exit 10) — there is no content to attribute a symbol's bytes within.
 
 ## Partial clones without a reachable promisor remote
 
