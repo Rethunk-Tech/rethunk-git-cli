@@ -486,9 +486,9 @@ ValidateToken
 ```
 
 `rgit symbols [--for-commit] <file>` lists every declared symbol that can be
-resolved from the worktree file, or from the file's index entry or `HEAD` blob
-when the worktree copy has been deleted, one symbol per line. A path present
-in neither the worktree, the index, nor `HEAD` still errors. `--for-commit` omits structured-data
+resolved from the worktree file, or from the file's `HEAD` blob when the
+worktree copy has been deleted, one symbol per line. A path present in neither
+the worktree nor `HEAD` still errors. `--for-commit` omits structured-data
 symbols that `rgit commit` refuses; it still exits successfully without output
 when the file is a supported structured-data file.
 
