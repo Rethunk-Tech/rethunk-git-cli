@@ -500,6 +500,10 @@ code, while an unsupported language exits with the unsupported-language code.
 See
 [`CODES.md`](CODES.md#exit-codes).
 
+When `core.ignorecase` is true, extension lookup is case-insensitive for
+`symbols`, `commit`, `diff`, `blame`, `log`, and `languages`; the path itself
+remains unchanged.
+
 ## Shell completion
 
 `rgit completion bash`, `rgit completion zsh`, `rgit completion fish`, and
