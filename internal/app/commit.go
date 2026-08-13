@@ -21,26 +21,27 @@ import (
 // commitFlags mirrors the `rgit commit` flag surface in docs/USAGE.md §
 // Flags.
 type commitFlags struct {
-	messages    []string
-	msgFile     string
-	signoff     bool
-	trailers    []string
-	amend       bool
-	allowEmpty  bool
-	push        bool
-	dryRun      bool
-	noVerify    bool
-	fixup       string
-	squash      string
-	author      string
-	date        string
-	resetAuthor bool
-	gpgSignKey  string // "" = not given; gpgSignBare = bare --gpg-sign; else the key id
-	noGPGSign   bool
-	porcelain   bool
-	quiet       bool
-	syms        []string
-	files       []string
+	messages     []string
+	msgFile      string
+	signoff      bool
+	trailers     []string
+	amend        bool
+	allowEmpty   bool
+	push         bool
+	dryRun       bool
+	noVerify     bool
+	fixup        string
+	squash       string
+	reuseMessage string
+	author       string
+	date         string
+	resetAuthor  bool
+	gpgSignKey   string // "" = not given; gpgSignBare = bare --gpg-sign; else the key id
+	noGPGSign    bool
+	porcelain    bool
+	quiet        bool
+	syms         []string
+	files        []string
 }
 
 // expandGPGSignShorthand rewrites git's own -S spelling into the long form
@@ -110,6 +111,8 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	fs.BoolVar(&f.noVerify, "no-verify", false, "skip git hooks")
 	fs.StringVar(&f.fixup, "fixup", "", "autosquash fixup for <commit> (or amend:<commit>/reword:<commit>)")
 	fs.StringVar(&f.squash, "squash", "", "autosquash squash for <commit>")
+	fs.StringVar(&f.reuseMessage, "reuse-message", "", "reuse the message and authorship from <commit>")
+	reeditMessage := fs.Bool("reedit-message", false, "unsupported; use --reuse-message")
 	fs.StringVar(&f.author, "author", "", "override the commit author")
 	fs.StringVar(&f.date, "date", "", "override the commit date")
 	fs.BoolVar(&f.resetAuthor, "reset-author", false, "take the author identity from the committer (with --amend)")
@@ -128,6 +131,10 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		"\nFull reference: docs/USAGE.md\n"
 	if code, done := parseFlagsOrHelp(fs, expandGPGSignShorthand(args), stdout, stderr, help); done {
 		return code
+	}
+	if *reeditMessage {
+		fmt.Fprintln(stderr, "rgit: --reedit-message is unsupported; use --reuse-message")
+		return exitcode.InvalidUsage
 	}
 
 	if len(f.messages) > 0 && f.msgFile != "" {
@@ -154,7 +161,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	// repository opens. -m/-F given alongside --fixup or --squash is not a
 	// conflict: git appends it as an extra body paragraph rather than
 	// rejecting or silently dropping it.
-	autoMessage := f.amend || f.fixup != "" || f.squash != ""
+	autoMessage := f.amend || f.fixup != "" || f.squash != "" || f.reuseMessage != ""
 	noEdit := f.amend && len(f.messages) == 0 && f.msgFile == ""
 
 	positionalsGiven := fs.Args()
@@ -164,7 +171,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		return exitcode.InvalidUsage
 	}
 
-	if !hasConventionalShape(f.messages) {
+	if (f.reuseMessage == "" || len(f.messages) > 0 || f.msgFile != "") && !hasConventionalShape(f.messages) {
 		// [warning], not "rgit: warning:" -- every other advisory in this
 		// command (below) and in diff.go already uses the bracketed form;
 		// one spelling for "advisory, not a refusal" across the surface.
@@ -297,6 +304,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		Messages:     f.messages,
 		Signoff:      f.signoff,
 		Trailers:     f.trailers,
+		ReuseMessage: f.reuseMessage,
 		Amend:        f.amend,
 		AllowEmpty:   f.allowEmpty,
 		NoVerify:     f.noVerify,

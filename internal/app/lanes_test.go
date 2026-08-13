@@ -496,3 +496,24 @@ func TestRun_FixupAndSquashWithNoTargetsUseIndex(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), "squash! chore: initial\n"))
 }
+
+func TestRun_ReuseMessageWithChdir(t *testing.T) {
+	dir := chdirTempRepo(t)
+	t.Chdir(t.TempDir())
+
+	_, stderr, code := runApp(t, "-C", dir, "commit", "--reuse-message=HEAD", "--allow-empty")
+
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), "chore: initial\n"))
+}
+
+func TestRun_ReeditMessageRefused(t *testing.T) {
+	chdirTempRepo(t)
+
+	_, stderr, code := runApp(t, "commit", "--reedit-message")
+
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "--reedit-message"))
+	qt.Assert(t, qt.StringContains(stderr, "--reuse-message"))
+}
