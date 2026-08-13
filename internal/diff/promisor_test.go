@@ -34,7 +34,7 @@ func TestRun_PromisorMissingBlobIsAnError(t *testing.T) {
 
 func TestPrefetchBlobs_PromisorMissingBlobIsAnError(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.BloblessClone(t)
+	_, repo := gittest.BloblessClone(t)
 
 	cache, err := prefetchBlobs(
 		context.Background(),
