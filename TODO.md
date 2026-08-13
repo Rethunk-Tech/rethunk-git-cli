@@ -8,9 +8,7 @@ Limitations that ship — unsupported languages, excluded cross-build targets,
 constructs no anchor reaches — are documented in
 [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md), not listed here.
 
-The residual queue is empty after index-as-existence, `--only`,
-promisor-missing blobs, `--pathspec-from-file`, `--reuse-message` with
-zero targets, and pwsh e2e completion pins. Deliberately not queued:
+Deliberately not queued:
 `rgit restore` (designed and held back —
 [`specs/design.md`](specs/design.md#rgit-restore-filesymbol-an-accepted-design-deliberately-not-built)),
 context staged/unstaged split, TOML taplo / SQL LSP cross-checks, Rust/C/C++/
