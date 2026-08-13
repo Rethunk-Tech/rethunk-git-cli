@@ -186,7 +186,13 @@ func TestRunCommit_IndexOnlyPathSymbolAnchor(t *testing.T) {
 	if err := os.Remove(dir + "/new.go"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := os.Stat(dir + "/new.go"); !os.IsNotExist(err) {
+		t.Fatalf("os.Stat(new.go) = %v; want os.IsNotExist", err)
+	}
 	t.Chdir(dir)
+	if got := gitOut(t, dir, "show", ":new.go"); !strings.Contains(got, "func New()") {
+		t.Errorf("git show :new.go = %q; want New function", got)
+	}
 
 	_, stderr, code := runApp(t, "commit", "-m", "feat(p): add New", "new.go:New")
 	if code != exitcode.Success {
