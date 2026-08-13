@@ -122,6 +122,14 @@ func TestCheckGitVersion(t *testing.T) {
 		qt.Assert(t, qt.Equals(c.Detail, "2.39.3"))
 	})
 
+	t.Run("platform-suffixed Windows output still parses", func(t *testing.T) {
+		t.Parallel()
+		script := writeFakeGit(t, "git version 2.43.0.windows.1")
+		c := CheckGitVersion(script, MinGitVersion)
+		qt.Assert(t, qt.IsTrue(c.OK))
+		qt.Assert(t, qt.Equals(c.Detail, "2.43.0"))
+	})
+
 	t.Run("unparseable output is reported, not silently accepted", func(t *testing.T) {
 		t.Parallel()
 		script := writeFakeGit(t, "not a version string")
