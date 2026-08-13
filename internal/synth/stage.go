@@ -479,6 +479,27 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 		return nil, err
 	}
 
+	workSrc, workExists, err := util.ReadFileIfExists(filepath.Join(root, path))
+	if err != nil {
+		return nil, err
+	}
+	if !workExists {
+		indexSrc, indexExists, err := repo.CatFile(ctx, "", path)
+		if err != nil {
+			return nil, err
+		}
+		if indexExists {
+			if len(indexSrc) == 0 {
+				return nil, &PathError{
+					Code:   exitcode.SpecialPathRefused,
+					Path:   path,
+					Reason: "worktree file is missing and the index contains an empty intent-to-add blob; restore the worktree file",
+				}
+			}
+			workSrc, workExists = indexSrc, true
+		}
+	}
+
 	kind, err := classifyPath(ctx, repo, root, path)
 	if err != nil {
 		return nil, err
@@ -493,6 +514,13 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 	// hook or bin/ entry is in. When that copy is absent, the shared resolver
 	// samples HEAD instead, so a deleted script can still resolve its anchors.
 	lang, ok, shebangSniffed, langErr := resolve.LanguageForPathFolding(root, path, ignoreCase, func() ([]byte, bool, error) {
+		if workExists {
+			sample := workSrc
+			if len(sample) > resolve.ShebangPeekBytes {
+				sample = sample[:resolve.ShebangPeekBytes]
+			}
+			return sample, true, nil
+		}
 		return repo.CatFileSample(ctx, "HEAD", path, resolve.ShebangPeekBytes)
 	})
 	if langErr != nil {
@@ -503,10 +531,6 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 	}
 
 	headSrc, headExists, err := repo.CatFile(ctx, "HEAD", path)
-	if err != nil {
-		return nil, err
-	}
-	workSrc, workExists, err := util.ReadFileIfExists(filepath.Join(root, path))
 	if err != nil {
 		return nil, err
 	}

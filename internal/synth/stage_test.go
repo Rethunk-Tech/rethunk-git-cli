@@ -76,6 +76,51 @@ func TestOpenFilePlan_UnsupportedLanguageReason(t *testing.T) {
 	})
 }
 
+func TestOpenFilePlan_UsesNonEmptyIndexBlobWhenWorktreeGone(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	want := "package sample\n\nfunc New() {}\n"
+	gittest.Write(t, dir, "new.go", want)
+	gittest.Git(t, dir, "add", "new.go")
+	if err := os.Remove(filepath.Join(dir, "new.go")); err != nil {
+		t.Fatal(err)
+	}
+
+	fp, err := openFilePlan(context.Background(), repo, dir, "new.go")
+	if err != nil {
+		t.Fatalf("openFilePlan: %v", err)
+	}
+	defer fp.close()
+	if !fp.workExists {
+		t.Fatal("workExists = false; want index-backed source")
+	}
+	if string(fp.workSrc) != want {
+		t.Errorf("workSrc = %q; want %q", fp.workSrc, want)
+	}
+	if fp.headExists {
+		t.Error("headExists = true; want false for an uncommitted new file")
+	}
+}
+
+func TestOpenFilePlan_RefusesEmptyIntentToAddWithoutWorktree(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	gittest.Write(t, dir, "new.go", "package sample\n\nfunc New() {}\n")
+	gittest.Git(t, dir, "add", "-N", "new.go")
+	if err := os.Remove(filepath.Join(dir, "new.go")); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := openFilePlan(context.Background(), repo, dir, "new.go")
+	var perr *PathError
+	if !errors.As(err, &perr) {
+		t.Fatalf("openFilePlan error = %v; want *PathError", err)
+	}
+	if !strings.Contains(perr.Reason, "empty intent-to-add blob") {
+		t.Errorf("PathError.Reason = %q; want empty intent-to-add explanation", perr.Reason)
+	}
+}
+
 // TestPathspecFileCounts_UnreadableUntrackedFileWarns pins the --dry-run
 // counting path: an untracked file whose content cannot be read must not
 // just vanish from the preview -- the numstat and ls-files failures right
