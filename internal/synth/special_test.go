@@ -264,6 +264,59 @@ func TestStage_RefusesUnmergedSymbol(t *testing.T) {
 	}
 }
 
+func TestStage_RefusesIndexWorktreeBits(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		mark   string
+		reason string
+		skip   bool
+		assume bool
+	}{
+		{
+			name:   "skip-worktree",
+			mark:   "--skip-worktree",
+			reason: "skip-worktree; name the path instead of a symbol",
+			skip:   true,
+		},
+		{
+			name:   "assume-unchanged",
+			mark:   "--assume-unchanged",
+			reason: "assume-unchanged; name the path instead of a symbol",
+			assume: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dir, repo := newSpecialTestRepo(t)
+			gittest.Write(t, dir, "tracked.go", "package p\n\nfunc Keep() {}\n")
+			commitSpecial(t, dir, "tracked.go")
+			gittest.Git(t, dir, "update-index", test.mark, "tracked.go")
+
+			err := Stage(context.Background(), repo, dir, []Target{AnchorTarget("tracked.go", "Keep")})
+			var pathErr *PathError
+			if !errors.As(err, &pathErr) {
+				t.Fatalf("Stage error = %v (%T); want *PathError", err, err)
+			}
+			if pathErr.Code != exitcode.SpecialPathRefused {
+				t.Errorf("Code = %v; want SpecialPathRefused", pathErr.Code)
+			}
+			if pathErr.Reason != test.reason {
+				t.Errorf("Reason = %q; want %q", pathErr.Reason, test.reason)
+			}
+
+			skip, assume, found, err := repo.IndexWorktreeBits(context.Background(), "tracked.go")
+			if err != nil {
+				t.Fatalf("IndexWorktreeBits after refusal: %v", err)
+			}
+			if skip != test.skip || assume != test.assume || !found {
+				t.Errorf("IndexWorktreeBits after refusal = (%t, %t, %t); want (%t, %t, true)", skip, assume, found, test.skip, test.assume)
+			}
+		})
+	}
+}
+
 func setUnmergedIndex(t *testing.T, dir, blob, path string) {
 	t.Helper()
 	cmd := exec.Command("git", "-C", dir, "update-index", "--index-info")

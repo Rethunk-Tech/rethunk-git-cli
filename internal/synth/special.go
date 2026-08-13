@@ -12,9 +12,10 @@ import (
 )
 
 // PathError is a target refused before any resolution was attempted on
-// it: a symlink, gitlink, binary, or unmerged path a symbol anchor cannot
-// address (exit 10), a gitignored-and-untracked path (exit 7), or a symbol
-// anchor naming a language with no grammar in this build (exit 9).
+// it: a symlink, gitlink, binary, unmerged, skip-worktree, or
+// assume-unchanged path a symbol anchor cannot address (exit 10), a
+// gitignored-and-untracked path (exit 7), or a symbol anchor naming a
+// language with no grammar in this build (exit 9).
 // docs/ANCHORS.md and
 // docs/USAGE.md's exit-code table are authoritative; Code is set to
 // match directly rather than requiring callers to pattern-match text.
@@ -38,6 +39,8 @@ const (
 	pathGitlink
 	pathBinary
 	pathUnmerged
+	pathSkipWorktree
+	pathAssumeUnchanged
 )
 
 // classifyPath determines a path's kind by preferring the worktree entry
@@ -55,6 +58,18 @@ func classifyPath(ctx context.Context, repo *gitx.Repo, root, path string) (path
 	}
 	if unmerged {
 		return pathUnmerged, nil
+	}
+	skip, assume, found, err := repo.IndexWorktreeBits(ctx, path)
+	if err != nil {
+		return pathRegular, err
+	}
+	if found {
+		switch {
+		case skip:
+			return pathSkipWorktree, nil
+		case assume:
+			return pathAssumeUnchanged, nil
+		}
 	}
 
 	full := filepath.Join(root, path)
@@ -150,6 +165,10 @@ func refusalFor(path string, kind pathKind) error {
 		return &PathError{Code: exitcode.SpecialPathRefused, Path: path, Reason: "binary; name the path instead of a symbol"}
 	case pathUnmerged:
 		return &PathError{Code: exitcode.SpecialPathRefused, Path: path, Reason: "unmerged; name the path instead of a symbol"}
+	case pathSkipWorktree:
+		return &PathError{Code: exitcode.SpecialPathRefused, Path: path, Reason: "skip-worktree; name the path instead of a symbol"}
+	case pathAssumeUnchanged:
+		return &PathError{Code: exitcode.SpecialPathRefused, Path: path, Reason: "assume-unchanged; name the path instead of a symbol"}
 	default:
 		return nil
 	}
