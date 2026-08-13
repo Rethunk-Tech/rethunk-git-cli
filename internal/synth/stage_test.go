@@ -163,7 +163,8 @@ func TestStage_PromisorMissingBlobIsAnError(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.BloblessClone(t)
 
-	err := Stage(context.Background(), repo, dir, []Target{AnchorTarget("tracked.go", "Tracked")})
+	// CatFile fails before symbol classification can inspect the missing blob.
+	err := Stage(context.Background(), repo, dir, []Target{AnchorTarget("tracked.go", "@header")})
 
 	var gerr *gitx.GitError
 	if !errors.As(err, &gerr) {
@@ -171,5 +172,8 @@ func TestStage_PromisorMissingBlobIsAnError(t *testing.T) {
 	}
 	if gerr.ExitCode != 128 {
 		t.Errorf("Stage exit code = %d; want 128", gerr.ExitCode)
+	}
+	if len(gerr.Stderr) == 0 {
+		t.Error("Stage GitError.Stderr is empty; want git's diagnostic")
 	}
 }
