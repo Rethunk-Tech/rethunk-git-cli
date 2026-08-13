@@ -234,9 +234,8 @@ func setUnmergedIndex(t *testing.T, dir, blob, path string) {
 }
 
 // TestExtractRangeToken_DetectsRangeNotAPath covers ExtractRangeToken's
-// main cold path (measured at 77.8% under -short -coverpkg=./... before the
-// subtests below were added): a "..2-shaped" argument that does not exist
-// as a path in the worktree or HEAD is the range token, pulled out of args
+// main cold path: a ".."-shaped argument that does not exist as a path in
+// the worktree, index, or HEAD is the range token, pulled out of args
 // rather than left for cli.ClassifyArgs to fail on. The real GitPathChecker
 // drives this rather than a stand-in -- CONTRIBUTING's "prefer the real
 // dependency" rule -- since the whole point of the check is a real git
