@@ -107,7 +107,7 @@ func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Repo
 			return nil, uerr
 		}
 		untrackedFiles, untrackedWarnings, untrackedTSOnly, uerr := parallelFileReports(len(untracked), func(i int) (*FileReport, []string, bool, error) {
-			return buildUntrackedReport(ctx, root, untracked[i], sess, symFiltered)
+			return buildUntrackedReport(ctx, repo, root, untracked[i], sess, symFiltered)
 		})
 		if uerr != nil {
 			return nil, uerr
@@ -309,7 +309,7 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 // warnings and tsOnly are returned rather than written into a shared
 // *Report, the same reason buildFileReport's own signature does -- see its
 // doc comment.
-func buildUntrackedReport(ctx context.Context, root, path string, sess *lsp.Session, symFiltered bool) (fr *FileReport, warnings []string, tsOnly bool, err error) {
+func buildUntrackedReport(ctx context.Context, repo *gitx.Repo, root, path string, sess *lsp.Session, symFiltered bool) (fr *FileReport, warnings []string, tsOnly bool, err error) {
 	content, err := os.ReadFile(filepath.Join(root, path))
 	if err != nil {
 		return nil, nil, false, err
@@ -318,11 +318,16 @@ func buildUntrackedReport(ctx context.Context, root, path string, sess *lsp.Sess
 		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: "-", Deleted: "-"}}}, nil, false, nil
 	}
 
+	ignoreCase, err := repo.IgnoreCase(ctx)
+	if err != nil {
+		return nil, nil, false, err
+	}
+
 	// content is already fully read above (needed for the binary check and
 	// line count regardless), so ForPath's shebang fallback costs nothing
 	// extra here -- unlike the other two call sites, there is no separate
 	// bounded peek to reason about.
-	lang, ok := resolve.ForPath(path, content)
+	lang, ok := resolve.ForPathFolding(path, content, ignoreCase)
 	if !ok {
 		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: itoa(countLines(content)), Deleted: "0"}}}, nil, false, nil
 	}
