@@ -299,3 +299,22 @@ func TestRun_BlameFollowRenameResolvesAgainstHEADNotWorktree(t *testing.T) {
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.Equals(dirty, clean))
 }
+
+func TestRun_BlameHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
+	root := t.TempDir()
+	gittest.Git(t, root, "init", "--quiet")
+	gittest.Git(t, root, "config", "core.ignorecase", "true")
+	writeAppFile(t, root, "Foo.GO", "package demo\n\nfunc First() {}\n")
+	gittest.Git(t, root, "add", "Foo.GO")
+	gittest.Git(t, root, "-c", "user.name=rgit test", "-c", "user.email=rgit@example.invalid", "commit", "--quiet", "-m", "initial")
+	t.Chdir(root)
+
+	stdout, stderr, code := runApp(t, "blame", "Foo.GO:First")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.StringContains(stdout, "First"))
+
+	gittest.Git(t, root, "config", "core.ignorecase", "false")
+	_, _, code = runApp(t, "blame", "Foo.GO:First")
+	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
+}
