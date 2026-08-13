@@ -158,7 +158,8 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	noEdit := f.amend && len(f.messages) == 0 && f.msgFile == ""
 
 	positionalsGiven := fs.Args()
-	if len(positionalsGiven)+len(f.syms)+len(f.files) == 0 {
+	targetCount := len(positionalsGiven) + len(f.syms) + len(f.files)
+	if targetCount == 0 && !f.amend && !f.allowEmpty && f.fixup == "" && f.squash == "" {
 		fmt.Fprintln(stderr, "rgit: commit requires at least one target")
 		return exitcode.InvalidUsage
 	}
@@ -189,95 +190,107 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		}
 	}
 
-	classified, err := cli.ClassifyArgs(ctx, restoreDoubleDash(fs), false, cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}, cli.GitRevisionResolver{Repo: repo})
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return exitcode.InvalidUsage
-	}
-
-	targets, err := commitTargets(root, prefix, classified, f.files, f.syms)
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return exitcode.InvalidUsage
-	}
-
-	// Checked on the built targets, not the raw arguments: by this point
-	// positionals and flags have collapsed into one list and every path has
-	// been resolved against the invocation prefix, so "src/a.go" named from
-	// a subdirectory and "a.go" named from the root compare equal.
-	paths, anchorFiles := targetPaths(targets)
-	if code := pathAnchorContradiction(paths, anchorFiles, stderr); code != exitcode.Success {
-		return code
-	}
-	if code := refuseStructuredDataAnchors(root, targets, stderr); code != exitcode.Success {
-		return code
-	}
-
-	plan, err := synth.PlanStage(ctx, repo, root, targets)
-	if err != nil {
-		code, msg := mapStageError(err)
-		fmt.Fprintf(stderr, "rgit: %s\n", msg)
-		return code
-	}
-
-	if plan.TSOnly() {
-		fmt.Fprintln(stderr, tsOnlyNotice)
-	}
-	for _, path := range plan.Preamble() {
-		fmt.Fprintf(stderr, "[notice] %s is new; staging its @header and @imports so the file compiles\n", path)
-	}
-	for _, e := range plan.Escalated() {
-		fmt.Fprintf(stderr, "[notice] %s: container is new, so the whole container is staged\n", e)
-	}
-	for _, anchor := range plan.Ordinals() {
-		fmt.Fprintf(stderr, "[warning] anchor '%s' is positional; inserting a symbol above it repoints it -- qualify it where the language allows\n", anchor)
-	}
-	for _, w := range plan.CountingWarnings() {
-		fmt.Fprintf(stderr, "[warning] %s\n", w)
-	}
-
-	allUnchanged := len(plan.Results()) > 0
-	for _, r := range plan.Results() {
-		if r.Outcome != synth.Unchanged {
-			allUnchanged = false
-			continue
+	var targetResults []synth.TargetResult
+	if targetCount > 0 {
+		classified, err := cli.ClassifyArgs(ctx, restoreDoubleDash(fs), false, cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}, cli.GitRevisionResolver{Repo: repo})
+		if err != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return exitcode.InvalidUsage
 		}
-		fmt.Fprintf(stderr, "[warning] target '%s' has no uncommitted changes; skipping\n", targetLabel(r.Target))
-	}
 
-	// docs/USAGE.md § Targets with nothing to commit: exit 11 only when
-	// EVERY named target turned out unchanged, and only then -- a mix of
-	// changed and unchanged targets is a warning plus a commit of the rest,
-	// not a failure. --allow-empty suppresses it.
-	if allUnchanged && !f.allowEmpty {
-		return exitcode.NothingToCommit
-	}
+		targets, err := commitTargets(root, prefix, classified, f.files, f.syms)
+		if err != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return exitcode.InvalidUsage
+		}
 
-	if f.dryRun {
-		// docs/USAGE.md: dry-run "writes no objects, stages nothing, runs
-		// no hooks" -- resolution (including the cross-check above) already
-		// happened as a pure read; nothing past this point may execute.
-		//
-		// It still has to say what it resolved. A preview that prints
-		// nothing and exits 0 is indistinguishable from one that found
-		// nothing, which is the opposite of what a preview is for.
+		// Checked on the built targets, not the raw arguments: by this point
+		// positionals and flags have collapsed into one list and every path has
+		// been resolved against the invocation prefix, so "src/a.go" named from
+		// a subdirectory and "a.go" named from the root compare equal.
+		paths, anchorFiles := targetPaths(targets)
+		if code := pathAnchorContradiction(paths, anchorFiles, stderr); code != exitcode.Success {
+			return code
+		}
+		if code := refuseStructuredDataAnchors(root, targets, stderr); code != exitcode.Success {
+			return code
+		}
+
+		plan, err := synth.PlanStage(ctx, repo, root, targets)
+		if err != nil {
+			code, msg := mapStageError(err)
+			fmt.Fprintf(stderr, "rgit: %s\n", msg)
+			return code
+		}
+
+		if plan.TSOnly() {
+			fmt.Fprintln(stderr, tsOnlyNotice)
+		}
+		for _, path := range plan.Preamble() {
+			fmt.Fprintf(stderr, "[notice] %s is new; staging its @header and @imports so the file compiles\n", path)
+		}
+		for _, e := range plan.Escalated() {
+			fmt.Fprintf(stderr, "[notice] %s: container is new, so the whole container is staged\n", e)
+		}
+		for _, anchor := range plan.Ordinals() {
+			fmt.Fprintf(stderr, "[warning] anchor '%s' is positional; inserting a symbol above it repoints it -- qualify it where the language allows\n", anchor)
+		}
+		for _, w := range plan.CountingWarnings() {
+			fmt.Fprintf(stderr, "[warning] %s\n", w)
+		}
+
+		targetResults = plan.Results()
+		allUnchanged := len(targetResults) > 0
+		for _, r := range targetResults {
+			if r.Outcome != synth.Unchanged {
+				allUnchanged = false
+				continue
+			}
+			fmt.Fprintf(stderr, "[warning] target '%s' has no uncommitted changes; skipping\n", targetLabel(r.Target))
+		}
+
+		// docs/USAGE.md § Targets with nothing to commit: exit 11 only when
+		// EVERY named target turned out unchanged, and only then -- a mix of
+		// changed and unchanged targets is a warning plus a commit of the rest,
+		// not a failure. --allow-empty suppresses it.
+		if allUnchanged && !f.allowEmpty {
+			return exitcode.NothingToCommit
+		}
+
+		if f.dryRun {
+			// docs/USAGE.md: dry-run "writes no objects, stages nothing, runs
+			// no hooks" -- resolution (including the cross-check above) already
+			// happened as a pure read; nothing past this point may execute.
+			//
+			// It still has to say what it resolved. A preview that prints
+			// nothing and exits 0 is indistinguishable from one that found
+			// nothing, which is the opposite of what a preview is for.
+			if f.porcelain {
+				// No preamble: the records are the whole output, so a caller
+				// can read them without stripping a human sentence first.
+				writeTargetRecords(stdout, targetResults)
+				return exitcode.Success
+			}
+			if !f.quiet {
+				fmt.Fprintln(stdout, "dry run: nothing written, nothing staged. Would commit:")
+				writeTargetListing(stdout, targetResults)
+			}
+			return exitcode.Success
+		}
+
+		if err := plan.Apply(ctx, repo, root); err != nil {
+			code, msg := mapStageError(err)
+			fmt.Fprintf(stderr, "rgit: %s\n", msg)
+			return code
+		}
+	} else if f.dryRun {
 		if f.porcelain {
-			// No preamble: the records are the whole output, so a caller
-			// can read them without stripping a human sentence first.
-			writeTargetRecords(stdout, plan.Results())
 			return exitcode.Success
 		}
 		if !f.quiet {
 			fmt.Fprintln(stdout, "dry run: nothing written, nothing staged. Would commit:")
-			writeTargetListing(stdout, plan.Results())
 		}
 		return exitcode.Success
-	}
-
-	if err := plan.Apply(ctx, repo, root); err != nil {
-		code, msg := mapStageError(err)
-		fmt.Fprintf(stderr, "rgit: %s\n", msg)
-		return code
 	}
 
 	opts := gitx.CommitOptions{
@@ -338,7 +351,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 			return exitcode.GitFailure
 		}
 		fmt.Fprintf(stdout, "H\t%s\n", sha)
-		writeTargetRecords(stdout, plan.Results())
+		writeTargetRecords(stdout, targetResults)
 	case f.quiet:
 		// Nothing on stdout. Hook output and every warning above still
 		// went to stderr -- git's own -q suppresses the summary, not
@@ -352,7 +365,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		// Then the part git cannot report: which symbols went in, and by
 		// how much. Same listing and same order as --dry-run, so a preview
 		// and the commit it previews are comparable line for line.
-		writeTargetListing(stdout, plan.Results())
+		writeTargetListing(stdout, targetResults)
 	}
 
 	if f.push {

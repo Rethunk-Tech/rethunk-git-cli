@@ -453,3 +453,46 @@ func TestRun_DiffUnsupportedLanguageSymReachesExtLookup(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "rgit_sql")))
 }
+
+func TestRun_AmendWithNoTargetsReusesHead(t *testing.T) {
+	dir := chdirTempRepo(t)
+	beforeTree := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD^{tree}"))
+	beforeSubject := gitOut(t, dir, "log", "-1", "--format=%s")
+
+	_, stderr, code := runApp(t, "commit", "--amend")
+
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.Equals(strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD^{tree}")), beforeTree))
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), beforeSubject))
+}
+
+func TestRun_AllowEmptyWithNoTargets(t *testing.T) {
+	dir := chdirTempRepo(t)
+	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+
+	_, stderr, code := runApp(t, "commit", "--allow-empty", "-m", "chore: ping")
+
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	after := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	qt.Assert(t, qt.Not(qt.Equals(after, before)))
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), "chore: ping\n"))
+}
+
+func TestRun_FixupAndSquashWithNoTargetsUseIndex(t *testing.T) {
+	dir := chdirTempRepo(t)
+	target := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 2 }\n")
+	gitOut(t, dir, "add", "--", "a.go")
+	_, _, code := runApp(t, "commit", "--fixup="+target)
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), "fixup! chore: initial\n"))
+
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 3 }\n")
+	gitOut(t, dir, "add", "--", "a.go")
+	_, _, code = runApp(t, "commit", "--squash="+target)
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), "squash! chore: initial\n"))
+}
