@@ -36,6 +36,61 @@ func TestLooksBinary(t *testing.T) {
 	}
 }
 
+func TestGitFileMode(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(path, []byte("content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mode := GitFileMode(info); mode != "100644" {
+		t.Errorf("GitFileMode(0644) = %q; want 100644", mode)
+	}
+
+	if err := os.Chmod(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	info, err = os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mode := GitFileMode(info); mode != "100755" {
+		t.Errorf("GitFileMode(0755) = %q; want 100755", mode)
+	}
+}
+
+func TestReadFileIfExists(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "file")
+	want := []byte("content")
+	if err := os.WriteFile(path, want, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	content, exists, err := ReadFileIfExists(path)
+	if err != nil || !exists || string(content) != string(want) {
+		t.Errorf("ReadFileIfExists(existing) = %q, %v, %v; want %q, true, nil", content, exists, err, want)
+	}
+
+	content, exists, err = ReadFileIfExists(filepath.Join(dir, "missing"))
+	if err != nil || exists || content != nil {
+		t.Errorf("ReadFileIfExists(missing) = %q, %v, %v; want nil, false, nil", content, exists, err)
+	}
+
+	if err := os.Chmod(path, 0); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = ReadFileIfExists(path)
+	if err == nil {
+		t.Skip("permission checks are unavailable when running as root")
+	}
+}
+
 func TestLooksBinaryFile(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
