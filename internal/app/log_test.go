@@ -580,3 +580,18 @@ func TestRun_LogFollowRenameMaxCountAppliesPerSegment(t *testing.T) {
 	qt.Assert(t, qt.Not(qt.StringContains(stdout, "refactor: rename middle to new")))
 	qt.Assert(t, qt.Equals(len(strings.Split(strings.TrimRight(stdout, "\n"), "\n")), 3))
 }
+
+func TestRun_LogHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
+	dir := chdirTempRepo(t)
+	gitOut(t, dir, "config", "core.ignorecase", "true")
+	writeAppFile(t, dir, "Foo.GO", "package demo\n\nfunc First() {}\n")
+	gitOut(t, dir, "add", "Foo.GO")
+	gitOut(t, dir, "commit", "-m", "feat(demo): add First")
+
+	_, _, code := runApp(t, "log", "Foo.GO:First")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+
+	gitOut(t, dir, "config", "core.ignorecase", "false")
+	_, _, code = runApp(t, "log", "Foo.GO:First")
+	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
+}
