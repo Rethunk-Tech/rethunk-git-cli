@@ -151,6 +151,32 @@ func TestRun_PatchPopulatesReportPatch(t *testing.T) {
 	}
 }
 
+func TestRun_UnmergedPathUsesWorktreeConflictContent(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	gittest.Write(t, dir, "conflict.txt", "base\n")
+	gittest.Commit(t, dir, "chore: add conflict fixture")
+	gittest.Write(t, dir, "conflict.txt", "<<<<<<< ours\nworktree\n>>>>>>> theirs\n")
+
+	blob := strings.TrimSpace(gittest.Git(t, dir, "rev-parse", "HEAD:conflict.txt"))
+	setUnmergedIndex(t, dir, blob, "conflict.txt")
+
+	report, err := Run(context.Background(), repo, dir, Options{
+		Files: []string{"conflict.txt"},
+		Patch: true,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	file, ok := findFile(report.Files, "conflict.txt")
+	if !ok || len(file.Rows) == 0 {
+		t.Fatalf("report.Files = %+v; want conflict.txt with rows", report.Files)
+	}
+	if !strings.Contains(string(report.Patch), "<<<<<<< ours") || !strings.Contains(string(report.Patch), "worktree") {
+		t.Errorf("Report.Patch = %q; want worktree conflict content", report.Patch)
+	}
+}
+
 // TestValidateSym_PrefersNewSideThenFallsBackToOld exercises validateSym
 // directly against every side-availability combination applyFilters'
 // hazard rests on: resolving on the New side when present, falling back to
