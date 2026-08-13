@@ -308,10 +308,10 @@ func resolveRangeScope(ctx context.Context, repo *gitx.Repo, rangeToken string) 
 // to stdout) — so a range token would otherwise fall through every rule to
 // an unresolvable-argument error instead of selecting a scope.
 //
-// Only a token with no worktree/HEAD path of that exact name is treated as
-// a range: git forbids ".." in ref names, but a legitimate relative
-// pathspec like "../shared/util.go" also contains "..", and path existence
-// must win over the heuristic.
+// Only a token with no existing worktree, index, or HEAD path of that exact
+// name is treated as a range: git forbids ".." in ref names, but a legitimate
+// relative pathspec like "../shared/util.go" also contains "..", and path
+// existence must win over the heuristic.
 func ExtractRangeToken(ctx context.Context, args []string, paths cli.PathChecker) (token string, rest []string, err error) {
 	dashAt := -1
 	for i, a := range args {

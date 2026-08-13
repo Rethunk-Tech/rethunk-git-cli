@@ -176,7 +176,7 @@ per commit, the trade-off `../specs/design.md`'s own reasoning settled on.
 Either way, a symbol's history is only reachable starting from the file's
 **current** name: querying it under a prior name directly fails at argument
 classification, the same as naming any other path that exists under neither
-the worktree nor `HEAD`.
+the worktree, the index, nor `HEAD`.
 
 `rgit blame FILE:SYMBOL` stops at the current file name by default. With
 `--follow-rename`, it reads HEAD history, re-resolves the symbol at each rename
