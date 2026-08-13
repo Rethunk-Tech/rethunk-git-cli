@@ -34,6 +34,51 @@ func TestReadPathspecFileNulPreservesNewline(t *testing.T) {
 	qt.Assert(t, qt.DeepEquals(got, []string{"a\nb.go", "other.go"}))
 }
 
+func TestReadPathspecFileStdin(t *testing.T) {
+	tests := []struct {
+		name     string
+		contents string
+		nul      bool
+		want     []string
+	}{
+		{
+			name:     "lines",
+			contents: "a.go\n\nb.go\n",
+			want:     []string{"a.go", "b.go"},
+		},
+		{
+			name:     "nul",
+			contents: "a\nb.go\x00other.go\x00",
+			nul:      true,
+			want:     []string{"a\nb.go", "other.go"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "targets")
+			if err := os.WriteFile(path, []byte(test.contents), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			stdin, err := os.Open(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			originalStdin := os.Stdin
+			os.Stdin = stdin
+			defer func() {
+				os.Stdin = originalStdin
+				_ = stdin.Close()
+			}()
+
+			got, err := readPathspecFile("-", test.nul)
+
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.DeepEquals(got, test.want))
+		})
+	}
+}
+
 func TestRunPathspecFromFileMatchesPositionals(t *testing.T) {
 	dir := chdirTempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
