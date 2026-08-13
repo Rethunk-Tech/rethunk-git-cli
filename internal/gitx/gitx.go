@@ -885,7 +885,53 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 		stdin = bytes.NewReader(opts.StdinMessage)
 	}
 
-	res, err := r.run(ctx, stdin, args...)
+	commitRepo := r
+	var tempIndex string
+	if opts.Only && len(opts.OnlyPaths) > 0 {
+		file, err := os.CreateTemp("", "rgit-index-*")
+		if err != nil {
+			return Result{}, &ExecError{Args: args, Err: err}
+		}
+		tempIndex = file.Name()
+		if err := file.Close(); err != nil {
+			_ = os.Remove(tempIndex)
+			return Result{}, &ExecError{Args: args, Err: err}
+		}
+		if err := os.Remove(tempIndex); err != nil {
+			return Result{}, &ExecError{Args: args, Err: err}
+		}
+		commitRepo = &Repo{root: r.root, env: withEnv(r.env, "GIT_INDEX_FILE", tempIndex)}
+		res, err := commitRepo.run(ctx, nil, "read-tree", "HEAD")
+		if err != nil {
+			_ = os.Remove(tempIndex)
+			return Result{}, err
+		}
+		if res.ExitCode != 0 {
+			_ = os.Remove(tempIndex)
+			return Result{}, gitError([]string{"read-tree", "HEAD"}, res)
+		}
+		for _, path := range opts.OnlyPaths {
+			mode, sha, found, err := r.stageCacheInfo(ctx, path)
+			if err != nil {
+				_ = os.Remove(tempIndex)
+				return Result{}, err
+			}
+			if !found {
+				if _, err := commitRepo.checked(ctx, "update-index", "--force-remove", "--", path); err != nil {
+					_ = os.Remove(tempIndex)
+					return Result{}, err
+				}
+				continue
+			}
+			if err := commitRepo.UpdateIndexCacheinfo(ctx, mode, sha, path); err != nil {
+				_ = os.Remove(tempIndex)
+				return Result{}, err
+			}
+		}
+		defer os.Remove(tempIndex)
+	}
+
+	res, err := commitRepo.run(ctx, stdin, args...)
 	if err != nil {
 		return Result{}, err
 	}
@@ -893,6 +939,39 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 		return res, gitError(args, res)
 	}
 	return res, nil
+}
+
+func withEnv(env []string, key, value string) []string {
+	prefix := key + "="
+	result := make([]string, 0, len(env)+1)
+	for _, item := range env {
+		if !strings.HasPrefix(item, prefix) {
+			result = append(result, item)
+		}
+	}
+	return append(result, prefix+value)
+}
+
+func (r *Repo) stageCacheInfo(ctx context.Context, path string) (mode, sha string, found bool, err error) {
+	out, err := r.checked(ctx, "ls-files", "--stage", "--", path)
+	if err != nil {
+		return "", "", false, err
+	}
+	trimmed := strings.TrimRight(string(out), "\n")
+	for line := range strings.SplitSeq(trimmed, "\n") {
+		before, _, ok := strings.Cut(line, "\t")
+		if !ok {
+			return "", "", false, fmt.Errorf("gitx: malformed ls-files --stage line %q", line)
+		}
+		fields := strings.Fields(before)
+		if len(fields) != 3 {
+			return "", "", false, fmt.Errorf("gitx: malformed ls-files --stage line %q", line)
+		}
+		if fields[2] == "0" {
+			return fields[0], fields[1], true, nil
+		}
+	}
+	return "", "", false, nil
 }
 
 // Push runs a bare `git push` -- rgit commit's only caller never has a

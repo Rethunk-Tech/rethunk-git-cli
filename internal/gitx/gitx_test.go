@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -680,5 +681,34 @@ func TestCommit_ReuseMessageForwarded(t *testing.T) {
 	}
 	if got := gittest.Git(t, dir, "log", "-1", "--format=%s"); got != "feat: original\n" {
 		t.Errorf("reused commit subject = %q; want %q", got, "feat: original\n")
+	}
+}
+
+func TestCommitOnlyUsesTemporaryIndex(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	gittest.Write(t, dir, "a.txt", "a before\n")
+	gittest.Write(t, dir, "b.txt", "b before\n")
+	gittest.Commit(t, dir, "chore: initial")
+	gittest.Write(t, dir, "a.txt", "a after\n")
+	gittest.Write(t, dir, "b.txt", "b after\n")
+	gittest.Git(t, dir, "add", "a.txt", "b.txt")
+
+	if _, err := repo.Commit(context.Background(), gitx.CommitOptions{
+		Messages:  []string{"feat: update a"},
+		Only:      true,
+		OnlyPaths: []string{"a.txt"},
+	}); err != nil {
+		t.Fatalf("Commit(Only): %v", err)
+	}
+
+	if got := gittest.Git(t, dir, "show", "HEAD:a.txt"); got != "a after\n" {
+		t.Errorf("HEAD:a.txt = %q; want updated content", got)
+	}
+	if got := gittest.Git(t, dir, "show", "HEAD:b.txt"); got != "b before\n" {
+		t.Errorf("HEAD:b.txt = %q; want prior content", got)
+	}
+	if got := gittest.Git(t, dir, "diff", "--cached", "--name-only"); got != "b.txt\n" {
+		t.Errorf("cached paths after --only commit = %q; want b.txt only", got)
 	}
 }
