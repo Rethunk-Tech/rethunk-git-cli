@@ -45,6 +45,16 @@ func TestRun_InterspersedFlagAfterPositional(t *testing.T) {
 	qt.Assert(t, qt.StringContains(stdout, "a.go:A"))
 }
 
+func TestRun_CommitSignoffAppendsSignedOffBy(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+
+	_, _, code := runApp(t, "commit", "-s", "-m", "fix(a): signoff", "a.go:A")
+
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(gitOut(t, dir, "log", "-1", "--format=%b"), "Signed-off-by:"))
+}
+
 // TestRun_PreStagedSiblingFileComesAlong pins AGENTS.md's inherited-from-git
 // behaviour: work staged before invoking rgit comes along with the commit,
 // exactly as a bare `git commit` would carry it.
