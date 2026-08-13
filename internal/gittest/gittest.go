@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
@@ -54,6 +55,40 @@ func Git(t testing.TB, dir string, args ...string) string {
 		t.Fatalf("git %v: %v: %s", args, err, out)
 	}
 	return string(out)
+}
+
+// GitInput runs one git command with input on stdin and returns its output,
+// failing the test if git does. It is useful for plumbing commands whose
+// input format is more precise than a sequence of command-line arguments.
+func GitInput(t testing.TB, dir, input string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Stdin = strings.NewReader(input)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v: %s", args, err, out)
+	}
+	return string(out)
+}
+
+// BloblessClone returns a repository whose tracked.go entry names an
+// unreachable blob while its configuration marks origin as a promisor remote.
+// Git therefore reports the tracked path as an unavailable object rather than
+// as an absent path.
+func BloblessClone(t testing.TB) (dir string, repo *gitx.Repo) {
+	t.Helper()
+	dir, _ = New(t)
+	const missingBlob = "1111111111111111111111111111111111111111"
+	treeInput := "100644 blob " + missingBlob + "\ttracked.go\n"
+	tree := strings.TrimSpace(GitInput(t, dir, treeInput, "mktree", "--missing"))
+	commit := Git(t, dir, "commit-tree", tree, "-m", "chore: add tracked file")
+	Git(t, dir, "update-ref", "refs/heads/main", strings.TrimSpace(commit))
+	Git(t, dir, "symbolic-ref", "HEAD", "refs/heads/main")
+	Git(t, dir, "remote", "add", "origin", filepath.Join(t.TempDir(), "unreachable"))
+	Git(t, dir, "config", "remote.origin.promisor", "true")
+	Git(t, dir, "config", "extensions.partialClone", "origin")
+	return dir, gitx.New(dir)
 }
 
 // Write creates a file under dir, making any parent directories it needs.
