@@ -694,7 +694,7 @@ func TestCommit_ReuseMessageForwarded(t *testing.T) {
 	}
 }
 
-func TestCommit_SignoffAppendsTrailer(t *testing.T) {
+func TestCommit_SignoffAppendsSignedOffBy(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t)
 	gittest.Write(t, dir, "a.txt", "content\n")
