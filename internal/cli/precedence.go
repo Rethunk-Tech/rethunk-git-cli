@@ -156,7 +156,7 @@ func classifyOne(ctx context.Context, a string, allowRevisions bool, paths PathC
 	if exists {
 		return Classification{Kind: KindPathspec, Pathspec: a}, nil
 	}
-	tried = append(tried, "existing path (worktree or HEAD)")
+	tried = append(tried, "existing path (worktree, index, or HEAD)")
 
 	// Rule 5. Split at the LAST colon, not the first, so a path that
 	// itself contains one (having already failed rule 4 whole) still
@@ -197,12 +197,13 @@ func PrefixPath(prefix, path string) string {
 // the current directory relative to Root (gitx.Repo.ShowPrefix), so rules 4
 // and 5 test the same path git would.
 type GitPathChecker struct {
-	Root       string
-	Prefix     string
-	Repo       *gitx.Repo
-	indexOnce  sync.Once
-	indexPaths map[string]struct{}
-	indexErr   error
+	Root            string
+	Prefix          string
+	Repo            *gitx.Repo
+	indexOnce       sync.Once
+	indexIgnoreCase bool
+	indexPaths      map[string]struct{}
+	indexErr        error
 }
 
 func (c *GitPathChecker) ExistsInWorktreeOrHEAD(ctx context.Context, path string) (bool, error) {
@@ -214,6 +215,12 @@ func (c *GitPathChecker) ExistsInWorktreeOrHEAD(ctx context.Context, path string
 	}
 
 	c.indexOnce.Do(func() {
+		ignoreCase, err := c.Repo.IgnoreCase(ctx)
+		if err != nil {
+			c.indexErr = err
+			return
+		}
+		c.indexIgnoreCase = ignoreCase
 		paths, err := c.Repo.LsFilesTracked(ctx)
 		if err != nil {
 			c.indexErr = err
@@ -221,13 +228,20 @@ func (c *GitPathChecker) ExistsInWorktreeOrHEAD(ctx context.Context, path string
 		}
 		c.indexPaths = make(map[string]struct{}, len(paths))
 		for _, path := range paths {
+			if ignoreCase {
+				path = strings.ToLower(path)
+			}
 			c.indexPaths[path] = struct{}{}
 		}
 	})
 	if c.indexErr != nil {
 		return false, c.indexErr
 	}
-	if _, found := c.indexPaths[rel]; found {
+	indexPath := rel
+	if c.indexIgnoreCase {
+		indexPath = strings.ToLower(indexPath)
+	}
+	if _, found := c.indexPaths[indexPath]; found {
 		return true, nil
 	}
 

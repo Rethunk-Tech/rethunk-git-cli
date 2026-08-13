@@ -120,7 +120,7 @@ func TestClassifyArgs_Rule6ListsWhatItTried(t *testing.T) {
 		// (internal/diff/scope.go), so rule 3 never actually tries one via
 		// rev-parse --verify; saying it did was false.
 		"revision or rev:path (git rev-parse --verify)",
-		"existing path (worktree or HEAD)",
+		"existing path (worktree, index, or HEAD)",
 		"symbol anchor (existing path + name after last ':')",
 	}))
 	// Error() is what a caller actually reads (internal/app relays it
@@ -129,7 +129,7 @@ func TestClassifyArgs_Rule6ListsWhatItTried(t *testing.T) {
 	// prefix check rather than a real attempt at resolving the token.
 	qt.Assert(t, qt.Equals(uerr.Error(),
 		`cannot classify "nosuch.go:Nope": rules considered: pathspec magic (leading ':'); `+
-			`revision or rev:path (git rev-parse --verify); existing path (worktree or HEAD); `+
+			`revision or rev:path (git rev-parse --verify); existing path (worktree, index, or HEAD); `+
 			`symbol anchor (existing path + name after last ':')`))
 
 	// Without revisions the rule-3 line must be absent rather than merely
@@ -174,6 +174,22 @@ func TestGitPathChecker_IntentToAddIgnoredPathExists(t *testing.T) {
 
 	checker := &GitPathChecker{Root: root, Repo: repo}
 	exists, err := checker.ExistsInWorktreeOrHEAD(context.Background(), "skip-me.go")
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsTrue(exists))
+}
+
+func TestGitPathChecker_IgnoreCaseIndexOnlyPathExists(t *testing.T) {
+	t.Parallel()
+	root, repo := gittest.New(t)
+	gittest.Git(t, root, "config", "core.ignorecase", "true")
+	gittest.Write(t, root, "Foo.go", "package p\n\nfunc Foo() {}\n")
+	gittest.Git(t, root, "add", "Foo.go")
+	if err := os.Remove(filepath.Join(root, "Foo.go")); err != nil {
+		t.Fatal(err)
+	}
+
+	checker := &GitPathChecker{Root: root, Repo: repo}
+	exists, err := checker.ExistsInWorktreeOrHEAD(context.Background(), "foo.go")
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.IsTrue(exists))
 }
