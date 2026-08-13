@@ -271,6 +271,12 @@ func assertPromisorMissing(t *testing.T, name string, exists bool, err error) {
 	if gerr.ExitCode != 128 {
 		t.Errorf("%s exit code = %d; want 128", name, gerr.ExitCode)
 	}
+	if len(gerr.Stderr) == 0 {
+		t.Errorf("%s stderr is empty; want git's failure message", name)
+	}
+	if strings.Contains(string(gerr.Stderr), "promisor object is unavailable") {
+		t.Errorf("%s stderr contains synthetic promisor message: %q", name, gerr.Stderr)
+	}
 }
 
 func newBloblessClone(t *testing.T) (string, *gitx.Repo) {
