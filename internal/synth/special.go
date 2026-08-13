@@ -176,8 +176,9 @@ func refusalFor(path string, kind pathKind) error {
 
 // checkGitignoreRefusal implements "gitignored and untracked" exit 7,
 // matching plain `git add`'s own refusal (docs/ANCHORS.md). Already-
-// tracked-but-now-ignored paths (a common .gitignore edit after the fact)
-// are not refused, exactly as git add itself does not refuse them.
+// tracked-but-now-ignored paths, including index-only entries (a common
+// .gitignore edit after the fact), are not refused, exactly as git add itself
+// does not refuse them.
 func checkGitignoreRefusal(ctx context.Context, repo *gitx.Repo, path string) error {
 	ignored, err := repo.CheckIgnore(ctx, path)
 	if err != nil {
@@ -186,6 +187,17 @@ func checkGitignoreRefusal(ctx context.Context, repo *gitx.Repo, path string) er
 	if !ignored {
 		return nil
 	}
+
+	indexPaths, err := repo.LsFilesTracked(ctx)
+	if err != nil {
+		return err
+	}
+	for _, indexPath := range indexPaths {
+		if indexPath == path {
+			return nil
+		}
+	}
+
 	_, tracked, err := repo.LsTreeTolerant(ctx, "HEAD", path)
 	if err != nil {
 		return err

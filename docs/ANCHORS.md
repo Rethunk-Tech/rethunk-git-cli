@@ -185,7 +185,7 @@ assume-unchanged. Name the path instead. Behaviour per kind:
 | Submodule | Gitlink SHA resolved from the submodule's `HEAD`, or the index if uninitialised |
 | Symlink | The target string, mode `120000` |
 | Rename | Nothing special — name both paths; git detects the rename at diff time |
-| Gitignored | Refused (exit 7) unless already tracked, matching `git add` |
+| Gitignored | Refused (exit 7) unless already tracked in the index or `HEAD`, matching `git add` |
 | Unmerged index path | `FILE:SYMBOL` refused with exit 10; name the path instead |
 | Skip-worktree / assume-unchanged | `FILE:SYMBOL` refused with exit 10; bits left unchanged. Name the path instead |
 

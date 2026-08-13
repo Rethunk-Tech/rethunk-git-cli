@@ -317,6 +317,41 @@ func TestStage_RefusesIndexWorktreeBits(t *testing.T) {
 	}
 }
 
+func TestCheckGitignoreRefusal_IndexEntryCountsAsTracked(t *testing.T) {
+	t.Parallel()
+
+	t.Run("intent-to-add entry is allowed", func(t *testing.T) {
+		dir, repo := newSpecialTestRepo(t)
+		gittest.Write(t, dir, ".gitignore", "skip-me.go\n")
+		gittest.Write(t, dir, "skip-me.go", "package p\n")
+		commitSpecial(t, dir, ".gitignore")
+		gittest.Git(t, dir, "add", "-f", "-N", "skip-me.go")
+
+		if err := checkGitignoreRefusal(context.Background(), repo, "skip-me.go"); err != nil {
+			t.Fatalf("checkGitignoreRefusal: %v; want nil", err)
+		}
+	})
+
+	t.Run("never-indexed entry is refused", func(t *testing.T) {
+		dir, repo := newSpecialTestRepo(t)
+		gittest.Write(t, dir, ".gitignore", "skip-me.go\n")
+		gittest.Write(t, dir, "skip-me.go", "package p\n")
+		commitSpecial(t, dir, ".gitignore")
+
+		err := checkGitignoreRefusal(context.Background(), repo, "skip-me.go")
+		var pathErr *PathError
+		if !errors.As(err, &pathErr) {
+			t.Fatalf("checkGitignoreRefusal error = %v (%T); want *PathError", err, err)
+		}
+		if pathErr.Code != exitcode.PathRefused {
+			t.Errorf("Code = %v; want PathRefused", pathErr.Code)
+		}
+		if pathErr.Reason != "gitignored and untracked" {
+			t.Errorf("Reason = %q; want gitignore refusal", pathErr.Reason)
+		}
+	})
+}
+
 func setUnmergedIndex(t *testing.T, dir, blob, path string) {
 	t.Helper()
 	cmd := exec.Command("git", "-C", dir, "update-index", "--index-info")
