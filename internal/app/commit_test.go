@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 
@@ -175,5 +176,23 @@ func TestCommitTargets_UnhandledKindErrorsRatherThanSkips(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unhandled classification kind") {
 		t.Errorf("commitTargets error = %q; want it to name the unhandled kind", err.Error())
+	}
+}
+
+func TestRunCommit_IndexOnlyPathSymbolAnchor(t *testing.T) {
+	dir, _ := gittest.New(t)
+	gittest.Write(t, dir, "new.go", "package p\n\nfunc New() {}\n")
+	gittest.Git(t, dir, "add", "new.go")
+	if err := os.Remove(dir + "/new.go"); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+
+	_, stderr, code := runApp(t, "commit", "-m", "feat(p): add New", "new.go:New")
+	if code != exitcode.Success {
+		t.Fatalf("runApp commit FILE:SYMBOL = %v; want exitcode.Success; stderr: %s", code, stderr)
+	}
+	if got := gitOut(t, dir, "cat-file", "-p", "HEAD:new.go"); !strings.Contains(got, "func New()") {
+		t.Errorf("HEAD:new.go = %q; want New function", got)
 	}
 }
