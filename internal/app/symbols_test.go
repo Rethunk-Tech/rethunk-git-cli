@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,6 +10,7 @@ import (
 	"github.com/go-quicktest/qt"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
 )
 
 func TestRun_SymbolsHelpAndUsage(t *testing.T) {
@@ -54,12 +54,12 @@ func TestRun_SymbolsUnsupportedLanguage(t *testing.T) {
 func TestRunSymbolsListsCleanWorktreeDeclarations(t *testing.T) {
 	root := t.TempDir()
 	source := []byte("package demo\n\nconst answer = 42\n\nfunc First() {}\n\ntype Thing struct{}\n\nfunc (Thing) Method() {}\n")
-	symbolsTestGit(t, root, "init", "--quiet")
+	gittest.Git(t, root, "init", "--quiet")
 	if err := os.WriteFile(filepath.Join(root, "main.go"), source, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	symbolsTestGit(t, root, "add", "main.go")
-	symbolsTestGit(t, root, "-c", "user.name=rgit test", "-c", "user.email=rgit@example.invalid", "commit", "--quiet", "-m", "initial")
+	gittest.Git(t, root, "add", "main.go")
+	gittest.Git(t, root, "-c", "user.name=rgit test", "-c", "user.email=rgit@example.invalid", "commit", "--quiet", "-m", "initial")
 
 	var stdout, stderr strings.Builder
 	code := runSymbols(context.Background(), root, []string{"main.go"}, &stdout, &stderr)
@@ -77,8 +77,8 @@ func TestRunSymbolsListsCleanWorktreeDeclarations(t *testing.T) {
 
 func TestRunSymbolsHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
 	root := t.TempDir()
-	symbolsTestGit(t, root, "init", "--quiet")
-	symbolsTestGit(t, root, "config", "core.ignorecase", "true")
+	gittest.Git(t, root, "init", "--quiet")
+	gittest.Git(t, root, "config", "core.ignorecase", "true")
 	if err := os.WriteFile(filepath.Join(root, "Foo.GO"), []byte("package demo\n\nfunc First() {}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestRunSymbolsHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
 		t.Fatalf("runSymbols(Foo.GO) omitted First from %q", stdout.String())
 	}
 
-	symbolsTestGit(t, root, "config", "core.ignorecase", "false")
+	gittest.Git(t, root, "config", "core.ignorecase", "false")
 	stdout.Reset()
 	stderr.Reset()
 	code = runSymbols(context.Background(), root, []string{"Foo.GO"}, &stdout, &stderr)
@@ -104,12 +104,12 @@ func TestRunSymbolsHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
 func TestRun_SymbolsListsHeadDeclarationsWhenWorktreeFileIsGone(t *testing.T) {
 	root := t.TempDir()
 	source := []byte("package demo\n\nfunc Foo() {}\n")
-	symbolsTestGit(t, root, "init", "--quiet")
+	gittest.Git(t, root, "init", "--quiet")
 	if err := os.WriteFile(filepath.Join(root, "a.go"), source, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	symbolsTestGit(t, root, "add", "a.go")
-	symbolsTestGit(t, root, "-c", "user.name=rgit test", "-c", "user.email=rgit@example.invalid", "commit", "--quiet", "-m", "initial")
+	gittest.Git(t, root, "add", "a.go")
+	gittest.Git(t, root, "-c", "user.name=rgit test", "-c", "user.email=rgit@example.invalid", "commit", "--quiet", "-m", "initial")
 	if err := os.Remove(filepath.Join(root, "a.go")); err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestRun_SymbolsListsHeadDeclarationsWhenWorktreeFileIsGone(t *testing.T) {
 
 func TestRun_SymbolsMissingUntrackedFileStillErrors(t *testing.T) {
 	root := t.TempDir()
-	symbolsTestGit(t, root, "init", "--quiet")
+	gittest.Git(t, root, "init", "--quiet")
 
 	var stdout, stderr strings.Builder
 	code := runSymbols(context.Background(), root, []string{"missing.go"}, &stdout, &stderr)
@@ -141,12 +141,12 @@ func TestRun_SymbolsMissingUntrackedFileStillErrors(t *testing.T) {
 func TestRunSymbolsStructuredDataCommitMode(t *testing.T) {
 	root := t.TempDir()
 	source := []byte("{\n  \"name\": \"demo\",\n  \"enabled\": true\n}\n")
-	symbolsTestGit(t, root, "init", "--quiet")
+	gittest.Git(t, root, "init", "--quiet")
 	if err := os.WriteFile(filepath.Join(root, "config.json"), source, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	symbolsTestGit(t, root, "add", "config.json")
-	symbolsTestGit(t, root, "-c", "user.name=rgit test", "-c", "user.email=rgit@example.invalid", "commit", "--quiet", "-m", "initial")
+	gittest.Git(t, root, "add", "config.json")
+	gittest.Git(t, root, "-c", "user.name=rgit test", "-c", "user.email=rgit@example.invalid", "commit", "--quiet", "-m", "initial")
 
 	var stdout, stderr strings.Builder
 	code := runSymbols(context.Background(), root, []string{"config.json"}, &stdout, &stderr)
@@ -168,11 +168,21 @@ func TestRunSymbolsStructuredDataCommitMode(t *testing.T) {
 	}
 }
 
-func symbolsTestGit(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, output)
+func TestRunCommitHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
+	root := t.TempDir()
+	gittest.Git(t, root, "init", "--quiet")
+	gittest.Git(t, root, "config", "core.ignorecase", "true")
+	if err := os.WriteFile(filepath.Join(root, "Foo.GO"), []byte("package demo\n\nfunc First() {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Chdir(root)
+	_, stderr, code := runApp(t, "commit", "-m", "feat(demo): stage First", "Foo.GO:First")
+	if code != exitcode.Success {
+		t.Fatalf("commit Foo.GO:First with core.ignorecase=true = %d, stderr = %q", code, stderr)
+	}
+	committed := gittest.Git(t, root, "cat-file", "-p", "HEAD:Foo.GO")
+	if !strings.Contains(committed, "func First()") {
+		t.Fatalf("committed Foo.GO omitted First: %q", committed)
 	}
 }
