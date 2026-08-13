@@ -1414,6 +1414,9 @@ func TestCompletion_PwshCompletesSymbolsFromSymbols(t *testing.T) {
 
 	got := runPwshCompletion(t, repo, script.Stdout, "commit", "a.go:")
 	qt.Assert(t, qt.DeepEquals(got, []string{"a.go:A", "a.go:B"}))
+
+	got = runPwshCompletion(t, repo, script.Stdout, "commit", "a.go:A")
+	qt.Assert(t, qt.DeepEquals(got, []string{"a.go:A"}))
 }
 
 // TestCompletion_PwshDegradesSilentlyOutsideARepo is the PowerShell half of
