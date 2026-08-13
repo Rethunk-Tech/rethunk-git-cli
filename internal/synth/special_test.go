@@ -332,6 +332,19 @@ func TestCheckGitignoreRefusal_IndexEntryCountsAsTracked(t *testing.T) {
 		}
 	})
 
+	t.Run("folded index name is allowed", func(t *testing.T) {
+		dir, repo := newSpecialTestRepo(t)
+		gittest.Git(t, dir, "config", "core.ignorecase", "true")
+		gittest.Write(t, dir, ".gitignore", "skip-me.go\n")
+		gittest.Write(t, dir, "Skip-Me.go", "package p\n")
+		commitSpecial(t, dir, ".gitignore")
+		gittest.Git(t, dir, "add", "-f", "-N", "Skip-Me.go")
+
+		if err := checkGitignoreRefusal(context.Background(), repo, "skip-me.go"); err != nil {
+			t.Fatalf("checkGitignoreRefusal: %v; want nil", err)
+		}
+	})
+
 	t.Run("never-indexed entry is refused", func(t *testing.T) {
 		dir, repo := newSpecialTestRepo(t)
 		gittest.Write(t, dir, ".gitignore", "skip-me.go\n")

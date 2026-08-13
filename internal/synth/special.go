@@ -195,6 +195,19 @@ func checkGitignoreRefusal(ctx context.Context, repo *gitx.Repo, path string) er
 	if found {
 		return nil
 	}
+	ignoreCase, err := repo.IgnoreCase(ctx)
+	if err != nil {
+		return err
+	}
+	if ignoreCase {
+		_, found, err = repo.LsFilesStage(ctx, ":(icase)"+path)
+		if err != nil {
+			return err
+		}
+		if found {
+			return nil
+		}
+	}
 
 	_, tracked, err := repo.LsTreeTolerant(ctx, "HEAD", path)
 	if err != nil {
