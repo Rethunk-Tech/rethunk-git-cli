@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 )
 
 // TestOpenFilePlan_UnsupportedLanguageReason pins the exit-9 message
@@ -155,5 +156,20 @@ func TestPathspecFileCounts_UnreadableUntrackedFileWarns(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("warnings = %v; want one naming secret.txt", warnings)
+	}
+}
+
+func TestStage_PromisorMissingBlobIsAnError(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.BloblessClone(t)
+
+	err := Stage(context.Background(), repo, dir, []Target{AnchorTarget("tracked.go", "Tracked")})
+
+	var gerr *gitx.GitError
+	if !errors.As(err, &gerr) {
+		t.Fatalf("Stage error = %v (%T); want *gitx.GitError", err, err)
+	}
+	if gerr.ExitCode != 128 {
+		t.Errorf("Stage exit code = %d; want 128", gerr.ExitCode)
 	}
 }
