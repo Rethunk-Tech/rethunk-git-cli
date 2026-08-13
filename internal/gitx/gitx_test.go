@@ -596,3 +596,20 @@ func TestErrorMessagesNameTheCommand(t *testing.T) {
 		t.Error("ExecError does not unwrap to its cause")
 	}
 }
+
+func TestCommit_ReuseMessageForwarded(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	gittest.Write(t, dir, "a.txt", "content\n")
+	gittest.Commit(t, dir, "feat: original")
+
+	if _, err := repo.Commit(context.Background(), gitx.CommitOptions{
+		ReuseMessage: "HEAD",
+		AllowEmpty:   true,
+	}); err != nil {
+		t.Fatalf("Commit(--reuse-message=HEAD --allow-empty): %v", err)
+	}
+	if got := gittest.Git(t, dir, "log", "-1", "--format=%s"); got != "feat: original\n" {
+		t.Errorf("reused commit subject = %q; want %q", got, "feat: original\n")
+	}
+}

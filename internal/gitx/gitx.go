@@ -701,6 +701,7 @@ type CommitOptions struct {
 	Messages     []string
 	MessageFile  string // -F value; "-" reads StdinMessage instead of a real file
 	StdinMessage []byte
+	ReuseMessage string // --reuse-message=<commit>
 	Signoff      bool
 	Trailers     []string // TOKEN:VALUE, forwarded as --trailer
 	Amend        bool
@@ -760,6 +761,9 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 	}
 	if opts.MessageFile != "" {
 		args = append(args, "-F", opts.MessageFile)
+	}
+	if opts.ReuseMessage != "" {
+		args = append(args, "--reuse-message="+opts.ReuseMessage)
 	}
 	if opts.Fixup != "" {
 		args = append(args, "--fixup="+opts.Fixup)
