@@ -77,6 +77,23 @@ func TestRun_OnlyLeavesOtherStagedWorkUncommitted(t *testing.T) {
 	qt.Assert(t, qt.StringContains(gitOut(t, dir, "status", "--porcelain"), "A  sibling.txt"))
 }
 
+func TestRun_OnlyWithNoTargetsRefusesWithoutAmend(t *testing.T) {
+	dir := chdirTempRepo(t)
+	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	writeAppFile(t, dir, "sibling.txt", "staged separately\n")
+	gitOut(t, dir, "add", "--", "a.go", "sibling.txt")
+
+	_, stderr, code := runApp(t, "commit", "--only", "--reuse-message=HEAD")
+
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "--only requires at least one target"))
+	qt.Assert(t, qt.Equals(strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")), before))
+	status := gitOut(t, dir, "status", "--porcelain")
+	qt.Assert(t, qt.StringContains(status, "M  a.go"))
+	qt.Assert(t, qt.StringContains(status, "A  sibling.txt"))
+}
+
 // TestRun_HookRejectionLeavesStagingIntact pins AGENTS.md's other inherited
 // behaviour: a hook that rejects the commit must never roll staging back.
 // This is deliberately covered in both lanes (rgit_e2e_test.go's own

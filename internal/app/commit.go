@@ -188,6 +188,10 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		positionalsGiven = append(positionalsGiven, pathspecs...)
 	}
 	targetCount := len(positionalsGiven) + len(f.syms) + len(f.files)
+	if f.only && targetCount == 0 && !f.amend {
+		fmt.Fprintln(stderr, "rgit: --only requires at least one target")
+		return exitcode.InvalidUsage
+	}
 	if targetCount == 0 && !f.amend && !f.allowEmpty && f.fixup == "" && f.squash == "" && f.reuseMessage == "" {
 		fmt.Fprintln(stderr, "rgit: commit requires at least one target")
 		return exitcode.InvalidUsage
