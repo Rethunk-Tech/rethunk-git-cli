@@ -1370,6 +1370,65 @@ func TestCompletion_FishDegradesSilentlyOutsideARepo(t *testing.T) {
 	qt.Assert(t, qt.Equals(len(got), 0))
 }
 
+// runPwshCompletion loads the emitted PowerShell script, then asks
+// CommandCompletion for the candidates at the end of a command line. This is
+// the programmatic path behind TabExpansion2, without needing an interactive
+// PowerShell host.
+func runPwshCompletion(t *testing.T, repo, pwshScript string, words ...string) []string {
+	t.Helper()
+	pwshPath, err := exec.LookPath("pwsh")
+	if err != nil {
+		t.Skip("pwsh not on PATH")
+	}
+
+	cmdline := "rgit " + strings.Join(words, " ")
+	driver := "$script = @'\n" + pwshScript + "\n'@\n" +
+		"Invoke-Expression $script\n" +
+		"$line = '" + strings.ReplaceAll(cmdline, "'", "''") + "'\n" +
+		"$completion = [System.Management.Automation.CommandCompletion]::CompleteInput($line, $line.Length, $null)\n" +
+		"$completion.CompletionMatches | ForEach-Object { $_.CompletionText }\n"
+
+	cmd := exec.Command(pwshPath, "-NoProfile", "-NonInteractive", "-Command", driver)
+	cmd.Dir = repo
+	cmd.Env = append(os.Environ(), "PATH="+filepath.Dir(rgitBin)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("pwsh completion driver: %v: %s", err, out)
+	}
+	trimmed := strings.TrimRight(string(out), "\n")
+	if trimmed == "" {
+		return nil
+	}
+	return strings.Split(trimmed, "\n")
+}
+
+// TestCompletion_PwshCompletesSymbolsFromSymbols is the PowerShell
+// counterpart to the bash, zsh, and fish dynamic completion cases.
+func TestCompletion_PwshCompletesSymbolsFromSymbols(t *testing.T) {
+	t.Parallel()
+	repo := initRepoWithFile(t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	gittest.Write(t, repo, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
+
+	script := runRgit(t, repo, "completion", "pwsh")
+	qt.Assert(t, qt.Equals(script.ExitCode, 0))
+
+	got := runPwshCompletion(t, repo, script.Stdout, "commit", "a.go:")
+	qt.Assert(t, qt.DeepEquals(got, []string{"a.go:A", "a.go:B"}))
+}
+
+// TestCompletion_PwshDegradesSilentlyOutsideARepo is the PowerShell half of
+// the shell completion tests' no-repository contract.
+func TestCompletion_PwshDegradesSilentlyOutsideARepo(t *testing.T) {
+	t.Parallel()
+	notARepo := t.TempDir()
+
+	script := runRgit(t, notARepo, "completion", "pwsh")
+	qt.Assert(t, qt.Equals(script.ExitCode, 0))
+
+	got := runPwshCompletion(t, notARepo, script.Stdout, "commit", "a.go:")
+	qt.Assert(t, qt.Equals(len(got), 0))
+}
+
 // TestCompletion_FishOffersSubcommandsAndFlags pins the parts of the fish
 // script bash/zsh have no equivalent for: the "-C <path>" pair walk uses
 // fish's own commandline -opc/-ct split (opc never contains the token the
@@ -1391,6 +1450,9 @@ func TestCompletion_FishOffersSubcommandsAndFlags(t *testing.T) {
 	got = runFishCompletion(t, repo, script.Stdout, "diff", "--")
 	qt.Assert(t, qt.SliceContains(got, "--porcelain"))
 	qt.Assert(t, qt.Not(qt.SliceContains(got, "-p")))
+
+	got = runFishCompletion(t, repo, script.Stdout, "symbols", "--")
+	qt.Assert(t, qt.SliceContains(got, "--for-commit"))
 
 	// A "-C" with no path after it yet completes as a directory, not the
 	// subcommand list -- the case the opc/ct split above makes non-obvious.
