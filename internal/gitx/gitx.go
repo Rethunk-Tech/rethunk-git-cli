@@ -813,6 +813,8 @@ type CommitOptions struct {
 	GPGSign      bool
 	GPGSignKeyID string
 	NoGPGSign    bool
+	Only         bool
+	OnlyPaths    []string
 }
 
 // Commit runs `git commit` with opts translated to flags and returns its
