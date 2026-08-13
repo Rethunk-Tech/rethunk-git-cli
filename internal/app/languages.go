@@ -31,7 +31,7 @@ SQL, behind -tags rgit_sql -- see docs/INSTALL.md § SQL support).
 docs/CODES.md#output-records.
 
 --in-repo filters that listing to grammars with at least one matching
-tracked file in the current repository -- advisory only, since the binary
+file in the current repository -- advisory only, since the binary
 still contains every compiled-in grammar regardless. Requires a git repo;
 plain "rgit languages" does not.
 
@@ -78,13 +78,11 @@ func runLanguages(ctx context.Context, dir string, args []string, stdout, stderr
 }
 
 // filterLanguagesInRepo narrows langs to the adapters with at least one
-// matching tracked file in the repository at dir. Extension-only would miss
-// extensionless shebang scripts, so it reuses
-// resolve.LanguageForWorktreePath -- the same extension-then-shebang
-// sequence every worktree file gets elsewhere in this codebase -- rather
-// than a second, narrower detection path. A gitlink or submodule directory
-// simply never matches any adapter (its "file" can't be opened as one),
-// so no separate exclusion is needed for those paths.
+// matching file in the repository at dir. Tracked paths use HEAD as a
+// fallback for deleted extensionless shebang scripts; untracked paths are
+// resolved from the worktree. A gitlink or submodule directory simply never
+// matches any adapter (its "file" can't be opened as one), so no separate
+// exclusion is needed for those paths.
 func filterLanguagesInRepo(ctx context.Context, dir string, langs []resolve.LanguageInfo, stderr io.Writer) ([]resolve.LanguageInfo, exitcode.Code) {
 	root, _, repo, code := openRepo(ctx, dir, stderr)
 	if code != exitcode.Success {
@@ -97,8 +95,26 @@ func filterLanguagesInRepo(ctx context.Context, dir string, langs []resolve.Lang
 		return nil, exitcode.GitFailure
 	}
 
+	others, err := repo.LsFilesOthers(ctx)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return nil, exitcode.GitFailure
+	}
+
 	present := map[string]bool{}
 	for _, path := range tracked {
+		lang, ok, _, err := resolve.LanguageForPath(root, path, func() ([]byte, bool, error) {
+			return repo.CatFileSample(ctx, "HEAD", path, resolve.ShebangPeekBytes)
+		})
+		if err != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return nil, exitcode.GitFailure
+		}
+		if ok {
+			present[lang.Name()] = true
+		}
+	}
+	for _, path := range others {
 		if lang, ok, _ := resolve.LanguageForWorktreePath(root, path); ok {
 			present[lang.Name()] = true
 		}
