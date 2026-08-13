@@ -229,6 +229,75 @@ func TestCatFileSample(t *testing.T) {
 	})
 }
 
+func TestCatFilePromisorMissingIsAnError(t *testing.T) {
+	t.Parallel()
+	_, repo := newBloblessClone(t)
+	ctx := context.Background()
+
+	if _, exists, err := repo.CatFile(ctx, "HEAD", "absent.go"); err != nil || exists {
+		t.Fatalf("CatFile(absent.go) = (_, %v, %v); want (nil, false)", exists, err)
+	}
+	_, exists, err := repo.CatFile(ctx, "HEAD", "tracked.go")
+	assertPromisorMissing(t, "CatFile", exists, err)
+
+	if _, exists, err := repo.CatFileSample(ctx, "HEAD", "absent.go", 16); err != nil || exists {
+		t.Fatalf("CatFileSample(absent.go) = (_, %v, %v); want (nil, false)", exists, err)
+	}
+	_, exists, err = repo.CatFileSample(ctx, "HEAD", "tracked.go", 16)
+	assertPromisorMissing(t, "CatFileSample", exists, err)
+
+	results, err := repo.BatchCatFile(ctx, []gitx.BatchCatFileRequest{
+		{Rev: "HEAD", Path: "absent.go"},
+	})
+	if err != nil || len(results) != 1 || results[0].Exists {
+		t.Fatalf("BatchCatFile(absent.go) = (%v, %v); want one absent result", results, err)
+	}
+	_, err = repo.BatchCatFile(ctx, []gitx.BatchCatFileRequest{
+		{Rev: "HEAD", Path: "tracked.go"},
+	})
+	assertPromisorMissing(t, "BatchCatFile", false, err)
+}
+
+func assertPromisorMissing(t *testing.T, name string, exists bool, err error) {
+	t.Helper()
+	if exists {
+		t.Errorf("%s exists = true; want false", name)
+	}
+	var gerr *gitx.GitError
+	if !errors.As(err, &gerr) {
+		t.Fatalf("%s error = %v (%T); want *gitx.GitError", name, err, err)
+	}
+	if gerr.ExitCode != 128 {
+		t.Errorf("%s exit code = %d; want 128", name, gerr.ExitCode)
+	}
+}
+
+func newBloblessClone(t *testing.T) (string, *gitx.Repo) {
+	t.Helper()
+	dir, _ := gittest.New(t)
+	const missingBlob = "1111111111111111111111111111111111111111"
+	treeInput := fmt.Sprintf("100644 blob %s\ttracked.go\n", missingBlob)
+	tree := runGitInput(t, dir, treeInput, "mktree", "--missing")
+	commit := gittest.Git(t, dir, "commit-tree", tree, "-m", "chore: add tracked file")
+	gittest.Git(t, dir, "update-ref", "refs/heads/main", strings.TrimSpace(commit))
+	gittest.Git(t, dir, "symbolic-ref", "HEAD", "refs/heads/main")
+	gittest.Git(t, dir, "remote", "add", "origin", filepath.Join(t.TempDir(), "unreachable"))
+	gittest.Git(t, dir, "config", "remote.origin.promisor", "true")
+	gittest.Git(t, dir, "config", "extensions.partialClone", "origin")
+	return dir, gitx.New(dir)
+}
+
+func runGitInput(t *testing.T, dir, input string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd.Stdin = strings.NewReader(input)
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("git %s: %v", strings.Join(args, " "), err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
 // TestBlame pins the -L bounding itself: blaming lines 2,2 of a three-line
 // file must name only that line's own commit, never the ones before or
 // after it -- the guardrail rgit blame exists to hold (docs/USAGE.md §

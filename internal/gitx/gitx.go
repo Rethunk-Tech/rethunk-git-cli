@@ -192,18 +192,59 @@ func (r *Repo) checkedLine(ctx context.Context, args ...string) (string, error) 
 // normal case — an untracked file has no HEAD blob — so exists reports
 // that distinction directly rather than making callers inspect stderr.
 func (r *Repo) CatFile(ctx context.Context, rev, path string) (content []byte, exists bool, err error) {
-	res, err := r.run(ctx, nil, "cat-file", "-p", rev+":"+path)
+	args := []string{"cat-file", "-p", rev + ":" + path}
+	res, err := r.run(ctx, nil, args...)
 	if err != nil {
 		return nil, false, err
 	}
 	if res.ExitCode != 0 {
-		// cat-file exits 128 uniformly for "bad revision" and "path does
-		// not exist in tree" alike. Blob synthesis treats both the same
-		// way (there is nothing at that rev), so no finer distinction is
-		// needed here.
-		return nil, false, nil
+		exists, err := r.catFileFailure(ctx, rev, path, args, res)
+		return nil, exists, err
 	}
 	return res.Stdout, true, nil
+}
+
+// catFileFailure preserves the normal absent-path answer while surfacing a
+// known-but-unreadable promisor object. A tree lookup is the distinction
+// cat-file -p itself does not expose: it reports both cases as exit 128.
+func (r *Repo) catFileFailure(ctx context.Context, rev, path string, args []string, res Result) (exists bool, err error) {
+	known, submodule, err := r.catFilePathStatus(ctx, rev, path)
+	if err != nil {
+		return false, err
+	}
+	if !known || submodule {
+		return false, nil
+	}
+	return false, gitError(args, res)
+}
+
+func (r *Repo) catFilePathStatus(ctx context.Context, rev, path string) (known, submodule bool, err error) {
+	if rev == "" {
+		mode, found, err := r.LsFilesStage(ctx, path)
+		if err != nil {
+			return false, false, err
+		}
+		return found, found && mode == "160000", nil
+	}
+	res, err := r.run(ctx, nil, "ls-tree", rev, "--", path)
+	if err != nil {
+		return false, false, err
+	}
+	if res.ExitCode != 0 {
+		// Preserve CatFile's existing normal-negative answer for a bad
+		// revision. A valid revision with no matching output is handled
+		// identically below.
+		return false, false, nil
+	}
+	line := strings.TrimRight(string(res.Stdout), "\n")
+	if line == "" {
+		return false, false, nil
+	}
+	entry, err := parseLsTreeLine(line)
+	if err != nil {
+		return false, false, err
+	}
+	return true, entry.Type == "commit" || entry.Mode == "160000", nil
 }
 
 // CatFileSample reads at most limit bytes of the blob at rev:path via `git
@@ -271,10 +312,9 @@ func (r *Repo) CatFileSample(ctx context.Context, rev, path string, limit int) (
 	if werr := cmd.Wait(); werr != nil {
 		var exitErr *exec.ExitError
 		if errors.As(werr, &exitErr) {
-			// cat-file exits non-zero uniformly for "bad revision" and
-			// "path does not exist in tree" alike, matching CatFile's own
-			// exists=false convention.
-			return nil, false, nil
+			res := Result{ExitCode: exitErr.ExitCode(), Stderr: stderr.Bytes()}
+			exists, err := r.catFileFailure(ctx, rev, path, args, res)
+			return nil, exists, err
 		}
 		return nil, false, &ExecError{Args: args, Err: werr}
 	}
@@ -362,7 +402,38 @@ func (r *Repo) BatchCatFile(ctx context.Context, requests []BatchCatFileRequest)
 		return nil, &ExecError{Args: args, Err: writeErr}
 	}
 	if err := cmd.Wait(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return nil, &GitError{Args: args, ExitCode: exitErr.ExitCode(), Stderr: stderr.Bytes()}
+		}
 		return nil, &ExecError{Args: args, Err: fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))}
+	}
+	for i, req := range requests {
+		if results[i].Exists {
+			continue
+		}
+		known, submodule, err := r.catFilePathStatus(ctx, req.Rev, req.Path)
+		if err != nil {
+			return nil, err
+		}
+		if !known || submodule {
+			continue
+		}
+		// --batch reports a promisor miss without fetching. Retry through
+		// the singular form so an available promisor remote can satisfy it;
+		// an unreachable remote then returns git's real exit-128 failure.
+		content, exists, err := r.CatFile(ctx, req.Rev, req.Path)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			return nil, &GitError{
+				Args:     []string{"cat-file", "-p", req.Rev + ":" + req.Path},
+				ExitCode: 128,
+				Stderr:   []byte("promisor object is unavailable"),
+			}
+		}
+		results[i] = BatchCatFileResult{Content: content, Exists: true}
 	}
 	return results, nil
 }

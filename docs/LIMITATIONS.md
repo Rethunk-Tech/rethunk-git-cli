@@ -153,6 +153,14 @@ entry, with nothing rgit-specific to special-case for it. A binary file is
 refused for a symbol anchor the same way a symlink or submodule is (exit
 10) — there is no content to attribute a symbol's bytes within.
 
+## Partial clones without a reachable promisor remote
+
+A blobless or otherwise promisor-backed clone needs Git to obtain an
+unfetched blob before `rgit` can resolve or synthesize an anchor against it.
+When the promisor remote is unreachable, Git reports the missing object with
+exit 128; `rgit` preserves that error rather than treating the tracked path as
+absent or synthesizing a full-file deletion. `rgit` does not fetch blobs itself.
+
 ## History across renames
 
 `rgit log FILE:SYMBOL` runs `git log -L` bounded to the named file. `-L`
