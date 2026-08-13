@@ -163,6 +163,30 @@ func TestGitPathChecker_IndexOnlyPathExists(t *testing.T) {
 	qt.Assert(t, qt.IsTrue(exists))
 }
 
+func TestClassifyArgs_IndexOnlyPathIsAnAnchor(t *testing.T) {
+	t.Parallel()
+	root, repo := gittest.New(t)
+	gittest.Write(t, root, "new.go", "package p\n\nfunc New() {}\n")
+	gittest.Git(t, root, "add", "new.go")
+	if err := os.Remove(filepath.Join(root, "new.go")); err != nil {
+		t.Fatal(err)
+	}
+
+	checker := &GitPathChecker{Root: root, Repo: repo}
+	revs := GitRevisionResolver{Repo: repo}
+	got, err := ClassifyArgs(
+		context.Background(),
+		[]string{"new.go:New"},
+		false,
+		checker,
+		revs,
+	)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.DeepEquals(got, []Classification{
+		{Kind: KindAnchor, Anchor: Anchor{File: "new.go", Name: "New"}},
+	}))
+}
+
 func TestGitPathChecker_IntentToAddIgnoredPathExists(t *testing.T) {
 	t.Parallel()
 	root, repo := gittest.New(t)
