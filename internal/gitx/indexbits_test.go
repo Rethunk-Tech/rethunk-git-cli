@@ -12,14 +12,15 @@ func TestIndexWorktreeBits(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		mark   string
+		marks  []string
 		skip   bool
 		assume bool
 		found  bool
 	}{
 		{name: "normal", found: true},
-		{name: "skip-worktree", mark: "--skip-worktree", skip: true, found: true},
-		{name: "assume-unchanged", mark: "--assume-unchanged", assume: true, found: true},
+		{name: "skip-worktree", marks: []string{"--skip-worktree"}, skip: true, found: true},
+		{name: "assume-unchanged", marks: []string{"--assume-unchanged"}, assume: true, found: true},
+		{name: "skip-worktree-and-assume-unchanged", marks: []string{"--skip-worktree", "--assume-unchanged"}, skip: true, assume: true, found: true},
 		{name: "absent"},
 	}
 	for _, test := range tests {
@@ -27,8 +28,8 @@ func TestIndexWorktreeBits(t *testing.T) {
 			dir, repo := gittest.New(t)
 			gittest.Write(t, dir, "tracked.txt", "content\n")
 			gittest.Commit(t, dir, "test: add tracked file")
-			if test.mark != "" {
-				gittest.Git(t, dir, "update-index", test.mark, "tracked.txt")
+			for _, mark := range test.marks {
+				gittest.Git(t, dir, "update-index", mark, "tracked.txt")
 			}
 
 			path := "tracked.txt"

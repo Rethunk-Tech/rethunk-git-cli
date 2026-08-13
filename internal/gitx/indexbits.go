@@ -16,8 +16,10 @@ func (r *Repo) IndexWorktreeBits(ctx context.Context, path string) (skip, assume
 			continue
 		}
 		switch line[0] {
-		case 'S', 's':
+		case 'S':
 			return true, false, true, nil
+		case 's':
+			return true, true, true, nil
 		case 'h':
 			return false, true, true, nil
 		case 'H':
