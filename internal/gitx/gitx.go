@@ -427,11 +427,12 @@ func (r *Repo) BatchCatFile(ctx context.Context, requests []BatchCatFileRequest)
 			return nil, err
 		}
 		if !exists {
-			return nil, &GitError{
-				Args:     []string{"cat-file", "-p", req.Rev + ":" + req.Path},
-				ExitCode: 128,
-				Stderr:   []byte("promisor object is unavailable"),
+			retryArgs := []string{"cat-file", "-p", req.Rev + ":" + req.Path}
+			retryRes, retryErr := r.run(ctx, nil, retryArgs...)
+			if retryErr != nil {
+				return nil, retryErr
 			}
+			return nil, gitError(retryArgs, retryRes)
 		}
 		results[i] = BatchCatFileResult{Content: content, Exists: true}
 	}
