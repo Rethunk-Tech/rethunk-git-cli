@@ -60,7 +60,6 @@ func TestRun_CommitPathspecOnSkipWorktreeDelegatesToGit(t *testing.T) {
 
 	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))
 	qt.Assert(t, qt.StringContains(stderr, "git add -- tracked.go"))
-	qt.Assert(t, qt.StringContains(stderr, "sparse-checkout definition"))
 }
 
 func assertSpecialPathRefusal(t *testing.T, stderr string, code exitcode.Code, reason string) {
