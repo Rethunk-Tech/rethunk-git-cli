@@ -340,7 +340,8 @@ interpreters such as `python3.12` and `python3.13` resolve the same way;
 Python 2 names remain unsupported. **`zsh` is deliberately excluded** — the
 bash grammar mis-parses zsh-specific syntax, and a wrong extent is worse than
 an honest refusal. The extension is always tried first, so this changes
-nothing for a file that has one.
+nothing for a file that has one. A trailing `.exe` on the interpreter basename
+is stripped case-insensitively before lookup; other Windows suffixes are not.
 
 The Node/TypeScript ecosystem routes to the TypeScript adapter the same way:
 `node`, `nodejs`, `tsx`, `ts-node`, `bun`, and `deno` all resolve to it, whether
