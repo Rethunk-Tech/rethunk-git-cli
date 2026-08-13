@@ -196,6 +196,7 @@ func TestShebangInterpreter_NodeJSEcosystem(t *testing.T) {
 		ok   bool
 	}{
 		{"direct node", "#!/usr/bin/env node\n", "node", true},
+		{"direct node windows executable", "#!/usr/bin/env node.exe\n", "node", true},
 		{"nodejs binary name", "#!/usr/bin/env nodejs\n", "nodejs", true},
 		{"env -S with a flag of its own", "#!/usr/bin/env -S node --import tsx\n", "node", true},
 		{"npx unwraps to its target", "#!/usr/bin/env npx tsx\n", "tsx", true},
@@ -203,6 +204,7 @@ func TestShebangInterpreter_NodeJSEcosystem(t *testing.T) {
 		{"bun run stays bun, trailing subcommand ignored", "#!/usr/bin/env bun run\n", "bun", true},
 		{"bare npx with nothing after it stays unmapped by shebangExtension, but shebangInterpreter still reports it", "#!/usr/bin/env npx\n", "npx", true},
 		{"unrecognized interpreter still reports its name", "#!/usr/bin/perl\n", "perl", true},
+		{"windows executable suffix is stripped from unknown interpreter", "#!/usr/bin/perl.exe\n", "perl", true},
 		{"not a shebang at all", "# just a comment\n", "", false},
 	}
 	for _, tt := range tests {
@@ -256,7 +258,9 @@ func TestForPath_VersionedPythonShebangsRouteToPython(t *testing.T) {
 	t.Parallel()
 
 	fixtures := []string{
+		"#!/usr/bin/python.exe\nprint(1)\n",
 		"#!/usr/bin/python3.12\nprint(1)\n",
+		"#!/usr/bin/python3.12.exe\nprint(1)\n",
 		"#!/usr/bin/env -S python3.13 -u\nprint(1)\n",
 	}
 	for _, content := range fixtures {

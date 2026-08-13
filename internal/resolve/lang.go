@@ -500,6 +500,9 @@ func shebangInterpreter(content []byte) (string, bool) {
 	if (interp == "npx" || interp == "bunx") && len(fields) > i+1 {
 		interp = filepath.Base(fields[i+1])
 	}
+	if strings.HasSuffix(strings.ToLower(interp), ".exe") {
+		interp = interp[:len(interp)-len(".exe")]
+	}
 	return interp, true
 }
 
