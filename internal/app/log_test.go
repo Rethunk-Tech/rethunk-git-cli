@@ -588,8 +588,9 @@ func TestRun_LogHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
 	gitOut(t, dir, "add", "Foo.GO")
 	gitOut(t, dir, "commit", "-m", "feat(demo): add First")
 
-	_, _, code := runApp(t, "log", "Foo.GO:First")
+	stdout, _, code := runApp(t, "log", "Foo.GO:First")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(stdout, "feat(demo): add First"))
 
 	gitOut(t, dir, "config", "core.ignorecase", "false")
 	_, _, code = runApp(t, "log", "Foo.GO:First")
