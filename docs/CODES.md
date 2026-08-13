@@ -300,6 +300,8 @@ Seven record types, distinguished by the first field:
 | `H` | `SHA` | One detached-HEAD record with the full commit object id; absent on an unborn branch |
 | `S` | `OP` | One active sequencer operation: `merge`, `cherry-pick`, `revert`, `rebase`, or `bisect` |
 | `W` | `ts-only` | One when at least one file had symbols to cross-check but no live language server was reached. The identical `[ts-only]` notice remains on stderr |
+| `W` | `stash` | One when the repository has a `refs/stash` ref |
+| `W` | `sparse` | One when `core.sparseCheckout` is true |
 | `W` | `warning`, `TEXT` | One per non-fatal diff warning. `TEXT` is the warning body without the human `[warning]` prefix; the identical `[warning] TEXT` line remains on stderr |
 | `F` | `FILE`, `SYMBOL`, `STATUS`, `ADDED`, `DELETED` | One `rgit diff --porcelain` row, identical fields — `STATUS` is the same six tokens § Output records defines above |
 | `C` | `HASH`, `SUBJECT` | One recent commit, newest first, bounded to the last 20 |
