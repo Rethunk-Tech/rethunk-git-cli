@@ -244,7 +244,7 @@ func setUnmergedIndex(t *testing.T, dir, blob, path string) {
 func TestExtractRangeToken_DetectsRangeNotAPath(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t)
-	checker := cli.GitPathChecker{Root: dir, Repo: repo}
+	checker := &cli.GitPathChecker{Root: dir, Repo: repo}
 	ctx := context.Background()
 
 	t.Run("range token pulled out, non-range args left in rest", func(t *testing.T) {
@@ -304,7 +304,7 @@ func TestExtractRangeToken_DetectsRangeNotAPath(t *testing.T) {
 	// util.go" resolve to the real "shared/util.go" from prefix "sub".
 	t.Run("an existing ../path wins over range-shaped parsing", func(t *testing.T) {
 		gittest.Write(t, dir, "shared/util.go", "package shared\n")
-		subChecker := cli.GitPathChecker{Root: dir, Prefix: "sub", Repo: repo}
+		subChecker := &cli.GitPathChecker{Root: dir, Prefix: "sub", Repo: repo}
 
 		token, rest, err := ExtractRangeToken(ctx, []string{"../shared/util.go"}, subChecker)
 		if err != nil {
