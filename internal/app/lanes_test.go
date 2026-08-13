@@ -285,6 +285,30 @@ func TestRun_FixupAndSquashGenerateAutosquashMessages(t *testing.T) {
 	}
 }
 
+func TestRun_FixupAmendAndRewordPrefixes(t *testing.T) {
+	dir := chdirTempRepo(t)
+	target := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+
+	for i, tc := range []struct {
+		flag, wantPrefix string
+		allowEmpty       bool
+	}{
+		{"--fixup=amend:", "amend! ", false},
+		{"--fixup=reword:", "amend! ", true},
+	} {
+		writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn "+strings.Repeat("1", i+3)+"\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+		args := []string{"commit", tc.flag + target}
+		if tc.allowEmpty {
+			args = append(args, "--allow-empty")
+		}
+		args = append(args, "a.go:A")
+		_, _, code := runApp(t, args...)
+
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), tc.wantPrefix+"chore: initial\n"))
+	}
+}
+
 // TestRun_FixupWithMessageAppendsRatherThanConflicts is m24: --fixup plus
 // -m is not the "-m and -F are mutually exclusive" shape of conflict --
 // git appends -m's text as an extra body paragraph below the generated
