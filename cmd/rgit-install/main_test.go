@@ -275,6 +275,9 @@ func TestGitVersion(t *testing.T) {
 
 	qt.Assert(t, qt.Equals(gitVersion(dir), "v1.2.3"))
 
+	gittest.Write(t, dir, "untracked.txt", "no\n")
+	qt.Assert(t, qt.Equals(gitVersion(dir), "v1.2.3"))
+
 	// git describe's own "-dirty" suffix -- the exact spelling
 	// cmd/rgit/main.go's resolveVersion and the Makefile's cross-build
 	// filenames both already match against; a change here would silently
