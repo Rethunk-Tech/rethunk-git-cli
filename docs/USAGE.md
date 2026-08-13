@@ -82,7 +82,7 @@ Resolution precedence, first match wins:
 | 1 | Appears after `--` | Pathspec, always |
 | 2 | Starts with `:` | Git pathspec magic, passed through verbatim |
 | 3 | *(`diff` only)* resolves via `git rev-parse --verify` | Revision, or a `rev:path` blob reference — see below |
-| 4 | Names a path existing in the worktree or HEAD | Pathspec |
+| 4 | Names a path existing in the worktree, index, or HEAD | Pathspec |
 | 5 | Splits at the last `:` into an existing path + a name | Symbol anchor |
 | 6 | None of the above | Error listing each interpretation tried |
 
@@ -551,7 +551,7 @@ is the point — § Context above).
 | --- | --- |
 | `--sym FILE:NAME` | Explicit anchor form; equivalent to a bare `FILE:NAME` positional. Repeatable. |
 | `--file PATH` | Explicit pathspec form; equivalent to a bare positional. Repeatable. |
-| `--pathspec-from-file FILE` | (`commit`, `diff`) Read one target per line from `FILE`, or from stdin when `FILE` is `-`. Empty lines are skipped; targets use the same precedence rules as positionals. |
+| `--pathspec-from-file FILE` | (`commit`, `diff`) Read one target per line from `FILE`, or from stdin when `FILE` is `-`. Empty lines are skipped; targets use the same precedence rules as positionals. Mutually exclusive with `-F -` when both would consume stdin (exit 129). |
 | `--pathspec-file-nul` | (`commit`, `diff`) Read NUL-delimited targets from `--pathspec-from-file` instead of newline-delimited lines. Empty records are skipped. |
 | `-m MSG`, `--message MSG` | Commit message. **Repeatable** — values join as blank-line-separated paragraphs, as git does. |
 | `-F FILE`, `--message-file FILE` | Read the message from a file, or `-` for stdin. Mutually exclusive with `-m`. |
@@ -661,7 +661,7 @@ the commit proceeds.
 
 `rgit` is `git add <pathspec> && git commit` at symbol granularity, so:
 
-- Work you staged before invoking `rgit` **comes along** with the commit.
+- Work you staged before invoking `rgit` **comes along** with the commit, unless `--only` is given.
 - A hook rejecting the commit **leaves staging in place**; nothing is rolled back.
 - Hooks are not policed — a hook may stage paths you did not name, exactly as
   under plain `git commit`. Use `--no-verify` to disable them.
