@@ -919,7 +919,7 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 				return Result{}, err
 			}
 		}
-		defer os.Remove(tempIndex)
+		defer func() { _ = os.Remove(tempIndex) }()
 	}
 
 	res, err := commitRepo.run(ctx, stdin, args...)
