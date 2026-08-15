@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![version](https://img.shields.io/badge/version-v1.2.0-brightgreen)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-v1.3.0-brightgreen)](CHANGELOG.md)
 [![go](https://img.shields.io/badge/go-1.26%2B-00ADD8)](https://go.dev)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 

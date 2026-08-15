@@ -6,6 +6,8 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-08-15
+
 ### Added
 
 - `rgit languages --in-repo` now counts untracked files and deleted tracked
