@@ -78,12 +78,14 @@ func (fp *filePlan) classify(anchor string) (op editOp, unchanged bool, err erro
 		pos, seq := fp.insertionPoint(workRes)
 		fp.deferCrossCheck(workRes)
 		op = editOp{
-			kind:   editInsert,
-			start:  pos,
-			seq:    seq,
-			text:   insertionText(fp.workSrc, workRes.Extent),
-			wstart: workRes.Extent.Start,
-			wend:   workRes.Extent.End,
+			kind:     editInsert,
+			start:    pos,
+			seq:      seq,
+			text:     insertionText(fp.workSrc, workRes.Extent),
+			leadGap:  leadingGap(fp.workSrc, workRes.Extent.Start),
+			trailGap: trailingGap(fp.workSrc, workRes.Extent.End),
+			wstart:   workRes.Extent.Start,
+			wend:     workRes.Extent.End,
 			// A structurally nested member only sits flush against its
 			// siblings when the language's own convention keeps it that
 			// way (Language.MembersSitFlush) -- Python requires a blank line
@@ -200,6 +202,29 @@ func lineStart(src []byte, off uint) uint {
 	return start
 }
 
+// leadingGap is the run of consecutive '\n' bytes in src immediately
+// preceding start -- the blank-line gap the worktree already has in front
+// of whatever begins there. Byte-exact by construction, so a splice that
+// reproduces it needs no separate "how many blank lines does this file's
+// convention want" guess (widerGap, synth.go).
+func leadingGap(src []byte, start uint) []byte {
+	end := start
+	for end > 0 && src[end-1] == '\n' {
+		end--
+	}
+	return src[end:start]
+}
+
+// trailingGap is leadingGap's mirror: the run of consecutive '\n' bytes in
+// src immediately following end.
+func trailingGap(src []byte, end uint) []byte {
+	stop := end
+	for stop < uint(len(src)) && src[stop] == '\n' {
+		stop++
+	}
+	return src[end:stop]
+}
+
 // escalateToContainer widens a new member anchor to the container that
 // encloses it when HEAD has neither. A method spliced in on its own lands at
 // file scope -- `hello(): number { return 1 }` sitting beside the imports --
@@ -305,8 +330,26 @@ func (fp *filePlan) insertionPoint(res *resolve.Resolution) (pos uint, seq int) 
 	idx := slices.Index(fp.workOrder, res.Anchor)
 	if idx < 0 {
 		// A pseudo-anchor: real position, but no entry in the declaration
-		// table, so there is no sibling walk to do from here.
+		// table, so idx must be located by byte offset instead of a name
+		// lookup -- the first declaration that starts after res itself,
+		// i.e. where res would sit if it were in fp.workOrder. Defaulting
+		// to len(fp.workOrder) (as if the pseudo-anchor sorted after every
+		// real declaration) sends the backward sibling walk below starting
+		// from the file's last declaration rather than from where the
+		// pseudo-anchor actually is, so it can walk past declarations that
+		// come after it in the worktree and land the splice at the wrong
+		// sibling's boundary.
 		idx = len(fp.workOrder)
+		for i, name := range fp.workOrder {
+			sib, err := fp.workFile.Resolve(name)
+			if err != nil {
+				continue
+			}
+			if sib.Extent.Start > res.Extent.Start {
+				idx = i
+				break
+			}
+		}
 	}
 	if !fp.headExists {
 		return 0, seq

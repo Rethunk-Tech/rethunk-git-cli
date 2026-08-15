@@ -65,6 +65,21 @@ type editOp struct {
 	// existing
 	// top-level insertion keeps its blank-line padding unchanged.
 	member bool
+
+	// leadGap and trailGap are the blank-line run that already sits before
+	// and after this anchor's own extent in the WORKTREE (classify.go's
+	// leadingGap/trailingGap) -- the real separator a byte-identical splice
+	// must reproduce when the file's own convention is wider than the
+	// member/non-member minimum (Python's PEP 8 double blank line between
+	// top-level defs, which a single hardcoded blank line would collapse).
+	// widerGap takes whichever is longer, so these only ever grow a
+	// separator past the minimum, never shrink it below. Left at the Go
+	// zero value (nil, so shorter than any minimum) by addPreamble's own
+	// ops, which already own their trailing separator via
+	// resolve.ExtendThroughOwnedSeparator -- computing one here too would
+	// double-count bytes that extent already claimed.
+	leadGap  []byte
+	trailGap []byte
 }
 
 // applyEdits synthesizes the final blob for one file: head with every op
@@ -86,7 +101,7 @@ func applyEdits(head []byte, ops []editOp) []byte {
 		case editDelete:
 			out = spliceExcise(out, op.start, op.end)
 		case editInsert:
-			out = spliceInsert(out, op.start, op.text, op.member)
+			out = spliceInsert(out, op)
 		}
 	}
 	return out
@@ -215,9 +230,23 @@ func mergeInsertTies(ops []editOp) []editOp {
 		member := group[0].member
 		text := group[0].text
 		for _, g := range group[1:] {
-			text = joinWithSeparator(text, g.text, member)
+			// The separator between two merged items is that LATER item's
+			// own leading gap: the true worktree distance between the
+			// previous item and this one, not a distance involving
+			// whatever precedes the whole group.
+			text = joinWithSeparator(text, g.text, widerGap(member, g.leadGap))
 		}
-		merged = append(merged, editOp{kind: editInsert, start: start, text: text, member: member})
+		merged = append(merged, editOp{
+			kind:  editInsert,
+			start: start,
+			text:  text,
+			// The merged op's own boundary gaps are the first item's real
+			// leading gap and the last item's real trailing gap -- the
+			// group's interior gaps were already consumed building text.
+			leadGap:  group[0].leadGap,
+			trailGap: group[len(group)-1].trailGap,
+			member:   member,
+		})
 	}
 	return merged
 }
@@ -261,24 +290,17 @@ func spliceExcise(out []byte, start, end uint) []byte {
 	return prefix
 }
 
-// spliceInsert splices text in at start, with no HEAD extent to replace.
-// It normalizes the boundary on both sides of the insertion (design.md:
-// "boundary padding normalizes newlines between spliced regions only") but
-// never manufactures a trailing newline where none existed: when start
-// lands at true end-of-file (out[start:] is empty), the result's own
+// spliceInsert splices op.text in at op.start, with no HEAD extent to
+// replace. It normalizes the boundary on both sides of the insertion
+// (design.md: "boundary padding normalizes newlines between spliced regions
+// only") but never manufactures a trailing newline where none existed: when
+// start lands at true end-of-file (out[start:] is empty), the result's own
 // trailing newline mirrors out's, not a forced default.
-//
-// member selects which boundary a top-level declaration and a container
-// member each structurally require: a blank line between two top-level
-// declarations, but exactly one newline between two members of the same
-// struct, interface, or class -- padding one in there is not "normalizing
-// spacing", it is producing a blob that never matches the worktree it was
-// supposed to reproduce (specs/design.md § Blob synthesis).
-func spliceInsert(out []byte, start uint, text []byte, member bool) []byte {
-	before := out[:start]
-	after := out[start:]
+func spliceInsert(out []byte, op editOp) []byte {
+	before := out[:op.start]
+	after := out[op.start:]
 
-	mid := joinWithSeparator(before, text, member)
+	mid := joinWithSeparator(before, op.text, widerGap(op.member, op.leadGap))
 	// Both empty and newlines-only mean end-of-file: nothing follows the
 	// insertion but the file's own terminator. Appending after the last
 	// symbol lands in the newlines-only case, since HEAD's trailing
@@ -290,15 +312,35 @@ func spliceInsert(out []byte, start uint, text []byte, member bool) []byte {
 		}
 		return mid
 	}
-	return joinWithSeparator(mid, after, member)
+	return joinWithSeparator(mid, after, widerGap(op.member, op.trailGap))
+}
+
+// widerGap picks the separator a splice should actually use: gap -- the
+// real blank-line run this anchor already has on that side in the worktree
+// -- when it is wider than the structural minimum (member selects which:
+// a blank line between two top-level declarations, exactly one newline
+// between two members of the same struct, interface, or class), else the
+// minimum itself. Only ever widens, never narrows: gap stays nil (shorter
+// than any minimum) for an op that never computed one (addPreamble's, which
+// already owns its trailing separator via
+// resolve.ExtendThroughOwnedSeparator), so those fall back to the minimum
+// exactly as before this existed.
+func widerGap(member bool, gap []byte) []byte {
+	min := "\n\n"
+	if member {
+		min = "\n"
+	}
+	if len(gap) > len(min) {
+		return gap
+	}
+	return []byte(min)
 }
 
 // joinWithSeparator concatenates a and b, trimming any newlines a already
 // trails or b already leads so repeated splices cannot accumulate extra
-// blank lines, then rejoining with exactly one blank line (member false) or
-// exactly one newline (member true). An empty side contributes no
+// blank lines, then rejoining with sep. An empty side contributes no
 // separator -- joining onto nothing is not a boundary.
-func joinWithSeparator(a, b []byte, member bool) []byte {
+func joinWithSeparator(a, b, sep []byte) []byte {
 	a = bytes.TrimRight(a, "\n")
 	b = bytes.TrimLeft(b, "\n")
 	switch {
@@ -307,10 +349,6 @@ func joinWithSeparator(a, b []byte, member bool) []byte {
 	case len(b) == 0:
 		return append([]byte(nil), a...)
 	default:
-		sep := "\n\n"
-		if member {
-			sep = "\n"
-		}
 		out := make([]byte, 0, len(a)+len(sep)+len(b))
 		out = append(out, a...)
 		out = append(out, sep...)
