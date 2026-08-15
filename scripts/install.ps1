@@ -90,14 +90,16 @@ try {
 Write-Output "installed to ${installPath}:"
 & $installPath --version
 # Informational only: the install itself already succeeded (download,
-# checksum, optional cosign verify, copy all completed above). Without this
-# reset, a stray non-zero exit from the just-installed binary -- the one
-# concrete way this bit a CI runner (ci.yml's own fixture in the "install
-# script (windows)" job once used a decoy that doesn't understand
-# --version) -- becomes this whole script's own trailing $LASTEXITCODE,
-# which GitHub Actions' pwsh step runner treats as step failure even though
-# nothing here threw.
-$LASTEXITCODE = 0
+# checksum, optional cosign verify, copy all completed above), so a
+# non-zero exit from the just-installed binary here must not fail the
+# script -- but a plain `$LASTEXITCODE = 0` does not actually do that: a
+# script invoked via `&` (this one, from ci.yml's own test step) runs in
+# its own scope, and an unqualified assignment there only shadows the
+# automatic $LASTEXITCODE variable locally, never reaching the one the
+# caller -- and GitHub Actions' pwsh step runner, which fails a step on
+# its trailing value -- actually inspects. $global: is required to reach
+# across that boundary.
+$global:LASTEXITCODE = 0
 
 if (-not (($env:PATH -split [IO.Path]::PathSeparator) -contains $prefix)) {
     Write-Output "note: $prefix is not on PATH -- add it to use 'rgit' directly"
