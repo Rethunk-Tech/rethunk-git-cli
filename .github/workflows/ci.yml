@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Rethunk-Tech/gh-actions/setup-go@ea87a602a5214e1fb513feb22a035b7e0f3b9245 # v1.5
+      - uses: Rethunk-Tech/gh-actions/setup-go@e04e0afa3e00c59e33030fdbc7df29c15000357b # v1.7
       # -short: the unit lane CONTRIBUTING.md calls where the guarantee
       # lives. It also skips every live-language-server test cleanly (each
       # checks testing.Short() and/or exec.LookPath before dialling), which
@@ -44,7 +44,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Rethunk-Tech/gh-actions/setup-go@ea87a602a5214e1fb513feb22a035b7e0f3b9245 # v1.5
+      - uses: Rethunk-Tech/gh-actions/setup-go@e04e0afa3e00c59e33030fdbc7df29c15000357b # v1.7
         with:
           run-lint: "true"
           lint-version: v2.12.2
@@ -55,7 +55,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Rethunk-Tech/gh-actions/setup-go@ea87a602a5214e1fb513feb22a035b7e0f3b9245 # v1.5
+      - uses: Rethunk-Tech/gh-actions/setup-go@e04e0afa3e00c59e33030fdbc7df29c15000357b # v1.7
       # The unit lane above is where a regression must fail; this lane
       # proves the assembled program behaves -- it builds the binary and
       # execs it, which -short skips entirely. Without it, CONTRIBUTING's
@@ -70,7 +70,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Rethunk-Tech/gh-actions/setup-go@ea87a602a5214e1fb513feb22a035b7e0f3b9245 # v1.5
+      - uses: Rethunk-Tech/gh-actions/setup-go@e04e0afa3e00c59e33030fdbc7df29c15000357b # v1.7
       # Scoped to internal/lsp, not ./...: CONTRIBUTING.md names jsonrpc2
       # and the spawn lock -- both there -- as the concurrency that
       # matters. Every live-server case in this package skips cleanly via
