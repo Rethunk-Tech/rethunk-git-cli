@@ -32,6 +32,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: Rethunk-Tech/gh-actions/setup-go@e04e0afa3e00c59e33030fdbc7df29c15000357b # v1.7
+      # cmd/rgit-install's own tests (TestRunPrereqChecks, TestFindSQLAdapter)
+      # assert this in a real dev/CI environment -- not a build-time SQL
+      # lane (this file's own top comment), just PATH presence for the
+      # prereq check itself. Same step release.yml's darwin/linux/windows
+      # jobs already carry, kept in sync on purpose.
+      - run: npm install -g tree-sitter-cli
       # -short: the unit lane CONTRIBUTING.md calls where the guarantee
       # lives. It also skips every live-language-server test cleanly (each
       # checks testing.Short() and/or exec.LookPath before dialling), which
@@ -56,6 +62,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: Rethunk-Tech/gh-actions/setup-go@e04e0afa3e00c59e33030fdbc7df29c15000357b # v1.7
+      # Same reason the unit lane above installs this: cmd/rgit-install's
+      # own tests run here too, unshortened by -short.
+      - run: npm install -g tree-sitter-cli
       # The unit lane above is where a regression must fail; this lane
       # proves the assembled program behaves -- it builds the binary and
       # execs it, which -short skips entirely. Without it, CONTRIBUTING's
@@ -286,8 +295,31 @@ jobs:
             New-Item -ItemType Directory -Path $directory | Out-Null
           }
           [IO.File]::WriteAllText($marker, '')
-          Copy-Item -LiteralPath (Join-Path $env:SystemRoot 'System32\where.exe') `
-            -Destination (Join-Path $fixture $asset)
+          # A real, standalone .exe is required here -- install.ps1's own
+          # post-install smoke test runs the installed binary with
+          # --version (scripts/install.ps1's final `& $installPath
+          # --version`), and that call's own exit code becomes this
+          # script's trailing $LASTEXITCODE, which GitHub Actions' pwsh
+          # step runner fails on even with no throw. where.exe (the prior
+          # stand-in) doesn't understand --version and exits non-zero,
+          # which is exactly the mirror image of what real rgit.exe does
+          # with that flag -- the Linux install.sh test avoids the same
+          # trap with its own printf stub (this file's "install script"
+          # job, "Verify optional cosign branch without network" step);
+          # csc.exe (bundled with every windows-latest runner's .NET
+          # Framework, via Add-Type) gives Windows the equivalent: a
+          # minimal console app that ignores its arguments and always
+          # exits 0.
+          $stubSource = @(
+            'using System;'
+            'class RgitStub {'
+            '  static int Main(string[] args) {'
+            '    Console.WriteLine("rgit v1.2.0");'
+            '    return 0;'
+            '  }'
+            '}'
+          ) -join [Environment]::NewLine
+          Add-Type -OutputType ConsoleApplication -OutputAssembly (Join-Path $fixture $asset) -TypeDefinition $stubSource
           $digest = (Get-FileHash -LiteralPath (Join-Path $fixture $asset) -Algorithm SHA256).Hash
           Set-Content -LiteralPath (Join-Path $fixture 'SHA256SUMS') `
             -Value "$digest  $asset" -Encoding ascii
