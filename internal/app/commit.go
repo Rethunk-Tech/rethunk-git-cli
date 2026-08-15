@@ -167,16 +167,19 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		return exitcode.InvalidUsage
 	}
 	// --amend, --fixup, and --squash each generate their own message when
-	// neither -m nor -F is given: --amend reuses HEAD's via --no-edit
-	// (docs/USAGE.md: rgit never opens an editor), and --fixup/--squash
-	// generate "fixup!"/"squash! <original subject>" the same way plain
-	// `git commit` does. An in-progress merge, cherry-pick, or revert may
-	// also supply git's generated message; that probe happens after the
+	// neither -m nor -F is given, and all three need --no-edit forwarded to
+	// keep that message-free (docs/USAGE.md: rgit never opens an editor).
+	// Plain `--fixup=<commit>` happens to skip git's own editor without it,
+	// but `--squash=<commit>` and the `--fixup=amend:`/`--fixup=reword:`
+	// subtypes do not -- git opens one to let the subject be edited, which
+	// hangs or fails outright ("Terminal is dumb, but EDITOR unset") in any
+	// non-interactive caller. An in-progress merge, cherry-pick, or revert
+	// may also supply git's generated message; that probe happens after the
 	// repository opens. -m/-F given alongside --fixup or --squash is not a
 	// conflict: git appends it as an extra body paragraph rather than
 	// rejecting or silently dropping it.
 	autoMessage := f.amend || f.fixup != "" || f.squash != "" || f.reuseMessage != ""
-	noEdit := f.amend && len(f.messages) == 0 && f.msgFile == ""
+	noEdit := (f.amend || f.fixup != "" || f.squash != "") && len(f.messages) == 0 && f.msgFile == ""
 
 	positionalsGiven := restoreDoubleDash(fs)
 	if f.pathspecFile != "" {
