@@ -773,6 +773,74 @@ func TestStage_MultipleSymbolsSpliceInReverseOffsetOrder(t *testing.T) {
 	mustParseGo(t, "multi-symbol splice", got)
 }
 
+// TestStage_MultiAnchorSameFileMatchesWorktreeByteIdentical regresses a bug
+// where naming several new anchors in one file placed insertions at wrong
+// offsets and collapsed a pre-existing multi-blank-line gap. Root cause:
+// insertionPoint (classify.go) ranks an insertion by its index in the
+// worktree's declaration table, but a pseudo-anchor like @imports has no
+// entry there and defaulted to sorting after every real declaration --
+// starting its nearest-existing-sibling walk from the file's last
+// declaration instead of from where @imports actually sits, landing its
+// splice at the wrong sibling's boundary. When the named anchors cover
+// every change in the file, the committed blob must equal the worktree
+// byte-for-byte, so this asserts full equality rather than substrings.
+func TestStage_MultiAnchorSameFileMatchesWorktreeByteIdentical(t *testing.T) {
+	t.Parallel()
+	head := "\"\"\"Doc.\"\"\"\n\nfrom __future__ import annotations\n\n\ndef alpha() -> int:\n    return 1\n"
+	work := "\"\"\"Doc.\"\"\"\n\nfrom __future__ import annotations\n\nimport logging\n\nlogger = logging.getLogger(__name__)\n\n\ndef alpha() -> int:\n    return 1\n\n\ndef beta() -> int:\n    logger.info(\"x\")\n    return 2\n"
+
+	t.Run("anchors in file order", func(t *testing.T) {
+		dir, repo := gittest.New(t)
+		gittest.Write(t, dir, "mod.py", head)
+		gittest.Commit(t, dir, "chore: mod.py")
+		gittest.Write(t, dir, "mod.py", work)
+
+		mustStage(t, repo, dir,
+			synth.AnchorTarget("mod.py", "@imports"),
+			synth.AnchorTarget("mod.py", "logger"),
+			synth.AnchorTarget("mod.py", "beta"))
+
+		qt.Assert(t, qt.Equals(indexBlob(t, repo, "mod.py"), work))
+	})
+
+	t.Run("anchors reversed on the command line", func(t *testing.T) {
+		// The synthesized blob must not depend on argument order: only the
+		// worktree's own declaration order may decide where each insertion
+		// lands.
+		dir, repo := gittest.New(t)
+		gittest.Write(t, dir, "mod.py", head)
+		gittest.Commit(t, dir, "chore: mod.py")
+		gittest.Write(t, dir, "mod.py", work)
+
+		mustStage(t, repo, dir,
+			synth.AnchorTarget("mod.py", "beta"),
+			synth.AnchorTarget("mod.py", "logger"),
+			synth.AnchorTarget("mod.py", "@imports"))
+
+		qt.Assert(t, qt.Equals(indexBlob(t, repo, "mod.py"), work))
+	})
+}
+
+// TestStage_MultiAnchorOutOfOrderVarAndFunctions confirms the insertionPoint
+// fix is not @imports-specific: an ordinary var and two functions, staged
+// out of worktree order, must land at their true worktree positions too.
+func TestStage_MultiAnchorOutOfOrderVarAndFunctions(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	gittest.Write(t, dir, "v.go", "package main\n\nfunc Seed() {}\n")
+	gittest.Commit(t, dir, "chore: v.go")
+	work := "package main\n\nvar Count = 0\n\nfunc Seed() {}\n\nfunc Bump() {\n\tCount++\n}\n"
+	gittest.Write(t, dir, "v.go", work)
+
+	mustStage(t, repo, dir,
+		synth.AnchorTarget("v.go", "Bump"),
+		synth.AnchorTarget("v.go", "Count"))
+
+	got := indexBlob(t, repo, "v.go")
+	mustParseGo(t, "var + function out of order", got)
+	qt.Assert(t, qt.Equals(got, work))
+}
+
 func TestStage_DeletedSymbolExcisedFromBlob(t *testing.T) {
 	t.Parallel()
 	// Deleting a symbol is
