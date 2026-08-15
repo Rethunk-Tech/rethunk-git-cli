@@ -295,31 +295,8 @@ jobs:
             New-Item -ItemType Directory -Path $directory | Out-Null
           }
           [IO.File]::WriteAllText($marker, '')
-          # A real, standalone .exe is required here -- install.ps1's own
-          # post-install smoke test runs the installed binary with
-          # --version (scripts/install.ps1's final `& $installPath
-          # --version`), and that call's own exit code becomes this
-          # script's trailing $LASTEXITCODE, which GitHub Actions' pwsh
-          # step runner fails on even with no throw. where.exe (the prior
-          # stand-in) doesn't understand --version and exits non-zero,
-          # which is exactly the mirror image of what real rgit.exe does
-          # with that flag -- the Linux install.sh test avoids the same
-          # trap with its own printf stub (this file's "install script"
-          # job, "Verify optional cosign branch without network" step);
-          # csc.exe (bundled with every windows-latest runner's .NET
-          # Framework, via Add-Type) gives Windows the equivalent: a
-          # minimal console app that ignores its arguments and always
-          # exits 0.
-          $stubSource = @(
-            'using System;'
-            'class RgitStub {'
-            '  static int Main(string[] args) {'
-            '    Console.WriteLine("rgit v1.2.0");'
-            '    return 0;'
-            '  }'
-            '}'
-          ) -join [Environment]::NewLine
-          Add-Type -OutputType ConsoleApplication -OutputAssembly (Join-Path $fixture $asset) -TypeDefinition $stubSource
+          Copy-Item -LiteralPath (Join-Path $env:SystemRoot 'System32\where.exe') `
+            -Destination (Join-Path $fixture $asset)
           $digest = (Get-FileHash -LiteralPath (Join-Path $fixture $asset) -Algorithm SHA256).Hash
           Set-Content -LiteralPath (Join-Path $fixture 'SHA256SUMS') `
             -Value "$digest  $asset" -Encoding ascii
