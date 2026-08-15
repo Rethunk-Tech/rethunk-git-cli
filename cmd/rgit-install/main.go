@@ -303,12 +303,21 @@ func firstField(s string) string {
 // len(CgoFiles) > 0 additionally confirms it is the cgo binding itself, not
 // some unrelated package that happens to share the name.
 //
-// `go list -tags rgit_sql -json ./...` succeeds here even before generation
-// has ever run: cgo's own #include "csrc/parser.c" is a C-preprocessor
-// directive inside a Go source comment, invisible to `go list`, which only
-// needs the .go file to parse -- exactly the state a clean checkout is in.
+// `go list -tags rgit_sql -e -json ./...` succeeds here even before
+// generation has ever run: cgo's own #include "csrc/parser.c" is a
+// C-preprocessor directive inside a Go source comment, invisible to `go
+// list`, which only needs the .go file to parse -- exactly the state a
+// clean checkout is in. -e is required, not optional, on that clean
+// checkout: generated_check.go's own go:embed csrc/scanner.c has no match
+// yet either, and without -e that load error alone fails the whole `go
+// list` invocation (exit 1, no JSON at all) before CgoFiles is ever
+// reported -- the discovery step this function exists for would never
+// find its own target on the exact checkout state it is meant to run
+// against. -e demotes that to a per-package Error field this function
+// never reads, while CgoFiles/Name are still populated from the syntax
+// scan that ran before the embed pattern was resolved.
 func findSQLAdapter(repoRoot string) (dir string, ok bool) {
-	cmd := exec.Command("go", "list", "-tags", "rgit_sql", "-json", "./...")
+	cmd := exec.Command("go", "list", "-tags", "rgit_sql", "-e", "-json", "./...")
 	cmd.Dir = repoRoot
 	out, err := cmd.Output()
 	if err != nil {
