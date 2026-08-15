@@ -31,9 +31,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
+      - uses: Rethunk-Tech/gh-actions/setup-go@0ddfe1fe8e7555566134593a3e291a47b412d75f # v1.3
       # -short: the unit lane CONTRIBUTING.md calls where the guarantee
       # lives. It also skips every live-language-server test cleanly (each
       # checks testing.Short() and/or exec.LookPath before dialling), which
@@ -46,9 +44,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
+      - uses: Rethunk-Tech/gh-actions/setup-go@0ddfe1fe8e7555566134593a3e291a47b412d75f # v1.3
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
@@ -59,9 +55,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
+      - uses: Rethunk-Tech/gh-actions/setup-go@0ddfe1fe8e7555566134593a3e291a47b412d75f # v1.3
       # The unit lane above is where a regression must fail; this lane
       # proves the assembled program behaves -- it builds the binary and
       # execs it, which -short skips entirely. Without it, CONTRIBUTING's
@@ -76,9 +70,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
+      - uses: Rethunk-Tech/gh-actions/setup-go@0ddfe1fe8e7555566134593a3e291a47b412d75f # v1.3
       # Scoped to internal/lsp, not ./...: CONTRIBUTING.md names jsonrpc2
       # and the spawn lock -- both there -- as the concurrency that
       # matters. Every live-server case in this package skips cleanly via
