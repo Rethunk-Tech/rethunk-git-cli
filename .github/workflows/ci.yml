@@ -45,9 +45,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: Rethunk-Tech/gh-actions/setup-go@ea87a602a5214e1fb513feb22a035b7e0f3b9245 # v1.5
-      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          version: v2.12.2
+          run-lint: "true"
+          lint-version: v2.12.2
 
   e2e:
     name: test (full suite)
