@@ -89,6 +89,15 @@ try {
 
 Write-Output "installed to ${installPath}:"
 & $installPath --version
+# Informational only: the install itself already succeeded (download,
+# checksum, optional cosign verify, copy all completed above). Without this
+# reset, a stray non-zero exit from the just-installed binary -- the one
+# concrete way this bit a CI runner (ci.yml's own fixture in the "install
+# script (windows)" job once used a decoy that doesn't understand
+# --version) -- becomes this whole script's own trailing $LASTEXITCODE,
+# which GitHub Actions' pwsh step runner treats as step failure even though
+# nothing here threw.
+$LASTEXITCODE = 0
 
 if (-not (($env:PATH -split [IO.Path]::PathSeparator) -contains $prefix)) {
     Write-Output "note: $prefix is not on PATH -- add it to use 'rgit' directly"
