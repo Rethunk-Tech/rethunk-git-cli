@@ -172,6 +172,12 @@ func TestRunCommitHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
 	root := t.TempDir()
 	gittest.Git(t, root, "init", "--quiet")
 	gittest.Git(t, root, "config", "core.ignorecase", "true")
+	// Identity must be set explicitly, same as gittest.New: an ambient
+	// global user.email/user.name (a developer's own machine) would
+	// otherwise mask a CI runner that has neither, which cannot commit at
+	// all ("empty ident name").
+	gittest.Git(t, root, "config", "user.email", "rgit-test@example.com")
+	gittest.Git(t, root, "config", "user.name", "rgit Test")
 	if err := os.WriteFile(filepath.Join(root, "Foo.GO"), []byte("package demo\n\nfunc First() {}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
