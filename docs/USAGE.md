@@ -485,12 +485,26 @@ $ rgit symbols auth.go
 ValidateToken
 ```
 
-`rgit symbols [--for-commit] <file>` lists every declared symbol that can be
-resolved from the worktree file, or from the file's `HEAD` blob when the
-worktree copy has been deleted, one symbol per line. A path present in neither
-the worktree nor `HEAD` still errors. `--for-commit` omits structured-data
-symbols that `rgit commit` refuses; it still exits successfully without output
-when the file is a supported structured-data file.
+`rgit symbols [--for-commit] [--with-lines] <file>` lists every declared symbol
+that can be resolved from the worktree file, or from the file's `HEAD` blob when
+the worktree copy has been deleted, one symbol per line. A path present in
+neither the worktree nor `HEAD` still errors. `--for-commit` omits
+structured-data symbols that `rgit commit` refuses; it still exits successfully
+without output when the file is a supported structured-data file.
+
+`--with-lines` emits each symbol's line range ahead of its anchor instead of the
+bare name, and composes with `--for-commit`:
+
+```console
+$ rgit symbols --with-lines auth.go
+1,3 @imports
+12,27 ValidateToken
+```
+
+The range is git's own `-L start,end` range for that symbol — the same range
+`rgit blame FILE:SYMBOL` and `rgit log FILE:SYMBOL` bound themselves to — so it
+can be handed straight to a reader that takes a line range. The record format is
+in [`CODES.md`](CODES.md#rgit-symbols---with-lines).
 
 `--help`/`-h` prints the command's usage text and exits 0. Exactly one file
 argument is required; a missing or extra argument prints the usage text to
@@ -541,8 +555,8 @@ Blame and § Languages above, [`CODES.md`](CODES.md#output-records)); `log`
 additionally takes `-p`/`--patch`, mutually exclusive with `--porcelain`,
 `--follow-rename`, `-n`/`--max-count`, and — only in its
 `--since`/`--until` shape — `--since`/`--until` themselves (§ Log and § Log
-by date and path above); `symbols` takes `--for-commit` and `--help` (§
-Symbols above); `doctor` takes `--porcelain`, `--deep`, and `--help`;
+by date and path above); `symbols` takes `--for-commit`, `--with-lines`, and
+`--help` (§ Symbols above); `doctor` takes `--porcelain`, `--deep`, and `--help`;
 `completion` and `context` take no flags beyond `--help`/`-h`
 (`completion` also takes its shell argument; `context`'s fixed output shape
 is the point — § Context above).

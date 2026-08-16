@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
 func TestRun_SymbolsHelpAndUsage(t *testing.T) {
@@ -190,5 +192,106 @@ func TestRunCommitHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
 	committed := gittest.Git(t, root, "cat-file", "-p", "HEAD:Foo.GO")
 	if !strings.Contains(committed, "func First()") {
 		t.Fatalf("committed Foo.GO omitted First: %q", committed)
+	}
+}
+
+// withLinesSource puts First on one line and Second across three, so a range
+// that collapsed a multi-line extent to its first line still fails.
+const withLinesSource = "package demo\n\nfunc First() {}\n\nfunc Second() {\n\treturn\n}\n"
+
+// symbolsFixture commits source as name in a fresh repository and returns its
+// root, so each --with-lines case states only what it is actually asserting.
+func symbolsFixture(t *testing.T, name, source string) string {
+	t.Helper()
+	root := t.TempDir()
+	gittest.Git(t, root, "init", "--quiet")
+	if err := os.WriteFile(filepath.Join(root, name), []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gittest.Git(t, root, "add", name)
+	gittest.Git(t, root, "-c", "user.name=rgit test", "-c", "user.email=rgit@example.invalid", "commit", "--quiet", "-m", "initial")
+	return root
+}
+
+func TestRunSymbolsWithLinesEmitsLineRanges(t *testing.T) {
+	root := symbolsFixture(t, "main.go", withLinesSource)
+
+	var stdout, stderr strings.Builder
+	code := runSymbols(context.Background(), root, []string{"--with-lines", "main.go"}, &stdout, &stderr)
+	if code != exitcode.Success {
+		t.Fatalf("runSymbols(--with-lines) = %d, stderr = %q", code, stderr.String())
+	}
+	want := "3,3\tFirst\n5,7\tSecond\n"
+	if stdout.String() != want {
+		t.Fatalf("runSymbols(--with-lines) = %q, want %q", stdout.String(), want)
+	}
+}
+
+// The bare form is the one every existing caller already parses, so it stays
+// byte-identical whether or not the new flag exists.
+func TestRunSymbolsBareOutputUnchangedByWithLines(t *testing.T) {
+	root := symbolsFixture(t, "main.go", withLinesSource)
+
+	var stdout, stderr strings.Builder
+	code := runSymbols(context.Background(), root, []string{"main.go"}, &stdout, &stderr)
+	if code != exitcode.Success {
+		t.Fatalf("runSymbols() = %d, stderr = %q", code, stderr.String())
+	}
+	if want := "First\nSecond\n"; stdout.String() != want {
+		t.Fatalf("runSymbols() = %q, want %q", stdout.String(), want)
+	}
+}
+
+func TestRunSymbolsWithLinesForCommitStillOmitsStructuredData(t *testing.T) {
+	root := symbolsFixture(t, "config.json", "{\n  \"name\": \"demo\"\n}\n")
+
+	var stdout, stderr strings.Builder
+	code := runSymbols(context.Background(), root, []string{"--with-lines", "--for-commit", "config.json"}, &stdout, &stderr)
+	if code != exitcode.Success {
+		t.Fatalf("runSymbols(--with-lines --for-commit) = %d, stderr = %q", code, stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("runSymbols(--with-lines --for-commit) = %q, want empty stdout", stdout.String())
+	}
+}
+
+// The range --with-lines reports has to be the range blame and log bound
+// themselves to: both call lineRange over resolve.Resolve's own extent
+// (blame.go, log.go). Resolving each anchor back through that path, rather
+// than through the table --with-lines itself read, is what would catch a
+// second resolution path drifting away from the first.
+func TestRunSymbolsWithLinesAgreesWithResolvedExtent(t *testing.T) {
+	root := symbolsFixture(t, "main.go", withLinesSource)
+	src := []byte(withLinesSource)
+
+	lang, ok, _, err := resolve.LanguageForPathFolding(root, "main.go", false,
+		func() ([]byte, bool, error) { return nil, false, nil })
+	if err != nil || !ok {
+		t.Fatalf("LanguageForPathFolding() ok = %v, err = %v", ok, err)
+	}
+
+	var stdout, stderr strings.Builder
+	code := runSymbols(context.Background(), root, []string{"--with-lines", "main.go"}, &stdout, &stderr)
+	if code != exitcode.Success {
+		t.Fatalf("runSymbols(--with-lines) = %d, stderr = %q", code, stderr.String())
+	}
+
+	records := strings.Split(strings.TrimSuffix(stdout.String(), "\n"), "\n")
+	if len(records) == 0 {
+		t.Fatal("runSymbols(--with-lines) emitted no records")
+	}
+	for _, record := range records {
+		gotRange, anchor, found := strings.Cut(record, "\t")
+		if !found {
+			t.Fatalf("record %q has no tab separator", record)
+		}
+		res, err := resolve.Resolve(lang, src, anchor)
+		if err != nil {
+			t.Fatalf("resolve.Resolve(%q) = %v", anchor, err)
+		}
+		start, end := lineRange(src, res.Extent)
+		if want := fmt.Sprintf("%d,%d", start, end); gotRange != want {
+			t.Errorf("--with-lines range for %q = %q, want %q", anchor, gotRange, want)
+		}
 	}
 }

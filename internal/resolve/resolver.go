@@ -112,6 +112,28 @@ func (f *File) DeclOrder() []string {
 	return out
 }
 
+// Declared is one declaration's anchor paired with the extent that names it.
+type Declared struct {
+	// Anchor is the string Resolve accepts back, exactly as DeclOrder emits it.
+	Anchor string
+
+	// Extent is the same byte extent Resolve returns for that anchor.
+	Extent Extent
+}
+
+// DeclExtents returns each declaration's anchor and extent, in source order —
+// DeclOrder's own table, keeping the extent DeclOrder drops. A caller that
+// wants the lines a symbol occupies needs both halves, and reading them off
+// this one index is what stops the anchor and the extent from being resolved
+// by two paths that could drift into disagreeing.
+func (f *File) DeclExtents() []Declared {
+	out := make([]Declared, len(f.idx.order))
+	for i, s := range f.idx.order {
+		out[i] = Declared{Anchor: s.Qualified, Extent: s.Full}
+	}
+	return out
+}
+
 // Resolve maps anchor — a bare or qualified symbol name, an ordinal form
 // like "init#2", a gopls-spelled receiver like "(*A).Get", or a pseudo-
 // anchor ("@header", "@imports", "@toplevel") — to the byte extent that
@@ -141,6 +163,19 @@ func DeclOrder(lang Language, src []byte) ([]string, error) {
 	}
 	defer f.Close()
 	return f.DeclOrder(), nil
+}
+
+// DeclExtents returns each top-level declaration's anchor and extent in src,
+// in source order — DeclOrder's table with the extent kept. Exported for the
+// same reason DeclOrder is: the qualification rules, and now the extent each
+// anchor names, have exactly one implementation to disagree with.
+func DeclExtents(lang Language, src []byte) ([]Declared, error) {
+	f, err := Open(lang, src)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return f.DeclExtents(), nil
 }
 
 // parserCache holds one *ts.Parser per distinct *ts.Language, reused across

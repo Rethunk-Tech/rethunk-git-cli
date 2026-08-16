@@ -11,16 +11,20 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
-const symbolsHelp = `usage: rgit symbols [--for-commit] <file>
+const symbolsHelp = `usage: rgit symbols [--for-commit] [--with-lines] <file>
 
 List every declared symbol that can be resolved from the worktree file or its HEAD blob.
 --for-commit  Omit structured-data symbols that commit refuses.
+--with-lines  Emit "start,end<TAB>symbol" instead of the bare name, where the
+              range is git's own -L range for that symbol -- the same range
+              blame and log bound themselves to.
 
 Full reference: docs/USAGE.md
 `
 
 func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	forCommit := false
+	withLines := false
 	positionals := make([]string, 0, 1)
 	for _, arg := range args {
 		switch arg {
@@ -29,6 +33,8 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 			return exitcode.Success
 		case "--for-commit":
 			forCommit = true
+		case "--with-lines":
+			withLines = true
 		default:
 			positionals = append(positionals, arg)
 		}
@@ -93,6 +99,21 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 		return exitcode.UnsupportedLanguage
 	}
 	if forCommit && resolve.IsStructuredData(lang) {
+		return exitcode.Success
+	}
+
+	if withLines {
+		decls, err := resolve.DeclExtents(lang, src)
+		if err != nil {
+			fmt.Fprintf(stderr, "rgit: cannot resolve symbols in %q: %v\n", positionals[0], err)
+			return exitcode.GitFailure
+		}
+		for _, decl := range decls {
+			// lineRange, not a second conversion: blame and log turn the
+			// same extent into the same range through it.
+			start, end := lineRange(src, decl.Extent)
+			fmt.Fprintf(stdout, "%d,%d\t%s\n", start, end, decl.Anchor)
+		}
 		return exitcode.Success
 	}
 

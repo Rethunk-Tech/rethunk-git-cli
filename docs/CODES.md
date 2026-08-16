@@ -338,6 +338,30 @@ prints git's own `git log -L` output unmodified, the same "pass through
 git's own format rather than inventing a second one" choice `rgit blame
 --porcelain` already makes.
 
+### `rgit symbols --with-lines`
+
+```text
+START,END<TAB>SYMBOL
+1,3 @imports
+12,27 ValidateToken
+```
+
+One record per declared symbol, in source order — the same symbols and the
+same order the bare `rgit symbols` form prints, which is unchanged by this
+flag. `START,END` is git's own `-L` range grammar: 1-based and inclusive on
+both ends, over the source the symbols were resolved from (the worktree file,
+or its `HEAD` blob when the worktree copy is gone).
+
+The range is the one `rgit blame FILE:SYMBOL` and `rgit log FILE:SYMBOL` bound
+themselves to, not a second measurement of the same thing — all three convert
+the identical resolved extent. A symbol whose range disagreed with what blame
+blames would be a resolver bug, not a formatting difference.
+
+`SYMBOL` is last because it is the unbounded field: an anchor may carry
+container qualification, an ordinal (`init#2`), or a gopls-spelled receiver,
+while the range never contains a tab. Splitting on the first tab is therefore
+always correct.
+
 ## Rules the diff and commit forms obey
 
 These rules are specific to `SYMBOL`-bearing records — `rgit languages

@@ -6,6 +6,14 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `rgit symbols --with-lines` emits each symbol's `start,end` line range ahead
+  of its anchor, using git's own `-L` range grammar — the same range `blame`
+  and `log` bound themselves to. See
+  [`docs/USAGE.md`](docs/USAGE.md#symbols) and
+  [`docs/CODES.md`](docs/CODES.md#rgit-symbols---with-lines).
+
 ## [1.3.0] — 2026-08-15
 
 ### Added
