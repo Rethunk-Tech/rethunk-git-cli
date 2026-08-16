@@ -26,11 +26,10 @@ func (f *fakeDeclResolver) Resolve(anchor string) (*resolve.Resolution, error) {
 	return nil, f.err
 }
 
-// TestResolveRegions_DeclOrderNameRejectedByResolveIsAnError guards Task
-// 18's decision: this condition is an internal inconsistency, not a
-// legitimate-input edge case, so it must surface as a loud error rather
-// than silently shrinking the region set (which previously left a row
-// mis-reported with nothing to say why).
+// TestResolveRegions_DeclOrderNameRejectedByResolveIsAnError guards against
+// treating this condition as a legitimate-input edge case: it is an
+// internal inconsistency, so it must surface as a loud error rather than
+// silently shrinking the region set.
 func TestResolveRegions_DeclOrderNameRejectedByResolveIsAnError(t *testing.T) {
 	t.Parallel()
 	lang, ok := resolve.ForExtension(".go")

@@ -446,11 +446,10 @@ func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''
 // TestRun_BatchesGitCatFileAcrossManyChangedFiles is the measured half of
 // the batching claim: buildFileReport's own read of each side, for N
 // changed files each with a real content edit against a rev (not the
-// worktree, which never shells out to cat-file at all), used to cost one
-// `git cat-file` subprocess per file per side before prefetchBlobs existed
-// -- 2N invocations for N files. It now costs exactly one, regardless of N,
-// because Run's own loop calls prefetchBlobs (and so BatchCatFile) a single
-// time before the per-file loop even starts.
+// worktree, which never shells out to cat-file at all), costs exactly one
+// `git cat-file` subprocess total, regardless of N, because Run's own loop
+// calls prefetchBlobs (and so BatchCatFile) a single time before the
+// per-file loop even starts.
 func TestRun_BatchesGitCatFileAcrossManyChangedFiles(t *testing.T) {
 	// cannot Parallel because t.Setenv below
 	dir, repo := gittest.New(t)
@@ -928,11 +927,10 @@ func findFile(files []FileReport, path string) (FileReport, bool) {
 
 // TestRun_BinaryChangeReportsDashCounts pins run.go's binary short-circuit
 // (buildFileReport's addedStr == "-" && deletedStr == "-" branch) at the
-// unit lane: previously only rgit_e2e_test.go's
-// TestDiff_BinaryRowUsesDashCounts proved a real worktree binary change
-// surfaces as StatusBinary with "-" counts; render_test.go only ever
-// constructed StatusBinary rows by hand for rendering, never exercised
-// Run's own classification of one.
+// unit lane: rgit_e2e_test.go's TestDiff_BinaryRowUsesDashCounts proves a
+// real worktree binary change surfaces as StatusBinary with "-" counts
+// end to end, but render_test.go only ever constructs StatusBinary rows by
+// hand for rendering, never exercising Run's own classification of one.
 func TestRun_BinaryChangeReportsDashCounts(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t)

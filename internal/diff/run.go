@@ -603,7 +603,7 @@ func sortReport(report *Report) {
 // resolution model is built to tolerate (specs/design.md).
 //
 // f is newSrc already parsed by buildFileReport's own call to resolve.Open
-// -- this function no longer opens its own; a parse failure is buildFileReport's
+// -- this function does not open its own; a parse failure is buildFileReport's
 // to report (it already fails loudly there, on the very next parse of the
 // same file for attribution), not something crossCheckFile silently
 // downgraded to "not degraded" while a sibling call moments later hit the
