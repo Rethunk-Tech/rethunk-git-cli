@@ -164,7 +164,7 @@ func TestAdd_AlreadyStagedDeletionSucceeds(t *testing.T) {
 // matches nothing, so tolerating it must not cost every other named path
 // its staging. Naming a bogus path alongside real ones must still fail
 // (and leave the index exactly as found), or a typo would silently drop
-// the paths beside it the same way the already-staged case used to.
+// every path beside it.
 func TestAdd_MixedAlreadyStagedDeletionStagesTheRest(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t)
