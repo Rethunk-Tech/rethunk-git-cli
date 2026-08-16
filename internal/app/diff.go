@@ -281,9 +281,9 @@ func symRefsFromFlag(syms []string) ([]diffpkg.SymRef, error) {
 // internal/diff/run.go's validateSym populates Path on this exact error
 // (Code == exitcode.UnsupportedLanguage) precisely so this never has to
 // recover the file by matching the failed anchor's bare name back against
-// the --sym list, which is what this function used to do: two files
-// sharing a bare symbol name resolved to whichever came first in that
-// list. Path empty (ok=false) should not happen on this error, since
+// the --sym list -- two files sharing a bare symbol name would otherwise
+// resolve to whichever came first in that list. Path empty (ok=false)
+// should not happen on this error, since
 // validateSym always sets it before returning, but a caller with no other
 // site to attach one from is still an honest "no hint" rather than a
 // panic.

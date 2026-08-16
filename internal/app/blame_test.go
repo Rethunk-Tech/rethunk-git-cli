@@ -13,8 +13,8 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
 )
 
-// assertAnchorUsageRefusals runs the usage-refusal matrix blame_test.go and
-// log_test.go used to each pin in full separately (m31): the six shapes
+// assertAnchorUsageRefusals runs the usage-refusal matrix shared by
+// blame_test.go and log_test.go: the six shapes
 // every "one FILE:SYMBOL positional" command built on shared.go's
 // parseAnchorCommandArgs must refuse the same way -- --help, no arguments,
 // a bare pathspec, a bare "--", a second positional, and an unrecognized

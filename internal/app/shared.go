@@ -388,11 +388,9 @@ func unsupportedLanguageHint(ext string) string {
 
 // refuseExtraArgs is the shared "this command takes no arguments beyond
 // --help" refusal for context.go and doctor.go -- the two hand-parsed
-// commands with no flag surface at all. They used to word this
-// differently (context's own "context takes no arguments" prose vs.
-// doctor's "unrecognized argument %q", which also quoted only args[0] and
-// silently dropped the rest): one wording, and the offending argument is
-// always named. Called only once len(args) != 0 is already known, so
+// commands with no flag surface at all. One wording covers both, and the
+// offending argument is always named. Called only once len(args) != 0 is
+// already known, so
 // args[0] is always the first (and, for these two commands, only ever
 // reachable) offending token -- see runDoctor/runContext's own help-first
 // check just above each call site.

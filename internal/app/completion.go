@@ -117,8 +117,6 @@ const rgitCommitFlags = "-m --message -F --message-file -s --signoff --trailer -
 // that languages.go, doctor.go, blame.go, log.go, context.go, symbols.go,
 // and this file parse their own args by hand rather than building a
 // pflag.FlagSet.
-// -- completion previously offered none of them at all, since neither
-// shell script's case statement had an entry for these commands.
 // TestCompletionFlags_MatchLiveFlagSets checks all of them against their
 // own --help output the same way.
 const rgitLanguagesFlags = "--porcelain --in-repo -h --help"

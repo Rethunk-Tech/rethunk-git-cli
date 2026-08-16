@@ -268,11 +268,11 @@ func TestBuildContextStream(t *testing.T) {
 	})
 
 	// TestBuildContextStream/"the X record itself never pushes the stream
-	// past budget" is the regression pin: the trailing X record used to be
-	// appended unconditionally after the budget-bounded loop, so its own
-	// bytes could push the total past budget -- breaking the "capped at 16
-	// KiB" contract runContext's own help text states as a hard limit. A
-	// budget just past what the record content alone needs, but too tight
+	// past budget" is the regression pin for the "capped at 16 KiB" contract
+	// runContext's own help text states as a hard limit: the trailing X
+	// record's own bytes must never push the total past budget, even though
+	// it is appended after the budget-bounded loop that shapes everything
+	// else. A budget just past what the record content alone needs, but too tight
 	// to also fit the marker alongside any of it, must still shed every
 	// record rather than let the marker overrun budget.
 	t.Run("the X record itself never pushes the stream past budget", func(t *testing.T) {
