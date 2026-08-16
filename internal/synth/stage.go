@@ -340,8 +340,8 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 	}
 
 	for _, fp := range plan.files {
-		// One batched language-server query per file, not one per anchor
-		// (m20) -- every anchor named in this file has already been
+		// One batched language-server query per file, not one per anchor --
+		// every anchor named in this file has already been
 		// resolved and its op built above, so a mismatch here still aborts
 		// the whole plan before Apply ever runs.
 		tsOnly, err := fp.crossCheckPending(ctx, sess, root)

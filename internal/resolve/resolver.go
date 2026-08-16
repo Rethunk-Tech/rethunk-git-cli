@@ -180,7 +180,7 @@ func DeclExtents(lang Language, src []byte) ([]Declared, error) {
 
 // parserCache holds one *ts.Parser per distinct *ts.Language, reused across
 // every resolve.Open call rather than constructing and discarding one per
-// parse. m5's own fix (internal/diff's attributeSymbolsOpen) already cut how
+// parse. internal/diff's attributeSymbolsOpen already cuts how
 // many times a file gets opened; this cuts what each Open itself costs --
 // ts.NewParser() is real construction work (allocating the parser's C-side
 // state), not a cheap wrapper, and buildFileReport/attributeSymbolsOpen and
