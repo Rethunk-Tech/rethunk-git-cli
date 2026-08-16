@@ -614,9 +614,9 @@ func TestDiff_AnchorRoundTrip(t *testing.T) {
 	}
 }
 
-// TestDiff_ModeRowOnChmod is thinned to the human-readable text rendering
-// (m27): the porcelain half -- a mode-only change surfacing as MODE at
-// all -- is already pinned at the unit level
+// TestDiff_ModeRowOnChmod is thinned to the human-readable text rendering:
+// the porcelain half -- a mode-only change surfacing as MODE at all -- is
+// already pinned at the unit level
 // (internal/app/lanes_test.go's TestRun_DiffUntrackedFileAndModeChange),
 // which covered it via both the default and --staged scopes. What only
 // this e2e case still proves is that the *human* output names both the
@@ -1094,7 +1094,7 @@ func TestCommit_PushWithNoUpstreamNamesTheFix(t *testing.T) {
 	// basis would silently break them). What it adds on top of git's own
 	// failure is a named, concrete fix.
 	//
-	// m26: also pinned at the unit level
+	// Also pinned at the unit level
 	// (internal/app/app_test.go's TestRun_PushFailureReportsUpstreamHint),
 	// deliberately -- see that test's own comment for why this is not
 	// plain duplication: it triggers push failure via no remote configured
