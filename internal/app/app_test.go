@@ -748,7 +748,7 @@ func TestRun_GPGSignShorthandReachesGit(t *testing.T) {
 // configured at all, so `git push` fails for the plainest possible
 // reason and HasUpstream's negative answer is real, not assumed.
 //
-// m26: this is deliberately pinned again in
+// This is deliberately pinned again in
 // cmd/rgit/rgit_e2e_test.go's TestCommit_PushWithNoUpstreamNamesTheFix, the
 // same dual-pin CONTRIBUTING.md sanctions for hook rejection
 // (lanes_test.go's own TestRun_HookRejectionLeavesStagingIntact) -- but for

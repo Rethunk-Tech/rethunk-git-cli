@@ -105,7 +105,7 @@ const contextByteBudget = 16384
 // runContext is hand-parsed and has no runtime flag surface beyond --help.
 //
 // --help wins wherever it appears in args, not only as the sole argument
-// (m12: every hand-parsed command follows the same rule now, matching
+// (every hand-parsed command follows the same rule now, matching
 // blame.go/log.go's own loop) -- but since context takes nothing else,
 // that reduces to just checking args[0]: any other token has already
 // failed by the time a later --help could be reached.

@@ -25,10 +25,10 @@ Persistent installation: docs/INSTALL.md § Shell completion.
 Full reference: docs/USAGE.md
 `
 
-// runCompletion's --help check is a loop rather than a sole-argument test
-// (m12: help wins wherever it appears, the same rule as every other
+// runCompletion's --help check is a loop rather than a sole-argument test:
+// help wins wherever it appears, the same rule as every other
 // hand-parsed command, e.g. `rgit completion bash --help` -- not only
-// `rgit completion --help` on its own) so it can still see past the shell
+// `rgit completion --help` on its own -- so it can still see past the shell
 // positional to find it.
 func runCompletion(args []string, stdout, stderr io.Writer) exitcode.Code {
 	var shell string
@@ -72,7 +72,7 @@ func runCompletion(args []string, stdout, stderr io.Writer) exitcode.Code {
 		_, _ = io.WriteString(stdout, pwshCompletionScript)
 		return exitcode.Success
 	default:
-		// m14: the missing-shell branch above already prints completionHelp;
+		// The missing-shell branch above already prints completionHelp;
 		// an unrecognized shell name is the same kind of usage error and
 		// must not leave the caller with less guidance than a bare
 		// `rgit completion` gets.

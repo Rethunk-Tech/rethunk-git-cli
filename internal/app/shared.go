@@ -428,7 +428,7 @@ type anchorCommandFlag struct {
 
 // parseAnchorCommandArgs is the "one FILE:SYMBOL positional plus a handful
 // of boolean flags" arg loop blame.go and log.go's own FILE:SYMBOL form
-// (runLogAnchor) share (m10): a future boolean flag landing on one
+// (runLogAnchor) share: a future boolean flag landing on one
 // command's own copy and not the other's was exactly the drift this
 // shares out. log.go's --since/--until form (runLogPathScoped) does not
 // use this loop -- its arity (zero or more path positionals, no required
@@ -437,7 +437,7 @@ type anchorCommandFlag struct {
 // diff.go already do for their own larger flag surfaces:
 //
 //   - --help/-h always wins, checked first every iteration -- so it is
-//     found "anywhere" in args (m12's rule for every hand-parsed command),
+//     found "anywhere" in args (the rule for every hand-parsed command),
 //     not only as the sole argument or only before the positional.
 //   - A recognized flag from flags sets its bool and is consumed.
 //   - A second positional, or an unrecognized "-"-prefixed token, is

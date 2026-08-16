@@ -14,7 +14,7 @@ import (
 )
 
 func TestRun_LogHelpAndUsage(t *testing.T) {
-	assertAnchorUsageRefusals(t, "log") // shared with blame_test.go (m31)
+	assertAnchorUsageRefusals(t, "log") // shared with blame_test.go
 
 	t.Run("--porcelain and --patch are mutually exclusive", func(t *testing.T) {
 		chdirTempRepo(t)

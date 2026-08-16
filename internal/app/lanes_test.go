@@ -309,8 +309,8 @@ func TestRun_FixupAmendAndRewordPrefixes(t *testing.T) {
 	}
 }
 
-// TestRun_FixupWithMessageAppendsRatherThanConflicts is m24: --fixup plus
-// -m is not the "-m and -F are mutually exclusive" shape of conflict --
+// TestRun_FixupWithMessageAppendsRatherThanConflicts covers --fixup plus
+// -m: not the "-m and -F are mutually exclusive" shape of conflict --
 // git appends -m's text as an extra body paragraph below the generated
 // "fixup! <original subject>" subject, and that behaviour was only proven
 // through the built binary (cmd/rgit/rgit_e2e_test.go's identically named
@@ -328,7 +328,7 @@ func TestRun_FixupWithMessageAppendsRatherThanConflicts(t *testing.T) {
 	qt.Assert(t, qt.StringContains(body, "UNIQUE_BODY_MARKER"))
 }
 
-// TestRun_NoGPGSignOverridesConfiguredGPGSign is m25's --no-gpg-sign half:
+// TestRun_NoGPGSignOverridesConfiguredGPGSign covers the --no-gpg-sign half:
 // commit.gpgsign=true only proved it overrode a configured signing default
 // through the built binary
 // (cmd/rgit/rgit_e2e_test.go's TestCommit_GPGSignFlagsForwarded); -S itself
@@ -384,7 +384,7 @@ func TestRun_ResetAuthorForwarded(t *testing.T) {
 		gitOut(t, dir, "log", "-1", "--format=%cn")))
 }
 
-// TestRun_DiffUnbornBranchListsEverythingCommittable is m28: a fresh repo
+// TestRun_DiffUnbornBranchListsEverythingCommittable: a fresh repo
 // with no HEAD cannot run `git diff HEAD` for the default scope, so it
 // compares against the empty tree instead (committableBase,
 // internal/diff/scope.go) -- both the staged and untracked halves of that
@@ -410,7 +410,7 @@ func TestRun_DiffUnbornBranchListsEverythingCommittable(t *testing.T) {
 	qt.Assert(t, qt.StringContains(stdout, "untracked.go\tUntracked\tMOD\t"))
 }
 
-// TestRun_PushAfterSuccessfulCommit is m29: a successful --push (as
+// TestRun_PushAfterSuccessfulCommit: a successful --push (as
 // opposed to the failure path TestRun_PushFailureReportsUpstreamHint,
 // app_test.go, already covers) was only proven through the built binary
 // (cmd/rgit/rgit_e2e_test.go's identically named case) -- a real bare
