@@ -529,16 +529,43 @@ func (r *Repo) Add(ctx context.Context, pathspecs ...string) error {
 	if err != nil {
 		return err
 	}
-	if res.ExitCode != 0 {
-		// A path whose removal is already staged matches nothing in either
-		// the worktree or the index, so `git add` calls it a bad pathspec.
-		// Naming something that is already staged exactly as asked is not an
-		// error — the commit will include it either way — and failing here
-		// would make `rgit commit <path>` unusable after a `git rm`.
-		if staged, serr := r.hasStagedChange(ctx, pathspecs); serr == nil && staged {
-			return nil
+	if res.ExitCode == 0 {
+		return nil
+	}
+	// git add is all-or-nothing: one bad pathspec fails the whole
+	// invocation and stages none of the others. A path whose removal is
+	// already staged is exactly that -- it matches nothing in either the
+	// worktree or the index -- so tolerating it here must not cost every
+	// other named path its staging. Classify each pathspec on its own with
+	// a non-mutating --dry-run before staging anything, so a genuine bad
+	// pathspec is still reported, and reported before any of the good ones
+	// are staged.
+	var remaining []string
+	for _, spec := range pathspecs {
+		dry, derr := r.run(ctx, nil, "add", "--dry-run", "--", spec)
+		if derr != nil {
+			return derr
 		}
+		if dry.ExitCode == 0 {
+			remaining = append(remaining, spec)
+			continue
+		}
+		// Naming something already staged exactly as asked is not an error
+		// -- the commit will include it either way -- and failing here
+		// would make `rgit commit <path>` unusable after a `git rm`.
+		if staged, serr := r.hasStagedChange(ctx, []string{spec}); serr == nil && staged {
+			continue
+		}
+		// Report the original combined failure, not the dry-run's own: it
+		// names every pathspec the caller typed, which is what the message
+		// should show.
 		return gitError(args, res)
+	}
+	if len(remaining) == 0 {
+		return nil
+	}
+	if _, err := r.checked(ctx, append([]string{"add", "--"}, remaining...)...); err != nil {
+		return err
 	}
 	return nil
 }

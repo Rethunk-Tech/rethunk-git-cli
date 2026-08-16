@@ -26,6 +26,12 @@ Notable changes to `rgit`. The format follows
   module's own version is available — which was being ignored. See
   [`docs/USAGE.md`](docs/USAGE.md#help).
 
+- `rgit commit <paths...>` dropped every named path when one of them was
+  already staged as a deletion: `git add` fails its whole invocation on the
+  one pathspec that matches nothing, so the rest were silently never staged
+  even though the printed summary and exit code both said they were. See
+  [`docs/USAGE.md`](docs/USAGE.md#commands).
+
 ## [1.3.0] — 2026-08-15
 
 ### Added

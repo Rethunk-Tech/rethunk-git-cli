@@ -159,6 +159,48 @@ func TestAdd_AlreadyStagedDeletionSucceeds(t *testing.T) {
 	}
 }
 
+// TestAdd_MixedAlreadyStagedDeletionStagesTheRest pins Add's per-pathspec
+// tolerance: `git add` fails its whole invocation on the one pathspec that
+// matches nothing, so tolerating it must not cost every other named path
+// its staging. Naming a bogus path alongside real ones must still fail
+// (and leave the index exactly as found), or a typo would silently drop
+// the paths beside it the same way the already-staged case used to.
+func TestAdd_MixedAlreadyStagedDeletionStagesTheRest(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	ctx := context.Background()
+
+	gittest.Write(t, dir, "gone.md", "bye\n")
+	gittest.Write(t, dir, "keep.txt", "a\n")
+	gittest.Commit(t, dir, "chore: fixtures")
+	gittest.Git(t, dir, "rm", "-q", "gone.md")
+	gittest.Write(t, dir, "keep.txt", "a-modified\n")
+
+	if err := repo.Add(ctx, "gone.md", "keep.txt"); err != nil {
+		t.Fatalf("Add(already-staged deletion, modified file) = %v; want nil", err)
+	}
+	staged := gittest.Git(t, dir, "diff", "--cached", "--name-only")
+	if !strings.Contains(staged, "keep.txt") {
+		t.Errorf("git diff --cached --name-only = %q; want keep.txt staged alongside the tolerated deletion", staged)
+	}
+
+	t.Run("genuine bad pathspec still errors and stages nothing", func(t *testing.T) {
+		gittest.Write(t, dir, "other.txt", "c\n")
+		gittest.Commit(t, dir, "chore: other.txt")
+		gittest.Write(t, dir, "other.txt", "c-modified\n")
+
+		before := gittest.Git(t, dir, "diff", "--cached", "--name-only")
+		err := repo.Add(ctx, "other.txt", "does-not-exist.txt")
+		if err == nil {
+			t.Fatalf("Add(real path, bogus path) = nil; want error")
+		}
+		after := gittest.Git(t, dir, "diff", "--cached", "--name-only")
+		if after != before {
+			t.Errorf("index changed on a genuine bad-pathspec error: before %q, after %q", before, after)
+		}
+	})
+}
+
 // TestCatFileSample pins the bounded-read contract classifyPath relies on:
 // a sample no larger than the caller's own limit, the same exists=false
 // folding CatFile itself does for a missing path or revision, and -- the

@@ -875,6 +875,34 @@ func TestCommit_PathAlreadyStagedAsDeleted(t *testing.T) {
 	qt.Assert(t, qt.Not(qt.StringContains(gittest.Git(t, repo, "ls-files"), "gone.md")))
 }
 
+// TestCommit_OtherPathsSurviveAnAlreadyStagedDeletion is
+// TestCommit_PathAlreadyStagedAsDeleted's sibling: the same tolerated
+// pathspec named *alongside* other, genuinely dirty paths in one commit.
+// `git add` fails its whole invocation on the one pathspec that matches
+// nothing, so tolerating it must not cost the other named paths their
+// staging -- the commit and the summary reporting it must agree with what
+// actually landed.
+func TestCommit_OtherPathsSurviveAnAlreadyStagedDeletion(t *testing.T) {
+	t.Parallel()
+	repo := initRepoWithFile(t, "keep.txt", "a\n")
+	gittest.Write(t, repo, "doomed.txt", "b\n")
+	gittest.Write(t, repo, "other.txt", "c\n")
+	gittest.Git(t, repo, "add", "doomed.txt", "other.txt")
+	gittest.Git(t, repo, "commit", "-q", "-m", "chore: add doomed.txt, other.txt")
+	gittest.Git(t, repo, "rm", "-q", "doomed.txt")
+	gittest.Write(t, repo, "keep.txt", "a-modified\n")
+	gittest.Write(t, repo, "other.txt", "c-modified\n")
+
+	got := runRgit(t, repo, "commit", "-m", "test", "doomed.txt", "keep.txt", "other.txt")
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
+
+	stat := gittest.Git(t, repo, "show", "--stat", "--oneline", "HEAD")
+	qt.Assert(t, qt.StringContains(stat, "keep.txt"))
+	qt.Assert(t, qt.StringContains(stat, "other.txt"))
+	qt.Assert(t, qt.StringContains(stat, "doomed.txt"))
+	qt.Assert(t, qt.Equals(gittest.Git(t, repo, "status", "--porcelain"), ""))
+}
+
 func TestOutput_OrderedByPathThenPosition(t *testing.T) {
 	t.Parallel()
 	// Both listings sort alphabetically by path, then ascending by position
