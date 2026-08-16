@@ -182,11 +182,10 @@ func TestServerCatalog(t *testing.T) {
 // editor tooling.
 //
 // Beyond binary names, this also cross-checks each entry's wantSpawnArgs
-// against internal/lsp.ServerInfo.SpawnArgs (m21 in the 2026-07-29 audit):
-// before this, the argv internal/lsp/servers.go spawns a server with had no
-// counterpart here at all, so a spawn-shape change in one file (say,
-// bash-language-server's "start" becoming "--stdio") could silently drift
-// from what this catalog documents without either test noticing.
+// against internal/lsp.ServerInfo.SpawnArgs: without this check, a
+// spawn-shape change in one file (say, bash-language-server's "start"
+// becoming "--stdio") could silently drift from what this catalog
+// documents without either test noticing.
 func TestServerCatalog_MatchesLSPServers(t *testing.T) {
 	t.Parallel()
 

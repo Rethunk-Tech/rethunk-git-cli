@@ -80,10 +80,9 @@ type serverEntry struct {
 	// counterpart in internal/lsp.Servers() (taplo) or a transportSocket
 	// one (gopls -- its argv is only known at spawn time, built around a
 	// socket path this catalog never sees). Only
-	// TestServerCatalog_MatchesLSPServers reads this field: before m21 (the
-	// 2026-07-29 audit), spawn argv shapes lived solely in
-	// internal/lsp/servers.go with nothing to catch them drifting from
-	// what this installer sets a user up to run.
+	// TestServerCatalog_MatchesLSPServers reads this field, catching spawn
+	// argv shapes drifting between internal/lsp/servers.go and what this
+	// installer sets a user up to run.
 	wantSpawnArgs []string
 }
 
