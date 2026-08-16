@@ -109,9 +109,9 @@ type filePlan struct {
 	// pendingCrossCheck accumulates every worktree resolution classify
 	// resolved for this file that still needs verifying against a live
 	// language server (deferCrossCheck). crossCheckPending drains it in one
-	// batched query per file instead of classify dialing once per anchor
-	// (m20: this used to be N documentSymbol round trips for N anchors in
-	// one file, where internal/diff's own crossCheckFile already paid one).
+	// batched query per file instead of classify dialing once per anchor --
+	// N documentSymbol round trips for N anchors in one file, where
+	// internal/diff's own crossCheckFile already pays one.
 	pendingCrossCheck []*resolve.Resolution
 }
 
@@ -460,11 +460,8 @@ func (fp *filePlan) addPreamble(named map[string]bool) (pairs []preambleOp) {
 }
 
 // isOrdinalAnchor reports whether anchor uses docs/ANCHORS.md's positional
-// "Bare#N" form. resolve.ParseOrdinal is the one parse of this shape now --
-// this used to carry its own copy (n > 0, non-empty bare), which happened to
-// already match the rule crosscheck.go's own former splitOrdinal did not
-// enforce; extracting resolve.ParseOrdinal picked this file's stricter rule
-// as the canonical one, so converting here is behavior-identical.
+// "Bare#N" form (n > 0, non-empty bare), delegating to resolve.ParseOrdinal,
+// the one parse of this shape.
 func isOrdinalAnchor(anchor string) bool {
 	_, _, ok := resolve.ParseOrdinal(anchor)
 	return ok

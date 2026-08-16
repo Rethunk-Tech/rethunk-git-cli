@@ -16,12 +16,11 @@ import (
 // mutating I/O and no LSP round trip of its own -- a symbol that needs
 // verifying against a live language server is only queued onto
 // fp.pendingCrossCheck here; crossCheckPending below is what actually
-// dials, once per file rather than once per anchor (m20's own fix: a
-// commit naming several symbols in one file used to pay one documentSymbol
-// round trip per anchor, the same query repeated, where internal/diff's
-// own crossCheckFile already batches identically-shaped work into one).
-// Deferring the dial rather than dropping it keeps this a pure read, same
-// as before: a failure surfaces once crossCheckPending runs, still before
+// dials, once per file rather than once per anchor, matching internal/diff's
+// own crossCheckFile, which already batches identically-shaped work into
+// one query instead of paying one documentSymbol round trip per anchor.
+// Deferring the dial rather than dropping it keeps this a pure read:
+// a failure surfaces once crossCheckPending runs, still before
 // planStage returns a plan Apply could act on, so AGENTS.md's "resolve
 // every target before staging any" still holds.
 //
@@ -133,7 +132,8 @@ func (fp *filePlan) classify(anchor string) (op editOp, unchanged bool, err erro
 
 // deferCrossCheck queues res to be verified against a live language server
 // the next time crossCheckPending runs for this file, instead of dialing
-// immediately -- the batching m20's fix rests on. Pseudo-anchors are
+// immediately -- the batching classify and crossCheckPending together
+// provide. Pseudo-anchors are
 // skipped here too, proactively, even though resolve.CrossCheckExtents
 // also treats a Pseudo entry as exempt internally -- docs/ANCHORS.md
 // documents the exemption as the caller's rule to know, not something to
@@ -149,9 +149,9 @@ func (fp *filePlan) deferCrossCheck(res *resolve.Resolution) {
 // crossCheckPending verifies every resolution deferCrossCheck queued for
 // this file against a live language server, in one query -- the same
 // per-file batching internal/diff's own crossCheckFile already does via
-// resolve.CrossCheckExtents, rather than the one-documentSymbol-round-trip-
-// per-anchor query classify used to issue directly (m20). Only the
-// worktree side is ever queued (deferCrossCheck's callers, classify's own
+// resolve.CrossCheckExtents, rather than issuing one documentSymbol round
+// trip per anchor directly. Only the worktree side is ever queued
+// (deferCrossCheck's callers, classify's own
 // two non-deletion branches), matching CrossCheckExtents' own worktree-only
 // contract.
 //
@@ -160,7 +160,7 @@ func (fp *filePlan) deferCrossCheck(res *resolve.Resolution) {
 // and its op built (planStage's own final pass over plan.files), so a
 // mismatch here still aborts planStage before it ever returns a plan Apply
 // could act on -- AGENTS.md's "resolve every target before staging any"
-// holds exactly as it did when this dialed inline.
+// still holds.
 func (fp *filePlan) crossCheckPending(ctx context.Context, sess *lsp.Session, root string) (tsOnly bool, err error) {
 	if len(fp.pendingCrossCheck) == 0 {
 		return false, nil

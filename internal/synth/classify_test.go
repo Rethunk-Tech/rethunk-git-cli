@@ -26,13 +26,13 @@ func stagedBlob(t *testing.T, repo *gitx.Repo, path string) string {
 	return string(content)
 }
 
-// TestClassify_DefersCrossCheckToOneBatchPerFile guards m20's own fix:
-// classify used to dial a live language server once per anchor
-// (fp.crossCheck, since deleted), so a commit naming N symbols in one file
-// paid N documentSymbol round trips where internal/diff's own crossCheckFile
-// already batches identically-shaped work into one. classify no longer
-// dials at all -- it only queues each worktree resolution onto
-// fp.pendingCrossCheck (deferCrossCheck) -- so two anchors in the same file
+// TestClassify_DefersCrossCheckToOneBatchPerFile guards the batching
+// contract: classify never dials a live language server itself -- it only
+// queues each worktree resolution onto fp.pendingCrossCheck
+// (deferCrossCheck) -- so a commit naming N symbols in one file pays a
+// single documentSymbol round trip per file, matching internal/diff's own
+// crossCheckFile, which already batches identically-shaped work into one.
+// Two anchors in the same file
 // must land in the identical, shared queue, in resolution order, ready for
 // crossCheckPending to drain in a single CrossCheckExtents call. No live or
 // mock server is needed to prove this: the batching is decided entirely by
@@ -63,16 +63,14 @@ func TestClassify_DefersCrossCheckToOneBatchPerFile(t *testing.T) {
 	qt.Assert(t, qt.DeepEquals(anchors, []string{"A", "B"}))
 }
 
-// TestEscalateToContainer_AmbiguousContainerPropagates pins the fix for a
-// silent-fallback bug: escalateToContainer used to treat every
-// *resolve.ResolveError alike when resolving a new member's own container,
-// including exitcode.AnchorAmbiguous, so a member whose container name
-// collides -- two duplicate TOML "[[servers]]" headers is the measured
-// shape -- proceeded to an ordinary top-level insertion instead of the
-// exit-4 ambiguity a direct "servers" anchor resolve already gives.
-// Spiked directly against the pre-fix code first (classify_spike_test.go,
-// since removed): it staged "port = 1" as a bare top-level entry between
-// the two tables with no error at all, silently producing malformed TOML.
+// TestEscalateToContainer_AmbiguousContainerPropagates pins
+// escalateToContainer's handling of a new member's own container
+// resolution: exitcode.AnchorAmbiguous must propagate rather than being
+// treated like every other *resolve.ResolveError, so a member whose
+// container name collides -- two duplicate TOML "[[servers]]" headers is
+// the measured shape -- surfaces the exit-4 ambiguity a direct "servers"
+// anchor resolve already gives, instead of proceeding to an ordinary
+// top-level insertion.
 func TestEscalateToContainer_AmbiguousContainerPropagates(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t)
@@ -104,14 +102,8 @@ func TestEscalateToContainer_AmbiguousContainerPropagates(t *testing.T) {
 //
 // Here the brand new "<em id=\"tagline\">" sits inside a brand new outer
 // wrapper "<div id=\"em\">" -- chosen so the wrapper's own id text ("em")
-// collides with the member's tag name, the coincidence escalateToContainer
-// used to key off. Spiked against the pre-fix code first
-// (classify_spike_test.go, since removed): it resolved "em" to that
-// unrelated wrapper, found the wrapper absent from HEAD too, and staged the
-// wrapper's ENTIRE extent -- section#content's original bytes duplicated
-// inside it, plus the untouched original div#app appended again after --
-// in place of the single named member. The fix skips container escalation
-// for HTML outright, so only "em#tagline" itself is spliced in, at its
+// collides with the member's tag name. Container escalation is skipped for
+// HTML outright, so only "em#tagline" itself is spliced in, at its
 // ordinary nearest-sibling position after section#content.
 func TestEscalateToContainer_HTMLNestedInsertIgnoresTagCoincidence(t *testing.T) {
 	t.Parallel()
