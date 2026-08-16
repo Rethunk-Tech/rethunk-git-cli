@@ -388,12 +388,30 @@ print their own hand-written usage text instead — surfaces small enough that a
 generated rendering was not worth building. A bare `rgit` (no command at all)
 is a usage error, not a help request — see § Exit codes.
 
-`rgit --version` prints `rgit <version>` on its first line and exits 0. The
-version is stamped at build time (`-ldflags "-X main.version=vX.Y.Z"`) and
-reads `dev` in a build that did not set one. That first line is the only one
-scripts should parse — a second line reports which optional/gated grammars
-this exact binary was compiled with (see § Languages below), so it can
-change independently of the version itself.
+`rgit --version` prints `rgit <version>` on its first line and exits 0:
+
+```console
+$ rgit --version
+rgit v1.3.0
+optional grammars: sql
+built with go1.26.6, linux/amd64
+```
+
+The version is stamped at build time (`-ldflags "-X main.version=vX.Y.Z"`),
+which `make install` and `cmd/rgit-install` both do. Without it, the version
+is recovered from what the toolchain embeds: a `go install …@vX.Y.Z` from the
+module proxy reports that tag, and a plain `go build` inside a checkout
+reports the abbreviated revision with `-dirty` where it applies — the same
+shape `git describe --tags --always --dirty` produces. Only a build with
+neither, such as one made outside a checkout or with `-buildvcs=false`, reads
+`dev`.
+
+That first line is the only one scripts should parse. The lines after it are
+free to grow: a second reports which optional/gated grammars this exact binary
+was compiled with (see § Languages below), so it can change independently of
+the version, and a third names the Go toolchain and platform it was built
+for — two binaries can report the same version and still differ there, which
+is what a bug report needs and what the reporter rarely thinks to include.
 
 ## Languages
 

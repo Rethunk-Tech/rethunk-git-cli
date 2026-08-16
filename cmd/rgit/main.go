@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime/debug"
+	"strings"
 	"syscall"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/app"
@@ -59,6 +60,20 @@ func resolveVersion(ldflags string, info *debug.BuildInfo, ok bool) string {
 	}
 	if !ok || info == nil {
 		return ldflags
+	}
+
+	// `go install ...@vX.Y.Z` builds from the module proxy rather than a
+	// checkout, so the go tool stamps no vcs.* settings at all and the
+	// revision path below finds nothing -- that install reported "dev" for a
+	// precisely known release. Main.Version is the only thing that path
+	// carries, so it is read first.
+	//
+	// An untagged local build instead gets a synthesized pseudo-version
+	// ("v0.0.0-20260816043017-f5d09e331c0e"), which is skipped: the
+	// abbreviated revision below says the same thing in the shape `git
+	// describe` produces, which is what every other install path prints.
+	if v := info.Main.Version; v != "" && v != "(devel)" && !strings.HasPrefix(v, "v0.0.0-") {
+		return v
 	}
 
 	const shortHashLen = 7

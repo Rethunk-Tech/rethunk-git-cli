@@ -8,11 +8,23 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit --version` gains a third line naming the Go toolchain and platform the
+  binary was built for. The first line is unchanged and remains the only one
+  scripts should parse. See [`docs/USAGE.md`](docs/USAGE.md#help).
+
 - `rgit symbols --with-lines` emits each symbol's `start,end` line range ahead
   of its anchor, using git's own `-L` range grammar — the same range `blame`
   and `log` bound themselves to. See
   [`docs/USAGE.md`](docs/USAGE.md#symbols) and
   [`docs/CODES.md`](docs/CODES.md#rgit-symbols---with-lines).
+
+### Fixed
+
+- `go install github.com/Rethunk-Tech/rethunk-git-cli/cmd/rgit@vX.Y.Z`
+  reported `dev`. That build comes from the module proxy rather than a
+  checkout, so the toolchain stamps no VCS metadata at all and only the
+  module's own version is available — which was being ignored. See
+  [`docs/USAGE.md`](docs/USAGE.md#help).
 
 ## [1.3.0] — 2026-08-15
 

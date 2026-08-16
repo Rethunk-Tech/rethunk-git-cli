@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -1310,6 +1311,14 @@ func TestRun_VersionReportsGrammars(t *testing.T) {
 	lines := strings.SplitN(stdout, "\n", 2)
 	qt.Assert(t, qt.Equals(lines[0], "rgit v0.0.0-test"))
 	qt.Assert(t, qt.StringContains(stdout, "optional grammars:"))
+
+	// A third line names the toolchain and platform. Two binaries can report
+	// the same version and still differ here, which is the ambiguity a bug
+	// report has to resolve and the reporter never thinks to include. It goes
+	// after the grammar line, never on the first, which stays a parsed
+	// contract.
+	qt.Assert(t, qt.StringContains(stdout, "built with go"))
+	qt.Assert(t, qt.StringContains(stdout, runtime.GOOS+"/"+runtime.GOARCH))
 }
 
 // TestRun_UnsupportedLanguageGetsNoRebuildHint pins the negative case: a

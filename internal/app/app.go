@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
@@ -57,6 +58,19 @@ and commit.
 Full reference: docs/USAGE.md
 `
 
+// versionBuildLine names the toolchain and platform this binary was built
+// for. It is the third line of --version, never the first: the first is a
+// parsed contract (docs/USAGE.md), and the grammar line already occupies the
+// second.
+//
+// Worth printing because it is free and because every one of these values can
+// differ between two binaries reporting the same version -- which is exactly
+// the ambiguity a bug report has to resolve, and the reporter never thinks to
+// include.
+func versionBuildLine() string {
+	return fmt.Sprintf("built with %s, %s/%s", runtime.Version(), runtime.GOOS, runtime.GOARCH)
+}
+
 // Run dispatches one rgit invocation and returns its exit code. version is
 // supplied by the caller so the build-time -ldflags value stays attached to
 // package main.
@@ -89,6 +103,7 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 		// never on it.
 		fmt.Fprintf(stdout, "rgit %s\n", version)
 		fmt.Fprintln(stdout, versionGrammarsLine())
+		fmt.Fprintln(stdout, versionBuildLine())
 		return exitcode.Success
 	case "diff":
 		return runDiff(ctx, dir, args[1:], stdout, stderr)

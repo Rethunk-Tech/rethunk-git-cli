@@ -67,6 +67,34 @@ func TestResolveVersion(t *testing.T) {
 			ok:   true,
 			want: "dev",
 		},
+		{
+			// `go install ...@v1.3.0` builds from the module proxy, not a
+			// checkout, so the go tool stamps no vcs.* settings at all --
+			// only Main.Version. Reading just the revision left this path
+			// reporting "dev" for a precisely known release.
+			name:    "module proxy install reports its own tag",
+			ldflags: "dev",
+			info:    &debug.BuildInfo{Main: debug.Module{Version: "v1.3.0"}},
+			ok:      true,
+			want:    "v1.3.0",
+		},
+		{
+			// An untagged local build gets a synthesized pseudo-version.
+			// The 7-character revision says the same thing in a form that
+			// matches `git describe`, which is what the other install paths
+			// already print.
+			name:    "synthesized pseudo-version yields to the revision",
+			ldflags: "dev",
+			info: &debug.BuildInfo{
+				Main: debug.Module{Version: "v0.0.0-20260816043017-f5d09e331c0e"},
+				Settings: []debug.BuildSetting{
+					{Key: "vcs.revision", Value: fullRevision},
+					{Key: "vcs.modified", Value: "false"},
+				},
+			},
+			ok:   true,
+			want: "f5d09e3",
+		},
 	}
 
 	for _, tt := range tests {
