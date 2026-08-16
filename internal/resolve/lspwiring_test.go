@@ -13,10 +13,10 @@ import (
 // servers map (keyed by Language.Name()), internal/lsp/client.go's
 // LanguageKindFor (keyed by file extension), and cmd/rgit-install/servers.go.
 // TestServerCatalog_MatchesLSPServers already guards install <-> lsp.Servers();
-// nothing previously asserted every servers-map language also has a working
-// didOpen languageId, so a newly added server entry with no matching
-// LanguageKindFor case would degrade silently at runtime (client.go's
-// DocumentSymbols) rather than fail a test.
+// this test asserts every servers-map language also has a working didOpen
+// languageId, so a newly added server entry with no matching
+// LanguageKindFor case fails here instead of degrading silently at runtime
+// (client.go's DocumentSymbols).
 //
 // This lives in package resolve, not lsp, because it needs Languages()'s own
 // name -> extensions table as the source of which extensions to try per

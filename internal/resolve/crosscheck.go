@@ -114,9 +114,9 @@ func crossCheckVerdict(src []byte, list []*Resolution, symbols []lsp.Symbol) (de
 	// form with the single-anchor one rather than reporting "[ts-only]" for
 	// a list this package itself declares has nothing to verify. allFound's
 	// own zero value would otherwise be vacuously true when the loop below
-	// never runs a real comparison, which used to report a *different* false
-	// positive ("not degraded, no mismatches" while claiming a genuine
-	// verification took place) before this early return existed.
+	// never runs a real comparison -- reporting "not degraded, no
+	// mismatches" while claiming a genuine verification took place, a false
+	// positive this early return prevents.
 	evaluated := false
 	allFound := true
 	for _, res := range list {

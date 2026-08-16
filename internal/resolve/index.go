@@ -57,11 +57,10 @@ func (e *ResolveError) Error() string {
 			e.Anchor, e.TreeSitterRange, e.LSPRange)
 	}
 	// label defaults to AnchorUnresolvable's own wording; every other code
-	// handled here overrides it explicitly rather than falling through --
-	// exitcode.UnsupportedLanguage used to fall through to "unresolved",
-	// contradicting docs/CODES.md's exit-9 row ("Unsupported / deferred
-	// language for a symbol anchor") while the exit code itself was
-	// already right. internal/diff/run.go's validateSym is the one caller
+	// handled here overrides it explicitly rather than falling through,
+	// matching docs/CODES.md's exit-9 row ("Unsupported / deferred
+	// language for a symbol anchor") for exitcode.UnsupportedLanguage
+	// specifically. internal/diff/run.go's validateSym is the one caller
 	// that constructs this code, and it never sets Candidates -- there is
 	// nothing to suggest for a language with no grammar at all -- so the
 	// "did you mean" suffix below stays unreachable for it the same way it

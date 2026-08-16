@@ -151,8 +151,7 @@ type ServerInfo struct {
 	// is only known at spawn time, in daemonArgs, so there is no static
 	// argv to compare). cmd/rgit-install/servers_test.go's
 	// TestServerCatalog_MatchesLSPServers pins this beside each install
-	// row (m21 in the 2026-07-29 audit): spawn argv previously lived only
-	// here with nothing to catch it drifting from what a user installs.
+	// row, so spawn argv cannot drift from what a user installs.
 	SpawnArgs []string
 }
 

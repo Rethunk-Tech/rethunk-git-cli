@@ -25,10 +25,10 @@ var neverWired = map[string]string{
 // TestServersMap_CoversEveryResolveLanguage is the reverse of
 // internal/resolve/lspwiring_test.go's TestServerLanguages_HaveLanguageKindMapping:
 // that guard catches an lsp.Servers() entry naming a language Languages()
-// does not know about; nothing previously caught the opposite drift -- a
+// does not know about; this test catches the opposite drift -- a
 // newly registered resolve grammar landing with no server wired for it,
-// which would silently stay [ts-only] forever with no test ever failing for
-// it. neverWired above is the allowlist for the languages that are
+// which would otherwise silently stay [ts-only] forever with no test ever
+// failing for it. neverWired above is the allowlist for the languages that are
 // [ts-only] on purpose; everything else must be wired.
 //
 // This is package lsp_test (an external test), not package lsp, and reads
