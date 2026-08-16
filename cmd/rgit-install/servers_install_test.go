@@ -134,9 +134,9 @@ func TestDirOnPATH(t *testing.T) {
 }
 
 // TestBinDirWarning covers the three-way decision manageServers' loop makes
-// after a job's install succeeds -- including the err != nil case (m23 in
-// the 2026-07-29 audit) that previously had no signal at all, silently
-// skipping the PATH check on a managerBinDir failure.
+// after a job's install succeeds -- including the err != nil case, where a
+// managerBinDir failure must still warn that the PATH check could not be
+// verified rather than skipping it silently.
 func TestBinDirWarning(t *testing.T) {
 	t.Parallel()
 
