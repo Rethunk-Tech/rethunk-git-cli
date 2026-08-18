@@ -366,7 +366,7 @@ func attributeSymbolsOpen(lang resolve.Language, oldSrc, newSrc []byte, oldFile,
 			deleted += separatorLines(oldSrc, self, oldRegions)
 			accDeleted += deleted
 			// A deleted symbol has no position in the new file, so it sorts
-			// by where it used to be — stable, and close to where a reader
+			// by its prior line position in the old file — stable, and close to where a reader
 			// expects to find it.
 			rows = append(rows, Row{Symbol: name, Status: StatusDeleted, Added: "0", Deleted: itoa(deleted), pos: oldExt.Start})
 		case !inOld && inNew:

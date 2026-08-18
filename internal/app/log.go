@@ -50,7 +50,7 @@ history is a question about what has already been committed, and git log
 Plain git log -L already follows a rename when git's similarity heuristic
 detects one, but a rename that also reshuffles the symbol can silently stop
 short. --follow-rename re-resolves the anchor's extent at each rename
-boundary and continues under the old name (docs/LIMITATIONS.md).
+boundary and continues under the pre-rename path (docs/LIMITATIONS.md).
 
 --since=DATE bounds either form. With a FILE:SYMBOL positional, the
 anchor remains the symbol-scoped form; otherwise this is ordinary,
@@ -68,8 +68,8 @@ git's own count limit. Under --follow-rename the limit applies per rename
 segment, so the total can exceed N. Without -n, history is unbounded.
 
 --follow-rename walks the file's rename history: at each commit that
-renamed it, the anchor's extent is re-resolved against the old name's blob
-just before the rename, and history continues under that name. Without it,
+renamed it, the anchor's extent is re-resolved against the pre-rename blob
+just before the rename, and history continues under that path. Without it,
 plain "git log -L" rename following still applies when similarity detects
 the rename, but reordering across the boundary can still lose the thread.
 
@@ -301,7 +301,7 @@ func logDateArgs(since, until string, maxCount int, maxCountSet bool, extra []st
 // newest first: HEAD's own extent (already resolved by the caller as head/
 // res) covers the segment from HEAD back to the nearest rename boundary
 // (or, absent one, the file's whole history); each further segment
-// re-resolves the anchor against the old name's blob one commit before
+// re-resolves the anchor against the pre-rename blob one commit before
 // that boundary and repeats, via gitx.FindRename. This is deliberately not
 // a per-commit tree-sitter re-parse (TODO.md's own tradeoff): git log -L
 // already re-derives how a fixed line range moves within one file's own
@@ -326,7 +326,7 @@ func runLogFollowRename(ctx context.Context, repo *gitx.Repo, file string, src [
 
 		// Bounded to the rename boundary when one was found -- otherwise
 		// this segment's own git log -L would walk straight through it and
-		// duplicate the history the next segment (under the old name) is
+		// duplicate the history the next segment (under the pre-rename path) is
 		// about to report on its own.
 		segRev := rev
 		if found {

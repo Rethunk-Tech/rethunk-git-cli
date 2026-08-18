@@ -81,7 +81,7 @@ func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.
 						headOnly = true
 						return src, "", true, nil
 					}
-					return nil, "no longer exists in the worktree", false, nil
+					return nil, "is absent from the worktree", false, nil
 				}
 				return nil, "", false, err
 			}
@@ -119,7 +119,7 @@ func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.
 
 // runBlameFollowRename walks one path segment at a time, newest first. A
 // segment's blame is bounded by git's normal path history; after the nearest
-// rename, the next segment starts from the old path's parent commit and
+// rename, the next segment starts from the pre-rename path's parent commit and
 // resolves the anchor against that blob.
 func runBlameFollowRename(ctx context.Context, repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, anchorName string, extra []string, stdout, stderr io.Writer) exitcode.Code {
 	ignoreCase, err := repo.IgnoreCase(ctx)

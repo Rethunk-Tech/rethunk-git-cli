@@ -153,7 +153,7 @@ func TestRun_BlameBoundsToTheSymbolExtent(t *testing.T) {
 }
 
 // TestRun_BlameDeletedWorktreeUsesHEAD keeps blame and its line range tied to
-// the same HEAD blob when the worktree copy has been removed.
+// the same HEAD blob when the worktree copy is absent.
 func TestRun_BlameDeletedWorktreeUsesHEAD(t *testing.T) {
 	dir, _ := gittest.New(t)
 	writeAppFile(t, dir, "gone.go", "package gone\n\nfunc Gone() int {\n\treturn 1\n}\n\nfunc Other() int {\n\treturn 2\n}\n")
@@ -218,7 +218,7 @@ func TestRun_BlameShortPorcelainFlagMatchesGit(t *testing.T) {
 
 // TestRun_BlameFollowRenameCrossesARenameThatReordersTheSymbol pins the
 // rename boundary: a reordered symbol needs a fresh extent in the old blob,
-// so --follow-rename reaches the old path while the default form remains
+// so --follow-rename reaches the pre-rename path while the default form remains
 // bounded to the current path.
 func TestRun_BlameFollowRenameCrossesARenameThatReordersTheSymbol(t *testing.T) {
 	dir := chdirTempRepo(t)
