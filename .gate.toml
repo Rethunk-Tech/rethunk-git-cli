@@ -1,0 +1,2 @@
+[gates.test]
+run = "make test-short"
