@@ -26,15 +26,14 @@ type defaultLanguage struct{}
 
 // AllowsRawHeadingFallback is false: only markdown has a heading concept
 // for rawHeadingFallback (index.go) to retry an unresolved anchor against.
-// Every other adapter's own explicit answer, before this struct existed,
-// was this same value for this same reason, spelled out nine times over
-// ("<language> has no heading concept for the fallback to apply to").
+// Every other adapter returns this same value for this same reason — only
+// markdown opts in via lang_markdown.go.
 func (defaultLanguage) AllowsRawHeadingFallback() bool { return false }
 
 // ImportKinds is nil: no node kind in the grammar plays the role of an
 // import/include statement at all -- not merely absent from one file, but
 // not a concept the grammar has. sql, toml, markdown, yaml, and json all
-// answered this identically before this struct existed, each pointing at
+// return nil here identically, each pointing at
 // the others as the same degraded-but-not-an-error precedent
 // (docs/ANCHORS.md). go, python, css, and typescript/tsx all have a real
 // import-shaped node and override this explicitly with it; shell overrides

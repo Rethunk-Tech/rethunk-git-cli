@@ -805,11 +805,9 @@ func TestNumstatPath(t *testing.T) {
 // TestRun_FileAndRowOrderIsPathThenPosition pins docs/USAGE.md's stable
 // ordering contract at the unit lane: files sorted alphabetically by path
 // (sortReport), rows within a file sorted by source position, not by
-// symbol name (attributeSymbols' own SortStableFunc by pos). Only
-// rgit_e2e_test.go's TestOutput_OrderedByPathThenPosition covered this before
-// this test landed,
-// so a regression in either sort would pass `go test -short ./...`
-// undetected. Two files guard the path sort; each declaring Zebra before
+// symbol name (attributeSymbols' own SortStableFunc by pos). The e2e lane
+// covers this too, but a regression in either sort would pass `go test -short ./...`
+// without this unit case. Two files guard the path sort; each declaring Zebra before
 // Apple in source order guards the position sort against an accidental
 // alphabetical one.
 func TestRun_FileAndRowOrderIsPathThenPosition(t *testing.T) {
@@ -966,10 +964,9 @@ func TestRun_BinaryChangeReportsDashCounts(t *testing.T) {
 // at the unit lane: a comment separated from every declaration by a blank
 // line on both sides belongs to no symbol, so editing only it must surface
 // as (unanchorable) and neither neighbouring function may show any change
-// -- the sum-of-hunks invariant. Only rgit_e2e_test.go's
-// TestDiff_UnanchorableHunk exercised this path before this test; the unit lane had
-// setext attribution and hand-built rows, never a Go free-floating comment
-// driven through attributeSymbols/Run.
+// -- the sum-of-hunks invariant. The e2e lane exercises this path too;
+// this unit case drives a Go free-floating comment through attributeSymbols/Run
+// rather than setext attribution and hand-built rows.
 func TestRun_FreeFloatingCommentIsUnanchorable(t *testing.T) {
 	t.Parallel()
 	const before = `package notes

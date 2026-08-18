@@ -324,7 +324,7 @@ func spliceInsert(out []byte, op editOp) []byte {
 // than any minimum) for an op that never computed one (addPreamble's, which
 // already owns its trailing separator via
 // resolve.ExtendThroughOwnedSeparator), so those fall back to the minimum
-// exactly as before this existed.
+// when gap is nil.
 func widerGap(member bool, gap []byte) []byte {
 	min := "\n\n"
 	if member {
