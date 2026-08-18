@@ -34,21 +34,28 @@ symbol had changed:
 
 1. **Read sources** — HEAD blob `B_head` (`git cat-file -p HEAD:<path>`, empty
    if untracked) and worktree content `W`.
+
 2. **Resolve extents** — the symbol's extent in `W`, and the corresponding
    extent in `B_head`, both via tree-sitter on the same qualified anchor.
+
 3. **Synthesize**
+
    - Present in `B_head`: replace that extent with `W`'s.
+
    - New: insert at the **nearest existing sibling** — walk backwards through
      `W`'s siblings to the first also in `B_head` and insert after it; else walk
      forwards and insert before; else append at end of scope. Determined even
      when immediate neighbours are themselves new (`W = [A, X_new, Y_new, C]`,
      staging `Y_new` → after `A`), and order is preserved.
+
    - Multiple extents in one file: apply in **reverse byte-offset order** so
      earlier replacements do not invalidate later offsets.
+
    - **Boundary padding** normalizes newlines *between* spliced regions only.
      It must not touch end-of-file: git tracks no-newline-at-EOF as real content
      (`\ No newline at end of file`), so blanket normalization would commit a
      byte the caller never changed.
+
    - **Appending at end-of-file inherits `B_head`'s own convention.** When the
      insertion point is the end of the file — the common case, since appending
      after the last existing symbol lands there — the synthesized blob ends with
@@ -57,10 +64,12 @@ symbol had changed:
      newline would
      add a byte to a file that never had one, and forcing its absence would
      strip one from a file that did.
+
 4. **Write** — `git hash-object -w --path <path> --stdin`. **`--path` is
    mandatory**: without it, `.gitattributes` clean filters and LFS
    normalization are bypassed. Measured writing `synthesized` where `git add`
    wrote `SYNTHESIZED` under an active filter.
+
 5. **Stage** — `git update-index --add --cacheinfo <mode>,$SHA,<path>`.
 
 **Mode** comes from `os.Stat()` (`mode & 0111`). When `W` is absent — staging a
@@ -137,18 +146,23 @@ deletion does the reverse (`[Doomed DELETED +0/-4]`), and — unlike
 `OwnsTrailingSeparator`, which only Go answers true to — TypeScript gets
 the same clean attribution with no adapter-specific code at all
 (`[h MOD +4/-0]`), because `attribute.go` derives ownership from the
-diff hunk itself, not from a language's own formatting convention. Python
+diff hunk itself, not from a language's own formatting convention.
+
+Python
 is the case that proves the mechanism is exactly "one separator", not
 "every adjacent blank line": PEP 8's own second blank line still surfaces
 as a genuine one-line `UNANCHORABLE` remainder
 (`[h MOD +3/-0][ UNANCHORABLE +1/-0]`), so nothing here silently widens to
-claim bytes a symbol does not actually own. Measured directly against a
+claim bytes a symbol does not actually own.
+
+Measured directly against a
 built binary too, beyond the pinned unit case: staging a brand-new Go
 function into an existing tracked file produces a blob byte-identical to
 the worktree, and `rgit diff`'s own row for it matches `git diff
 --numstat`'s raw count exactly across a single insertion, two adjacent
 insertions, an insertion with no preceding sibling, and one with no
 following sibling — every case this item's own acceptance criteria named.
+
 The one case that must stay `(unanchorable)` — whitespace changed between
 two already-tracked, otherwise-unmodified declarations, with no new or
 deleted symbol on either side — was confirmed still exactly that, the
@@ -444,7 +458,9 @@ rather than implying parity.** Shell appears in roughly 45% of surveyed
 repositories — more than any single one of those three — but fewer than half
 of surveyed shell *lines* sit inside a function, and most shell files define
 none at all: a typical script is a flat sequence of top-level commands, not a
-library of callable units. That is well under the 91%-of-added-lines-inside-a-
+library of callable units.
+
+That is well under the 91%-of-added-lines-inside-a-
 symbol-body figure that justified Go/TS/Python. The value shell staging
 delivers is real but concentrated in library-style scripts (`lib.sh`,
 `functions.sh`) that define several functions each, not spread evenly across
@@ -452,16 +468,23 @@ every `.sh` file the way that figure was.
 
 `function_definition` covers both `foo() {}` and `function foo {}` — one
 grammar node for both surface forms, measured against a compiled parse tree
-built from a fixture using each spelling. `variable_assignment`'s `"name"`
+built from a fixture using each spelling.
+
+`variable_assignment`'s `"name"`
 field is `variable_name` for a bare `X=1` (addressable) or `subscript` for an
 indexed `arr[0]=1` (left unaddressable, the same reasoning as Go's shared-name
-field line and Python's subscripted-target skip). There is no shebang node:
+field line and Python's subscripted-target skip).
+
+There is no shebang node:
 `#!/usr/bin/env bash` parses as an ordinary `comment`, so `HeaderKinds` is
-`["comment"]`, identical to Python, with nothing new to specify. `heredoc_body`
+`["comment"]`, identical to Python, with nothing new to specify.
+
+`heredoc_body`
 and `heredoc_content` are real, distinct nodes — measured directly by parsing a
 heredoc whose body text looks like a function definition and confirming it
 never surfaces as a sibling `function_definition` of `program`, so a false
 positive there is structurally impossible rather than merely unobserved.
+
 Shell's function namespace is flat (no classes, no modules to nest under), so
 `Container` is always empty and a redefined function disambiguates with the
 existing `#N` ordinal, the same as two same-named Go package-level functions
@@ -508,7 +531,7 @@ container-qualified key path
 namespace is flat.
 
 **Node kinds were measured against tree-sitter-yaml v0.7.2's own
-`src/node-types.json` and a compiled parse tree, not assumed.** `stream` is the
+node-types.json and a compiled parse tree, not assumed.** `stream` is the
 root, holding one or more `document` children; a `block_mapping_pair` carries
 `"key"` and `"value"` fields, each typed `block_node | flow_node`. The ordinary
 key is a `flow_node` wrapping exactly one `plain_scalar` (or a quoted-scalar
@@ -582,7 +605,7 @@ content disagreement still fails.
 
 **CSS followed YAML in demand order, not re-surveyed independently.** Every
 node shape below was measured against a compiled parse tree and cross-checked
-against `tree-sitter-css` v0.25.0's own `src/node-types.json`, not assumed
+against tree-sitter-css v0.25.0's own node-types.json, not assumed
 from `grammar.js`.
 
 **tree-sitter-css declares no fields at all.** Measured: `rule_set`,
@@ -747,7 +770,7 @@ so its own `bindings/go`'s `#include "../../src/parser.c"` fails — verified
 directly against every one of those tags' own file trees, the same check
 that catches markdown's `v0.5.2` Go-bindings regression (§ Dependencies).
 The module does ship `grammar.js` and `tree-sitter.json` at its
-root, and `src/scanner.c` — everything `tree-sitter generate` needs except
+root, and scanner.c — everything `tree-sitter generate` needs except
 the one file it produces.
 
 **Generation at build time, not vendoring — a genuine divergence from how
@@ -811,11 +834,15 @@ comment, invisible to `go list`, which only needs the `.go` file itself to
 parse.
 
 **Every node shape `lang_sql.go` reads was measured against a compiled
-parse tree**, the same discipline every other adapter here follows. The
+parse tree**, the same discipline every other adapter here follows.
+
+The
 root node kind is `program`; its named children are `statement` wrappers —
 one per statement, each with exactly one named child — not the inner
 `create_table`/`create_view`/etc. node directly, measured across every
-statement kind this adapter addresses and every one it does not. A `;`
+statement kind this adapter addresses and every one it does not.
+
+A `;`
 terminator is its own unnamed sibling of `statement` under `program`, not a
 child of `statement` itself — measured directly by walking `program`'s
 children including unnamed ones — so a symbol's extent never includes it,
@@ -826,18 +853,24 @@ Five of the six addressed statement kinds (`CREATE TABLE`/`VIEW`/
 `FUNCTION`/`TRIGGER`/`TYPE`) name themselves through an `object_reference`
 child holding a `"name"` field, and — only when the source wrote one — a
 `"schema"` field, read as `Container` the same one-level-qualification way a
-Go receiver or a TOML table header already is. That child is positional
+Go receiver or a TOML table header already is.
+
+That child is positional
 (tree-sitter-sql declares no field naming it on the parent statement), found
 by scanning for the first `object_reference`-kind child — measured to
 always be the statement's own name even on `CREATE TRIGGER`, whose statement
 carries three `object_reference` children in total (its own name, the table
-it fires on, the function it calls). `CREATE INDEX` is the exception: its
+it fires on, the function it calls).
+
+`CREATE INDEX` is the exception: its
 own name is a field directly on `create_index` itself, confusingly named
 `"column"` — measured, and distinct from the same-named `"column"` field
 each entry inside its own `index_fields` carries for the columns actually
 being indexed; an anonymous index (`CREATE INDEX ON t (c)`, legal SQL) has
 no `"column"` field on `create_index` at all and is left unaddressable
-rather than guessing at the name the database would assign. `CREATE DOMAIN`
+rather than guessing at the name the database would assign.
+
+`CREATE DOMAIN`
 does not parse under this grammar version at all — measured: it produces an
 `ERROR` node — so it is not a candidate regardless of demand.
 
@@ -1207,7 +1240,9 @@ compared against anything.
 
 **Markdown: `marksman` matches exactly, because tree-sitter-markdown's own
 `section` nodes are already hierarchical the same way `marksman`'s outline
-is.** On
+is.**
+
+On
 
 ```markdown
 # Title
@@ -1224,7 +1259,9 @@ More text.
 `marksman` reported `Title` L0..L9, `Setup` L2..L9, `Options` L6..L9 —
 exact matches, each parent's range correctly enclosing its subsections, the
 same nesting `docs/ANCHORS.md` already documents ("a Markdown heading's
-extent is the whole section it opens ... subsections included"). This is
+extent is the whole section it opens ... subsections included").
+
+This is
 why Markdown's own cross-check needed no normalization the way TOML's does
 below: tree-sitter's own node already nests the way the server's own range
 does, rather than modelling siblings the server reports as parent/child.
@@ -1241,7 +1278,9 @@ because this specific binary does not run here at all.
 **TOML: `taplo` completes the LSP handshake, but its ranges genuinely
 disagree with `declOnlyExtent` on the ordinary case of a nested table — the
 exact false-positive risk this comparison exists to catch, not a
-normalization gap.** On
+normalization gap.**
+
+On
 
 ```toml
 # leading comment for server table
@@ -1257,12 +1296,17 @@ cert = "a.pem"
 `taplo` reports `server` as L1..L7 — the *entire* file from `[server]`
 through `cert`'s own line — because `taplo` understands TOML's dotted-table
 semantics and treats `[server.tls]` as a logical child of `server`.
+
 tree-sitter-toml does not: measured directly against a compiled parse tree,
 `document`'s only allowed children are `pair`/`table`/`table_array_element`
 as flat siblings (§ Grammar scope), so `server`'s own node spans only L1..L5 — the header through the blank
 line before the next header begins, not through the next table's own
-content. `taplo`'s `server` range is objectively wider than the anchor
-`rgit` would ever stage for it. Cross-checking `server` against `taplo`
+content.
+
+`taplo`'s `server` range is objectively wider than the anchor
+`rgit` would ever stage for it.
+
+Cross-checking `server` against `taplo`
 would hard-fail (exit 6) on a correct, unmodified extent, on every TOML file
 with a dotted-nested table — the ordinary organizing pattern the format
 exists to support, not a corner case.
@@ -1273,7 +1317,9 @@ real character of `cert = "a.pem"`; tree-sitter's own node reaches L5..L8,
 one line further, because `table`'s `EndByte()` measured as reaching all the
 way to the file's own trailing newline when nothing follows it (the same
 "table absorbs the trailing blank line before the next header" behaviour in
-§ Grammar scope — with no next header, it absorbs through EOF instead). Two
+§ Grammar scope — with no next header, it absorbs through EOF instead).
+
+Two
 independent, measured mismatches, not one; TOML stays `[ts-only]`.
 
 **Answering `workspace/configuration` is load-bearing, and `taplo` is the
@@ -1323,29 +1369,39 @@ tree-sitter re-resolution of the anchor's extent at every commit it touched
 (the only way to track a symbol correctly through a rename).
 
 **`git log -L` was measured to already do the expensive half of the job for
-free.** `git log -L` does not re-run rgit's own resolver at each ancestor
+free.**
+
+`git log -L` does not re-run rgit's own resolver at each ancestor
 commit; it re-derives the touched line range at each commit *itself*, as
 part of its own diff engine — confirmed directly: editing a symbol whose
 line position had already shifted between commits still produced the
 correct single-commit-per-touch history with no help from this side, one
-subprocess exec, zero additional parses. This diff-engine tracking turned
+subprocess exec, zero additional parses.
+
+This diff-engine tracking turned
 out to already follow a **rename** too, whenever git's own content
 similarity detects one — measured directly: `git log -L range:newname` (the
 current name, queried the only way rgit's anchor resolution ever starts —
 against `HEAD`) continued reporting commits under `oldname` with no
-`--follow` and no help from this side. What genuinely fails is starting
+`--follow` and no help from this side.
+
+What genuinely fails is starting
 `-L` from a name `HEAD` does not have: `git log -L range:oldname` after a
 `git mv` + commit fails outright with `fatal: There is no path <oldname> in
 the commit` — irrelevant to rgit, since an anchor always resolves against
 the current name first.
 
-Chosen: `git log -L`, resolved once, still. The one real gap this diff-based
+Chosen: `git log -L`, resolved once, still.
+
+The one real gap this diff-based
 tracking leaves is accuracy, not reach: it follows *lines*, not the
 *symbol*, so a rename that also reshuffles the symbol's position in the
 file (a reorder, a surrounding refactor landing in the same commit) can
 lose the thread partway even though the rename itself was detected — a
 line-range heuristic has no notion of "this decl moved," only "this text
-moved." `--follow-rename` (below) covers exactly that gap; the plain,
+moved."
+
+`--follow-rename` (below) covers exactly that gap; the plain,
 unflagged form stays resolved once, since it already carries the common
 case (a symbol whose file was never renamed, or renamed cleanly enough for
 git's own tracking) for one subprocess exec and zero additional parses.
@@ -1356,14 +1412,20 @@ Per-commit re-resolution (`git log --follow` plus a tree-sitter parse at
 every historical commit) was rejected above for the plain form on cost —
 and stays rejected here: it pays a parse for every touching commit just to
 get the same handful of rename boundaries a much cheaper query already
-names outright. `gitx.FindRename` asks git directly for the nearest commit
+names outright.
+
+`gitx.FindRename` asks git directly for the nearest commit
 in a file's `--follow`ed history that git's own diff engine classified as a
 rename (`git log --follow --diff-filter=R --name-status --format=%H -1`) —
-one exec, no parsing on this side. Only *there* — at the boundary itself,
+one exec, no parsing on this side.
+
+Only *there* — at the boundary itself,
 not at every commit either side of it — does `--follow-rename` re-resolve
-the anchor with tree-sitter, against the old name's blob one commit before
+the anchor with tree-sitter, against the pre-rename blob one commit before
 the boundary, then hands the segment back to `git log -L` (bounded to
-`boundary~1..segment-start`) exactly as the unflagged form does. One parse
+`boundary~1..segment-start`) exactly as the unflagged form does.
+
+One parse
 per rename, however many renames the file has had; zero parses for commits
 that only edited the symbol without renaming its file.
 
@@ -1600,22 +1662,35 @@ messages and three targets. An LLM writing git-shaped commands produces that
 ordering routinely.
 
 pflag is the only option with both interspersed parsing and free control of the
-exit code (Cobra hardcodes 1, Kong exits 80). A full framework stays rejected:
+exit code (Cobra hardcodes 1, Kong exits 80).
+
+A full framework stays rejected:
+
 `rgit` must own its positional precedence regardless, and nine dispatched
 commands — `diff`, `commit`, `blame`, `log`, `context`, `languages`, `doctor`,
 `completion`, `symbols` — still sits below the bar set in
-`claude-format-hooks`: none of them carries an independent subcommand tree,
+`claude-format-hooks`.
+
+None of them carries an independent subcommand tree,
 shared persistent flags, or generated multi-level help, which is the
-machinery a framework actually buys. pflag is a flag parser, not a
+machinery a framework actually buys.
+
+pflag is a flag parser, not a
 framework — one dependency bought for a measured, specific defect.
 
 **Shell completion is hand-written, and a framework would not have shortened
-it.** The genuinely useful completion — symbols after `auth.go:` — is a dynamic
+it.**
+
+The genuinely useful completion — symbols after `auth.go:` — is a dynamic
 function shelling out to `rgit symbols` (or `rgit symbols --for-commit` for
-commit targets), which every framework leaves hand-written anyway. `rgit
+commit targets), which every framework leaves hand-written anyway.
+
+`rgit
 completion bash|zsh|fish|pwsh` ships as exactly that: a script per shell whose
 symbol completion delegates to those enumerators, with no framework and no new
-dependency. The porcelain format is a machine contract with a shipped
+dependency.
+
+The porcelain format is a machine contract with a shipped
 in-repo consumer as a result ([`docs/CODES.md`](../docs/CODES.md)).
 
 ### The global `-C <path>`: git's own semantics, threaded rather than `chdir`ed
@@ -1641,15 +1716,21 @@ missing space rather than `unknown command`: the caller reaching for this
 flag from memory is exactly the one who mistypes it.
 
 The path is **threaded** to `openRepo` rather than applied with `chdir`.
+
 Git can afford the real `chdir` — it does it once per process, before
-dispatch. `internal/app` cannot: `app.Run` is called in-process, many times
+dispatch.
+
+`internal/app` cannot: `app.Run` is called in-process, many times
 per test binary, which is the whole reason it lives outside `main`
 ([`CONTRIBUTING.md`](../CONTRIBUTING.md#tests)), so a `chdir` that no
 subcommand ever restores would leak into every later case in the package.
+
 Threading also has no seam to get wrong — `openRepo` was already the single
 place a working directory entered the program, and `internal/gitx` already
 reaches git through `git -C <root>`, so "started somewhere else" needed no
-new mechanism at all. What it does not buy is validation: nothing chdirs, so
+new mechanism at all.
+
+What it does not buy is validation: nothing chdirs, so
 the directory is `os.Stat`ed in `parseChdir` before dispatch, which is what
 keeps a broken `-C` fatal on `doctor` and `languages` too, as git's own
 pre-dispatch `chdir` makes it.
@@ -1743,7 +1824,7 @@ mean "still has Go bindings."
 inline grammar into one Go package, so `tree_sitter_markdown_inline` and its
 scanner symbols ship regardless (measured with `go tool nm`).
 tree-sitter-bash has only one grammar: `bindings/go/binding.go` compiles
-exactly `src/parser.c` and `src/scanner.c`, and `go tool nm` on the built
+exactly parser.c and scanner.c, and `go tool nm` on the built
 binary shows exactly one grammar's worth of `tree_sitter_bash*` symbols, no
 second unreferenced set. The size this dependency adds is the bash grammar
 itself, not waste alongside it — bash's own grammar is simply larger, driven
@@ -1805,7 +1886,7 @@ newest one that still ships `bindings/go` — checked directly against that
 tag's own file tree (`bindings/go/binding.go`, package `tree_sitter_html`,
 exporting `Language()`), the same check markdown's `v0.5.2` regression
 showed is never safe to skip. It reports ABI 14, not 15 (measured from the
-module's own `src/parser.c` `LANGUAGE_VERSION`) — the same split
+module's own parser.c LANGUAGE_VERSION) — the same split
 TypeScript/JSON/YAML/TOML already have, not something this adapter needs to
 handle itself (`go-tree-sitter` v0.25.0 accepts either). `go tool nm` on an
 unstripped build shows exactly one grammar's worth of `tree_sitter_html*`

@@ -55,26 +55,42 @@ A struct field line naming several identifiers at once (`A, B int`) and an
 embedded/anonymous field are not addressable by their own anchor: the first
 has no way to give one name its own extent without the other's text coming
 along, and the second has no name of its own to begin with. Name the
-containing type or the path instead. TypeScript's anonymous default export
+containing type or the path instead.
+
+TypeScript's anonymous default export
 (`export default function () {}`) is unaddressable for the same reason as the
-embedded field — the grammar gives it no name to read. So are TypeScript's
+embedded field — the grammar gives it no name to read.
+
+So are TypeScript's
 destructuring declarators — `const {a, b} = obj` and `const [x, y] = arr` bind
 several names off one pattern node, so no single name owns an extent of its
-own; name the containing statement or the path instead. A YAML sequence item
+own; name the containing statement or the path instead.
+
+A YAML sequence item
 is unaddressable the same way — `steps` in a GitHub Actions job addresses the
 whole list (`build.steps`), but no single step has a name of its own to
-address it by. A flow-style mapping or sequence (`{ a: 1 }`, `[1, 2]`) is a
+address it by.
+
+A flow-style mapping or sequence (`{ a: 1 }`, `[1, 2]`) is a
 leaf too, at any nesting depth: the key holding one is addressable, but
 nothing inside it is.
 
-The two nest differently, which matters when the container is new. A Go method
+The two nest differently, which matters when the container is new.
+
+A Go method
 sits beside its type rather than inside it, so staging one never drags the type
-along. A class encloses its members, so naming a member of a class absent from
+along.
+
+A class encloses its members, so naming a member of a class absent from
 `HEAD` stages the whole class: there is no way to add a method to a class that
-does not exist yet. `rgit commit` says so on stderr rather than doing it
+does not exist yet.
+
+`rgit commit` says so on stderr rather than doing it
 quietly, and `rgit diff --sym` on that exact member warns too — narrowing the
 listing to one member would otherwise hide that its siblings are coming along
-with it. The unfiltered listing never warns: every sibling already has its own
+with it.
+
+The unfiltered listing never warns: every sibling already has its own
 row there, so the notice would only repeat what is already visible.
 
 | Form | Example | Notes |
@@ -157,17 +173,25 @@ frontmatter is set aside.
 
 A YAML file's own `@header` is a leading top-of-file comment run, not the
 `---` document-start marker or a `%YAML`/`%TAG` directive — those stay with
-whichever key's extent happens to contain them. `@imports` resolves to nothing,
-the same as Markdown. `@toplevel` spans every top-level key, first through
+whichever key's extent happens to contain them.
+
+`@imports` resolves to nothing,
+the same as Markdown.
+
+`@toplevel` spans every top-level key, first through
 last, which in practice is the whole document once `@header` is set aside.
 
 An HTML file's own `@header` is its leading `<!DOCTYPE html>` plus any
 comment immediately preceding or following it — a real, distinct node kind
-in this grammar, unlike Markdown or YAML's comment-only preamble. `@imports`
+in this grammar, unlike Markdown or YAML's comment-only preamble.
+
+`@imports`
 resolves to nothing: no node kind in this grammar plays the role of an
 import statement, so a `<link rel="stylesheet">` or `<script src="...">` —
 semantically import-shaped, but not a distinct node from any other tag — is
-not reachable through it. `@toplevel` spans every addressable (id-bearing)
+not reachable through it.
+
+`@toplevel` spans every addressable (id-bearing)
 element, first through last, which in a typical page — one root `<html>`
 element enclosing everything — is the whole document once `@header` is set
 aside, the same as it is for every other language with no `@imports` of its
@@ -223,18 +247,26 @@ unaddressable by key — see
 
 A CSS selector's bare name is its own text, exactly as written —
 `.button-primary`, `#app`, `div`, or a comma-joined list like `.a, .b`, which
-stages as one anchor rather than two. An at-rule (`@media`, `@supports`,
+stages as one anchor rather than two.
+
+An at-rule (`@media`, `@supports`,
 `@keyframes`, `@font-face`, and any custom at-rule the grammar accepts)
 addresses by its full prelude, not the bare keyword —
 `@media (max-width: 600px)` — because two at-rules of the same kind in one
 file are the ordinary case, not a corner, and only the prelude tells them
 apart; an at-rule with no prelude at all (`@font-face { ... }`) degrades to
-the bare keyword. Nested rules inside an `@media`/`@supports`/`@keyframes`
+the bare keyword.
+
+Nested rules inside an `@media`/`@supports`/`@keyframes`
 block are not descended into and have no anchor of their own — naming the
-enclosing at-rule stages the whole block. This is a different case from
+enclosing at-rule stages the whole block.
+
+This is a different case from
 native CSS Nesting, covered next, and unaffected by it: an at-rule is never
 walked for nested rule sets, whether the at-rule sits at the top level or
-inside another rule's own block. `@import` is a real, distinct node kind, so
+inside another rule's own block.
+
+`@import` is a real, distinct node kind, so
 `@imports` is meaningful for CSS, unlike Markdown, YAML, JSON, or TOML — but
 an `@import` is reachable only through `@imports`, never as a bare anchor of
 its own, the same way a Go file's imports are invisible to its own
@@ -246,7 +278,9 @@ above: naming `.child` alone works when it is unambiguous, and its qualified
 form is `.parent .child`, joined with a literal space rather than the `.`
 every other language's own container qualification uses, because that space
 is the descendant combinator CSS itself would use to flatten the same
-nesting (`.parent .child { ... }` means the same thing written flat). Nesting
+nesting (`.parent .child { ... }` means the same thing written flat).
+
+Nesting
 three levels deep qualifies by the immediate parent only, the same
 one-level rule a YAML or JSON key nested three deep already follows: a rule
 inside `.mid` inside `.outer` is addressed as `.mid .inner`, never the full
@@ -254,23 +288,33 @@ inside `.mid` inside `.outer` is addressed as `.mid .inner`, never the full
 
 **A generic at-rule can be spelled anything, including a pseudo-anchor's own
 name** — CSS reserves no at-rule keywords, so `styles.css:@header` is legal
-CSS and genuinely collides with the pseudo-anchor `@header`. The
+CSS and genuinely collides with the pseudo-anchor `@header`.
+
+The
 pseudo-anchor always wins: `rgit` checks for `@header`/`@imports`/`@toplevel`
 before it ever consults a file's own symbols, so a same-spelled at-rule is
 never reachable by that name under any circumstance — not merely
-deprioritized. It still shows up in `rgit diff`'s ordinary listing under its
+deprioritized.
+
+It still shows up in `rgit diff`'s ordinary listing under its
 own qualified name; only the anchor spelling `@header` itself is shadowed.
 
 A JSON object's own key paths address the same way a YAML mapping key does:
 `config.json:server.port` claims one nested key, and naming an object claims
-everything under it. JSON has no comment syntax, so `@header` and `@imports`
+everything under it.
+
+JSON has no comment syntax, so `@header` and `@imports`
 both resolve to nothing there, the same degraded-but-not-an-error result
-Markdown gives a file with no shebang. **Breadth overstates the value here**
+Markdown gives a file with no shebang.
+
+**Breadth overstates the value here**
 — most JSON `rgit` runs against in practice is `package.json`, a tsconfig,
 or a lockfile, all of which want whole-path staging regardless of whether a
 key anchor exists; this grammar earns its place on the narrower case where a
 single nested config key is genuinely the unit that changed, not by making
-every JSON file's full contents individually addressable. An array, at any
+every JSON file's full contents individually addressable.
+
+An array, at any
 depth, is a leaf — `list` addresses the whole array, never one element.
 
 TOML addresses the same way, with one more form: a `[table]` or
@@ -278,31 +322,46 @@ TOML addresses the same way, with one more form: a `[table]` or
 (`config.toml:server` claims the whole table), and its members qualify
 under that same text verbatim — `server.tls`'s own members address as
 `server.tls.<key>`, not a further-nested path, since the header's dotted
-spelling already is the container. Two array-of-tables entries sharing one
+spelling already is the container.
+
+Two array-of-tables entries sharing one
 header (`[[servers]]` twice) collide the same way two same-named Go
 functions do — `servers#1`/`servers#2`, ordinal by source order, not by
-array index — the same for their own same-named members. A dotted pair key
+array index — the same for their own same-named members.
+
+A dotted pair key
 written directly (`a.b = 1`, legal at the document root or inside a table
 body) is not split into its own container and leaf; its bare name is the
 full dotted spelling, one anchor rather than a second qualification scheme.
+
 Naming a table also stages any blank line between it and the next section
 header — the grammar attributes that gap to the table itself, since nothing
-else could claim it. Inline tables (`{ a = 1 }`) and arrays are leaves,
+else could claim it.
+
+Inline tables (`{ a = 1 }`) and arrays are leaves,
 never descended into, the same as YAML's flow-style values.
 
 SQL addresses `CREATE TABLE`, `CREATE VIEW`, `CREATE FUNCTION`, `CREATE
 INDEX`, `CREATE TRIGGER`, and `CREATE TYPE` by the name being defined —
-`schema.sql:users`, `schema.sql:active_users`. `DROP`, `ALTER`, `INSERT`,
+`schema.sql:users`, `schema.sql:active_users`.
+
+`DROP`, `ALTER`, `INSERT`,
 `SELECT`, and `CREATE SCHEMA` all parse but declare no persistent named
 object, so none is addressable; naming the path stages those the same way it
-does an unaddressable shape in any other language. A schema-qualified name
+does an unaddressable shape in any other language.
+
+A schema-qualified name
 (`CREATE TABLE s.t`) qualifies one level, the same as a Go receiver or a TOML
 table header — `s.sql:s.t` addresses it, and a bare `t` disambiguates by
 ordinal against another schema's `t` in the same file the way two identically
-named Go functions do. `CREATE TRIGGER` never carries a schema qualifier of
+named Go functions do.
+
+`CREATE TRIGGER` never carries a schema qualifier of
 its own — Postgres does not allow one — so two same-named triggers in one
 file (legal when they fire on different tables) disambiguate by ordinal only;
-there is no qualifier that captures which table each fires on. `CREATE INDEX`
+there is no qualifier that captures which table each fires on.
+
+`CREATE INDEX`
 with no name (`CREATE INDEX ON t (c)`, legal SQL — the database assigns one)
 is unaddressable, the same as any other symbol with no name of its own to
 read. SQL ships behind the `rgit_sql` build tag rather than unconditionally
@@ -310,25 +369,37 @@ read. SQL ships behind the `rgit_sql` build tag rather than unconditionally
 and what a user without the tree-sitter CLI loses.
 
 HTML addresses one shape only: an element carrying an `id` attribute,
-tag-qualified as `div#app` — element and id, nothing wider. There is
+tag-qualified as `div#app` — element and id, nothing wider.
+
+There is
 deliberately no anchor for a class, an attribute selector, `nth-of-type`, a
 pseudo-class/pseudo-element, or a descendant/child/sibling combinator — see
 [`LIMITATIONS.md`](LIMITATIONS.md#constructs-no-anchor-reaches) for the full
-list and why. `rgit` resolves anchors; it is not a CSS selector engine. An
+list and why.
+
+`rgit` resolves anchors; it is not a CSS selector engine.
+
+An
 element is addressable at any nesting depth, not only at the top level — a
 mount point (`div#app`) five levels deep inside a full page shell resolves
 the same as one at the root — and naming an outer element claims everything
 nested inside it, id-bearing descendants included, the same "naming the
 container claims its members" rule every other language's own container
-qualification already follows. An element with **no** id gets no anchor of
+qualification already follows.
+
+An element with **no** id gets no anchor of
 its own at all, even when it is the only one of its tag in the file: this
 resolver's index has no per-parent scoping, so falling back to a bare tag
 name would make ordinary tags like `div` collide across nearly every real
 document; only an element's own written text (its tag name and its id's
 value, both taken verbatim) is ever staged, matching how a CSS selector
-already stages. Attribute names, including `id` itself, are matched
+already stages.
+
+Attribute names, including `id` itself, are matched
 case-insensitively (`ID`, `Id`, and `id` all recognize the same attribute),
-per the WHATWG HTML spec — the id's own value is not case-folded. Two
+per the WHATWG HTML spec — the id's own value is not case-folded.
+
+Two
 elements sharing one id — the same tag twice, or two different tags — collide
 in this resolver's index exactly the way two identically named Go functions
 or two identical CSS selectors already do: exit 4 (ambiguous), listing each

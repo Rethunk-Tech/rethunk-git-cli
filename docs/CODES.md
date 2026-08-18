@@ -175,27 +175,33 @@ can learn the committed revision without a follow-up `git rev-parse HEAD`.
 An `--allow-empty` commit still emits `H` even when no target rows follow it.
 
 **A pathspec produces one record per file it stages, not one for the
-pathspec.** Naming a directory stages everything under it, so `rgit commit
-apps/auth` lists `apps/auth/a.go`, `apps/auth/b.go` and so on, each with its
-own counts — the same breakdown `rgit diff` gives, rather than a single total
-that says something moved without saying what. Untracked files under that
-pathspec are listed too, since `git add` stages them as well, and a renamed
-file is listed at its new path. A binary file is listed with zero counts: it is
-being staged, and git reports no line counts for it. A pathspec that matches
-nothing keeps one record naming the pathspec itself, so `git add`'s own "did
-not match any files" is still what answers for it.
+pathspec.**
+
+- Naming a directory stages everything under it, so `rgit commit
+  apps/auth` lists `apps/auth/a.go`, `apps/auth/b.go` and so on, each with its
+  own counts — the same breakdown `rgit diff` gives, rather than a single total
+  that says something moved without saying what.
+- Untracked files under that pathspec are listed too, since `git add` stages
+  them as well, and a renamed file is listed at its new path.
+- A binary file is listed with zero counts: it is being staged, and git reports
+  no line counts for it.
+- A pathspec that matches nothing keeps one record naming the pathspec itself,
+  so `git add`'s own "did not match any files" is still what answers for it.
 
 There is no `STATUS` column: an unchanged target is omitted from the listing
 entirely (it gets its own stderr warning instead), so every target record would
-carry the same value. Target records are identical for `--dry-run` and for the
-commit it previews; a successful real commit additionally has the leading `H`
-record above. `--porcelain` replaces `git commit`'s own summary rather than
-adding to it — exactly as `git commit --porcelain` does.
+carry the same value.
 
-Because unchanged targets are omitted, `--porcelain --allow-empty` writes only
-the leading `H` record while still creating a commit and exiting 0. The full
-object id is the committed revision, so no before-and-after `git rev-parse
-HEAD` comparison is needed.
+Target records are identical for `--dry-run` and for the
+commit it previews; a successful real commit additionally has the leading `H`
+record above.
+
+- `--porcelain` replaces `git commit`'s own summary rather than
+  adding to it — exactly as `git commit --porcelain` does.
+- Because unchanged targets are omitted, `--porcelain --allow-empty` writes only
+  the leading `H` record while still creating a commit and exiting 0.
+- The full object id is the committed revision, so no before-and-after
+  `git rev-parse HEAD` comparison is needed.
 
 ### `rgit languages --porcelain`
 
@@ -216,18 +222,26 @@ yaml<TAB>.yaml .yml<TAB>0<TAB>wired
 ```
 
 Sampled from a `-tags rgit_sql` build; a plain build has no `sql` row (see
-[`INSTALL.md`](INSTALL.md#sql-support)). One record per grammar compiled into
-this binary, sorted alphabetically by `NAME`. `EXTENSIONS` is every extension the grammar claims, leading dot
+[`INSTALL.md`](INSTALL.md#sql-support)).
+
+One record per grammar compiled into
+this binary, sorted alphabetically by `NAME`.
+
+`EXTENSIONS` is every extension the grammar claims, leading dot
 included on each, joined with a single space — unambiguous, since a real
 extension is always `.something` and never itself contains whitespace.
+
 `GATED` is `1` when the grammar exists in this binary only because a build
 tag selected it (SQL alone, `-tags rgit_sql`; see
 [`INSTALL.md`](INSTALL.md#sql-support)) and `0` otherwise, present on every
 row rather than only the gated ones, so a reader always gets a definite
 answer instead of inferring "not gated" from an absent column.
+
 `CROSS-CHECK` is `wired` when the language has a compile-time entry in the
 language-server catalog and `ts-only` when it does not (currently TOML and
-SQL). This is design-time wiring, not reachability: a `wired` language still
+SQL).
+
+This is design-time wiring, not reachability: a `wired` language still
 degrades to `[ts-only]` when its server is missing, cold, or unreachable; see
 `rgit doctor` for environment and server status.
 
@@ -237,8 +251,9 @@ human output and `rgit --version`'s second line.
 
 `--in-repo` narrows the same rows to grammars with a matching tracked file in
 the current repository (requires a git repo); the record shape is
-unchanged, only which rows appear. See
-[`USAGE.md`](USAGE.md#languages).
+unchanged, only which rows appear.
+
+See [`USAGE.md`](USAGE.md#languages).
 
 ### `rgit doctor --porcelain`
 
@@ -310,12 +325,15 @@ Seven record types, distinguished by the first field:
 **A `B` or `H` record, when present, always sorts first, `S` follows it, `W`
 diagnostics follow that, and `F` records always precede `C` records** — a breaking change from the
 original commits-first order — **while an `X` record, when present, is always
-the last line.** `B` is a single record and costs the budget almost nothing.
-Diagnostics are emitted before the actionable, unbounded diff rows; commit
-history is already bounded to 20 and cheap to drop, and is one `git log` call
-away if the caller needs it back. See [`USAGE.md`](USAGE.md#context) for the
-byte budget and [`../specs/design.md`](../specs/design.md#commands) for why it
-is 16 KiB and what happens at the boundary.
+the last line.**
+
+- `B` is a single record and costs the budget almost nothing.
+- Diagnostics are emitted before the actionable, unbounded diff rows; commit
+  history is already bounded to 20 and cheap to drop, and is one `git log` call
+  away if the caller needs it back.
+- See [`USAGE.md`](USAGE.md#context) for the byte budget and
+  [`../specs/design.md`](../specs/design.md#commands) for why it is 16 KiB and
+  what happens at the boundary.
 
 ### `rgit log --porcelain`
 
@@ -327,13 +345,20 @@ a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2<TAB>fix(auth): reject expired tokens
 
 For the anchor form, one record per commit whose own diff touched the named
 symbol's current extent, newest first — the same ordering `git log`'s own
-default gives. For the unanchored form, one record per matching commit in the
+default gives.
+
+For the unanchored form, one record per matching commit in the
 date/path scope, with the same ordering.
+
 `HASH` is the full commit object id, never abbreviated (unlike the aligned
 default's `<abbrev-hash> <subject>`, which is for a human to read, not to
-paste elsewhere). Patch-free: this is the one record shape in this file that
+paste elsewhere).
+
+Patch-free: this is the one record shape in this file that
 is never emitted alongside `-p`/`--patch`, since asking for both would mean
-asking for a record format and a patch dump at once. `rgit log -p` instead
+asking for a record format and a patch dump at once.
+
+`rgit log -p` instead
 prints git's own `git log -L` output unmodified, the same "pass through
 git's own format rather than inventing a second one" choice `rgit blame
 --porcelain` already makes.

@@ -36,25 +36,34 @@ not restate it: the tiered layout below is what keeps one authority per fact.
 Cutting a release: tag `vX.Y.Z`, which
 [`.github/workflows/release.yml`](.github/workflows/release.yml) turns into a
 GitHub release with the cross-built and natively-built binaries and their
-`SHA256SUMS`. That workflow also fails the release outright if any
+`SHA256SUMS`.
+
+That workflow also fails the release outright if any
 artifact's own `rgit languages` output has no `sql` row — a `-tags
-rgit_sql` regression on any artifact this actually reaches: linux/amd64
-and windows/amd64 execute directly (windows via Wine); linux/arm64 runs
-inside a matching arm64 container image under QEMU emulation, since it is
-dynamically linked against glibc and bare QEMU has no aarch64 sysroot to
-resolve that against; whichever darwin arch matches the `macos-latest`
-runner's own (arm64, as of this writing) executes directly in its own
-job — the other darwin artifact is checked by file type only, not
-executed. See [`docs/INSTALL.md`](docs/INSTALL.md#cross-builds).
+rgit_sql` regression on any artifact this actually reaches:
+
+- linux/amd64 and windows/amd64 execute directly (windows via Wine)
+- linux/arm64 runs inside a matching arm64 container image under QEMU
+  emulation, since it is dynamically linked against glibc and bare QEMU has no
+  aarch64 sysroot to resolve that against
+- whichever darwin arch matches the `macos-latest` runner's own (arm64, as of
+  this writing) executes directly in its own job — the other darwin artifact is
+  checked by file type only, not executed
+
+See [`docs/INSTALL.md`](docs/INSTALL.md#cross-builds).
+
 Move the unreleased entries under the new version heading, and bump the
 README's version badge — it is a static shield, so nothing else catches it
-going stale. Also check `sqlGrammarVersion` in
+going stale.
+
+Also check `sqlGrammarVersion` in
 [`cmd/rgit-install/main.go`](cmd/rgit-install/main.go) against
 [`tree-sitter-sql`](https://github.com/DerekStride/tree-sitter-sql)'s own
 tags: `@latest` cannot track it, because that module gitignores `parser.c` at
 every tag ([`internal/resolve/sqlgrammar/grammar.go`](internal/resolve/sqlgrammar/grammar.go)),
-so this pin only ever moves by hand and nothing else reminds you to look. If
-a newer tag exists, bump the constant, then `make sql-parser` and `go test
+so this pin only ever moves by hand and nothing else reminds you to look.
+
+If a newer tag exists, bump the constant, then `make sql-parser` and `go test
 -tags rgit_sql ./...` to confirm the new grammar still generates, compiles,
 and resolves — update any resolver fixtures whose anchor extents shifted —
 before tagging.
@@ -105,7 +114,7 @@ binary, like everything else here.
 | File | Happy path | Critical edge cases |
 | --- | --- | --- |
 | `rgit_e2e_test.go` | Init repo → edit symbol → `rgit diff` → `rgit commit` → verify HEAD, clean index, hook ran, worktree preserved | Hook rejection leaves staging intact (exit 128, also pinned at the unit level: a real hook is process-level enough to earn both); `--` and leading-colon pathspec magic reaching real `git add`, not just classification; positional pathspec parity with `--file`; path escape and malformed `--sym` rejection (exit 129); invocation from a subdirectory resolves paths relative to it; unborn branch lists everything committable; `--fixup`'s own message-appending with `-m`; `--gpg-sign`/`--no-gpg-sign` and `--push` reaching real git; shell completion driving real bash, zsh, fish, and pwsh; exit codes and help text as an external process observes them |
-| `index_test.go` | Single-symbol blob synthesis staged into the real index | Initial commit on an unborn branch, and its gitignore refusal (exit 7); no-newline-at-EOF preserved, and an appended symbol inheriting HEAD's EOF newline; rename staged as two paths yields git's `R100`; pathspec glob and `:(exclude)` pass through; mode-only change surfaces as `MODE`; submodule and symlink staging; `.gitattributes` clean filter (the `--path` requirement); overlapping/nested anchors coalesce into one extent; a new file's `@header`/`@imports` preamble stages automatically; class/container members (TypeScript, Python) stage without their sibling, and a Go receiver method stays a sibling never escalated into; a member deletion keeps the file parseable across a class's own indentation; YAML nested-key edits round-trip byte-identical; resolve-all-before-staging-any leaves the index untouched on a partial failure; a new symbol's nearest-sibling insertion walks past other new, unstaged siblings; multiple symbols splice in reverse byte-offset order; a container member insert is byte-identical to the worktree, no blank line invented (Python's own PEP 8 line is the deliberate exception); `--dry-run`'s preamble rows agree with git's real numstat |
+| `index_test.go` | Single-symbol blob synthesis staged into the real index | Initial commit on an unborn branch, and its gitignore refusal (exit 7); no-newline-at-EOF preserved, and an appended symbol inheriting HEAD's EOF newline; rename staged as two paths yields git rename at full similarity; pathspec glob and `:(exclude)` pass through; mode-only change surfaces as `MODE`; submodule and symlink staging; `.gitattributes` clean filter (the `--path` requirement); overlapping/nested anchors coalesce into one extent; a new file's `@header`/`@imports` preamble stages automatically; class/container members (TypeScript, Python) stage without their sibling, and a Go receiver method stays a sibling never escalated into; a member deletion keeps the file parseable across a class's own indentation; YAML nested-key edits round-trip byte-identical; resolve-all-before-staging-any leaves the index untouched on a partial failure; a new symbol's nearest-sibling insertion walks past other new, unstaged siblings; multiple symbols splice in reverse byte-offset order; a container member insert is byte-identical to the worktree, no blank line invented (Python's own PEP 8 line is the deliberate exception); `--dry-run`'s preamble rows agree with git's real numstat |
 | `resolver_test.go` | Tree-sitter extent + doc-comment attribution on a Go fixture | Exit 3 (unresolvable) and its did-you-mean candidates; new-symbol insertion when neighbours are also new; `@header`, `@imports`, and `@toplevel` extents, including imports spanning interior comments; live `gopls` cross-check |
 
 Units run against in-memory tree-sitter. Prefer the real dependency over a
@@ -188,7 +197,7 @@ go test -bench=Attribution -benchmem ./internal/diff/
 ```
 
 cgo + tree-sitter makes absolute time machine-noisy — judge by ratio
-against a checked-in or previously recorded baseline, not an absolute
+against a checked-in or recorded baseline, not an absolute
 threshold. Not run in CI: benchmarks are noisy on shared runners and a
 flaky gate is worse than no gate; run it by hand before and after a change
 to `internal/diff/attribute.go` or `internal/resolve`'s parse-caching path.

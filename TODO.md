@@ -13,5 +13,5 @@ Deliberately not queued:
 [`specs/design.md`](specs/design.md#rgit-restore-filesymbol-an-accepted-design-deliberately-not-built)),
 context staged/unstaged split, TOML taplo / SQL LSP cross-checks, Rust/C/C++/
 Vue/Svelte grammars, SCSS/zsh, JSONC/JSON5, orphan-gopls handshake cleanup,
-`--include`/`-a`, and any web/shadcn surface (this is a CLI;
+include-style pathspec flags and any web/shadcn surface (this is a CLI;
 `@shadcn/command` does not apply).

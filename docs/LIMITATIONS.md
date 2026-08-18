@@ -137,7 +137,8 @@ resolution retains its ordinary exit 3 (unresolvable) behavior.
 A **rename** staged by symbol anchor is not detected as one: `HEAD` simply
 has no blob at the new path, so an anchor into it stages as an ordinary new
 file, and git's own tree diff is what notices the rename after the fact
-(`R100` in `git status`/`git diff`, the same as any rename staged by hand).
+(rename at full similarity in `git status`/`git diff`, the same as any rename
+staged by hand).
 There is nothing `rgit`-specific to get wrong here — renames staged by
 pathspec go through `git add` unmodified, proven by
 `TestStage_RenameStagedAsTwoPathsYieldsR100`.
