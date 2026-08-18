@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -362,13 +363,20 @@ func dialStdio(ctx context.Context, spec serverSpec, repoRoot string) (*Client, 
 	// and reaps whatever the close left behind -- nothing will reuse this
 	// process either way, so an already-exited one is not a problem to
 	// solve, only a Wait() to perform.
+	var closeOnce sync.Once
+	var closeErr error
 	client.closeFn = func() error {
-		connErr := client.conn.Close()
-		waitErr := killAndReap()
-		if connErr != nil {
-			return connErr
-		}
-		return waitErr
+		closeOnce.Do(func() {
+			connErr := client.conn.Close()
+			<-client.conn.Done()
+			waitErr := killAndReap()
+			if connErr != nil {
+				closeErr = connErr
+				return
+			}
+			closeErr = waitErr
+		})
+		return closeErr
 	}
 	return client, false
 }
