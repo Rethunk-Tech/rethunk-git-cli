@@ -252,8 +252,9 @@ func openRepo(ctx context.Context, dir string, stderr io.Writer) (root, prefix s
 // log resolves HEAD). ok is false when there is nothing to resolve against
 // (a deleted worktree file, a file with no HEAD history); notFoundDetail is
 // then the parenthetical resolveAnchorExtent appends to the
-// AnchorUnresolvable message it emits itself ("no longer exists in the
-// worktree", "has no HEAD history").
+// parenthetical resolveAnchorExtent appends to the AnchorUnresolvable
+// message blame.go supplies for a missing worktree copy, or "has no HEAD
+// history" when HEAD has no blob.
 type anchorSourceFunc func(ctx context.Context, repo *gitx.Repo, root, file string) (src []byte, notFoundDetail string, ok bool, err error)
 
 // resolveAnchorExtent is the wiring blame.go and log.go otherwise duplicate
