@@ -256,7 +256,7 @@ Two repo conventions that are easy to undo by accident:
 - **`docs/` is only for documentation shipped with the tool.** Design record and
   migration material go in `specs/`.
 - **An `@-reference` in `AGENTS.md` is a budget line, not a link.** `CLAUDE.md`
-  symlinks to `AGENTS.md`, so every `@path` there is pulled into *every* agent
+  is an `@AGENTS.md` pointer, so every `@path` there is pulled into *every* agent
   session whether or not the change touches that file — @-referencing all eight
   docs costs ~17k tokens a session to save a `Read` most sessions never need.
   Only `@CONTRIBUTING.md` keeps one, because its test and coverage rules bind
