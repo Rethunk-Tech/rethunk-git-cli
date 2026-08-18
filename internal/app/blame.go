@@ -81,7 +81,7 @@ func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.
 						headOnly = true
 						return src, "", true, nil
 					}
-					return nil, "is absent from the worktree", false, nil
+					return nil, "no longer exists in the worktree", false, nil
 				}
 				return nil, "", false, err
 			}
