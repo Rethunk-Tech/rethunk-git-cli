@@ -48,7 +48,7 @@ func indexBlob(t *testing.T, repo *gitx.Repo, path string) string {
 
 func mustStage(t *testing.T, repo *gitx.Repo, dir string, targets ...synth.Target) {
 	t.Helper()
-	err := synth.Stage(context.Background(), repo, dir, targets)
+	err := stageTargets(context.Background(), repo, dir, targets)
 	qt.Assert(t, qt.IsNil(err))
 }
 
@@ -338,7 +338,7 @@ func TestStage_PythonModuleLevelAssignment(t *testing.T) {
 	qt.Assert(t, qt.StringContains(got, "RETRIES = 3")) // sibling untouched
 
 	// CONFIG["k"] names no symbol, so it cannot be staged by anchor.
-	err := synth.Stage(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("conf.py", "CONFIG[\"k\"]")})
+	err := stageTargets(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("conf.py", "CONFIG[\"k\"]")})
 	qt.Assert(t, qt.IsNotNil(err))
 }
 
@@ -484,7 +484,7 @@ func TestStage_UnbornBranchGitignoredPathRefused(t *testing.T) {
 	gittest.Write(t, dir, ".gitignore", "*.log\n")
 	gittest.Write(t, dir, "debug.log", "noise\n")
 
-	err := synth.Stage(context.Background(), repo, dir, []synth.Target{synth.PathTarget("debug.log")})
+	err := stageTargets(context.Background(), repo, dir, []synth.Target{synth.PathTarget("debug.log")})
 	assertPathError(t, err, exitcode.PathRefused)
 }
 
@@ -595,7 +595,7 @@ func TestStage_SubmoduleAndSymlinkPathStaging(t *testing.T) {
 
 	// A symbol anchor on the same symlink is refused rather than
 	// misresolved (docs/ANCHORS.md § Paths that anchors cannot address).
-	err := synth.Stage(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("link.txt", "Foo")})
+	err := stageTargets(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("link.txt", "Foo")})
 	assertPathError(t, err, exitcode.SpecialPathRefused)
 
 	// A symbol anchor into the submodule directory is refused the same
@@ -603,7 +603,7 @@ func TestStage_SubmoduleAndSymlinkPathStaging(t *testing.T) {
 	// TestClassifyPath already proves classifyPath answers pathGitlink for
 	// it; this proves the refusal actually reaches a caller through the
 	// real staging path, not just the classifier in isolation.
-	err = synth.Stage(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("sub", "Foo")})
+	err = stageTargets(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("sub", "Foo")})
 	assertPathError(t, err, exitcode.SpecialPathRefused)
 }
 
@@ -635,7 +635,7 @@ func TestStage_GitignoredUntrackedRefused(t *testing.T) {
 	gittest.Commit(t, dir, "chore: add gitignore")
 	gittest.Write(t, dir, "debug.log", "noise\n")
 
-	err := synth.Stage(context.Background(), repo, dir, []synth.Target{synth.PathTarget("debug.log")})
+	err := stageTargets(context.Background(), repo, dir, []synth.Target{synth.PathTarget("debug.log")})
 	assertPathError(t, err, exitcode.PathRefused)
 }
 
@@ -645,7 +645,7 @@ func TestStage_UnsupportedLanguageAnchorRefused(t *testing.T) {
 	gittest.Write(t, dir, "notes.rs", "fn main() {}\n")
 	gittest.Commit(t, dir, "chore: add notes.rs")
 
-	err := synth.Stage(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("notes.rs", "main")})
+	err := stageTargets(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("notes.rs", "main")})
 	assertPathError(t, err, exitcode.UnsupportedLanguage)
 }
 
@@ -658,7 +658,7 @@ func TestStage_ResolveAllBeforeStagingAnyLeavesIndexUntouched(t *testing.T) {
 
 	// Foo does not exist anywhere -- the whole batch must fail before A
 	// (which resolves cleanly) is ever staged.
-	err := synth.Stage(context.Background(), repo, dir, []synth.Target{
+	err := stageTargets(context.Background(), repo, dir, []synth.Target{
 		synth.AnchorTarget("a.go", "A"),
 		synth.AnchorTarget("a.go", "Foo"),
 	})
@@ -1242,4 +1242,15 @@ func TestPlanStage_PreambleDoesNotAbsorbSeparatorForLanguagesThatDontOwnOne(t *t
 	// `import { z } from "./z";` alone -- one line, no absorbed blank line.
 	qt.Assert(t, qt.Equals(results[0].Added, 1))
 	qt.Assert(t, qt.Equals(results[1].Target.Symbol.Anchor, "hello"))
+}
+
+// stageTargets runs synth's two steps back to back. Production always keeps
+// them apart -- rgit commit resolves first so --dry-run and the exit-11
+// "nothing to commit" check can decide before anything is written.
+func stageTargets(ctx context.Context, repo *gitx.Repo, root string, targets []synth.Target) error {
+	plan, err := synth.PlanStage(ctx, repo, root, targets)
+	if err != nil {
+		return err
+	}
+	return plan.Apply(ctx, repo, root)
 }

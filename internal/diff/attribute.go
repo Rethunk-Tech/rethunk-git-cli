@@ -284,8 +284,12 @@ func indexRegions(regions []region) map[string]resolve.Extent {
 	return out
 }
 
-// attributeSymbols splits one file's total change into per-symbol rows plus
-// an (unanchorable) remainder.
+// attributeSymbolsOpen splits one file's total change into per-symbol rows
+// plus an (unanchorable) remainder, taking each side's already-parsed file
+// rather than opening its own: buildFileReport (run.go) parses newSrc once
+// for the LSP cross-check, and reusing that *resolve.File is this package's
+// share of the held-parse gain specs/design.md § Blob synthesis measures
+// for internal/synth (~39x, one parse per side instead of one per anchor).
 //
 // Each named region that exists on both sides gets an isolated line diff of
 // just its own extent (go-udiff, in process — no fork/exec per anchor,
@@ -298,29 +302,6 @@ func indexRegions(regions []region) map[string]resolve.Extent {
 // file's true total" true by construction. It clamps at zero: isolated
 // per-symbol diffs and git's whole-file diff can align ambiguous content
 // (duplicate lines, say) differently.
-func attributeSymbols(lang resolve.Language, oldSrc, newSrc []byte, totalAdded, totalDeleted int) ([]Row, []string, error) {
-	oldFile, err := resolve.Open(lang, oldSrc)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer oldFile.Close()
-	newFile, err := resolve.Open(lang, newSrc)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer newFile.Close()
-	return attributeSymbolsOpen(lang, oldSrc, newSrc, oldFile, newFile, totalAdded, totalDeleted)
-}
-
-// attributeSymbolsOpen is attributeSymbols' own logic, taking each side's
-// already-parsed file (buildRegions' Open, factored out) rather than
-// opening its own. buildFileReport (run.go) already parses newSrc once for
-// the LSP cross-check; calling through here with that same *resolve.File
-// instead of letting attributeSymbols open a second one is this package's
-// own share of the held-parse gain specs/design.md § Blob synthesis
-// measures for internal/synth (~39x, one parse per side instead of one per
-// anchor) -- attributeSymbols above stays the convenience form for a caller
-// (this package's own tests) with nothing already open to hand in.
 func attributeSymbolsOpen(lang resolve.Language, oldSrc, newSrc []byte, oldFile, newFile declResolver, totalAdded, totalDeleted int) ([]Row, []string, error) {
 	oldRegions, err := resolveRegions(lang, oldSrc, oldFile)
 	if err != nil {

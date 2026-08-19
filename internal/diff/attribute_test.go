@@ -164,3 +164,20 @@ func TestAttributeSymbols_MarkdownSectionOwnParagraphSurvivesNestedSetext(t *tes
 		t.Errorf("usage.options#2 row = %+v; want Added=1 Deleted=1", found)
 	}
 }
+
+// attributeSymbols opens both sides itself, for a test with nothing already
+// parsed to hand in. Production always has a *resolve.File open already and
+// calls attributeSymbolsOpen directly.
+func attributeSymbols(lang resolve.Language, oldSrc, newSrc []byte, totalAdded, totalDeleted int) ([]Row, []string, error) {
+	oldFile, err := resolve.Open(lang, oldSrc)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer oldFile.Close()
+	newFile, err := resolve.Open(lang, newSrc)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer newFile.Close()
+	return attributeSymbolsOpen(lang, oldSrc, newSrc, oldFile, newFile, totalAdded, totalDeleted)
+}

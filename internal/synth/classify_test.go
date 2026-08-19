@@ -85,7 +85,7 @@ func TestEscalateToContainer_AmbiguousContainerPropagates(t *testing.T) {
 	work := "[[servers]]\nhost = \"a\"\nport = 1\n\n[[servers]]\nhost = \"b\"\n"
 	gittest.Write(t, dir, "conf.toml", work)
 
-	err := Stage(context.Background(), repo, dir, []Target{AnchorTarget("conf.toml", "servers.port")})
+	err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("conf.toml", "servers.port")})
 
 	var rerr *resolve.ResolveError
 	qt.Assert(t, qt.ErrorAs(err, &rerr))
@@ -115,7 +115,7 @@ func TestEscalateToContainer_HTMLNestedInsertIgnoresTagCoincidence(t *testing.T)
 	work := "<div id=\"em\">\n<div id=\"app\">\n  <section id=\"content\">v1</section>\n  <em id=\"tagline\">Hi</em>\n</div>\n</div>\n"
 	gittest.Write(t, dir, "index.html", work)
 
-	err := Stage(context.Background(), repo, dir, []Target{AnchorTarget("index.html", "em#tagline")})
+	err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("index.html", "em#tagline")})
 	qt.Assert(t, qt.IsNil(err))
 
 	want := "<div id=\"app\">\n  <section id=\"content\">v1</section>\n\n  <em id=\"tagline\">Hi</em>\n\n</div>\n"

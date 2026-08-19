@@ -246,7 +246,7 @@ func TestStage_RefusesUnmergedSymbol(t *testing.T) {
 	blob := strings.TrimSpace(gittest.Git(t, dir, "rev-parse", "HEAD:conflict.go"))
 	setUnmergedIndex(t, dir, blob, "conflict.go")
 
-	err := Stage(context.Background(), repo, dir, []Target{AnchorTarget("conflict.go", "Keep")})
+	err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("conflict.go", "Keep")})
 	var pathErr *PathError
 	if !errors.As(err, &pathErr) {
 		t.Fatalf("Stage error = %v (%T); want *PathError", err, err)
@@ -294,7 +294,7 @@ func TestStage_RefusesIndexWorktreeBits(t *testing.T) {
 			commitSpecial(t, dir, "tracked.go")
 			gittest.Git(t, dir, "update-index", test.mark, "tracked.go")
 
-			err := Stage(context.Background(), repo, dir, []Target{AnchorTarget("tracked.go", "Keep")})
+			err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("tracked.go", "Keep")})
 			var pathErr *PathError
 			if !errors.As(err, &pathErr) {
 				t.Fatalf("Stage error = %v (%T); want *PathError", err, err)

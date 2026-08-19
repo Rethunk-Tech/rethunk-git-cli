@@ -145,14 +145,13 @@ type stagePlan struct {
 // written or staged. A caller that needs to inspect what resolution found
 // before deciding whether to write anything at all (rgit commit's
 // --dry-run, and its "every named target already matches HEAD" exit-11
-// rule) resolves via PlanStage, decides, and calls Apply second; Stage
-// itself is the two steps run back to back unconditionally.
+// rule) resolves via PlanStage, decides, and calls Apply second.
 type Plan struct {
 	plan *stagePlan
 }
 
 // Results reports what resolution found for each target, in the order
-// PlanStage (or Stage) received them.
+// PlanStage received them.
 func (p *Plan) Results() []TargetResult { return p.plan.results }
 
 // TSOnly reports whether any anchor in the plan degraded to tree-sitter-only
@@ -194,29 +193,18 @@ func (p *Plan) Apply(ctx context.Context, repo *gitx.Repo, root string) error {
 }
 
 // PlanStage resolves every target against repo's worktree (root) and HEAD
-// -- the pure-read half of Stage -- without writing anything. A caller that
-// never calls the returned Plan's Apply (a --dry-run preview, or the
-// "nothing to commit" exit-11 case) leaves the index exactly as found.
+// without writing anything -- the pure read that must succeed for all of
+// them before Apply writes any synthesized blob, so a failure leaves the
+// index exactly as found (specs/design.md § Blob synthesis; AGENTS.md's
+// invariant table). A caller that never calls the returned Plan's Apply (a
+// --dry-run preview, or the "nothing to commit" exit-11 case) never touches
+// the index at all.
 func PlanStage(ctx context.Context, repo *gitx.Repo, root string, targets []Target) (*Plan, error) {
 	plan, err := planStage(ctx, repo, root, targets)
 	if err != nil {
 		return nil, err
 	}
 	return &Plan{plan: plan}, nil
-}
-
-// Stage resolves every target against repo's worktree (root) and HEAD,
-// then -- only once all of them resolve cleanly -- writes the synthesized
-// blobs and stages them. Resolution is a pure read, so a failure leaves
-// the index exactly as found: the caller never ran `git add`, so nothing
-// should have moved (specs/design.md § Blob synthesis; AGENTS.md's
-// invariant table).
-func Stage(ctx context.Context, repo *gitx.Repo, root string, targets []Target) error {
-	plan, err := PlanStage(ctx, repo, root, targets)
-	if err != nil {
-		return err
-	}
-	return plan.Apply(ctx, repo, root)
 }
 
 func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Target) (*stagePlan, error) {

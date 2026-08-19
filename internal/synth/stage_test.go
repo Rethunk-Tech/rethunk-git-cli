@@ -164,7 +164,7 @@ func TestStage_PromisorMissingBlobIsAnError(t *testing.T) {
 	dir, repo := gittest.BloblessClone(t)
 
 	// CatFile fails before symbol classification can inspect the missing blob.
-	err := Stage(context.Background(), repo, dir, []Target{AnchorTarget("tracked.go", "@header")})
+	err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("tracked.go", "@header")})
 
 	var gerr *gitx.GitError
 	if !errors.As(err, &gerr) {
@@ -176,4 +176,15 @@ func TestStage_PromisorMissingBlobIsAnError(t *testing.T) {
 	if len(gerr.Stderr) == 0 {
 		t.Error("Stage GitError.Stderr is empty; want git's diagnostic")
 	}
+}
+
+// stageTargets runs synth's two steps back to back. Production always keeps
+// them apart -- rgit commit resolves first so --dry-run and the exit-11
+// "nothing to commit" check can decide before anything is written.
+func stageTargets(ctx context.Context, repo *gitx.Repo, root string, targets []Target) error {
+	plan, err := PlanStage(ctx, repo, root, targets)
+	if err != nil {
+		return err
+	}
+	return plan.Apply(ctx, repo, root)
 }
