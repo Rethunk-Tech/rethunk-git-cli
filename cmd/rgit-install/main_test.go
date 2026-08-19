@@ -20,7 +20,7 @@ import (
 // dependency, not a double, and stays fast because both commands are cheap.
 //
 // The exceptions -- runSQLGeneration, downloadSQLGrammarModule, and
-// buildBinary's actual `go build` -- need the network or a multi-second real
+// runInstall's actual `go install` -- need the network or a multi-second real
 // compile; each carries its own doc comment saying what would catch drift
 // there instead of a test.
 
@@ -245,23 +245,23 @@ func TestGenerateSQLParserWith(t *testing.T) {
 	qt.Assert(t, qt.StringContains(msg, "tree-sitter CLI not found on PATH"))
 }
 
-func TestBuildArgs(t *testing.T) {
+func TestInstallArgs(t *testing.T) {
 	t.Parallel()
 
 	t.Run("without SQL", func(t *testing.T) {
 		t.Parallel()
-		got := buildArgs("/tmp/rgit", false, "v1.2.3")
-		qt.Assert(t, qt.DeepEquals(got, []string{"build", "-ldflags", "-s -w -X main.version=v1.2.3", "-o", "/tmp/rgit", "./cmd/rgit"}))
+		got := installArgs(false, "v1.2.3")
+		qt.Assert(t, qt.DeepEquals(got, []string{"install", "-ldflags", "-s -w -X main.version=v1.2.3", "./cmd/rgit"}))
 	})
 
-	// The regression this guards: -tags rgit_sql must land between -o's
-	// value and the package path, not appended after it (go build parses
-	// flags positionally -- a misplaced -tags silently becomes a package
-	// argument instead of a flag).
+	// The regression this guards: -tags rgit_sql must land before the
+	// package path, not appended after it (go install parses flags
+	// positionally -- a misplaced -tags silently becomes a package argument
+	// instead of a flag).
 	t.Run("with SQL, -tags lands before the package path", func(t *testing.T) {
 		t.Parallel()
-		got := buildArgs("/tmp/rgit", true, "")
-		qt.Assert(t, qt.DeepEquals(got, []string{"build", "-ldflags", "-s -w", "-o", "/tmp/rgit", "-tags", "rgit_sql", "./cmd/rgit"}))
+		got := installArgs(true, "")
+		qt.Assert(t, qt.DeepEquals(got, []string{"install", "-ldflags", "-s -w", "-tags", "rgit_sql", "./cmd/rgit"}))
 	})
 }
 
@@ -323,75 +323,6 @@ func TestCopyFile(t *testing.T) {
 		dir := t.TempDir()
 		err := copyFile(filepath.Join(dir, "nope"), filepath.Join(dir, "dst"))
 		qt.Assert(t, qt.IsNotNil(err))
-	})
-}
-
-func TestInstallBinary(t *testing.T) {
-	t.Parallel()
-
-	t.Run("fresh install reports not replaced", func(t *testing.T) {
-		t.Parallel()
-		dir := t.TempDir()
-		bin := filepath.Join(dir, "built")
-		qt.Assert(t, qt.IsNil(os.WriteFile(bin, []byte("binary content"), 0o644)))
-		dest := filepath.Join(dir, "prefix", "rgit") // prefix/ does not exist yet
-
-		replaced, err := installBinary(bin, dest)
-		qt.Assert(t, qt.IsNil(err))
-		qt.Assert(t, qt.IsFalse(replaced))
-
-		got, err := os.ReadFile(dest)
-		qt.Assert(t, qt.IsNil(err))
-		qt.Assert(t, qt.Equals(string(got), "binary content"))
-
-		info, err := os.Stat(dest)
-		qt.Assert(t, qt.IsNil(err))
-		qt.Assert(t, qt.Equals(info.Mode().Perm(), os.FileMode(0o755)))
-	})
-
-	// main's "Installed" vs "Replaced existing binary at" wording reads
-	// directly off this return value.
-	t.Run("existing binary reports replaced and its content is overwritten", func(t *testing.T) {
-		t.Parallel()
-		dir := t.TempDir()
-		bin := filepath.Join(dir, "built")
-		qt.Assert(t, qt.IsNil(os.WriteFile(bin, []byte("new content"), 0o644)))
-		dest := filepath.Join(dir, "rgit")
-		qt.Assert(t, qt.IsNil(os.WriteFile(dest, []byte("old content"), 0o755)))
-
-		replaced, err := installBinary(bin, dest)
-		qt.Assert(t, qt.IsNil(err))
-		qt.Assert(t, qt.IsTrue(replaced))
-
-		got, err := os.ReadFile(dest)
-		qt.Assert(t, qt.IsNil(err))
-		qt.Assert(t, qt.Equals(string(got), "new content"))
-	})
-
-	t.Run("missing source binary", func(t *testing.T) {
-		t.Parallel()
-		dir := t.TempDir()
-		_, err := installBinary(filepath.Join(dir, "nope"), filepath.Join(dir, "dest"))
-		qt.Assert(t, qt.IsNotNil(err))
-	})
-
-	// A directory at dest makes os.Rename(tmp, dest) fail (EISDIR/ENOTDIR,
-	// depending on platform) without needing to simulate a permissions
-	// failure. Before this fix, the ".tmp" file installBinary writes just
-	// above the failed rename was left behind forever.
-	t.Run("rename failure cleans up its own tmp file", func(t *testing.T) {
-		t.Parallel()
-		dir := t.TempDir()
-		bin := filepath.Join(dir, "built")
-		qt.Assert(t, qt.IsNil(os.WriteFile(bin, []byte("binary content"), 0o644)))
-		dest := filepath.Join(dir, "dest")
-		qt.Assert(t, qt.IsNil(os.MkdirAll(dest, 0o755)))
-
-		_, err := installBinary(bin, dest)
-		qt.Assert(t, qt.IsNotNil(err))
-
-		_, statErr := os.Stat(dest + ".tmp")
-		qt.Assert(t, qt.IsTrue(os.IsNotExist(statErr)))
 	})
 }
 
@@ -485,7 +416,7 @@ func TestSQLCSRCContentHash(t *testing.T) {
 		qt.Assert(t, qt.Equals(h1, h2))
 	})
 
-	// buildBinary's cache-busting only defeats a stale go build cache if
+	// runInstall's cache-busting only defeats a stale go build cache if
 	// this hash actually changes when csrc/ content does. A hash that
 	// stayed constant across different content would silently make the
 	// cache-busting a no-op.

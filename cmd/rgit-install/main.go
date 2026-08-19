@@ -151,25 +151,21 @@ func main() {
 		return
 	}
 
+	_, statErr := os.Stat(dest)
+	replaced := statErr == nil
+
 	fmt.Println("Building...")
-	bin, cleanup, err := buildBinary(repoRoot, sql, sqlPkgDir, ver)
+	err = runInstall(repoRoot, sql, sqlPkgDir, ver, prefix)
 	if err != nil && sql {
 		// generateSQLParser only proves the C it wrote is well-formed enough
 		// to reach the compiler; a cgo build can still fail past that (a
 		// grammar.js version mismatch, a toolchain quirk). docs/INSTALL.md
 		// promises a working rgit without the tree-sitter CLI -- keep that
 		// promise here too rather than dying with SQL as the only path tried.
-		cleanup()
 		fmt.Fprintf(os.Stderr, "rgit-install: SQL build failed, retrying without SQL support: %v\n", err)
 		sql = false
-		bin, cleanup, err = buildBinary(repoRoot, sql, sqlPkgDir, ver)
+		err = runInstall(repoRoot, sql, sqlPkgDir, ver, prefix)
 	}
-	if err != nil {
-		fatalf("build failed: %v", err)
-	}
-	defer cleanup()
-
-	replaced, err := installBinary(bin, dest)
 	if err != nil {
 		fatalf("install failed: %v", err)
 	}
@@ -628,23 +624,25 @@ func ldflags(ver string) string {
 	return f
 }
 
-// buildArgs constructs the `go build` argv, split out from buildBinary so
-// the flag wiring -- ldflags always present, -tags rgit_sql only when sql is
-// requested, in that order -- is testable without a real, multi-second
+// installArgs constructs the `go install` argv, split out from runInstall
+// so the flag wiring -- ldflags always present, -tags rgit_sql only when sql
+// is requested, in that order -- is testable without a real, multi-second
 // compile.
-func buildArgs(bin string, sql bool, ver string) []string {
-	args := []string{"build", "-ldflags", ldflags(ver), "-o", bin}
+func installArgs(sql bool, ver string) []string {
+	args := []string{"install", "-ldflags", ldflags(ver)}
 	if sql {
 		args = append(args, "-tags", "rgit_sql")
 	}
 	return append(args, "./cmd/rgit")
 }
 
-// buildBinary builds ./cmd/rgit into a fresh temp directory rather than
-// straight to the install prefix, so a build failure never leaves a
-// half-written binary at the destination.
+// runInstall builds and installs ./cmd/rgit with `go install`, which already
+// resolves GOBIN, creates the directory, and renames the finished binary
+// into place -- so a failed build never leaves a truncated rgit at the
+// destination. GOBIN is set explicitly so -prefix reaches the same
+// mechanism rather than a hand-rolled copy beside it.
 //
-// No test seam past buildArgs: a real invocation compiles this repo's own
+// No test seam past installArgs: a real invocation compiles this repo's own
 // cgo-linked binary, multiple seconds even from a warm cache -- far over
 // this package's test budget, and every e2e case elsewhere in this repo
 // already proves `go build ./cmd/rgit` itself works. What would catch drift
@@ -652,16 +650,10 @@ func buildArgs(bin string, sql bool, ver string) []string {
 // sqlPkgDir/csrc, rebuild with -tags rgit_sql, and confirm the change is
 // reflected rather than silently served from a stale cached object -- the
 // exact regression sqlCSRCContentHash (tested) exists to prevent.
-func buildBinary(repoRoot string, sql bool, sqlPkgDir, ver string) (bin string, cleanup func(), err error) {
-	dir, err := os.MkdirTemp("", "rgit-install-build-*")
-	if err != nil {
-		return "", func() {}, err
-	}
-	cleanup = func() { _ = os.RemoveAll(dir) }
-
-	bin = filepath.Join(dir, "rgit")
-	cmd := exec.Command("go", buildArgs(bin, sql, ver)...)
+func runInstall(repoRoot string, sql bool, sqlPkgDir, ver, prefix string) error {
+	cmd := exec.Command("go", installArgs(sql, ver)...)
 	cmd.Dir = repoRoot
+	env := append(os.Environ(), "GOBIN="+prefix)
 	if sql {
 		// Go's build cache does not otherwise notice csrc/ changing: the
 		// generated C reaches the compiler only through a C #include inside
@@ -673,23 +665,25 @@ func buildBinary(repoRoot string, sql bool, sqlPkgDir, ver string) (bin string, 
 		// compiles on, so folding the actual csrc/ content into it -- as an
 		// inert, unreferenced macro -- makes the cache key honestly track
 		// what will get compiled, without the whole-world cost of -a.
+		//
+		// A hashing failure (e.g. csrc/ genuinely missing) is left for the
+		// build itself to report -- it will fail with a much clearer
+		// "no such file" than anything worth synthesizing here.
 		if hash, herr := sqlCSRCContentHash(sqlPkgDir); herr == nil {
 			flag := "-DRGIT_SQL_CSRC_HASH=" + hash
 			if existing := os.Getenv("CGO_CFLAGS"); existing != "" {
 				flag = existing + " " + flag
 			}
-			cmd.Env = append(os.Environ(), "CGO_CFLAGS="+flag)
+			env = append(env, "CGO_CFLAGS="+flag)
 		}
-		// A hashing failure (e.g. csrc/ genuinely missing) is left for the
-		// build itself to report -- it will fail with a much clearer
-		// "no such file" than anything worth synthesizing here.
 	}
+	cmd.Env = env
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return "", cleanup, fmt.Errorf("go build: %w: %s", err, stderr.String())
+		return fmt.Errorf("go install: %w: %s", err, stderr.String())
 	}
-	return bin, cleanup, nil
+	return nil
 }
 
 // sqlCSRCContentHash hashes every file under pkgDir/csrc, in path order, so
@@ -741,33 +735,4 @@ func resolvePrefix(flagPrefix string) (string, error) {
 		return "", fmt.Errorf("neither GOBIN nor GOPATH is set")
 	}
 	return filepath.Join(gopath, "bin"), nil
-}
-
-// installBinary writes to a temp file beside dest and renames over it, so a
-// crash mid-install never leaves a truncated binary at the install path --
-// the same reasoning the invariants table in AGENTS.md applies to staging.
-func installBinary(bin, dest string) (replaced bool, err error) {
-	if _, err := os.Stat(dest); err == nil {
-		replaced = true
-	}
-	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-		return replaced, err
-	}
-	data, err := os.ReadFile(bin)
-	if err != nil {
-		return replaced, err
-	}
-	tmp := dest + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o755); err != nil {
-		return replaced, err
-	}
-	if err := os.Rename(tmp, dest); err != nil {
-		// A failed rename must not leave the temp file behind: the next
-		// install attempt writes the same tmp path again, and a caller
-		// investigating a failed install should not find a stray
-		// executable-mode file that Rename simply never got to remove.
-		_ = os.Remove(tmp)
-		return replaced, err
-	}
-	return replaced, nil
 }
