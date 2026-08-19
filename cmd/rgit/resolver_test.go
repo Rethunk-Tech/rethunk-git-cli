@@ -875,7 +875,7 @@ func ValidateToken(t string) error {
 	attempt := func(r *resolve.Resolution) (bool, error) {
 		sess := lsp.NewSession()
 		defer sess.Close()
-		return resolve.CrossCheckExtent(ctx, sess, lang, dir, path, src, r)
+		return crossCheckOne(ctx, sess, lang, dir, path, src, r)
 	}
 
 	var (
@@ -947,7 +947,7 @@ func TestResolve_CrossCheckLiveHTML(t *testing.T) {
 		qt.Assert(t, qt.IsNil(rerr))
 		sess := lsp.NewSession()
 		defer sess.Close()
-		return resolve.CrossCheckExtent(ctx, sess, lang, dir, path, src, res)
+		return crossCheckOne(ctx, sess, lang, dir, path, src, res)
 	}
 
 	// An id-bearing element, including the void-element case declOnlyExtent's
@@ -970,7 +970,7 @@ func TestResolve_CrossCheckLiveHTML(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 	sess := lsp.NewSession()
 	defer sess.Close()
-	degraded, cerr := resolve.CrossCheckExtent(ctx, sess, lang, dir, classPath, classSrc, classRes)
+	degraded, cerr := crossCheckOne(ctx, sess, lang, dir, classPath, classSrc, classRes)
 	qt.Assert(t, qt.IsFalse(degraded))
 	qt.Assert(t, qt.IsNil(cerr))
 }
@@ -2050,4 +2050,16 @@ func TestResolve_ForPathShebangFallback(t *testing.T) {
 		_, ok := resolve.ForPathFolding(c.path, []byte(c.content), false)
 		qt.Assert(t, qt.IsFalse(ok), qt.Commentf("content %q", c.content))
 	}
+}
+
+// crossCheckOne drives resolve.CrossCheckExtents for a single resolution.
+// The tests below assert per-anchor outcomes against a live server; the
+// package itself only offers the batch form, since production never wants
+// one round trip per anchor.
+func crossCheckOne(ctx context.Context, sess *lsp.Session, lang resolve.Language, repoRoot, absPath string, src []byte, res *resolve.Resolution) (bool, error) {
+	degraded, mismatches := resolve.CrossCheckExtents(ctx, sess, lang, repoRoot, absPath, src, []*resolve.Resolution{res})
+	if len(mismatches) > 0 {
+		return degraded, mismatches[0]
+	}
+	return degraded, nil
 }

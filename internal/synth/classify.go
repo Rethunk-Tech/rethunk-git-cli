@@ -98,7 +98,7 @@ func (fp *filePlan) classify(anchor string) (op editOp, unchanged bool, err erro
 		// Deletion: never cross-checked. The symbol exists only in HEAD,
 		// outside a language server's worktree view -- both
 		// docs/ANCHORS.md's cross-check exemptions and
-		// resolve.CrossCheckExtent's own doc comment ("callers must not
+		// resolve.CrossCheckExtents' own doc comment ("callers must not
 		// invoke this for deletions") are explicit that this is the
 		// caller's job to skip, not something the exempted function
 		// itself is trusted to catch every time.

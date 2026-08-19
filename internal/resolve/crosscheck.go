@@ -11,72 +11,42 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
 )
 
-// CrossCheckExtent verifies res's declaration-only extent against a live
-// language server. Tree-sitter already produced the extent that gets
-// staged; the server's range is never substituted for it.
-//
-// Callers must not invoke this for deletions -- the symbol exists only in
-// HEAD, outside the server's worktree view. res.Pseudo is exempt for the
-// same reason and is checked here (specs/design.md § Cross-check
-// exemptions).
-//
-// degraded=true means no comparison happened: absent or slow server,
-// unsupported language, or a symbol its outline does not name. None is a
-// failure -- the caller prints "[ts-only]" and proceeds. err is non-nil
-// only for a genuine range disagreement (exit 6).
-//
-// res.Pseudo reports degraded=false, not true: production callers already
-// skip a pseudo-anchor before ever reaching this function (internal/synth's
-// filePlan.crossCheck checks res.Pseudo itself, docs/ANCHORS.md), so this
-// guard exists only for a caller reaching this public function directly --
-// and a caller that does must see the exemption applied consistently with
-// every other entry point, not report "[ts-only]" for something this
-// package documents as exempt, not unverified.
-func CrossCheckExtent(ctx context.Context, sess *lsp.Session, lang Language, repoRoot, absPath string, src []byte, res *Resolution) (degraded bool, err error) {
-	if res.Pseudo {
-		return false, nil
-	}
-
-	// The session owns the client and closes it once per invocation.
-	client, deg := sess.Dial(ctx, lang.Name(), repoRoot)
-	if deg {
-		return true, nil
-	}
-
-	symbols, err := client.DocumentSymbols(ctx, absPath, src)
-	if err != nil {
-		// A live client that then fails mid-query (crash, protocol error)
-		// is exactly as uninformative as no client at all -- degrade.
-		return true, nil
-	}
-
-	degraded, mismatches := crossCheckVerdict(src, []*Resolution{res}, symbols)
-	if len(mismatches) > 0 {
-		return degraded, mismatches[0]
-	}
-	return degraded, nil
-}
-
 // CrossCheckExtents verifies a whole file's worth of resolutions against a
-// single language-server query. CrossCheckExtent dials and asks for the
-// document's symbols per anchor, which is right when there is one anchor
-// and wrong when there are dozens: `rgit diff` resolves every declaration in
-// every changed file, and one round trip per symbol would put a language
-// server in the middle of the fast path.
+// single language-server query. Tree-sitter already produced the extents
+// that get staged; the server's ranges are never substituted for them. One
+// round trip covers the whole list: `rgit diff` resolves every declaration
+// in every changed file, and asking per anchor would put a language server
+// in the middle of the fast path.
 //
-// degraded=true means no comparison happened at all, exactly as for the
-// single-anchor form -- including when the server answered but its outline
-// omitted at least one of list's own non-pseudo resolutions, aligning this
-// batch form with CrossCheckExtent's own found=false case, which also
-// degrades rather than treating "not named" as verified: both go through
-// the shared crossCheckVerdict below, so they cannot disagree about it.
-// mismatches holds one error per resolution whose range the server
-// disagreed with; a resolution the server does not name at all is not a
-// mismatch (specs/design.md's fourth exemption), but still marks the batch
-// as degraded.
+// Callers must not pass deletions -- the symbol exists only in HEAD,
+// outside the server's worktree view. Pseudo resolutions are exempt for the
+// same reason (specs/design.md § Cross-check exemptions) and are dropped
+// before dialling, so a list with nothing else in it costs no round trip.
+//
+// degraded=true means no comparison happened at all: absent or slow server,
+// unsupported language, or an outline that omitted at least one of list's
+// own non-pseudo resolutions -- "not named" degrades rather than counting
+// as verified. None is a failure; the caller prints "[ts-only]" and
+// proceeds. mismatches holds one error per resolution whose range the
+// server disagreed with (exit 6); a resolution the server does not name at
+// all is not a mismatch (specs/design.md's fourth exemption), but still
+// marks the batch as degraded.
 func CrossCheckExtents(ctx context.Context, sess *lsp.Session, lang Language, repoRoot, absPath string, src []byte, list []*Resolution) (degraded bool, mismatches []error) {
 	if len(list) == 0 {
 		return true, nil
+	}
+	// Pseudo resolutions never reach a verdict, so a list holding nothing
+	// else has nothing to ask about -- exempt, not degraded, and not worth
+	// a round trip to discover.
+	comparable := false
+	for _, res := range list {
+		if res != nil && !res.Pseudo {
+			comparable = true
+			break
+		}
+	}
+	if !comparable {
+		return false, nil
 	}
 	client, deg := sess.Dial(ctx, lang.Name(), repoRoot)
 	if deg {
@@ -109,10 +79,10 @@ func crossCheckVerdict(src []byte, list []*Resolution, symbols []lsp.Symbol) (de
 	// MatchAndCompare. A list that is non-empty but every entry nil or
 	// Pseudo (a file whose only cross-checked resolution is @imports, say)
 	// has nothing to compare -- the same fourth cross-check exemption
-	// CrossCheckExtent's own res.Pseudo shortcut applies before ever
-	// reaching here, so this is exempt, not degraded, aligning the batch
-	// form with the single-anchor one rather than reporting "[ts-only]" for
-	// a list this package itself declares has nothing to verify. allFound's
+	// CrossCheckExtents applies before dialling. Reaching here means a
+	// resolution went nil after that pre-filter, so this is exempt, not
+	// degraded, rather than reporting "[ts-only]" for a list this package
+	// itself declares has nothing to verify. allFound's
 	// own zero value would otherwise be vacuously true when the loop below
 	// never runs a real comparison -- reporting "not degraded, no
 	// mismatches" while claiming a genuine verification took place, a false
@@ -139,14 +109,14 @@ func crossCheckVerdict(src []byte, list []*Resolution, symbols []lsp.Symbol) (de
 	return !allFound, mismatches
 }
 
-// MatchAndCompare is CrossCheckExtent's comparison, factored out so it can
+// MatchAndCompare is CrossCheckExtents' comparison, factored out so it can
 // be driven with an already-fetched symbol table instead of a live
 // connection -- the seam resolver_test.go's mock-server and normalization
 // coverage uses, since a mock cannot exercise Dial's real socket/subprocess
 // machinery but can exercise everything this function does.
 //
 // found=false means symbols simply does not name res.Anchor (see
-// CrossCheckExtent's doc on the fourth cross-check exemption); err is
+// CrossCheckExtents' doc on the fourth cross-check exemption); err is
 // non-nil only when a match was found and its range disagreed.
 func MatchAndCompare(src []byte, res *Resolution, symbols []lsp.Symbol) (found bool, err error) {
 	match, ok := matchLSPSymbol(res.Anchor, res.Sep, res.Flat, symbols)

@@ -23,7 +23,7 @@ import (
 // server-catalog language name, and a hand-written second copy of that table
 // here would just be the same drift this guard exists to catch.
 // internal/lsp cannot import internal/resolve for this instead (resolve
-// already imports lsp, for CrossCheckExtent's own Dial call, so the reverse
+// already imports lsp, for CrossCheckExtents' own Dial call, so the reverse
 // import would cycle) -- resolve is the one package that can see both sides
 // of the seam.
 func TestServerLanguages_HaveLanguageKindMapping(t *testing.T) {

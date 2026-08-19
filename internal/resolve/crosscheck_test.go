@@ -6,22 +6,16 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
 )
 
-// TestCrossCheckVerdict_AgreesPerAnchorAndBatch guards the invariant this
-// package's two public cross-check entry points must never independently
-// drift on: commit's per-anchor CrossCheckExtent and diff's batch
-// CrossCheckExtents must never disagree about what "degraded" or "a
-// mismatch" means for an identical resolution against an identical symbol
-// table. Neither
-// function is driven directly here -- both dial a real *lsp.Session before
-// ever reaching a verdict, and Session's client cache is unexported to
-// package lsp, so there is no seam to hand either one a mock client
-// without a live server. What both actually share for the verdict itself
-// is crossCheckVerdict (crosscheck.go), extracted for exactly this reason:
-// this test drives it directly with one shared mock symbol list, first
-// per-anchor (a single-resolution list, precisely what CrossCheckExtent
-// constructs internally) and then as part of the full batch (precisely
-// CrossCheckExtents' own list, unmodified), and asserts the two agree.
-func TestCrossCheckVerdict_AgreesPerAnchorAndBatch(t *testing.T) {
+// TestCrossCheckVerdict_SingleAgreesWithBatch guards the invariant a batch
+// verdict must hold: one resolution's outcome must not change because
+// other resolutions shared its query. CrossCheckExtents is not driven
+// directly here -- it dials a real *lsp.Session before reaching a verdict,
+// and Session's client cache is unexported to package lsp, so there is no
+// seam to hand it a mock client without a live server. crossCheckVerdict
+// (crosscheck.go) is where the verdict is actually decided: this test
+// drives it with one shared mock symbol list, first per-anchor and then
+// over the full batch, and asserts the two agree.
+func TestCrossCheckVerdict_SingleAgreesWithBatch(t *testing.T) {
 	t.Parallel()
 
 	// Two lines, so DeclOnly extents below can point at real byte offsets

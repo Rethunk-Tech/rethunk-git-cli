@@ -307,7 +307,7 @@ func flattenFlat(syms []protocol.SymbolInformation) []Symbol {
 // (TestServerLanguages_HaveLanguageKindMapping) can call it directly rather
 // than a second, hand-maintained copy of this switch: internal/lsp cannot
 // import internal/resolve (resolve already imports lsp, for
-// CrossCheckExtent's Dial call), so that guard has to reach in from the
+// CrossCheckExtents' Dial call), so that guard has to reach in from the
 // resolve side, which needs this exported.
 func LanguageKindFor(path string) (kind protocol.LanguageKind, ok bool) {
 	switch filepath.Ext(path) {
