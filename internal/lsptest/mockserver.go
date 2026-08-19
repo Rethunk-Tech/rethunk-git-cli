@@ -50,7 +50,7 @@ type MockServerHooks struct {
 // path to be caught, rather than this double quietly becoming the only
 // definition of "correct" either caller checks against.
 //
-// One gap this loop cannot model at all (n15 in the 2026-07-29 audit): a
+// One gap this loop cannot model at all: a
 // server-initiated request, e.g. workspace/configuration, which
 // internal/lsp/client.go's configClient exists to answer for taplo. This is
 // a client speaking to a server it drives, not server-side jsonrpc2 --

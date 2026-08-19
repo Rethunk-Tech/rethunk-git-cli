@@ -35,13 +35,11 @@ import (
 // speculative, and answering it safely costs nothing for every server that
 // is wired and never asks.
 //
-// Dead on every wired path today (n14 in the 2026-07-29 audit) is therefore
-// the correct, deliberate state, not debt: this is protocol reserve for
-// taplo specifically, kept rather than deleted or stubbed, and worth
-// revisiting only if taplo is ever wired into the servers map for real.
-// internal/lsptest's mockserver has no equivalent of this handler -- see
-// its own doc comment (n15) for what that gap in the double does and does
-// not cover.
+// Dead on every wired path today is therefore deliberate, not debt: this is
+// protocol reserve for taplo specifically, worth revisiting only if taplo is
+// wired into the servers map for real. internal/lsptest's mockserver has no
+// equivalent handler -- see its own doc comment for what that gap in the
+// double does and does not cover.
 type configClient struct {
 	protocol.UnimplementedClient
 }

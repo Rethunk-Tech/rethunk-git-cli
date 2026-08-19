@@ -13,12 +13,8 @@ import (
 
 // defaultDialBudget bounds how long Dial waits to reach a live daemon socket
 // before giving up and reporting degraded=true (specs/design.md), unless
-// overridden by RGIT_LSP_DIAL_TIMEOUT.
-//
-// Unexported: no caller outside this package reaches Dial's timing directly
-// (n13 in the 2026-07-29 audit found none when this was still exported) --
-// internal/resolve calls CrossCheckExtent/CrossCheckExtents, never Dial or
-// these constants themselves.
+// overridden by RGIT_LSP_DIAL_TIMEOUT. Unexported: internal/resolve calls
+// CrossCheckExtents, never Dial or this constant.
 const defaultDialBudget = 150 * time.Millisecond
 
 // defaultQueryDeadline bounds a single textDocument/documentSymbol round
@@ -28,11 +24,8 @@ const defaultDialBudget = 150 * time.Millisecond
 // 2s, not a tighter budget: a warm gopls daemon answers in single-digit
 // milliseconds, but vtsls's first documentSymbol after didOpen can take
 // roughly half a second, and a deadline a real server routinely misses
-// degrades the cross-check to [ts-only] on every invocation instead of
-// occasionally -- a deadline that only ever fires is not a budget, it is a
-// disabled feature.
-//
-// Unexported alongside defaultDialBudget -- see its comment.
+// degrades the cross-check to [ts-only] on every invocation -- a deadline
+// that only ever fires is a disabled feature, not a budget.
 const defaultQueryDeadline = 2 * time.Second
 
 // dialBudget and queryDeadline read their env override on every call, not
