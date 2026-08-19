@@ -81,6 +81,19 @@ func TestGitVersion_Less(t *testing.T) {
 func TestCheckGitVersion(t *testing.T) {
 	t.Parallel()
 
+	// Every fake git is written here, before any parallel subtest starts,
+	// and never from inside one: a concurrent fork/exec inherits the write
+	// fd os.WriteFile still holds on a sibling's script, and the kernel then
+	// refuses to exec that script with ETXTBSY ("text file busy"). Writing
+	// them all up front leaves no write in flight once the execs begin.
+	var (
+		belowFloor  = writeFakeGit(t, "git version 2.20.1")
+		atFloor     = writeFakeGit(t, "git version 2.32.0")
+		appleSuffix = writeFakeGit(t, "git version 2.39.3 (Apple Git-146)")
+		winSuffix   = writeFakeGit(t, "git version 2.43.0.windows.1")
+		unparseable = writeFakeGit(t, "not a version string")
+	)
+
 	t.Run("real git on this machine meets the floor", func(t *testing.T) {
 		t.Parallel()
 		gitPath, err := exec.LookPath("git")
@@ -100,7 +113,7 @@ func TestCheckGitVersion(t *testing.T) {
 
 	t.Run("a version below the floor reports both numbers", func(t *testing.T) {
 		t.Parallel()
-		script := writeFakeGit(t, "git version 2.20.1")
+		script := belowFloor
 		c := CheckGitVersion(script, GitVersion{Major: 2, Minor: 32, Patch: 0})
 		qt.Assert(t, qt.IsFalse(c.OK))
 		qt.Assert(t, qt.Equals(c.Detail, "2.20.1 found, need >= 2.32.0 -- see docs/INSTALL.md § Prerequisites"))
@@ -108,7 +121,7 @@ func TestCheckGitVersion(t *testing.T) {
 
 	t.Run("a version at the floor passes", func(t *testing.T) {
 		t.Parallel()
-		script := writeFakeGit(t, "git version 2.32.0")
+		script := atFloor
 		c := CheckGitVersion(script, GitVersion{Major: 2, Minor: 32, Patch: 0})
 		qt.Assert(t, qt.IsTrue(c.OK))
 		qt.Assert(t, qt.Equals(c.Detail, "2.32.0"))
@@ -116,7 +129,7 @@ func TestCheckGitVersion(t *testing.T) {
 
 	t.Run("platform-suffixed output still parses", func(t *testing.T) {
 		t.Parallel()
-		script := writeFakeGit(t, "git version 2.39.3 (Apple Git-146)")
+		script := appleSuffix
 		c := CheckGitVersion(script, GitVersion{Major: 2, Minor: 32, Patch: 0})
 		qt.Assert(t, qt.IsTrue(c.OK))
 		qt.Assert(t, qt.Equals(c.Detail, "2.39.3"))
@@ -124,7 +137,7 @@ func TestCheckGitVersion(t *testing.T) {
 
 	t.Run("platform-suffixed Windows output still parses", func(t *testing.T) {
 		t.Parallel()
-		script := writeFakeGit(t, "git version 2.43.0.windows.1")
+		script := winSuffix
 		c := CheckGitVersion(script, MinGitVersion)
 		qt.Assert(t, qt.IsTrue(c.OK))
 		qt.Assert(t, qt.Equals(c.Detail, "2.43.0"))
@@ -132,7 +145,7 @@ func TestCheckGitVersion(t *testing.T) {
 
 	t.Run("unparseable output is reported, not silently accepted", func(t *testing.T) {
 		t.Parallel()
-		script := writeFakeGit(t, "not a version string")
+		script := unparseable
 		c := CheckGitVersion(script, MinGitVersion)
 		qt.Assert(t, qt.IsFalse(c.OK))
 		qt.Assert(t, qt.Equals(c.Detail, `unparseable `+"`git --version`"+` output "not a version string"`))
@@ -143,6 +156,9 @@ func TestCheckGitVersion(t *testing.T) {
 // echoes versionLine for any "--version" invocation, so CheckGitVersion's
 // parsing can be pinned against exact strings without depending on the
 // real git binary's own current version.
+//
+// Call it before any parallel subtest runs, never from inside one -- see
+// TestCheckGitVersion for the ETXTBSY race that costs.
 func writeFakeGit(t *testing.T, versionLine string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "fake-git.sh")
