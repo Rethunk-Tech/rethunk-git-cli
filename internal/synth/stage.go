@@ -346,22 +346,18 @@ type preambleOp struct {
 //
 // The returned pairs are the caller's to turn into their own TargetResult
 // rows (docs/USAGE.md: a --dry-run preview and the commit it previews must
-// be "comparable line for line") -- rolling their line counts silently into
-// whichever symbol the caller actually named would misattribute bytes to a
-// symbol that never touched them.
+// be "comparable line for line") -- rolling their line counts into whichever
+// symbol the caller named would misattribute bytes to a symbol that never
+// touched them.
 //
-// Each pseudo-anchor's own reported extent also absorbs its mandatory
-// trailing separator where the language owns one (resolve.
-// OwnsTrailingSeparator): gofmt always leaves exactly one blank line after
-// Go's package clause and after its import block, so that blank line is as
-// much part of "the header" and "the imports" as their own trailing newline
-// -- owning it is not misattribution, and it is what lets these rows sum to
-// git's own raw insertion count for a brand new file (specs/design.md §
-// Blob synthesis's "Separator ownership beyond @header/@imports was
-// considered and deferred, not built"). The synthesized blob itself is
-// unaffected either way:
-// mergeInsertTies' joinWithSeparator trims and renormalizes every insert's
-// boundary regardless of what either side's own text already carries.
+// Each pseudo-anchor's extent absorbs its mandatory trailing separator where
+// the language owns one (resolve.OwnsTrailingSeparator): gofmt always leaves
+// one blank line after Go's package clause and import block, so that line is
+// as much part of "the header" as its own trailing newline -- which is what
+// lets these rows sum to git's raw insertion count for a new file
+// (specs/design.md § Blob synthesis). The synthesized blob is unaffected
+// either way: mergeInsertTies' joinWithSeparator renormalizes every insert's
+// boundary regardless.
 func (fp *filePlan) addPreamble(named map[string]bool) (pairs []preambleOp) {
 	if fp.headExists || !fp.workExists {
 		return nil
@@ -525,41 +521,23 @@ func (fp *filePlan) close() {
 	fp.workFile.Close()
 }
 
-// apply is the plan's only side-effecting step: pathspecs delegate to one
-// `git add` call, and every file's synthesized blob is written and staged
-// through its own hash-object + update-index pair. PlanStage already
-// resolved every target before apply ever runs -- resolution is a pure
-// read, so a resolution failure never reaches here -- but an I/O error
+// Apply is the plan's only side-effecting step: pathspecs delegate to one
+// `git add`, and every file's synthesized blob is written and staged through
+// its own hash-object + update-index pair. PlanStage already resolved every
+// target, so a resolution failure never reaches here -- but an I/O error
 // inside this loop (a full disk, a permission race) can still leave an
-// earlier file's blob staged while a later one fails. That is inherited
-// git behaviour, not a gap: this loop is N independent git invocations,
-// each durable the instant it returns, the same as a caller running the
-// equivalent hash-object/update-index sequence by hand would get
-// (specs/design.md § Blob synthesis measures both halves of this against
-// real git). A caller wanting the index back exactly as it was already has
-// `git reset` for it.
+// earlier file's blob staged while a later one fails. That is inherited git
+// behaviour: N independent git invocations, each durable the instant it
+// returns, and a caller wanting the index back has `git reset`.
 //
-// This loop does not skip a filePlan whose every op turned out Unchanged
-// (synth.Unchanged), even though the resulting blob is then byte-identical
-// to fp.headSrc and the hash-object/update-index pair changes nothing --
-// deliberate, not an oversight. Skipping is safe against Results()/
-// Preamble()/the exit-11 check: those read plan.Results, built once per
-// target in PlanStage and never touched by this loop, so stripping ops
-// here could never make an Unchanged result disappear from what the app
-// layer sees. The reason to leave it alone anyway is AGENTS.md's own
-// invariant: `git add path` re-stages path's current bytes unconditionally
-// whenever a caller names it, whether or not anything actually changed --
-// there is no "skip if identical" case in git's own add, so inventing one
-// here only for the all-Unchanged file would special-case rgit away from
-// the tool it matches, not toward it. It would also change what happens to
-// a path that already has different content staged from outside this
-// invocation (a manual `git add` before running rgit): today, naming any
-// anchor in that path collapses its index entry back to HEAD-plus-named-
-// anchors regardless of Outcome, the same as every other named path;
-// skipping only the all-Unchanged case would carve out a content-dependent
-// exception no other target combination gets.
-// Apply performs Plan's only side-effecting step: staging pathspecs via
-// `git add` and writing + staging every file's synthesized blob.
+// A filePlan whose every op is Unchanged is not skipped, even though its
+// blob is byte-identical to fp.headSrc. `git add path` re-stages path's
+// current bytes unconditionally whenever a caller names it, so a
+// "skip if identical" case would special-case rgit away from the tool it
+// matches. It would also carve out a content-dependent exception for a path
+// with different content already staged from outside this invocation: today
+// naming any anchor there collapses its index entry back to
+// HEAD-plus-named-anchors, the same as every other named path.
 func (p *Plan) Apply(ctx context.Context, repo *gitx.Repo, root string) error {
 	if len(p.pathspecs) > 0 {
 		if err := repo.Add(ctx, p.pathspecs...); err != nil {

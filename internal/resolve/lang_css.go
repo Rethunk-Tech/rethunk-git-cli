@@ -72,19 +72,14 @@ func (c *cssLanguage) MembersSitFlush() bool { return false }
 // Language's Declarations must never return entries for header or import
 // material, or @header/@imports/@toplevel would claim overlapping bytes.
 //
-// A rule_set's own block is descended into for further, natively nested
-// rule_sets (ruleSetDeclarations below) -- CSS Nesting, mainstream now:
-// `.parent { .child {} }` parses .child's rule_set as a direct named child
-// of .parent's own "block", sibling to its declaration nodes. A rule_set
-// nested inside an @media/@supports/@keyframes block, by contrast, is still
-// not descended into and gets no anchor of its own: that is a different,
-// deliberate non-descent rule (docs/ANCHORS.md), unaffected by this one --
-// an at-rule is never itself walked for nested rule_sets, whether it
-// appears at the top level or, per the CSS Nesting spec, inside another
-// rule_set's own block (this grammar allows that shape too, e.g. `.a {
-// @media (...) { .b {} } }` -- .b's own rule_set is a grandchild of .a's
-// block, once removed through the media_statement, and is left just as
-// undescended as any other at-rule content).
+// A rule_set's block is descended into for natively nested rule_sets
+// (ruleSetDeclarations below): `.parent { .child {} }` parses .child as a
+// direct named child of .parent's "block". A rule_set inside an
+// @media/@supports/@keyframes block is not, and gets no anchor -- a separate
+// non-descent rule (docs/ANCHORS.md). An at-rule is never walked for nested
+// rule_sets wherever it appears, including inside another rule_set's block
+// (`.a { @media (...) { .b {} } }` leaves .b as undescended as any other
+// at-rule content).
 func (c *cssLanguage) Declarations(src []byte, root *ts.Node) []Declaration {
 	var decls []Declaration
 	for _, child := range namedChildren(root) {
@@ -178,15 +173,13 @@ func (c *cssLanguage) ruleSetDeclaration(src []byte, node *ts.Node, container st
 // (bare "@font-face") still degrades to the keyword alone, which is exactly
 // the shape a caller would expect to type.
 //
-// The last named child is the body when it is one of "block" (media_
-// statement, supports_statement, at_rule, scope_statement all keep it as
-// their own final named child) or "keyframe_block_list" (keyframes_
-// statement's distinct body kind, not itself called "block"); the name is
-// everything before that child's own start byte. A body-less statement
-// (charset_statement, import_statement, namespace_statement -- none of
-// these ever have a block) instead ends at the statement's own end byte,
-// which includes the trailing ";" the trailing TrimRight below strips along
-// with the whitespace either shape can leave behind.
+// The last named child is the body when it is "block" (media_statement,
+// supports_statement, at_rule and scope_statement all end with one) or
+// "keyframe_block_list" (keyframes_statement's distinct body kind); the name
+// is everything before that child's start byte. A body-less statement
+// (charset_statement, import_statement, namespace_statement) ends at the
+// statement's own end byte, including the trailing ";" the TrimRight below
+// strips along with any whitespace.
 func cssAtRuleName(src []byte, node *ts.Node) string {
 	end := node.EndByte()
 	if body := cssBodyChild(node); body != nil {

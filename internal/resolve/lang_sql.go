@@ -96,21 +96,17 @@ func (l *sqlLanguage) buildTagGated() bool { return true }
 // doc-comment attribution (docStart) walks PrevNamedSibling from the
 // "statement" wrapper itself and finds them there regardless.
 //
-// Every top-level "statement" node wraps exactly one inner statement node,
-// across every kind handled below and every one this resolver leaves
-// unaddressed. Declarations reports the "statement" wrapper itself
-// as Node, not the inner node -- the same "outermost node is what a caller
-// means" rule TypeScript's export_statement and Python's
-// decorated_definition already follow -- so a caller naming a table also
-// gets the ";" or blank line up to its own extent boundary handled by the
-// core resolver's normal machinery, no SQL-specific extension needed.
+// Every top-level "statement" wraps exactly one inner statement node, and
+// Declarations reports the wrapper as Node -- the same "outermost node is
+// what a caller means" rule TypeScript's export_statement and Python's
+// decorated_definition follow -- so the core resolver's normal machinery
+// handles the ";" or blank line up to the extent boundary.
 //
 // Only CREATE TABLE/VIEW/FUNCTION/INDEX/TRIGGER/TYPE are addressable. DROP,
-// ALTER, INSERT, SELECT, and CREATE SCHEMA all parse but declare no
-// persistent named object the way the six covered kinds do; CREATE DOMAIN
-// does not even parse under this grammar version (it produces an ERROR
-// node). None of the excluded kinds clears the measured-demand bar
-// specs/design.md § Grammar scope holds every addressable shape to.
+// ALTER, INSERT, SELECT and CREATE SCHEMA parse but declare no persistent
+// named object; CREATE DOMAIN does not parse at all under this grammar
+// version (it produces an ERROR node). None clears the measured-demand bar
+// specs/design.md § Grammar scope holds addressable shapes to.
 func (l *sqlLanguage) Declarations(src []byte, root *ts.Node) []Declaration {
 	var decls []Declaration
 	for _, child := range namedChildren(root) {
@@ -142,31 +138,24 @@ func sqlDeclarationFor(src []byte, stmt, inner *ts.Node) (Declaration, bool) {
 }
 
 // sqlObjectReferenceDeclaration names a CREATE TABLE/VIEW/FUNCTION/TRIGGER/
-// TYPE statement by its first "object_reference" child's own "name" field --
-// the first "object_reference"-kind child in every one of the five
-// statement kinds above -- positional rather than a field on the
-// statement itself, since tree-sitter-sql declares no field naming that
-// child directly (CREATE TRIGGER's own statement carries three
-// object_reference children -- its own name, the table it fires on, the
-// function it calls -- and the trigger's own name is always the first).
+// TYPE statement by its first "object_reference" child's "name" field --
+// positional, since tree-sitter-sql declares no field naming that child
+// directly. CREATE TRIGGER carries three object_reference children (its own
+// name, the table it fires on, the function it calls); the trigger's name is
+// always the first.
 //
 // A schema-qualified name ("s.t") carries the schema as object_reference's
-// own "schema" field, present only when written in the source; it is read
-// as Container, the same one-level qualification a Go receiver type or a
-// TOML table header already gives, so both "schema.sql:s.t" and the bare
-// "t" (when unambiguous) resolve. CREATE TRIGGER never carries a schema
-// field on its own name -- correctly, since Postgres does not allow a
-// schema-qualified trigger name -- so a trigger's Container is always
-// empty; two same-named triggers in one file (legal when they fire on
-// different tables, a real gap this adapter does not close) disambiguate
-// with the existing #N ordinal, the same as two same-named Go functions.
+// "schema" field, read as Container -- the same one-level qualification a Go
+// receiver type gives, so both "schema.sql:s.t" and a bare unambiguous "t"
+// resolve. CREATE TRIGGER never carries a schema field, correctly: Postgres
+// does not allow a schema-qualified trigger name. Two same-named triggers in
+// one file (legal when they fire on different tables, a gap this adapter
+// does not close) disambiguate with the #N ordinal.
 //
-// A quoted identifier's own text ("\"Users\"") is read verbatim, quotes
-// included, rather than unwrapped the way lang_toml.go strips a
-// quoted_key's surrounding quote: matching lang_css.go's "a selector's bare
-// name is its own text, exactly as written" precedent instead, since a
-// caller who wrote a quoted identifier in the source will naturally type it
-// quoted in the anchor too.
+// A quoted identifier ("\"Users\"") is read verbatim, quotes included,
+// rather than unwrapped the way lang_toml.go strips a quoted_key: a caller
+// who wrote it quoted in the source will type it quoted in the anchor, the
+// same precedent lang_css.go sets for selectors.
 func sqlObjectReferenceDeclaration(src []byte, stmt, inner *ts.Node) (Declaration, bool) {
 	var ref *ts.Node
 	for _, c := range namedChildren(inner) {

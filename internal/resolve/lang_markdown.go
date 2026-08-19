@@ -184,14 +184,12 @@ func headingText(src []byte, heading *ts.Node) string {
 // declarations pseudo.go's shared toplevelExtent computes for every other
 // language.
 //
-// That shared algorithm spans idx.order's first through last declaration,
-// which for markdown is the opposite region: Declarations never returns an
-// entry for the lede (sectionDeclarations has no heading to name it by,
-// see atxHeadingOf), so "first declaration" is always the first actual
-// heading, and the shared formula computes "first heading through end of
-// document" -- everything the lede is not. pseudo.go dispatches here via a
-// type assertion on *mdLanguage rather than a new Language method, so
-// every other grammar's own @toplevel stays on the shared code path.
+// The shared algorithm spans idx.order's first through last declaration,
+// which for markdown is the opposite region: Declarations never names the
+// lede (no heading to name it by, see atxHeadingOf), so "first declaration"
+// is the first actual heading and the shared formula computes everything the
+// lede is not. pseudo.go dispatches here via a type assertion on
+// *mdLanguage, keeping every other grammar on the shared path.
 //
 // found is false when there is no lede to stage: a document with no
 // content before its first heading (or none at all after frontmatter) has
