@@ -2012,7 +2012,7 @@ func TestResolve_ForPathShebangFallback(t *testing.T) {
 	// A recognized extension is authoritative and never even looks at
 	// content: passing shebang-shaped bytes that would map to a different
 	// language must not steer a ".go" file anywhere else.
-	lang, ok := resolve.ForPath("main.go", []byte("#!/usr/bin/env python3\n"))
+	lang, ok := resolve.ForPathFolding("main.go", []byte("#!/usr/bin/env python3\n"), false)
 	qt.Assert(t, qt.IsTrue(ok))
 	qt.Assert(t, qt.Equals(lang.Name(), "go"))
 
@@ -2022,14 +2022,14 @@ func TestResolve_ForPathShebangFallback(t *testing.T) {
 		"#!/bin/bash\n", "#!/usr/bin/env bash\n",
 		"#!/bin/sh\n", "#!/usr/bin/env sh\n",
 	} {
-		lang, ok := resolve.ForPath("hooks/pre-commit", []byte(shebang+"foo() {\n  echo hi\n}\n"))
+		lang, ok := resolve.ForPathFolding("hooks/pre-commit", []byte(shebang+"foo() {\n  echo hi\n}\n"), false)
 		qt.Assert(t, qt.IsTrue(ok), qt.Commentf("shebang %q", shebang))
 		qt.Assert(t, qt.Equals(lang.Name(), "shell"))
 	}
 
 	// python3 falls out cleanly too: the same adapter Python's own
 	// extension resolves to, with no special-casing for how it was reached.
-	lang, ok = resolve.ForPath("bin/tool", []byte("#!/usr/bin/env python3\n\ndef foo():\n    return 1\n"))
+	lang, ok = resolve.ForPathFolding("bin/tool", []byte("#!/usr/bin/env python3\n\ndef foo():\n    return 1\n"), false)
 	qt.Assert(t, qt.IsTrue(ok))
 	qt.Assert(t, qt.Equals(lang.Name(), "python"))
 
@@ -2047,7 +2047,7 @@ func TestResolve_ForPathShebangFallback(t *testing.T) {
 		{"hooks/pre-commit", "# just a comment, not a shebang\nfoo() {}\n"},
 		{"hooks/pre-commit", ""},
 	} {
-		_, ok := resolve.ForPath(c.path, []byte(c.content))
+		_, ok := resolve.ForPathFolding(c.path, []byte(c.content), false)
 		qt.Assert(t, qt.IsFalse(ok), qt.Commentf("content %q", c.content))
 	}
 }

@@ -375,27 +375,22 @@ var shebangExtension = map[string]string{
 	"deno":    ".ts",
 }
 
-// ForPath returns the adapter for path. Extension lookup is tried first and
-// is byte-for-byte ForExtension's own result -- a ".go" file, or any other
-// recognized extension, never reaches the code below. Only when that yields
-// nothing does ForPath fall back to sniffing content's first line for a "#!"
-// interpreter line, via shebangExtension.
+// ForPathFolding returns the adapter for path. Extension lookup is tried
+// first and is byte-for-byte ForExtensionFolding's own result -- a ".go"
+// file, or any other recognized extension, never reaches the code below.
+// Only when that yields nothing does it fall back to sniffing content's
+// first line for a "#!" interpreter line, via shebangExtension. fold applies
+// to the extension lookup alone; path itself stays byte-for-byte unchanged
+// and shebang lookup is never folded.
 //
-// content is whatever the caller already has; ForPath itself never reads a
-// file. It looks at content's first line alone and nothing past it -- a
-// caller that only peeked a bounded prefix of a large or binary file (rather
-// than reading the whole thing just to decide it has no shebang) gets
-// exactly the same answer a full read would have given, since a real
+// content is whatever the caller already has; ForPathFolding itself never
+// reads a file. It looks at content's first line alone and nothing past it
+// -- a caller that only peeked a bounded prefix of a large or binary file
+// (rather than reading the whole thing just to decide it has no shebang)
+// gets exactly the same answer a full read would have given, since a real
 // shebang line is always the first thing in the file. content may be nil,
 // meaning no bytes were available to peek (e.g. the path exists only in
-// HEAD, not the worktree); ForPath then behaves exactly like ForExtension.
-func ForPath(path string, content []byte) (Language, bool) {
-	return ForPathFolding(path, content, false)
-}
-
-// ForPathFolding resolves path with optional case folding for its extension.
-// The path itself remains byte-for-byte unchanged; only the extension lookup
-// is folded when fold is true. Shebang lookup is unchanged.
+// HEAD, not the worktree); it then behaves exactly like ForExtensionFolding.
 func ForPathFolding(path string, content []byte, fold bool) (Language, bool) {
 	if l, ok := ForExtensionFolding(filepath.Ext(path), fold); ok {
 		return l, true
@@ -513,7 +508,7 @@ func shebangInterpreter(content []byte) (string, bool) {
 	return interp, true
 }
 
-// shebangPeekBytes bounds how much of a candidate file PeekShebangLine will
+// shebangPeekBytes bounds how much of a candidate file peekShebangLine will
 // ever read: a real interpreter line is always short, so this is generous
 // headroom for one, not an attempt to capture more.
 const shebangPeekBytes = 256
@@ -522,7 +517,7 @@ const shebangPeekBytes = 256
 // extensionless path whose worktree copy is absent.
 const ShebangPeekBytes = shebangPeekBytes
 
-// PeekShebangLine reads at most shebangPeekBytes from the worktree file at
+// peekShebangLine reads at most shebangPeekBytes from the worktree file at
 // fullPath and returns its first line, for ForPath's shebang fallback. ok is
 // false when fullPath cannot be opened at all -- most commonly, no worktree
 // copy exists there: a path resolved only against HEAD, the index, or an
@@ -535,7 +530,7 @@ const ShebangPeekBytes = shebangPeekBytes
 // just to learn it has no shebang. This is the one place that logic lives;
 // internal/synth and internal/diff both reach it through
 // LanguageForWorktreePath below rather than each reading their own prefix.
-func PeekShebangLine(fullPath string) ([]byte, bool) {
+func peekShebangLine(fullPath string) ([]byte, bool) {
 	f, err := os.Open(fullPath)
 	if err != nil {
 		return nil, false
@@ -568,28 +563,23 @@ func PeekShebangLine(fullPath string) ([]byte, bool) {
 // git execution layer.
 type HeadShebangSample func() (sample []byte, exists bool, err error)
 
-// LanguageForPath resolves relPath's language from its extension, then a
-// bounded shebang peek. An existing worktree copy always wins the shebang
-// lookup; only when that copy is absent does headSample get called for a
-// bounded HEAD-blob peek. Extension lookup never calls either source.
+// LanguageForPathFolding resolves relPath's language from its extension,
+// then a bounded shebang peek. An existing worktree copy always wins the
+// shebang lookup; only when that copy is absent does headSample get called
+// for a bounded HEAD-blob peek. Extension lookup never calls either source,
+// and fold applies to it alone -- relPath stays unchanged and shebang lookup
+// is never folded.
 //
 // peeked reports whether a source was actually found and inspected,
 // independent of ok: a source with no shebang or an unmapped interpreter
 // still has peeked=true. headSample may be nil when HEAD fallback is not
-// available.
-func LanguageForPath(root, relPath string, headSample HeadShebangSample) (lang Language, ok bool, peeked bool, err error) {
-	return LanguageForPathFolding(root, relPath, false, headSample)
-}
-
-// LanguageForPathFolding is LanguageForPath with optional case folding for
-// extension lookup. The path remains unchanged, and shebang lookup follows
-// the same rules as LanguageForPath.
+// available -- LanguageForWorktreePathFolding is that case named.
 func LanguageForPathFolding(root, relPath string, fold bool, headSample HeadShebangSample) (lang Language, ok bool, peeked bool, err error) {
 	if lang, ok := ForExtensionFolding(filepath.Ext(relPath), fold); ok {
 		return lang, true, false, nil
 	}
 	fullPath := filepath.Join(root, relPath)
-	line, peeked := PeekShebangLine(fullPath)
+	line, peeked := peekShebangLine(fullPath)
 	if peeked {
 		lang, ok = ForPathFolding(relPath, line, fold)
 		return lang, ok, true, nil
@@ -611,15 +601,10 @@ func LanguageForPathFolding(root, relPath string, fold bool, headSample HeadSheb
 	return lang, ok, true, nil
 }
 
-// LanguageForWorktreePath resolves relPath from its extension or a bounded
-// shebang peek of the worktree copy. Callers that can fall back to a HEAD blob
-// use LanguageForPath directly.
-func LanguageForWorktreePath(root, relPath string) (lang Language, ok bool, peeked bool) {
-	return LanguageForWorktreePathFolding(root, relPath, false)
-}
-
 // LanguageForWorktreePathFolding resolves relPath from its extension or a
-// bounded shebang peek of the worktree copy, optionally folding its extension.
+// bounded shebang peek of the worktree copy, optionally folding its
+// extension. Callers that can fall back to a HEAD blob use
+// LanguageForPathFolding directly.
 func LanguageForWorktreePathFolding(root, relPath string, fold bool) (lang Language, ok bool, peeked bool) {
 	lang, ok, peeked, _ = LanguageForPathFolding(root, relPath, fold, nil)
 	return lang, ok, peeked

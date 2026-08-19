@@ -19,9 +19,9 @@ func TestPeekShebangLine(t *testing.T) {
 		if err := os.WriteFile(path, []byte("#!/bin/sh\necho hi\n"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		line, ok := PeekShebangLine(path)
+		line, ok := peekShebangLine(path)
 		if !ok {
-			t.Fatal("PeekShebangLine() ok = false; want true")
+			t.Fatal("peekShebangLine() ok = false; want true")
 		}
 		if string(line) != "#!/bin/sh\n" {
 			t.Errorf("line = %q; want %q", line, "#!/bin/sh\n")
@@ -37,16 +37,16 @@ func TestPeekShebangLine(t *testing.T) {
 		if err := os.WriteFile(path, []byte("#!/bin/sh"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		line, ok := PeekShebangLine(path)
+		line, ok := peekShebangLine(path)
 		if !ok {
-			t.Fatal("PeekShebangLine() ok = false; want true for a short, newline-less file")
+			t.Fatal("peekShebangLine() ok = false; want true for a short, newline-less file")
 		}
 		if string(line) != "#!/bin/sh" {
 			t.Errorf("line = %q; want %q", line, "#!/bin/sh")
 		}
 	})
 
-	// Before PeekShebangLine's own fix, a successful os.Open on a zero-byte
+	// Before peekShebangLine's own fix, a successful os.Open on a zero-byte
 	// file still reported ok=true with an empty line -- indistinguishable
 	// from a genuine (if shebang-less) first line to a caller that only
 	// checks the bool.
@@ -56,25 +56,25 @@ func TestPeekShebangLine(t *testing.T) {
 		if err := os.WriteFile(path, nil, 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if _, ok := PeekShebangLine(path); ok {
-			t.Error("PeekShebangLine() ok = true for an empty file; want false")
+		if _, ok := peekShebangLine(path); ok {
+			t.Error("peekShebangLine() ok = true for an empty file; want false")
 		}
 	})
 
 	t.Run("missing file", func(t *testing.T) {
 		t.Parallel()
-		if _, ok := PeekShebangLine(filepath.Join(t.TempDir(), "does-not-exist")); ok {
-			t.Error("PeekShebangLine() ok = true for a missing file; want false")
+		if _, ok := peekShebangLine(filepath.Join(t.TempDir(), "does-not-exist")); ok {
+			t.Error("peekShebangLine() ok = true for a missing file; want false")
 		}
 	})
 
 	// A directory's os.Open succeeds; its Read does not (EISDIR). Before
-	// PeekShebangLine's own fix, that non-EOF read error was silently
+	// peekShebangLine's own fix, that non-EOF read error was silently
 	// discarded and this still reported ok=true.
 	t.Run("directory reports ok=false", func(t *testing.T) {
 		t.Parallel()
-		if _, ok := PeekShebangLine(t.TempDir()); ok {
-			t.Error("PeekShebangLine() ok = true for a directory; want false")
+		if _, ok := peekShebangLine(t.TempDir()); ok {
+			t.Error("peekShebangLine() ok = true for a directory; want false")
 		}
 	})
 }
@@ -240,16 +240,16 @@ func TestForPath_NodeJSEcosystemRoutesToTypeScript(t *testing.T) {
 		"#!/usr/bin/env bun run\nconsole.log(1)\n",
 	}
 	for _, content := range fixtures {
-		lang, ok := ForPath("script", []byte(content))
+		lang, ok := ForPathFolding("script", []byte(content), false)
 		if !ok || lang.Name() != typescript.Name() {
-			t.Errorf("ForPath(%q) = (%v, %v); want the TypeScript adapter", content, lang, ok)
+			t.Errorf("ForPathFolding(%q) = (%v, %v); want the TypeScript adapter", content, lang, ok)
 		}
 	}
 
-	if _, ok := ForPath("script", []byte("#!/usr/bin/perl\nprint 1;\n")); ok {
+	if _, ok := ForPathFolding("script", []byte("#!/usr/bin/perl\nprint 1;\n"), false); ok {
 		t.Error(`ForPath with a perl shebang resolved; want exit-9 unmapped`)
 	}
-	if _, ok := ForPath("script", []byte("#!/usr/bin/env zsh\necho hi\n")); ok {
+	if _, ok := ForPathFolding("script", []byte("#!/usr/bin/env zsh\necho hi\n"), false); ok {
 		t.Error("ForPath with a zsh shebang resolved; zsh stays excluded (tree-sitter-bash mis-parse)")
 	}
 }
@@ -264,9 +264,9 @@ func TestForPath_VersionedPythonShebangsRouteToPython(t *testing.T) {
 		"#!/usr/bin/env -S python3.13 -u\nprint(1)\n",
 	}
 	for _, content := range fixtures {
-		lang, ok := ForPath("script", []byte(content))
+		lang, ok := ForPathFolding("script", []byte(content), false)
 		if !ok || lang.Name() != "python" {
-			t.Errorf("ForPath(%q) = (%v, %v); want the Python adapter", content, lang, ok)
+			t.Errorf("ForPathFolding(%q) = (%v, %v); want the Python adapter", content, lang, ok)
 		}
 	}
 
@@ -274,8 +274,8 @@ func TestForPath_VersionedPythonShebangsRouteToPython(t *testing.T) {
 		"#!/usr/bin/python2\nprint 1\n",
 		"#!/usr/bin/python2.7\nprint 1\n",
 	} {
-		if _, ok := ForPath("script", []byte(content)); ok {
-			t.Errorf("ForPath(%q) resolved; want Python 2 to remain unmapped", content)
+		if _, ok := ForPathFolding("script", []byte(content), false); ok {
+			t.Errorf("ForPathFolding(%q) resolved; want Python 2 to remain unmapped", content)
 		}
 	}
 }
@@ -352,7 +352,7 @@ func TestLanguageForPath_UsesHEADWhenWorktreeIsAbsent(t *testing.T) {
 
 	root := t.TempDir()
 	var calls int
-	lang, ok, peeked, err := LanguageForPath(root, "hook", func() ([]byte, bool, error) {
+	lang, ok, peeked, err := LanguageForPathFolding(root, "hook", false, func() ([]byte, bool, error) {
 		calls++
 		return []byte("#!/usr/bin/env bash\n"), true, nil
 	})
@@ -360,10 +360,10 @@ func TestLanguageForPath_UsesHEADWhenWorktreeIsAbsent(t *testing.T) {
 		t.Fatalf("LanguageForPath: %v", err)
 	}
 	if !ok || lang.Name() != "shell" {
-		t.Fatalf("LanguageForPath() = (%v, %v); want shell, true", lang, ok)
+		t.Fatalf("LanguageForPathFolding() = (%v, %v); want shell, true", lang, ok)
 	}
 	if !peeked {
-		t.Error("LanguageForPath() peeked = false; want true for HEAD sample")
+		t.Error("LanguageForPathFolding() peeked = false; want true for HEAD sample")
 	}
 	if calls != 1 {
 		t.Errorf("HEAD sample calls = %d; want 1", calls)
@@ -373,15 +373,15 @@ func TestLanguageForPath_UsesHEADWhenWorktreeIsAbsent(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls = 0
-	lang, ok, peeked, err = LanguageForPath(root, "hook", func() ([]byte, bool, error) {
+	lang, ok, peeked, err = LanguageForPathFolding(root, "hook", false, func() ([]byte, bool, error) {
 		calls++
 		return []byte("#!/usr/bin/env bash\n"), true, nil
 	})
 	if err != nil {
-		t.Fatalf("LanguageForPath(worktree): %v", err)
+		t.Fatalf("LanguageForPathFolding(worktree): %v", err)
 	}
 	if ok || lang != nil || !peeked {
-		t.Errorf("LanguageForPath(worktree) = (%v, %v, %v); want nil, false, true", lang, ok, peeked)
+		t.Errorf("LanguageForPathFolding(worktree) = (%v, %v, %v); want nil, false, true", lang, ok, peeked)
 	}
 	if calls != 0 {
 		t.Errorf("HEAD sample calls with worktree = %d; want 0", calls)
