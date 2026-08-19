@@ -1158,10 +1158,10 @@ func TestStage_HTMLElementByID(t *testing.T) {
 
 // TestPlanStage_PreambleRowsAppearInResults guards against a --dry-run
 // undercount: TestStage_NewFileCarriesHeaderAndImports already proves the
-// @header/@imports preamble is staged for a new file, and plan.Results()
+// @header/@imports preamble is staged for a new file, and plan.Results
 // must carry a row for it too -- not merely announce it on stderr's
 // [notice] line -- or a --dry-run preview (which prints nothing but
-// plan.Results()) reports only the named symbol's own count, silently
+// plan.Results) reports only the named symbol's own count, silently
 // dropping the preamble's.
 //
 // The row-level counts here DO sum to git's raw numstat total for the whole
@@ -1182,7 +1182,7 @@ func TestPlanStage_PreambleRowsAppearInResults(t *testing.T) {
 	plan, err := synth.PlanStage(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("new.go", "Hello")})
 	qt.Assert(t, qt.IsNil(err))
 
-	results := plan.Results()
+	results := plan.Results
 	qt.Assert(t, qt.Equals(len(results), 3))
 
 	labels := make([]string, len(results))
@@ -1236,7 +1236,7 @@ func TestPlanStage_PreambleDoesNotAbsorbSeparatorForLanguagesThatDontOwnOne(t *t
 	plan, err := synth.PlanStage(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("new.ts", "hello")})
 	qt.Assert(t, qt.IsNil(err))
 
-	results := plan.Results()
+	results := plan.Results
 	qt.Assert(t, qt.Equals(len(results), 2))
 	qt.Assert(t, qt.Equals(results[0].Target.Symbol.Anchor, "@imports"))
 	// `import { z } from "./z";` alone -- one line, no absorbed blank line.

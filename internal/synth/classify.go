@@ -21,7 +21,7 @@ import (
 // one query instead of paying one documentSymbol round trip per anchor.
 // Deferring the dial rather than dropping it keeps this a pure read:
 // a failure surfaces once crossCheckPending runs, still before
-// planStage returns a plan Apply could act on, so AGENTS.md's "resolve
+// PlanStage returns a plan Apply could act on, so AGENTS.md's "resolve
 // every target before staging any" still holds.
 //
 // unchanged reports whether the resolved extent is byte-identical between
@@ -157,8 +157,8 @@ func (fp *filePlan) deferCrossCheck(res *resolve.Resolution) {
 //
 // err is the first genuine range disagreement (exit 6), if any. Called once
 // per file after every target naming that file has already been resolved
-// and its op built (planStage's own final pass over plan.files), so a
-// mismatch here still aborts planStage before it ever returns a plan Apply
+// and its op built (PlanStage's own final pass over plan.files), so a
+// mismatch here still aborts PlanStage before it ever returns a plan Apply
 // could act on -- AGENTS.md's "resolve every target before staging any"
 // still holds.
 func (fp *filePlan) crossCheckPending(ctx context.Context, sess *lsp.Session, root string) (tsOnly bool, err error) {

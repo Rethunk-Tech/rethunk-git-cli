@@ -261,23 +261,23 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 			return code
 		}
 
-		if plan.TSOnly() {
+		if plan.TSOnly {
 			fmt.Fprintln(stderr, tsOnlyNotice)
 		}
-		for _, path := range plan.Preamble() {
+		for _, path := range plan.Preamble {
 			fmt.Fprintf(stderr, "[notice] %s is new; staging its @header and @imports so the file compiles\n", path)
 		}
-		for _, e := range plan.Escalated() {
+		for _, e := range plan.Escalated {
 			fmt.Fprintf(stderr, "[notice] %s: container is new, so the whole container is staged\n", e)
 		}
-		for _, anchor := range plan.Ordinals() {
+		for _, anchor := range plan.Ordinals {
 			fmt.Fprintf(stderr, "[warning] anchor '%s' is positional; inserting a symbol above it repoints it -- qualify it where the language allows\n", anchor)
 		}
-		for _, w := range plan.CountingWarnings() {
+		for _, w := range plan.CountingWarnings {
 			fmt.Fprintf(stderr, "[warning] %s\n", w)
 		}
 
-		targetResults = plan.Results()
+		targetResults = plan.Results
 		allUnchanged := len(targetResults) > 0
 		for _, r := range targetResults {
 			if r.Outcome != synth.Unchanged {

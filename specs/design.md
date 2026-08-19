@@ -110,9 +110,9 @@ any anchor in a path collapses its index entry back to `HEAD` plus the
 named anchors regardless of outcome, the same as every other target
 combination; skipping the all-`Unchanged` case would carve out the one
 content-dependent exception to that. Verified before deciding, not assumed:
-`Plan.Results()` — which the exit-11 "every named target is unchanged"
+`Plan.Results` — which the exit-11 "every named target is unchanged"
 rule and `--dry-run`'s own preview both read — is built once per target in
-`planStage` and never touched by `apply`'s loop, so this was never a choice
+`PlanStage` and never touched by `Apply`'s loop, so this was never a choice
 between correctness and speed; it was purely whether to diverge from git's
 own re-stage-unconditionally rule for one specific case, and the answer is
 no.

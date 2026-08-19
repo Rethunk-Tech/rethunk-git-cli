@@ -115,81 +115,47 @@ type filePlan struct {
 	pendingCrossCheck []*resolve.Resolution
 }
 
-// stagePlan is the pure-read result of resolving every target: nothing in
-// it has touched the git index or written an object yet.
-type stagePlan struct {
+// Plan is a resolved, not-yet-applied stage: every target has been
+// classified and cross-checked -- a pure read -- but nothing has touched
+// the git index or written an object yet. A caller that needs to inspect
+// what resolution found before writing anything at all (rgit commit's
+// --dry-run, and its "every named target already matches HEAD" exit-11
+// rule) reads the fields below, decides, and calls Apply second.
+type Plan struct {
 	pathspecs []string
 	files     []*filePlan
-	results   []TargetResult
-	tsOnly    bool
 
-	// preamble lists files whose @header/@imports were staged for them
-	// because the file is new, and ordinals lists anchors that resolved
-	// positionally. Both are the caller's to announce on stderr
-	// (docs/ANCHORS.md); synth writes to no stream of its own.
-	preamble  []string
-	ordinals  []string
-	escalated []string
+	// Results reports what resolution found for each target, in the order
+	// PlanStage received them.
+	Results []TargetResult
 
-	// countWarnings holds one message per pathspec whose --dry-run line
+	// TSOnly reports whether any anchor degraded to tree-sitter-only
+	// resolution because no live language server answered in time for its
+	// cross-check -- normal, not an error (specs/design.md), but the
+	// caller's job to announce once on stderr.
+	TSOnly bool
+
+	// Preamble lists files whose @header/@imports were staged for them
+	// because the file is new -- docs/ANCHORS.md's "both are staged
+	// automatically for an untracked file", without which the synthesized
+	// blob is a bare function body with no package clause. Ordinals lists
+	// anchors that resolved by position ("init#2") rather than by a unique
+	// or container-qualified name, a last resort because an inserted symbol
+	// repoints it. Escalated lists member anchors widened to their
+	// enclosing container because HEAD has neither -- a method cannot be
+	// added to a class that does not exist yet. All three are the caller's
+	// to announce on stderr; synth writes to no stream of its own.
+	Preamble  []string
+	Ordinals  []string
+	Escalated []string
+
+	// CountingWarnings holds one message per pathspec whose --dry-run line
 	// counts could not be fully computed. The commit itself does not
-	// depend on them -- apply stages a pathspec via plain `git add`
+	// depend on them -- Apply stages a pathspec via plain `git add`
 	// regardless -- so a counting failure never fails the plan; it would
 	// only make a preview understate its own totals with nothing to say
 	// so, which is what this exists to prevent.
-	countWarnings []string
-}
-
-// Plan is a resolved, not-yet-applied Stage. Every target has been
-// classified and cross-checked -- a pure read -- but nothing has been
-// written or staged. A caller that needs to inspect what resolution found
-// before deciding whether to write anything at all (rgit commit's
-// --dry-run, and its "every named target already matches HEAD" exit-11
-// rule) resolves via PlanStage, decides, and calls Apply second.
-type Plan struct {
-	plan *stagePlan
-}
-
-// Results reports what resolution found for each target, in the order
-// PlanStage received them.
-func (p *Plan) Results() []TargetResult { return p.plan.results }
-
-// TSOnly reports whether any anchor in the plan degraded to tree-sitter-only
-// resolution because no live language server answered in time for its
-// cross-check -- normal, not an error (specs/design.md), but the caller's
-// job to announce once on stderr.
-func (p *Plan) TSOnly() bool { return p.plan.tsOnly }
-
-// Preamble lists the files whose @header and @imports were staged alongside
-// the symbols actually named, because the file does not exist in HEAD --
-// docs/ANCHORS.md's "both are staged automatically for an untracked file".
-// Without them the synthesized blob is a bare function body with no package
-// clause, which does not compile.
-func (p *Plan) Preamble() []string { return p.plan.preamble }
-
-// Ordinals lists anchors that resolved by position ("init#2") rather than by
-// a unique or container-qualified name. docs/ANCHORS.md calls the form a last
-// resort because an inserted symbol repoints it.
-func (p *Plan) Ordinals() []string { return p.plan.ordinals }
-
-// Escalated lists member anchors that were widened to their enclosing
-// container because HEAD has neither -- a method cannot be added to a class
-// that does not exist yet. The caller announces it; staging more than was
-// named is not something to do quietly.
-func (p *Plan) Escalated() []string { return p.plan.escalated }
-
-// CountingWarnings lists one message per pathspec whose --dry-run line
-// counts could not be fully computed. The commit itself is unaffected --
-// Apply stages a pathspec via plain `git add` regardless of whether its
-// preview counted correctly -- so this never changes the outcome; it is
-// only the caller's chance to say a preview's totals may be short rather
-// than presenting them as exact.
-func (p *Plan) CountingWarnings() []string { return p.plan.countWarnings }
-
-// Apply performs Plan's only side-effecting step: staging pathspecs via
-// `git add` and writing + staging every file's synthesized blob.
-func (p *Plan) Apply(ctx context.Context, repo *gitx.Repo, root string) error {
-	return p.plan.apply(ctx, repo, root)
+	CountingWarnings []string
 }
 
 // PlanStage resolves every target against repo's worktree (root) and HEAD
@@ -200,15 +166,7 @@ func (p *Plan) Apply(ctx context.Context, repo *gitx.Repo, root string) error {
 // --dry-run preview, or the "nothing to commit" exit-11 case) never touches
 // the index at all.
 func PlanStage(ctx context.Context, repo *gitx.Repo, root string, targets []Target) (*Plan, error) {
-	plan, err := planStage(ctx, repo, root, targets)
-	if err != nil {
-		return nil, err
-	}
-	return &Plan{plan: plan}, nil
-}
-
-func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Target) (*stagePlan, error) {
-	plan := &stagePlan{}
+	plan := &Plan{}
 	byPath := map[string]*filePlan{}
 	// Anchors the caller named per path, so the new-file preamble pass below
 	// does not stage a second copy of one they asked for themselves.
@@ -262,12 +220,12 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 			// nothing about which. `rgit diff` already breaks the same
 			// change down this way, and the two are supposed to agree.
 			files, warnings := pathspecFileCounts(ctx, repo, root, t.Pathspec)
-			plan.countWarnings = append(plan.countWarnings, warnings...)
+			plan.CountingWarnings = append(plan.CountingWarnings, warnings...)
 			if len(files) == 0 {
 				// Nothing matched, or nothing changed. Keep one row naming
 				// the pathspec as given: it is still being staged, and the
 				// "did not match any files" answer is git add's to give.
-				plan.results = append(plan.results, TargetResult{
+				plan.Results = append(plan.Results, TargetResult{
 					Target:  t,
 					Outcome: Staged,
 					Path:    t.Pathspec,
@@ -275,7 +233,7 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 				continue
 			}
 			for _, pf := range files {
-				plan.results = append(plan.results, TargetResult{
+				plan.Results = append(plan.Results, TargetResult{
 					Target:  t,
 					Outcome: Staged,
 					Added:   pf.added,
@@ -310,14 +268,14 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 		}
 		named[fp.path][t.Symbol.Anchor] = true
 		if isOrdinalAnchor(t.Symbol.Anchor) {
-			plan.ordinals = append(plan.ordinals, fp.path+":"+t.Symbol.Anchor)
+			plan.Ordinals = append(plan.Ordinals, fp.path+":"+t.Symbol.Anchor)
 		}
 		outcome := Staged
 		if unchanged {
 			outcome = Unchanged
 		}
 		added, deleted := opLineCounts(fp, op)
-		plan.results = append(plan.results, TargetResult{
+		plan.Results = append(plan.Results, TargetResult{
 			Target:  t,
 			Outcome: outcome,
 			Added:   added,
@@ -337,13 +295,13 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 			return nil, err
 		}
 		if tsOnly {
-			plan.tsOnly = true
+			plan.TSOnly = true
 		}
 
 		pseudos := fp.addPreamble(named[fp.path])
 		for _, po := range pseudos {
 			added, deleted := opLineCounts(fp, po.op)
-			plan.results = append(plan.results, TargetResult{
+			plan.Results = append(plan.Results, TargetResult{
 				Target:  AnchorTarget(fp.path, po.name),
 				Outcome: Staged,
 				Added:   added,
@@ -353,14 +311,14 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 			})
 		}
 		if len(pseudos) > 0 {
-			plan.preamble = append(plan.preamble, fp.path)
+			plan.Preamble = append(plan.Preamble, fp.path)
 		}
 		for _, e := range fp.escalated {
-			plan.escalated = append(plan.escalated, fp.path+":"+e)
+			plan.Escalated = append(plan.Escalated, fp.path+":"+e)
 		}
 	}
 
-	sortResults(plan.results)
+	sortResults(plan.Results)
 	return plan, nil
 }
 
@@ -585,8 +543,8 @@ func (fp *filePlan) close() {
 // (synth.Unchanged), even though the resulting blob is then byte-identical
 // to fp.headSrc and the hash-object/update-index pair changes nothing --
 // deliberate, not an oversight. Skipping is safe against Results()/
-// Preamble()/the exit-11 check: those read plan.results, built once per
-// target in planStage and never touched by this loop, so stripping ops
+// Preamble()/the exit-11 check: those read plan.Results, built once per
+// target in PlanStage and never touched by this loop, so stripping ops
 // here could never make an Unchanged result disappear from what the app
 // layer sees. The reason to leave it alone anyway is AGENTS.md's own
 // invariant: `git add path` re-stages path's current bytes unconditionally
@@ -600,7 +558,9 @@ func (fp *filePlan) close() {
 // anchors regardless of Outcome, the same as every other named path;
 // skipping only the all-Unchanged case would carve out a content-dependent
 // exception no other target combination gets.
-func (p *stagePlan) apply(ctx context.Context, repo *gitx.Repo, root string) error {
+// Apply performs Plan's only side-effecting step: staging pathspecs via
+// `git add` and writing + staging every file's synthesized blob.
+func (p *Plan) Apply(ctx context.Context, repo *gitx.Repo, root string) error {
 	if len(p.pathspecs) > 0 {
 		if err := repo.Add(ctx, p.pathspecs...); err != nil {
 			return err

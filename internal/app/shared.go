@@ -356,7 +356,7 @@ func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, posi
 }
 
 // warnIfOrdinalAnchor prints commit.go's own ordinal-anchor advisory
-// (internal/synth/stage.go's plan.Ordinals(), surfaced by runCommit) on any
+// (internal/synth/stage.go's plan.Ordinals, surfaced by runCommit) on any
 // other command that resolves a single explicit anchor -- blame, log, and
 // diff's --sym. Advisory only: never fails the command, matching commit's
 // own [warning] rather than an error. Fires only for an anchor whose own
