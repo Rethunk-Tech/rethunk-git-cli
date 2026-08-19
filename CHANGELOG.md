@@ -6,6 +6,8 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-08-19
+
 ### Added
 
 - `rgit --version` gains a third line naming the Go toolchain and platform the
