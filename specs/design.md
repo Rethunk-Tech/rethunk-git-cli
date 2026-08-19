@@ -1046,7 +1046,7 @@ same bytes two different callers read differently.
 ancestor.** Every language wired before HTML does: `qualifyLSPSymbol` builds
 `Container + Sep + Name` and compares it against `Anchor`, and a server's own
 `containerName` agrees because it also names a real parent. HTML's own
-`Container` is `FlatContainerLanguage`'s self-referential trick (the
+`Container` is `Language.FlatContainer`'s self-referential trick (the
 element's own tag, not an ancestor, so `"div#app"` construction never
 touches nesting) — but the *server* still reports a genuine parent's name as
 `containerName` (`"div#app"` for a `<p id="after">` sitting inside it),
@@ -1056,7 +1056,7 @@ qualified `Name` (`"p#after"`), producing `"div#app#p#after"` — a string
 Measured directly with the actual `CrossCheckExtent` entry point, not
 inferred: `div#app` itself degraded (found=false) even in the simplest
 single-element fixture, confirming this is not a nested-only edge case.
-Fixed by a new `Resolution.Flat` field (set from `FlatContainerLanguage` once
+Fixed by a new `Resolution.Flat` field (set from `Language.FlatContainer` once
 per resolve, `resolver.go`) that `matchLSPSymbol` consults to compare
 against a server symbol's bare `Name` directly when true, skipping the join
 entirely — HTML's own server spells `Name` in flat `tag#id` form, or appends

@@ -404,12 +404,12 @@ func attributeSymbolsOpen(lang resolve.Language, oldSrc, newSrc []byte, oldFile,
 //
 // Mirrors escalateToContainer's two guards precisely, so this can never
 // warn on a case synth would not actually escalate: HTML's Container is the
-// element's own tag, not a real ancestor (FlatContainerLanguage), and a Go
+// element's own tag, not a real ancestor (Language.FlatContainer), and a Go
 // receiver method's Container names a sibling type, not an enclosing one
 // (tested by extent containment, not by the mere presence of a container
 // name).
 func newlyEscalatedContainer(lang resolve.Language, oldFile, newFile declResolver, name string) (container string, isNew bool) {
-	if flat, ok := lang.(resolve.FlatContainerLanguage); ok && flat.FlatContainer() {
+	if lang.FlatContainer() {
 		return "", false
 	}
 	member, err := newFile.Resolve(name)

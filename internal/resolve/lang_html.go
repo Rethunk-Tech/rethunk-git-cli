@@ -34,7 +34,7 @@ func (h *htmlLanguage) Name() string { return "html" }
 // FlatContainer is true: Declaration.Container above is always the
 // element's own tag, never an enclosing ancestor's name, so
 // internal/synth's escalateToContainer must never resolve it as one
-// (FlatContainerLanguage's own doc comment, lang.go).
+// (Language.FlatContainer's own doc comment, lang.go).
 func (h *htmlLanguage) FlatContainer() bool { return true }
 
 func (h *htmlLanguage) Extensions() []string { return []string{".html", ".htm"} }

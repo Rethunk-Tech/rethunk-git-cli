@@ -127,24 +127,11 @@ type Language interface {
 	// slug. defaultLanguage (lang_default.go) answers false for every
 	// adapter that does not override it.
 	AllowsRawHeadingFallback() bool
-}
 
-// FlatContainerLanguage is an optional refinement of Language for an adapter
-// whose Declaration.Container does not name a real, resolvable ancestor at
-// all -- HTML's own tag name, carried only so containerQualified (index.go)
-// can build the "tag#id" anchor text Declaration.Sep's own doc comment
-// describes. internal/synth's escalateToContainer widens a new member's
-// anchor to its enclosing container when HEAD has neither; resolving HTML's
-// tag-as-container there would chase whatever unrelated element elsewhere
-// happens to share that tag as its own id -- a coincidence, not containment
-// -- so escalateToContainer must never attempt it for this adapter. A
-// caller type-asserts for this the same way toplevelExtent (pseudo.go)
-// already does for markdown's own structural difference, rather than a
-// string compare against Language.Name(), which a future rename would
-// silently break.
-type FlatContainerLanguage interface {
 	// FlatContainer reports true when Declaration.Container is not an
-	// ancestor's name and must never be resolved as one.
+	// ancestor's name and must never be resolved as one. defaultLanguage
+	// answers false; only an adapter whose Container is a formatting
+	// device rather than real containment overrides it.
 	FlatContainer() bool
 }
 
@@ -160,8 +147,7 @@ type FlatContainerLanguage interface {
 //
 // A Language that does not implement this interface is not one of these
 // guarded formats -- IsStructuredData below answers false for it, the same
-// "absence means no" default FlatContainerLanguage and ImportMatcher
-// already use.
+// "absence means no" default ImportMatcher already uses.
 type StructuredDataLanguage interface {
 	// StructuredData reports whether this adapter's format is guarded.
 	StructuredData() bool

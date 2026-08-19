@@ -38,7 +38,7 @@ type Resolution struct {
 	// ".", the same zero-value convention Declaration.Sep itself uses.
 	Sep string
 
-	// Flat mirrors the resolving language's own FlatContainerLanguage
+	// Flat mirrors the resolving language's own FlatContainer
 	// answer (lang.go): true means Container is not a real ancestor, so a
 	// server-reported symbol's own containerName -- a genuine parent, for
 	// HTML the enclosing element -- must not be joined onto its name before
@@ -95,10 +95,7 @@ func (f *File) Resolve(anchor string) (*Resolution, error) {
 	if err != nil {
 		return nil, err
 	}
-	flat := false
-	if fc, ok := f.lang.(FlatContainerLanguage); ok {
-		flat = fc.FlatContainer()
-	}
+	flat := f.lang.FlatContainer()
 	return &Resolution{Extent: sym.Full, DeclOnly: sym.DeclOnly, Anchor: sym.Qualified, Container: sym.Decl.Container, Sep: sym.Decl.Sep, Flat: flat}, nil
 }
 

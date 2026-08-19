@@ -41,3 +41,11 @@ func (defaultLanguage) AllowsRawHeadingFallback() bool { return false }
 // fact (ImportMatcher takes precedence, lang_shell.go), not "no import
 // concept," so it is not this default's to speak for.
 func (defaultLanguage) ImportKinds() []string { return nil }
+
+// FlatContainer is false: Declaration.Container names a real, resolvable
+// ancestor for every adapter but HTML, whose tag name is carried only so
+// containerQualified (index.go) can build "tag#id" anchor text. Resolving
+// that as containment -- internal/synth's escalateToContainer widening a new
+// member to its enclosing container -- would chase whatever unrelated
+// element elsewhere happens to share the tag as its own id.
+func (defaultLanguage) FlatContainer() bool { return false }

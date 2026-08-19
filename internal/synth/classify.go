@@ -272,11 +272,11 @@ func (fp *filePlan) escalateToContainer(member *resolve.Resolution) (res *resolv
 	// level, on purpose), so the only sound fix is to never widen a flat-
 	// container adapter's member to a "container" at all -- new nested
 	// elements insert directly at their sibling position, uninvolved with
-	// this mechanism. resolve.FlatContainerLanguage's own doc comment is
+	// this mechanism. resolve.Language.FlatContainer's own doc comment is
 	// the seam; matched by type assertion, the same way markdown's
 	// structural difference is (toplevelExtent, pseudo.go), rather than a
 	// Language.Name() string compare a future rename would silently break.
-	if flat, ok := fp.lang.(resolve.FlatContainerLanguage); ok && flat.FlatContainer() {
+	if fp.lang.FlatContainer() {
 		return member, false, nil
 	}
 	container := member.Container

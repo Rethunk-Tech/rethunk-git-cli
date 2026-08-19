@@ -192,7 +192,7 @@ func formatRange(start, end uint32) string {
 // server's own reported order, which is source order for every grammar
 // rgit supports.
 // flat means res.Flat: the resolving language's own Container is not a real
-// ancestor (FlatContainerLanguage, lang.go's own doc comment), so a
+// ancestor (Language.FlatContainer, lang.go's own doc comment), so a
 // server-reported symbol's genuine containerName must never be joined onto
 // its Name before comparing. HTML's resolver emits "tag#id", while the
 // language server may append ".class" selectors to that same Name; strip
