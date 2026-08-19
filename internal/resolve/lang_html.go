@@ -109,25 +109,18 @@ func (h *htmlLanguage) elementDeclarations(src []byte, node *ts.Node) []Declarat
 	return out
 }
 
-// declarationsFor reports node's own Declaration -- tag-qualified by its own
-// id attribute, Sep "#" (Declaration.Sep's own doc comment; this is what
-// produces the "div#app" spelling docs/ANCHORS.md § Language support ships,
-// with no extra join code) -- when it has one, plus, recursively, one
-// Declaration per id-bearing element
-// nested anywhere inside it, to whatever depth the worktree actually nests
-// them.
+// declarationsFor reports node's own Declaration -- tag-qualified by its id
+// attribute, Sep "#", which produces the "div#app" spelling docs/ANCHORS.md
+// ships with no extra join code -- plus one per id-bearing element nested
+// inside it, to any depth.
 //
-// An element with no id attribute at all gets no Declaration of its own --
-// it is still recursed through, but never itself addressable. This is
-// deliberate, not an oversight: this resolver's index has no per-parent
-// scoping the way a real DOM's getElementById has document-wide uniqueness
-// (or the way lang_css.go's Container only reaches one level) -- indexing
-// bare tag names too would make "div" (or any common tag) collide across
-// nearly every real HTML document. The demand signal was always the
-// component-root/mount-point case, where an id already exists; teaching the
-// resolver to fall back to bare-tag-name or positional lookup would reopen
-// exactly the "how far does the selector syntax go" question element+id was
-// scoped to close (specs/design.md § Grammar scope, which records both).
+// An element with no id gets no Declaration: it is recursed through but
+// never addressable. Deliberate -- this index has no per-parent scoping, so
+// indexing bare tag names would make "div" collide across nearly every real
+// document. The demand was always the component-root case, where an id
+// already exists; a bare-tag or positional fallback would reopen the "how
+// far does the selector syntax go" question element+id closed
+// (specs/design.md § Grammar scope).
 func (h *htmlLanguage) declarationsFor(src []byte, node *ts.Node) []Declaration {
 	var out []Declaration
 	if tag, id, ok := htmlTagAndID(src, node); ok {
@@ -138,21 +131,16 @@ func (h *htmlLanguage) declarationsFor(src []byte, node *ts.Node) []Declaration 
 }
 
 // trimDeclOnlyEnd implements declOnlyEndTrimmer: a void element (`<input>`,
-// `<img>`, `<br>`, and similarly self-closing-by-tag-name elements, with no
-// explicit `/>` and no real `end_tag`) has no node kind of its own bounding
-// where its tag ends -- tree-sitter-html's own `element` node keeps
-// absorbing whatever whitespace or plain text follows in scope as trailing
-// content until the next real sibling or its enclosing tag's close
-// (specs/design.md § Grammar scope, measured directly against a compiled
-// parse tree). A real language server's own range never includes that
-// absorbed content, so the declaration-only extent this compares against
-// must not either -- trimmed back to the start_tag's own end, the one
+// `<img>`, `<br>` -- no explicit `/>` and no real `end_tag`) has no node
+// bounding where its tag ends, so tree-sitter-html's `element` keeps
+// absorbing following whitespace and text until the next sibling or the
+// enclosing tag's close (specs/design.md § Grammar scope, measured against a
+// compiled parse tree). A language server's range never includes that, so
+// the declaration-only extent trims back to the start_tag's end, the one
 // boundary both sides agree on.
 //
-// A node with a real end_tag (every element that is not void-shaped) or an
-// explicit self_closing_tag is returned unchanged: neither ever absorbs
-// trailing content the way an implicit void element does (same measurement),
-// so there is nothing here for either shape to trim.
+// A node with a real end_tag or an explicit self_closing_tag is returned
+// unchanged: neither absorbs trailing content the way a void element does.
 func (h *htmlLanguage) trimDeclOnlyEnd(src []byte, node *ts.Node) uint {
 	var startTagEnd uint
 	hasStartTag := false

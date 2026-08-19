@@ -47,30 +47,23 @@ func (y *yamlLanguage) IsComment(kind string) bool { return kind == "comment" }
 
 // trimTrailingComment implements the trailingCommentTrimmer seam
 // (extent.go). tree-sitter-yaml's external scanner grafts a comment sitting
-// between the end of a nested value and the next, more shallowly indented
-// sibling onto the deepest block still open when it consumed the comment
-// token -- even a comment written at the SAME column as the following
-// (shallower) key still nests several levels deep inside the previous
-// key's own last list item rather than becoming that key's sibling. Left
-// alone, every container-qualified
-// extent that happens to precede such a comment would silently absorb
-// content that was written to describe its successor, not itself.
+// between a nested value's end and the next, shallower sibling onto the
+// deepest block still open when it consumed the token -- even a comment at
+// the SAME column as the following key nests inside the previous key's last
+// list item. Left alone, a container-qualified extent preceding such a
+// comment absorbs content written to describe its successor.
 //
-// This walks node's own "last named child" spine -- the descendants that
-// share node's own EndByte(), i.e. the nodes that make up its trailing
-// edge -- until either the spine runs out (nothing to trim: an anonymous
-// token such as a flow sequence's closing "]" accounts for the true end
-// instead) or it reaches a level whose own trailing named children are one
-// or more comments. When it does, those comments and the blank/indentation
-// bytes immediately before them are excluded from the returned end.
+// This walks node's "last named child" spine -- the descendants sharing its
+// EndByte() -- until the spine runs out (nothing to trim: an anonymous token
+// like a flow sequence's "]" accounts for the true end) or reaches a level
+// whose trailing named children are comments, which are excluded along with
+// the blank/indentation bytes before them.
 //
-// This can also exclude a comment that genuinely was the last line of a
-// container with nothing shallower following it anywhere in the file --
-// the tree alone cannot distinguish the two, and excluding is the safe
-// direction: it can only end a single-key anchor one comment short of the
-// raw parse (still reachable by naming the enclosing container, @toplevel,
-// or the whole file, all of which reach the file's own end-of-document byte
-// regardless), never graft one key's edit onto its neighbour's extent.
+// This can also exclude a comment that genuinely ended a container with
+// nothing shallower after it; the tree cannot distinguish the two, and
+// excluding is the safe direction -- it ends an anchor one comment short of
+// the raw parse (still reachable via the enclosing container, @toplevel, or
+// the whole file) rather than grafting one key's edit onto its neighbour.
 func (y *yamlLanguage) trimTrailingComment(src []byte, node *ts.Node) uint {
 	end := node.EndByte()
 	cur := node
@@ -233,28 +226,20 @@ func blockMappingIn(blockNode *ts.Node) (*ts.Node, bool) {
 	return nil, false
 }
 
-// mappingDeclarations walks mapping's own "block_mapping_pair" children --
-// "comment" nodes are real siblings at this level too (a comment between
-// two keys parses as an ordinary named child of the enclosing
-// "block_mapping", not as a leading-trivia attribute of the pair after it)
-// and are skipped here because they carry no key of their own; the shared
-// docStart machinery (extent.go) still attaches one to the pair
-// immediately below it when no blank line separates them, with nothing
-// YAML-specific required for that.
+// mappingDeclarations walks mapping's "block_mapping_pair" children.
+// "comment" nodes are real siblings at this level and are skipped, carrying
+// no key of their own; the shared docStart machinery (extent.go) still
+// attaches one to the pair below it when no blank line separates them.
 //
-// A pair whose value is itself a nested "block_mapping" recurses one level,
-// qualified by container -- the pair's own bare key, not container.bare --
-// the same nearest-ancestor-only rule sectionDeclarations uses. A pair whose
-// value is a "block_sequence" is not descended into at all: a sequence item
-// has no name to address it by (an unnamed YAML list entry is exactly the
-// same shape as Go's shared "A, B int" field line or TypeScript's
-// destructuring declarator -- left unaddressable rather than invented a
-// spelling for), so `jobs.build.steps` addresses the whole list and nothing
-// finer. Flow-style values (`{a: 1}`, `[1, 2]`) are likewise never
-// descended into, at any depth: there is no measured demand for it in the
-// CI/compose files this grammar targets, and stopping at "flow style
-// is a leaf" is one rule rather than a second recursion to maintain in
-// parallel with the block-style one.
+// A pair whose value is a nested "block_mapping" recurses one level,
+// qualified by the pair's own bare key -- the nearest-ancestor-only rule
+// sectionDeclarations uses. A "block_sequence" value is not descended into:
+// a sequence item has no name to address it by (the same shape as Go's
+// shared "A, B int" field line, left unaddressable rather than invented a
+// spelling for), so `jobs.build.steps` addresses the whole list. Flow-style
+// values (`{a: 1}`, `[1, 2]`) are leaves at any depth: no measured demand in
+// the CI/compose files this grammar targets, and one rule beats a second
+// recursion maintained in parallel with the block-style one.
 func mappingDeclarations(mapping *ts.Node, container string, src []byte) []Declaration {
 	var out []Declaration
 	for _, child := range namedChildren(mapping) {

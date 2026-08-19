@@ -135,19 +135,14 @@ type Language interface {
 	FlatContainer() bool
 }
 
-// StructuredDataLanguage is an optional refinement of Language for an
-// adapter whose format `rgit commit`'s own symbol-splice guard must refuse
-// a FILE:SYMBOL anchor against: JSON, YAML, and TOML's grammars do not
-// always agree with where a spliced extent actually belongs, and unlike a
-// source-code grammar there is no compiler downstream to catch the
-// resulting malformed blob -- it lands in HEAD looking like a normal
-// commit (internal/synth/stage.go's openFilePlan is where the refusal
-// itself lives). Naming the path instead is unaffected: nothing here
-// changes how `diff`, `blame`, or `log` read these files.
+// StructuredDataLanguage marks a format `rgit commit`'s symbol-splice guard
+// must refuse a FILE:SYMBOL anchor against: JSON, YAML and TOML grammars do
+// not always agree with where a spliced extent belongs, and no compiler
+// downstream catches the malformed blob -- it lands in HEAD looking like a
+// normal commit (the refusal lives in internal/synth's openFilePlan).
+// Naming the path instead is unaffected.
 //
-// A Language that does not implement this interface is not one of these
-// guarded formats -- IsStructuredData below answers false for it, the same
-// "absence means no" default ImportMatcher already uses.
+// Absence means no, the same default ImportMatcher uses.
 type StructuredDataLanguage interface {
 	// StructuredData reports whether this adapter's format is guarded.
 	StructuredData() bool
@@ -252,35 +247,21 @@ func ForExtensionFolding(ext string, fold bool) (Language, bool) {
 	return nil, false
 }
 
-// buildTagGated is an optional refinement of Language, the same seam shape
-// as ImportMatcher above and trailingCommentTrimmer (extent.go): a Language
-// implements it only when it needs to answer something most adapters never
-// have occasion to. Here, that is "was I compiled in only because a build
-// tag selected me" -- only sqlLanguage does (lang_sql.go's rgit_sql tag).
+// buildTagGated answers "was I compiled in only because a build tag
+// selected me" -- only sqlLanguage does (lang_sql.go's rgit_sql tag).
 //
-// This is deliberately an optional interface rather than a required
-// Language method the way OwnsTrailingSeparator/MembersSitFlush/
-// AllowsRawHeadingFallback were promoted to (lang.go): those three failed
-// silently for a language that never got a considered answer, corrupting
-// what that adapter actually resolved. Forgetting to implement this one for
-// some future gated adapter cannot do that -- the worst it does is describe
-// that adapter as unconditionally present in a `rgit languages` listing,
-// cosmetic rather than a correctness gap. A gated adapter's own author is
-// also, by construction, already writing the bespoke tag-scoped
-// registration file this seam lives beside, the same position lang_sql.go's
-// own author was already in.
+// Optional rather than a required Language method, unlike
+// OwnsTrailingSeparator and MembersSitFlush: forgetting those corrupts what
+// an adapter resolves, while forgetting this one only describes a gated
+// adapter as unconditionally present in a `rgit languages` listing.
 type buildTagGated interface {
 	buildTagGated() bool
 }
 
-// LanguageInfo describes one registered adapter for a caller that needs to
-// list what this build supports without reaching into resolve's own
-// registry or depending on the Language interface itself -- a `rgit
-// languages` subcommand is the motivating case. It is deliberately the
-// minimal read-only projection that satisfies that: no *Language, no
-// grammar handle, nothing that would let a caller start resolving anchors
-// through this seam instead of the real one (internal/synth,
-// internal/diff).
+// LanguageInfo describes one registered adapter for a caller listing what
+// this build supports -- `rgit languages`. Deliberately the minimal
+// read-only projection: no *Language, no grammar handle, nothing that would
+// let a caller resolve anchors through this seam instead of the real one.
 type LanguageInfo struct {
 	// Name is the same string Language.Name reports for this adapter --
 	// "go", "css", "typescript", etc.
@@ -361,22 +342,17 @@ var shebangExtension = map[string]string{
 	"deno":    ".ts",
 }
 
-// ForPathFolding returns the adapter for path. Extension lookup is tried
-// first and is byte-for-byte ForExtensionFolding's own result -- a ".go"
-// file, or any other recognized extension, never reaches the code below.
-// Only when that yields nothing does it fall back to sniffing content's
-// first line for a "#!" interpreter line, via shebangExtension. fold applies
-// to the extension lookup alone; path itself stays byte-for-byte unchanged
-// and shebang lookup is never folded.
+// ForPathFolding returns the adapter for path: ForExtensionFolding's result
+// first, falling back to sniffing content's first line for a "#!"
+// interpreter (shebangExtension) only when the extension yields nothing.
+// fold applies to the extension lookup alone; shebang lookup is never
+// folded.
 //
-// content is whatever the caller already has; ForPathFolding itself never
-// reads a file. It looks at content's first line alone and nothing past it
-// -- a caller that only peeked a bounded prefix of a large or binary file
-// (rather than reading the whole thing just to decide it has no shebang)
-// gets exactly the same answer a full read would have given, since a real
-// shebang line is always the first thing in the file. content may be nil,
-// meaning no bytes were available to peek (e.g. the path exists only in
-// HEAD, not the worktree); it then behaves exactly like ForExtensionFolding.
+// content is whatever the caller already has -- this never reads a file, and
+// looks at nothing past the first line, so a caller that peeked only a
+// bounded prefix gets the same answer a full read would have given. content
+// may be nil (the path exists only in HEAD), in which case this behaves
+// exactly like ForExtensionFolding.
 func ForPathFolding(path string, content []byte, fold bool) (Language, bool) {
 	if l, ok := ForExtensionFolding(filepath.Ext(path), fold); ok {
 		return l, true
@@ -443,25 +419,16 @@ func versionSuffix(suffix string, dottedOnly bool) bool {
 // ordinary leading "# comment" is the most common false start, and only a
 // line starting with the literal two bytes "#!" is considered.
 //
-// "#!/usr/bin/env bash" and "#!/bin/bash" both resolve to "bash": the
-// "/usr/bin/env NAME" indirection is unwrapped to NAME, the same interpreter
-// a direct "#!/bin/NAME" spells directly. "#!/usr/bin/env -S NAME ..." is
-// unwrapped the same way, skipping the "-S" itself -- env's own "split the
-// rest of the line into multiple arguments" flag, needed for a NAME that
-// takes flags of its own ("#!/usr/bin/env -S node --import tsx"). Only that
-// one flag is recognized; "#!/usr/bin/env -S bash -x" unwraps to "bash",
-// but any other env flag before NAME is left unmapped rather than guessed
-// at, the same honest "no grammar registered" refusal every unrecognized
-// interpreter already falls through to.
+// "/usr/bin/env NAME" unwraps to NAME, as does "-S NAME" (env's
+// split-the-rest flag, needed for a NAME taking its own flags:
+// "#!/usr/bin/env -S node --import tsx"). Only -S is recognized; any other
+// env flag before NAME is left unmapped rather than guessed at.
 //
-// "npx NAME" and "bunx NAME" are unwrapped once more, to NAME itself: both
-// are package runners, not interpreters, and NAME is what actually decides
-// the language ("#!/usr/bin/env npx tsx" is TypeScript, not "npx"). A bare
-// "npx"/"bunx" with nothing after it stays unmapped -- there is no honest
-// guess for what it would have run. "bun" needs no such unwrap: unlike
-// npx/bunx it is a real JS/TS runtime in its own right, mapped directly in
-// shebangExtension, and a trailing subcommand ("bun run") is simply never
-// looked at.
+// "npx NAME" and "bunx NAME" unwrap once more, to NAME: both are package
+// runners, not interpreters ("#!/usr/bin/env npx tsx" is TypeScript). A bare
+// npx/bunx stays unmapped. "bun" needs no unwrap -- it is a real JS/TS
+// runtime, mapped directly in shebangExtension, and a trailing subcommand
+// ("bun run") is never looked at.
 func shebangInterpreter(content []byte) (string, bool) {
 	line := content
 	if i := bytes.IndexByte(line, '\n'); i >= 0 {
