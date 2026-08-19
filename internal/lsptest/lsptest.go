@@ -48,8 +48,10 @@ func ReadFrame(r *bufio.Reader) (msg map[string]any, ok bool, err error) {
 	for {
 		line, rerr := r.ReadString('\n')
 		if rerr != nil {
+			// A clean EOF before any header byte is the normal shutdown
+			// path between frames, not an error to report.
 			if first && len(line) == 0 && errors.Is(rerr, io.EOF) {
-				return nil, false, nil //nolint:nilerr // clean EOF before any header byte: the normal shutdown path between frames
+				return nil, false, nil
 			}
 			return nil, false, fmt.Errorf("mock lsp server: read header: %w", rerr)
 		}
