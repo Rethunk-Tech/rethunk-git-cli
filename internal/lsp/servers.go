@@ -1,6 +1,9 @@
 package lsp
 
-import "sort"
+import (
+	"slices"
+	"strings"
+)
 
 // transportKind is how Dial reaches a language's server. Only "go" has a
 // real listen-mode daemon (specs/design.md § Symbol resolution): gopls's
@@ -167,13 +170,13 @@ func Servers() []ServerInfo {
 	}
 	out := make([]ServerInfo, 0, len(byBin))
 	for bin, langs := range byBin {
-		sort.Strings(langs)
+		slices.Sort(langs)
 		info := ServerInfo{Bin: bin, Languages: langs}
 		if spec := specByBin[bin]; spec.transport == transportStdio {
 			info.SpawnArgs = append([]string(nil), spec.stdioArgs...)
 		}
 		out = append(out, info)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Bin < out[j].Bin })
+	slices.SortFunc(out, func(a, b ServerInfo) int { return strings.Compare(a.Bin, b.Bin) })
 	return out
 }

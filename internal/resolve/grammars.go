@@ -38,7 +38,6 @@ func pythonGrammar() *ts.Language { return ts.NewLanguage(tspy.Language()) }
 // a JSX element, so a .tsx file parsed as TypeScript yields ERROR nodes.
 func typescriptGrammar() *ts.Language { return ts.NewLanguage(tsts.LanguageTypescript()) }
 
-// tsxGrammar parses .tsx and .jsx.
 func tsxGrammar() *ts.Language { return ts.NewLanguage(tsts.LanguageTSX()) }
 
 // markdownGrammar parses the block grammar only — headings, sections, and
@@ -54,7 +53,6 @@ func markdownGrammar() *ts.Language { return ts.NewLanguage(tsmd.Language()) }
 // grammar and mis-parses zsh-only syntax (lang_shell.go).
 func bashGrammar() *ts.Language { return ts.NewLanguage(tsbash.Language()) }
 
-// yamlGrammar parses .yaml and .yml.
 func yamlGrammar() *ts.Language { return ts.NewLanguage(tsyaml.Language()) }
 
 // cssGrammar parses .css. Not .scss/.sass: no SCSS/SASS tree-sitter grammar
@@ -62,11 +60,8 @@ func yamlGrammar() *ts.Language { return ts.NewLanguage(tsyaml.Language()) }
 // not a scoping choice, the same distinction lang_shell.go draws for .zsh.
 func cssGrammar() *ts.Language { return ts.NewLanguage(tscss.Language()) }
 
-// jsonGrammar parses .json.
 func jsonGrammar() *ts.Language { return ts.NewLanguage(tsjson.Language()) }
 
-// htmlGrammar parses .html and .htm.
 func htmlGrammar() *ts.Language { return ts.NewLanguage(tshtml.Language()) }
 
-// tomlGrammar parses .toml.
 func tomlGrammar() *ts.Language { return ts.NewLanguage(tstoml.Language()) }

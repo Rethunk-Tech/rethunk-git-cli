@@ -17,7 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -709,7 +709,7 @@ func sqlCSRCContentHash(pkgDir string) (string, error) {
 	}); err != nil {
 		return "", err
 	}
-	sort.Strings(paths)
+	slices.Sort(paths)
 
 	h := sha256.New()
 	for _, p := range paths {

@@ -329,7 +329,7 @@ func buildUntrackedReport(ctx context.Context, repo *gitx.Repo, root, path strin
 	// bounded peek to reason about.
 	lang, ok := resolve.ForPathFolding(path, content, ignoreCase)
 	if !ok {
-		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: itoa(countLines(content)), Deleted: "0"}}}, nil, false, nil
+		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: strconv.Itoa(countLines(content)), Deleted: "0"}}}, nil, false, nil
 	}
 
 	newFile, err := resolve.Open(lang, content)
@@ -359,7 +359,7 @@ func buildUntrackedReport(ctx context.Context, repo *gitx.Repo, root, path strin
 	if len(rows) == 0 {
 		// No declarations at all (e.g. a comment-only or empty file): fall
 		// back to the collapsed row rather than an empty Rows slice.
-		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: itoa(countLines(content)), Deleted: "0"}}}, warnings, tsOnly, nil
+		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: strconv.Itoa(countLines(content)), Deleted: "0"}}}, warnings, tsOnly, nil
 	}
 	return &FileReport{Path: path, Rows: rows, lang: lang.Name()}, warnings, tsOnly, nil
 }

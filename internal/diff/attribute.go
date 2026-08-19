@@ -331,13 +331,13 @@ func attributeSymbolsOpen(lang resolve.Language, oldSrc, newSrc []byte, oldFile,
 		case inOld && inNew:
 			oldText := exclusiveText(oldSrc, region{name: name, ext: oldExt}, oldRegions)
 			newText := exclusiveText(newSrc, region{name: name, ext: newExt}, newRegions)
-			added, deleted := isolatedDiff(oldText, newText)
+			added, deleted := LineCounts(oldText, newText)
 			if added == 0 && deleted == 0 {
 				return
 			}
 			accAdded += added
 			accDeleted += deleted
-			rows = append(rows, Row{Symbol: name, Status: StatusMod, Added: itoa(added), Deleted: itoa(deleted), pos: newExt.Start})
+			rows = append(rows, Row{Symbol: name, Status: StatusMod, Added: strconv.Itoa(added), Deleted: strconv.Itoa(deleted), pos: newExt.Start})
 		case inOld && !inNew:
 			self := region{name: name, ext: oldExt}
 			deleted := countLines(exclusiveText(oldSrc, self, oldRegions))
@@ -349,7 +349,7 @@ func attributeSymbolsOpen(lang resolve.Language, oldSrc, newSrc []byte, oldFile,
 			// A deleted symbol has no position in the new file, so it sorts
 			// by its prior line position in the old file — stable, and close to where a reader
 			// expects to find it.
-			rows = append(rows, Row{Symbol: name, Status: StatusDeleted, Added: "0", Deleted: itoa(deleted), pos: oldExt.Start})
+			rows = append(rows, Row{Symbol: name, Status: StatusDeleted, Added: "0", Deleted: strconv.Itoa(deleted), pos: oldExt.Start})
 		case !inOld && inNew:
 			self := region{name: name, ext: newExt}
 			added := countLines(exclusiveText(newSrc, self, newRegions))
@@ -358,7 +358,7 @@ func attributeSymbolsOpen(lang resolve.Language, oldSrc, newSrc []byte, oldFile,
 			}
 			added += separatorLines(newSrc, self, newRegions)
 			accAdded += added
-			rows = append(rows, Row{Symbol: name, Status: StatusMod, Added: itoa(added), Deleted: "0", pos: newExt.Start})
+			rows = append(rows, Row{Symbol: name, Status: StatusMod, Added: strconv.Itoa(added), Deleted: "0", pos: newExt.Start})
 			if container, isNew := newlyEscalatedContainer(lang, oldFile, newFile, name); isNew {
 				notices = append(notices, fmt.Sprintf("%s: %s is new; rgit commit would stage the whole container, not just %s", name, container, name))
 			}
@@ -388,7 +388,7 @@ func attributeSymbolsOpen(lang resolve.Language, oldSrc, newSrc []byte, oldFile,
 	slices.SortStableFunc(rows, func(a, b Row) int { return cmp.Compare(a.pos, b.pos) })
 
 	if unAdded > 0 || unDeleted > 0 {
-		rows = append(rows, Row{Status: StatusUnanchorable, Added: itoa(unAdded), Deleted: itoa(unDeleted)})
+		rows = append(rows, Row{Status: StatusUnanchorable, Added: strconv.Itoa(unAdded), Deleted: strconv.Itoa(unDeleted)})
 	}
 
 	return rows, notices, nil
@@ -426,20 +426,14 @@ func newlyEscalatedContainer(lang resolve.Language, oldFile, newFile declResolve
 	return member.Container, true
 }
 
-// LineCounts line-diffs two extents' own text in isolation and reports the
-// insertions and deletions between them.
+// LineCounts line-diffs two extents' own text in isolation via go-udiff,
+// summing insertions and deletions across every returned edit.
 //
 // Exported so `rgit commit --dry-run` previews the same numbers `rgit diff`
 // prints. Two implementations of "how much did this symbol change" would be
 // free to disagree, and a preview that disagrees with the diff it previews is
 // worse than no preview.
 func LineCounts(oldText, newText []byte) (added, deleted int) {
-	return isolatedDiff(oldText, newText)
-}
-
-// isolatedDiff line-diffs two extents' own text in isolation via go-udiff,
-// summing insertions and deletions across every returned edit.
-func isolatedDiff(oldText, newText []byte) (added, deleted int) {
 	edits := udiff.Lines(string(oldText), string(newText))
 	for _, e := range edits {
 		deleted += countLines(oldText[e.Start:e.End])
@@ -462,5 +456,3 @@ func countLines(b []byte) int {
 	}
 	return n
 }
-
-func itoa(n int) string { return strconv.Itoa(n) }
