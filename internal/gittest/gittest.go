@@ -54,7 +54,29 @@ func Git(t testing.TB, dir string, args ...string) string {
 	if err != nil {
 		t.Fatalf("git %v: %v: %s", args, err, out)
 	}
+	if len(args) > 0 && args[0] == "init" {
+		disableAutoMaintenance(t, dir)
+	}
 	return string(out)
+}
+
+// disableAutoMaintenance turns off the one thing that touches .git after the
+// command that triggered it has already exited: git forks auto-maintenance
+// detached, so no caller waits on it, and it can still be writing under
+// .git/objects when t.TempDir()'s RemoveAll runs -- surfacing as a
+// "directory not empty" cleanup failure in whichever test happened to trip
+// it. Applied to every repository this package creates, bare ones included,
+// since all of them go through Git's own "init". None is remotely large
+// enough to need either pass.
+func disableAutoMaintenance(t testing.TB, dir string) {
+	t.Helper()
+	for _, kv := range [][2]string{{"gc.auto", "0"}, {"maintenance.auto", "false"}} {
+		cmd := exec.Command("git", "config", kv[0], kv[1])
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git config %s %s: %v: %s", kv[0], kv[1], err, out)
+		}
+	}
 }
 
 // GitInput runs one git command with input on stdin and returns its output,
