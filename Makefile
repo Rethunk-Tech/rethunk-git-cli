@@ -86,7 +86,7 @@ lint:
 		echo "lint needs golangci-lint on PATH (https://golangci-lint.run/welcome/install/)"; \
 		exit 1; \
 	}
-	golangci-lint run ./...
+	golangci-lint run --allow-parallel-runners ./...
 
 clean:
 	rm -f $(BINARY) rgit-install coverage.out short.out
