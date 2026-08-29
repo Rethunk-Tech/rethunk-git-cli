@@ -647,15 +647,11 @@ func TestAttribute_TopLevelSymbolOwnsOneSeparator(t *testing.T) {
 	}
 }
 
-// TestCrossCheckOutcome_DegradedAndMismatchAreOrthogonal pins the
-// regression 8a560aa's own follow-up left behind: CrossCheckExtents began
-// returning degraded=true whenever any declaration in the batch was absent
-// from the server's outline, but crossCheckFile still discarded a genuine
-// mismatch whenever degraded was true -- that clause was only ever safe
-// while CrossCheckExtents could not produce that combination at all. A
-// file where nine of ten declarations verify clean and the tenth is a real
-// disagreement must report the disagreement, not silently downgrade to
-// [ts-only]. Exercised directly against the (degraded, mismatches) pair
+// TestCrossCheckOutcome_DegradedAndMismatchAreOrthogonal pins that a file where
+// nine of ten declarations verify clean and the tenth disagrees reports the
+// disagreement, not [ts-only]. CrossCheckExtents can return degraded=true
+// alongside mismatches; crossCheckFile must not treat degraded as permission
+// to drop mismatches. Exercised directly against the (degraded, mismatches) pair
 // rather than through a live language server: the bug is in how this
 // package combines two already-computed signals, not in what a server
 // says, so a real dial would only add flakiness without adding proof.

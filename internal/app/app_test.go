@@ -1344,8 +1344,7 @@ func TestRun_UnsupportedLanguageGetsNoRebuildHint(t *testing.T) {
 // surface of cli.UnresolvedArgError: commit.go's mapStageError-adjacent
 // path (its ClassifyArgs call) prints the error verbatim behind "rgit: "
 // at exit 129, so a target rule 6 rejects reads as this and not a bare
-// "invalid argument" -- and pins the "rules considered" wording 7de6deb
-// gave UnresolvedArgError.Error() over the old "tried" framing.
+// "invalid argument" -- with "rules considered" in the message.
 func TestRun_UnclassifiableArgReportsRulesConsidered(t *testing.T) {
 	chdirTempRepo(t)
 

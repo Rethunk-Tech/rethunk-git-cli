@@ -15,8 +15,8 @@ import (
 // actually reached a live server, the returned Client would be owned by
 // nobody able to Close it. "go" is dialled here specifically because it is
 // the one language with a real spawn-on-demand path (dialSocket) that
-// could otherwise leak a daemon; if this regresses to the old fallthrough,
-// this test's own nil Session would successfully dial (or spawn) it.
+// could otherwise leak a daemon; falling through to Dial here would let this
+// test's own nil Session successfully dial (or spawn) it.
 func TestSession_NilDialDegradesWithoutDialing(t *testing.T) {
 	t.Parallel()
 	var sess *Session

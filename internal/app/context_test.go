@@ -277,9 +277,7 @@ func TestBuildContextStream(t *testing.T) {
 	// record rather than let the marker overrun budget.
 	t.Run("the X record itself never pushes the stream past budget", func(t *testing.T) {
 		records := []string{"12345\n", "12345\n", "12345\n"} // 6 bytes each, 18 total
-		const budget = 17                                    // less than the 18-byte total; the old code appended the
-		// X line unconditionally here and overran budget by nearly 2x (26
-		// bytes for a 17-byte budget)
+		const budget = 17                                    // less than the 18-byte total; appending the X line here overran budget
 		got := buildContextStream(records, budget)
 		qt.Assert(t, qt.IsTrue(len(got) <= budget))
 		qt.Assert(t, qt.Equals(got, "X\tTRUNCATED\t3\n"))
