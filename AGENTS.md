@@ -1,98 +1,59 @@
 # AGENTS.md
 
-Internals for anyone — human or model — changing this repository. To *use*
-`rgit`, read [HUMANS.md](HUMANS.md). To submit changes, read @CONTRIBUTING.md —
-the only file pulled in eagerly, because its test layout and coverage rules bind
-changes that would not otherwise think to consult it.
+Internals for changing this repo. Usage: [HUMANS.md](HUMANS.md). Process: @CONTRIBUTING.md.
 
 ## The one invariant
 
-**`rgit` is `git add <pathspec> && git commit` at symbol granularity.**
+**`rgit` is `git add <pathspec> && git commit` at symbol granularity.** Match git wherever git has an opinion. Divergence needs an explicit PR argument.
 
-Where git has an opinion, match it exactly. Do not invent semantics git already
-defines. A change that diverges from git must argue against it explicitly in
-the PR, not quietly.
-
-The consequences are listed in
-[docs/USAGE.md § Behaviour inherited from git](docs/USAGE.md#behaviour-inherited-from-git),
-and several of them read like bugs worth fixing. None is — each is git's own
-behaviour, reproduced on purpose. Do not exclude, roll back, or police any of
-them.
-
-Reasoning and the measurement behind each: [specs/design.md](specs/design.md)
+Inherited behaviour: [docs/USAGE.md § Behaviour inherited from git](docs/USAGE.md#behaviour-inherited-from-git). Reasoning: [specs/design.md](specs/design.md).
 
 ## File map
 
-Read whichever one the change touches; none is loaded for you.
-
 | Path | Holds |
 | --- | --- |
-| [README.md](README.md) | Orientation and the documentation index |
-| [HUMANS.md](HUMANS.md) | Running and using `rgit` — what it does, inherited behaviour, degraded mode |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Process — commit style, test layout, dependency and documentation policy |
-| [CHANGELOG.md](CHANGELOG.md) | Release notes — one entry per tagged version |
-| [SECURITY.md](SECURITY.md) | Vulnerability reporting, and the hooks/LSP trust boundary |
-| [specs/design.md](specs/design.md) | Design record — why, mechanisms, and every measurement |
-| [docs/USAGE.md](docs/USAGE.md) | Command surface, argument grammar, flags |
-| [docs/ANCHORS.md](docs/ANCHORS.md) | Anchor syntax, extents, pseudo-anchors, special paths |
-| [docs/CODES.md](docs/CODES.md) | Exit codes and `--porcelain` record formats — the machine contract |
-| [docs/INSTALL.md](docs/INSTALL.md) | Build, installer, cross builds, language servers, env vars, verify |
-| [docs/LIMITATIONS.md](docs/LIMITATIONS.md) | What `rgit` does not do, and why |
+| [README.md](README.md) | Orientation and doc index |
+| [HUMANS.md](HUMANS.md) | Run and use |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Commits, tests, deps, docs policy |
+| [CHANGELOG.md](CHANGELOG.md) | Release notes |
+| [SECURITY.md](SECURITY.md) | Vulnerability reporting, hooks/LSP trust |
+| [specs/design.md](specs/design.md) | Design record and measurements |
+| [docs/USAGE.md](docs/USAGE.md) | Commands, flags, grammar |
+| [docs/ANCHORS.md](docs/ANCHORS.md) | Anchor syntax, extents, special paths |
+| [docs/CODES.md](docs/CODES.md) | Exit codes, `--porcelain` formats |
+| [docs/INSTALL.md](docs/INSTALL.md) | Build, installer, env vars, verify |
+| [docs/LIMITATIONS.md](docs/LIMITATIONS.md) | Non-goals |
 
-`docs/` ships with the tool. `specs/` does not — the design record lives there.
+`docs/` ships with the tool; `specs/` does not.
 
 ## Delegation boundary
 
-`rgit` shells out to `git` for everything git already does. It owns exactly
-three things:
+`rgit` shells out to `git` for everything git already does. It owns:
 
-1. **Anchor resolution** — mapping `FILE:NAME` to a byte extent.
-2. **Blob synthesis** — constructing the blob that would exist if only the named
-   symbols had changed.
-3. **Argument precedence** — deciding whether a token is a pathspec, a revision,
-   or an anchor.
+1. **Anchor resolution** — `FILE:NAME` → byte extent.
+2. **Blob synthesis** — blob as if only named symbols changed.
+3. **Argument precedence** — pathspec vs revision vs anchor.
 
-Everything else — hooks, filters, pathspec matching, trailers, amend semantics,
-credential prompting, index bookkeeping — is git's. `go-git` is rejected for
-this reason; it would create a second, divergent source of truth.
+Hooks, filters, pathspecs, trailers, amend — git's. No `go-git`.
 
-## Invariants in the synthesis path
+## Synthesis invariants
 
-Breaking one of these is silent. The mechanism and the measurement behind
-each is in
-[specs/design.md § Blob synthesis](specs/design.md#blob-synthesis) and
-[§ Grammar scope](specs/design.md#grammar-scope).
+Breaking one is silent. Mechanism: [specs/design.md § Blob synthesis](specs/design.md#blob-synthesis), [§ Grammar scope](specs/design.md#grammar-scope).
 
 | Invariant | Why |
 | --- | --- |
-| `hash-object` **must** carry `--path` | Skips `.gitattributes`/LFS filters otherwise |
-| EOF newline is inherited, never normalized | Git tracks a missing EOF newline as real content |
-| Multiple extents apply in **reverse byte-offset order** | Earlier replacements would invalidate later offsets |
-| Resolve every target before staging any | A failure must leave the index untouched |
-| The resolver indexes bare **and** qualified names | A bare name that is merely absent yields "did you mean" where "qualify it" is correct |
-| `@imports` spans N nodes | Go emits one `import_declaration`; TS and Python emit one `import_statement` per import |
-| `commit` refuses a `FILE:SYMBOL` anchor on JSON/YAML/TOML | A spliced extent is not guaranteed to agree with the file's own grammar, and nothing downstream would catch it |
+| `hash-object` **must** carry `--path` | Skips `.gitattributes`/LFS filters |
+| EOF newline inherited, never normalized | Git tracks a missing EOF newline |
+| Multiple extents apply in **reverse byte-offset order** | Earlier replacements invalidate later offsets |
+| Resolve every target before staging any | Failure must leave index untouched |
+| Resolver indexes bare **and** qualified names | Bare absence → "did you mean" not "qualify it" |
+| `@imports` spans N nodes | Go: one `import_declaration`; TS/Python: one `import_statement` per import |
+| `commit` refuses `FILE:SYMBOL` on JSON/YAML/TOML | Spliced extent may disagree with grammar |
 
 ## Resolution model
 
-Tree-sitter is the primary resolver and always produces the extent that gets
-staged. A language server, when reachable, only *verifies* it — comparing
-against the **declaration-only** extent, with the doc-comment prefix stripped,
-because LSP ranges exclude doc comments.
-
-Degraded resolution is normal, not an error: no daemon, a cold index, or an
-unsupported language all fall back to tree-sitter with `[ts-only]` on stderr.
-Never block on a cold server.
+Tree-sitter resolves; LSP **verifies** declaration-only extent (doc comment stripped). No daemon or cold index → `[ts-only]` on stderr; never block on a cold server.
 
 ## State
 
-`rgit` holds no persistent state of its own. The only files it creates are the
-language-server socket and its spawn lock, inside a private, UID-scoped
-`rgit-<uid>` subdirectory of `$XDG_RUNTIME_DIR` (falling back to the system
-temp directory when unset) — both disposable. That subdirectory is created
-`0700` and verified owned by the current user before every use; a directory
-that fails either check is never dialled or spawned into, degrading to
-`[ts-only]` instead (`internal/lsp/dial.go`'s `privateSocketDir`) — a
-predictable path in a shared, world-writable temp directory must not be
-trusted just because it has the right name. Repository state lives entirely
-in git.
+No persistent state. Creates only LSP socket and spawn lock under UID-scoped `rgit-<uid>` in `$XDG_RUNTIME_DIR` (or system temp), `0700`, owner-verified before dial (`internal/lsp/dial.go`). Repository state is git's alone.

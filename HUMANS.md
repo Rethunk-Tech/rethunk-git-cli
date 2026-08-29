@@ -1,9 +1,6 @@
 # HUMANS.md
 
-The starting point for running and using `rgit`, pointing into
-[`docs/`](docs/) for the full reference. Internals live in
-[`AGENTS.md`](AGENTS.md); the reasoning behind the design is in
-[`specs/design.md`](specs/design.md).
+Run and use `rgit`. Internals: [AGENTS.md](AGENTS.md). Design record: [specs/design.md](specs/design.md).
 
 ## Quick start
 
@@ -14,78 +11,24 @@ rgit commit -m "fix(auth): reject expired" auth.go:ValidateToken
 rgit -C /some/other/repo diff                    # ...without standing in it
 ```
 
-Build, prerequisites, language-server setup, environment variables,
-verification, and uninstall: [`docs/INSTALL.md`](docs/INSTALL.md).
+Install, env vars, verify, uninstall: [docs/INSTALL.md](docs/INSTALL.md).
 
 ## What it does
 
-`rgit commit` stages **one symbol at a time** instead of one file at a time.
-Naming `auth.go:ValidateToken` commits that function — its doc comment,
-attributes, and body — and leaves every other edit in the file uncommitted.
+`rgit commit` stages **one symbol at a time** instead of one file. Name `auth.go:ValidateToken` to commit that function — doc comment, attributes, body — leaving other edits in the file uncommitted.
 
-`rgit diff` shows what is committable, labelled with the exact anchors
-`rgit commit` accepts, so the output of one is the input of the other.
+`rgit diff` shows committable anchors that `rgit commit` accepts. `rgit blame FILE:SYMBOL` and `rgit log FILE:SYMBOL` bound those commands to a symbol's extent ([docs/USAGE.md](docs/USAGE.md)). `rgit context` streams branch, warnings, diff rows, and recent commits in one call ([docs/CODES.md](docs/CODES.md#output-records)).
 
-`rgit blame FILE:SYMBOL` bounds `git blame` to just that symbol's own lines
-instead of the whole file. Use `--follow-rename` to follow it across a file
-rename; see [`docs/USAGE.md`](docs/USAGE.md#blame).
+Everything else stays plain `git`. Full command reference: [docs/USAGE.md](docs/USAGE.md); anchors: [docs/ANCHORS.md](docs/ANCHORS.md).
 
-`rgit log FILE:SYMBOL` shows that symbol's own history — one line per
-touching commit, patch-free unless you ask for one with `-p`. Give `--since`
-or `--until` with the anchor to bound that symbol's history; without an
-anchor, those flags select ordinary, date-bounded history over one or more
-paths — the `git log --since=... -- <paths>` you would otherwise have had to
-fall back to plain `git` for. Use `--follow-rename` to follow it across file
-renames; see [`docs/USAGE.md`](docs/USAGE.md#log).
+## Inherited git behaviour
 
-`rgit context` is one-call orientation for a fresh session: branch/upstream,
-then any `W` diagnostics, then committable diff rows, then recent commit
-subjects, as a single `B` → `W` → `F` → `C` record stream — instead of a
-status, a diffstat, a diff, and a log
-call separately. A `B` record, when present, always sorts first.
-Its `W` records report degraded resolution or non-fatal warnings; see
-[`docs/CODES.md`](docs/CODES.md#output-records) for the machine format.
+`rgit` deliberately behaves like `git add <pathspec> && git commit`. Surprising consequences are git's own — see [docs/USAGE.md § Behaviour inherited from git](docs/USAGE.md#behaviour-inherited-from-git).
 
-Everything else stays plain `git`. `rgit` has two staging commands — plus
-`blame`, `log`, `context`, `languages`, `doctor`, `completion`, and
-`symbols` for everything around them — and no opinions about the rest of
-your workflow.
+## Anchor limits
 
-Commands and flags are in [`docs/USAGE.md`](docs/USAGE.md); anchor syntax is
-in [`docs/ANCHORS.md`](docs/ANCHORS.md); exit codes and the `--porcelain`
-record formats are in [`docs/CODES.md`](docs/CODES.md). The full index of
-every document lives in [`README.md`](README.md#documentation).
-
-## Things worth knowing before you rely on it
-
-`rgit` deliberately behaves like `git add <pathspec> && git commit`. Most of
-that is unremarkable, but a few consequences surprise people — none of them
-oversights; each is what plain `git commit` already does.
-
-The full list is in
-[`docs/USAGE.md`](docs/USAGE.md#behaviour-inherited-from-git); what was
-measured to establish each is in
-[`specs/design.md`](specs/design.md#governing-principle).
-
-## When a symbol anchor will not work
-
-Anchors need a parsed syntax tree, so they are refused on binaries, symlinks,
-submodules, and any language with no grammar — see
-[`docs/LIMITATIONS.md`](docs/LIMITATIONS.md#unsupported-languages) for which.
-A `chmod +x` with no content change has nothing to name either. `rgit commit`
-also refuses a `FILE:SYMBOL` anchor into JSON, YAML, or TOML specifically —
-`rgit diff`, `rgit blame`, and `rgit log` still resolve one fine, but a
-spliced extent in one of these formats is not guaranteed to agree with the
-file's own grammar, and `commit` is the one command that would write the
-result. In every case, name the path instead — `rgit commit package.json`
-works fine, and `rgit diff` never reports such a file as clean.
-
-Which paths are refused, and how each kind stages:
-[`docs/ANCHORS.md`](docs/ANCHORS.md#paths-that-anchors-cannot-address).
+Anchors need a parsed syntax tree — refused on binaries, symlinks, submodules, and unsupported languages ([docs/LIMITATIONS.md](docs/LIMITATIONS.md#unsupported-languages)). `rgit commit` also refuses `FILE:SYMBOL` on JSON, YAML, or TOML (other commands still resolve); name the path instead. Details: [docs/ANCHORS.md § Paths that anchors cannot address](docs/ANCHORS.md#paths-that-anchors-cannot-address).
 
 ## Degraded mode
 
-If no language server is reachable, `rgit` resolves symbols with tree-sitter
-alone and prints `[ts-only]` on stderr. This is normal and safe — it simply
-skips the cross-check that catches build-tag and macro edge cases. `rgit` never
-blocks waiting for a cold language server.
+With no language server, `rgit` resolves with tree-sitter alone and prints `[ts-only]` on stderr — safe, skips macro/build-tag cross-checks. Never blocks on a cold server.
