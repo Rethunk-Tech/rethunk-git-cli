@@ -26,8 +26,16 @@ patch-free history, `context` for one-call repository orientation, plus
 meta subcommands (`languages`, `doctor`, `completion`, `symbols`); everything else
 stays plain `git`.
 
-Start with [HUMANS.md](HUMANS.md) to run it, or
-[docs/INSTALL.md](docs/INSTALL.md) to build it.
+## Quick start
+
+```bash
+cd /some/git/repo
+rgit diff
+rgit commit -m "fix(auth): reject expired" auth.go:ValidateToken
+```
+
+Build, prerequisites, and the full runbook:
+[HUMANS.md](HUMANS.md) and [docs/INSTALL.md](docs/INSTALL.md).
 
 ## Highlights
 
