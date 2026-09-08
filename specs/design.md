@@ -1470,12 +1470,22 @@ class is deliberately not normalized — accepting any server range that is
 merely the anchor's first line would also accept a genuine one-line extent
 bug, trading a warning that is understood for a blind spot that is not.
 
-The four that are left are one shape, examined individually rather than
-sampled: a server summarising nested structure and claiming a different
-span for it, in both directions — `models` by ten lines more, `ingress` by
-eight more, `cost` by one more, a long quoted key by seven fewer. No extent
-either side produced is wrong; they disagree about how deep a mapping's
-value reaches. Nothing here indicts a grammar.
+The four that are left were examined individually rather than sampled, and
+they are not one shape. Three are the server over-extending: `models` ends
+at its last list item on L53 and `yaml-language-server` runs it to L63,
+through the commented-out entries and the header introducing the next key —
+the same trailing-comment absorption `declOnlyEndTrimmer` removes from
+rgit's own side. `ingress` and `cost` differ the same way, by eight lines
+and by one.
+
+The fourth is rgit's, and is a genuine over-capture: a mapping whose value
+ends on L554 runs to L561 in tree-sitter's reading, absorbing a trailing
+comment block that closes the file. `trimTrailingComment` walks the node's
+child spine, so it removes comments a mapping owns but not a comment block
+that trails at end of file where no sibling key follows. One case in 5674
+YAML comparisons, and `commit` refuses YAML anchors regardless, so nothing
+is staged wrongly — but `diff`, `blame` and `log` on that anchor report
+seven lines that belong to no declaration.
 
 The count that grew is `Not named`, and that is the intended price. Those
 symbols were previously paired on a name the server reports more than once,
