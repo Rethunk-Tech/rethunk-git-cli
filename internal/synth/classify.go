@@ -317,6 +317,55 @@ func (fp *filePlan) escalateToContainer(member *resolve.Resolution) (res *resolv
 // exactly why this walks fp.workOrder rather than only checking adjacent
 // entries.
 //
+// enclosesInWork reports whether the worktree extent of the declaration named
+// by anchor contains res's own -- the test for "this is my container, not my
+// sibling". Containment is read from the worktree because that is the tree
+// both anchors were resolved against; HEAD may not have res at all.
+func (fp *filePlan) enclosesInWork(anchor string, res *resolve.Resolution) bool {
+	outer, err := fp.workFile.Resolve(anchor)
+	if err != nil {
+		return false
+	}
+	return outer.Extent.Start <= res.Extent.Start &&
+		res.Extent.End <= outer.Extent.End &&
+		outer.Extent != res.Extent
+}
+
+// containerBodyEnd is the offset inside ext at which a first member belongs:
+// the start of the line carrying the closing delimiter, so the member is
+// spliced above it rather than after it. A language that closes a block by
+// dedent rather than by a delimiter -- Python -- has no such line, and the
+// end of the container is already inside it.
+func containerBodyEnd(src []byte, ext resolve.Extent) uint {
+	end := ext.End
+	for end > ext.Start && isSpace(src[end-1]) {
+		end--
+	}
+	if end == ext.Start {
+		return ext.End
+	}
+	switch src[end-1] {
+	case '}', ')', ']':
+	default:
+		return ext.End
+	}
+	lineStart := end - 1
+	for lineStart > ext.Start && src[lineStart-1] != '\n' {
+		lineStart--
+	}
+	return lineStart
+}
+
+func isSpace(b byte) bool { return b == ' ' || b == '\t' || b == '\n' || b == '\r' }
+
+// lineStartOf is the offset of the first byte on off's own line.
+func lineStartOf(src []byte, off uint) uint {
+	for off > 0 && src[off-1] != '\n' {
+		off--
+	}
+	return off
+}
+
 // seq is the anchor's own start offset in the worktree, which is what
 // mergeInsertTies orders same-offset insertions by. A byte offset rather
 // than a declaration index because a pseudo-anchor is not a declaration
@@ -355,9 +404,37 @@ func (fp *filePlan) insertionPoint(res *resolve.Resolution) (pos uint, seq int) 
 		return 0, seq
 	}
 	for i := idx - 1; i >= 0; i-- {
-		if sib, err := fp.headFile.Resolve(fp.workOrder[i]); err == nil {
-			return sib.Extent.End, seq
+		sib, err := fp.headFile.Resolve(fp.workOrder[i])
+		if err != nil {
+			continue
 		}
+		// Source order lists a container ahead of everything it contains,
+		// so this walk reaches the container before any of its members. For
+		// a container HEAD already has but whose members it lacks -- an
+		// empty one, or a member landing ahead of every member HEAD knows
+		// -- sib is the container itself and sib.Extent.End is the byte
+		// after its closing delimiter. Splicing there puts the member
+		// outside the very thing it belongs to, and the blob does not
+		// parse.
+		if fp.enclosesInWork(fp.workOrder[i], res) {
+			// Prefer a member HEAD does have, so the new one keeps its
+			// worktree position relative to it.
+			for j := idx + 1; j < len(fp.workOrder); j++ {
+				after, aerr := fp.headFile.Resolve(fp.workOrder[j])
+				if aerr != nil {
+					continue
+				}
+				if after.Extent.Start >= sib.Extent.Start && after.Extent.End <= sib.Extent.End {
+					// The line start, not the extent start: a member's
+					// extent opens after its indent, and splicing there
+					// cuts that line in half.
+					return lineStartOf(fp.headSrc, after.Extent.Start), seq
+				}
+				break
+			}
+			return containerBodyEnd(fp.headSrc, sib.Extent), seq
+		}
+		return sib.Extent.End, seq
 	}
 	for i := idx + 1; i < len(fp.workOrder); i++ {
 		if sib, err := fp.headFile.Resolve(fp.workOrder[i]); err == nil {

@@ -1176,3 +1176,51 @@ func stageTargets(ctx context.Context, repo *gitx.Repo, root string, targets []s
 	}
 	return plan.Apply(ctx, repo, root)
 }
+
+// TestStage_FirstContainerMemberLandsInsideTheContainer pins the case the
+// sibling walk cannot reach on its own. Source order lists a container ahead
+// of everything it contains, so for a container HEAD already has but whose
+// members it lacks, the nearest sibling found walking backwards is the
+// container itself — and its extent ends after the closing delimiter. Splicing
+// there puts the member outside the thing it belongs to and produces a blob
+// that does not parse, at exit 0.
+func TestStage_FirstContainerMemberLandsInsideTheContainer(t *testing.T) {
+	t.Parallel()
+
+	t.Run("go empty struct", func(t *testing.T) {
+		dir, repo := gittest.RepoWithFile(t, "p.go", "package main\n\ntype Point struct {\n}\n", "chore: initial p.go")
+
+		work := "package main\n\ntype Point struct {\n\tZ int\n}\n"
+		gittest.Write(t, dir, "p.go", work)
+
+		mustStage(t, repo, dir, synth.AnchorTarget("p.go", "Point.Z"))
+
+		got := indexBlob(t, repo, "p.go")
+		mustParseGo(t, "first field of an empty struct", got)
+		qt.Assert(t, qt.Equals(got, work))
+	})
+
+	t.Run("go member ahead of every member HEAD has", func(t *testing.T) {
+		dir, repo := gittest.RepoWithFile(t, "q.go", "package main\n\ntype Q struct {\n\tY int\n}\n", "chore: initial q.go")
+
+		work := "package main\n\ntype Q struct {\n\tZ int\n\tY int\n}\n"
+		gittest.Write(t, dir, "q.go", work)
+
+		mustStage(t, repo, dir, synth.AnchorTarget("q.go", "Q.Z"))
+
+		got := indexBlob(t, repo, "q.go")
+		mustParseGo(t, "field ahead of the existing one", got)
+		qt.Assert(t, qt.Equals(got, work))
+	})
+
+	t.Run("typescript empty class", func(t *testing.T) {
+		dir, repo := gittest.RepoWithFile(t, "svc.ts", "export class Svc {\n}\n", "chore: initial svc.ts")
+
+		work := "export class Svc {\n  hello(): number { return 1; }\n}\n"
+		gittest.Write(t, dir, "svc.ts", work)
+
+		mustStage(t, repo, dir, synth.AnchorTarget("svc.ts", "Svc.hello"))
+
+		qt.Assert(t, qt.Equals(indexBlob(t, repo, "svc.ts"), work))
+	})
+}
