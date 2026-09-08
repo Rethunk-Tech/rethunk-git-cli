@@ -35,6 +35,14 @@ Notable changes to `rgit`. The format follows
 
 ### Fixed
 
+- `rgit commit` staged a container's first new member **outside** the
+  container. Naming `p.go:Point.Z` against a `Point` that HEAD has but whose
+  fields it lacks spliced the field after the closing brace and committed it
+  at exit 0, leaving a blob that does not parse. The same applied to a member
+  landing ahead of every member HEAD knows, and to class methods in
+  TypeScript. The cross-check could not see it: it compares the worktree
+  extent, not the synthesized blob.
+
 - `rgit symbols` read files outside the repository: a path climbing above the
   root was resolved and listed rather than refused, where `diff` and `blame`
   refused the same path. It now exits 129 like they do. See
