@@ -1360,35 +1360,13 @@ cross-check's value on real files. The measurement below answers the
 different question: across real repository source, how often does the
 comparison fire, and when it fires, which side is wrong.
 
-**Method.** Drive the same three public seams `rgit diff` uses, per file:
-`resolve.Open` + `File.DeclExtents` for the declaration list,
-`resolve.Resolve` per anchor, `lsp.Session.Dial` +
-`Client.DocumentSymbols` for the server's outline, and
-`resolve.MatchAndCompare` for the verdict — with every disagreement logged
-instead of collapsed into a single exit code. One `lsp.Session` per
-language for the whole corpus (a `Session` caches a degraded language and
-will not redial it, matching `rgit`'s own behaviour), with a warm-up loop
-for `gopls`. Pseudo-anchors are skipped, as `CrossCheckExtents` skips them.
-Corpora: this repository's own `.go` tree for Go; one real Next.js
-application for TypeScript/TSX; the whole local multi-repo checkout for
-Shell, YAML, JSON, CSS, HTML, and Markdown, excluding `node_modules`,
-`.git`, `.next`, and (for JSON) lockfiles and files over 40 KB.
-
-| Grammar | Server | Files | Symbols compared | Agree | Disagree | Not named by server |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| Go | `gopls` | 117 | 1591 | 1589 | 0 | 2 |
-| TypeScript | `vtsls` | 382 | 2821 | 2821 | 0 | 0 |
-| TSX | `vtsls` | 197 | 580 | 580 | 0 | 0 |
-| Shell | `bash-language-server` | 216 | 2058 | 2053 | 5 | 0 |
-| YAML | `yaml-language-server` | 418 | 8545 | 6349 | 2196 | 0 |
-| JSON | `vscode-json-language-server` | 300 | 11283 | 11283 | 0 | 0 |
-| CSS | `vscode-css-language-server` | 115 | 5754 | 4073 | 133 | 1548 |
-| HTML | `vscode-html-language-server` | 297 | 590 | 590 | 0 | 0 |
-| Markdown | `marksman` | 300 | 3274 | 0 | 0 | 3274 |
-| **Total** | | **2342** | **36496** | **29338** | **2334** | **4824** |
-
-Python is unmeasured: `pyright-langserver` is not installed, and it is the
-only server `internal/lsp` wires for that grammar.
+**Method.** `cmd/xcheck`, built behind the `rgit_xcheck` tag so it never
+enters the shipped binary, drives the same three public seams `rgit diff`
+uses and logs every disagreement instead of collapsing it into one exit
+code. Two traps it encodes, both of which silently produced wrong numbers
+before they were understood: corpus paths must be absolute, and a stdio
+server is one-shot, so a session cached per language measures only the
+first file of each — `gopls` alone survives that, being a socket daemon.
 
 **Every one of the 2334 disagreements was traced to a side.** Three
 classes, none of which is "tree-sitter produced a wrong extent for a
@@ -1401,7 +1379,7 @@ content line is `End.Line - 1`. `flattenTree`/`flattenFlat` copy
 `yaml-language-server` ends every non-terminal block mapping this way, so
 the comparison reports `dEnd = +1` on 86% of its own disagreements. `gopls`
 never does — its ranges end on the closing brace, mid-line — which is why
-no fixture in the table above exposed it. Re-running the corpus with the
+no fixture exposed it. Re-running the corpus with the
 correction applied resolves exactly these 1883 and nothing else. The
 tree-sitter extent is correct in every one; the defect is in the
 comparison's own line conversion.
@@ -1492,8 +1470,14 @@ several rules of one stylesheet, so a group pairs only when every
 member-matching symbol agrees on one range, and `@layer`-style at-rules get
 no symbol at all. Python carries 30, every one the server reporting a
 multi-line assignment by its name line alone (`BASE_PROG` L22..L29 against
-L22..L22) — a convention difference, not an extent claim. These are the
-open edges; nothing here indicts a grammar.
+L22..L22): `pyright` is naming the binding where tree-sitter names the
+statement.
+
+That last one is deliberately not normalized. Accepting any server range
+that is merely the anchor's first line would also accept a genuine one-line
+extent bug, trading a warning that is understood for a blind spot that is
+not — the same trade the ordinal fallback made before it was gated. These
+are the open edges; nothing here indicts a grammar.
 
 The counts above are the pre-correction measurement and are kept as the
 record that produced the fixes. Re-running the corpus is the outstanding
