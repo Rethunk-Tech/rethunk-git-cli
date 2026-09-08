@@ -1,6 +1,7 @@
 package resolve
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
@@ -346,5 +347,34 @@ func TestMatchAndCompare_SlugAnchorDropsTrailingBlankLines(t *testing.T) {
 	}
 	if err != nil {
 		t.Errorf("err = %v; want nil -- a trailing blank line is not a disagreement", err)
+	}
+}
+
+// TestDeclOnlyExcludesTheNextKeysCommentBlock pins the declaration-only extent
+// for a block mapping followed by the comment block that introduces its next
+// sibling. The mapping's node runs to the start of that sibling, so it spans
+// the blank line and those comments -- documentation for something else. The
+// staged extent already trims them; the extent the cross-check compares must
+// trim them too, or it reports a range no language server would ever answer.
+func TestDeclOnlyExcludesTheNextKeysCommentBlock(t *testing.T) {
+	t.Parallel()
+
+	lang, ok := ForExtension(".yaml")
+	if !ok {
+		t.Skip("yaml grammar not compiled in")
+	}
+	src := []byte("run:\n  name: one\n\n# ---- Serving ----\n# introduces the next key\nserver:\n  port: 8080\n")
+
+	res, err := Resolve(lang, src, "run")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+
+	declOnly := string(src[res.DeclOnly.Start:res.DeclOnly.End])
+	if strings.Contains(declOnly, "Serving") || strings.Contains(declOnly, "introduces the next key") {
+		t.Errorf("DeclOnly = %q; want the next key's comment block excluded", declOnly)
+	}
+	if !strings.Contains(declOnly, "name: one") {
+		t.Errorf("DeclOnly = %q; want the mapping's own content kept", declOnly)
 	}
 }

@@ -64,6 +64,17 @@ func (y *yamlLanguage) IsComment(kind string) bool { return kind == "comment" }
 // excluding is the safe direction -- it ends an anchor one comment short of
 // the raw parse (still reachable via the enclosing container, @toplevel, or
 // the whole file) rather than grafting one key's edit onto its neighbour.
+// trimDeclOnlyEnd implements declOnlyEndTrimmer with the same scan the staged
+// extent already uses. A block mapping's node runs to the start of the next
+// sibling key, so it swallows the blank line and the whole comment block that
+// introduces that next key -- documentation for something else. The staged
+// extent trims it; the declaration-only extent did not, so the cross-check
+// compared a range no language server would ever report and blamed the server
+// for the difference.
+func (y *yamlLanguage) trimDeclOnlyEnd(src []byte, node *ts.Node) uint {
+	return y.trimTrailingComment(src, node)
+}
+
 func (y *yamlLanguage) trimTrailingComment(src []byte, node *ts.Node) uint {
 	end := node.EndByte()
 	cur := node

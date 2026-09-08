@@ -240,7 +240,7 @@ func formatRange(start, end uint32) string {
 func matchLSPSymbol(anchor, sep string, flat, slugAnchors, groupedAnchors bool, sameName int, symbols []lsp.Symbol) (lsp.Symbol, bool) {
 	bare, ordinal, hasOrdinal := ParseOrdinal(anchor)
 
-	var byBare []lsp.Symbol
+	var byBare, byMember []lsp.Symbol
 	for _, s := range symbols {
 		qualified := s.Name
 		if flat {
@@ -257,11 +257,22 @@ func matchLSPSymbol(anchor, sep string, flat, slugAnchors, groupedAnchors bool, 
 			return s, true
 		}
 		if groupedAnchors && anchorNamesGroupMember(anchor, qualified) {
-			return s, true
+			byMember = append(byMember, s)
 		}
 		if hasOrdinal && (qualified == bare || s.Name == bare) {
 			byBare = append(byBare, s)
 		}
+	}
+
+	// A selector group pairs only when every symbol naming one of its members
+	// agrees on a single range. A selector is free to appear in several rules
+	// of one stylesheet, so "some symbol carries this name" does not identify
+	// the rule -- measured, that pairs a group with an unrelated rule hundreds
+	// of lines away. Symbols that genuinely split one rule all carry that
+	// rule's own range, so requiring agreement keeps the split case and drops
+	// the ambiguous one.
+	if len(byMember) > 0 && sameRange(byMember) {
+		return byMember[0], true
 	}
 
 	// An ordinal names the Nth declaration the resolver found, so indexing
@@ -289,6 +300,16 @@ func matchLSPSymbol(anchor, sep string, flat, slugAnchors, groupedAnchors bool, 
 // spelling ("(*A).Get") arrives with no containerName field at all, so
 // this is the one place a server-reported symbol's own name still needs
 // the same normalization anchor input already gets.
+// sameRange reports whether every symbol covers the identical line range.
+func sameRange(syms []lsp.Symbol) bool {
+	for _, s := range syms[1:] {
+		if s.StartLine != syms[0].StartLine || s.EndLine != syms[0].EndLine {
+			return false
+		}
+	}
+	return true
+}
+
 // anchorNamesGroupMember reports whether qualified is one of the
 // comma-separated names anchor carries. A CSS rule is anchored by its whole
 // selector list while the server reports one symbol per selector, each with
