@@ -137,10 +137,10 @@ func TestRun_BlameUnsupportedLanguage(t *testing.T) {
 }
 
 // TestRun_BlameBoundsToTheSymbolExtent is the happy path and the token case
-// specs/design.md § Commands accepted this command against: the output
-// must name the blamed symbol's own content and must NOT include the
-// sibling function's, proving the -L bound actually narrowed git's own
-// blame rather than covering the whole file.
+// that earns this command its place: the output must name the blamed
+// symbol's own content and must NOT include the sibling function's,
+// proving the -L bound actually narrowed git's own blame rather than
+// covering the whole file.
 func TestRun_BlameBoundsToTheSymbolExtent(t *testing.T) {
 	chdirTempRepo(t)
 

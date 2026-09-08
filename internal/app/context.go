@@ -3,8 +3,8 @@
 // committable diff rows, then recent commit subjects, as a single
 // fixed-shape record stream.
 //
-// Pure read composition over internal/gitx and internal/diff, per
-// specs/design.md § Commands: no new resolution or attribution machinery.
+// Pure read composition over internal/gitx and internal/diff: no new
+// resolution or attribution machinery.
 // The diff half is literally internal/diff.Run's default scope, rendered
 // through its own RenderPorcelain and re-tagged per line, rather than a
 // second walk of report.Files that could drift from what
@@ -83,15 +83,13 @@ next to nothing), then S, W diagnostics, F rows, and C rows. F rows survive
 truncation before C rows do: the diff section has no natural bound of its own,
 while commits are already bounded up front (the most recent 20, via git's own
 -n) and cost little to drop. The X record names how many rows were withheld.
-See specs/design.md#commands for the reasoning.
 
 Full reference: docs/USAGE.md
 `
 
 // contextRecentCommitLimit bounds gitx.RecentCommits' own -n flag: an
 // input bound, not a truncation applied after the fact -- git never
-// produces more than this many commits to begin with (specs/design.md §
-// Commands).
+// produces more than this many commits to begin with.
 const contextRecentCommitLimit = 20
 
 // contextByteBudget is the hard ceiling on rgit context's entire stdout
@@ -99,7 +97,7 @@ const contextRecentCommitLimit = 20
 // ordinary in-progress change -- never comes close to it, while a worst
 // case (a bulk rename or a vendored dependency bump touching hundreds of
 // files) is bounded to a fixed, predictable cost rather than scaling with
-// repository size (specs/design.md § Commands).
+// repository size.
 const contextByteBudget = 16384
 
 // runContext is hand-parsed and has no runtime flag surface beyond --help.
@@ -170,9 +168,8 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 
 	// The default "everything committable" scope -- staged + unstaged vs
 	// HEAD, plus untracked -- is exactly what a bare `rgit diff` already
-	// reports; no Options fields are set here, per specs/design.md §
-	// Commands's own guardrail against a flag surface that would let this
-	// grow into a second `git status`.
+	// reports; no Options fields are set here, guarding against a flag
+	// surface that would let this grow into a second `git status`.
 	report, err := diffpkg.Run(ctx, repo, root, diffpkg.Options{})
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)

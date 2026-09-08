@@ -6,15 +6,14 @@
 //     thin caller over anchor resolution and `git log -L`: git's own -L
 //     implementation already re-derives the touched line range at each
 //     ancestor commit itself, so there is no per-commit tree-sitter
-//     re-parse here and no second attribution path (specs/design.md §
-//     Commands).
+//     re-parse here and no second attribution path.
 //   - `rgit log --since=DATE [--until=DATE] [PATH...]` -- time- and
 //     path-scoped history with no symbol at all, the shape the operator's
 //     own tooling otherwise has to fall back to plain `git log --since=...
 //     -- <paths>` for. Selected by the presence of --since/--until when no
 //     positional is a FILE:SYMBOL anchor; every positional is a pathspec.
 //
-// specs/design.md § Commands's own guardrail is non-negotiable for both:
+// One guardrail is non-negotiable for both:
 // patches are opt-in (-p/--patch), never default -- the default stream is
 // bounded by commit count, not by code size, which `git log -L` or a bare
 // `git log` would not be on their own (both always show the patch).
@@ -149,7 +148,7 @@ func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr
 	// committed, never about an uncommitted worktree edit -- resolving
 	// against HEAD's own blob is what keeps the derived line range
 	// meaningful to `git log -L`, which walks HEAD's own history and knows
-	// nothing about the worktree at all (specs/design.md § Commands).
+	// nothing about the worktree at all.
 	repo, file, head, res, anchorName, code := resolveAnchorExtent(ctx, dir, stderr, opts.positional, "log", logHelp,
 		func(ctx context.Context, repo *gitx.Repo, _, file string) ([]byte, string, bool, error) {
 			head, exists, err := repo.CatFile(ctx, "HEAD", file)

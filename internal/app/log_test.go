@@ -106,9 +106,8 @@ func TestRun_LogUnsupportedLanguage(t *testing.T) {
 }
 
 // TestRun_LogDefaultIsPatchFreeAndListsOnlyTouchingCommits pins the
-// non-negotiable guardrail specs/design.md § Commands states in full:
-// patches are opt-in, never default, and the stream is bounded by commit
-// count, not code size.
+// non-negotiable guardrail: patches are opt-in, never default, and the
+// stream is bounded by commit count, not code size.
 // A commit that only touched B must never appear in A's own history, and
 // no patch marker may leak into the default output no matter how many
 // commits touched the symbol.

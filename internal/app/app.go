@@ -28,8 +28,8 @@ const usageLine = "usage: rgit [--version] [-C <path>] <diff|commit|blame|log|co
 const tsOnlyNotice = "rgit: [ts-only] no live language server reached in time; extents unverified"
 
 // topLevelHelp is what `rgit --help`, `-h`, and `help` print. Kept to the
-// same budget as a subcommand's own help (specs/design.md:231's "--help
-// tokens" measurement): orientation, not a manual -- docs/USAGE.md is that.
+// same "--help tokens" budget as a subcommand's own help: orientation, not
+// a manual -- docs/USAGE.md is that.
 const topLevelHelp = usageLine + `
 
 rgit is "git add <pathspec> && git commit" at symbol granularity: name a

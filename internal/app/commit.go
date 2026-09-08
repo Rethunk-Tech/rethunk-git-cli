@@ -54,7 +54,7 @@ type commitFlags struct {
 // It cannot be a registered shorthand: pflag resolves an optional-value
 // flag's NoOptDefVal before checking for an attached value, so -SDEADBEEF
 // parses as a chain of nonexistent single-letter flags rather than as a key
-// id (specs/design.md § CLI handling).
+// id.
 //
 // The rewrite follows getopt's rule, which is git's: for a short option
 // taking an optional argument, the rest of the token IS the argument. -Ss

@@ -61,12 +61,12 @@ func TestRun_ContextEmptyRepoEmitsNothing(t *testing.T) {
 	qt.Assert(t, qt.Equals(stderr, ""))
 }
 
-// TestRun_ContextEmitsDiffRowsBeforeCommits is the token case
-// specs/design.md § Commands accepted this command against: one
-// invocation reports recent commit subjects AND the same per-symbol
-// diffstat `rgit diff` itself reports, as one stream, diff rows first --
-// on a busy branch the unbounded, actionable F rows must survive budget
-// truncation before the cheap, bounded C rows do (docs/CODES.md#output-records).
+// TestRun_ContextEmitsDiffRowsBeforeCommits is the token case that earns
+// this command its place: one invocation reports recent commit subjects
+// AND the same per-symbol diffstat `rgit diff` itself reports, as one
+// stream, diff rows first -- on a busy branch the unbounded, actionable
+// F rows must survive budget truncation before the cheap, bounded C rows
+// do (docs/CODES.md#output-records).
 func TestRun_ContextEmitsDiffRowsBeforeCommits(t *testing.T) {
 	dir := chdirTempRepo(t) // "chore: initial" commits a.go with A and B
 	t.Setenv("PATH", isolatedPATHWithGopls(t))
@@ -239,7 +239,7 @@ func TestRun_ContextStashAndSparseRecords(t *testing.T) {
 
 // TestBuildContextStream unit-tests the byte-budget truncation boundary
 // directly against a tiny budget, rather than building a repository large
-// enough to exceed the real 16 KiB one (specs/design.md § Commands).
+// enough to exceed the real 16 KiB one.
 func TestBuildContextStream(t *testing.T) {
 	t.Parallel()
 
