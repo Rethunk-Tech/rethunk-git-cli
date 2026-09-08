@@ -153,9 +153,8 @@ canonical spelling.
 
 On a repository with no commits yet there is no `HEAD` to compare against, and
 `git diff HEAD` fails outright. The default scope falls back to the empty tree,
-so everything staged or untracked lists as an addition — `rgit diff` answers
-the same question in a fresh `git init` that it does anywhere else, and
-`rgit commit` writes the root commit.
+so everything staged or untracked lists as an addition, and `rgit commit`
+writes the root commit.
 
 ## Output
 
@@ -177,10 +176,9 @@ unfiltered listing never warns — every sibling already has its own row there.
 
 `-p`/`--patch` appends git's own real patch body after the aligned/porcelain
 report, unmodified — not a second diff format `rgit` invents, the same
-framing as `log -p` and `blame --porcelain`. It covers the identical scope
-and pathspec filter as the report above it, since both are derived from the
-same comparison. Mutually exclusive with `--porcelain`; the default output
-with neither flag is unaffected by `-p`'s existence.
+framing as `log -p` and `blame --porcelain`. Both come from the same
+comparison, so it covers the identical scope and pathspec filter as the report
+above it. Mutually exclusive with `--porcelain`.
 
 ## Blame
 
@@ -195,31 +193,29 @@ $ rgit blame auth.go:ValidateToken
 --sym` do, then runs `git blame -L start,end -- FILE` bounded to just that
 symbol's own extent in the current worktree file — never the whole file.
 There is no revision argument. When the worktree copy exists, blame reads it,
-the same file a bare `git blame FILE` would. When the file has been deleted
-from the worktree, rgit resolves the extent from `HEAD` and runs git blame
-against `HEAD` for that same blob and line range.
+the same file a bare `git blame FILE` would; when it has been deleted, rgit
+resolves the extent from `HEAD` and blames `HEAD`'s blob for that line range.
 
 `--follow-rename` follows the symbol across rename boundaries using the same
 rename-boundary re-resolution as `log --follow-rename`: when git identifies a
 rename, rgit resolves the symbol once against the pre-rename blob and blames
-that segment's line range. It does not re-parse once per commit. With this flag,
-every resolution uses the `HEAD` blob, never the dirty worktree. Without this
-flag, blame keeps the behavior above, including its `HEAD` fallback when the
-worktree file is gone.
+that segment's line range. It does not re-parse once per commit. With this
+flag, every resolution uses the `HEAD` blob, never the dirty worktree; without
+it, blame keeps the behavior above, including the `HEAD` fallback.
 
 An anchor that does not resolve is **never** silently widened to a whole-file
 blame — it is exit 3 (unresolvable), 4 (ambiguous), or 9 (unsupported
 language), the same codes `commit` and `diff --sym` already give the
 identical anchor. See [`CODES.md`](CODES.md#exit-codes).
 
-`-p` is accepted alongside `--porcelain` as its exact alias, matching git
-blame's own flag: unlike `git log -p` or `git diff -p`, git blame's own `-p`
-already means `--porcelain`, not "patch" — blame annotates lines, it does
-not diff them, so there is no separate patch mode to opt into.
+`-p` is accepted as an exact alias of `--porcelain`, matching git blame's own
+flag: unlike `git log -p` or `git diff -p`, git blame's `-p` already means
+`--porcelain`, not "patch" — blame annotates lines, it does not diff them, so
+there is no separate patch mode to opt into.
 
 `--porcelain` passes straight through to git's own `git blame --porcelain`
 output, unmodified — not a second record format rgit invents. The default is
-likewise git's own human-readable blame output, unmodified. See
+likewise git's own human-readable blame output. See
 [`CODES.md`](CODES.md#output-records).
 
 ## Log
@@ -250,9 +246,8 @@ Unlike default `blame` (worktree first), the anchor is resolved against
 **`HEAD`, not the worktree**: history is a question about what has already
 been committed, and `git log -L` itself walks `HEAD`'s own history with no
 notion of the worktree at all. (`blame --follow-rename` uses the same
-`HEAD`-blob rule.) This also means a symbol already deleted from the
-worktree, but still present in `HEAD`, keeps its history reachable — there
-is nothing to open on disk, so `rgit log` never needs to.
+`HEAD`-blob rule.) A symbol already deleted from the worktree, but still
+present in `HEAD`, therefore keeps its history reachable.
 
 `git log -L` already follows a rename on its own whenever git's own content
 similarity detects one, the same as `git log --follow` — but it tracks the
@@ -285,10 +280,8 @@ c8fdd8a init
 
 `--follow-rename` continues a symbol's history past a rename that plain `log
 FILE:SYMBOL` stops at, one rename boundary at a time (not a per-commit
-re-parse): at each commit git's own follow detects as a rename, the anchor
-is re-resolved with tree-sitter against the pre-rename blob one commit
-earlier, and history continues under that path. Without the flag, behaviour
-is unchanged. See [`LIMITATIONS.md`](LIMITATIONS.md#history-across-renames).
+re-parse). Without the flag, behaviour is unchanged. See
+[`LIMITATIONS.md`](LIMITATIONS.md#history-across-renames).
 
 ### Log by date and path
 
@@ -313,10 +306,7 @@ This is the one `git log` carve-out `rgit`'s own "the tree is only ever
 inspected through `rgit`" convention otherwise has to make for a plain
 `git log --since=... -- <paths>` — closed by giving `rgit log` a second
 invocation shape rather than a second command. `--porcelain` and `-p`/
-`--patch` behave identically to the `FILE:SYMBOL` form above: patch-free
-aligned records by default, `--porcelain`'s tab-separated form on request,
-and the real patch body only when `-p`/`--patch` is given, mutually
-exclusive with `--porcelain`.
+`--patch` behave identically to the `FILE:SYMBOL` form above.
 
 ## Context
 
