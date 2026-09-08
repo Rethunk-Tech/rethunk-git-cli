@@ -361,10 +361,9 @@ func TestStage_MemberDeletionKeepsTheFileParseable(t *testing.T) {
 }
 
 // TestStage_YAMLNestedKeyByteIdenticalRoundTrip pins the acceptance bar
-// specs/design.md § Grammar scope sets for this grammar: YAML's indentation handling
-// is exactly where synthesis bugs are easiest to hide, so a nested key's
-// own replace must reproduce the worktree byte-for-byte, not merely
-// "close."
+// for this grammar: YAML's indentation handling is exactly where synthesis
+// bugs are easiest to hide, so a nested key's own replace must reproduce
+// the worktree byte-for-byte, not merely "close."
 func TestStage_YAMLNestedKeyByteIdenticalRoundTrip(t *testing.T) {
 	t.Parallel()
 	head := "name: CI\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: go build ./...\n\n" +
@@ -1038,12 +1037,12 @@ func TestStage_SiblingReceiverMethodKeepsBlankLinePadding(t *testing.T) {
 	qt.Assert(t, qt.Equals(got, work))
 }
 
-// TestStage_HTMLElementByID exercises the pipeline specs/design.md §
-// Grammar scope's own div#app demand case motivates: resolving a
-// tag-qualified id anchor through a real git index, nested inside another
-// element, alongside a sibling void element whose own trailing content
-// tree-sitter-html's external scanner is measured absorbing (same section)
-// -- proving that quirk never crosses into a neighbour's own staged bytes.
+// TestStage_HTMLElementByID exercises the pipeline the div#app demand
+// case motivates: resolving a tag-qualified id anchor through a real git
+// index, nested inside another element, alongside a sibling void element
+// whose own trailing content tree-sitter-html's external scanner is
+// measured absorbing -- proving that quirk never crosses into a
+// neighbour's own staged bytes.
 func TestStage_HTMLElementByID(t *testing.T) {
 	t.Parallel()
 	head := "<!DOCTYPE html>\n<html>\n<body>\n<div id=\"app\">\n  <section id=\"content\">v1</section>\n  <input id=\"field\" type=\"text\">\n</div>\n</body>\n</html>\n"
@@ -1068,7 +1067,7 @@ func TestStage_HTMLElementByID(t *testing.T) {
 		// Only the void input's own attribute changes; section#content's
 		// own "v1" text must survive untouched even though input#field's
 		// own node, measured directly, absorbs the trailing "\n" up to
-		// </div> (specs/design.md) -- left alone as the grammar's own
+		// </div> -- left alone as the grammar's own
 		// honest boundary, the same way TOML's trailing-blank-line
 		// absorption already is, rather than trimmed.
 		work := strings.Replace(head, `type="text"`, `type="email"`, 1)
@@ -1147,9 +1146,9 @@ func TestPlanStage_PreambleRowsAppearInResults(t *testing.T) {
 // deterministically inserts a blank line after @imports: neither TypeScript
 // nor Python inserts a blank line after the import block the way gofmt does
 // after Go's, so @imports' own row must stay exactly its own text -- not
-// the file's true total, and that gap is accepted (specs/design.md § Blob
-// synthesis's "Separator ownership beyond @header/@imports was considered
-// and deferred, not built"), not silently guessed away.
+// the file's true total. That gap is accepted: separator ownership beyond
+// @header/@imports was considered and deferred, not built -- and not
+// silently guessed away.
 func TestPlanStage_PreambleDoesNotAbsorbSeparatorForLanguagesThatDontOwnOne(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.RepoWithFile(t, "seed.ts", "export const seed = 1;\n", "chore: seed")

@@ -248,9 +248,9 @@ func After() {}
 
 func TestResolve_ConsecutiveNewSymbolsEachResolveIndependently(t *testing.T) {
 	t.Parallel()
-	// internal/synth's nearest-existing-sibling insertion (specs/design.md
-	// § Blob synthesis) walks the worktree's declaration order to find a
-	// sibling also present in HEAD, skipping past any that are themselves
+	// internal/synth's nearest-existing-sibling insertion walks the
+	// worktree's declaration order to find a sibling also present in HEAD,
+	// skipping past any that are themselves
 	// new -- for W = [A, XNew, YNew, C], staging YNew must insert after A.
 	// That walk depends on this resolver giving each consecutive new
 	// symbol its own correct extent and preserving their source order;
@@ -695,7 +695,7 @@ func TestResolve_UnsupportedLanguage(t *testing.T) {
 	qt.Assert(t, qt.Equals(err.Error(), `resolve: "main": unsupported language`))
 }
 
-// --- Language-server cross-check (specs/design.md § Symbol resolution) ---
+// --- Language-server cross-check -------------------------------------
 //
 // Coverage here is split by what can prove it: the union-shape decode and
 // the anchor-normalization/comparison logic run against an in-process mock
@@ -870,8 +870,8 @@ func ValidateToken(t string) error {
 	// language that degraded and will not redial it, so reusing one here
 	// would pin the first cold result forever. Separate sessions model
 	// what this actually simulates -- successive rgit invocations, the
-	// first spawning a daemon without waiting for it (specs/design.md:
-	// "never block on a cold server").
+	// first spawning a daemon without waiting for it, since rgit never
+	// blocks on a cold server.
 	attempt := func(r *resolve.Resolution) (bool, error) {
 		sess := lsp.NewSession()
 		defer sess.Close()
@@ -1546,7 +1546,7 @@ div {
 	qt.Assert(t, qt.Not(qt.StringContains(toplevel, "@import")))
 
 	// .css is claimed; .scss and .sass deliberately are not -- no SCSS/SASS
-	// tree-sitter grammar ships Go bindings (specs/design.md § Dependencies).
+	// tree-sitter grammar ships Go bindings.
 	_, ok = resolve.ForExtension(".scss")
 	qt.Assert(t, qt.IsFalse(ok))
 	_, ok = resolve.ForExtension(".sass")
@@ -1835,13 +1835,13 @@ cert = "a.pem"
 	qt.Assert(t, qt.Equals(unresolvable.Code, exitcode.AnchorUnresolvable))
 }
 
-// TestResolve_HTML pins the deliberately narrow anchor syntax
-// specs/design.md § Grammar scope settles: element + id only ("div#app"),
-// nested to whatever depth the worktree actually nests it, with a doc
-// comment attributed the same way every other language's is, and @header/
-// @imports/@toplevel each given a considered answer -- including @imports,
-// which does not apply and says so by degrading to unresolved rather than
-// silently matching nothing useful.
+// TestResolve_HTML pins the deliberately narrow HTML anchor syntax:
+// element + id only ("div#app"), nested to whatever depth the worktree
+// actually nests it, with a doc comment attributed the same way every
+// other language's is, and @header/@imports/@toplevel each given a
+// considered answer -- including @imports, which does not apply and says
+// so by degrading to unresolved rather than silently matching nothing
+// useful.
 func TestResolve_HTML(t *testing.T) {
 	t.Parallel()
 	src := []byte(`<!DOCTYPE html>
@@ -1878,8 +1878,8 @@ func TestResolve_HTML(t *testing.T) {
 
 	// A void element resolves to its own tag alone, not the rest of the
 	// file -- proof that tree-sitter-html's own void-element trailing-
-	// content quirk (specs/design.md § Grammar scope) never crosses into a
-	// sibling's bytes, only ever absorbs harmless trailing whitespace.
+	// content quirk never crosses into a sibling's bytes, only ever
+	// absorbs harmless trailing whitespace.
 	field := mustResolveExt(t, ".html", src, "input#field")
 	qt.Assert(t, qt.StringContains(field, "<input id=\"field\" type=\"text\">"))
 	qt.Assert(t, qt.Not(qt.StringContains(field, "</div>")))
@@ -1920,12 +1920,12 @@ func TestResolve_HTML(t *testing.T) {
 	qt.Assert(t, qt.DeepEquals(order, []string{"div#app", "section#content", "input#field"}))
 }
 
-// TestResolve_HTMLDuplicateIDIsAmbiguous pins the second design decision
-// specs/design.md § Grammar scope records: an id is unique per document by
-// spec but routinely is not in practice, and index.go's existing byBare/
-// byQualified/ordinal machinery already reports that as exit 4
-// (AnchorAmbiguous) with no HTML-specific code at all -- the same mechanism
-// two identical CSS selectors or two same-named Go functions already share.
+// TestResolve_HTMLDuplicateIDIsAmbiguous pins the second HTML decision: an
+// id is unique per document by spec but routinely is not in practice, and
+// index.go's existing byBare/byQualified/ordinal machinery already
+// reports that as exit 4 (AnchorAmbiguous) with no HTML-specific code at
+// all -- the same mechanism two identical CSS selectors or two same-named
+// Go functions already share.
 func TestResolve_HTMLDuplicateIDIsAmbiguous(t *testing.T) {
 	t.Parallel()
 	src := []byte(`<div id="app"></div>

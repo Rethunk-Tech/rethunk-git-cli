@@ -276,8 +276,7 @@ func TestDiff_CrossCheckReportsWithoutGating(t *testing.T) {
 func TestDocumentedPathsWithoutOtherCoverage(t *testing.T) {
 	t.Parallel()
 	t.Run("no reachable language server degrades to ts-only", func(t *testing.T) {
-		// specs/design.md: degraded resolution is normal, announced once, and
-		// never blocks.
+		// Degraded resolution is normal, announced once, and never blocks.
 		//
 		// Both routes to a server have to be closed, or this passes or fails
 		// on what the developer's machine happens to be running: stripping
@@ -960,10 +959,9 @@ func TestOutput_OrderedByPathThenPosition(t *testing.T) {
 
 func TestHelp_TopLevelExitsZeroOnEverySpelling(t *testing.T) {
 	t.Parallel()
-	// specs/design.md § CLI handling counts "--help tokens" per flag
-	// library as a selection criterion; all three spellings -- bare "--help", "-h", and
-	// "help" -- must print the same top-level help to stdout and exit 0,
-	// not fall into the unknown-command branch (exit 129).
+	// All three spellings -- bare "--help", "-h", and "help" -- must print
+	// the same top-level help to stdout and exit 0, not fall into the
+	// unknown-command branch (exit 129).
 	repo, _ := gittest.New(t)
 	for _, spelling := range []string{"--help", "-h", "help"} {
 		t.Run(spelling, func(t *testing.T) {
