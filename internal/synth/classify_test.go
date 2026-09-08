@@ -39,9 +39,7 @@ func stagedBlob(t *testing.T, repo *gitx.Repo, path string) string {
 // what classify queues, before any dial ever happens.
 func TestClassify_DefersCrossCheckToOneBatchPerFile(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "a.go", "package p\n\nfunc A() int { return 1 }\n\nfunc B() int { return 2 }\n")
-	gittest.Commit(t, dir, "chore: fixture")
+	dir, repo := gittest.RepoWithFile(t, "a.go", "package p\n\nfunc A() int { return 1 }\n\nfunc B() int { return 2 }\n", "chore: fixture")
 	gittest.Write(t, dir, "a.go", "package p\n\nfunc A() int { return 11 }\n\nfunc B() int { return 22 }\n")
 
 	fp, err := openFilePlan(context.Background(), repo, dir, "a.go")

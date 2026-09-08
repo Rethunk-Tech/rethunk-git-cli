@@ -54,9 +54,7 @@ func TestRunCommit_RefusesSymbolAnchorOnStructuredData(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			dir, _ := gittest.New(t)
-			gittest.Write(t, dir, tc.path, tc.before)
-			gittest.Commit(t, dir, "chore: add structured data")
+			dir, _ := gittest.RepoWithFile(t, tc.path, tc.before, "chore: add structured data")
 			gittest.Write(t, dir, tc.path, tc.after)
 			t.Chdir(dir)
 
@@ -96,9 +94,7 @@ func TestRunCommit_RefusesSymbolAnchorOnStructuredData(t *testing.T) {
 // TestRun_CommitRefusesStructuredDataSymbolViaRunApp pins runApp dispatch:
 // symbols lists the resolvable key name, while commit refuses package.json:name.
 func TestRun_CommitRefusesStructuredDataSymbolViaRunApp(t *testing.T) {
-	dir, _ := gittest.New(t)
-	gittest.Write(t, dir, "package.json", `{"name": "before"}`+"\n")
-	gittest.Commit(t, dir, "chore: add structured data")
+	dir, _ := gittest.RepoWithFile(t, "package.json", `{"name": "before"}`+"\n", "chore: add structured data")
 	t.Chdir(dir)
 
 	stdout, stderr, code := runApp(t, "symbols", "package.json")

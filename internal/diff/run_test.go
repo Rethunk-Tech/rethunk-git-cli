@@ -23,11 +23,7 @@ import (
 // or in the worktree.
 func newDiffTestRepo(t *testing.T) (dir string, repo *gitx.Repo) {
 	t.Helper()
-	dir, repo = gittest.New(t)
-	gittest.Write(t, dir, "b.py", "def existing():\n    return 1\n")
-	gittest.Git(t, dir, "add", "b.py")
-	gittest.Git(t, dir, "commit", "-q", "-m", "chore: initial b.py")
-	return dir, repo
+	return gittest.RepoWithFile(t, "b.py", "def existing():\n    return 1\n", "chore: initial b.py")
 }
 
 // assertUnresolvable is the shape every --sym failure in this file shares:
@@ -153,9 +149,7 @@ func TestRun_PatchPopulatesReportPatch(t *testing.T) {
 
 func TestRun_UnmergedPathUsesWorktreeConflictContent(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "conflict.txt", "base\n")
-	gittest.Commit(t, dir, "chore: add conflict fixture")
+	dir, repo := gittest.RepoWithFile(t, "conflict.txt", "base\n", "chore: add conflict fixture")
 	gittest.Write(t, dir, "conflict.txt", "<<<<<<< ours\nworktree\n>>>>>>> theirs\n")
 
 	blob := strings.TrimSpace(gittest.Git(t, dir, "rev-parse", "HEAD:conflict.txt"))
@@ -635,9 +629,7 @@ func TestAttribute_TopLevelSymbolOwnsOneSeparator(t *testing.T) {
 			// and touches no shared package state, no t.Setenv, no t.Chdir --
 			// safe to run concurrently with its four siblings.
 			t.Parallel()
-			dir, repo := gittest.New(t)
-			gittest.Write(t, dir, tc.path, tc.head)
-			gittest.Commit(t, dir, "chore: fixture")
+			dir, repo := gittest.RepoWithFile(t, tc.path, tc.head, "chore: fixture")
 			gittest.Write(t, dir, tc.path, tc.work)
 
 			if got := describeRows(rowsFor(t, dir, repo, tc.path)); got != tc.wantRows {
@@ -725,9 +717,7 @@ func TestRun_ScopeUsageErrorsAreTyped(t *testing.T) {
 // this feature by accident.
 func TestRun_RevPathTwoBlobScope(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "a.go", "package p\n\nfunc Foo() int { return 1 }\n\nfunc Bar() int { return 2 }\n")
-	gittest.Commit(t, dir, "chore: v1")
+	dir, repo := gittest.RepoWithFile(t, "a.go", "package p\n\nfunc Foo() int { return 1 }\n\nfunc Bar() int { return 2 }\n", "chore: v1")
 	gittest.Write(t, dir, "a.go", "package p\n\nfunc Foo() int { return 11 }\n\nfunc Bar() int { return 22 }\n")
 	gittest.Commit(t, dir, "chore: v2")
 	// A third, unrelated commit -- proves the comparison is strictly
@@ -989,9 +979,7 @@ func B() int {
 	return 2
 }
 `
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "notes.go", before)
-	gittest.Commit(t, dir, "chore: fixture")
+	dir, repo := gittest.RepoWithFile(t, "notes.go", before, "chore: fixture")
 	gittest.Write(t, dir, "notes.go", after)
 
 	rows := rowsFor(t, dir, repo, "notes.go")

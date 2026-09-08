@@ -108,9 +108,7 @@ func TestStage_OverlappingAnchorsCoalesceIntoOneExtent(t *testing.T) {
 	head := "package main\n\n// A returns one.\nfunc A() int {\n\treturn 1\n}\n\n// B returns two.\nfunc B() int {\n\treturn 2\n}\n"
 
 	t.Run("pseudo-anchor encloses a named symbol", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "greet.go", head)
-		gittest.Commit(t, dir, "chore: initial greet.go")
+		dir, repo := gittest.RepoWithFile(t, "greet.go", head, "chore: initial greet.go")
 
 		work := "package main\n\n// A returns one.\nfunc A() int {\n\treturn 100\n}\n\n// B returns two.\nfunc B() int {\n\treturn 200\n}\n"
 		gittest.Write(t, dir, "greet.go", work)
@@ -132,9 +130,7 @@ func TestStage_OverlappingAnchorsCoalesceIntoOneExtent(t *testing.T) {
 		// to an insert point rather than a replaced range. That point falls
 		// inside @toplevel, whose text already contains C -- splicing it in
 		// again would stage C twice.
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "greet.go", head)
-		gittest.Commit(t, dir, "chore: initial greet.go")
+		dir, repo := gittest.RepoWithFile(t, "greet.go", head, "chore: initial greet.go")
 
 		work := head + "\n// C returns three.\nfunc C() int {\n\treturn 3\n}\n"
 		gittest.Write(t, dir, "greet.go", work)
@@ -153,9 +149,7 @@ func TestStage_OverlappingAnchorsCoalesceIntoOneExtent(t *testing.T) {
 		// Degenerate overlap: an extent overlaps itself. Applying the
 		// identical replacement twice must not cut the wrong bytes the
 		// second time when the new text is not the same length as the old.
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "greet.go", head)
-		gittest.Commit(t, dir, "chore: initial greet.go")
+		dir, repo := gittest.RepoWithFile(t, "greet.go", head, "chore: initial greet.go")
 
 		work := "package main\n\n// A returns one.\nfunc A() int {\n\treturn 7777777\n}\n\n// B returns two.\nfunc B() int {\n\treturn 2\n}\n"
 		gittest.Write(t, dir, "greet.go", work)
@@ -181,9 +175,7 @@ func TestStage_NewFileCarriesHeaderAndImports(t *testing.T) {
 	work := "package main\n\nimport (\n\t\"fmt\"\n\t\"strings\"\n)\n\nfunc Shout(s string) string {\n\treturn strings.ToUpper(fmt.Sprint(s))\n}\n\nfunc Unrelated() {}\n"
 
 	t.Run("staged automatically", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "seed.go", "package main\n\nfunc Seed() {}\n")
-		gittest.Commit(t, dir, "chore: seed")
+		dir, repo := gittest.RepoWithFile(t, "seed.go", "package main\n\nfunc Seed() {}\n", "chore: seed")
 		gittest.Write(t, dir, "new.go", work)
 
 		mustStage(t, repo, dir, synth.AnchorTarget("new.go", "Shout"))
@@ -205,9 +197,7 @@ func TestStage_NewFileCarriesHeaderAndImports(t *testing.T) {
 		// table, and a pseudo-anchor has no entry there, so an explicitly
 		// named @header must not sort after every symbol and land the
 		// package clause at the bottom of the file.
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "seed.go", "package main\n\nfunc Seed() {}\n")
-		gittest.Commit(t, dir, "chore: seed")
+		dir, repo := gittest.RepoWithFile(t, "seed.go", "package main\n\nfunc Seed() {}\n", "chore: seed")
 		gittest.Write(t, dir, "new.go", work)
 
 		mustStage(t, repo, dir,
@@ -221,9 +211,7 @@ func TestStage_NewFileCarriesHeaderAndImports(t *testing.T) {
 	})
 
 	t.Run("a file already in HEAD gets no preamble", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "tracked.go", "package main\n\nimport \"fmt\"\n\nfunc A() { fmt.Println(1) }\n\nfunc B() { fmt.Println(2) }\n")
-		gittest.Commit(t, dir, "chore: tracked")
+		dir, repo := gittest.RepoWithFile(t, "tracked.go", "package main\n\nimport \"fmt\"\n\nfunc A() { fmt.Println(1) }\n\nfunc B() { fmt.Println(2) }\n", "chore: tracked")
 		gittest.Write(t, dir, "tracked.go", "package main\n\nimport \"fmt\"\n\nfunc A() { fmt.Println(100) }\n\nfunc B() { fmt.Println(200) }\n")
 
 		mustStage(t, repo, dir, synth.AnchorTarget("tracked.go", "A"))
@@ -249,9 +237,7 @@ func TestStage_ClassMemberAnchors(t *testing.T) {
 	pyWork := "class Svc:\n    def login(self):\n        return 111\n\n    def logout(self):\n        return 222\n"
 
 	t.Run("typescript member stages without its sibling", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "svc.ts", tsHead)
-		gittest.Commit(t, dir, "chore: svc.ts")
+		dir, repo := gittest.RepoWithFile(t, "svc.ts", tsHead, "chore: svc.ts")
 		gittest.Write(t, dir, "svc.ts", tsWork)
 
 		mustStage(t, repo, dir, synth.AnchorTarget("svc.ts", "Svc.login"))
@@ -263,9 +249,7 @@ func TestStage_ClassMemberAnchors(t *testing.T) {
 	})
 
 	t.Run("python member stages without its sibling", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "svc.py", pyHead)
-		gittest.Commit(t, dir, "chore: svc.py")
+		dir, repo := gittest.RepoWithFile(t, "svc.py", pyHead, "chore: svc.py")
 		gittest.Write(t, dir, "svc.py", pyWork)
 
 		mustStage(t, repo, dir, synth.AnchorTarget("svc.py", "Svc.login"))
@@ -277,9 +261,7 @@ func TestStage_ClassMemberAnchors(t *testing.T) {
 	})
 
 	t.Run("the class itself remains addressable", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "svc.ts", tsHead)
-		gittest.Commit(t, dir, "chore: svc.ts")
+		dir, repo := gittest.RepoWithFile(t, "svc.ts", tsHead, "chore: svc.ts")
 		gittest.Write(t, dir, "svc.ts", tsWork)
 
 		mustStage(t, repo, dir, synth.AnchorTarget("svc.ts", "Svc"))
@@ -292,9 +274,7 @@ func TestStage_ClassMemberAnchors(t *testing.T) {
 	t.Run("a member of a class new to HEAD stages the class", func(t *testing.T) {
 		// Splicing the member alone puts a method at file scope, which is
 		// not the file in the worktree and does not parse as TypeScript.
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "svc.ts", "export const seed = 1;\n")
-		gittest.Commit(t, dir, "chore: seed")
+		dir, repo := gittest.RepoWithFile(t, "svc.ts", "export const seed = 1;\n", "chore: seed")
 		gittest.Write(t, dir, "svc.ts", "export const seed = 1;\n\nexport class Fresh {\n  hello(): number { return 1; }\n}\n")
 
 		mustStage(t, repo, dir, synth.AnchorTarget("svc.ts", "Fresh.hello"))
@@ -307,9 +287,7 @@ func TestStage_ClassMemberAnchors(t *testing.T) {
 	t.Run("a Go receiver container is a sibling, never escalated into", func(t *testing.T) {
 		// The same container-qualified shape, but the type declaration does
 		// not enclose the method, so staging the method must not drag it in.
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "a.go", "package main\n\ntype A struct{}\n\nfunc Seed() {}\n")
-		gittest.Commit(t, dir, "chore: a.go")
+		dir, repo := gittest.RepoWithFile(t, "a.go", "package main\n\ntype A struct{}\n\nfunc Seed() {}\n", "chore: a.go")
 		gittest.Write(t, dir, "a.go", "package main\n\ntype A struct{}\n\nfunc (a *A) Get() int { return 1 }\n\nfunc Seed() {}\n")
 
 		mustStage(t, repo, dir, synth.AnchorTarget("a.go", "A.Get"))
@@ -351,9 +329,7 @@ func TestStage_MemberDeletionKeepsTheFileParseable(t *testing.T) {
 	// left behind to run into the next member's, producing a Python file
 	// that raises IndentationError or a TypeScript file with a stray brace.
 	t.Run("python", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "svc.py", "class Svc:\n    def keep(self):\n        return 1\n\n    def gone(self):\n        return 2\n\n    def also(self):\n        return 3\n")
-		gittest.Commit(t, dir, "chore: svc.py")
+		dir, repo := gittest.RepoWithFile(t, "svc.py", "class Svc:\n    def keep(self):\n        return 1\n\n    def gone(self):\n        return 2\n\n    def also(self):\n        return 3\n", "chore: svc.py")
 		gittest.Write(t, dir, "svc.py", "class Svc:\n    def keep(self):\n        return 1\n\n    def also(self):\n        return 3\n")
 
 		mustStage(t, repo, dir, synth.AnchorTarget("svc.py", "Svc.gone"))
@@ -363,9 +339,7 @@ func TestStage_MemberDeletionKeepsTheFileParseable(t *testing.T) {
 	})
 
 	t.Run("typescript", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "svc.ts", "export class Svc {\n  keep(): number { return 1; }\n  gone(): number { return 2; }\n}\n")
-		gittest.Commit(t, dir, "chore: svc.ts")
+		dir, repo := gittest.RepoWithFile(t, "svc.ts", "export class Svc {\n  keep(): number { return 1; }\n  gone(): number { return 2; }\n}\n", "chore: svc.ts")
 		gittest.Write(t, dir, "svc.ts", "export class Svc {\n  keep(): number { return 1; }\n}\n")
 
 		mustStage(t, repo, dir, synth.AnchorTarget("svc.ts", "Svc.gone"))
@@ -375,9 +349,7 @@ func TestStage_MemberDeletionKeepsTheFileParseable(t *testing.T) {
 	})
 
 	t.Run("a top-level deletion is unaffected", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "a.go", "package main\n\nfunc Keep() {}\n\nfunc Gone() {}\n\nfunc Also() {}\n")
-		gittest.Commit(t, dir, "chore: a.go")
+		dir, repo := gittest.RepoWithFile(t, "a.go", "package main\n\nfunc Keep() {}\n\nfunc Gone() {}\n\nfunc Also() {}\n", "chore: a.go")
 		gittest.Write(t, dir, "a.go", "package main\n\nfunc Keep() {}\n\nfunc Also() {}\n")
 
 		mustStage(t, repo, dir, synth.AnchorTarget("a.go", "Gone"))
@@ -399,9 +371,7 @@ func TestStage_YAMLNestedKeyByteIdenticalRoundTrip(t *testing.T) {
 		"  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: go test ./...\n"
 
 	t.Run("a lone nested-key edit round-trips byte-identical", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "ci.yml", head)
-		gittest.Commit(t, dir, "chore: ci.yml")
+		dir, repo := gittest.RepoWithFile(t, "ci.yml", head, "chore: ci.yml")
 		work := "name: CI\n\njobs:\n  build:\n    runs-on: macos-latest\n    steps:\n      - run: go build ./...\n\n" +
 			"  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: go test ./...\n"
 		gittest.Write(t, dir, "ci.yml", work)
@@ -415,9 +385,7 @@ func TestStage_YAMLNestedKeyByteIdenticalRoundTrip(t *testing.T) {
 	})
 
 	t.Run("a sibling job's own pending edit stays unstaged", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "ci.yml", head)
-		gittest.Commit(t, dir, "chore: ci.yml")
+		dir, repo := gittest.RepoWithFile(t, "ci.yml", head, "chore: ci.yml")
 		work := "name: CI\n\njobs:\n  build:\n    runs-on: macos-latest\n    steps:\n      - run: go build ./...\n\n" +
 			"  test:\n    runs-on: windows-latest\n    steps:\n      - run: go test ./...\n"
 		gittest.Write(t, dir, "ci.yml", work)
@@ -433,9 +401,7 @@ func TestStage_YAMLNestedKeyByteIdenticalRoundTrip(t *testing.T) {
 	})
 
 	t.Run("naming the job stages its whole subtree, block scalar included", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "ci.yml", head)
-		gittest.Commit(t, dir, "chore: ci.yml")
+		dir, repo := gittest.RepoWithFile(t, "ci.yml", head, "chore: ci.yml")
 		work := "name: CI\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n" +
 			"          go build ./...\n          go vet ./...\n\n" +
 			"  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: go test ./...\n"
@@ -511,9 +477,7 @@ func TestStage_AppendedSymbolInheritsEOFNewline(t *testing.T) {
 	// BEFORE HEAD's trailing newline, not at true end-of-file -- the
 	// case where that terminator is easiest to drop (AGENTS.md: EOF
 	// newline inherited, never normalized).
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "tail.go", "package main\n\nfunc A() {}\n")
-	gittest.Commit(t, dir, "chore: initial tail.go")
+	dir, repo := gittest.RepoWithFile(t, "tail.go", "package main\n\nfunc A() {}\n", "chore: initial tail.go")
 
 	gittest.Write(t, dir, "tail.go", "package main\n\nfunc A() {}\n\nfunc Z() int { return 2 }\n")
 	mustStage(t, repo, dir, synth.AnchorTarget("tail.go", "Z"))
@@ -525,9 +489,7 @@ func TestStage_AppendedSymbolInheritsEOFNewline(t *testing.T) {
 
 func TestStage_RenameStagedAsTwoPathsYieldsR100(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "old.txt", "hello world\nsecond line\n")
-	gittest.Commit(t, dir, "chore: add old.txt")
+	dir, repo := gittest.RepoWithFile(t, "old.txt", "hello world\nsecond line\n", "chore: add old.txt")
 
 	// A rename staged as a removal-plus-addition -- not `git mv` -- is
 	// exactly what a caller naming two pathspecs produces; git's own
@@ -556,9 +518,7 @@ func TestStage_PathspecGlobAndExcludePassThrough(t *testing.T) {
 
 func TestStage_ModeOnlyChangeStages(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "script.sh", "#!/bin/sh\necho hi\n")
-	gittest.Commit(t, dir, "chore: add script.sh")
+	dir, repo := gittest.RepoWithFile(t, "script.sh", "#!/bin/sh\necho hi\n", "chore: add script.sh")
 
 	// --sym cannot express a mode change (docs/USAGE.md); a mode-only
 	// edit stages by pathspec instead.
@@ -630,9 +590,7 @@ func TestStage_GitattributesCleanFilterRequiresPath(t *testing.T) {
 
 func TestStage_GitignoredUntrackedRefused(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, ".gitignore", "*.log\n")
-	gittest.Commit(t, dir, "chore: add gitignore")
+	dir, repo := gittest.RepoWithFile(t, ".gitignore", "*.log\n", "chore: add gitignore")
 	gittest.Write(t, dir, "debug.log", "noise\n")
 
 	err := stageTargets(context.Background(), repo, dir, []synth.Target{synth.PathTarget("debug.log")})
@@ -641,9 +599,7 @@ func TestStage_GitignoredUntrackedRefused(t *testing.T) {
 
 func TestStage_UnsupportedLanguageAnchorRefused(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "notes.rs", "fn main() {}\n")
-	gittest.Commit(t, dir, "chore: add notes.rs")
+	dir, repo := gittest.RepoWithFile(t, "notes.rs", "fn main() {}\n", "chore: add notes.rs")
 
 	err := stageTargets(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("notes.rs", "main")})
 	assertPathError(t, err, exitcode.UnsupportedLanguage)
@@ -651,9 +607,7 @@ func TestStage_UnsupportedLanguageAnchorRefused(t *testing.T) {
 
 func TestStage_ResolveAllBeforeStagingAnyLeavesIndexUntouched(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "a.go", "package main\n\nfunc A() {}\n")
-	gittest.Commit(t, dir, "chore: add a.go")
+	dir, repo := gittest.RepoWithFile(t, "a.go", "package main\n\nfunc A() {}\n", "chore: add a.go")
 	gittest.Write(t, dir, "a.go", "package main\n\nfunc A() { println(1) }\n")
 
 	// Foo does not exist anywhere -- the whole batch must fail before A
@@ -790,9 +744,7 @@ func TestStage_MultiAnchorSameFileMatchesWorktreeByteIdentical(t *testing.T) {
 	work := "\"\"\"Doc.\"\"\"\n\nfrom __future__ import annotations\n\nimport logging\n\nlogger = logging.getLogger(__name__)\n\n\ndef alpha() -> int:\n    return 1\n\n\ndef beta() -> int:\n    logger.info(\"x\")\n    return 2\n"
 
 	t.Run("anchors in file order", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "mod.py", head)
-		gittest.Commit(t, dir, "chore: mod.py")
+		dir, repo := gittest.RepoWithFile(t, "mod.py", head, "chore: mod.py")
 		gittest.Write(t, dir, "mod.py", work)
 
 		mustStage(t, repo, dir,
@@ -807,9 +759,7 @@ func TestStage_MultiAnchorSameFileMatchesWorktreeByteIdentical(t *testing.T) {
 		// The synthesized blob must not depend on argument order: only the
 		// worktree's own declaration order may decide where each insertion
 		// lands.
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "mod.py", head)
-		gittest.Commit(t, dir, "chore: mod.py")
+		dir, repo := gittest.RepoWithFile(t, "mod.py", head, "chore: mod.py")
 		gittest.Write(t, dir, "mod.py", work)
 
 		mustStage(t, repo, dir,
@@ -826,9 +776,7 @@ func TestStage_MultiAnchorSameFileMatchesWorktreeByteIdentical(t *testing.T) {
 // out of worktree order, must land at their true worktree positions too.
 func TestStage_MultiAnchorOutOfOrderVarAndFunctions(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "v.go", "package main\n\nfunc Seed() {}\n")
-	gittest.Commit(t, dir, "chore: v.go")
+	dir, repo := gittest.RepoWithFile(t, "v.go", "package main\n\nfunc Seed() {}\n", "chore: v.go")
 	work := "package main\n\nvar Count = 0\n\nfunc Seed() {}\n\nfunc Bump() {\n\tCount++\n}\n"
 	gittest.Write(t, dir, "v.go", work)
 
@@ -917,9 +865,7 @@ func TestStage_ModeInheritsFromHEADWhenWorktreeFileGone(t *testing.T) {
 func TestStage_ContainerMemberInsertIsByteIdenticalToWorktree(t *testing.T) {
 	t.Parallel()
 	t.Run("go struct field", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "p.go", "package main\n\ntype Point struct {\n\tX int\n\tY int\n}\n")
-		gittest.Commit(t, dir, "chore: initial p.go")
+		dir, repo := gittest.RepoWithFile(t, "p.go", "package main\n\ntype Point struct {\n\tX int\n\tY int\n}\n", "chore: initial p.go")
 
 		work := "package main\n\ntype Point struct {\n\tX int\n\tY int\n\tZ int\n}\n"
 		gittest.Write(t, dir, "p.go", work)
@@ -932,9 +878,7 @@ func TestStage_ContainerMemberInsertIsByteIdenticalToWorktree(t *testing.T) {
 	})
 
 	t.Run("go interface method", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "i.go", "package main\n\ntype Doer interface {\n\tDo()\n}\n")
-		gittest.Commit(t, dir, "chore: initial i.go")
+		dir, repo := gittest.RepoWithFile(t, "i.go", "package main\n\ntype Doer interface {\n\tDo()\n}\n", "chore: initial i.go")
 
 		work := "package main\n\ntype Doer interface {\n\tDo()\n\tRedo()\n}\n"
 		gittest.Write(t, dir, "i.go", work)
@@ -947,9 +891,7 @@ func TestStage_ContainerMemberInsertIsByteIdenticalToWorktree(t *testing.T) {
 	})
 
 	t.Run("typescript class method", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "svc.ts", "export class Svc {\n  login(): number { return 1; }\n}\n")
-		gittest.Commit(t, dir, "chore: initial svc.ts")
+		dir, repo := gittest.RepoWithFile(t, "svc.ts", "export class Svc {\n  login(): number { return 1; }\n}\n", "chore: initial svc.ts")
 
 		work := "export class Svc {\n  login(): number { return 1; }\n  logout(): number { return 2; }\n}\n"
 		gittest.Write(t, dir, "svc.ts", work)
@@ -961,9 +903,7 @@ func TestStage_ContainerMemberInsertIsByteIdenticalToWorktree(t *testing.T) {
 	})
 
 	t.Run("python class method keeps its PEP 8 blank line, not flush", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "svc.py", "class Svc:\n    def login(self):\n        return 1\n")
-		gittest.Commit(t, dir, "chore: initial svc.py")
+		dir, repo := gittest.RepoWithFile(t, "svc.py", "class Svc:\n    def login(self):\n        return 1\n", "chore: initial svc.py")
 
 		// A blank line between methods, matching PEP 8 -- unlike the three
 		// flush cases above, this one is the byte-identical result BECAUSE
@@ -1011,9 +951,7 @@ func TestStage_WidenedMemberDoesNotDuplicateItsNewContainer(t *testing.T) {
 	t.Parallel()
 
 	t.Run("member widened to its container is not spliced twice", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "p.go", "package p\n\nfunc E() int { return 1 }\n")
-		gittest.Commit(t, dir, "chore: initial p.go")
+		dir, repo := gittest.RepoWithFile(t, "p.go", "package p\n\nfunc E() int { return 1 }\n", "chore: initial p.go")
 
 		work := "package p\n\nfunc E() int { return 1 }\n\ntype T struct {\n\ta int\n}\n"
 		gittest.Write(t, dir, "p.go", work)
@@ -1027,9 +965,7 @@ func TestStage_WidenedMemberDoesNotDuplicateItsNewContainer(t *testing.T) {
 	})
 
 	t.Run("naming order does not matter", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "p.go", "package p\n\nfunc E() int { return 1 }\n")
-		gittest.Commit(t, dir, "chore: initial p.go")
+		dir, repo := gittest.RepoWithFile(t, "p.go", "package p\n\nfunc E() int { return 1 }\n", "chore: initial p.go")
 
 		work := "package p\n\nfunc E() int { return 1 }\n\ntype T struct {\n\ta int\n}\n"
 		gittest.Write(t, dir, "p.go", work)
@@ -1044,9 +980,7 @@ func TestStage_WidenedMemberDoesNotDuplicateItsNewContainer(t *testing.T) {
 	})
 
 	t.Run("three members of one new container still dedupe to one", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "p.go", "package p\n\nfunc E() int { return 1 }\n")
-		gittest.Commit(t, dir, "chore: initial p.go")
+		dir, repo := gittest.RepoWithFile(t, "p.go", "package p\n\nfunc E() int { return 1 }\n", "chore: initial p.go")
 
 		work := "package p\n\nfunc E() int { return 1 }\n\ntype T struct {\n\ta int\n\tb int\n\tc int\n}\n"
 		gittest.Write(t, dir, "p.go", work)
@@ -1064,9 +998,7 @@ func TestStage_WidenedMemberDoesNotDuplicateItsNewContainer(t *testing.T) {
 	})
 
 	t.Run("two different new containers stay independent", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "p.go", "package p\n\nfunc E() int { return 1 }\n")
-		gittest.Commit(t, dir, "chore: initial p.go")
+		dir, repo := gittest.RepoWithFile(t, "p.go", "package p\n\nfunc E() int { return 1 }\n", "chore: initial p.go")
 
 		work := "package p\n\nfunc E() int { return 1 }\n\ntype T struct {\n\ta int\n}\n\ntype U struct {\n\tb int\n}\n"
 		gittest.Write(t, dir, "p.go", work)
@@ -1094,9 +1026,7 @@ func TestStage_WidenedMemberDoesNotDuplicateItsNewContainer(t *testing.T) {
 // whatever the nearest existing declaration is.
 func TestStage_SiblingReceiverMethodKeepsBlankLinePadding(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "a.go", "package main\n\ntype A struct{}\n\nfunc Seed() {}\n")
-	gittest.Commit(t, dir, "chore: initial a.go")
+	dir, repo := gittest.RepoWithFile(t, "a.go", "package main\n\ntype A struct{}\n\nfunc Seed() {}\n", "chore: initial a.go")
 
 	work := "package main\n\ntype A struct{}\n\nfunc (a *A) Get() int { return 1 }\n\nfunc Seed() {}\n"
 	gittest.Write(t, dir, "a.go", work)
@@ -1120,9 +1050,7 @@ func TestStage_HTMLElementByID(t *testing.T) {
 
 	t.Run("nested element by id", func(t *testing.T) {
 		t.Parallel()
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "index.html", head)
-		gittest.Commit(t, dir, "chore: initial index.html")
+		dir, repo := gittest.RepoWithFile(t, "index.html", head, "chore: initial index.html")
 
 		work := strings.Replace(head, "v1", "v2", 1)
 		gittest.Write(t, dir, "index.html", work)
@@ -1135,9 +1063,7 @@ func TestStage_HTMLElementByID(t *testing.T) {
 
 	t.Run("void element boundary is not absorbed into a neighbour", func(t *testing.T) {
 		t.Parallel()
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "index.html", head)
-		gittest.Commit(t, dir, "chore: initial index.html")
+		dir, repo := gittest.RepoWithFile(t, "index.html", head, "chore: initial index.html")
 
 		// Only the void input's own attribute changes; section#content's
 		// own "v1" text must survive untouched even though input#field's
@@ -1174,9 +1100,7 @@ func TestStage_HTMLElementByID(t *testing.T) {
 // credits it the one line that gap would otherwise be.
 func TestPlanStage_PreambleRowsAppearInResults(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "seed.go", "package main\n\nfunc Seed() {}\n")
-	gittest.Commit(t, dir, "chore: seed")
+	dir, repo := gittest.RepoWithFile(t, "seed.go", "package main\n\nfunc Seed() {}\n", "chore: seed")
 	gittest.Write(t, dir, "new.go", "package main\n\nimport \"fmt\"\n\nfunc Hello() {\n\tfmt.Println(\"hi\")\n}\n")
 
 	plan, err := synth.PlanStage(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("new.go", "Hello")})
@@ -1228,9 +1152,7 @@ func TestPlanStage_PreambleRowsAppearInResults(t *testing.T) {
 // and deferred, not built"), not silently guessed away.
 func TestPlanStage_PreambleDoesNotAbsorbSeparatorForLanguagesThatDontOwnOne(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "seed.ts", "export const seed = 1;\n")
-	gittest.Commit(t, dir, "chore: seed")
+	dir, repo := gittest.RepoWithFile(t, "seed.ts", "export const seed = 1;\n", "chore: seed")
 	gittest.Write(t, dir, "new.ts", "import { z } from \"./z\";\n\nexport function hello() {}\n")
 
 	plan, err := synth.PlanStage(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("new.ts", "hello")})

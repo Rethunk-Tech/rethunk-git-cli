@@ -10,9 +10,7 @@ import (
 )
 
 func TestRunCommit_PorcelainEmitsCommitSHA(t *testing.T) {
-	dir, _ := gittest.New(t)
-	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n")
-	gittest.Commit(t, dir, "feat: add A")
+	dir, _ := gittest.RepoWithFile(t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n", "feat: add A")
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 2\n}\n")
 	t.Chdir(dir)
 
@@ -57,9 +55,7 @@ func TestRunCommit_PorcelainEmitsCommitSHA(t *testing.T) {
 }
 
 func TestRunCommit_QuietSuccessEmptyStdout(t *testing.T) {
-	dir, _ := gittest.New(t)
-	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n")
-	gittest.Commit(t, dir, "feat: add A")
+	dir, _ := gittest.RepoWithFile(t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n", "feat: add A")
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 2\n}\n")
 	t.Chdir(dir)
 

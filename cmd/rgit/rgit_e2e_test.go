@@ -314,9 +314,7 @@ func TestDocumentedPathsWithoutOtherCoverage(t *testing.T) {
 // base state every diff scope in this file's tests compares against.
 func initRepoWithFile(t *testing.T, relPath, content string) string {
 	t.Helper()
-	dir, _ := gittest.New(t)
-	gittest.Write(t, dir, relPath, content)
-	gittest.Commit(t, dir, "init")
+	dir, _ := gittest.RepoWithFile(t, relPath, content, "init")
 	return dir
 }
 

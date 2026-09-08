@@ -57,9 +57,7 @@ func TestOpenFilePlan_UnsupportedLanguageReason(t *testing.T) {
 
 	t.Run("extensionless path deleted from the worktree samples HEAD", func(t *testing.T) {
 		t.Parallel()
-		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "bin/hook", "echo hi\n")
-		gittest.Commit(t, dir, "chore: add hook")
+		dir, repo := gittest.RepoWithFile(t, "bin/hook", "echo hi\n", "chore: add hook")
 		if err := os.Remove(filepath.Join(dir, "bin", "hook")); err != nil {
 			t.Fatal(err)
 		}

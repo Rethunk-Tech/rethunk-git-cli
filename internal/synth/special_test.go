@@ -10,18 +10,13 @@ import (
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 )
 
-// newSpecialTestRepo is a self-contained temp repo (gitx_test.go's own
+// The fixtures below are self-contained temp repos (gitx_test.go's own
 // style): this is white-box package synth, testing classifyPath's
 // unexported branches directly rather than through Stage's public surface,
 // which index_test.go's TestStage_SubmoduleAndSymlinkPathStaging already
 // covers for the worktree-present half of classifyPath.
-func newSpecialTestRepo(t *testing.T) (dir string, repo *gitx.Repo) {
-	t.Helper()
-	return gittest.New(t)
-}
 
 func commitSpecial(t *testing.T, dir string, paths ...string) {
 	t.Helper()
@@ -49,7 +44,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("symlink deleted from the worktree classifies via HEAD's 120000 entry", func(t *testing.T) {
-		dir, repo := newSpecialTestRepo(t)
+		dir, repo := gittest.New(t)
 		if err := os.WriteFile(filepath.Join(dir, "target.txt"), []byte("x\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -72,7 +67,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	})
 
 	t.Run("submodule directory removed from the worktree classifies via HEAD's 160000 entry", func(t *testing.T) {
-		dir, repo := newSpecialTestRepo(t)
+		dir, repo := gittest.New(t)
 		subDir := filepath.Join(dir, "sub")
 		if err := os.MkdirAll(subDir, 0o755); err != nil {
 			t.Fatal(err)
@@ -108,7 +103,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 		// ".git present" heuristic cannot tell this apart from an ordinary
 		// directory by local shape alone; classifyPath must still cross-
 		// check HEAD's own tree mode rather than settling for pathRegular.
-		dir, repo := newSpecialTestRepo(t)
+		dir, repo := gittest.New(t)
 		subDir := filepath.Join(dir, "sub")
 		if err := os.MkdirAll(subDir, 0o755); err != nil {
 			t.Fatal(err)
@@ -142,7 +137,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	})
 
 	t.Run("binary file deleted from the worktree classifies via HEAD's content", func(t *testing.T) {
-		dir, repo := newSpecialTestRepo(t)
+		dir, repo := gittest.New(t)
 		if err := os.WriteFile(filepath.Join(dir, "blob.bin"), []byte("a\x00b\x00c"), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -162,7 +157,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	})
 
 	t.Run("regular file deleted from the worktree classifies as pathRegular via HEAD", func(t *testing.T) {
-		dir, repo := newSpecialTestRepo(t)
+		dir, repo := gittest.New(t)
 		if err := os.WriteFile(filepath.Join(dir, "plain.go"), []byte("package p\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -182,7 +177,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	})
 
 	t.Run("plain directory in the worktree classifies as pathRegular, not a submodule", func(t *testing.T) {
-		dir, repo := newSpecialTestRepo(t)
+		dir, repo := gittest.New(t)
 		if err := os.MkdirAll(filepath.Join(dir, "plaindir"), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -197,7 +192,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	})
 
 	t.Run("binary file present in the worktree refuses a symbol anchor", func(t *testing.T) {
-		dir, repo := newSpecialTestRepo(t)
+		dir, repo := gittest.New(t)
 		if err := os.WriteFile(filepath.Join(dir, "blob.bin"), []byte("a\x00b\x00c"), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -220,7 +215,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	})
 
 	t.Run("path present on neither side classifies as pathRegular", func(t *testing.T) {
-		dir, repo := newSpecialTestRepo(t)
+		dir, repo := gittest.New(t)
 		// An empty repo: the path was never committed and never existed in
 		// the worktree either. classifyPath's job is refusing an
 		// addressable-but-wrong-kind path, not diagnosing absence -- that is
@@ -237,7 +232,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 
 func TestStage_RefusesUnmergedSymbol(t *testing.T) {
 	t.Parallel()
-	dir, repo := newSpecialTestRepo(t)
+	dir, repo := gittest.New(t)
 	gittest.Write(t, dir, "conflict.go", "package p\n\nfunc Keep() {}\n")
 	gittest.Commit(t, dir, "chore: add conflict fixture")
 
@@ -287,7 +282,7 @@ func TestStage_RefusesIndexWorktreeBits(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			dir, repo := newSpecialTestRepo(t)
+			dir, repo := gittest.New(t)
 			gittest.Write(t, dir, "tracked.go", "package p\n\nfunc Keep() {}\n")
 			commitSpecial(t, dir, "tracked.go")
 			gittest.Git(t, dir, "update-index", test.mark, "tracked.go")
@@ -319,7 +314,7 @@ func TestCheckGitignoreRefusal_IndexEntryCountsAsTracked(t *testing.T) {
 	t.Parallel()
 
 	t.Run("intent-to-add entry is allowed", func(t *testing.T) {
-		dir, repo := newSpecialTestRepo(t)
+		dir, repo := gittest.New(t)
 		gittest.Write(t, dir, ".gitignore", "skip-me.go\n")
 		gittest.Write(t, dir, "skip-me.go", "package p\n")
 		commitSpecial(t, dir, ".gitignore")
@@ -331,7 +326,7 @@ func TestCheckGitignoreRefusal_IndexEntryCountsAsTracked(t *testing.T) {
 	})
 
 	t.Run("folded index name is allowed", func(t *testing.T) {
-		dir, repo := newSpecialTestRepo(t)
+		dir, repo := gittest.New(t)
 		gittest.Git(t, dir, "config", "core.ignorecase", "true")
 		gittest.Write(t, dir, ".gitignore", "skip-me.go\n")
 		gittest.Write(t, dir, "Skip-Me.go", "package p\n")
@@ -344,7 +339,7 @@ func TestCheckGitignoreRefusal_IndexEntryCountsAsTracked(t *testing.T) {
 	})
 
 	t.Run("never-indexed entry is refused", func(t *testing.T) {
-		dir, repo := newSpecialTestRepo(t)
+		dir, repo := gittest.New(t)
 		gittest.Write(t, dir, ".gitignore", "skip-me.go\n")
 		gittest.Write(t, dir, "skip-me.go", "package p\n")
 		commitSpecial(t, dir, ".gitignore")

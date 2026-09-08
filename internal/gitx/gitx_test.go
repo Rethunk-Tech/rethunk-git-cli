@@ -536,9 +536,7 @@ func TestLog_MaxCount(t *testing.T) {
 // diverge correctly in both directions after a local-only commit.
 func TestUpstreamAndAheadBehind(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "a.go", "package a\n")
-	gittest.Commit(t, dir, "chore: initial")
+	dir, repo := gittest.RepoWithFile(t, "a.go", "package a\n", "chore: initial")
 
 	if _, ok, err := repo.Upstream(context.Background()); err != nil || ok {
 		t.Fatalf("Upstream() = (_, %v, %v); want ok=false with no upstream configured", ok, err)
@@ -631,9 +629,7 @@ func TestBatchCatFile(t *testing.T) {
 // pointer bump like any other whole-file change.
 func TestBatchCatFile_SubmodulePathIsExistsFalse(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "a.go", "package a\n")
-	gittest.Commit(t, dir, "chore: first")
+	dir, repo := gittest.RepoWithFile(t, "a.go", "package a\n", "chore: first")
 	gittest.Git(t, dir, "update-index", "--add", "--cacheinfo",
 		"160000,0123456789abcdef0123456789abcdef01234567,mysub")
 	gittest.Git(t, dir, "commit", "-q", "-m", "chore: add gitlink")
@@ -705,9 +701,7 @@ func TestErrorMessagesNameTheCommand(t *testing.T) {
 
 func TestCommit_ReuseMessageForwarded(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "a.txt", "content\n")
-	gittest.Commit(t, dir, "feat: original")
+	dir, repo := gittest.RepoWithFile(t, "a.txt", "content\n", "feat: original")
 	gittest.Write(t, dir, "a.txt", "staged content\n")
 	gittest.Git(t, dir, "add", "a.txt")
 
@@ -726,9 +720,7 @@ func TestCommit_ReuseMessageForwarded(t *testing.T) {
 
 func TestCommit_SignoffAppendsSignedOffBy(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "a.txt", "content\n")
-	gittest.Commit(t, dir, "chore: initial")
+	dir, repo := gittest.RepoWithFile(t, "a.txt", "content\n", "chore: initial")
 	gittest.Write(t, dir, "a.txt", "updated content\n")
 	gittest.Git(t, dir, "add", "a.txt")
 
@@ -745,9 +737,7 @@ func TestCommit_SignoffAppendsSignedOffBy(t *testing.T) {
 
 func TestCommit_TrailerForwarded(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "a.txt", "content\n")
-	gittest.Commit(t, dir, "chore: initial")
+	dir, repo := gittest.RepoWithFile(t, "a.txt", "content\n", "chore: initial")
 	gittest.Write(t, dir, "a.txt", "updated content\n")
 	gittest.Git(t, dir, "add", "a.txt")
 
@@ -793,9 +783,7 @@ func TestCommitOnlyUsesTemporaryIndex(t *testing.T) {
 
 func TestCommitOnlyWithNoPathsLeavesOtherStagedWork(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "base.txt", "base\n")
-	gittest.Commit(t, dir, "chore: initial")
+	dir, repo := gittest.RepoWithFile(t, "base.txt", "base\n", "chore: initial")
 	gittest.Write(t, dir, "extra.txt", "staged only\n")
 	gittest.Git(t, dir, "add", "extra.txt")
 

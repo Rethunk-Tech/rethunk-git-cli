@@ -44,6 +44,21 @@ func New(t testing.TB) (dir string, repo *gitx.Repo) {
 	return dir, gitx.New(dir)
 }
 
+// RepoWithFile is New plus one committed file, the starting state most
+// tests want: an anchor can only resolve against a symbol that exists at
+// HEAD, so a repository with no commit is useless to them.
+//
+// It returns the gitx.Repo as well as the directory because the two are
+// wanted together often enough that a dir-only variant just pushes every
+// such caller back to spelling the three calls out again.
+func RepoWithFile(t testing.TB, rel, content, message string) (dir string, repo *gitx.Repo) {
+	t.Helper()
+	dir, repo = New(t)
+	Write(t, dir, rel, content)
+	Commit(t, dir, message)
+	return dir, repo
+}
+
 // Git runs one git command in dir and returns its combined output, failing
 // the test if git does. The output is returned rather than discarded so a
 // caller can assert on it without a second spelling of this function.

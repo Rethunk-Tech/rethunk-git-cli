@@ -78,9 +78,7 @@ func TestResolveRangeScope_ThreeDotUsesMergeBaseTwoDotUsesLiteralA(t *testing.T)
 // and only that type, to exit 129 rather than exit 128.
 func TestResolveRangeScope_ErrorPaths(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "f.txt", "one\n")
-	gittest.Commit(t, dir, "chore: fixture")
+	dir, repo := gittest.RepoWithFile(t, "f.txt", "one\n", "chore: fixture")
 	ctx := context.Background()
 
 	// One case per separator, not one per missing side: scope.go's own
@@ -156,9 +154,7 @@ func TestResolveRangeScope_MergeBaseExecFailureIsNotAUsageError(t *testing.T) {
 // a range separator.
 func TestResolveRangeScope_ExplicitFormFallsBackToSingleRevision(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "f.txt", "one\n")
-	gittest.Commit(t, dir, "chore: fixture")
+	_, repo := gittest.RepoWithFile(t, "f.txt", "one\n", "chore: fixture")
 
 	scope, err := resolveRangeScope(context.Background(), repo, "HEAD")
 	if err != nil {
@@ -196,9 +192,7 @@ func TestCommittableBase_UnbornBranchFallsBackToEmptyTree(t *testing.T) {
 
 func TestContentSideRead_UnmergedFallsBackToWorktree(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "conflict.txt", "base\n")
-	gittest.Commit(t, dir, "chore: add conflict fixture")
+	dir, repo := gittest.RepoWithFile(t, "conflict.txt", "base\n", "chore: add conflict fixture")
 	gittest.Write(t, dir, "conflict.txt", "<<<<<<< ours\nworktree\n>>>>>>> theirs\n")
 
 	blob := strings.TrimSpace(gittest.Git(t, dir, "rev-parse", "HEAD:conflict.txt"))
