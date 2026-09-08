@@ -20,7 +20,7 @@ import (
 //
 // Callers must not pass deletions -- the symbol exists only in HEAD,
 // outside the server's worktree view. Pseudo resolutions are exempt for the
-// same reason (specs/design.md § Cross-check exemptions) and are dropped
+// same reason and are dropped
 // before dialling, so a list with nothing else in it costs no round trip.
 //
 // degraded=true means no comparison happened at all: absent or slow server,
@@ -29,8 +29,7 @@ import (
 // as verified. None is a failure; the caller prints "[ts-only]" and
 // proceeds. mismatches holds one error per resolution whose range the
 // server disagreed with (exit 6); a resolution the server does not name at
-// all is not a mismatch (specs/design.md's fourth exemption), but still
-// marks the batch as degraded.
+// all is not a mismatch, but still marks the batch as degraded.
 func CrossCheckExtents(ctx context.Context, sess *lsp.Session, lang Language, repoRoot, absPath string, src []byte, list []*Resolution) (degraded bool, mismatches []error) {
 	if len(list) == 0 {
 		return true, nil

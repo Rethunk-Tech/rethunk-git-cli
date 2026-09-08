@@ -122,8 +122,8 @@ func sectionDeclarations(sec *ts.Node, container string, src []byte) []Declarati
 			// inside the SAME enclosing section, not grouped under the
 			// heading the way an atx-opened section groups its body.
 			// Reproducing that grouping by hand would be exactly the
-			// level-tracking walk this grammar was chosen to avoid
-			// (specs/design.md § Dependencies), so a setext heading is
+			// level-tracking walk this grammar was chosen to avoid, so
+			// a setext heading is
 			// addressable by its own slug, but its extent is the heading
 			// line alone — a declaration with no body, not a section.
 			if s := slugify(headingText(src, &child)); s != "" {

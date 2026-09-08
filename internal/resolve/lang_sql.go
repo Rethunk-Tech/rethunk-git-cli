@@ -28,7 +28,7 @@ func sqlGrammar() *ts.Language { return ts.NewLanguage(sqlgrammar.Language()) }
 
 // sqlLanguage adapts the tree-sitter SQL grammar
 // (github.com/DerekStride/tree-sitter-sql, generated at build/install time --
-// see cmd/rgit-install/main.go and specs/design.md § Dependencies).
+// see cmd/rgit-install/main.go).
 type sqlLanguage struct {
 	defaultLanguage
 	lang *ts.Language
@@ -106,7 +106,7 @@ func (l *sqlLanguage) buildTagGated() bool { return true }
 // ALTER, INSERT, SELECT and CREATE SCHEMA parse but declare no persistent
 // named object; CREATE DOMAIN does not parse at all under this grammar
 // version (it produces an ERROR node). None clears the measured-demand bar
-// specs/design.md § Grammar scope holds addressable shapes to.
+// every addressable shape here is held to.
 func (l *sqlLanguage) Declarations(src []byte, root *ts.Node) []Declaration {
 	var decls []Declaration
 	for _, child := range namedChildren(root) {

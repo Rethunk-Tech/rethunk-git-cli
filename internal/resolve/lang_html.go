@@ -15,11 +15,10 @@ func init() { register(newHTMLLanguage()) }
 // lang_yaml.go's own constructs already have -- so every shape below is read
 // by node kind and position.
 //
-// docs/ANCHORS.md and specs/design.md § Grammar scope record the anchor
-// syntax this adapter deliberately stops at: element + id only ("div#app",
-// that section's own canonical example), never a class, an nth-of-type, or
-// a descendant combinator. rgit resolves anchors; it is not a CSS selector
-// engine.
+// docs/ANCHORS.md and docs/LIMITATIONS.md record the anchor syntax this
+// adapter deliberately stops at: element + id only ("div#app", the
+// canonical example), never a class, an nth-of-type, or a descendant
+// combinator. rgit resolves anchors; it is not a CSS selector engine.
 type htmlLanguage struct {
 	defaultLanguage
 	lang *ts.Language
@@ -61,8 +60,8 @@ func (h *htmlLanguage) HeaderKinds() []string { return []string{"doctype", "comm
 // lang_shell.go). Unlike shell, no ImportMatcher is built for it here:
 // deciding which elements count (rel="stylesheet" but not rel="icon"?
 // script[src] but not an inline <script>? a <base href>?) has no measured
-// demand behind it -- specs/design.md § Grammar scope's own HTML entry
-// names only div#app as the demand signal -- and is exactly the kind of
+// demand behind it -- div#app, the component-root case, is the only demand
+// signal this grammar was ever added for -- and is exactly the kind of
 // widened scope element+id was deliberately kept narrow to avoid.
 // @imports therefore degrades the same way it does for JSON, TOML, YAML,
 // and Markdown: unresolvable, not an error.
@@ -90,9 +89,8 @@ func (h *htmlLanguage) MembersSitFlush() bool { return false }
 // Unlike lang_css.go's one-level rule_set-inside-rule_set nesting, HTML's own
 // structure has no natural depth limit, and a caller's div#app is exactly as
 // likely to sit five levels deep -- a component root mounted inside a full
-// page shell, the same shape specs/design.md § Grammar scope measured as
-// this grammar's own component-root/mount-point demand case -- as at the
-// top.
+// page shell, the measured component-root/mount-point demand case this
+// grammar was added for -- as at the top.
 func (h *htmlLanguage) Declarations(src []byte, root *ts.Node) []Declaration {
 	return h.elementDeclarations(src, root)
 }
@@ -119,8 +117,7 @@ func (h *htmlLanguage) elementDeclarations(src []byte, node *ts.Node) []Declarat
 // indexing bare tag names would make "div" collide across nearly every real
 // document. The demand was always the component-root case, where an id
 // already exists; a bare-tag or positional fallback would reopen the "how
-// far does the selector syntax go" question element+id closed
-// (specs/design.md § Grammar scope).
+// far does the selector syntax go" question element+id closed.
 func (h *htmlLanguage) declarationsFor(src []byte, node *ts.Node) []Declaration {
 	var out []Declaration
 	if tag, id, ok := htmlTagAndID(src, node); ok {
@@ -134,8 +131,8 @@ func (h *htmlLanguage) declarationsFor(src []byte, node *ts.Node) []Declaration 
 // `<img>`, `<br>` -- no explicit `/>` and no real `end_tag`) has no node
 // bounding where its tag ends, so tree-sitter-html's `element` keeps
 // absorbing following whitespace and text until the next sibling or the
-// enclosing tag's close (specs/design.md § Grammar scope, measured against a
-// compiled parse tree). A language server's range never includes that, so
+// enclosing tag's close (measured against a compiled parse tree). A
+// language server's range never includes that, so
 // the declaration-only extent trims back to the start_tag's end, the one
 // boundary both sides agree on.
 //
