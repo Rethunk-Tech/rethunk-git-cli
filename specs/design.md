@@ -1423,29 +1423,19 @@ ordinal fallback is the fragile part: it assumes the server's symbol list
 and the resolver's declaration list enumerate the same declarations in the
 same order, and no wired server guarantees that.
 
-**3. Half-open extent converted as inclusive — 181 (8%), all YAML.** This
-class was first recorded as genuine tree-sitter over-extension. It is not.
-An `Extent` is `[Start, End)`, so the byte at `End` belongs to whatever
-follows; for a construct ending exactly on a line boundary — every YAML
-block mapping, every Markdown section, both of which end at the first byte
-of the next sibling — converting `End` directly reports one line too many.
-`internal/app`'s `lineRange` already decremented it and the comparison did
-not, so the two halves of rgit disagreed about the same extent and the
-language server was blamed for the difference.
+**3. Trailing comments in the compared extent — 181 (8%), all YAML.** A
+block mapping's node runs to the start of the next sibling key, so it spans
+the blank line and the whole comment block introducing that key —
+documentation for something else. `trimTrailingComment` already trimmed
+that from the staged extent; the declaration-only extent the cross-check
+compares did not implement `declOnlyEndTrimmer` at all, so it compared a
+range no language server would ever answer. YAML now shares the one scan.
 
-The specific reading that a `block_mapping_pair` absorbs the *next* key's
-comment block does not reproduce. A comment block between two keys is
-attached as the *leading* documentation of the key below it, the same
-treatment every other grammar here gives a doc comment: for a `concurrency:`
-key followed by a four-line `# TODO` header, `concurrency` resolves to its
-own single line and the header belongs to `jobs`. `DeclOnly` strips it
-before comparison, which is why the comparison agrees.
-
-With the conversion corrected, targeted reproductions of this class — a
-mapping ending at EOF, and the comment-block case above — agree on both
-sides. Re-running the full corpus to confirm the 181 resolve as a group,
-and that no genuine over-extension hides among them, is the outstanding
-step: the count above is the pre-correction measurement.
+A fourth class hid inside the first three and was only visible once they
+were fixed: an `Extent` is `[Start, End)`, so the byte at `End` belongs to
+whatever follows. `internal/app`'s `lineRange` already decremented it and
+the comparison did not, so the two halves of rgit disagreed about the same
+extent wherever a construct ends on a line boundary.
 
 **Anchor-namespace gaps cost two grammars their verification.** A language
 whose anchors are slugs of human-readable text never matched a server
@@ -1454,29 +1444,56 @@ resolver's anchor is `quick-start`, and all 3274 headings degraded to
 `[ts-only]` while the ranges agreed line-for-line wherever they could be
 paired by hand. `matchLSPSymbol` now slugifies the server's side for those
 languages — per part, never after the join, since the separator is not part
-of either name — and Markdown verifies. A residual convention difference
-remains: tree-sitter includes the blank line trailing a section, `marksman`
-does not, so a section followed by a blank line still reports a one-line
-disagreement in which neither side is wrong.
+of either name. A section also runs to the blank line before the next
+heading while the server ends it at its last line of content, so that blank
+tail is dropped before comparing: both readings are defensible and the
+difference is not a disagreement either side owns.
 
-CSS degrades on 27% of its symbols for the same category of reason and is
-not addressed: multi-selector rules (`html, body, h1, …`) and at-rules
-(`@theme`, `@layer base`, `@charset`) are anchors the server never names in
-that form.
+CSS's own gap is narrower than it first reads. A rule is anchored by its
+whole selector list while the server reports one symbol per selector, each
+carrying that rule's range, so pairing on any member recovers it — but only
+when every member-matching symbol agrees on one range, since a selector is
+free to appear in several rules of one stylesheet and pairing on name alone
+matches an unrelated rule hundreds of lines away. At-rules are not one
+gap but two: `@media (max-width: 600px)` is reported and already paired,
+while `@layer base` gets no symbol at all. No normalization reaches the
+second, which is a server limitation rather than an anchor mismatch.
 
-**What this settles.** Every one of the 2334 disagreements was a defect in
-rgit, and none was a defect in a grammar. Two sat in the LSP client and one
-in the comparison: an exclusive range end read as inclusive, an extent end
-read as inclusive, and an ordinal fallback that paired declarations the two
-sides had enumerated differently. All three are fixed, and each carries a
-regression test.
+**What this settles.** Every disagreement traced to a defect in rgit, none
+to a defect in a grammar: an exclusive LSP range end read as inclusive, a
+half-open extent end read as inclusive, trailing comments left in the
+compared extent, an ordinal fallback pairing declarations the two sides had
+enumerated differently, and two anchor namespaces that could not be
+compared at all. Each is fixed and carries a regression test.
 
-That is what the subsystem is worth: not catching a grammar out, but
-holding two independent readings of the same file against each other, where
-a disagreement indicts whichever side is easier to be wrong — and on this
-corpus that was always rgit. Nine grammars agreed with eight servers on
-every construct either could name; Go, TypeScript, TSX, JSON and HTML were
-clean at 16,865 symbols before any fix.
+**Post-fix measurement.** 1008 files, 9 grammars, 9 servers, 17,804 symbols
+compared: 17,636 agree, 168 disagree (0.94%), 784 the server never names.
+
+| Grammar | Files | Compared | Agree | Disagree | Not named |
+| --- | --: | --: | --: | --: | --: |
+| Go | 118 | 1612 | 1612 | 0 | 2 |
+| TypeScript | 93 | 1538 | 1538 | 0 | 0 |
+| TSX | 2 | 20 | 20 | 0 | 0 |
+| Shell | 100 | 806 | 806 | 0 | 0 |
+| Markdown | 100 | 745 | 745 | 0 | 0 |
+| HTML | 100 | 375 | 375 | 0 | 8 |
+| JSON | 100 | 2454 | 2450 | 4 | 92 |
+| YAML | 200 | 5701 | 5692 | 9 | 186 |
+| CSS | 95 | 3061 | 2936 | 125 | 492 |
+| Python | 100 | 1492 | 1462 | 30 | 4 |
+
+Five grammars are exact. Markdown went from verifying nothing to 745
+symbols with no disagreement. YAML fell from 102 disagreements to 6 on the
+same 100 files once the declaration-only extent was trimmed.
+
+What remains is concentrated and is not extent disagreement. CSS carries
+125, and 492 anchors the server never names: a selector may appear in
+several rules of one stylesheet, so a group pairs only when every
+member-matching symbol agrees on one range, and `@layer`-style at-rules get
+no symbol at all. Python carries 30, every one the server reporting a
+multi-line assignment by its name line alone (`BASE_PROG` L22..L29 against
+L22..L22) — a convention difference, not an extent claim. These are the
+open edges; nothing here indicts a grammar.
 
 The counts above are the pre-correction measurement and are kept as the
 record that produced the fixes. Re-running the corpus is the outstanding
