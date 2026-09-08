@@ -5,10 +5,9 @@ measured against, and the list of things that break silently.
 
 ## Before you change behaviour
 
-`rgit` matches git rather than inventing semantics. If a change makes `rgit`
-behave differently from `git add <pathspec> && git commit`, say so explicitly in
-the PR and justify it — the reasoning already on record is in
-[`specs/design.md`](specs/design.md).
+If a change makes `rgit` behave differently from `git add <pathspec> && git
+commit`, say so explicitly in the PR and justify it — the reasoning already
+on record is in [`specs/design.md`](specs/design.md).
 
 Claims in that record are backed by measurement. If you contradict one, measure
 it again and update the record — do not simply reword it.
@@ -30,25 +29,25 @@ Add to the unreleased entry in the same commit as the change that earns it —
 a behaviour change, a new grammar, a new flag, an exit code. Refactors, test
 work, and documentation edits do not earn one.
 
-Entries say what changed and link to the reference that documents it. They do
-not restate it: the tiered layout below is what keeps one authority per fact.
+Entries link to the reference that documents a change rather than restating
+it; the tiered layout below is what keeps one authority per fact.
 
 Cutting a release: tag `vX.Y.Z`, which
 [`.github/workflows/release.yml`](.github/workflows/release.yml) turns into a
 GitHub release with the cross-built and natively-built binaries and their
 `SHA256SUMS`.
 
-That workflow also fails the release outright if any
-artifact's own `rgit languages` output has no `sql` row — a `-tags
-rgit_sql` regression on any artifact this actually reaches:
+That workflow also fails the release outright if any artifact's own `rgit
+languages` output has no `sql` row, catching a `-tags rgit_sql` regression
+on every artifact it reaches:
 
 - linux/amd64 and windows/amd64 execute directly (windows via Wine)
 - linux/arm64 runs inside a matching arm64 container image under QEMU
   emulation, since it is dynamically linked against glibc and bare QEMU has no
   aarch64 sysroot to resolve that against
-- whichever darwin arch matches the `macos-latest` runner's own (arm64, as of
-  this writing) executes directly in its own job — the other darwin artifact is
-  checked by file type only, not executed
+- whichever darwin arch matches the `macos-latest` runner's own (arm64)
+  executes directly in its own job; the other darwin artifact is checked by
+  file type only, not executed
 
 See [`docs/INSTALL.md`](docs/INSTALL.md#cross-builds).
 
@@ -61,7 +60,7 @@ Also check `sqlGrammarVersion` in
 [`tree-sitter-sql`](https://github.com/DerekStride/tree-sitter-sql)'s own
 tags: `@latest` cannot track it, because that module gitignores `parser.c` at
 every tag ([`internal/resolve/sqlgrammar/grammar.go`](internal/resolve/sqlgrammar/grammar.go)),
-so this pin only ever moves by hand and nothing else reminds you to look.
+so this pin only ever moves by hand and nothing else flags it as stale.
 
 If a newer tag exists, bump the constant, then `make sql-parser` and `go test
 -tags rgit_sql ./...` to confirm the new grammar still generates, compiles,
@@ -71,45 +70,42 @@ before tagging.
 ## Tests
 
 **Least tests, highest coverage. The suite stays under 30s** (ideally under
-10). Each file holds one happy
-path plus the edge cases that have actually bitten — no permutation laundry
-lists.
+10). Each file holds one happy path plus the edge cases that have actually
+bitten — no permutation laundry lists.
 
 The two test lanes below, plus `golangci-lint`, run in
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on every push and pull
-request — that much is enforced, not just documented. The ≤30s suite-time
-budget and the coverage numbers in [§ Coverage](#coverage) are not: CI runs
-no timing check and no coverage step, so both stay a review discipline
-rather than a CI gate.
+request. The ≤30s suite-time budget and the coverage numbers in
+[§ Coverage](#coverage) are not enforced anywhere — CI runs no timing check
+and no coverage step — so both stay a review discipline rather than a CI
+gate.
 
-There are two lanes, and which one a case belongs in is the first decision:
+Which of the two lanes a case belongs in is the first decision:
 
 - **The unit lane is where the guarantee lives.** It runs under `-short`, and
   **a regression must fail here.** Anything only the end-to-end file proves is
   a gap, not coverage — measure it rather than assuming (see § Coverage).
   `internal/app/app_test.go` covers the whole command surface by calling
   `app.Run` directly with buffers, which is why `internal/app` exists outside
-  `main` at all; `internal/app/lanes_test.go` holds the same kind of
-  `app.Run`-driven case for guarantees that also need a real hook, a real
-  index, or forwarded git flags — split into its own file so a concurrent
-  editor of `app_test.go` never collides with it; `internal/cli/precedence_test.go`
-  covers the six-rule argument table; other packages test their own
-  internals beside them. `index_test.go` (below) belongs to this lane too,
-  despite living in `cmd/rgit`: its cases drive `synth.Stage` directly and
-  never touch the built binary, so `-short` does not skip them.
+  `main` at all; `internal/app/lanes_test.go` holds the same `app.Run`-driven
+  cases for guarantees that also need a real hook, a real index, or forwarded
+  git flags, split out so a concurrent editor of `app_test.go` never collides
+  with it; `internal/cli/precedence_test.go` covers the six-rule argument
+  table; other packages test their own internals beside them. `index_test.go`
+  (below) belongs to this lane too, despite living in `cmd/rgit`: its cases
+  drive `synth.Stage` directly and never touch the built binary, so `-short`
+  does not skip them.
 - **`rgit_e2e_test.go` is the slow lane.** It builds the binary and execs it,
   so `-short` skips the whole file. It earns its place by proving the assembled
   program behaves — argument precedence through a real process, hooks, the
-  index, exit codes as a caller observes them — not by being the only thing
-  that proves a behaviour at all.
+  index, exit codes as a caller observes them.
 
 The three files below, beside `main.go` in [`cmd/rgit`](cmd/rgit), are the
 home for the design's validated cases; a case one of them covers must not be
-lost when it is refactored.
-
-Temporary repositories come from [`internal/gittest`](internal/gittest/gittest.go)
-rather than being hand-rolled per package. It shells out to the real git
-binary, like everything else here.
+lost when it is refactored. Temporary repositories come from
+[`internal/gittest`](internal/gittest/gittest.go) rather than being
+hand-rolled per package; it shells out to the real git binary, like
+everything else here.
 
 | File | Happy path | Critical edge cases |
 | --- | --- | --- |
@@ -122,9 +118,9 @@ double wherever one is reachable: a language server that is installed gets
 dialled for real, and the live-`gopls` check skips cleanly only when the binary
 is absent or `-short` is set. A double encodes what its author believed the
 dependency did and then stops tracking it — real language-server range
-semantics can diverge from what a stand-in assumes, and that gap is exactly
-what a double cannot catch. Reach for one only where the real thing is
-unreachable, and say at the seam what would catch its drift.
+semantics can diverge from that assumption, and the gap is exactly what a
+double cannot catch. Reach for one only where the real thing is unreachable,
+and say at the seam what would catch its drift.
 
 **Write tests before implementation.**
 
@@ -134,7 +130,7 @@ so: `internal/app`'s cases change directory, because `openRepo` resolves the
 repository from the working directory. Everything else builds its own temp
 repository, most often via `internal/gittest`, and shares nothing with any
 other case, which is what makes `t.Parallel()` safe to add without auditing
-the whole suite for shared state each time.
+the suite for shared state each time.
 
 ```bash
 go test ./...          # full suite, end-to-end cases included
@@ -151,7 +147,7 @@ before touching concurrent code anywhere else in the tree.
 
 Always pass `-coverpkg=./...`: much of this suite drives code from another
 package, so without it `internal/app`, `internal/cli`, `internal/resolve` and
-`internal/synth` report 0.0% while being covered heavily in fact.
+`internal/synth` report 0.0% while in fact being covered heavily.
 
 ```bash
 go test -coverpkg=./... -coverprofile=coverage.out ./...
@@ -169,17 +165,16 @@ go tool cover -func=short.out | tail -1
 
 **That comparison is in-process only — it cannot see the built binary's own
 coverage.** `rgit_e2e_test.go` builds `rgitBin` with `-cover` and points
-`GOCOVERDIR` at a temp directory for the whole process (`TestMain`), but
-removes that directory unmerged once the run finishes. Every case in this
-file execs the real binary, and the coverage that binary itself accumulated
-is discarded before either `coverprofile` above is written — so the full
-lane's number is exactly the in-process short-lane number plus whatever the
-in-process parts of the full lane alone added, never the binary's own
+`GOCOVERDIR` at a temp directory for the whole process (`TestMain`), then
+removes it unmerged once the run finishes. The coverage the exec'd binary
+accumulated is discarded before either `coverprofile` above is written, so
+the full lane's number is exactly the in-process short-lane number plus
+whatever the full lane's own in-process parts added, never the binary's
 exec'd paths. The full and `-short` totals reading identical is this
 artifact, not evidence the unit lane already covers everything the binary
-exercises. To actually see the binary's own coverage, merge `GOCOVERDIR`
-into a profile before it is removed — `go tool covdata textfmt
--i=<GOCOVERDIR> -o=e2e.out`, comparable to the two profiles above with
+exercises. To see the binary's own coverage, merge `GOCOVERDIR` into a
+profile before it is removed — `go tool covdata textfmt -i=<GOCOVERDIR>
+-o=e2e.out`, comparable to the two profiles above with
 `go tool cover -func=e2e.out | tail -1`.
 
 ### Benchmarks
@@ -228,8 +223,7 @@ make lint   # golangci-lint run ./...
 [`.golangci.yml`](.golangci.yml) keeps the default linter set (errcheck,
 govet, ineffassign, staticcheck, unused) with one deliberate tuning: an
 errcheck exemption for the `fmt.Fprint*` calls that report an outcome to the
-caller's own stdout/stderr, where a second failure has nowhere to go. The
-reasoning is recorded there rather than repeated here.
+caller's own stdout/stderr, where a second failure has nowhere to go.
 
 ## Dependencies
 
@@ -243,10 +237,10 @@ the delegation boundary in [`AGENTS.md`](AGENTS.md#delegation-boundary).
 
 ## Documentation
 
-This repo follows the tiered doc layout: README orients and links, `HUMANS.md`
-introduces running and using `rgit`, `docs/` holds the authoritative reference
-it points at, `AGENTS.md` holds internals, `CONTRIBUTING.md` holds process, and
-`specs/` holds the design record.
+The tiered layout: README orients and links, `HUMANS.md` introduces running
+and using `rgit`, `docs/` holds the authoritative reference it points at,
+`AGENTS.md` holds internals, `CONTRIBUTING.md` holds process, and `specs/`
+holds the design record.
 
 Do not repeat content between tiers. If something belongs in two places, it
 belongs in one and gets linked from the other.
