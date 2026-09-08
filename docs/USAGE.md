@@ -197,11 +197,11 @@ the same file a bare `git blame FILE` would; when it has been deleted, rgit
 resolves the extent from `HEAD` and blames `HEAD`'s blob for that line range.
 
 `--follow-rename` follows the symbol across rename boundaries using the same
-rename-boundary re-resolution as `log --follow-rename`: when git identifies a
-rename, rgit resolves the symbol once against the pre-rename blob and blames
-that segment's line range. It does not re-parse once per commit. With this
-flag, every resolution uses the `HEAD` blob, never the dirty worktree; without
-it, blame keeps the behavior above, including the `HEAD` fallback.
+rename-boundary re-resolution as `log --follow-rename`: at each rename git
+identifies, rgit resolves the symbol once against the pre-rename blob and
+blames that segment's line range, never re-parsing per commit. With this flag,
+every resolution uses the `HEAD` blob, never the dirty worktree; without it,
+blame keeps the behavior above, including the `HEAD` fallback.
 
 An anchor that does not resolve is **never** silently widened to a whole-file
 blame — it is exit 3 (unresolvable), 4 (ambiguous), or 9 (unsupported
@@ -260,8 +260,7 @@ at argument classification. See
 [`LIMITATIONS.md`](LIMITATIONS.md#history-across-renames).
 
 An anchor that does not resolve is exit 3 (unresolvable), 4 (ambiguous), or 9
-(unsupported language) — the same codes `blame`, `commit`, and `diff --sym`
-already give the identical anchor. See [`CODES.md`](CODES.md#exit-codes).
+(unsupported language). See [`CODES.md`](CODES.md#exit-codes).
 
 `--porcelain` lists stable tab-separated `HASH<TAB>SUBJECT` records instead of
 the aligned `<abbrev-hash> <subject>` default, no header. Mutually exclusive
