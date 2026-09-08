@@ -101,4 +101,4 @@ case ":$PATH:" in
   *) echo "note: $prefix is not on PATH -- add it to use 'rgit' directly" ;;
 esac
 
-echo "optional language servers: go run ./cmd/rgit-install -with-servers (from a source checkout), or see docs/INSTALL.md § Language servers"
+echo "optional language servers: see docs/INSTALL.md § Language servers"

@@ -6,6 +6,15 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Removed
+
+- `rgit-install -with-servers`. Installing a language server is one command
+  per language, printed verbatim in
+  [`docs/INSTALL.md`](docs/INSTALL.md#language-servers); the flag shelled out
+  to run those same commands from a catalog that duplicated
+  `internal/lsp/servers.go`. That catalog is now single: `internal/lsp` is
+  the only list of servers `rgit` knows about.
+
 ## [1.4.0] — 2026-08-19
 
 ### Added

@@ -43,10 +43,6 @@ go run ./cmd/rgit-install -dry-run
 go run ./cmd/rgit-install -prefix ~/.local/bin
 ```
 
-It can also install or update the language servers `rgit`'s LSP cross-check
-uses, opt-in via `-with-servers` — see
-[Installing and updating servers automatically](#installing-and-updating-servers-automatically).
-
 **`make build`** builds `./rgit` for the host only, no install step.
 
 **Plain `go build`** needs no `make`:
@@ -142,15 +138,6 @@ every target builds SQL-less instead of failing — the same fallback
 language does (exit 9, `docs/ANCHORS.md`); every other language is
 unaffected either way.
 
-**`-generate-only` combines with `-with-servers` rather than skipping it.**
-`cmd/rgit-install`'s `main()` runs the `-with-servers` step before
-`-generate-only`'s own early return, so `cmd/rgit-install -generate-only
--with-servers` — what `make cross` would need if it ever grew a
-server-installing mode — still installs or updates every managed language
-server ([§ Installing and updating servers
-automatically](#installing-and-updating-servers-automatically)) even though
-it exits before touching `rgit`'s own build or install.
-
 `make cross` also regenerates `dist/SHA256SUMS` from that run's own
 artifacts — each invocation overwrites the file rather than appending to
 it, so the checksums on disk always match the binaries currently in
@@ -186,7 +173,7 @@ cross-check, which catches build-tag, macro, and type-level mismatches.
 
 | Language | Server | Install | How `rgit` runs it |
 | --- | --- | --- | --- |
-| Go | `gopls` | `go install golang.org/x/tools/gopls@v0.23.0` (pinned; `-with-servers` installs this exact tag) | Background daemon, reused |
+| Go | `gopls` | `go install golang.org/x/tools/gopls@v0.23.0` | Background daemon, reused |
 | TypeScript/JavaScript | `vtsls` | `npm i -g @vtsls/language-server` | One-shot subprocess per query |
 | Python | `pyright-langserver` | `npm i -g pyright` | One-shot subprocess per query |
 | Shell | `bash-language-server` | `npm i -g bash-language-server` | One-shot subprocess per query |
@@ -197,10 +184,9 @@ cross-check, which catches build-tag, macro, and type-level mismatches.
 | HTML | `vscode-html-language-server` | `npm i -g vscode-langservers-extracted` | One-shot subprocess per query |
 
 JSON, CSS, and HTML share one npm package, `vscode-langservers-extracted` — a
-single install produces all three binaries. `marksman` is the one server in
-this table
-[`-with-servers`](#installing-and-updating-servers-automatically) does not
-manage, for the same reason: nothing to shell out to.
+single install produces all three binaries. `marksman` is the one server with
+no package manager at all: install it from a platform-named GitHub release
+binary.
 
 Only `gopls` has a listen mode, so Go is the only language with a reusable
 daemon: `rgit` probes for one and starts it in the background if none answers.
@@ -213,79 +199,10 @@ first invocation. The transport survey behind this split is in
 
 **TOML and SQL stay `[ts-only]` permanently** — see
 [`LIMITATIONS.md`](LIMITATIONS.md#language-server-coverage) for why. `taplo`
-still completes the LSP handshake once built with `-with-servers`'
-`--features lsp`, and other tooling can use it; it just never drives
+still completes the LSP handshake once built with `--features lsp`, and
+other tooling can use it; it just never drives
 `rgit`'s own cross-check. HTML is wired; void elements still need a
 `declOnlyEndTrimmer` seam (same section), not a class-suffix mismatch.
-
-### Installing and updating servers automatically
-
-```bash
-go run ./cmd/rgit-install -with-servers            # alongside a normal install
-go run ./cmd/rgit-install -dry-run -with-servers   # preview only -- nothing runs
-```
-
-`-with-servers` is opt-in and off by default: a plain `rgit-install` never
-touches anything beyond this repo's own build. Passed, it additionally
-installs or updates every server it knows how to manage, by
-shelling out to that ecosystem's own package manager rather than fetching
-release binaries itself:
-
-| Server | Manager | Command |
-| --- | --- | --- |
-| `gopls` | go | `go install golang.org/x/tools/gopls@v0.23.0` (pinned; see `cmd/rgit-install/servers.go`) |
-| `vtsls` | npm/bun | `npm install -g @vtsls/language-server` (`bun add -g` when bun is on `PATH`) |
-| `pyright-langserver` | npm/bun | `npm install -g pyright` |
-| `bash-language-server` | npm/bun | `npm install -g bash-language-server` |
-| `yaml-language-server` | npm/bun | `npm install -g yaml-language-server` |
-| `vscode-json-language-server`, `vscode-css-language-server`, `vscode-html-language-server` | npm/bun | `npm install -g vscode-langservers-extracted` (one package, all three binaries) |
-| `taplo` | cargo | `cargo install taplo-cli --locked --features lsp` |
-
-Every row above except `taplo` is a server `rgit` dials for its own
-cross-check, matching the table in [Language servers](#language-servers).
-`taplo` is the exception: TOML stays `[ts-only]`
-permanently, on measured range disagreement rather than availability (see
-[Language servers](#language-servers) above) — `-with-servers` still manages
-`taplo` since other tooling can use it, but installing it will not turn on a
-TOML cross-check.
-
-**`taplo` needs the non-default `--locked --features lsp` explicitly.** A
-bare `cargo install taplo-cli` and npm's `@taplo/cli` package both build a
-`taplo` that answers on `PATH` while speaking no LSP at all — presence
-without capability. `-with-servers` checks for taplo's own `lsp` subcommand,
-not just that the binary exists, and reports which is missing when it isn't
-there.
-
-The same invocation both installs a missing server and updates a present
-one: every npm/bun/cargo entry above already resolves to the latest
-available version and reinstalls only when something actually changed
-(cargo additionally reinstalls when the requested `--features` differ from
-what's already built). `gopls` is the one exception — it is pinned (see the
-table above), so re-running installs or reinstalls exactly `v0.23.0`
-regardless of what `gopls` has tagged since; bumping it needs an edit to
-`cmd/rgit-install/servers.go`, not another `-with-servers` run. Either way,
-running `-with-servers` again is always safe.
-
-**`marksman` is deliberately out of scope.** No package manager publishes
-it — only GitHub release binaries, platform-named per target. Teaching this
-installer HTTP fetching and checksum verification for one server was judged
-not worth it; `-with-servers` reports marksman as unmanaged and prints the
-release URL instead.
-
-**A server installed to a directory that isn't on `PATH` is still
-invisible.** `cargo install` in particular writes to `$CARGO_HOME/bin`
-(`~/.cargo/bin` by default), which is not on every system's `PATH`.
-`-with-servers` checks every manager's bin directory against `PATH` after
-each install and warns loudly, by name and directory, rather than reporting
-success and leaving the binary unreachable.
-
-**A failed install is detectable, not just printed.** Each job is bounded
-by a generous timeout so a hung registry or a stalled build cannot block
-`-with-servers` indefinitely, and a `FAILED` line for any job makes the
-whole invocation exit non-zero — `rgit` itself still gets built and
-installed normally (a language server failing is not a reason to withhold
-it), but automation driving `-with-servers` can tell a partial run from a
-clean one instead of reading exit 0 either way.
 
 ## Environment variables
 
@@ -405,9 +322,8 @@ push.
 linux/amd64, linux/arm64, darwin/amd64, and darwin/arm64; `install.ps1`
 supports Windows/amd64. Linux verifies the release line with `sha256sum`;
 macOS uses its native `shasum -a 256`. Language servers stay opt-in exactly
-as they are everywhere else — neither installer installs one. The shell
-script prints the `-with-servers` pointer as its last line, while the
-PowerShell script points at this documentation. There is no Homebrew formula:
+as they are everywhere else — neither installer installs one; both point at
+this documentation instead. There is no Homebrew formula:
 `rgit` links tree-sitter
 through cgo, so a formula would need to build from source per-platform (a
 bottle per target) rather than fetch one, which is a materially bigger
