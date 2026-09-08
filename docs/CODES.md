@@ -34,8 +34,8 @@ Those two are the only codes **every** command can produce, `languages`,
 ([`USAGE.md`](USAGE.md#global-flags)) is validated before dispatch: a
 missing directory argument is 129 and an unenterable directory is 128 even
 for a command that would never have opened a repository. Git chdirs before
-it dispatches too, so a broken `-C` cannot be silent on one command and
-fatal on the next.
+dispatch too, so a broken `-C` cannot be silent on one command and fatal on
+the next.
 
 The numeric bindings live in `internal/exitcode`, which spells no meaning of
 its own — the constant names carry it, and this table defines it.
@@ -50,21 +50,19 @@ diff rather than mid-commit.
 ### Exit 12 is `commit`'s alone
 
 `rgit diff --sym`, `rgit blame`, and `rgit log` all resolve a `FILE:SYMBOL`
-anchor into JSON, YAML, or TOML exactly like any other anchor — none of them
-writes a blob, so there is nothing for the guard to protect. Only `rgit
-commit` refuses it, because only `rgit commit` would splice a synthesized
-extent into a blob and stage it. Name the path instead: `rgit commit
-config.yaml` stages the whole file, unaffected.
+anchor into JSON, YAML, or TOML exactly like any other anchor — none writes a
+blob, so there is nothing for the guard to protect. Only `rgit commit` would
+splice a synthesized extent into a blob and stage it, so only it refuses. Name
+the path instead: `rgit commit config.yaml` stages the whole file, unaffected.
 
 ### A missing cross-check is never a failure
 
 When no language server is reached, any command that runs the diff
 cross-check — `diff`, `commit`, and `context`, which composes `diff`'s own
-default scope — prints `[ts-only]` on stderr and proceeds — degraded
-resolution is normal, not an error
-([`AGENTS.md`](../AGENTS.md#resolution-model)). `rgit diff --quiet` still
-prints it, since `--quiet` suppresses the report on stdout, not
-diagnostics.
+default scope — prints `[ts-only]` on stderr and proceeds; degraded resolution
+is normal, not an error ([`AGENTS.md`](../AGENTS.md#resolution-model)).
+`rgit diff --quiet` still prints it, since `--quiet` suppresses the report on
+stdout, not diagnostics.
 
 ### The cross-check compares lines, not columns
 
@@ -87,13 +85,11 @@ failure is.
 
 ### `log` shares the anchor codes too, resolved against `HEAD`
 
-`rgit log FILE:SYMBOL` resolves its one anchor the same way `blame` does —
-3 (unresolvable), 4 (ambiguous), and 9 (unsupported language) mean the same
-thing — except against `HEAD`'s own blob rather than the worktree, since
-history is a question about what has already been committed. It never
-stages or commits anything either, so the same 1, 5, 6, 7, 8, 10, 11, and 12
-exclusions apply, and a failure past resolution is `git log`'s own exit,
-folded into 128.
+`rgit log FILE:SYMBOL` behaves as `blame` does — 3, 4, and 9 carry the same
+meanings, the same 1, 5, 6, 7, 8, 10, 11, and 12 exclusions apply, and a
+failure past resolution folds into 128 — except that it resolves against
+`HEAD`'s own blob rather than the worktree, since history is a question about
+what has already been committed.
 
 `rgit log --since`/`--until` with no `FILE:SYMBOL` positional is the second,
 unanchored shape (see [`USAGE.md`](USAGE.md#log-by-date-and-path)); it resolves
@@ -105,10 +101,9 @@ date, folded from `git log`'s own exit.
 
 ### `context` has no anchor to resolve at all
 
-`rgit context` names no symbol, so 3, 4, and 9 never apply either. It never
-stages or commits anything, so the same 1, 5, 6, 7, 8, 10, 11, and 12
-exclusions as `blame` and `log` hold. A failure reaching `git log` or `git diff`
-underneath it is folded into 128, same as everywhere else.
+`rgit context` names no symbol, so 3, 4, and 9 never apply either, and it
+stages nothing, so the same 1, 5, 6, 7, 8, 10, 11, and 12 exclusions hold. A
+failure reaching `git log` or `git diff` underneath it folds into 128.
 
 ## Output records
 
@@ -120,9 +115,8 @@ that with stable tab-separated records, no header.
 This is not a hypothetical contract: shell completion scripts call `rgit
 symbols` and `rgit symbols --for-commit` (`internal/app/completion.go`), while
 `rgit context`'s `F` records reuse the same field layout as `rgit diff
---porcelain` (`internal/app/context.go`). Reordering or adding a column here is
-a breaking change for the context `F` records and `rgit diff --porcelain`, not
-just for external scripts.
+--porcelain` (`internal/app/context.go`). Reordering or adding a column is a
+breaking change in-tree, not just for external scripts.
 
 ### `rgit diff --porcelain`
 
@@ -150,13 +144,12 @@ logo.png<TAB><TAB>BINARY<TAB>-<TAB>-
 | `BINARY` | A binary file; both counts are `-` |
 
 An untracked file with a supported grammar (`newfile.go` above) attributes
-per symbol exactly like a brand-new tracked file — there is no `HEAD` blob
-to diff against, so every declared symbol is wholly new and rows read `MOD`,
-not a distinct "new" token. `--sym` filters it the same way it filters any
-other file. `UNTRACKED` survives only as the collapsed fallback for a binary
-file or one whose language has no grammar to attribute by at all
-(`config.ini` above), where `HintSymbol`, when resolvable, still points a
-caller at `--sym`/`--file`.
+per symbol like a brand-new tracked file — there is no `HEAD` blob to diff
+against, so every declared symbol is wholly new and rows read `MOD`, not a
+distinct "new" token. `--sym` filters it like any other file. `UNTRACKED`
+survives only as the collapsed fallback for a binary file or one whose
+language has no grammar to attribute by (`config.ini` above), where
+`HintSymbol`, when resolvable, still points a caller at `--sym`/`--file`.
 
 ### `rgit commit --porcelain`
 
@@ -192,16 +185,10 @@ There is no `STATUS` column: an unchanged target is omitted from the listing
 entirely (it gets its own stderr warning instead), so every target record would
 carry the same value.
 
-Target records are identical for `--dry-run` and for the
-commit it previews; a successful real commit additionally has the leading `H`
-record above.
-
 - `--porcelain` replaces `git commit`'s own summary rather than
   adding to it — exactly as `git commit --porcelain` does.
 - Because unchanged targets are omitted, `--porcelain --allow-empty` writes only
   the leading `H` record while still creating a commit and exiting 0.
-- The full object id is the committed revision, so no before-and-after
-  `git rev-parse HEAD` comparison is needed.
 
 ### `rgit languages --porcelain`
 
@@ -221,10 +208,7 @@ typescript<TAB>.ts .mts .cts<TAB>0<TAB>wired
 yaml<TAB>.yaml .yml<TAB>0<TAB>wired
 ```
 
-Sampled from a `-tags rgit_sql` build; a plain build has no `sql` row (see
-[`INSTALL.md`](INSTALL.md#sql-support)).
-
-One record per grammar compiled into
+Sampled from a `-tags rgit_sql` build. One record per grammar compiled into
 this binary, sorted alphabetically by `NAME`.
 
 `EXTENSIONS` is every extension the grammar claims, leading dot
@@ -239,9 +223,7 @@ answer instead of inferring "not gated" from an absent column.
 
 `CROSS-CHECK` is `wired` when the language has a compile-time entry in the
 language-server catalog and `ts-only` when it does not (currently TOML and
-SQL).
-
-This is design-time wiring, not reachability: a `wired` language still
+SQL). This is design-time wiring, not reachability: a `wired` language still
 degrades to `[ts-only]` when its server is missing, cold, or unreachable; see
 `rgit doctor` for environment and server status.
 
@@ -250,8 +232,8 @@ plain build's records have no `sql` line, matching `rgit languages`'s own
 human output and `rgit --version`'s second line.
 
 `--in-repo` narrows the same rows to grammars with a matching tracked file in
-the current repository (requires a git repo); the record shape is
-unchanged, only which rows appear.
+the current repository (requires a git repo); only which rows appear changes,
+never the record shape.
 
 See [`USAGE.md`](USAGE.md#languages).
 
@@ -285,8 +267,7 @@ tree-sitter CLI is still exit 0 with `MISSING` in its own record.
 Not a new record shape: `--porcelain` passes straight through to git's own
 `git blame --porcelain` output, unmodified. See `git help blame` for that
 format — rewrapping it in a second, rgit-specific shape would be exactly the
-kind of duplication this file exists to avoid, for a fact git already
-establishes on its own.
+duplication this file exists to avoid, for a fact git already establishes.
 
 ### `rgit context`
 
@@ -345,23 +326,18 @@ a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2<TAB>fix(auth): reject expired tokens
 
 For the anchor form, one record per commit whose own diff touched the named
 symbol's current extent, newest first — the same ordering `git log`'s own
-default gives.
-
-For the unanchored form, one record per matching commit in the
-date/path scope, with the same ordering.
+default gives. For the unanchored form, one record per matching commit in the
+date/path scope, same ordering.
 
 `HASH` is the full commit object id, never abbreviated (unlike the aligned
 default's `<abbrev-hash> <subject>`, which is for a human to read, not to
 paste elsewhere).
 
-Patch-free: this is the one record shape in this file that
-is never emitted alongside `-p`/`--patch`, since asking for both would mean
-asking for a record format and a patch dump at once.
-
-`rgit log -p` instead
-prints git's own `git log -L` output unmodified, the same "pass through
-git's own format rather than inventing a second one" choice `rgit blame
---porcelain` already makes.
+Patch-free: this is the one record shape in this file that is never emitted
+alongside `-p`/`--patch`, since asking for both would mean asking for a record
+format and a patch dump at once. `rgit log -p` instead prints git's own
+`git log -L` output unmodified, the same "pass through git's own format rather
+than inventing a second one" choice `rgit blame --porcelain` already makes.
 
 ### `rgit symbols --with-lines`
 
@@ -371,16 +347,16 @@ START,END<TAB>SYMBOL
 12,27 ValidateToken
 ```
 
-One record per declared symbol, in source order — the same symbols and the
-same order the bare `rgit symbols` form prints, which is unchanged by this
-flag. `START,END` is git's own `-L` range grammar: 1-based and inclusive on
-both ends, over the source the symbols were resolved from (the worktree file,
-or its `HEAD` blob when the worktree copy is gone).
+One record per declared symbol, in source order — the same symbols and order
+the bare `rgit symbols` form prints, unchanged by this flag. `START,END` is
+git's own `-L` range grammar: 1-based and inclusive on both ends, over the
+source the symbols were resolved from (the worktree file, or its `HEAD` blob
+when the worktree copy is gone).
 
 The range is the one `rgit blame FILE:SYMBOL` and `rgit log FILE:SYMBOL` bound
-themselves to, not a second measurement of the same thing — all three convert
-the identical resolved extent. A symbol whose range disagreed with what blame
-blames would be a resolver bug, not a formatting difference.
+themselves to — all three convert the identical resolved extent, so a range
+that disagreed with what blame blames would be a resolver bug, not a formatting
+difference.
 
 `SYMBOL` is last because it is the unbounded field: an anchor may carry
 container qualification, an ordinal (`init#2`), or a gopls-spelled receiver,
@@ -389,9 +365,8 @@ always correct.
 
 ## Rules the diff and commit forms obey
 
-These rules are specific to `SYMBOL`-bearing records — `rgit languages
---porcelain` has no symbol, count, or ordering concept to share with them,
-and its own rules are stated in full above.
+These rules are specific to `SYMBOL`-bearing records; `rgit languages
+--porcelain` has no symbol, count, or ordering concept to share with them.
 
 `SYMBOL` is empty for every row or record that owns no anchor. A non-empty
 `SYMBOL` is always exactly the string a symbol anchor accepts back, so output
