@@ -552,19 +552,17 @@ everywhere else. Install and PowerShell registration instructions:
 
 ## Flags
 
-`commit` and `diff` document their flags in the table below; hand-parsed meta
-commands carry smaller surfaces of their own: `blame` takes
-`-p`/`--porcelain`, `--follow-rename`, and
-`--help`; `languages` takes `--porcelain`, `--in-repo`, and `--help` (§
-Blame and § Languages above, [`CODES.md`](CODES.md#output-records)); `log`
-additionally takes `-p`/`--patch`, mutually exclusive with `--porcelain`,
-`--follow-rename`, `-n`/`--max-count`, and — only in its
-`--since`/`--until` shape — `--since`/`--until` themselves (§ Log and § Log
-by date and path above); `symbols` takes `--for-commit`, `--with-lines`, and
-`--help` (§ Symbols above); `doctor` takes `--porcelain`, `--deep`, and `--help`;
-`completion` and `context` take no flags beyond `--help`/`-h`
-(`completion` also takes its shell argument; `context`'s fixed output shape
-is the point — § Context above).
+`commit` and `diff` document their flags in the table below. The hand-parsed
+meta commands carry smaller surfaces of their own, each covered in its own
+section above: `blame` takes `-p`/`--porcelain`, `--follow-rename`, and
+`--help`; `languages` takes `--porcelain`, `--in-repo`, and `--help`; `log`
+takes `--porcelain`, `-p`/`--patch` (mutually exclusive with it),
+`--follow-rename`, `-n`/`--max-count`, `--help`, and — only in its
+`--since`/`--until` shape — `--since`/`--until` themselves; `symbols` takes
+`--for-commit`, `--with-lines`, and `--help`; `doctor` takes `--porcelain`,
+`--deep`, and `--help`; `completion` and `context` take no flags beyond
+`--help`/`-h` (`completion` also takes its shell argument; `context`'s fixed
+output shape is the point).
 
 | Flag | Behavior |
 | --- | --- |
@@ -638,9 +636,7 @@ H<TAB>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
 auth.go<TAB>ValidateToken<TAB>12<TAB>3
 ```
 
-The target records are identical for `--dry-run` and for the commit it
-previews. Dry-run output has no `H` record; an `--allow-empty` commit emits
-`H` even when it has no target rows. `--quiet` continues to leave stdout empty.
+An `--allow-empty` commit emits `H` even when it has no target rows.
 
 Repeatable `-m` gives subject and body without embedding newlines in one shell
 argument:
@@ -715,8 +711,8 @@ Naming a target that has no uncommitted changes is a warning, not a failure.
 [warning] target 'auth.go:oldHelper' has no uncommitted changes; skipping
 ```
 
-Exit is **11** only when *every* named target turned out unchanged — that is,
-when there is genuinely nothing to commit. `--allow-empty` suppresses it.
+Exit is **11** only when *every* named target turned out unchanged.
+`--allow-empty` suppresses it.
 
 ## Exit codes
 
