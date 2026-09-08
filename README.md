@@ -12,7 +12,7 @@
 
 Git stages files. `rgit` stages **symbols**.
 
-Naming `auth.go:ValidateToken` commits that one function and leaves every other edit uncommitted. Anchors resolve from a syntax tree and cross-check against a language server — no line numbers, no `git add -p`. Underneath, `rgit` is `git add <pathspec> && git commit` at symbol granularity — hooks, filters, signing, and pre-staged work behave like plain git.
+Naming `auth.go:ValidateToken` commits that one function and leaves every other edit uncommitted. No line numbers, no `git add -p`.
 
 ## Quick start
 
