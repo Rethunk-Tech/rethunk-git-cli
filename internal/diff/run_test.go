@@ -1012,3 +1012,39 @@ func B() int {
 		t.Fatalf("comment-only change between two functions must surface as UNANCHORABLE: %+v", rows)
 	}
 }
+
+// TestRun_UntrackedFileThatVanishesIsWarnedNotFatal pins the race
+// buildUntrackedReport shares with synth's preview counts: ls-files
+// --others names a path, and by the time the report reads it the file is
+// gone. Returning that error failed the whole report -- every other file
+// with it -- for one file that stopped existing. A dangling symlink is the
+// deterministic stand-in: git lists it as untracked, and reading it gets
+// the same ENOENT the real race produces.
+func TestRun_UntrackedFileThatVanishesIsWarnedNotFatal(t *testing.T) {
+	t.Parallel()
+	dir, repo := newDiffTestRepo(t)
+	gittest.Write(t, dir, "real.go", "package p\n\nfunc Kept() int { return 1 }\n")
+	if err := os.Symlink(filepath.Join(dir, "gone.go"), filepath.Join(dir, "dangling.go")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	report, err := Run(context.Background(), repo, dir, Options{})
+	if err != nil {
+		t.Fatalf("Run: %v; want the unreadable path skipped, not a failed report", err)
+	}
+	if _, ok := findFile(report.Files, "real.go"); !ok {
+		t.Errorf("Files = %+v; want the readable untracked file still reported", report.Files)
+	}
+	if _, ok := findFile(report.Files, "dangling.go"); ok {
+		t.Errorf("Files = %+v; want the unreadable path absent", report.Files)
+	}
+	var warned bool
+	for _, w := range report.Warnings {
+		if strings.Contains(w, "dangling.go") {
+			warned = true
+		}
+	}
+	if !warned {
+		t.Errorf("Warnings = %v; want one naming dangling.go, so the skip is not silent", report.Warnings)
+	}
+}

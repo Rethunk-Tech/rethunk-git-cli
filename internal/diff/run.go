@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -310,9 +309,19 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 // *Report, the same reason buildFileReport's own signature does -- see its
 // doc comment.
 func buildUntrackedReport(ctx context.Context, repo *gitx.Repo, root, path string, sess *lsp.Session, symFiltered bool) (fr *FileReport, warnings []string, tsOnly bool, err error) {
-	content, err := os.ReadFile(filepath.Join(root, path))
-	if err != nil {
-		return nil, nil, false, err
+	// ls-files --others named this path a moment ago, so a failure to read
+	// it now means it changed underneath the listing -- removed, or made
+	// unreadable, in between. Skipping it with a warning is what the same
+	// race on the same listing already does in synth's preview counts;
+	// returning the error instead let one vanished temp file fail the whole
+	// report, every other file included.
+	content, exists, err := util.ReadFileIfExists(filepath.Join(root, path))
+	if !exists {
+		reason := "no longer present"
+		if err != nil {
+			reason = err.Error()
+		}
+		return nil, []string{fmt.Sprintf("%s: untracked file skipped: %s", path, reason)}, false, nil
 	}
 	if util.LooksBinary(content) {
 		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: "-", Deleted: "-"}}}, nil, false, nil
