@@ -519,8 +519,7 @@ argument is required; a missing or extra argument prints the usage text to
 stderr and exits with the invalid-usage code. A file that cannot be read from
 either source or whose symbols cannot be resolved exits with the git-failure
 code, while an unsupported language exits with the unsupported-language code.
-See
-[`CODES.md`](CODES.md#exit-codes).
+See [`CODES.md`](CODES.md#exit-codes).
 
 When `core.ignorecase` is true, extension lookup is case-insensitive for
 `symbols`, `commit`, `diff`, `blame`, `log`, and `languages`; the path itself
@@ -535,25 +534,17 @@ nothing else is written.
 PowerShell registration instructions are in
 [`INSTALL.md`](INSTALL.md#shell-completion).
 
-It completes subcommands, each subcommand's own flags, plain file paths, and
-— the useful part — symbol names after `FILE:`, by shelling back out to
-`rgit symbols FILE`.
+It completes subcommands, each subcommand's own flags, plain file paths, and —
+the useful part — symbol names after `FILE:`, by shelling back out to `rgit
+symbols FILE`. That read-only command reads the worktree file or the `HEAD`
+blob (§ Symbols above), so completion works for clean, dirty, and
+deleted-but-tracked files. If the call fails for any reason — the working
+directory is not a repository, `rgit` is not on `PATH`, anything — completion
+offers nothing rather than printing to the prompt.
 
-That read-only command lists every declared symbol in
-the worktree file, or the `HEAD` blob when that copy is gone, so completion
-works for clean, dirty, and deleted-but-tracked files.
-
-If
-that call fails for any reason — the working directory is not a repository,
-`rgit` is not on `PATH`, anything — completion offers nothing rather than
-printing to the prompt.
-
-`rgit symbols FILE` itself prints one anchor per
-line and is useful for scripts that need the same list.
-
-Completion for
-`commit` uses `rgit symbols --for-commit FILE`, which omits structured-data
-symbols that `commit` refuses; other commands use the complete list.
+Completion for `commit` uses `rgit symbols --for-commit FILE`, which omits
+structured-data symbols that `commit` refuses; other commands use the complete
+list.
 
 The fish and pwsh scripts drive the identical logic through their shells' own
 completion models — fish's dynamic candidate function registered with
@@ -622,14 +613,10 @@ is the point — § Context above).
 (`--amend` reuses HEAD's via `--no-edit`; `--fixup`/`--squash` generate
 `fixup!`/`squash! <subject>`; `--reuse-message` takes the named commit's,
 exactly as plain `git commit` does). It also requires at least one target,
-unless `--amend`, `--allow-empty`, `--fixup`, `--squash`, or
-`--reuse-message` is set: zero
-targets means skip staging and operate on the index as it stands, not
-`git add -A`.
-During an in-progress merge, cherry-pick, or revert, omitting `-m` and `-F`
-also reuses Git's generated message via `--no-edit`; `-m` or `-F` overrides
-that behavior. An in-progress rebase remains a `git rebase --continue`
-operation and still requires a message here.
+unless `--amend`, `--allow-empty`, `--fixup`, `--squash`, or `--reuse-message`
+is set: zero targets means skip staging and operate on the index as it stands,
+not `git add -A`. During an in-progress merge, cherry-pick, or revert,
+omitting `-m` and `-F` also reuses Git's generated message via `--no-edit`.
 
 `-S` is accepted in git's own spellings: bare `-S`, or `-S<key-id>` with the
 key attached. It is rewritten to the long form before the flag parser runs,
@@ -643,9 +630,8 @@ refused by name rather than misread.
 On success it relays `git commit`'s own summary — branch, new SHA, and the
 changed/insertion/deletion counts — then lists each staged target with its
 `+N/-M`, which git cannot report because git does not know about symbols. Hook
-output is passed through too. `--dry-run` prints the same listing, so a preview
-and the commit it previews are comparable line for line, and neither needs a
-follow-up `git show` or `rgit diff` to interpret.
+output is passed through too. `--dry-run` prints the same listing, so a
+preview and the commit it previews are comparable line for line.
 
 `--porcelain` replaces both with stable tab-separated records — a successful
 real commit starts with its full commit object id, then the target rows. The
@@ -676,9 +662,9 @@ a revision argument (a range, or one or two bare revisions), `--staged` +
 `--unstaged`, `--range` + a positional `A..B`/`A...B` range, `-m` + `-F`,
 `--porcelain` + `--quiet` (`diff`), `--porcelain` + `-p`/`--patch` (`diff`,
 `log`) → exit 129.
-Naming one path both as a path and as a symbol anchor → exit 5, in
-whichever spelling: `--file` with
-`--sym`, or the positional forms `greet.go greet.go:A`.
+Naming one path both as a path and as a symbol anchor → exit 5, in whichever
+spelling: `--file` with `--sym`, or the positional forms `greet.go
+greet.go:A`.
 
 A `FILE:SYMBOL` anchor into a structured-data file (JSON, YAML, TOML) → exit
 12: a spliced extent is not guaranteed to agree with the file's own grammar,
@@ -699,7 +685,8 @@ the commit proceeds.
 - Hooks are not policed — a hook may stage paths you did not name, exactly as
   under plain `git commit`. Use `--no-verify` to disable them.
 - During an in-progress merge, cherry-pick, or revert, omitting `-m` and `-F`
-  uses Git's `--no-edit` message reuse; rebase remains `git rebase --continue`.
+  uses Git's `--no-edit` message reuse, which `-m` or `-F` overrides; rebase
+  remains `git rebase --continue` and still requires a message.
 - `commit.cleanup` and `commit.gpgsign` are honoured as configuration, and
   `--gpg-sign`/`--no-gpg-sign` override either. `commit.template` is **not**
   honoured — templates prefill an editor and `rgit` never opens one.
