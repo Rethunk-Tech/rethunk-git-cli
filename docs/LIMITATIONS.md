@@ -11,7 +11,7 @@ list the running binary supports; it drifts as grammars are added, which is
 why this file doesn't restate it. Rust, C, and C++ are the common examples
 with none, and stay unsupported on the same demand survey that ordered every
 shipped grammar: no repository surveyed contained any
-([`../specs/design.md`](../specs/design.md#grammar-scope)); config and data
+; config and data
 files in those ecosystems still stage by path in the meantime.
 
 Two exclusions inside otherwise-supported languages are deliberate, not gaps
@@ -58,7 +58,7 @@ address. Stage the containing declaration or the path instead.
   descendant/child/sibling combinator (`.parent .child`, `>`, `+`, `~`). This
   is deliberate scope, not an oversight — `rgit` resolves anchors, it is not
   a CSS selector engine, and each of those is a step toward reimplementing
-  one (`specs/design.md` § Grammar scope). An element with **no** id is also
+  one. An element with **no** id is also
   unaddressable, even a lone, unambiguous `<button>` with no sibling to
   confuse it with — HTML's own demand signal is the mount-point/component-root
   case (`div#app`), where an id already exists; falling back to a bare tag
@@ -169,7 +169,7 @@ that also moves the symbol within the file (reordering, a surrounding
 refactor) can lose the thread partway. `--follow-rename` covers that case by
 re-resolving the anchor with tree-sitter at each rename boundary instead —
 see [`USAGE.md`](USAGE.md#log-across-renames) — one parse per rename, not
-per commit, the trade-off `../specs/design.md`'s own reasoning settled on.
+per commit, which is the trade-off that made it worth building.
 
 Either way, a symbol's history is only reachable starting from the file's
 **current** name: querying it under a prior name directly fails at argument

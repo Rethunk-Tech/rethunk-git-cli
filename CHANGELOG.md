@@ -62,8 +62,7 @@ Notable changes to `rgit`. The format follows
   pairing declarations the two sides had enumerated differently. Measured
   over 1063 files across nine grammars, disagreements fall from 2334 to 27,
   and the ones left are a server naming a construct differently rather than
-  an extent either side got wrong. See
-  [`specs/design.md`](specs/design.md).
+  an extent either side got wrong.
 
 - A YAML mapping at the end of a file claimed the comment block closing that
   file. Both the staged extent and the range `blame` and `log` bound
@@ -345,8 +344,7 @@ Notable changes to `rgit`. The format follows
 - `rgit diff` batches every changed file's git-backed blob read into one
   `git cat-file --batch` process instead of one `git cat-file` subprocess
   per file per side — a large rename or vendor bump no longer pays linear
-  git-exec overhead. Porcelain output is unaffected. See
-  [`specs/design.md`](specs/design.md#grammar-scope).
+  git-exec overhead. Porcelain output is unaffected.
 
 - `scripts/install.sh`: a checksum-verified install path for a machine with
   only git — no Go toolchain, no zig. linux/amd64 and linux/arm64 only;
@@ -666,6 +664,5 @@ What ships:
   ([`docs/USAGE.md`](docs/USAGE.md#behaviour-inherited-from-git)).
 
 Known limitations are catalogued in
-[`docs/LIMITATIONS.md`](docs/LIMITATIONS.md); the reasoning and the
-measurements behind every decision are in
-[`specs/design.md`](specs/design.md).
+[`docs/LIMITATIONS.md`](docs/LIMITATIONS.md); designs accepted but not built,
+and the measurements that closed a question, are in [`TODO.md`](TODO.md).

@@ -48,9 +48,10 @@ go run ./cmd/rgit-install -prefix ~/.local/bin
 go build -ldflags="-s -w" -o rgit ./cmd/rgit
 ```
 
-The binary is ~13.5 MB stripped, or ~16 MB built with `-tags rgit_sql`;
-the grammars account for nearly all of it, measured per grammar in
-[`specs/design.md`](../specs/design.md#binary-size).
+The binary is ~13.5 MB stripped (13740 KB), or ~16 MB with `-tags rgit_sql`
+(16156 KB); the grammars account for nearly all of it — Shell adds ~1332 KB
+and Markdown ~768 KB, and cgo links per object file, so a grammar's unused
+inline copy cannot be dropped.
 
 Without `make install`, put the binary on `PATH` yourself — anywhere on
 `PATH` works; this matches where `make install` would have put it:
@@ -184,9 +185,9 @@ daemon: `rgit` probes for one and starts it in the background if none answers.
 That first invocation finishes in `[ts-only]` mode rather than blocking on a
 cold index; later ones get the full cross-check. Every other server is
 stdio-only, so `rgit` spawns one per query and kills it on close — nothing
-persists, and the cross-check is live on the first invocation. The
-transport survey behind this split is in
-[`specs/design.md`](../specs/design.md#transport-support-per-server).
+persists, and the cross-check is live on the first invocation. The split is
+the servers' own: `vtsls` and `pyright` dial out on `--socket=<port>`, while
+`bash-language-server` has no transport flag at all.
 
 **TOML and SQL stay `[ts-only]` permanently** — see
 [`LIMITATIONS.md`](LIMITATIONS.md#language-server-coverage) for why. `rgit`

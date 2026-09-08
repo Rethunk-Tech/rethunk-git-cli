@@ -1,6 +1,6 @@
 # HUMANS.md
 
-Run and use `rgit`. Internals: [AGENTS.md](AGENTS.md). Design record: [specs/design.md](specs/design.md).
+Run and use `rgit`. Internals: [AGENTS.md](AGENTS.md).
 
 ## Quick start
 

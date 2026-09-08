@@ -47,7 +47,6 @@ Build and runbook: [HUMANS.md](HUMANS.md).
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Commits, tests, dependency policy |
 | [CHANGELOG.md](CHANGELOG.md) | Release notes |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting |
-| [specs/design.md](specs/design.md) | Design record and measurements |
 
 ## License
 

@@ -6,11 +6,12 @@ measured against, and the list of things that break silently.
 ## Before you change behaviour
 
 If a change makes `rgit` behave differently from `git add <pathspec> && git
-commit`, say so explicitly in the PR and justify it — the reasoning already
-on record is in [`specs/design.md`](specs/design.md).
+commit`, say so explicitly in the PR and justify it. Divergence that is already
+deliberate is recorded where it is implemented; divergence that was considered
+and rejected is in [`TODO.md`](TODO.md).
 
-Claims in that record are backed by measurement. If you contradict one, measure
-it again and update the record — do not simply reword it.
+A claim in either place is backed by measurement. If you contradict one, measure
+it again and update it — do not simply reword it.
 
 ## Commits
 
@@ -180,8 +181,7 @@ profile before it is removed — `go tool covdata textfmt -i=<GOCOVERDIR>
 ### Benchmarks
 
 `internal/diff/bench_test.go`'s `BenchmarkAttribution_200MemberClass` is a
-regression gate, not a comparison: `specs/design.md` § Blob synthesis
-measured a ~39× difference between re-parsing per declaration and holding
+regression gate, not a comparison: a ~39× difference was measured between re-parsing per declaration and holding
 one parse open per side on a 200-member class, and the held-open path is
 the only one that ships (`attributeSymbolsOpen`), so there is nothing left
 to re-parse-and-compare against in-process. Run it and compare `ns/op`
@@ -228,8 +228,8 @@ caller's own stdout/stderr, where a second failure has nowhere to go.
 ## Dependencies
 
 Binary size and dependency count are not constraints — but every dependency
-needs a specific, measured justification, recorded in
-[`specs/design.md`](specs/design.md#dependencies). "It is the standard choice
+needs a specific, measured justification, recorded with the dependency
+itself or in [`TODO.md`](TODO.md#dependencies). "It is the standard choice
 for this category" is not one.
 
 Anything that reimplements what git already does is rejected on principle; see

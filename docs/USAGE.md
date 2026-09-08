@@ -1,7 +1,7 @@
 # Usage
 
 Command reference for `rgit`. For the reasoning behind these choices see
-[`specs/design.md`](../specs/design.md); for anchor syntax see
+[`AGENTS.md`](../AGENTS.md); for anchor syntax see
 [`ANCHORS.md`](ANCHORS.md).
 
 ## Commands
@@ -328,7 +328,7 @@ call.
 
 **The output shape is fixed and takes no flags beyond `--help`.** A command
 with options becomes `git status` with extra steps — see
-[`specs/design.md`](../specs/design.md#commands) for why the shape stays
+[`AGENTS.md`](../AGENTS.md) for why the shape stays
 fixed rather than growing one. Seven record types, tab-separated, no header:
 
 | Record | Fields | Meaning |

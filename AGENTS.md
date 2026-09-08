@@ -6,7 +6,7 @@ Internals for changing this repo. Usage: [HUMANS.md](HUMANS.md). Process: @CONTR
 
 **`rgit` is `git add <pathspec> && git commit` at symbol granularity.** Match git wherever git has an opinion. Divergence needs an explicit PR argument.
 
-Inherited behaviour: [docs/USAGE.md § Behaviour inherited from git](docs/USAGE.md#behaviour-inherited-from-git). Reasoning: [specs/design.md](specs/design.md).
+Inherited behaviour: [docs/USAGE.md § Behaviour inherited from git](docs/USAGE.md#behaviour-inherited-from-git). Decisions not built, and the measurements that closed them: [TODO.md](TODO.md).
 
 ## File map
 
@@ -17,7 +17,6 @@ Inherited behaviour: [docs/USAGE.md § Behaviour inherited from git](docs/USAGE.
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Commits, tests, deps, docs policy |
 | [CHANGELOG.md](CHANGELOG.md) | Release notes |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting, hooks/LSP trust |
-| [specs/design.md](specs/design.md) | Design record and measurements |
 | [docs/USAGE.md](docs/USAGE.md) | Commands, flags, grammar |
 | [docs/ANCHORS.md](docs/ANCHORS.md) | Anchor syntax, extents, special paths |
 | [docs/CODES.md](docs/CODES.md) | Exit codes, `--porcelain` formats |
@@ -38,7 +37,7 @@ Hooks, filters, pathspecs, trailers, amend — git's. No `go-git`.
 
 ## Synthesis invariants
 
-Breaking one is silent. Mechanism: [specs/design.md § Blob synthesis](specs/design.md#blob-synthesis), [§ Grammar scope](specs/design.md#grammar-scope).
+Breaking one is silent. Mechanism: `internal/synth` (splice order, EOF newline) and `internal/resolve` (extent scope).
 
 | Invariant | Why |
 | --- | --- |

@@ -274,7 +274,7 @@ duplication this file exists to avoid, for a fact git already establishes.
 Unlike every other command in this file, `rgit context` has no aligned
 human default to alternate with: its one output shape is always this
 tab-separated record stream, no header, no `--porcelain` flag to ask for it
-— see [`specs/design.md`](../specs/design.md#commands) for why.
+— see [`AGENTS.md`](../AGENTS.md) for why.
 
 ```text
 B<TAB>main<TAB>origin/main<TAB>0<TAB>2
@@ -312,9 +312,9 @@ the last line.**
 - Diagnostics are emitted before the actionable, unbounded diff rows; commit
   history is already bounded to 20 and cheap to drop, and is one `git log` call
   away if the caller needs it back.
-- See [`USAGE.md`](USAGE.md#context) for the byte budget and
-  [`../specs/design.md`](../specs/design.md#commands) for why it is 16 KiB and
-  what happens at the boundary.
+- See [`USAGE.md`](USAGE.md#context) for the byte budget. 16 KiB is the
+  point past which a caller is reading a diff rather than orienting; records
+  are dropped whole at the boundary, never truncated mid-record.
 
 ### `rgit log --porcelain`
 
