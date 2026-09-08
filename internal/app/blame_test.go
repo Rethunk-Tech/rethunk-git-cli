@@ -318,3 +318,39 @@ func TestRun_BlameHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
 	_, _, code = runApp(t, "blame", "Foo.GO:First")
 	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
 }
+
+// TestRun_FollowRenameResolvesShebangLanguageBeforeTheRename pins
+// docs/ANCHORS.md's shebang guarantee across a rename boundary, for both
+// commands that walk one: the pre-rename name of an extensionless script has
+// no extension to key on, so resolving the old blob's language from the path
+// alone stranded history mid-walk with exit 9 while the current name resolved
+// fine. One fixture covers both because blame and log had the same bug at the
+// same point in the same shape.
+func TestRun_FollowRenameResolvesShebangLanguageBeforeTheRename(t *testing.T) {
+	dir := chdirTempRepo(t)
+	script := "#!/usr/bin/env python3\n\n\ndef greet():\n    return \"hi\"\n\n\ndef other():\n    return 2\n"
+	writeAppFile(t, dir, "oldtool", script)
+	gitOut(t, dir, "add", "oldtool")
+	gitOut(t, dir, "commit", "-m", "feat: add tool")
+
+	gitOut(t, dir, "mv", "oldtool", "newtool")
+	gitOut(t, dir, "commit", "-m", "refactor: rename tool")
+
+	writeAppFile(t, dir, "newtool", script+"\n\ndef added():\n    return 3\n")
+	gitOut(t, dir, "add", "-A")
+	gitOut(t, dir, "commit", "-m", "feat: extend")
+
+	t.Run("blame", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "blame", "newtool:greet", "--follow-rename")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Not(qt.StringContains(stderr, "unsupported language")))
+		qt.Assert(t, qt.StringContains(stdout, "def greet():"))
+	})
+
+	t.Run("log", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "log", "newtool:greet", "--follow-rename")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Not(qt.StringContains(stderr, "unsupported language")))
+		qt.Assert(t, qt.StringContains(stdout, "feat: add tool"))
+	})
+}

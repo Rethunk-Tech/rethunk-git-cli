@@ -151,11 +151,6 @@ func runBlameFollowRename(ctx context.Context, repo *gitx.Repo, file string, src
 
 		rev = renameCommit + "~1"
 		file = oldPath
-		lang, ok := resolve.ForExtensionFolding(filepath.Ext(file), ignoreCase)
-		if !ok {
-			fmt.Fprintf(stderr, "rgit: blame: %q: unsupported language before the rename to its current name\n", file)
-			return exitcode.UnsupportedLanguage
-		}
 		src, exists, err := repo.CatFile(ctx, rev, file)
 		if err != nil {
 			fmt.Fprintf(stderr, "rgit: %v\n", err)
@@ -164,6 +159,15 @@ func runBlameFollowRename(ctx context.Context, repo *gitx.Repo, file string, src
 		if !exists {
 			fmt.Fprintf(stderr, "rgit: blame: %q does not exist at %s\n", file, rev)
 			return exitcode.AnchorUnresolvable
+		}
+		// The blob is read before the language lookup so the name a file
+		// carried before the rename gets the shebang match docs/ANCHORS.md
+		// promises. Keying on the extension alone stranded an extensionless
+		// script mid-history: the current name resolved, the old one did not.
+		lang, ok := resolve.ForPathFolding(file, src, ignoreCase)
+		if !ok {
+			fmt.Fprintf(stderr, "rgit: blame: %q: unsupported language before the rename to its current name\n", file)
+			return exitcode.UnsupportedLanguage
 		}
 		res, err = resolve.Resolve(lang, src, anchorName)
 		if err != nil {
