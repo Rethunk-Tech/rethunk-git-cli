@@ -1198,20 +1198,9 @@ func TestRun_DoctorDeepReportsReachable(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir()) // never reach a real, already-running daemon at the managed default
 
 	sockPath := filepath.Join(t.TempDir(), "gopls.sock")
-	ln, err := net.Listen("unix", sockPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = ln.Close() }()
-	go func() {
-		for {
-			conn, aerr := ln.Accept()
-			if aerr != nil {
-				return
-			}
-			go func() { _ = lsptest.ServeMockLSP(conn, "[]", lsptest.MockServerHooks{}) }()
-		}
-	}()
+	lsptest.Listen(t, sockPath, func(conn net.Conn) {
+		_ = lsptest.ServeMockLSP(conn, "[]", lsptest.MockServerHooks{})
+	})
 	t.Setenv("RGIT_LSP_SOCKET", sockPath)
 
 	stdout, stderr, code := runApp(t, "doctor", "--porcelain", "--deep")
@@ -1233,20 +1222,7 @@ func TestRun_DoctorDeepReportsDegraded(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir()) // never reach a real, already-running daemon at the managed default
 
 	sockPath := filepath.Join(t.TempDir(), "gopls.sock")
-	ln, err := net.Listen("unix", sockPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = ln.Close() }()
-	go func() {
-		for {
-			conn, aerr := ln.Accept()
-			if aerr != nil {
-				return
-			}
-			_ = conn.Close() // accepts, then hangs up -- never speaks the handshake
-		}
-	}()
+	lsptest.Listen(t, sockPath, lsptest.HangUp)
 	t.Setenv("RGIT_LSP_SOCKET", sockPath)
 
 	stdout, _, code := runApp(t, "doctor", "--porcelain", "--deep")

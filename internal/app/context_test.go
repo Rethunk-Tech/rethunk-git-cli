@@ -101,25 +101,13 @@ func TestRun_ContextEmitsWarningRecords(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 
 	sockPath := filepath.Join(t.TempDir(), "gopls.sock")
-	ln, err := net.Listen("unix", sockPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = ln.Close() }()
-
 	const resultJSON = `[
 		{"name":"A","kind":12,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}},
 		{"name":"B","kind":12,"range":{"start":{"line":7,"character":0},"end":{"line":9,"character":1}},"selectionRange":{"start":{"line":7,"character":0},"end":{"line":7,"character":5}}}
 	]`
-	go func() {
-		for {
-			conn, acceptErr := ln.Accept()
-			if acceptErr != nil {
-				return
-			}
-			go func() { _ = lsptest.ServeMockLSP(conn, resultJSON, lsptest.MockServerHooks{}) }()
-		}
-	}()
+	lsptest.Listen(t, sockPath, func(conn net.Conn) {
+		_ = lsptest.ServeMockLSP(conn, resultJSON, lsptest.MockServerHooks{})
+	})
 	t.Setenv("RGIT_LSP_SOCKET", sockPath)
 
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")

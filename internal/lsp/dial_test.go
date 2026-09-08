@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsptest"
 )
 
 // shortTempDir returns a fresh, short-named temp directory, cleaned up when
@@ -392,22 +394,7 @@ func TestDialSocket_HandshakeFailureUnlinksManagedSocketAndDegrades(t *testing.T
 		t.Fatal("defaultSocketPath() ok = false; want true for a fresh, owned temp dir")
 	}
 
-	ln, err := net.Listen("unix", sockPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = ln.Close() }()
-	go func() {
-		for {
-			conn, aerr := ln.Accept()
-			if aerr != nil {
-				return
-			}
-			// Close immediately without ever speaking the handshake --
-			// exactly a stale or incompatible listener's shape.
-			_ = conn.Close()
-		}
-	}()
+	lsptest.Listen(t, sockPath, lsptest.HangUp)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -435,20 +422,7 @@ func TestDialSocket_HandshakeFailureLeavesUserSuppliedSocketAlone(t *testing.T) 
 	t.Setenv("XDG_RUNTIME_DIR", shortTempDir(t))
 
 	sockPath := filepath.Join(shortTempDir(t), "user-supplied.sock")
-	ln, err := net.Listen("unix", sockPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = ln.Close() }()
-	go func() {
-		for {
-			conn, aerr := ln.Accept()
-			if aerr != nil {
-				return
-			}
-			_ = conn.Close()
-		}
-	}()
+	lsptest.Listen(t, sockPath, lsptest.HangUp)
 	t.Setenv("RGIT_LSP_SOCKET", sockPath)
 
 	spec := serverSpec{name: "test-user-socket", bin: "rgit-lsp-test-binary-does-not-exist", daemonArgs: noopDaemonArgs}
@@ -506,20 +480,7 @@ func TestUnlinkDeadSocket_RemovesDeadSocketFile(t *testing.T) {
 func TestUnlinkDeadSocket_LeavesLiveSocketAlone(t *testing.T) {
 	t.Parallel()
 	sockPath := filepath.Join(shortTempDir(t), "rgit-test.sock")
-	ln, err := net.Listen("unix", sockPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = ln.Close() }()
-	go func() {
-		for {
-			conn, aerr := ln.Accept()
-			if aerr != nil {
-				return
-			}
-			_ = conn.Close()
-		}
-	}()
+	lsptest.Listen(t, sockPath, lsptest.HangUp)
 
 	unlinkDeadSocket(sockPath)
 
