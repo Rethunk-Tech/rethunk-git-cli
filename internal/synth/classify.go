@@ -243,7 +243,7 @@ func trailingGap(src []byte, end uint) []byte {
 // method, as opposed to a Go receiver method merely named with a container
 // prefix while sitting beside it. Only a true nested member being spliced
 // next to siblings that are already there wants spliceInsert's flush
-// treatment (no blank line, specs/design.md § Blob synthesis); a sibling method
+// treatment (no blank line); a sibling method
 // and a whole freshly-escalated container are both ordinary top-level
 // insertions and keep their blank-line padding.
 //

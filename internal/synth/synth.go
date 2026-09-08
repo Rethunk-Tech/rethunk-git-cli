@@ -4,8 +4,8 @@
 // else (hooks, pathspec matching, credential prompting) stays git's job,
 // delegated through internal/gitx.
 //
-// The algorithm is specs/design.md's "Blob synthesis" section: read HEAD
-// and worktree content, resolve each anchor's extent in both, and splice,
+// The algorithm: read HEAD and worktree content, resolve each anchor's
+// extent in both, and splice,
 // insert, or excise accordingly. Multiple edits in one file apply in reverse
 // byte-offset order so an earlier splice cannot invalidate a later
 // offset (AGENTS.md's invariant table).
@@ -60,8 +60,8 @@ type editOp struct {
 	// top-level declaration. Container members sit flush against their
 	// siblings in idiomatic source -- no blank line between them -- so
 	// spliceInsert must not pad one in, or the synthesized blob is
-	// semantically right but never byte-identical to the worktree
-	// (specs/design.md § Blob synthesis). Zero value is false, so every
+	// semantically right but never byte-identical to the worktree.
+	// Zero value is false, so every
 	// existing
 	// top-level insertion keeps its blank-line padding unchanged.
 	member bool
@@ -156,7 +156,7 @@ func (o editOp) span() uint {
 //
 // An insertion is different: op.start is a splice POSITION into HEAD's
 // bytes (AGENTS.md's descending-offset splice pass), computed as the
-// nearest-existing-sibling's own HEAD boundary (specs/design.md). That
+// nearest-existing-sibling's own HEAD boundary. That
 // position can coincide exactly with another kept op's HEAD start or end by
 // pure adjacency -- a sibling being replaced right next to a brand new
 // symbol inserted immediately after it -- without that kept op's

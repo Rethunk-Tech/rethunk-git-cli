@@ -131,7 +131,7 @@ type Plan struct {
 
 	// TSOnly reports whether any anchor degraded to tree-sitter-only
 	// resolution because no live language server answered in time for its
-	// cross-check -- normal, not an error (specs/design.md), but the
+	// cross-check -- normal, not an error, but the
 	// caller's job to announce once on stderr.
 	TSOnly bool
 
@@ -161,8 +161,7 @@ type Plan struct {
 // PlanStage resolves every target against repo's worktree (root) and HEAD
 // without writing anything -- the pure read that must succeed for all of
 // them before Apply writes any synthesized blob, so a failure leaves the
-// index exactly as found (specs/design.md § Blob synthesis; AGENTS.md's
-// invariant table). A caller that never calls the returned Plan's Apply (a
+// index exactly as found (AGENTS.md's invariant table). A caller that never calls the returned Plan's Apply (a
 // --dry-run preview, or the "nothing to commit" exit-11 case) never touches
 // the index at all.
 func PlanStage(ctx context.Context, repo *gitx.Repo, root string, targets []Target) (*Plan, error) {
@@ -354,8 +353,8 @@ type preambleOp struct {
 // the language owns one (resolve.OwnsTrailingSeparator): gofmt always leaves
 // one blank line after Go's package clause and import block, so that line is
 // as much part of "the header" as its own trailing newline -- which is what
-// lets these rows sum to git's raw insertion count for a new file
-// (specs/design.md § Blob synthesis). The synthesized blob is unaffected
+// lets these rows sum to git's raw insertion count for a new file.
+// The synthesized blob is unaffected
 // either way: mergeInsertTies' joinWithSeparator renormalizes every insert's
 // boundary regardless.
 func (fp *filePlan) addPreamble(named map[string]bool) (pairs []preambleOp) {
