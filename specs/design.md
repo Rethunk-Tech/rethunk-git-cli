@@ -1368,9 +1368,10 @@ before they were understood: corpus paths must be absolute, and a stdio
 server is one-shot, so a session cached per language measures only the
 first file of each — `gopls` alone survives that, being a socket daemon.
 
-**Every one of the 2334 disagreements was traced to a side.** Three
-classes, none of which is "tree-sitter produced a wrong extent for a
-well-formed declaration":
+**What the first corpus run found.** It fired on 2334 anchors, and every
+one traced to a side. These are the classes that produced the fixes below;
+none of them is "tree-sitter produced a wrong extent for a well-formed
+declaration":
 
 **1. Exclusive end position at column 0 — 1883 (81%), all YAML.** An LSP
 `Range` whose `End.Character` is `0` ends *before* that line; its last
@@ -1379,10 +1380,8 @@ content line is `End.Line - 1`. `flattenTree`/`flattenFlat` copy
 `yaml-language-server` ends every non-terminal block mapping this way, so
 the comparison reports `dEnd = +1` on 86% of its own disagreements. `gopls`
 never does — its ranges end on the closing brace, mid-line — which is why
-no fixture exposed it. Re-running the corpus with the
-correction applied resolves exactly these 1883 and nothing else. The
-tree-sitter extent is correct in every one; the defect is in the
-comparison's own line conversion.
+no fixture exposed it. The tree-sitter extent is correct in every one; the
+defect is in the comparison's own line conversion.
 
 **2. Anchor-namespace divergence — 270 (12%): 132 YAML, 133 CSS, 5 Shell.**
 The server's symbol table is not the same set of declarations `rgit` names,
@@ -1444,46 +1443,45 @@ compared extent, an ordinal fallback pairing declarations the two sides had
 enumerated differently, and two anchor namespaces that could not be
 compared at all. Each is fixed and carries a regression test.
 
-**Post-fix measurement.** 1008 files, 9 grammars, 9 servers, 17,804 symbols
-compared: 17,636 agree, 168 disagree (0.94%), 784 the server never names.
+**Post-fix measurement.** 1008 files, 9 grammars, 9 servers, 17,558 symbols
+compared: 17,520 agree, 38 disagree (0.22%), 1035 the server never names.
 
 | Grammar | Files | Compared | Agree | Disagree | Not named |
 | --- | --: | --: | --: | --: | --: |
 | Go | 118 | 1612 | 1612 | 0 | 2 |
 | TypeScript | 93 | 1538 | 1538 | 0 | 0 |
 | TSX | 2 | 20 | 20 | 0 | 0 |
-| Shell | 100 | 806 | 806 | 0 | 0 |
+| Shell | 100 | 738 | 738 | 0 | 68 |
 | Markdown | 100 | 745 | 745 | 0 | 0 |
 | HTML | 100 | 375 | 375 | 0 | 8 |
-| JSON | 100 | 2454 | 2450 | 4 | 92 |
-| YAML | 200 | 5701 | 5692 | 9 | 186 |
-| CSS | 95 | 3061 | 2936 | 125 | 492 |
+| JSON | 100 | 2419 | 2419 | 0 | 127 |
+| YAML | 200 | 5704 | 5697 | 7 | 188 |
+| CSS | 95 | 2915 | 2914 | 1 | 638 |
 | Python | 100 | 1492 | 1462 | 30 | 4 |
 
-Five grammars are exact. Markdown went from verifying nothing to 745
-symbols with no disagreement. YAML fell from 102 disagreements to 6 on the
-same 100 files once the declaration-only extent was trimmed.
+Seven grammars are exact. Markdown went from verifying nothing to 745
+symbols with no disagreement; YAML fell from 102 disagreements to 6 on the
+same files once the declaration-only extent was trimmed; CSS fell from 125
+to 1 once an ambiguous name stopped being paired.
 
-What remains is concentrated and is not extent disagreement. CSS carries
-125, and 492 anchors the server never names: a selector may appear in
-several rules of one stylesheet, so a group pairs only when every
-member-matching symbol agrees on one range, and `@layer`-style at-rules get
-no symbol at all. Python carries 30, every one the server reporting a
-multi-line assignment by its name line alone (`BASE_PROG` L22..L29 against
-L22..L22): `pyright` is naming the binding where tree-sitter names the
-statement.
+Thirty of the 38 that remain are Python, where `pyright` names a multi-line
+assignment by its name line alone (`BASE_PROG` L22..L29 against L22..L22):
+it names the binding where tree-sitter names the statement. Eight survive
+across every other grammar.
 
-That last one is deliberately not normalized. Accepting any server range
-that is merely the anchor's first line would also accept a genuine one-line
+That class is deliberately not normalized. Accepting any server range that
+is merely the anchor's first line would also accept a genuine one-line
 extent bug, trading a warning that is understood for a blind spot that is
-not — the same trade the ordinal fallback made before it was gated. These
-are the open edges; nothing here indicts a grammar.
+not — the same trade the ordinal fallback made before it was gated.
 
-The counts above are the pre-correction measurement and are kept as the
-record that produced the fixes. Re-running the corpus is the outstanding
-step, and the number that matters from it is how many disagreements survive
-— the expectation is the CSS anchor-namespace gap and the Markdown
-trailing-blank-line convention, both cases where neither side is wrong.
+The count that grew is `Not named`, from 784 to 1035, and that is the
+intended price. Those symbols were previously paired on a name the server
+reports more than once, which is a guess, and a guess that happens to be
+right still teaches the comparison to trust guesses. Shell shows the shape
+plainly: `bash-language-server` reports every assignment of a variable, so
+68 anchors that used to agree with whichever it listed first are now
+honestly unverified.
+
 
 ## Commands
 

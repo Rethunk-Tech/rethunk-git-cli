@@ -378,3 +378,35 @@ func TestDeclOnlyExcludesTheNextKeysCommentBlock(t *testing.T) {
 		t.Errorf("DeclOnly = %q; want the mapping's own content kept", declOnly)
 	}
 }
+
+// TestMatchAndCompare_AmbiguousNameIsNotPaired pins the ambiguity rule for a
+// literal name match. One selector may head several rules of a stylesheet, and
+// a selector group's split symbols carry a member's name beside the rule that
+// already had it, so a name the server reports twice at two ranges identifies
+// no single declaration. Pairing with whichever came first compares an extent
+// against an unrelated rule; not pairing degrades to [ts-only], which is true.
+func TestMatchAndCompare_AmbiguousNameIsNotPaired(t *testing.T) {
+	t.Parallel()
+
+	src := []byte(".a {\n  color: red;\n}\n\n.a {\n  color: blue;\n}\n")
+	res := &Resolution{Anchor: ".a", SameName: 1, DeclOnly: Extent{Start: 0, End: uint(len(".a {\n  color: red;\n}\n"))}}
+
+	twice := []lsp.Symbol{
+		{Name: ".a", StartLine: 0, EndLine: 2},
+		{Name: ".a", StartLine: 4, EndLine: 6},
+	}
+	if found, _ := MatchAndCompare(src, res, twice); found {
+		t.Error("found = true for a name reported at two ranges; want false")
+	}
+
+	// Reported twice at the SAME range is one declaration described twice,
+	// which is exactly the selector-group split, and must still pair.
+	sameRange := []lsp.Symbol{
+		{Name: ".a", StartLine: 0, EndLine: 2},
+		{Name: ".a", StartLine: 0, EndLine: 2},
+	}
+	found, err := MatchAndCompare(src, res, sameRange)
+	if !found || err != nil {
+		t.Errorf("found = %v, err = %v; want a clean pair when the ranges agree", found, err)
+	}
+}

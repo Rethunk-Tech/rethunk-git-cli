@@ -240,7 +240,7 @@ func formatRange(start, end uint32) string {
 func matchLSPSymbol(anchor, sep string, flat, slugAnchors, groupedAnchors bool, sameName int, symbols []lsp.Symbol) (lsp.Symbol, bool) {
 	bare, ordinal, hasOrdinal := ParseOrdinal(anchor)
 
-	var byBare, byMember []lsp.Symbol
+	var byName, byBare, byMember []lsp.Symbol
 	for _, s := range symbols {
 		qualified := s.Name
 		if flat {
@@ -250,11 +250,9 @@ func matchLSPSymbol(anchor, sep string, flat, slugAnchors, groupedAnchors bool, 
 		} else {
 			qualified = qualifyLSPSymbol(s, sep)
 		}
-		if qualified == anchor {
-			return s, true
-		}
-		if slugAnchors && slugQualified(s, sep) == anchor {
-			return s, true
+		if qualified == anchor || (slugAnchors && slugQualified(s, sep) == anchor) {
+			byName = append(byName, s)
+			continue
 		}
 		if groupedAnchors && anchorNamesGroupMember(anchor, qualified) {
 			byMember = append(byMember, s)
@@ -262,6 +260,22 @@ func matchLSPSymbol(anchor, sep string, flat, slugAnchors, groupedAnchors bool, 
 		if hasOrdinal && (qualified == bare || s.Name == bare) {
 			byBare = append(byBare, s)
 		}
+	}
+
+	// A name the server reports more than once identifies no single
+	// declaration. One selector may head several rules of a stylesheet, and a
+	// selector group's split symbols carry a member's name beside the rule
+	// that already had it, so taking the first match pairs the anchor with
+	// whichever rule the server happened to list first -- measured, that is
+	// every CSS disagreement in the corpus, each one starting on a different
+	// line than the extent it was compared against. Symbols describing one
+	// declaration agree on its range; anything else is ambiguous and degrades
+	// to [ts-only] rather than guessing.
+	if len(byName) > 0 {
+		if sameRange(byName) {
+			return byName[0], true
+		}
+		return lsp.Symbol{}, false
 	}
 
 	// A selector group pairs only when every symbol naming one of its members
