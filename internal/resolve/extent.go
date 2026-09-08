@@ -57,12 +57,12 @@ func extentEnd(lang Language, src []byte, node *ts.Node) uint {
 // trailingCommentTrimmer because the two fix unrelated defects (YAML's
 // scanner misattaching a comment vs. HTML's node absorbing a void element's
 // trailing content) and neither should force the other's fix. lang_html.go
-// is the only implementer.
+// and lang_yaml.go implement it.
 //
 // Unlike trailingCommentTrimmer, which extentEnd consults for the full
 // staged extent, this affects only the declaration-only extent the LSP
 // cross-check compares against -- the void-element absorption stays in what
-// actually gets staged (specs/design.md § Grammar scope).
+// actually gets staged.
 type declOnlyEndTrimmer interface {
 	trimDeclOnlyEnd(src []byte, node *ts.Node) uint
 }
@@ -71,7 +71,7 @@ type declOnlyEndTrimmer interface {
 // attributed doc comment. It exists solely for the later LSP cross-check:
 // LSP symbol ranges exclude doc comments, so comparing unnormalized extents
 // would hard-fail every documented symbol — ValidateToken is L5..L14 raw
-// but L9..L14 via gopls (specs/design.md).
+// but L9..L14 via gopls.
 func declOnlyExtent(lang Language, src []byte, node *ts.Node) Extent {
 	end := node.EndByte()
 	if t, ok := lang.(declOnlyEndTrimmer); ok {

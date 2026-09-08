@@ -357,7 +357,7 @@ func TestLanguageForPath_UsesHEADWhenWorktreeIsAbsent(t *testing.T) {
 		return []byte("#!/usr/bin/env bash\n"), true, nil
 	})
 	if err != nil {
-		t.Fatalf("LanguageForPath: %v", err)
+		t.Fatalf("LanguageForPathFolding: %v", err)
 	}
 	if !ok || lang.Name() != "shell" {
 		t.Fatalf("LanguageForPathFolding() = (%v, %v); want shell, true", lang, ok)

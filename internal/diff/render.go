@@ -114,7 +114,7 @@ func rowHint(path, lang string, row Row) string {
 // lang comes from the caller's FileReport rather than being re-derived here
 // via path's extension: buildFileReport already resolved it with the
 // shebang fallback an extensionless git hook or bin/ entry needs
-// (resolve.LanguageForWorktreePath), and re-deriving from extension alone
+// (resolve.LanguageForWorktreePathFolding), and re-deriving from extension alone
 // here would silently disagree with that for such a path.
 func unanchorableHint(path, lang string) string {
 	if lang == "markdown" {

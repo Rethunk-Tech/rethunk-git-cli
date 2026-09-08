@@ -80,7 +80,7 @@ type FileReport struct {
 	// lang is the resolved language's Name() (resolve.Language), set only
 	// when buildFileReport actually reached attributeSymbols -- the same
 	// resolution that already ran the shebang fallback for an extensionless
-	// path (resolve.LanguageForWorktreePath). render.go's unanchorableHint
+	// path (resolve.LanguageForWorktreePathFolding). render.go's unanchorableHint
 	// reads it instead of re-deriving the language from Path's extension
 	// alone, so an extensionless file routed by shebang gets the same
 	// answer here as everywhere else in the pipeline. Unexported: it is

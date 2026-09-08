@@ -193,8 +193,9 @@ func parseGOMODOutput(out string) (string, error) {
 // runPrereqChecks verifies what a build needs. go, git, cgo, and a C
 // compiler are fatal -- rgit links tree-sitter through cgo, so none of them
 // is optional (AGENTS.md's delegation boundary: git is shelled out to for
-// everything git already does). tree-sitter and a JS runtime are informational
-// only, since SQL generation degrades gracefully without them.
+// everything git already does). tree-sitter is informational only, since SQL
+// generation degrades gracefully without it -- and needs no JS runtime, since
+// the CLI evaluates grammar.js with its own embedded engine.
 //
 // git and tree-sitter here use the exact same internal/prereq.LookPath
 // mechanism internal/app's doctor does -- see that package's doc comment

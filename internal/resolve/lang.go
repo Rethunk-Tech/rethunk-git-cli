@@ -490,7 +490,7 @@ const ShebangPeekBytes = shebangPeekBytes
 // or one with no newline in its opening bytes, must never be read in full
 // just to learn it has no shebang. This is the one place that logic lives;
 // internal/synth and internal/diff both reach it through
-// LanguageForWorktreePath below rather than each reading their own prefix.
+// LanguageForWorktreePathFolding below rather than each reading their own prefix.
 func peekShebangLine(fullPath string) ([]byte, bool) {
 	f, err := os.Open(fullPath)
 	if err != nil {
