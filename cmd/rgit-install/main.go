@@ -59,15 +59,11 @@ const sqlAdapterPackageName = "sqlgrammar"
 // saying why) around flag.Parse's global os.Args and fatalf's os.Exit,
 // neither of which is worth a subprocess re-exec harness just to reach.
 // What would catch drift in the wiring itself: `go run ./cmd/rgit-install
-// -dry-run` (no side effects), `go run ./cmd/rgit-install -dry-run
-// -with-servers` (also covers the flag added alongside this one), and `go
-// run ./cmd/rgit-install -generate-only -with-servers` (covers the ordering
-// below that makes the two combine instead of the latter being silently
-// skipped), all run by hand as part of validating any change here.
+// -dry-run` (no side effects) and `go run ./cmd/rgit-install
+// -generate-only`, both run by hand as part of validating any change here.
 func main() {
 	dryRun := flag.Bool("dry-run", false, "print what would happen without building or installing")
 	prefixFlag := flag.String("prefix", "", "install directory (default: $GOBIN, else $(go env GOPATH)/bin)")
-	withServers := flag.Bool("with-servers", false, "also install/update the language servers rgit's LSP cross-check can use (shells out to go install/npm|bun/cargo; see docs/INSTALL.md)")
 	generateOnly := flag.Bool("generate-only", false, "generate the SQL parser if the tree-sitter CLI allows, then exit without building or installing (what `make cross` calls, so parser generation stays in this one place)")
 	flag.Parse()
 
@@ -98,39 +94,14 @@ func main() {
 		fmt.Println("No SQL adapter package present yet; building without SQL support.")
 	}
 
-	// Independent of rgit's own build/install below -- runs before both
-	// early returns that follow (-generate-only immediately below, the
-	// dry-run one further down), so `-generate-only -with-servers` and
-	// `-dry-run -with-servers` each still install/preview the servers
-	// instead of -with-servers silently being skipped (docs/INSTALL.md's
-	// own -generate-only sentence documents this). A plain rgit-install
-	// (flag unset) never calls this, so its existing behavior is
-	// unchanged (the opt-in decision docs/INSTALL.md records).
-	//
-	// serversOK is checked again at the very end of main, after rgit's own
-	// build/install -- a language server failing to install is no reason
-	// to withhold the rgit binary this command exists to produce, but the
-	// process must still exit nonzero so automation driving -with-servers
-	// can tell a partial run from a clean one. -generate-only's own early
-	// return below repeats that same check, since it exits before reaching
-	// the one at the end of main.
-	serversOK := true
-	if *withServers {
-		serversOK = manageServers(*dryRun, os.Stdout, exec.LookPath)
-	}
-
 	// -generate-only exists so `make cross` can produce the parser without
 	// also building or installing a host binary it has no use for. Placed
 	// after generation and before everything else rgit's own build/install
-	// needs, so the flag does exactly what it says: the parser (and, if
-	// paired with -with-servers, the language servers), then nothing else.
-	// A caller without the tree-sitter CLI still exits 0 here (absent a
-	// server failure) -- generateSQLParser already reported why, and cross
-	// builds fall back to no SQL the same way `make install` does.
+	// needs, so the flag does exactly what it says: the parser, then
+	// nothing else. A caller without the tree-sitter CLI still exits 0
+	// here -- generateSQLParser already reported why, and cross builds
+	// fall back to no SQL the same way `make install` does.
 	if *generateOnly {
-		if !serversOK {
-			fatalf("one or more language servers failed to install/update -- see FAILED lines above")
-		}
 		return
 	}
 
@@ -175,10 +146,6 @@ func main() {
 		action = "Replaced existing binary at"
 	}
 	fmt.Printf("%s %s (version %s)\n", action, dest, versionOrDev(ver))
-
-	if !serversOK {
-		fatalf("one or more language servers failed to install/update -- see FAILED lines above")
-	}
 }
 
 // fatalf never returns -- os.Exit skips this test binary the same way it

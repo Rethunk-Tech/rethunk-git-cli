@@ -13,8 +13,7 @@ import (
 
 // Most subprocess-driving functions here are pure past their one shell-out,
 // with that shell-out either injected (a lookPath func) or pulled out into
-// its own tested step -- CONTRIBUTING.md's "test the pure logic" boundary,
-// the same one servers_test.go and servers_install_test.go already draw.
+// its own tested step -- CONTRIBUTING.md's "test the pure logic" boundary.
 // git and the go toolchain are hard requirements of this repo (CONTRIBUTING.md,
 // internal/gittest), so calling them for real in a test is the real
 // dependency, not a double, and stays fast because both commands are cheap.
