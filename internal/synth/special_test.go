@@ -3,9 +3,7 @@ package synth
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -244,7 +242,7 @@ func TestStage_RefusesUnmergedSymbol(t *testing.T) {
 	gittest.Commit(t, dir, "chore: add conflict fixture")
 
 	blob := strings.TrimSpace(gittest.Git(t, dir, "rev-parse", "HEAD:conflict.go"))
-	setUnmergedIndex(t, dir, blob, "conflict.go")
+	gittest.Unmerged(t, dir, blob, "conflict.go")
 
 	err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("conflict.go", "Keep")})
 	var pathErr *PathError
@@ -363,16 +361,4 @@ func TestCheckGitignoreRefusal_IndexEntryCountsAsTracked(t *testing.T) {
 			t.Errorf("Reason = %q; want gitignore refusal", pathErr.Reason)
 		}
 	})
-}
-
-func setUnmergedIndex(t *testing.T, dir, blob, path string) {
-	t.Helper()
-	cmd := exec.Command("git", "-C", dir, "update-index", "--index-info")
-	cmd.Stdin = strings.NewReader(fmt.Sprintf(
-		"100644 %s 1\t%s\n100644 %s 2\t%s\n100644 %s 3\t%s\n",
-		blob, path, blob, path, blob, path,
-	))
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git update-index --index-info: %v: %s", err, out)
-	}
 }

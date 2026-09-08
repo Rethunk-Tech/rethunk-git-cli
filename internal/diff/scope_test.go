@@ -3,8 +3,6 @@ package diff
 import (
 	"context"
 	"errors"
-	"fmt"
-	"os/exec"
 	"strings"
 	"testing"
 
@@ -204,7 +202,7 @@ func TestContentSideRead_UnmergedFallsBackToWorktree(t *testing.T) {
 	gittest.Write(t, dir, "conflict.txt", "<<<<<<< ours\nworktree\n>>>>>>> theirs\n")
 
 	blob := strings.TrimSpace(gittest.Git(t, dir, "rev-parse", "HEAD:conflict.txt"))
-	setUnmergedIndex(t, dir, blob, "conflict.txt")
+	gittest.Unmerged(t, dir, blob, "conflict.txt")
 
 	content, exists, err := indexSide().read(context.Background(), repo, dir, "conflict.txt", nil)
 	if err != nil {
@@ -216,18 +214,6 @@ func TestContentSideRead_UnmergedFallsBackToWorktree(t *testing.T) {
 	want := "<<<<<<< ours\nworktree\n>>>>>>> theirs\n"
 	if string(content) != want {
 		t.Errorf("indexSide.read content = %q; want %q", content, want)
-	}
-}
-
-func setUnmergedIndex(t *testing.T, dir, blob, path string) {
-	t.Helper()
-	cmd := exec.Command("git", "-C", dir, "update-index", "--index-info")
-	cmd.Stdin = strings.NewReader(fmt.Sprintf(
-		"100644 %s 1\t%s\n100644 %s 2\t%s\n100644 %s 3\t%s\n",
-		blob, path, blob, path, blob, path,
-	))
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git update-index --index-info: %v: %s", err, out)
 	}
 }
 

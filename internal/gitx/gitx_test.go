@@ -46,7 +46,7 @@ func TestLsFilesStageAndMergeBase(t *testing.T) {
 
 	gittest.Write(t, dir, "conflict.txt", "conflict\n")
 	blob := hashObject(t, dir, "conflict\n")
-	setUnmergedIndex(t, dir, blob, "conflict.txt")
+	gittest.Unmerged(t, dir, blob, "conflict.txt")
 
 	if unmerged, err := repo.IsUnmerged(ctx, "conflict.txt"); err != nil {
 		t.Fatalf("IsUnmerged error: %v", err)
@@ -124,18 +124,6 @@ func hashObject(t *testing.T, dir, content string) string {
 		t.Fatalf("git hash-object: %v", err)
 	}
 	return strings.TrimSpace(string(out))
-}
-
-func setUnmergedIndex(t *testing.T, dir, blob, path string) {
-	t.Helper()
-	cmd := exec.Command("git", "-C", dir, "update-index", "--index-info")
-	cmd.Stdin = strings.NewReader(fmt.Sprintf(
-		"100644 %s 1\t%s\n100644 %s 2\t%s\n100644 %s 3\t%s\n",
-		blob, path, blob, path, blob, path,
-	))
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git update-index --index-info: %v: %s", err, out)
-	}
 }
 
 // TestAdd_AlreadyStagedDeletionSucceeds pins Add's own fallback (the unit

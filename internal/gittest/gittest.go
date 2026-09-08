@@ -16,6 +16,7 @@
 package gittest
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -131,6 +132,17 @@ func Commit(t testing.TB, dir, message string) {
 	t.Helper()
 	Git(t, dir, "add", "-A")
 	Git(t, dir, "commit", "-q", "-m", message)
+}
+
+// Unmerged rewrites path's index entry as a conflict, staging the same blob
+// at all three merge stages. A real merge is not needed to produce one, and
+// the index is the only thing rgit reads to tell a conflicted path apart.
+func Unmerged(t testing.TB, dir, blob, path string) {
+	t.Helper()
+	GitInput(t, dir, fmt.Sprintf(
+		"100644 %s 1\t%s\n100644 %s 2\t%s\n100644 %s 3\t%s\n",
+		blob, path, blob, path, blob, path,
+	), "update-index", "--index-info")
 }
 
 // InstallHook writes an executable git hook into dir's real .git/hooks --

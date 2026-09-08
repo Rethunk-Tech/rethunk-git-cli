@@ -159,7 +159,7 @@ func TestRun_UnmergedPathUsesWorktreeConflictContent(t *testing.T) {
 	gittest.Write(t, dir, "conflict.txt", "<<<<<<< ours\nworktree\n>>>>>>> theirs\n")
 
 	blob := strings.TrimSpace(gittest.Git(t, dir, "rev-parse", "HEAD:conflict.txt"))
-	setUnmergedIndex(t, dir, blob, "conflict.txt")
+	gittest.Unmerged(t, dir, blob, "conflict.txt")
 
 	report, err := Run(context.Background(), repo, dir, Options{
 		Files: []string{"conflict.txt"},
