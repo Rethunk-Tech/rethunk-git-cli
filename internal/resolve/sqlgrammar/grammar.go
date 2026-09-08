@@ -9,8 +9,7 @@
 // csrc/ is generated at install time by cmd/rgit-install's generateSQLParser,
 // from the grammar.js and tree-sitter.json the module does ship. Nothing
 // here imports the upstream module, which is why plain `go build ./...`
-// never touches this file and go.mod carries no requirement for it -- see
-// specs/design.md § Dependencies.
+// never touches this file and go.mod carries no requirement for it.
 package sqlgrammar
 
 // The generated C must live in csrc/, not beside this file: a .c file in the

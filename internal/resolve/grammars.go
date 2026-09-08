@@ -56,7 +56,7 @@ func bashGrammar() *ts.Language { return ts.NewLanguage(tsbash.Language()) }
 func yamlGrammar() *ts.Language { return ts.NewLanguage(tsyaml.Language()) }
 
 // cssGrammar parses .css. Not .scss/.sass: no SCSS/SASS tree-sitter grammar
-// ships Go bindings (specs/design.md § Dependencies) -- an upstream gap,
+// ships Go bindings -- an upstream gap,
 // not a scoping choice, the same distinction lang_shell.go draws for .zsh.
 func cssGrammar() *ts.Language { return ts.NewLanguage(tscss.Language()) }
 

@@ -186,9 +186,8 @@ func (r *Repo) checkedLine(ctx context.Context, args ...string) (string, error) 
 	return strings.TrimSpace(string(out)), nil
 }
 
-// CatFile reads the blob at rev:path (e.g. "HEAD:auth.go"). Per
-// specs/design.md's blob-synthesis algorithm, a path absent from rev is a
-// normal case — an untracked file has no HEAD blob — so exists reports
+// CatFile reads the blob at rev:path (e.g. "HEAD:auth.go"). To blob
+// synthesis, a path absent from rev is a normal case — an untracked file has no HEAD blob — so exists reports
 // that distinction directly rather than making callers inspect stderr.
 func (r *Repo) CatFile(ctx context.Context, rev, path string) (content []byte, exists bool, err error) {
 	args := []string{"cat-file", "-p", rev + ":" + path}
@@ -519,8 +518,8 @@ func (r *Repo) UpdateIndexCacheinfo(ctx context.Context, mode, sha, path string)
 }
 
 // Add stages pathspecs verbatim via `git add --`, for targets that are
-// plain paths rather than symbol anchors. specs/design.md: staging by
-// path is plain `git add <pathspec>`, delegated rather than synthesized,
+// plain paths rather than symbol anchors. Staging by path is plain
+// `git add <pathspec>`, delegated rather than synthesized,
 // so every pathspec form (globs, ":(exclude)...") keeps working exactly
 // as it does under bash git.
 func (r *Repo) Add(ctx context.Context, pathspecs ...string) error {
