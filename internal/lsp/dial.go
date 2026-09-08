@@ -36,7 +36,7 @@ func Dial(ctx context.Context, lang, repoRoot string) (client *Client, degraded 
 	return dialStdio(ctx, spec, repoRoot)
 }
 
-// dialSocket implements the probe/spawn sequence from specs/design.md:
+// dialSocket implements the probe/spawn sequence:
 // try $RGIT_LSP_SOCKET, then the default socket path, each within
 // dialBudget; if neither answers, spawn a daemon for a future invocation to
 // find and degrade this one to [ts-only] rather than wait for it.
@@ -90,8 +90,8 @@ func dialSocket(ctx context.Context, spec serverSpec, repoRoot string) (*Client,
 				// -listen.timeout idle shutdown (servers.go's daemonArgs)
 				// reclaims it. A handshake failure this deep into
 				// dialBudget+queryDeadline is itself strong evidence of a
-				// stuck process (specs/design.md measures a healthy gopls
-				// answering in single-digit milliseconds), so this is not
+				// stuck process (a healthy gopls answers in
+				// single-digit milliseconds), so this is not
 				// treated as a case worth a shutdown RPC or kill-by-pid:
 				// no dialled server here exposes either, and there is
 				// nothing to key a kill on beyond the socket path itself.
@@ -115,7 +115,7 @@ func dialSocket(ctx context.Context, spec serverSpec, repoRoot string) (*Client,
 	return nil, true
 }
 
-// socketCandidates returns the probe order from specs/design.md:
+// socketCandidates returns the probe order:
 // $RGIT_LSP_SOCKET first (an existing socket the caller points at
 // explicitly), then the managed default path -- omitted entirely when
 // hasDefault is false, meaning privateSocketDir could not vouch for a
@@ -177,9 +177,12 @@ func privateSocketDir() (dir string, ok bool) {
 // case -- leaving a TOCTOU window in which the parent directory could in
 // principle be rewritten to swap dir out from under a caller that trusted
 // an earlier verification. This narrows that window; it does not close
-// it (specs/design.md § Symbol resolution has the full reasoning for why
-// closing it fully was rejected here, and why the residual window is
-// accepted).
+// it, and closing it fully was rejected: Go's net.Dial for a unix socket
+// takes a path string rather than a directory-relative descriptor, so an
+// openat-style dial would mean hand-rolled syscalls buying real
+// protection only where sameOwner is not already a deliberate no-op
+// (owner_windows.go), against a swap the environments this matters in (a
+// sticky /tmp, a systemd-managed $XDG_RUNTIME_DIR) already refuse.
 func verifyPrivateDir(dir string) bool {
 	// Lstat, not Stat: a symlink at this exact path -- planted by another
 	// user pointing somewhere they control -- must be rejected outright,
@@ -201,7 +204,7 @@ func runtimeDir() string {
 // trySpawnDaemon starts spec's daemon listening at sockPath in the
 // background, guarded by an O_EXCL lock beside the socket so a burst of
 // concurrent rgit invocations does not each launch a doomed duplicate
-// (specs/design.md notes gopls itself survives the bind race unaided; the
+// (gopls itself survives the bind race unaided; the
 // lock exists only to avoid the extra process spawns and their stderr
 // noise, not for correctness). This invocation never waits on the daemon
 // it just started — the load-bearing rule is that spawning must not block
@@ -254,8 +257,8 @@ func trySpawnDaemon(spec serverSpec, sockPath string) {
 // once in the same invocation rather than leaving the actual spawn to
 // whatever invocation happens to run next -- otherwise the
 // invocation that notices the stale lock is never the one that benefits
-// from clearing it. The lock is an optimization, not correctness
-// (specs/design.md): the worst a lost race over it costs is one extra
+// from clearing it. The lock is an optimization, not correctness: the
+// worst a lost race over it costs is one extra
 // doomed gopls process and its stderr noise -- so a lock this function
 // cannot vouch for (below) is simply left in place and treated as held,
 // same as any other stat failure, rather than escalated into a hard error.
@@ -303,9 +306,8 @@ func unlinkDeadSocket(sockPath string) {
 }
 
 // dialStdio spawns spec's server fresh: vtsls and pyright have no
-// listen-mode daemon (specs/design.md), so every query is a new process.
-// The whole spawn+handshake is bounded by
-// dialBudget+queryDeadline; a server still indexing when that expires is
+// listen-mode daemon, so every query is a new process. The whole
+// spawn+handshake is bounded by dialBudget+queryDeadline; a server still indexing when that expires is
 // killed and this invocation degrades rather than waits.
 func dialStdio(ctx context.Context, spec serverSpec, repoRoot string) (*Client, bool) {
 	if _, err := exec.LookPath(spec.bin); err != nil {

@@ -27,9 +27,9 @@ import (
 // document as excluded.
 //
 // taplo is not in the servers map -- deliberately, not merely not-yet-wired:
-// specs/design.md § Symbol resolution measures taplo's own ranges genuinely
-// disagreeing with tree-sitter-toml on nested tables, a real false-positive
-// risk, not a normalization gap this package could paper over. This has no
+// taplo's own ranges were measured genuinely disagreeing with
+// tree-sitter-toml on nested tables, a real false-positive risk, not a
+// normalization gap this package could paper over. This has no
 // live caller as a result, but stays: the workspace/configuration behavior
 // documented above is specific to taplo's own measured protocol quirk, not
 // speculative, and answering it safely costs nothing for every server that
@@ -67,8 +67,9 @@ type Client struct {
 	// closeFn tears down the transport. Dial sets it per transport kind:
 	// closing just the connection for a shared daemon socket (the daemon
 	// outlives this process), or killing the subprocess for a one-shot
-	// stdio session (nothing else will ever reuse it — specs/design.md's
-	// transport-support measurement). NewClient defaults it to rwc.Close.
+	// stdio session (nothing else will ever reuse it — no server outside
+	// gopls was measured offering a listen-mode daemon). NewClient
+	// defaults it to rwc.Close.
 	closeFn func() error
 }
 
@@ -199,9 +200,9 @@ func (c *Client) DocumentSymbols(ctx context.Context, path string, src []byte) (
 		// protocol ever grows a third variant, a shape this package does
 		// not understand. Either way this must not silently read as "the
 		// file genuinely has zero symbols" -- that is exactly the class
-		// of failure specs/design.md's cross-check coverage and this
-		// repo's own posture (fail loudly, never continue on a shape you
-		// cannot account for) both warn against, and it would be
+		// of failure the cross-check and this repo's own posture (fail
+		// loudly, never continue on a shape you cannot account for) both
+		// warn against, and it would be
 		// indistinguishable from a real empty outline downstream. Erring
 		// out here degrades this query the same way a query error
 		// already does, rather than returning a result that looks
@@ -218,7 +219,7 @@ func (c *Client) DocumentSymbols(ctx context.Context, path string, src []byte) (
 // extend one line past their own last real content, through the single
 // blank line separating them from a following sibling key at the same
 // level -- not block-scalar-specific: a plain-scalar sibling reproduces it
-// identically (specs/design.md § Cross-check coverage). tree-sitter-yaml's
+// identically. tree-sitter-yaml's
 // own node never does this, stopping at its own last real content line
 // instead.
 //

@@ -6,7 +6,7 @@ import (
 )
 
 // transportKind is how Dial reaches a language's server. Only "go" has a
-// real listen-mode daemon (specs/design.md § Symbol resolution): gopls's
+// real listen-mode daemon: gopls's
 // `-listen=unix;<path>` binds a unix socket other processes can dial into.
 // vtsls's and pyright's own `--socket=<port>` flag instead dials OUT, as a
 // TCP client, to a listener the caller must already have bound. Neither
@@ -88,8 +88,8 @@ var servers = map[string]serverSpec{
 	},
 	// yaml, json, css, and markdown's servers hold to the same bar as the
 	// four above: their documentSymbol ranges match this resolver's own
-	// declOnlyExtent byte-for-byte on real fixtures (specs/design.md §
-	// Cross-check coverage), including the doc-comment-exclusion case (a
+	// declOnlyExtent byte-for-byte on real fixtures, including the
+	// doc-comment-exclusion case (a
 	// leading comment with no blank line before the symbol) -- not merely
 	// "it has a --stdio flag".
 	"yaml": {
@@ -111,7 +111,7 @@ var servers = map[string]serverSpec{
 		stdioArgs: []string{"--stdio"},
 	},
 	// marksman, not vscode-markdown-language-server: the latter crashes on
-	// startup on this machine (specs/design.md), an ESM/CJS interop defect
+	// startup on this machine, an ESM/CJS interop defect
 	// in its own bundled dependency, not a transport choice. marksman's own
 	// daemon-shaped "server" subcommand is not used; it is dialled the same
 	// one-shot stdio way as the other non-gopls servers here, matching the
@@ -128,7 +128,7 @@ var servers = map[string]serverSpec{
 	// resolver's own declOnly extent for a bare id-bearing element
 	// ("div#app") once void-element trailing absorption is trimmed
 	// (internal/resolve/lang_html.go's declEndTrimmer) -- measured against
-	// the installed binary, not assumed (specs/design.md § Grammar scope).
+	// the installed binary, not assumed.
 	"html": {
 		name:      "vscode-html-language-server",
 		bin:       "vscode-html-language-server",

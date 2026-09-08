@@ -17,7 +17,7 @@ import (
 // skip cleanly when the binary is not on PATH or -short is set, dial and
 // query for real otherwise. A double here would only prove this package
 // calls a mock the way its author expected, exactly the class of defect
-// specs/design.md's cross-check coverage warns a stand-in produces.
+// the cross-check's own coverage warns a stand-in produces.
 func TestDial_NewServers(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {

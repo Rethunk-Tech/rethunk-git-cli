@@ -52,7 +52,7 @@ func writeStaleLock(t *testing.T, sockPath string) {
 }
 
 // TestTrySpawnDaemon_BinaryNotOnPATH covers the "load-bearing" no-op this
-// function is specs/design.md's rule for: a language server that is not
+// function exists for: a language server that is not
 // installed must never even attempt to create a spawn lock, since nothing
 // will ever clear one for a binary that can never be spawned.
 func TestTrySpawnDaemon_BinaryNotOnPATH(t *testing.T) {

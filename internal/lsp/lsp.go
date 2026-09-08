@@ -12,14 +12,13 @@ import (
 )
 
 // defaultDialBudget bounds how long Dial waits to reach a live daemon socket
-// before giving up and reporting degraded=true (specs/design.md), unless
-// overridden by RGIT_LSP_DIAL_TIMEOUT. Unexported: internal/resolve calls
+// before giving up and reporting degraded=true, unless overridden by
+// RGIT_LSP_DIAL_TIMEOUT. Unexported: internal/resolve calls
 // CrossCheckExtents, never Dial or this constant.
 const defaultDialBudget = 150 * time.Millisecond
 
 // defaultQueryDeadline bounds a single textDocument/documentSymbol round
-// trip once connected (specs/design.md), unless overridden by
-// RGIT_LSP_QUERY_TIMEOUT.
+// trip once connected, unless overridden by RGIT_LSP_QUERY_TIMEOUT.
 //
 // 2s, not a tighter budget: a warm gopls daemon answers in single-digit
 // milliseconds, but vtsls's first documentSymbol after didOpen can take
