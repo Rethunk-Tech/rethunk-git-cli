@@ -45,8 +45,9 @@ func tsxGrammar() *ts.Language { return ts.NewLanguage(tsts.LanguageTSX()) }
 // so nothing here ever calls tsmd.InlineLanguage. The two grammars ship as
 // one Go package (bindings/go holds markdown.go and markdown_inline.go
 // together, not two importable packages), so this is the only lever that
-// exists to avoid pulling the inline grammar in on purpose; see design.md §
-// Dependencies for what that is actually measured to cost.
+// exists to avoid pulling the inline grammar in on purpose: Markdown's
+// grammars add ~768 KB, and cgo links per object file, so the unused inline
+// copy cannot be dropped once linked.
 func markdownGrammar() *ts.Language { return ts.NewLanguage(tsmd.Language()) }
 
 // bashGrammar parses .sh and .bash. Not .zsh: tree-sitter-bash is a POSIX/Bash

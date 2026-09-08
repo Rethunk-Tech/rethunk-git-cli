@@ -267,9 +267,9 @@ func (fp *filePlan) escalateToContainer(member *resolve.Resolution) (res *resolv
 	// not containment), and when that accidental match is itself new, the
 	// escalated branch below would splice in its entire unrelated extent in
 	// place of the member actually named. There is no per-Declaration
-	// ancestor chain recorded to escalate to correctly instead (specs/
-	// design.md § Grammar scope keeps HTML's addressing at element+id, one
-	// level, on purpose), so the only sound fix is to never widen a flat-
+	// ancestor chain recorded to escalate to correctly instead, and HTML's
+	// addressing stays at element+id, one level, on purpose, so the only
+	// sound fix is to never widen a flat-
 	// container adapter's member to a "container" at all -- new nested
 	// elements insert directly at their sibling position, uninvolved with
 	// this mechanism. resolve.Language.FlatContainer's own doc comment is
@@ -308,7 +308,7 @@ func (fp *filePlan) escalateToContainer(member *resolve.Resolution) (res *resolv
 	return outer, false, nil
 }
 
-// insertionPoint implements design.md's nearest-existing-sibling rule:
+// insertionPoint implements the nearest-existing-sibling rule:
 // walk backwards through the worktree's declaration order to the first
 // sibling also present in HEAD and insert after it; else walk forwards
 // and insert before; else append at the end of the synthesized region.

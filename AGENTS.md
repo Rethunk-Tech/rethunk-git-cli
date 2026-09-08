@@ -23,7 +23,7 @@ Inherited behaviour: [docs/USAGE.md § Behaviour inherited from git](docs/USAGE.
 | [docs/INSTALL.md](docs/INSTALL.md) | Build, installer, env vars, verify |
 | [docs/LIMITATIONS.md](docs/LIMITATIONS.md) | Non-goals |
 
-`docs/` ships with the tool; `specs/` does not.
+`docs/` ships with the tool; `TODO.md` does not.
 
 ## Delegation boundary
 

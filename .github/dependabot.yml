@@ -5,9 +5,9 @@ version: 2
 # with each other, and eleven separate PRs for one upstream bump is noise.
 #
 # Note that github.com/DerekStride/tree-sitter-sql is deliberately absent
-# from go.mod (specs/design.md § Grammar scope, SQL) and so is invisible to
-# dependabot. Its pin lives in cmd/rgit-install's own sqlGrammarVersion and
-# has to be bumped by hand.
+# from go.mod -- its parser is generated at build time rather than vendored --
+# and so is invisible to dependabot. Its pin lives in cmd/rgit-install's own
+# sqlGrammarVersion and has to be bumped by hand.
 updates:
   - package-ecosystem: gomod
     directory: /

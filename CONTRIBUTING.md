@@ -239,16 +239,17 @@ the delegation boundary in [`AGENTS.md`](AGENTS.md#delegation-boundary).
 
 The tiered layout: README orients and links, `HUMANS.md` introduces running
 and using `rgit`, `docs/` holds the authoritative reference it points at,
-`AGENTS.md` holds internals, `CONTRIBUTING.md` holds process, and `specs/`
-holds the design record.
+`AGENTS.md` holds internals, `CONTRIBUTING.md` holds process, and `TODO.md`
+holds work not done and the measurements that closed a question.
 
 Do not repeat content between tiers. If something belongs in two places, it
 belongs in one and gets linked from the other.
 
 Two repo conventions that are easy to undo by accident:
 
-- **`docs/` is only for documentation shipped with the tool.** Design record and
-  migration material go in `specs/`.
+- **`docs/` is only for documentation shipped with the tool.** Why the code is
+  the way it is belongs beside the code; what was decided and not built belongs
+  in `TODO.md`.
 - **An `@-reference` in `AGENTS.md` is a budget line, not a link.** `CLAUDE.md`
   is an `@AGENTS.md` pointer, so every `@path` there is pulled into *every* agent
   session whether or not the change touches that file — @-referencing all eight

@@ -292,8 +292,8 @@ func spliceExcise(out []byte, start, end uint) []byte {
 
 // spliceInsert splices op.text in at op.start, with no HEAD extent to
 // replace. It normalizes the boundary on both sides of the insertion
-// (design.md: "boundary padding normalizes newlines between spliced regions
-// only") but never manufactures a trailing newline where none existed: when
+// -- boundary padding normalizes newlines between spliced regions only --
+// but never manufactures a trailing newline where none existed: when
 // start lands at true end-of-file (out[start:] is empty), the result's own
 // trailing newline mirrors out's, not a forced default.
 func spliceInsert(out []byte, op editOp) []byte {
