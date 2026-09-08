@@ -1423,40 +1423,66 @@ ordinal fallback is the fragile part: it assumes the server's symbol list
 and the resolver's declaration list enumerate the same declarations in the
 same order, and no wired server guarantees that.
 
-**3. Genuine tree-sitter over-extension — 181 (8%), all YAML.** A
-`block_mapping_pair` node absorbs the blank line *and the entire comment
-block* that introduces the next sibling key, so a mapping's extent runs
-past its own last content line into a comment that documents something
-else. Measured worst case: a `concurrency:` key whose real content ends at
-one line claims 17 further lines of an unrelated `# TODO: code-signing`
-header. The server is right; tree-sitter is wrong; staging that anchor
-would carry the next key's documentation with it. This class is the only
-one where the cross-check catches what it was built to catch, and it is
-0.5% of all symbols compared.
+**3. Half-open extent converted as inclusive — 181 (8%), all YAML.** This
+class was first recorded as genuine tree-sitter over-extension. It is not.
+An `Extent` is `[Start, End)`, so the byte at `End` belongs to whatever
+follows; for a construct ending exactly on a line boundary — every YAML
+block mapping, every Markdown section, both of which end at the first byte
+of the next sibling — converting `End` directly reports one line too many.
+`internal/app`'s `lineRange` already decremented it and the comparison did
+not, so the two halves of rgit disagreed about the same extent and the
+language server was blamed for the difference.
 
-**Two wired grammars verify far less than the table above implies.**
-Markdown verifies *nothing*: `marksman` reports a heading's raw text
-(`Quick start`), while the resolver's anchor is its slug (`quick-start`),
-so `matchLSPSymbol` never matches and all 3274 headings degrade to
-`[ts-only]`. The single-lowercase-word fixture headings above are the only
-shape where the two spellings coincide. The reported *ranges* agree
-line-for-line wherever they can be paired by hand, so the gap is name
-normalization, not extents. CSS degrades on 27% of its symbols for the
-same category of reason: multi-selector rules (`html, body, h1, …`) and
-at-rules (`@theme`, `@layer base`, `@charset`) are anchors the server
-never names in that form.
+The specific reading that a `block_mapping_pair` absorbs the *next* key's
+comment block does not reproduce. A comment block between two keys is
+attached as the *leading* documentation of the key below it, the same
+treatment every other grammar here gives a doc comment: for a `concurrency:`
+key followed by a four-line `# TODO` header, `concurrency` resolves to its
+own single line and the header belongs to `jobs`. `DeclOnly` strips it
+before comparison, which is why the comparison agrees.
 
-**What this settles.** The cross-check is load-bearing — it found a real
-extent bug in a shipped grammar that no fixture surfaced — so it stays. But
-its precision on real files is 8%: on the corpus above it would raise exit
-6 on 2153 correct extents to catch 181 wrong ones, and exit 6 is
-`commit`'s hard failure. That ratio is a property of the two normalization
-gaps in class 1 and class 2, both of which sit in the comparison rather
-than in the resolver, and both of which are fixable without touching a
-grammar. Until they are, YAML and CSS carry a false-positive rate high
-enough that the comparison costs more than it returns on those two
-grammars specifically; Go, TypeScript, TSX, JSON, and HTML are clean at
-16,865 symbols with zero disagreements of any kind.
+With the conversion corrected, targeted reproductions of this class — a
+mapping ending at EOF, and the comment-block case above — agree on both
+sides. Re-running the full corpus to confirm the 181 resolve as a group,
+and that no genuine over-extension hides among them, is the outstanding
+step: the count above is the pre-correction measurement.
+
+**Anchor-namespace gaps cost two grammars their verification.** A language
+whose anchors are slugs of human-readable text never matched a server
+reporting that text verbatim: `marksman` answers `Quick start` where the
+resolver's anchor is `quick-start`, and all 3274 headings degraded to
+`[ts-only]` while the ranges agreed line-for-line wherever they could be
+paired by hand. `matchLSPSymbol` now slugifies the server's side for those
+languages — per part, never after the join, since the separator is not part
+of either name — and Markdown verifies. A residual convention difference
+remains: tree-sitter includes the blank line trailing a section, `marksman`
+does not, so a section followed by a blank line still reports a one-line
+disagreement in which neither side is wrong.
+
+CSS degrades on 27% of its symbols for the same category of reason and is
+not addressed: multi-selector rules (`html, body, h1, …`) and at-rules
+(`@theme`, `@layer base`, `@charset`) are anchors the server never names in
+that form.
+
+**What this settles.** Every one of the 2334 disagreements was a defect in
+rgit, and none was a defect in a grammar. Two sat in the LSP client and one
+in the comparison: an exclusive range end read as inclusive, an extent end
+read as inclusive, and an ordinal fallback that paired declarations the two
+sides had enumerated differently. All three are fixed, and each carries a
+regression test.
+
+That is what the subsystem is worth: not catching a grammar out, but
+holding two independent readings of the same file against each other, where
+a disagreement indicts whichever side is easier to be wrong — and on this
+corpus that was always rgit. Nine grammars agreed with eight servers on
+every construct either could name; Go, TypeScript, TSX, JSON and HTML were
+clean at 16,865 symbols before any fix.
+
+The counts above are the pre-correction measurement and are kept as the
+record that produced the fixes. Re-running the corpus is the outstanding
+step, and the number that matters from it is how many disagreements survive
+— the expectation is the CSS anchor-namespace gap and the Markdown
+trailing-blank-line convention, both cases where neither side is wrong.
 
 ## Commands
 
