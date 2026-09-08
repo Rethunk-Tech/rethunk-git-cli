@@ -119,15 +119,16 @@ func crossCheckVerdict(src []byte, list []*Resolution, symbols []lsp.Symbol) (de
 // CrossCheckExtents' doc on the fourth cross-check exemption); err is
 // non-nil only when a match was found and its range disagreed.
 func MatchAndCompare(src []byte, res *Resolution, symbols []lsp.Symbol) (found bool, err error) {
-	match, ok := matchLSPSymbol(res.Anchor, res.Sep, res.Flat, res.SlugAnchors, res.GroupedAnchors, res.SameName, symbols)
+	// The declaration's own first line, passed so a selector group cannot
+	// pair with a rule that merely shares a member name; lineOf's failure is
+	// handled below, and an unusable value simply skips that check.
+	groupStart, groupStartOK := lineOf(src, res.DeclOnly.Start)
+	match, ok := matchLSPSymbol(res.Anchor, res.Sep, res.Flat, res.SlugAnchors, res.GroupedAnchors, res.SameName, groupStart, groupStartOK, symbols)
 	if !ok {
 		return false, nil
 	}
 
-	end := lastOffset(res.DeclOnly)
-	if res.SlugAnchors {
-		end = lastContentOffset(src, res.DeclOnly.Start, end)
-	}
+	end := lastContentOffset(src, res.DeclOnly.Start, lastOffset(res.DeclOnly))
 	wantStart, startOK := lineOf(src, res.DeclOnly.Start)
 	wantEnd, endOK := lineOf(src, end)
 	if !startOK || !endOK {
@@ -178,10 +179,14 @@ func lastOffset(ext Extent) uint {
 }
 
 // lastContentOffset walks back from end over trailing whitespace, stopping at
-// start. A section in a prose format runs to the blank line before the next
-// heading, while a language server reports it ending at its last line of
-// actual content; both readings are defensible, so the blank tail is dropped
-// before comparing rather than reported as a disagreement neither side owns.
+// start. A declaration that reaches a blank line -- a prose section running to
+// the blank before the next heading, a YAML mapping running to a file's
+// trailing newline -- covers that blank in tree-sitter's reading while a
+// language server reports the last line of actual content. Both readings are
+// defensible, so the blank tail is dropped before comparing rather than
+// reported as a disagreement neither side owns. Applied to every language: a
+// declaration whose extent ends on its own syntax, as Go's and TypeScript's
+// do on a closing brace, has no trailing whitespace inside it to trim.
 func lastContentOffset(src []byte, start, end uint) uint {
 	if end >= uint(len(src)) {
 		return end
@@ -237,7 +242,7 @@ func formatRange(start, end uint32) string {
 // those server-only suffixes before comparing. qualifyLSPSymbol's join is for
 // every other language, where Container really is an ancestor a server also
 // reports as one.
-func matchLSPSymbol(anchor, sep string, flat, slugAnchors, groupedAnchors bool, sameName int, symbols []lsp.Symbol) (lsp.Symbol, bool) {
+func matchLSPSymbol(anchor, sep string, flat, slugAnchors, groupedAnchors bool, sameName int, declStart uint32, declStartOK bool, symbols []lsp.Symbol) (lsp.Symbol, bool) {
 	bare, ordinal, hasOrdinal := ParseOrdinal(anchor)
 
 	var byName, byBare, byMember []lsp.Symbol
@@ -279,13 +284,17 @@ func matchLSPSymbol(anchor, sep string, flat, slugAnchors, groupedAnchors bool, 
 	}
 
 	// A selector group pairs only when every symbol naming one of its members
-	// agrees on a single range. A selector is free to appear in several rules
+	// agrees on a single range, and that range begins where the declaration
+	// does. Agreement alone is not identity: a stylesheet can report a member
+	// name only at rules other than the one the anchor names, and those wrong
+	// occurrences agree with each other. A selector is free to appear in several rules
 	// of one stylesheet, so "some symbol carries this name" does not identify
 	// the rule -- measured, that pairs a group with an unrelated rule hundreds
 	// of lines away. Symbols that genuinely split one rule all carry that
 	// rule's own range, so requiring agreement keeps the split case and drops
 	// the ambiguous one.
-	if len(byMember) > 0 && sameRange(byMember) {
+	if len(byMember) > 0 && sameRange(byMember) &&
+		(!declStartOK || byMember[0].StartLine == declStart) {
 		return byMember[0], true
 	}
 

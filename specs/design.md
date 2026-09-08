@@ -1443,58 +1443,47 @@ compared extent, an ordinal fallback pairing declarations the two sides had
 enumerated differently, and two anchor namespaces that could not be
 compared at all. Each is fixed and carries a regression test.
 
-**Post-fix measurement.** 1008 files, 9 grammars, 9 servers, 17,558 symbols
-compared: 17,520 agree, 38 disagree (0.22%), 1035 the server never names.
+**Post-fix measurement.** 1008 files, 9 grammars, 9 servers, 15,995 symbols
+compared: 15,963 agree, 32 disagree (0.20%), 1025 the server never names.
 
 | Grammar | Files | Compared | Agree | Disagree | Not named |
 | --- | --: | --: | --: | --: | --: |
-| Go | 118 | 1612 | 1612 | 0 | 2 |
-| TypeScript | 93 | 1538 | 1538 | 0 | 0 |
-| TSX | 2 | 20 | 20 | 0 | 0 |
-| Shell | 100 | 738 | 738 | 0 | 68 |
-| Markdown | 100 | 745 | 745 | 0 | 0 |
-| HTML | 100 | 375 | 375 | 0 | 8 |
-| JSON | 100 | 2419 | 2419 | 0 | 127 |
-| YAML | 200 | 5704 | 5697 | 7 | 188 |
-| CSS | 95 | 2915 | 2914 | 1 | 638 |
-| Python | 100 | 1492 | 1462 | 30 | 4 |
+| Go | 119 | 1614 | 1614 | 0 | 2 |
+| TypeScript | 88 | 184 | 184 | 0 | 0 |
+| TSX | 6 | 28 | 28 | 0 | 0 |
+| Shell | 100 | 742 | 742 | 0 | 61 |
+| Markdown | 100 | 740 | 740 | 0 | 0 |
+| HTML | 100 | 226 | 226 | 0 | 4 |
+| JSON | 100 | 2392 | 2392 | 0 | 127 |
+| YAML | 200 | 5674 | 5670 | 4 | 188 |
+| CSS | 95 | 2914 | 2914 | 0 | 639 |
+| Python | 100 | 1481 | 1453 | 28 | 4 |
 
-Seven grammars are exact. Markdown went from verifying nothing to 745
-symbols with no disagreement; YAML fell from 102 disagreements to 6 on the
-same files once the declaration-only extent was trimmed; CSS fell from 125
-to 1 once an ambiguous name stopped being paired.
+Eight grammars are exact. Markdown went from verifying nothing to 740
+symbols with none; YAML fell from 102 disagreements to 4; CSS from 125 to
+none.
 
-Thirty of the 38 that remain are Python, where `pyright` names a multi-line
-assignment by its name line alone (`BASE_PROG` L22..L29 against L22..L22):
-it names the binding where tree-sitter names the statement. Eight survive
-across every other grammar.
+Twenty-eight of the 32 that remain are Python, where `pyright` names a
+multi-line assignment by its name line alone (`BASE_PROG` L22..L29 against
+L22..L22): it names the binding where tree-sitter names the statement. That
+class is deliberately not normalized — accepting any server range that is
+merely the anchor's first line would also accept a genuine one-line extent
+bug, trading a warning that is understood for a blind spot that is not.
 
-That class is deliberately not normalized. Accepting any server range that
-is merely the anchor's first line would also accept a genuine one-line
-extent bug, trading a warning that is understood for a blind spot that is
-not — the same trade the ordinal fallback made before it was gated.
+The four that are left are one shape, examined individually rather than
+sampled: a server summarising nested structure and claiming a different
+span for it, in both directions — `models` by ten lines more, `ingress` by
+eight more, `cost` by one more, a long quoted key by seven fewer. No extent
+either side produced is wrong; they disagree about how deep a mapping's
+value reaches. Nothing here indicts a grammar.
 
-The eight non-Python disagreements were examined individually rather than
-sampled. Three are one `docker-compose.yml` whose last line is blank:
-tree-sitter's mapping runs to it, the server stops at the last content
-line. Two are the server claiming *more* lines than tree-sitter (`models`
-by ten, `cost` by one) and two claiming fewer (`runner.env` by eleven, a
-long quoted key by seven) — a server summarising nested structure, not an
-extent either side got wrong. The last is CSS, and it is a real residual
-mis-pair: the anchor `.dark, .dark *` names the rule at L9, the server
-reports `.dark` twice but at neither of that rule's lines, and the two
-wrong occurrences agree with each other, so the range test that catches an
-ambiguous name cannot see it. Requiring a group's own start line to match
-would close it, at the cost of refusing groups whose start the server
-legitimately reports differently; unmeasured, so not done.
-
-The count that grew is `Not named`, from 784 to 1035, and that is the
-intended price. Those symbols were previously paired on a name the server
-reports more than once, which is a guess, and a guess that happens to be
-right still teaches the comparison to trust guesses. Shell shows the shape
-plainly: `bash-language-server` reports every assignment of a variable, so
-68 anchors that used to agree with whichever it listed first are now
-honestly unverified.
+The count that grew is `Not named`, and that is the intended price. Those
+symbols were previously paired on a name the server reports more than once,
+which is a guess, and a guess that happens to be right still teaches the
+comparison to trust guesses. Shell shows the shape plainly:
+`bash-language-server` reports every assignment of a variable, so anchors
+that used to agree with whichever it listed first are now honestly
+unverified.
 
 
 ## Commands

@@ -410,3 +410,59 @@ func TestMatchAndCompare_AmbiguousNameIsNotPaired(t *testing.T) {
 		t.Errorf("found = %v, err = %v; want a clean pair when the ranges agree", found, err)
 	}
 }
+
+// TestMatchAndCompare_BlankTailTrimmedForEveryLanguage pins that the blank-tail
+// trim is not limited to slug anchors. A YAML mapping that reaches a file's
+// trailing newline covers that blank line in tree-sitter's reading while the
+// server stops at the last line of content; a declaration that ends on its own
+// syntax has no trailing whitespace inside it, so the trim is inert there.
+func TestMatchAndCompare_BlankTailTrimmedForEveryLanguage(t *testing.T) {
+	t.Parallel()
+
+	// "a:\n  b: 1\n\n" -- content on lines 1-2, line 3 blank.
+	src := []byte("a:\n  b: 1\n\n")
+	res := &Resolution{Anchor: "a", SameName: 1, DeclOnly: Extent{Start: 0, End: uint(len(src))}}
+
+	found, err := MatchAndCompare(src, res, []lsp.Symbol{{Name: "a", StartLine: 0, EndLine: 1}})
+	if !found {
+		t.Fatal("found = false; want true")
+	}
+	if err != nil {
+		t.Errorf("err = %v; want nil -- a trailing blank line is not a disagreement", err)
+	}
+}
+
+// TestMatchAndCompare_GroupMustStartWhereTheDeclarationDoes pins the other half
+// of group pairing. Agreement among the server's member-named symbols is not
+// identity: a stylesheet can report a member name only at rules other than the
+// one the anchor names, and those wrong occurrences agree with each other.
+func TestMatchAndCompare_GroupMustStartWhereTheDeclarationDoes(t *testing.T) {
+	t.Parallel()
+
+	src := []byte(".dark, .dark * {\n  color: red;\n}\n\n.other {\n  color: blue;\n}\n")
+	res := &Resolution{
+		Anchor:         ".dark, .dark *",
+		GroupedAnchors: true,
+		SameName:       1,
+		DeclOnly:       Extent{Start: 0, End: uint(len(".dark, .dark * {\n  color: red;\n}\n"))},
+	}
+
+	// Both members reported, agreeing with each other, but at another rule.
+	elsewhere := []lsp.Symbol{
+		{Name: ".dark", StartLine: 4, EndLine: 6},
+		{Name: ".dark *", StartLine: 4, EndLine: 6},
+	}
+	if found, _ := MatchAndCompare(src, res, elsewhere); found {
+		t.Error("found = true for a group agreeing at the wrong rule; want false")
+	}
+
+	// Reported at the declaration's own start, which is the split case.
+	here := []lsp.Symbol{
+		{Name: ".dark", StartLine: 0, EndLine: 2},
+		{Name: ".dark *", StartLine: 0, EndLine: 2},
+	}
+	found, err := MatchAndCompare(src, res, here)
+	if !found || err != nil {
+		t.Errorf("found = %v, err = %v; want a clean pair at the declaration's own range", found, err)
+	}
+}
