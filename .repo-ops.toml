@@ -4,6 +4,6 @@
 [[hold]]
 package = "github.com/tree-sitter-grammars/tree-sitter-markdown"
 max_version = "0.5.1"
-until = "2026-09-03"
+until = "2027-09-01"
 ecosystem = "go"
 reason = "v0.5.2+ removed bindings/go upstream; go build breaks above v0.5.1"
