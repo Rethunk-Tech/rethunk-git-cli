@@ -1351,6 +1351,113 @@ TypeScript, TSX, Python, Shell, YAML, JSON, CSS, Markdown, HTML) — 10 of 11
 on a build without `-tags rgit_sql` — leaving TOML and SQL as the only
 grammars in this set that remain `[ts-only]`.
 
+### Corpus measurement: what the cross-check actually catches
+
+The coverage table above is fixture-measured — one hand-written file per
+grammar, constructed to be well formed. Every wired server reads "exact
+match" there, which makes it a statement about the fixtures, not about the
+cross-check's value on real files. The measurement below answers the
+different question: across real repository source, how often does the
+comparison fire, and when it fires, which side is wrong.
+
+**Method.** Drive the same three public seams `rgit diff` uses, per file:
+`resolve.Open` + `File.DeclExtents` for the declaration list,
+`resolve.Resolve` per anchor, `lsp.Session.Dial` +
+`Client.DocumentSymbols` for the server's outline, and
+`resolve.MatchAndCompare` for the verdict — with every disagreement logged
+instead of collapsed into a single exit code. One `lsp.Session` per
+language for the whole corpus (a `Session` caches a degraded language and
+will not redial it, matching `rgit`'s own behaviour), with a warm-up loop
+for `gopls`. Pseudo-anchors are skipped, as `CrossCheckExtents` skips them.
+Corpora: this repository's own `.go` tree for Go; one real Next.js
+application for TypeScript/TSX; the whole local multi-repo checkout for
+Shell, YAML, JSON, CSS, HTML, and Markdown, excluding `node_modules`,
+`.git`, `.next`, and (for JSON) lockfiles and files over 40 KB.
+
+| Grammar | Server | Files | Symbols compared | Agree | Disagree | Not named by server |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Go | `gopls` | 117 | 1591 | 1589 | 0 | 2 |
+| TypeScript | `vtsls` | 382 | 2821 | 2821 | 0 | 0 |
+| TSX | `vtsls` | 197 | 580 | 580 | 0 | 0 |
+| Shell | `bash-language-server` | 216 | 2058 | 2053 | 5 | 0 |
+| YAML | `yaml-language-server` | 418 | 8545 | 6349 | 2196 | 0 |
+| JSON | `vscode-json-language-server` | 300 | 11283 | 11283 | 0 | 0 |
+| CSS | `vscode-css-language-server` | 115 | 5754 | 4073 | 133 | 1548 |
+| HTML | `vscode-html-language-server` | 297 | 590 | 590 | 0 | 0 |
+| Markdown | `marksman` | 300 | 3274 | 0 | 0 | 3274 |
+| **Total** | | **2342** | **36496** | **29338** | **2334** | **4824** |
+
+Python is unmeasured: `pyright-langserver` is not installed, and it is the
+only server `internal/lsp` wires for that grammar.
+
+**Every one of the 2334 disagreements was traced to a side.** Three
+classes, none of which is "tree-sitter produced a wrong extent for a
+well-formed declaration":
+
+**1. Exclusive end position at column 0 — 1883 (81%), all YAML.** An LSP
+`Range` whose `End.Character` is `0` ends *before* that line; its last
+content line is `End.Line - 1`. `flattenTree`/`flattenFlat` copy
+`Range.End.Line` verbatim, so every such range reads one line too long.
+`yaml-language-server` ends every non-terminal block mapping this way, so
+the comparison reports `dEnd = +1` on 86% of its own disagreements. `gopls`
+never does — its ranges end on the closing brace, mid-line — which is why
+no fixture in the table above exposed it. Re-running the corpus with the
+correction applied resolves exactly these 1883 and nothing else. The
+tree-sitter extent is correct in every one; the defect is in the
+comparison's own line conversion.
+
+**2. Anchor-namespace divergence — 270 (12%): 132 YAML, 133 CSS, 5 Shell.**
+The server's symbol table is not the same set of declarations `rgit` names,
+so `matchLSPSymbol`'s name-first match and its Nth-same-name ordinal
+fallback align two *different* declarations and then compare their
+unrelated extents. `bash-language-server` reports every variable assignment
+(23 for one `FAIL` in one script) where the resolver names only the
+top-level ones (3), so `FAIL#2` compares against the server's second
+assignment, not the resolver's. `vscode-css-language-server` splits a
+selector group into one symbol per selector, so `body` matches the
+server's entry for `html, body, h1, …` rather than the standalone `body`
+rule. `yaml-language-server` sometimes emits the same symbol twice, which
+shifts every later ordinal by one. Neither side's extent is wrong in any of
+these; the two are describing different things under the same name. The
+ordinal fallback is the fragile part: it assumes the server's symbol list
+and the resolver's declaration list enumerate the same declarations in the
+same order, and no wired server guarantees that.
+
+**3. Genuine tree-sitter over-extension — 181 (8%), all YAML.** A
+`block_mapping_pair` node absorbs the blank line *and the entire comment
+block* that introduces the next sibling key, so a mapping's extent runs
+past its own last content line into a comment that documents something
+else. Measured worst case: a `concurrency:` key whose real content ends at
+one line claims 17 further lines of an unrelated `# TODO: code-signing`
+header. The server is right; tree-sitter is wrong; staging that anchor
+would carry the next key's documentation with it. This class is the only
+one where the cross-check catches what it was built to catch, and it is
+0.5% of all symbols compared.
+
+**Two wired grammars verify far less than the table above implies.**
+Markdown verifies *nothing*: `marksman` reports a heading's raw text
+(`Quick start`), while the resolver's anchor is its slug (`quick-start`),
+so `matchLSPSymbol` never matches and all 3274 headings degrade to
+`[ts-only]`. The single-lowercase-word fixture headings above are the only
+shape where the two spellings coincide. The reported *ranges* agree
+line-for-line wherever they can be paired by hand, so the gap is name
+normalization, not extents. CSS degrades on 27% of its symbols for the
+same category of reason: multi-selector rules (`html, body, h1, …`) and
+at-rules (`@theme`, `@layer base`, `@charset`) are anchors the server
+never names in that form.
+
+**What this settles.** The cross-check is load-bearing — it found a real
+extent bug in a shipped grammar that no fixture surfaced — so it stays. But
+its precision on real files is 8%: on the corpus above it would raise exit
+6 on 2153 correct extents to catch 181 wrong ones, and exit 6 is
+`commit`'s hard failure. That ratio is a property of the two normalization
+gaps in class 1 and class 2, both of which sit in the comparison rather
+than in the resolver, and both of which are fixable without touching a
+grammar. Until they are, YAML and CSS carry a false-positive rate high
+enough that the comparison costs more than it returns on those two
+grammars specifically; Go, TypeScript, TSX, JSON, and HTML are clean at
+16,865 symbols with zero disagreements of any kind.
+
 ## Commands
 
 `blame`, `log`, and `context` were each accepted against one question: does
