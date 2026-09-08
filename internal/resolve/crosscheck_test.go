@@ -150,7 +150,7 @@ func TestMatchAndCompare_FlatHTMLOrdinalClassSuffix(t *testing.T) {
 		{Name: "div#app.other", StartLine: 1, EndLine: 1},
 	}
 	second := []byte(`<div id="app" class="widget">` + "\n")
-	res := &Resolution{Anchor: "div#app#2", Sep: "#", Flat: true, DeclOnly: Extent{Start: uint(len(second)), End: uint(len(src) - 1)}}
+	res := &Resolution{Anchor: "div#app#2", Sep: "#", Flat: true, SameName: 2, DeclOnly: Extent{Start: uint(len(second)), End: uint(len(src) - 1)}}
 
 	found, err := MatchAndCompare(src, res, symbols)
 	if !found {
@@ -184,5 +184,104 @@ func TestMatchAndCompare_CorruptedOffsetFailsLoudly(t *testing.T) {
 	}
 	if _, ok := err.(*ResolveError); ok {
 		t.Errorf("err = %T (%v); want a plain error, not exitcode.ExtentMismatch's own -- this is not a real tree-sitter/language-server disagreement", err, err)
+	}
+}
+
+// TestMatchAndCompare_OrdinalRequiresAgreeingCounts pins the gate on the
+// ordinal fallback. An ordinal names the Nth declaration the resolver found,
+// so indexing the server's own list by it is only the same declaration when
+// both sides found the same number. A server that splits, adds, or repeats a
+// symbol shifts every later ordinal, and pairing across that shift reports a
+// disagreement between two unrelated declarations. Not naming the anchor at
+// all is the honest answer, and degrades to [ts-only].
+func TestMatchAndCompare_OrdinalRequiresAgreeingCounts(t *testing.T) {
+	t.Parallel()
+
+	src := []byte(`<div id="app" class="widget">` + "\n" + `<div id="app" class="other">` + "\n")
+	second := []byte(`<div id="app" class="widget">` + "\n")
+	decl := Extent{Start: uint(len(second)), End: uint(len(src) - 1)}
+
+	// The server reports three same-named symbols where the resolver found
+	// two, so its second is not the resolver's second.
+	symbols := []lsp.Symbol{
+		{Name: "div#app.widget", StartLine: 0, EndLine: 0},
+		{Name: "div#app.injected", StartLine: 0, EndLine: 0},
+		{Name: "div#app.other", StartLine: 1, EndLine: 1},
+	}
+
+	res := &Resolution{Anchor: "div#app#2", Sep: "#", Flat: true, SameName: 2, DeclOnly: decl}
+	found, err := MatchAndCompare(src, res, symbols)
+	if found {
+		t.Errorf("found = true (err %v); want false -- a shifted ordinal must not be compared", err)
+	}
+
+	// With the counts agreeing, the same anchor still resolves and agrees.
+	agreeing := []lsp.Symbol{
+		{Name: "div#app.widget", StartLine: 0, EndLine: 0},
+		{Name: "div#app.other", StartLine: 1, EndLine: 1},
+	}
+	found, err = MatchAndCompare(src, res, agreeing)
+	if !found || err != nil {
+		t.Errorf("found = %v, err = %v; want found with no disagreement", found, err)
+	}
+}
+
+// TestMatchAndCompare_SlugAnchorsMatchRawHeadingText pins the cross-check for
+// a language whose anchors are slugs of human-readable text. A server that
+// reports the heading verbatim names the same declaration under a different
+// spelling, so comparing the two literally never matches and every symbol in
+// the file degrades to [ts-only] while both sides agree on the extent.
+func TestMatchAndCompare_SlugAnchorsMatchRawHeadingText(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("# Quick start\n\nbody\n")
+	res := &Resolution{
+		Anchor:      "quick-start",
+		SlugAnchors: true,
+		SameName:    1,
+		DeclOnly:    Extent{Start: 0, End: uint(len(src) - 1)},
+	}
+	symbols := []lsp.Symbol{{Name: "Quick start", StartLine: 0, EndLine: 2}}
+
+	found, err := MatchAndCompare(src, res, symbols)
+	if !found {
+		t.Fatal("found = false; want true -- a slug anchor must match the heading it was derived from")
+	}
+	if err != nil {
+		t.Errorf("err = %v; want nil, both sides cover the same lines", err)
+	}
+
+	// Without the slug rule the same pair must not match, which is the
+	// degradation this exists to remove.
+	literal := &Resolution{Anchor: "quick-start", SameName: 1, DeclOnly: res.DeclOnly}
+	if found, _ := MatchAndCompare(src, literal, symbols); found {
+		t.Error("found = true for a literal comparison; want false")
+	}
+}
+
+// TestMatchAndCompare_ExtentEndIsExclusive pins the half-open extent contract
+// on rgit's own side of the comparison. An Extent is [Start, End), so the byte
+// at End belongs to whatever follows; for a construct that ends exactly on a
+// line boundary -- a YAML block mapping, a Markdown section -- that byte is the
+// first byte of the next sibling, one line down. Converting End directly
+// reports an extent one line longer than the one rgit stages and blames, and
+// blames the language server for the difference.
+func TestMatchAndCompare_ExtentEndIsExclusive(t *testing.T) {
+	t.Parallel()
+
+	// Two lines; the first "declaration" covers line 1 only, its extent
+	// ending at the first byte of line 2.
+	src := []byte("first\nsecond\n")
+	firstLineEnd := uint(len("first\n"))
+
+	res := &Resolution{Anchor: "first", SameName: 1, DeclOnly: Extent{Start: 0, End: firstLineEnd}}
+	symbols := []lsp.Symbol{{Name: "first", StartLine: 0, EndLine: 0}}
+
+	found, err := MatchAndCompare(src, res, symbols)
+	if !found {
+		t.Fatal("found = false; want true")
+	}
+	if err != nil {
+		t.Errorf("err = %v; want nil -- an extent ending at a line boundary covers the line above it", err)
 	}
 }

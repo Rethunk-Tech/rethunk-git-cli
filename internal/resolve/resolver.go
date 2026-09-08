@@ -48,6 +48,22 @@ type Resolution struct {
 	// real ancestor's name on top of that would produce a string HTML's own
 	// flat anchor space can never contain (crosscheck.go's matchLSPSymbol).
 	Flat bool
+
+	// SameName is how many declarations in the resolved file share this
+	// anchor's pre-ordinal name -- 1 when no ordinal was needed. An ordinal
+	// only selects the same declaration on both sides of the cross-check if
+	// the server reports the same number of same-named symbols the resolver
+	// found, so matchLSPSymbol compares the two counts before trusting it.
+	SameName int
+
+	// SlugAnchors mirrors the resolving language's own
+	// AllowsRawHeadingFallback: the anchor space is slugs derived from
+	// human-readable text, so a server reporting that text verbatim names
+	// the same declaration under a different spelling. matchLSPSymbol
+	// slugifies the server's side before comparing; without it every
+	// symbol in such a file degrades to [ts-only] despite the two sides
+	// agreeing on the extent.
+	SlugAnchors bool
 }
 
 // File is one source parsed once and held open, so a caller with several
@@ -96,7 +112,7 @@ func (f *File) Resolve(anchor string) (*Resolution, error) {
 		return nil, err
 	}
 	flat := f.lang.FlatContainer()
-	return &Resolution{Extent: sym.Full, DeclOnly: sym.DeclOnly, Anchor: sym.Qualified, Container: sym.Decl.Container, Sep: sym.Decl.Sep, Flat: flat}, nil
+	return &Resolution{Extent: sym.Full, DeclOnly: sym.DeclOnly, Anchor: sym.Qualified, Container: sym.Decl.Container, Sep: sym.Decl.Sep, Flat: flat, SameName: sym.SameName, SlugAnchors: f.lang.AllowsRawHeadingFallback()}, nil
 }
 
 // DeclOrder returns the anchor rgit emits for each declaration, in source

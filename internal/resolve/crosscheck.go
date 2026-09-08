@@ -119,13 +119,13 @@ func crossCheckVerdict(src []byte, list []*Resolution, symbols []lsp.Symbol) (de
 // CrossCheckExtents' doc on the fourth cross-check exemption); err is
 // non-nil only when a match was found and its range disagreed.
 func MatchAndCompare(src []byte, res *Resolution, symbols []lsp.Symbol) (found bool, err error) {
-	match, ok := matchLSPSymbol(res.Anchor, res.Sep, res.Flat, symbols)
+	match, ok := matchLSPSymbol(res.Anchor, res.Sep, res.Flat, res.SlugAnchors, res.SameName, symbols)
 	if !ok {
 		return false, nil
 	}
 
 	wantStart, startOK := lineOf(src, res.DeclOnly.Start)
-	wantEnd, endOK := lineOf(src, res.DeclOnly.End)
+	wantEnd, endOK := lineOf(src, lastOffset(res.DeclOnly))
 	if !startOK || !endOK {
 		// Not a real tree-sitter/language-server disagreement: res itself
 		// names an offset past the end of src, which every offset this
@@ -160,6 +160,19 @@ func MatchAndCompare(src []byte, res *Resolution, symbols []lsp.Symbol) (found b
 	}
 }
 
+// lastOffset is the offset of the final byte an extent covers. Extents are
+// half-open [Start, End), so the byte at End belongs to whatever follows --
+// for a YAML block mapping or a Markdown section that is the first byte of
+// the next sibling, one line further down. Converting End directly would
+// report an extent one line longer than the one rgit itself stages and
+// blames, which is what internal/app's lineRange already avoids the same way.
+func lastOffset(ext Extent) uint {
+	if ext.End > ext.Start {
+		return ext.End - 1
+	}
+	return ext.End
+}
+
 // lineOf converts a byte offset to a 0-based line number, matching LSP's
 // Position.Line convention directly so callers never juggle a 1-based/
 // 0-based mismatch across the comparison. ok=false means offset exceeds
@@ -190,7 +203,9 @@ func formatRange(start, end uint32) string {
 // output -- both report every overload/repeat under the identical bare
 // name -- so they fall back to matching the Nth same-named symbol in the
 // server's own reported order, which is source order for every grammar
-// rgit supports.
+// rgit supports. sameName gates that fallback: it is the resolver's own
+// count of declarations sharing the pre-ordinal name, and the Nth on each
+// side is the same declaration only when the two counts agree.
 // flat means res.Flat: the resolving language's own Container is not a real
 // ancestor (Language.FlatContainer, lang.go's own doc comment), so a
 // server-reported symbol's genuine containerName must never be joined onto
@@ -199,7 +214,7 @@ func formatRange(start, end uint32) string {
 // those server-only suffixes before comparing. qualifyLSPSymbol's join is for
 // every other language, where Container really is an ancestor a server also
 // reports as one.
-func matchLSPSymbol(anchor, sep string, flat bool, symbols []lsp.Symbol) (lsp.Symbol, bool) {
+func matchLSPSymbol(anchor, sep string, flat, slugAnchors bool, sameName int, symbols []lsp.Symbol) (lsp.Symbol, bool) {
 	bare, ordinal, hasOrdinal := ParseOrdinal(anchor)
 
 	var byBare []lsp.Symbol
@@ -215,12 +230,24 @@ func matchLSPSymbol(anchor, sep string, flat bool, symbols []lsp.Symbol) (lsp.Sy
 		if qualified == anchor {
 			return s, true
 		}
+		if slugAnchors && slugQualified(s, sep) == anchor {
+			return s, true
+		}
 		if hasOrdinal && (qualified == bare || s.Name == bare) {
 			byBare = append(byBare, s)
 		}
 	}
 
-	if hasOrdinal && ordinal <= len(byBare) {
+	// An ordinal names the Nth declaration the resolver found, so indexing
+	// the server's list by it only selects the same declaration when both
+	// sides found the same number. They routinely do not: a server may
+	// split one declaration into several symbols, report a construct the
+	// resolver does not treat as a declaration at all, or emit the same
+	// symbol twice -- each of which shifts every later ordinal and pairs
+	// two unrelated declarations, producing a disagreement in which neither
+	// side is wrong. Falling through to "the server does not name this
+	// anchor" degrades to [ts-only], which is the honest answer.
+	if hasOrdinal && len(byBare) == sameName && ordinal <= len(byBare) {
 		return byBare[ordinal-1], true
 	}
 	return lsp.Symbol{}, false
@@ -236,6 +263,17 @@ func matchLSPSymbol(anchor, sep string, flat bool, symbols []lsp.Symbol) (lsp.Sy
 // spelling ("(*A).Get") arrives with no containerName field at all, so
 // this is the one place a server-reported symbol's own name still needs
 // the same normalization anchor input already gets.
+// slugQualified is qualifyLSPSymbol for a language whose anchors are slugs
+// of human-readable text. Each part is slugified before the join, never the
+// joined string: the separator is not part of either name and slugify would
+// fold it into a hyphen.
+func slugQualified(s lsp.Symbol, sep string) string {
+	if s.Container == "" {
+		return slugify(s.Name)
+	}
+	return joinQualified(slugify(s.Container), slugify(s.Name), sep)
+}
+
 func qualifyLSPSymbol(s lsp.Symbol, sep string) string {
 	if s.Container == "" {
 		return normalizeAnchorInput(s.Name)

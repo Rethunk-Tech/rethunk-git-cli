@@ -126,6 +126,13 @@ type Symbol struct {
 	// with a sibling and there is no container to disambiguate with,
 	// otherwise the bare name unchanged.
 	Qualified string
+
+	// SameName is how many declarations in this file share Qualified's
+	// pre-ordinal name, so 1 for a name that needed no ordinal. The LSP
+	// cross-check compares it against the server's own count before
+	// trusting an ordinal to select the same declaration on both sides
+	// (crosscheck.go's matchLSPSymbol).
+	SameName int
 }
 
 // index resolves anchors against one parsed source: bare and qualified name
@@ -202,6 +209,7 @@ func assignQualifiedNames(syms []*Symbol) {
 	seen := map[string]int{}
 	for _, s := range syms {
 		name := containerQualified(s)
+		s.SameName = total[name]
 		if total[name] == 1 {
 			s.Qualified = name
 			continue
