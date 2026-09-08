@@ -35,3 +35,7 @@ func (defaultLanguage) ImportKinds() []string { return nil }
 // member to its enclosing container -- would chase whatever unrelated
 // element elsewhere happens to share the tag as its own id.
 func (defaultLanguage) FlatContainer() bool { return false }
+
+// GroupedAnchors is false for every language whose declaration names exactly
+// one thing; CSS overrides it for selector groups.
+func (defaultLanguage) GroupedAnchors() bool { return false }

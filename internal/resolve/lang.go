@@ -133,6 +133,14 @@ type Language interface {
 	// answers false; only an adapter whose Container is a formatting
 	// device rather than real containment overrides it.
 	FlatContainer() bool
+
+	// GroupedAnchors reports whether one declaration can carry several
+	// comma-separated names at once, any of which a language server may
+	// report as a symbol in its own right -- a CSS selector group is the
+	// one such shape. The names all denote the same declaration, so the
+	// cross-check pairs on any member (crosscheck.go's matchLSPSymbol).
+	// defaultLanguage answers false.
+	GroupedAnchors() bool
 }
 
 // StructuredDataLanguage marks a format `rgit commit`'s symbol-splice guard

@@ -119,13 +119,17 @@ func crossCheckVerdict(src []byte, list []*Resolution, symbols []lsp.Symbol) (de
 // CrossCheckExtents' doc on the fourth cross-check exemption); err is
 // non-nil only when a match was found and its range disagreed.
 func MatchAndCompare(src []byte, res *Resolution, symbols []lsp.Symbol) (found bool, err error) {
-	match, ok := matchLSPSymbol(res.Anchor, res.Sep, res.Flat, res.SlugAnchors, res.SameName, symbols)
+	match, ok := matchLSPSymbol(res.Anchor, res.Sep, res.Flat, res.SlugAnchors, res.GroupedAnchors, res.SameName, symbols)
 	if !ok {
 		return false, nil
 	}
 
+	end := lastOffset(res.DeclOnly)
+	if res.SlugAnchors {
+		end = lastContentOffset(src, res.DeclOnly.Start, end)
+	}
 	wantStart, startOK := lineOf(src, res.DeclOnly.Start)
-	wantEnd, endOK := lineOf(src, lastOffset(res.DeclOnly))
+	wantEnd, endOK := lineOf(src, end)
 	if !startOK || !endOK {
 		// Not a real tree-sitter/language-server disagreement: res itself
 		// names an offset past the end of src, which every offset this
@@ -173,6 +177,25 @@ func lastOffset(ext Extent) uint {
 	return ext.End
 }
 
+// lastContentOffset walks back from end over trailing whitespace, stopping at
+// start. A section in a prose format runs to the blank line before the next
+// heading, while a language server reports it ending at its last line of
+// actual content; both readings are defensible, so the blank tail is dropped
+// before comparing rather than reported as a disagreement neither side owns.
+func lastContentOffset(src []byte, start, end uint) uint {
+	if end >= uint(len(src)) {
+		return end
+	}
+	for end > start && isSpaceByte(src[end]) {
+		end--
+	}
+	return end
+}
+
+func isSpaceByte(b byte) bool {
+	return b == ' ' || b == '\t' || b == '\n' || b == '\r'
+}
+
 // lineOf converts a byte offset to a 0-based line number, matching LSP's
 // Position.Line convention directly so callers never juggle a 1-based/
 // 0-based mismatch across the comparison. ok=false means offset exceeds
@@ -214,7 +237,7 @@ func formatRange(start, end uint32) string {
 // those server-only suffixes before comparing. qualifyLSPSymbol's join is for
 // every other language, where Container really is an ancestor a server also
 // reports as one.
-func matchLSPSymbol(anchor, sep string, flat, slugAnchors bool, sameName int, symbols []lsp.Symbol) (lsp.Symbol, bool) {
+func matchLSPSymbol(anchor, sep string, flat, slugAnchors, groupedAnchors bool, sameName int, symbols []lsp.Symbol) (lsp.Symbol, bool) {
 	bare, ordinal, hasOrdinal := ParseOrdinal(anchor)
 
 	var byBare []lsp.Symbol
@@ -231,6 +254,9 @@ func matchLSPSymbol(anchor, sep string, flat, slugAnchors bool, sameName int, sy
 			return s, true
 		}
 		if slugAnchors && slugQualified(s, sep) == anchor {
+			return s, true
+		}
+		if groupedAnchors && anchorNamesGroupMember(anchor, qualified) {
 			return s, true
 		}
 		if hasOrdinal && (qualified == bare || s.Name == bare) {
@@ -263,6 +289,25 @@ func matchLSPSymbol(anchor, sep string, flat, slugAnchors bool, sameName int, sy
 // spelling ("(*A).Get") arrives with no containerName field at all, so
 // this is the one place a server-reported symbol's own name still needs
 // the same normalization anchor input already gets.
+// anchorNamesGroupMember reports whether qualified is one of the
+// comma-separated names anchor carries. A CSS rule is anchored by its whole
+// selector list while the server reports one symbol per selector, each with
+// that same rule's range, so any member identifies the same declaration.
+//
+// The members are compared whole, never by prefix: ".button" must not match
+// ".button-primary" simply because one string contains the other.
+func anchorNamesGroupMember(anchor, qualified string) bool {
+	if !strings.Contains(anchor, ",") {
+		return false
+	}
+	for member := range strings.SplitSeq(anchor, ",") {
+		if strings.TrimSpace(member) == qualified {
+			return true
+		}
+	}
+	return false
+}
+
 // slugQualified is qualifyLSPSymbol for a language whose anchors are slugs
 // of human-readable text. Each part is slugified before the join, never the
 // joined string: the separator is not part of either name and slugify would

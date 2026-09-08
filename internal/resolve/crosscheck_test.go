@@ -285,3 +285,66 @@ func TestMatchAndCompare_ExtentEndIsExclusive(t *testing.T) {
 		t.Errorf("err = %v; want nil -- an extent ending at a line boundary covers the line above it", err)
 	}
 }
+
+// TestMatchAndCompare_GroupedAnchorMatchesAnyMember pins the selector-group
+// pairing. One CSS rule is anchored by its whole selector list while the
+// server reports one symbol per selector, each carrying that rule's identical
+// range, so pairing on any member describes the same declaration. Members are
+// compared whole: a prefix must never match.
+func TestMatchAndCompare_GroupedAnchorMatchesAnyMember(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("html, body, h1 {\n  margin: 0;\n}\n")
+	res := &Resolution{
+		Anchor:         "html, body, h1",
+		GroupedAnchors: true,
+		SameName:       1,
+		DeclOnly:       Extent{Start: 0, End: uint(len(src))},
+	}
+
+	// The server names only one member of the group.
+	found, err := MatchAndCompare(src, res, []lsp.Symbol{{Name: "body", StartLine: 0, EndLine: 2}})
+	if !found {
+		t.Fatal("found = false; want true -- any member of the group names the rule")
+	}
+	if err != nil {
+		t.Errorf("err = %v; want nil", err)
+	}
+
+	// A selector that merely shares a prefix with a member is not a member.
+	if found, _ := MatchAndCompare(src, res, []lsp.Symbol{{Name: "bod", StartLine: 0, EndLine: 2}}); found {
+		t.Error("found = true for a prefix of a member; want false")
+	}
+
+	// Without the grouped rule the same pair must not match.
+	plain := &Resolution{Anchor: "html, body, h1", SameName: 1, DeclOnly: res.DeclOnly}
+	if found, _ := MatchAndCompare(src, plain, []lsp.Symbol{{Name: "body", StartLine: 0, EndLine: 2}}); found {
+		t.Error("found = true without GroupedAnchors; want false")
+	}
+}
+
+// TestMatchAndCompare_SlugAnchorDropsTrailingBlankLines pins the other half of
+// the slug-anchor normalization. A prose section runs to the blank line before
+// the next heading while a server reports it ending at its last line of real
+// content; neither reading is wrong, so the blank tail is not a disagreement.
+func TestMatchAndCompare_SlugAnchorDropsTrailingBlankLines(t *testing.T) {
+	t.Parallel()
+
+	// Section covers lines 1-3, with line 3 blank; the server says 1-2.
+	src := []byte("# Title\nbody\n\n# Next\n")
+	sectionEnd := uint(len("# Title\nbody\n\n"))
+	res := &Resolution{
+		Anchor:      "title",
+		SlugAnchors: true,
+		SameName:    1,
+		DeclOnly:    Extent{Start: 0, End: sectionEnd},
+	}
+
+	found, err := MatchAndCompare(src, res, []lsp.Symbol{{Name: "Title", StartLine: 0, EndLine: 1}})
+	if !found {
+		t.Fatal("found = false; want true")
+	}
+	if err != nil {
+		t.Errorf("err = %v; want nil -- a trailing blank line is not a disagreement", err)
+	}
+}

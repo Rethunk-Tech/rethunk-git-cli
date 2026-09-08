@@ -61,6 +61,12 @@ func (c *cssLanguage) OwnsTrailingSeparator() bool { return false }
 // keeping whatever blank line the author would have written by hand.
 func (c *cssLanguage) MembersSitFlush() bool { return false }
 
+// GroupedAnchors is true: a rule_set's own anchor is its whole selector list
+// ("html, body, h1"), while vscode-css-language-server reports one symbol per
+// selector in that list, each carrying the rule's identical range. Pairing on
+// any member is what lets the two describe the same rule.
+func (c *cssLanguage) GroupedAnchors() bool { return true }
+
 // AllowsRawHeadingFallback is inherited from defaultLanguage: CSS has no
 // heading concept for the fallback to apply to.
 
