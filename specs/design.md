@@ -1478,13 +1478,13 @@ runs it to L63, through commented-out entries and the header introducing
 the next key — the same absorption this side removes. `ingress` and `cost`
 differ the same way, by eight lines and by one.
 
-The count that grew is `Not named`, and that is the intended price. Those
-symbols were previously paired on a name the server reports more than once,
-which is a guess, and a guess that happens to be right still teaches the
+`Not named` is the largest column here, and that is the intended price. A
+name the server reports more than once identifies no single declaration, so
+pairing on it is a guess — and a guess that lands right still teaches the
 comparison to trust guesses. Shell shows the shape plainly:
-`bash-language-server` reports every assignment of a variable, so anchors
-that used to agree with whichever it listed first are now honestly
-unverified.
+`bash-language-server` reports every assignment of a variable, where the
+resolver names only the top-level ones, so those anchors are honestly
+unverified rather than accidentally right.
 
 
 ## Commands

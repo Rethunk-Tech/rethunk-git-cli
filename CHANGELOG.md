@@ -6,6 +6,8 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-09-08
+
 ### Removed
 
 - `rgit-install -with-servers`. Installing a language server is one command
@@ -14,6 +16,63 @@ Notable changes to `rgit`. The format follows
   to run those same commands from a catalog that duplicated
   `internal/lsp/servers.go`. That catalog is now single: `internal/lsp` is
   the only list of servers `rgit` knows about.
+
+### Changed
+
+- Building from source needs **Go 1.27+**. See
+  [`docs/INSTALL.md`](docs/INSTALL.md#prerequisites).
+
+- The LSP handshake announces the workspace through `workspaceFolders` and
+  the matching client capability, rather than the `rootUri` the protocol
+  deprecates in its favour. Servers that read only `rootUri` would see no
+  workspace; every server `internal/lsp` wires reads `workspaceFolders`.
+
+- The cross-check declines to compare an anchor the server names ambiguously
+  instead of pairing it with whichever declaration the server listed first.
+  Affected anchors report `[ts-only]` rather than a comparison, so exit 6
+  fires on fewer extents and the ones it does fire on are real. See
+  [`docs/CODES.md`](docs/CODES.md#a-missing-cross-check-is-never-a-failure).
+
+### Fixed
+
+- `rgit symbols` read files outside the repository: a path climbing above the
+  root was resolved and listed rather than refused, where `diff` and `blame`
+  refused the same path. It now exits 129 like they do. See
+  [`docs/CODES.md`](docs/CODES.md#exit-codes).
+
+- `rgit blame --follow-rename` and `rgit log --follow-rename` stopped at the
+  rename boundary with exit 9 for a file whose language comes from its
+  shebang. The pre-rename name of an extensionless script has no extension to
+  key on, and only the extension was consulted. See
+  [`docs/ANCHORS.md`](docs/ANCHORS.md#language-support).
+
+- `rgit diff` failed the whole report when an untracked file disappeared
+  between being listed and being read; it now warns and skips that path, the
+  way the same race is already handled when previewing counts.
+
+- A refusal naming a gated grammar now says so wherever it happens. `rgit
+  symbols` on a `.sql` file in a build without `-tags rgit_sql` gave a bare
+  unsupported-language message while `commit` named the tag and the rebuild.
+  See [`docs/INSTALL.md`](docs/INSTALL.md#sql-support).
+
+- The LSP cross-check compared extents on four wrong bases, each of which
+  reported a disagreement where none existed: a `Range` ending at column 0
+  read one line too long, a half-open `Extent` end read as inclusive, a
+  mapping's trailing comments left in the compared extent, and an ordinal
+  pairing declarations the two sides had enumerated differently. Measured
+  over 1063 files across nine grammars, disagreements fall from 2334 to 27,
+  and the ones left are a server naming a construct differently rather than
+  an extent either side got wrong. See
+  [`specs/design.md`](specs/design.md).
+
+- A YAML mapping at the end of a file claimed the comment block closing that
+  file. Both the staged extent and the range `blame` and `log` bound
+  themselves to included lines belonging to no declaration.
+
+- Markdown and CSS anchors are cross-checked at all. A heading's slug never
+  matched the server's raw heading text, and a rule's selector list never
+  matched the per-selector symbols a server reports for it, so every such
+  anchor degraded to `[ts-only]` while both sides agreed on the extent.
 
 ## [1.4.0] — 2026-08-19
 

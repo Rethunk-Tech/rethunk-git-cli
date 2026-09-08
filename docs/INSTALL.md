@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- **Go 1.26+** with cgo enabled — the tree-sitter grammars are C.
+- **Go 1.27+** with cgo enabled — the tree-sitter grammars are C.
 - **git 2.32+** on `PATH`. `rgit` shells out to it for everything git already
   does; 2.32 is the newest behaviour any code path relies on (`git commit
   --trailer`, `internal/gitx.go`). `rgit doctor` checks the resolved
@@ -267,7 +267,7 @@ On Windows/amd64, `scripts/install.ps1` provides the equivalent
 release-download and checksum-verification path:
 
 ```powershell
-$env:VERSION = 'v1.2.0'  # optional on a real install; defaults to latest
+$env:VERSION = 'v2.0.0'  # optional on a real install; defaults to latest
 .\scripts\install.ps1
 ```
 
@@ -278,7 +278,7 @@ source when `cosign` is available. It requires an explicit `VERSION` tag —
 there is no latest-tag lookup on that path:
 
 ```powershell
-$env:VERSION = 'v1.2.0'
+$env:VERSION = 'v2.0.0'
 .\scripts\install.ps1 -DryRun
 ```
 
@@ -311,7 +311,7 @@ Without `cosign`, both installers retain their SHA256-only paths. `--dry-run`
 and `-DryRun` exit before any download, so neither fetches the signature bundle.
 
 `PREFIX` (default `$HOME/.local/bin`) and `VERSION` (default `latest`) are
-environment variables, not flags — `VERSION=v1.2.0 PREFIX=/usr/local/bin sh
+environment variables, not flags — `VERSION=v2.0.0 PREFIX=/usr/local/bin sh
 install.sh` installs that exact tag system-wide. `--dry-run` prints the plan
 (download URL, checksum source, install path) without touching the network
 at all, which is what CI runs to lint the script's own control flow on every

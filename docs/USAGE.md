@@ -393,9 +393,9 @@ is a usage error, not a help request — see § Exit codes.
 
 ```console
 $ rgit --version
-rgit v1.3.0
+rgit v2.0.0
 optional grammars: sql
-built with go1.26.6, linux/amd64
+built with go1.27.1, linux/amd64
 ```
 
 The version is stamped at build time (`-ldflags "-X main.version=vX.Y.Z"`),
