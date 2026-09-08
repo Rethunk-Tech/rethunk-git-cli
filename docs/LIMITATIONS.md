@@ -6,14 +6,13 @@ throughout: name the path instead of a symbol anchor.
 ## Unsupported languages
 
 Any language with no tree-sitter grammar in this binary refuses a symbol
-anchor with exit 9 — Rust, C, and C++ are common examples with none.
-Run `rgit languages` (or `rgit doctor`) for the exact list the running
-binary supports; it drifts as grammars are added, which is why this file
-doesn't restate it. Rust, C, and C++ stay unsupported on the same demand
-survey that ordered every shipped grammar: no repository surveyed
-contained any ([`../specs/design.md`](../specs/design.md#grammar-scope));
-config and data files in those ecosystems still stage by path in the
-meantime.
+anchor with exit 9. Run `rgit languages` (or `rgit doctor`) for the exact
+list the running binary supports; it drifts as grammars are added, which is
+why this file doesn't restate it. Rust, C, and C++ are the common examples
+with none, and stay unsupported on the same demand survey that ordered every
+shipped grammar: no repository surveyed contained any
+([`../specs/design.md`](../specs/design.md#grammar-scope)); config and data
+files in those ecosystems still stage by path in the meantime.
 
 Two exclusions inside otherwise-supported languages are deliberate, not gaps
 waiting to close:
@@ -80,9 +79,8 @@ Full anchor and qualification rules: [`ANCHORS.md`](ANCHORS.md).
   `make cross`'s own zig-based matrix stays linux/windows only. They are
   still built and published: the release workflow runs `make cross-darwin`
   natively on a `macos-latest` GitHub-hosted runner, a separate job from
-  the cross-compiled linux/windows one. `scripts/install.sh` downloads and
-  verifies the matching artifact on a Mac; `scripts/install.ps1` does the
-  same for Windows/amd64. Detail:
+  the cross-compiled linux/windows one, and `scripts/install.sh` downloads
+  and verifies the matching artifact on a Mac. Detail:
   [`INSTALL.md`](INSTALL.md#cross-builds).
 - **SQL ships only behind the `rgit_sql` build tag.** A plain build works
   identically without it; a `.sql` anchor then exits 9 like any other
@@ -109,7 +107,7 @@ the anchor refusal, on each of the two kinds.
 An **unmerged path** likewise refuses a symbol anchor with exit 10
 (`SpecialPathRefused`) in `commit`. Name the path instead so Git can stage the
 conflict entries and their conflict-marker content without rgit attempting a
-symbol splice. Pathspec targets remain delegated to `git add`.
+symbol splice.
 
 **An uninitialized submodule refuses the identical anchor the same way** —
 `git submodule deinit` leaves the directory in place, emptied of its own
@@ -124,8 +122,8 @@ different treatment.
 **A sparse-checkout-excluded path** is handled by Git's skip-worktree bit.
 The default diff scope is a real `git diff --numstat`
 (`internal/gitx.DiffNumstat`), and git itself never reports a skip-worktree
-path as changed, so it never reaches `rgit`'s own attribution at all in the
-ordinary case. An explicit `FILE:SYMBOL` anchor on a path marked
+path as changed, so in the ordinary case it never reaches `rgit`'s own
+attribution. An explicit `FILE:SYMBOL` anchor on a path marked
 skip-worktree refuses with exit 10 before blob synthesis; the bit is left
 unchanged. The same refusal applies to an assume-unchanged path, in `commit`.
 A pathspec target still reaches real `git add`, which handles Git's own
@@ -138,10 +136,8 @@ A **rename** staged by symbol anchor is not detected as one: `HEAD` simply
 has no blob at the new path, so an anchor into it stages as an ordinary new
 file, and git's own tree diff is what notices the rename after the fact
 (rename at full similarity in `git status`/`git diff`, the same as any rename
-staged by hand).
-There is nothing `rgit`-specific to get wrong here — renames staged by
-pathspec go through `git add` unmodified, proven by
-`TestStage_RenameStagedAsTwoPathsYieldsR100`.
+staged by hand). Renames staged by pathspec go through `git add` unmodified,
+proven by `TestStage_RenameStagedAsTwoPathsYieldsR100`.
 
 Every synthesized blob is written via `git hash-object -w --path <path>`
 (`internal/gitx.HashObject`), never with `--path` omitted — the function
