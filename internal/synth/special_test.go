@@ -232,9 +232,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 
 func TestStage_RefusesUnmergedSymbol(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
-	gittest.Write(t, dir, "conflict.go", "package p\n\nfunc Keep() {}\n")
-	gittest.Commit(t, dir, "chore: add conflict fixture")
+	dir, repo := gittest.RepoWithFile(t, "conflict.go", "package p\n\nfunc Keep() {}\n", "chore: add conflict fixture")
 
 	blob := strings.TrimSpace(gittest.Git(t, dir, "rev-parse", "HEAD:conflict.go"))
 	gittest.Unmerged(t, dir, blob, "conflict.go")
