@@ -92,19 +92,29 @@ func NewClient(handshakeCtx context.Context, rwc io.ReadWriteCloser, root string
 	// DocumentSymbols call too.
 	_, conn, server := protocol.NewClient(context.Background(), configClient{}, stream)
 
-	rootURI := uri.File(root)
 	pid := int32(os.Getpid())
-	if _, err := server.Initialize(handshakeCtx, &protocol.InitializeParams{
+	// The workspace is announced through workspaceFolders, not the rootUri
+	// the LSP spec deprecates in its favour. The two are not interchangeable
+	// on the wire: a server only reads workspaceFolders if the client says it
+	// supports them, so the capability below is what makes the folder visible
+	// at all rather than a redundant declaration of it.
+	params := &protocol.InitializeParams{
 		ProcessID: &pid,
-		RootURI:   &rootURI,
 		Capabilities: protocol.ClientCapabilities{
+			Workspace: &protocol.WorkspaceClientCapabilities{
+				WorkspaceFolders: new(true),
+			},
 			TextDocument: &protocol.TextDocumentClientCapabilities{
 				DocumentSymbol: &protocol.DocumentSymbolClientCapabilities{
 					HierarchicalDocumentSymbolSupport: new(true),
 				},
 			},
 		},
-	}); err != nil {
+	}
+	params.WorkspaceFolders = protocol.NewNullable([]protocol.WorkspaceFolder{
+		{URI: uri.File(root), Name: filepath.Base(root)},
+	})
+	if _, err := server.Initialize(handshakeCtx, params); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("lsp: initialize: %w", err)
 	}

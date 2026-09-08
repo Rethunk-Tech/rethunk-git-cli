@@ -20,28 +20,6 @@ linters:
         - fmt.Fprint
         - fmt.Fprintf
         - fmt.Fprintln
-  exclusions:
-    rules:
-      # SA1019 on InitializeParams.RootURI, which staticcheck reports as
-      # deprecated "in favour of workspaceFolders". There is nothing to move
-      # to: go.lsp.dev/protocol v1.0.1 is the latest published version, and
-      # its InitializeParams carries no WorkspaceFolders field at all. The
-      # LSP spec composes InitializeParams as _InitializeParams &
-      # WorkspaceFoldersInitializeParams; this library generated the second
-      # struct (workspace_features.gen.go) and never embedded it.
-      #
-      # Dropping the field is not the alternative it looks like. RootURI is
-      # `json:"rootUri"` with no omitzero, so a nil value serializes as null
-      # -- "no folder is open" -- which drops gopls, pyright and vtsls into
-      # single-file mode and silently costs the cross-check its workspace.
-      #
-      # Scoped to the one call site, and temporary: the upstream fix is to
-      # embed the struct the spec already pairs it with, after which rgit
-      # sends workspaceFolders and this exclusion goes away.
-      - path: internal/lsp/client\.go
-        linters:
-          - staticcheck
-        text: SA1019
 
 issues:
   # Report every occurrence. golangci-lint otherwise caps repeats of one
