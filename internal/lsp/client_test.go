@@ -271,3 +271,41 @@ func TestDocumentSymbols_SendsDidClose(t *testing.T) {
 		t.Errorf("didClose uri = %q; want %q", observer.closedURI, wantURI)
 	}
 }
+
+// TestFlattenTreatsRangeEndAsExclusive pins the LSP range contract for both
+// shapes a server may answer documentSymbol in. A range ending at character 0
+// stops before that line, so the last line it covers is the one above; a range
+// ending mid-line covers the line it ends on. Getting this wrong blames a
+// correct tree-sitter extent for every symbol a column-0-ending server reports.
+func TestFlattenTreatsRangeEndAsExclusive(t *testing.T) {
+	rng := func(startLine, endLine, endChar uint32) protocol.Range {
+		return protocol.Range{
+			Start: protocol.Position{Line: startLine, Character: 0},
+			End:   protocol.Position{Line: endLine, Character: endChar},
+		}
+	}
+
+	for _, tc := range []struct {
+		name    string
+		r       protocol.Range
+		wantEnd uint32
+	}{
+		{"ends at column 0 of a later line", rng(4, 9, 0), 8},
+		{"ends mid-line", rng(4, 9, 1), 9},
+		{"single line ending at column 0 keeps its line", rng(4, 4, 0), 4},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tree := flattenTree([]protocol.DocumentSymbol{{Name: "S", Range: tc.r}}, "")
+			if len(tree) != 1 || tree[0].EndLine != tc.wantEnd {
+				t.Errorf("flattenTree EndLine = %v, want %d", tree, tc.wantEnd)
+			}
+
+			flat := flattenFlat([]protocol.SymbolInformation{
+				{Name: "S", Location: protocol.Location{Range: tc.r}},
+			})
+			if len(flat) != 1 || flat[0].EndLine != tc.wantEnd {
+				t.Errorf("flattenFlat EndLine = %v, want %d", flat, tc.wantEnd)
+			}
+		})
+	}
+}

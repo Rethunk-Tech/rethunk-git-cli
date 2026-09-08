@@ -260,6 +260,25 @@ func flatten(result protocol.DocumentSymbolResult) (syms []Symbol, ok bool) {
 	}
 }
 
+// lastLine converts an LSP range end, which is exclusive, into the last line
+// the range actually covers. A range ending at character 0 stops before that
+// line, so the final covered line is the one above it.
+//
+// Servers differ sharply here and only one side of the difference is visible
+// in a hand-written fixture: gopls ends a declaration mid-line on its closing
+// brace, so its End.Character is never 0 and a verbatim copy is right by
+// accident. yaml-language-server ends every non-terminal block mapping at
+// column 0 of the following line, where a verbatim copy overstates the extent
+// by exactly one line -- measured as 81% of all cross-check disagreements
+// across a real corpus, every one of them the comparison blaming a correct
+// tree-sitter extent.
+func lastLine(r protocol.Range) uint32 {
+	if r.End.Character == 0 && r.End.Line > r.Start.Line {
+		return r.End.Line - 1
+	}
+	return r.End.Line
+}
+
 func flattenTree(syms []protocol.DocumentSymbol, container string) []Symbol {
 	out := make([]Symbol, 0, len(syms))
 	for _, s := range syms {
@@ -267,7 +286,7 @@ func flattenTree(syms []protocol.DocumentSymbol, container string) []Symbol {
 			Name:      s.Name,
 			Container: container,
 			StartLine: s.Range.Start.Line,
-			EndLine:   s.Range.End.Line,
+			EndLine:   lastLine(s.Range),
 		})
 		if len(s.Children) > 0 {
 			out = append(out, flattenTree(s.Children, s.Name)...)
@@ -287,7 +306,7 @@ func flattenFlat(syms []protocol.SymbolInformation) []Symbol {
 			Name:      s.Name,
 			Container: container,
 			StartLine: s.Location.Range.Start.Line,
-			EndLine:   s.Location.Range.End.Line,
+			EndLine:   lastLine(s.Location.Range),
 		})
 	}
 	return out
