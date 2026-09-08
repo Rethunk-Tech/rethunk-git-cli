@@ -149,13 +149,6 @@ type ServerInfo struct {
 	// sorted. More than one language can share a server -- "typescript"
 	// and "tsx" both dial vtsls.
 	Languages []string
-	// SpawnArgs is the static argv Dial spawns Bin with for a
-	// transportStdio server (nil for transportSocket -- gopls's sockPath
-	// is only known at spawn time, in daemonArgs, so there is no static
-	// argv to compare). cmd/rgit-install/servers_test.go's
-	// TestServerCatalog_MatchesLSPServers pins this beside each install
-	// row, so spawn argv cannot drift from what a user installs.
-	SpawnArgs []string
 }
 
 // Servers returns one ServerInfo per distinct binary in the package-level
@@ -171,11 +164,7 @@ func Servers() []ServerInfo {
 	out := make([]ServerInfo, 0, len(byBin))
 	for bin, langs := range byBin {
 		slices.Sort(langs)
-		info := ServerInfo{Bin: bin, Languages: langs}
-		if spec := specByBin[bin]; spec.transport == transportStdio {
-			info.SpawnArgs = append([]string(nil), spec.stdioArgs...)
-		}
-		out = append(out, info)
+		out = append(out, ServerInfo{Bin: bin, Languages: langs})
 	}
 	slices.SortFunc(out, func(a, b ServerInfo) int { return strings.Compare(a.Bin, b.Bin) })
 	return out

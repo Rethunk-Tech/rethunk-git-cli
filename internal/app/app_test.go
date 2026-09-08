@@ -55,12 +55,12 @@ func chdirTempRepo(t *testing.T) string {
 }
 
 // writeAppFile is a thin wrapper over gittest.Write, kept rather than
-// calling gittest.Write directly at its ~49 call sites across this package
-// for the same reason gitOut wraps gittest.Git below it: every test in
-// this package reaches the temp repo through an "App"-local name, so a
-// future change to what a package-level fixture call looks like here (a
-// second argument, a different return shape) is one signature to edit,
-// not every call site in every file in this package.
+// calling gittest.Write directly at its many call sites across this package
+// for the same reason gitOut wraps gittest.Git below it: both take a
+// variadic or positional shape this package leans on heavily, so a change
+// to either signature is one edit here rather than one per call site.
+// Fixtures with a fixed shape -- gittest.Commit, gittest.RepoWithFile --
+// are called directly; wrapping them would buy nothing.
 func writeAppFile(t *testing.T, dir, rel, content string) {
 	t.Helper()
 	gittest.Write(t, dir, rel, content)

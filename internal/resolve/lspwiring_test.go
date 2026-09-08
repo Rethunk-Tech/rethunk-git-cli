@@ -6,17 +6,14 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
 )
 
-// TestServerLanguages_HaveLanguageKindMapping guards a seam
-// TestServerCatalog_MatchesLSPServers (cmd/rgit-install) does not: a
-// language's LSP wiring is encoded in four places (AGENTS.md's delegation
-// boundary) -- an adapter here in internal/resolve, internal/lsp/servers.go's
-// servers map (keyed by Language.Name()), internal/lsp/client.go's
-// LanguageKindFor (keyed by file extension), and cmd/rgit-install/servers.go.
-// TestServerCatalog_MatchesLSPServers already guards install <-> lsp.Servers();
-// this test asserts every servers-map language also has a working didOpen
-// languageId, so a newly added server entry with no matching
-// LanguageKindFor case fails here instead of degrading silently at runtime
-// (client.go's DocumentSymbols).
+// TestServerLanguages_HaveLanguageKindMapping guards the seam between two of
+// the three places a language's LSP wiring is encoded (AGENTS.md's delegation
+// boundary): an adapter here in internal/resolve, internal/lsp/servers.go's
+// servers map (keyed by Language.Name()), and internal/lsp/client.go's
+// LanguageKindFor (keyed by file extension). This test asserts every
+// servers-map language also has a working didOpen languageId, so a newly
+// added server entry with no matching LanguageKindFor case fails here
+// instead of degrading silently at runtime (client.go's DocumentSymbols).
 //
 // This lives in package resolve, not lsp, because it needs Languages()'s own
 // name -> extensions table as the source of which extensions to try per

@@ -198,10 +198,9 @@ first invocation. The transport survey behind this split is in
 [`specs/design.md`](../specs/design.md#transport-support-per-server).
 
 **TOML and SQL stay `[ts-only]` permanently** — see
-[`LIMITATIONS.md`](LIMITATIONS.md#language-server-coverage) for why. `taplo`
-still completes the LSP handshake once built with `--features lsp`, and
-other tooling can use it; it just never drives
-`rgit`'s own cross-check. HTML is wired; void elements still need a
+[`LIMITATIONS.md`](LIMITATIONS.md#language-server-coverage) for why. `rgit`
+never dials a server for either, so neither has a row in the table above.
+HTML is wired; void elements still need a
 `declOnlyEndTrimmer` seam (same section), not a class-suffix mismatch.
 
 ## Environment variables
