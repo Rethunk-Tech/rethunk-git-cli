@@ -17,7 +17,7 @@ import (
 // appear and name the identical path at two revisions -- "rgit diff
 // A:f.go B:f.go", the one shape with a single file for rgit diff to group
 // symbol rows under. Comparing two arbitrary, differently-named blobs is
-// valid git diff syntax (specs/design.md) but has no such file to report
+// valid git diff syntax but has no such file to report
 // against, and a lone rev:path (no partner to pair with) is exactly as
 // unaddressable as it always was.
 func BucketClassified(classified []cli.Classification) (revisions, files []string, syms []SymRef, revPaths []cli.RevPath, err error) {

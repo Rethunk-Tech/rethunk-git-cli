@@ -196,7 +196,7 @@ func parallelFileReports(n int, build func(i int) (*FileReport, []string, bool, 
 // numstat total under StatusNoSymbols; everything else parses each side
 // exactly once and goes through crossCheckFile and attributeSymbolsOpen,
 // sharing that one parse of newSrc between them instead of each opening
-// its own -- specs/design.md § Blob synthesis' held-parse gain, applied
+// its own -- the held-parse gain, applied
 // here the same way internal/synth already holds one *resolve.File per
 // side across every anchor it resolves.
 //
@@ -609,7 +609,7 @@ func sortReport(report *Report) {
 // against a live language server, in one query. It returns messages, never
 // an error: rgit diff is a read-only report, and a server that is absent,
 // slow or simply silent about a symbol is the normal case the whole
-// resolution model is built to tolerate (specs/design.md).
+// resolution model is built to tolerate.
 //
 // f is newSrc already parsed by buildFileReport's own call to resolve.Open
 // -- this function does not open its own; a parse failure is buildFileReport's

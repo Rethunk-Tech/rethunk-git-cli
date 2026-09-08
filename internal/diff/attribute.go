@@ -288,12 +288,12 @@ func indexRegions(regions []region) map[string]resolve.Extent {
 // plus an (unanchorable) remainder, taking each side's already-parsed file
 // rather than opening its own: buildFileReport (run.go) parses newSrc once
 // for the LSP cross-check, and reusing that *resolve.File is this package's
-// share of the held-parse gain specs/design.md § Blob synthesis measures
-// for internal/synth (~39x, one parse per side instead of one per anchor).
+// share of the held-parse gain measured for internal/synth (~39x, one
+// parse per side instead of one per anchor).
 //
 // Each named region that exists on both sides gets an isolated line diff of
 // just its own extent (go-udiff, in process — no fork/exec per anchor,
-// specs/design.md's dependency justification for it). A region that exists
+// which is why that dependency is carried). A region that exists
 // on only one side is a pure addition or deletion of that whole extent, so
 // its count is a plain line count, no diff needed.
 //

@@ -13,9 +13,9 @@ import (
 )
 
 // buildLargeGoClassFixture generates a Go file with a 200-method struct,
-// changing every method's return value on the "new" side -- the same shape
-// specs/design.md § Blob synthesis measured the held-parse gain against
-// (0.78s re-parsing per declaration vs 0.02s held open, ~39x).
+// changing every method's return value on the "new" side -- the shape the
+// held-parse gain was measured against (0.78s re-parsing per declaration
+// vs 0.02s held open, ~39x).
 func buildLargeGoClassFixture(members int) (oldSrc, newSrc []byte) {
 	var oldBuf, newBuf strings.Builder
 	oldBuf.WriteString("package p\n\ntype Big struct{}\n\n")
@@ -28,7 +28,7 @@ func buildLargeGoClassFixture(members int) (oldSrc, newSrc []byte) {
 }
 
 // BenchmarkAttribution_200MemberClass is the regression gate for the
-// held-parse gain specs/design.md § Blob synthesis measures: attributeSymbols
+// held-parse gain buildLargeGoClassFixture measures: attributeSymbols
 // (and everything it calls -- resolveRegions, exclusiveText, isolatedDiff)
 // must keep doing one parse per side, not one per declaration. There is no
 // re-parsing code path left to compare against directly -- attributeSymbolsOpen
@@ -54,8 +54,8 @@ func BenchmarkAttribution_200MemberClass(b *testing.B) {
 
 // buildCrossCheckFixture commits n Python and n TypeScript files (2n total,
 // no daemon for either language -- pyright-langserver and vtsls are both
-// one-shot-per-query stdio servers, specs/design.md § Transport support per
-// server), then edits every one of them, so Run's own cross-check has 2n
+// one-shot-per-query stdio servers), then edits every one of them, so
+// Run's own cross-check has 2n
 // independent LSP round trips to make.
 func buildCrossCheckFixture(b *testing.B, n int) (dir string, repo *gitx.Repo) {
 	b.Helper()
