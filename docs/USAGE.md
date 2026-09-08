@@ -347,17 +347,16 @@ fixed rather than growing one. Seven record types, tab-separated, no header:
 | `C` | `HASH`, `SUBJECT` | One per recent commit, newest first, bounded to the last 20 |
 | `X` | `TRUNCATED`, `COUNT` | At most one, always last: this many records were withheld to hold the byte budget |
 
-The diff half is pure composition, not a second attribution path: it is
-literally `rgit diff`'s own default scope (everything committable), rendered
-through the same `--porcelain` records and re-tagged per line.
+The diff half is pure composition, not a second attribution path: `rgit
+diff`'s own default scope, rendered through the same `--porcelain` records and
+re-tagged per line.
 
 **The whole stream is capped at 16 KiB.** `B` or `H`, when present, sorts first
 — a single record that costs the budget almost nothing — then `S`, `W`
-diagnostics and `F` rows. `F` rows survive truncation before `C` rows do. The diff section is
-the unbounded, actionable half and has no natural limit of its own; commits
-are already bounded up front (the most recent 20, via git's own history limit)
-and cost little to drop, so a busy branch sheds commit history before it ever
-shortens the diff. Truncation happens at the byte boundary, with a trailing
+diagnostics and `F` rows. `F` rows survive truncation before `C` rows do: the
+diff section is the unbounded, actionable half, where commits are already
+bounded up front (the most recent 20, via git's own history limit) and cost
+little to drop. Truncation happens at the byte boundary, with a trailing
 `X` record naming how many rows were withheld. See
 [`../specs/design.md`](../specs/design.md#commands) for the reasoning. See
 [`CODES.md`](CODES.md#output-records) for the exact record grammar.
@@ -397,7 +396,7 @@ free to grow: a second reports which optional/gated grammars this exact binary
 was compiled with (see § Languages below), so it can change independently of
 the version, and a third names the Go toolchain and platform it was built
 for — two binaries can report the same version and still differ there, which
-is what a bug report needs and what the reporter rarely thinks to include.
+is what a bug report needs.
 
 ## Languages
 
@@ -436,30 +435,25 @@ omits the `sql` row entirely (see [`INSTALL.md`](INSTALL.md#sql-support)).
 `NAME<TAB>EXTENSIONS<TAB>GATED<TAB>CROSS-CHECK` records; the first three
 columns retain the meanings above.
 
-`CROSS-CHECK` is `wired` for grammars with
-a language-server catalog entry and `ts-only` for TOML and SQL.
-
-It reports
-compile-time design wiring, not whether a server is reachable in this
-invocation; `rgit doctor` reports that environment status.
+`CROSS-CHECK` is `wired` for grammars with a language-server catalog entry and
+`ts-only` for TOML and SQL. It reports compile-time design wiring, not whether
+a server is reachable in this invocation; `rgit doctor` reports that
+environment status.
 
 A `.sql` anchor on a binary built without `rgit_sql` still fails with exit 9
 ("no grammar registered"), the same as any genuinely unsupported language —
 but unlike one this resolver has never supported, the message also names the
 build tag and points at rebuilding.
 
-**`--in-repo` narrows the listing to grammars with at least one matching
-file in the current repository** — advisory only, since the binary
-still contains every compiled-in grammar regardless of what a given repo
-happens to use.
-
-A monorepo with only `.go` files omits `python`, `css`, and
-the rest even though a Python or CSS anchor would resolve fine elsewhere.
+**`--in-repo` narrows the listing to grammars with at least one matching file
+in the current repository** — advisory only, since the binary still contains
+every compiled-in grammar regardless of what a given repo uses. A monorepo
+with only `.go` files omits `python`, `css`, and the rest even though a Python
+or CSS anchor would resolve fine elsewhere.
 
 Detection reuses the same extension-then-shebang sequence every worktree file
 gets; tracked files fall back to a bounded `HEAD` sample when their worktree
 copy is absent, and untracked files (excluding ignored ones) count too.
-
 Requires a git repo, unlike the plain form above.
 
 ## Doctor
@@ -471,36 +465,25 @@ CLI, which language servers from
 [`INSTALL.md`](INSTALL.md#language-servers) answer on `PATH` for the extent
 cross-check, and the same grammar listing `rgit languages` prints.
 
-It exits
-0 unless rgit genuinely cannot function — a missing language server, the
-tree-sitter CLI, or a below-floor git version is informational, since
+It exits 0 unless rgit genuinely cannot function — a missing language server,
+the tree-sitter CLI, or a below-floor git version is informational, since
 degraded `[ts-only]` resolution is normal and documented, not an error (see
 [`CODES.md`](CODES.md)).
 
 `--porcelain` lists the environment and language-server checks as stable
-tab-separated records instead — see
-[`CODES.md`](CODES.md#rgit-doctor---porcelain) — for agents and CI that want
-a parseable stream rather than the aligned human report.
-
-It does not repeat
-the grammar listing; `rgit languages --porcelain` already owns that.
+tab-separated records instead, for agents and CI that want a parseable stream
+rather than the aligned human report — see
+[`CODES.md`](CODES.md#rgit-doctor---porcelain). It does not repeat the grammar
+listing; `rgit languages --porcelain` already owns that.
 
 **`--deep` dials each on-PATH server for real** — the identical
-initialize/initialized handshake `rgit diff`/`rgit commit` already perform
-for the cross-check — and appends `(reachable)` or `(degraded — handshake
-timed out or unanswered)` to its detail column.
-
-A binary being on `PATH` is
-not proof it actually answers; a stale daemon or a cold index both look
-identical to a plain `LookPath` check but differ under `--deep`.
-
-Slower than
-the default for exactly that reason, and not the default: a cold CI host
-with nothing installed should stay instant.
-
-A server not on `PATH` at all is
-never dialed — there is nothing to dial, and `MISSING` already says
-everything `--deep` could add.
+initialize/initialized handshake `rgit diff`/`rgit commit` already perform for
+the cross-check — and appends `(reachable)` or `(degraded — handshake timed
+out or unanswered)` to its detail column. Being on `PATH` is not proof a
+binary answers; a stale daemon or a cold index both look identical to a plain
+`LookPath` check. Slower for exactly that reason, and not the default: a cold
+CI host with nothing installed should stay instant. A server not on `PATH` is
+never dialed — `MISSING` already says everything `--deep` could add.
 
 ## Symbols
 
