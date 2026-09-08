@@ -3,28 +3,26 @@
 ## Prerequisites
 
 - **Go 1.27+** with cgo enabled — the tree-sitter grammars are C.
-- **git 2.32+** on `PATH`. `rgit` shells out to it for everything git already
-  does; 2.32 is the newest behaviour any code path relies on (`git commit
-  --trailer`, `internal/gitx.go`). `rgit doctor` checks the resolved
-  version, not just presence, and reports it as informational rather than
-  refusing to run below the floor.
+- **git 2.32+** on `PATH` — the newest behaviour any code path relies on
+  (`git commit --trailer`, `internal/gitx.go`). `rgit doctor` checks the
+  resolved version, not just presence, and reports it as informational
+  rather than refusing to run below the floor.
 - Optionally, a **language server** per language you want cross-checked
   (see [Language servers](#language-servers)).
 - Optionally, the **tree-sitter CLI** for `.sql` anchors (see
   [SQL support](#sql-support)) — everything else builds and works without it.
 
-The Go floor is not chosen — it tracks whatever the dependencies declare, since
-`rgit` keeps them at their latest releases, and rises whenever one of them
+The Go floor is not chosen — it tracks whatever the dependencies declare,
+since `rgit` keeps them at their latest releases, and rises when one of them
 raises its own.
 
 ## Build
 
 Three ways to get a binary, in order of how much they do for you:
 
-**`make install`** builds and installs in one step, wrapping
-[`cmd/rgit-install`](../cmd/rgit-install) — it checks prerequisites, generates
-the SQL parser when it can (see [SQL support](#sql-support)), builds,
-installs, and reports each step:
+**`make install`** wraps [`cmd/rgit-install`](../cmd/rgit-install): it checks
+prerequisites, generates the SQL parser when it can (see
+[SQL support](#sql-support)), builds, installs, and reports each step:
 
 ```bash
 make install                     # to $GOBIN, or $(go env GOPATH)/bin
@@ -32,11 +30,10 @@ make install PREFIX=~/.local/bin # anywhere else
 ```
 
 **The default target is `$GOBIN`, falling back to `$(go env GOPATH)/bin`** —
-usually `~/go/bin`. That is where the binary lands unless you pass `PREFIX`
-(or `-prefix`), and it is the path the uninstall step below assumes.
+usually `~/go/bin`. The binary lands there unless you pass `PREFIX` (or
+`-prefix`), and that is the path the uninstall step below assumes.
 
-Run the installer directly for its own flags, including a preview that
-changes nothing:
+Run the installer directly for its own flags, including a no-op preview:
 
 ```bash
 go run ./cmd/rgit-install -dry-run
@@ -55,9 +52,8 @@ The binary is ~13.5 MB stripped, or ~16 MB built with `-tags rgit_sql`;
 the grammars account for nearly all of it, measured per grammar in
 [`specs/design.md`](../specs/design.md#binary-size).
 
-Install any of the above onto `PATH` yourself if you didn't use `make
-install` — anywhere on `PATH` works; this matches where `make install` would
-have put it:
+Without `make install`, put the binary on `PATH` yourself — anywhere on
+`PATH` works; this matches where `make install` would have put it:
 
 ```bash
 dest="$(go env GOBIN)"; [ -n "$dest" ] || dest="$(go env GOPATH)/bin"
@@ -104,15 +100,14 @@ darwin fails at link time through zig with `unable to find dynamic system
 library 'resolv'`: `net` is a real dependency (`go.lsp.dev/jsonrpc2` uses it
 for the `gopls` socket), and linking it needs `-lresolv` and `-framework
 CoreFoundation` from an actual macOS SDK — building with `-tags
-netgo,osusergo` does not clear it, and it is why darwin is deliberately not
+netgo,osusergo` does not clear it, which is why darwin is deliberately not
 in `make cross`'s own zig-based matrix.
 
 **`make cross-darwin` builds darwin/amd64 and darwin/arm64 natively — run
-it on an actual macOS host, not this one.** A real Mac's own clang and SDK
-build both darwin arches without a cross-compilation toolchain at all
-(Xcode ships a universal SDK, the same reason a Mac already builds for
-either Apple Silicon or Intel without a second one), so this target carries
-no `zig`/`CC` override the way `cross`'s three targets do:
+it on an actual macOS host.** A Mac's own clang and SDK build both darwin
+arches without a cross-compilation toolchain at all (Xcode ships a
+universal SDK), so this target carries no `zig`/`CC` override the way
+`cross`'s three targets do:
 
 ```bash
 make cross-darwin          # both darwin arches, into dist/ -- macOS host only
@@ -134,14 +129,12 @@ measures ~28s).
 
 Without the tree-sitter CLI on the build host, nothing is generated and
 every target builds SQL-less instead of failing — the same fallback
-`make install` makes. `.sql` anchors then resolve as any other unsupported
-language does (exit 9, `docs/ANCHORS.md`); every other language is
-unaffected either way.
+`make install` makes, with `.sql` anchors resolving as any other
+unsupported language does (exit 9, `docs/ANCHORS.md`).
 
 `make cross` also regenerates `dist/SHA256SUMS` from that run's own
-artifacts — each invocation overwrites the file rather than appending to
-it, so the checksums on disk always match the binaries currently in
-`dist/`.
+artifacts, overwriting rather than appending, so the checksums on disk
+always match the binaries currently in `dist/`.
 
 ## SQL support
 
@@ -150,9 +143,9 @@ SQL is a second grammar behind the `rgit_sql` build tag: a plain `go build
 Its parser has no pre-built Go bindings — the grammar module gitignores its
 own `parser.c` at every tag — so `rgit` generates that file at build time
 instead of vendoring it: `tree-sitter generate` turns the module's
-`grammar.js` into a working `parser.c`, which is copied into the SQL
-adapter package's `csrc/` subdirectory. That directory is gitignored and
-never committed; it regenerates on demand.
+`grammar.js` into a working `parser.c`, copied into the SQL adapter
+package's `csrc/` subdirectory. That directory is gitignored and never
+committed; it regenerates on demand.
 
 `cmd/rgit-install` does this automatically once the SQL adapter package
 exists and the [tree-sitter CLI](https://github.com/tree-sitter/tree-sitter)
@@ -183,18 +176,16 @@ cross-check, which catches build-tag, macro, and type-level mismatches.
 | Markdown | `marksman` | [GitHub release binary](https://github.com/artempyanykh/marksman/releases) — no package manager publishes it | One-shot subprocess per query |
 | HTML | `vscode-html-language-server` | `npm i -g vscode-langservers-extracted` | One-shot subprocess per query |
 
-JSON, CSS, and HTML share one npm package, `vscode-langservers-extracted` — a
-single install produces all three binaries. `marksman` is the one server with
-no package manager at all: install it from a platform-named GitHub release
-binary.
+JSON, CSS, and HTML share one npm package: a single
+`vscode-langservers-extracted` install produces all three binaries.
 
 Only `gopls` has a listen mode, so Go is the only language with a reusable
 daemon: `rgit` probes for one and starts it in the background if none answers.
 That first invocation finishes in `[ts-only]` mode rather than blocking on a
-cold index; later ones get the full cross-check. Every other language's
-server has no listen mode, so `rgit` spawns one over stdio per query and
-kills it on close — nothing persists, and the cross-check is live on the
-first invocation. The transport survey behind this split is in
+cold index; later ones get the full cross-check. Every other server is
+stdio-only, so `rgit` spawns one per query and kills it on close — nothing
+persists, and the cross-check is live on the first invocation. The
+transport survey behind this split is in
 [`specs/design.md`](../specs/design.md#transport-support-per-server).
 
 **TOML and SQL stay `[ts-only]` permanently** — see
@@ -263,8 +254,8 @@ downloads a release binary and verifies it against that release's own
 curl -fsSL https://raw.githubusercontent.com/Rethunk-Tech/rethunk-git-cli/main/scripts/install.sh | sh
 ```
 
-On Windows/amd64, `scripts/install.ps1` provides the equivalent
-release-download and checksum-verification path:
+On Windows/amd64, `scripts/install.ps1` is the equivalent release-download
+and checksum-verification path:
 
 ```powershell
 $env:VERSION = 'v2.0.0'  # optional on a real install; defaults to latest
@@ -272,22 +263,15 @@ $env:VERSION = 'v2.0.0'  # optional on a real install; defaults to latest
 ```
 
 It installs `rgit.exe` to `$HOME\.local\bin` by default; set `$env:PREFIX` to
-override the destination. `-DryRun` prints the download URL, checksum source,
-and install path without touching the network, plus the planned signature
-source when `cosign` is available. It requires an explicit `VERSION` tag —
-there is no latest-tag lookup on that path:
+override. `-DryRun` prints the plan — download URL, checksum source, install
+path, plus the planned signature source when `cosign` is available — without
+touching the network, and requires an explicit `VERSION` tag; there is no
+latest-tag lookup on that path:
 
 ```powershell
 $env:VERSION = 'v2.0.0'
 .\scripts\install.ps1 -DryRun
 ```
-
-When `cosign` is on `PATH`, `install.ps1` also downloads
-`SHA256SUMS.sigstore.json` and verifies `SHA256SUMS` with the identity and OIDC
-issuer shown below before checking the binary's SHA256. Without `cosign`, it
-keeps the SHA256-only path. `-DryRun` stays network-free; when `cosign` is
-available, it reports the planned signature verification without downloading
-the bundle.
 
 Every release also publishes `SHA256SUMS.sigstore.json`, a keyless
 [cosign](https://docs.sigstore.dev/cosign/signing/overview/) signature over
@@ -304,29 +288,26 @@ cosign verify-blob \
 ```
 
 When `cosign` is on `PATH`, `scripts/install.sh` and `scripts/install.ps1`
-perform this verification automatically: they download
-`SHA256SUMS.sigstore.json` beside `SHA256SUMS` and verify the checksum file
-before checking the binary's SHA256. A failed verification stops the install.
-Without `cosign`, both installers retain their SHA256-only paths. `--dry-run`
-and `-DryRun` exit before any download, so neither fetches the signature bundle.
+do this automatically: they download `SHA256SUMS.sigstore.json` beside
+`SHA256SUMS` and verify the checksum file before checking the binary's
+SHA256, and a failed verification stops the install. Without `cosign`, both
+keep their SHA256-only paths. `--dry-run` and `-DryRun` exit before any
+download, so neither fetches the signature bundle.
 
 `PREFIX` (default `$HOME/.local/bin`) and `VERSION` (default `latest`) are
 environment variables, not flags — `VERSION=v2.0.0 PREFIX=/usr/local/bin sh
-install.sh` installs that exact tag system-wide. `--dry-run` prints the plan
-(download URL, checksum source, install path) without touching the network
-at all, which is what CI runs to lint the script's own control flow on every
-push.
+install.sh` installs that exact tag system-wide. `--dry-run` prints the same
+plan without touching the network at all, which is what CI runs to lint the
+script's own control flow on every push.
 
 **Scope is deliberately narrow.** `scripts/install.sh` supports
 linux/amd64, linux/arm64, darwin/amd64, and darwin/arm64; `install.ps1`
 supports Windows/amd64. Linux verifies the release line with `sha256sum`;
-macOS uses its native `shasum -a 256`. Language servers stay opt-in exactly
-as they are everywhere else — neither installer installs one; both point at
-this documentation instead. There is no Homebrew formula:
-`rgit` links tree-sitter
-through cgo, so a formula would need to build from source per-platform (a
-bottle per target) rather than fetch one, which is a materially bigger
-undertaking than this script covers, not a small addition to it.
+macOS uses its native `shasum -a 256`. Neither installer installs a language
+server; both point at this documentation instead. There is no Homebrew
+formula: `rgit` links tree-sitter through cgo, so a formula would need to
+build from source per-platform (a bottle per target) rather than fetch one,
+a materially bigger undertaking than this script covers.
 
 ## Verify
 
@@ -353,12 +334,12 @@ rm "$(command -v rgit)"
 rm -rf "${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/rgit-$(id -u)"
 ```
 
-`command -v rgit` resolves whichever copy your shell actually runs, which is
-the one to remove — hardcoding a path guesses wrong for anyone who installed
-to the default `$GOBIN`/`$(go env GOPATH)/bin` rather than passing `PREFIX`.
+`command -v rgit` resolves whichever copy your shell actually runs — hardcoding
+a path guesses wrong for anyone who installed to the default
+`$GOBIN`/`$(go env GOPATH)/bin` rather than passing `PREFIX`.
 
 That subdirectory exists only for `gopls`; the stdio servers leave nothing
-behind. A `gopls` daemon `rgit` started exits on its own idle timeout. The
+behind, and a `gopls` daemon `rgit` started exits on its own idle timeout. The
 lookup order above mirrors `rgit`'s own (`internal/lsp/dial.go`'s
 `runtimeDir`): `$XDG_RUNTIME_DIR` first, then Go's `os.TempDir()`, which on
 POSIX honours `$TMPDIR` before falling back to `/tmp` — a host with `$TMPDIR`
