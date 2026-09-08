@@ -1474,6 +1474,20 @@ is merely the anchor's first line would also accept a genuine one-line
 extent bug, trading a warning that is understood for a blind spot that is
 not — the same trade the ordinal fallback made before it was gated.
 
+The eight non-Python disagreements were examined individually rather than
+sampled. Three are one `docker-compose.yml` whose last line is blank:
+tree-sitter's mapping runs to it, the server stops at the last content
+line. Two are the server claiming *more* lines than tree-sitter (`models`
+by ten, `cost` by one) and two claiming fewer (`runner.env` by eleven, a
+long quoted key by seven) — a server summarising nested structure, not an
+extent either side got wrong. The last is CSS, and it is a real residual
+mis-pair: the anchor `.dark, .dark *` names the rule at L9, the server
+reports `.dark` twice but at neither of that rule's lines, and the two
+wrong occurrences agree with each other, so the range test that catches an
+ambiguous name cannot see it. Requiring a group's own start line to match
+would close it, at the cost of refusing groups whose start the server
+legitimately reports differently; unmeasured, so not done.
+
 The count that grew is `Not named`, from 784 to 1035, and that is the
 intended price. Those symbols were previously paired on a name the server
 reports more than once, which is a guess, and a guess that happens to be
