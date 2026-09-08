@@ -105,7 +105,7 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 		return exitcode.GitFailure
 	}
 	if !ok {
-		fmt.Fprintf(stderr, "rgit: unsupported language for %q\n", positionals[0])
+		fmt.Fprintf(stderr, "rgit: unsupported language for %q%s\n", positionals[0], unsupportedLanguageHint(filepath.Ext(path)))
 		return exitcode.UnsupportedLanguage
 	}
 	if forCommit && resolve.IsStructuredData(lang) {

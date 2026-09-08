@@ -75,4 +75,20 @@ func TestRun_LanguagesAndDoctorOmitSQLWithoutTag(t *testing.T) {
 		qt.Assert(t, qt.StringContains(stderr, "rgit_sql"))
 		qt.Assert(t, qt.StringContains(stderr, "docs/INSTALL.md"))
 	})
+
+	// commit is not the only command that meets a gated grammar, and a
+	// gated miss is only useful if it says so wherever it happens: symbols
+	// used to refuse the same file with a bare message, leaving the reader
+	// to guess the grammar existed at all.
+	t.Run("symbols reports the gated miss the same way commit does", func(t *testing.T) {
+		dir := chdirTempRepo(t)
+		writeAppFile(t, dir, "q.sql", "SELECT 1;\n")
+		gittest.Commit(t, dir, "chore: add sql fixture")
+
+		_, stderr, code := runApp(t, "symbols", "q.sql")
+
+		qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
+		qt.Assert(t, qt.StringContains(stderr, "rgit_sql"))
+		qt.Assert(t, qt.StringContains(stderr, "docs/INSTALL.md"))
+	})
 }

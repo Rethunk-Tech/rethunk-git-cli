@@ -166,7 +166,7 @@ func runBlameFollowRename(ctx context.Context, repo *gitx.Repo, file string, src
 		// script mid-history: the current name resolved, the old one did not.
 		lang, ok := resolve.ForPathFolding(file, src, ignoreCase)
 		if !ok {
-			fmt.Fprintf(stderr, "rgit: blame: %q: unsupported language before the rename to its current name\n", file)
+			fmt.Fprintf(stderr, "rgit: blame: %q: unsupported language before the rename to its current name%s\n", file, unsupportedLanguageHint(filepath.Ext(file)))
 			return exitcode.UnsupportedLanguage
 		}
 		res, err = resolve.Resolve(lang, src, anchorName)
