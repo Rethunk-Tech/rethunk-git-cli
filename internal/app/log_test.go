@@ -11,6 +11,7 @@ import (
 	"github.com/go-quicktest/qt"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
 )
 
 func TestRun_LogHelpAndUsage(t *testing.T) {
@@ -65,8 +66,7 @@ func TestRun_LogAmbiguousAnchor(t *testing.T) {
 	dir := chdirTempRepo(t)
 	writeAppFile(t, dir, "b.go", "package a\n\ntype X struct{}\n\nfunc (x X) Get() int { return 1 }\n\n"+
 		"type Y struct{}\n\nfunc (y Y) Get() int { return 2 }\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "chore: two Gets")
+	gittest.Commit(t, dir, "chore: two Gets")
 
 	_, stderr, code := runApp(t, "log", "b.go:Get")
 	qt.Assert(t, qt.Equals(code, exitcode.AnchorAmbiguous))
@@ -116,12 +116,10 @@ func TestRun_LogDefaultIsPatchFreeAndListsOnlyTouchingCommits(t *testing.T) {
 	dir := chdirTempRepo(t) // "chore: initial" already touches A and B
 
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "fix(a): bump A")
+	gittest.Commit(t, dir, "fix(a): bump A")
 
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "fix(b): bump B")
+	gittest.Commit(t, dir, "fix(b): bump B")
 
 	stdout, stderr, code := runApp(t, "log", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
@@ -141,8 +139,7 @@ func TestRun_LogDefaultIsPatchFreeAndListsOnlyTouchingCommits(t *testing.T) {
 func TestRun_LogPorcelainEmitsTabSeparatedRecords(t *testing.T) {
 	dir := chdirTempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "fix(a): bump A")
+	gittest.Commit(t, dir, "fix(a): bump A")
 
 	stdout, stderr, code := runApp(t, "log", "--porcelain", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
@@ -162,8 +159,7 @@ func TestRun_LogPorcelainEmitsTabSeparatedRecords(t *testing.T) {
 func TestRun_LogPatchFlagIncludesPatch(t *testing.T) {
 	dir := chdirTempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "fix(a): bump A")
+	gittest.Commit(t, dir, "fix(a): bump A")
 
 	for _, flag := range []string{"-p", "--patch"} {
 		t.Run(flag, func(t *testing.T) {
@@ -206,14 +202,12 @@ func TestRun_LogPathScopedSinceAndUntil(t *testing.T) {
 	t.Setenv("GIT_AUTHOR_DATE", "2020-01-01T00:00:00")
 	t.Setenv("GIT_COMMITTER_DATE", "2020-01-01T00:00:00")
 	writeAppFile(t, dir, "old.txt", "old\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "chore: old commit")
+	gittest.Commit(t, dir, "chore: old commit")
 
 	t.Setenv("GIT_AUTHOR_DATE", "2030-01-01T00:00:00")
 	t.Setenv("GIT_COMMITTER_DATE", "2030-01-01T00:00:00")
 	writeAppFile(t, dir, "new.txt", "new\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "chore: new commit")
+	gittest.Commit(t, dir, "chore: new commit")
 
 	t.Run("--since alone excludes the earlier commit", func(t *testing.T) {
 		stdout, stderr, code := runApp(t, "log", "--since=2025-01-01")
@@ -303,16 +297,13 @@ func TestRun_LogPathScopedPaths(t *testing.T) {
 
 	writeAppFile(t, dir, "x.txt", "x\n")
 	writeAppFile(t, dir, "y.txt", "y\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "chore: add x and y")
+	gittest.Commit(t, dir, "chore: add x and y")
 
 	writeAppFile(t, dir, "x.txt", "x2\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "fix(x): bump x")
+	gittest.Commit(t, dir, "fix(x): bump x")
 
 	writeAppFile(t, dir, "y.txt", "y2\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "fix(y): bump y")
+	gittest.Commit(t, dir, "fix(y): bump y")
 
 	t.Run("one path narrows to only its own touching commits", func(t *testing.T) {
 		stdout, stderr, code := runApp(t, "log", "--since=2000-01-01", "x.txt")
@@ -392,8 +383,7 @@ func TestRun_LogPathScopedMaxCount(t *testing.T) {
 func TestRun_LogPathScopedOutputModes(t *testing.T) {
 	dir := chdirTempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "fix(a): bump A")
+	gittest.Commit(t, dir, "fix(a): bump A")
 
 	t.Run("--porcelain emits tab-separated records", func(t *testing.T) {
 		stdout, _, code := runApp(t, "log", "--since=2000-01-01", "--porcelain")
@@ -473,14 +463,12 @@ func TestRun_LogFollowRenameCrossesARenameThatReordersTheSymbol(t *testing.T) {
 	t.Setenv("GIT_AUTHOR_DATE", "2025-01-01T00:00:00")
 	t.Setenv("GIT_COMMITTER_DATE", "2025-01-01T00:00:00")
 	writeAppFile(t, dir, "new.go", "package p\n\nfunc Bar() int {\n\treturn 100\n}\n\nfunc Foo() int {\n\treturn 2\n}\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "refactor: rename and reorder")
+	gittest.Commit(t, dir, "refactor: rename and reorder")
 
 	t.Setenv("GIT_AUTHOR_DATE", "2030-01-01T00:00:00")
 	t.Setenv("GIT_COMMITTER_DATE", "2030-01-01T00:00:00")
 	writeAppFile(t, dir, "new.go", "package p\n\nfunc Bar() int {\n\treturn 100\n}\n\nfunc Foo() int {\n\treturn 3\n}\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "fix: bump Foo")
+	gittest.Commit(t, dir, "fix: bump Foo")
 
 	t.Run("without the flag, history stops at the rename", func(t *testing.T) {
 		stdout, stderr, code := runApp(t, "log", "new.go:Foo")
@@ -530,8 +518,7 @@ func TestRun_LogFollowRenameCrossesARenameThatReordersTheSymbol(t *testing.T) {
 func TestRun_LogFollowRenameNoRenameMatchesDefault(t *testing.T) {
 	dir := chdirTempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "fix(a): bump A")
+	gittest.Commit(t, dir, "fix(a): bump A")
 
 	withoutFlag, _, code := runApp(t, "log", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
@@ -554,21 +541,17 @@ func TestRun_LogFollowRenameMaxCountAppliesPerSegment(t *testing.T) {
 
 	gitOut(t, dir, "mv", "old.go", "middle.go")
 	writeAppFile(t, dir, "middle.go", "package p\n\nfunc Bar() int {\n\treturn 100\n}\n\nfunc Foo() int {\n\treturn 2\n}\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "refactor: rename old to middle")
+	gittest.Commit(t, dir, "refactor: rename old to middle")
 
 	writeAppFile(t, dir, "middle.go", "package p\n\nfunc Bar() int {\n\treturn 100\n}\n\nfunc Foo() int {\n\treturn 3\n}\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "fix: bump middle Foo")
+	gittest.Commit(t, dir, "fix: bump middle Foo")
 
 	gitOut(t, dir, "mv", "middle.go", "new.go")
 	writeAppFile(t, dir, "new.go", "package p\n\nfunc Foo() int {\n\treturn 4\n}\n\nfunc Bar() int {\n\treturn 100\n}\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "refactor: rename middle to new")
+	gittest.Commit(t, dir, "refactor: rename middle to new")
 
 	writeAppFile(t, dir, "new.go", "package p\n\nfunc Foo() int {\n\treturn 5\n}\n\nfunc Bar() int {\n\treturn 100\n}\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "fix: bump new Foo")
+	gittest.Commit(t, dir, "fix: bump new Foo")
 
 	stdout, stderr, code := runApp(t, "log", "new.go:Foo", "--follow-rename", "-n", "1")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))

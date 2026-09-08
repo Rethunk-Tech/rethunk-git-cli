@@ -117,8 +117,7 @@ func TestRun_BlameAmbiguousAnchor(t *testing.T) {
 	dir := chdirTempRepo(t)
 	writeAppFile(t, dir, "b.go", "package a\n\ntype X struct{}\n\nfunc (x X) Get() int { return 1 }\n\n"+
 		"type Y struct{}\n\nfunc (y Y) Get() int { return 2 }\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "chore: two Gets")
+	gittest.Commit(t, dir, "chore: two Gets")
 
 	_, stderr, code := runApp(t, "blame", "b.go:Get")
 	qt.Assert(t, qt.Equals(code, exitcode.AnchorAmbiguous))
@@ -232,14 +231,12 @@ func TestRun_BlameFollowRenameCrossesARenameThatReordersTheSymbol(t *testing.T) 
 	t.Setenv("GIT_AUTHOR_DATE", "2025-01-01T00:00:00")
 	t.Setenv("GIT_COMMITTER_DATE", "2025-01-01T00:00:00")
 	writeAppFile(t, dir, "new.go", "package p\n\nfunc Bar() int {\n\treturn 100\n}\n\nfunc Foo() int {\n\treturn 2\n}\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "refactor: rename and reorder")
+	gittest.Commit(t, dir, "refactor: rename and reorder")
 
 	t.Setenv("GIT_AUTHOR_DATE", "2030-01-01T00:00:00")
 	t.Setenv("GIT_COMMITTER_DATE", "2030-01-01T00:00:00")
 	writeAppFile(t, dir, "new.go", "package p\n\nfunc Bar() int {\n\treturn 100\n}\n\nfunc Foo() int {\n\treturn 3\n}\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "fix: bump Foo")
+	gittest.Commit(t, dir, "fix: bump Foo")
 
 	t.Run("without the flag, blame stops at the current name", func(t *testing.T) {
 		stdout, stderr, code := runApp(t, "blame", "new.go:Foo")
@@ -337,8 +334,7 @@ func TestRun_FollowRenameResolvesShebangLanguageBeforeTheRename(t *testing.T) {
 	gitOut(t, dir, "commit", "-m", "refactor: rename tool")
 
 	writeAppFile(t, dir, "newtool", script+"\n\ndef added():\n    return 3\n")
-	gitOut(t, dir, "add", "-A")
-	gitOut(t, dir, "commit", "-m", "feat: extend")
+	gittest.Commit(t, dir, "feat: extend")
 
 	t.Run("blame", func(t *testing.T) {
 		stdout, stderr, code := runApp(t, "blame", "newtool:greet", "--follow-rename")
