@@ -295,3 +295,38 @@ func TestRunSymbolsWithLinesAgreesWithResolvedExtent(t *testing.T) {
 		}
 	}
 }
+
+// TestRunSymbolsRefusesPathAboveRoot pins symbols to the same containment
+// diff and blame enforce. symbols normalizes an absolute argument itself
+// rather than calling repoPath, so the escape check is the one piece of
+// repoPath it has to reach for explicitly -- and the case it missed read
+// files outside the repository and exited 0.
+func TestRunSymbolsRefusesPathAboveRoot(t *testing.T) {
+	dir := chdirTempRepo(t)
+
+	outside := filepath.Join(filepath.Dir(dir), "outside.go")
+	if err := os.WriteFile(outside, []byte("package x\n\nfunc SecretOutside() {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, arg := range []string{"../outside.go", outside} {
+		t.Run(arg, func(t *testing.T) {
+			stdout, stderr, code := runApp(t, "symbols", arg)
+			qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+			qt.Assert(t, qt.Equals(stdout, ""))
+			qt.Assert(t, qt.StringContains(stderr, "escapes the repository root"))
+		})
+	}
+}
+
+// TestRunSymbolsAcceptsAbsolutePathInsideRoot guards the other side of the
+// escape check: the absolute-path branch is why symbols cannot simply call
+// repoPath, so a fix that routed through it would silently drop this.
+func TestRunSymbolsAcceptsAbsolutePathInsideRoot(t *testing.T) {
+	dir := chdirTempRepo(t)
+
+	stdout, stderr, code := runApp(t, "symbols", filepath.Join(dir, "a.go"))
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.StringContains(stdout, "A"))
+}

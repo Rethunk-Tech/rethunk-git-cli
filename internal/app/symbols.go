@@ -67,6 +67,16 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 		path = filepath.Join(prefix, path)
 	}
 	path = filepath.Clean(path)
+	// The absolute-path branch above is why this cannot simply call
+	// repoPath: PrefixPath has no notion of an absolute argument, so
+	// routing through it would drop the Rel normalization that lets
+	// `rgit symbols /abs/file.go` work from a subdirectory. The escape
+	// check is the half of repoPath that must not be skipped -- without
+	// it symbols reads files above root that diff and blame refuse.
+	if err := checkPathEscape(root, path); err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return exitcode.InvalidUsage
+	}
 
 	src, err := os.ReadFile(filepath.Join(root, path))
 	var headSrc []byte
