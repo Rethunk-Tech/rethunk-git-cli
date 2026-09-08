@@ -236,11 +236,9 @@ command exists to avoid. Pass `-p`/`--patch` to see it anyway — git's own
 
 `--since=DATE` and `--until=DATE` may be added to this anchor form; the
 `FILE:SYMBOL` positional keeps its symbol-scoped meaning, and the bounds are
-forwarded to git's own `git log -L`. `-n N`/`--max-count=N` can be combined
-with it as well. `--follow-rename` may be combined with either date bound;
-each rename segment receives the same filters. Under `--follow-rename`,
-`-n`/`--max-count` applies independently to each rename segment, so the total
-can exceed `N` when history crosses multiple renames.
+forwarded to git's own `git log -L`. `-n N`/`--max-count=N` and
+`--follow-rename` combine with it too, each rename segment receiving the same
+filters.
 
 Unlike default `blame` (worktree first), the anchor is resolved against
 **`HEAD`, not the worktree**: history is a question about what has already
@@ -299,8 +297,8 @@ there (`"2024-01-01"`, `"2 weeks ago"`) works here too. With no paths, the
 unanchored form is the whole repository's history in that window, matching
 plain `git log --since=DATE`.
 
-`-n N`/`--max-count=N` limits either form to at most `N` commits, forwarding
-git's own count limit. Without either spelling, the history remains unbounded.
+`-n N`/`--max-count=N` limits either form to at most `N` commits; without it,
+history is unbounded.
 
 This is the one `git log` carve-out `rgit`'s own "the tree is only ever
 inspected through `rgit`" convention otherwise has to make for a plain
@@ -358,7 +356,6 @@ diff section is the unbounded, actionable half, where commits are already
 bounded up front (the most recent 20, via git's own history limit) and cost
 little to drop. Truncation happens at the byte boundary, with a trailing
 `X` record naming how many rows were withheld. See
-[`../specs/design.md`](../specs/design.md#commands) for the reasoning. See
 [`CODES.md`](CODES.md#output-records) for the exact record grammar.
 
 ## Help
@@ -429,7 +426,7 @@ yaml        .yaml .yml
 ```
 
 This sample is from a `-tags rgit_sql` build; a plain `go build`/`go install`
-omits the `sql` row entirely (see [`INSTALL.md`](INSTALL.md#sql-support)).
+omits the `sql` row entirely.
 
 `--porcelain` replaces the aligned listing with stable
 `NAME<TAB>EXTENSIONS<TAB>GATED<TAB>CROSS-CHECK` records; the first three
@@ -531,9 +528,6 @@ remains unchanged.
 `rgit completion pwsh` print a completion script for that shell to stdout;
 nothing else is written.
 
-PowerShell registration instructions are in
-[`INSTALL.md`](INSTALL.md#shell-completion).
-
 It completes subcommands, each subcommand's own flags, plain file paths, and —
 the useful part — symbol names after `FILE:`, by shelling back out to `rgit
 symbols FILE`. That read-only command reads the worktree file or the `HEAD`
@@ -553,7 +547,8 @@ completion models — fish's dynamic candidate function registered with
 same way, including the `-C <path>` walk and the `FILE:SYMBOL` lookup.
 
 An unrecognized or missing shell argument is a usage error, same table as
-everywhere else. Install instructions: [`INSTALL.md`](INSTALL.md#shell-completion).
+everywhere else. Install and PowerShell registration instructions:
+[`INSTALL.md`](INSTALL.md#shell-completion).
 
 ## Flags
 
