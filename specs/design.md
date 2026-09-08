@@ -1443,49 +1443,40 @@ compared extent, an ordinal fallback pairing declarations the two sides had
 enumerated differently, and two anchor namespaces that could not be
 compared at all. Each is fixed and carries a regression test.
 
-**Post-fix measurement.** 1008 files, 9 grammars, 9 servers, 15,995 symbols
-compared: 15,963 agree, 32 disagree (0.20%), 1025 the server never names.
+**Post-fix measurement.** 1063 files, 9 grammars, 9 servers, 16,946 symbols
+compared: 16,919 agree, 27 disagree (0.16%), 1386 the server never names.
 
 | Grammar | Files | Compared | Agree | Disagree | Not named |
 | --- | --: | --: | --: | --: | --: |
-| Go | 119 | 1614 | 1614 | 0 | 2 |
-| TypeScript | 88 | 184 | 184 | 0 | 0 |
-| TSX | 6 | 28 | 28 | 0 | 0 |
-| Shell | 100 | 742 | 742 | 0 | 61 |
-| Markdown | 100 | 740 | 740 | 0 | 0 |
-| HTML | 100 | 226 | 226 | 0 | 4 |
-| JSON | 100 | 2392 | 2392 | 0 | 127 |
-| YAML | 200 | 5674 | 5670 | 4 | 188 |
-| CSS | 95 | 2914 | 2914 | 0 | 639 |
-| Python | 100 | 1481 | 1453 | 28 | 4 |
+| Go | 119 | 1620 | 1620 | 0 | 2 |
+| TypeScript | 128 | 884 | 884 | 0 | 0 |
+| TSX | 21 | 71 | 71 | 0 | 0 |
+| Shell | 100 | 692 | 692 | 0 | 64 |
+| Markdown | 100 | 820 | 820 | 0 | 0 |
+| HTML | 100 | 224 | 224 | 0 | 4 |
+| JSON | 100 | 2419 | 2419 | 0 | 127 |
+| YAML | 200 | 5595 | 5592 | 3 | 188 |
+| CSS | 95 | 3190 | 3190 | 0 | 997 |
+| Python | 100 | 1431 | 1407 | 24 | 4 |
 
-Eight grammars are exact. Markdown went from verifying nothing to 740
-symbols with none; YAML fell from 102 disagreements to 4; CSS from 125 to
-none.
+Eight grammars are exact. Markdown went from verifying nothing to 820
+symbols with none; CSS from 125 disagreements to none; YAML from 102 to 3.
+TypeScript is measured against a project root `vtsls` can resolve, without
+which it answers for a fraction of a file's symbols and its zero means
+little.
 
-Twenty-eight of the 32 that remain are Python, where `pyright` names a
+Twenty-four of the 27 that remain are Python, where `pyright` names a
 multi-line assignment by its name line alone (`BASE_PROG` L22..L29 against
 L22..L22): it names the binding where tree-sitter names the statement. That
 class is deliberately not normalized — accepting any server range that is
 merely the anchor's first line would also accept a genuine one-line extent
 bug, trading a warning that is understood for a blind spot that is not.
 
-The four that are left were examined individually rather than sampled, and
-they are not one shape. Three are the server over-extending: `models` ends
-at its last list item on L53 and `yaml-language-server` runs it to L63,
-through the commented-out entries and the header introducing the next key —
-the same trailing-comment absorption `declOnlyEndTrimmer` removes from
-rgit's own side. `ingress` and `cost` differ the same way, by eight lines
-and by one.
-
-The fourth is rgit's, and is a genuine over-capture: a mapping whose value
-ends on L554 runs to L561 in tree-sitter's reading, absorbing a trailing
-comment block that closes the file. `trimTrailingComment` walks the node's
-child spine, so it removes comments a mapping owns but not a comment block
-that trails at end of file where no sibling key follows. One case in 5674
-YAML comparisons, and `commit` refuses YAML anchors regardless, so nothing
-is staged wrongly — but `diff`, `blame` and `log` on that anchor report
-seven lines that belong to no declaration.
+The last three are the server over-extending, and rgit is right in each:
+`models` ends at its final list item on L53 while `yaml-language-server`
+runs it to L63, through commented-out entries and the header introducing
+the next key — the same absorption this side removes. `ingress` and `cost`
+differ the same way, by eight lines and by one.
 
 The count that grew is `Not named`, and that is the intended price. Those
 symbols were previously paired on a name the server reports more than once,

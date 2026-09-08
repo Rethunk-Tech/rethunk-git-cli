@@ -466,3 +466,63 @@ func TestMatchAndCompare_GroupMustStartWhereTheDeclarationDoes(t *testing.T) {
 		t.Errorf("found = %v, err = %v; want a clean pair at the declaration's own range", found, err)
 	}
 }
+
+// TestDeclOnlyExcludesACommentBlockClosingTheFile pins the end-of-file half of
+// the trailing-comment trim. A block mapping runs to wherever the next sibling
+// key begins, and at end of file there is no next key, so a comment block
+// closing the file falls inside the mapping's node without being one of its
+// children. An inline comment on a content line stays: it sits on a line that
+// carries real content, and the mapping owns it.
+func TestDeclOnlyExcludesACommentBlockClosingTheFile(t *testing.T) {
+	t.Parallel()
+
+	lang, ok := ForExtension(".yaml")
+	if !ok {
+		t.Skip("yaml grammar not compiled in")
+	}
+	src := []byte("a:\n  - one   # inline\n\n# closes the file\n# and says nothing about a\n")
+
+	res, err := Resolve(lang, src, "a")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	got := string(src[res.Extent.Start:res.Extent.End])
+	if strings.Contains(got, "closes the file") {
+		t.Errorf("extent = %q; want the file-closing comment block excluded", got)
+	}
+	if !strings.Contains(got, "# inline") {
+		t.Errorf("extent = %q; want the inline comment on a content line kept", got)
+	}
+}
+
+// TestTrailingCommentTrimKeepsTheEOFNewline pins the invariant the trim must
+// not break: git tracks whether a file ends with a newline, so an extent
+// ending just past one is that line ending and not an empty line after it.
+// Dropping it would normalize away exactly what AGENTS.md forbids normalizing.
+func TestTrailingCommentTrimKeepsTheEOFNewline(t *testing.T) {
+	t.Parallel()
+
+	lang, ok := ForExtension(".yaml")
+	if !ok {
+		t.Skip("yaml grammar not compiled in")
+	}
+
+	withNewline := []byte("a:\n  b: 1\n")
+	res, err := Resolve(lang, withNewline, "a")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if got := string(withNewline[res.Extent.Start:res.Extent.End]); got != "a:\n  b: 1\n" {
+		t.Errorf("extent = %q; want the trailing newline kept", got)
+	}
+
+	// A file with no EOF newline keeps that shape too.
+	without := []byte("a:\n  b: 1")
+	res, err = Resolve(lang, without, "a")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if got := string(without[res.Extent.Start:res.Extent.End]); got != "a:\n  b: 1" {
+		t.Errorf("extent = %q; want no newline invented", got)
+	}
+}

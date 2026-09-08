@@ -75,7 +75,49 @@ func (y *yamlLanguage) trimDeclOnlyEnd(src []byte, node *ts.Node) uint {
 	return y.trimTrailingComment(src, node)
 }
 
+// trimTrailingCommentLines drops whole trailing lines that are blank or hold
+// nothing but a comment, stopping at the last line carrying real content and
+// never crossing start.
+//
+// This is the end-of-file half of the same defect trimTrailingCommentSpine
+// handles between siblings. A block mapping runs to wherever the next sibling
+// key begins, and at end of file there is no next key, so a comment block
+// closing the file falls inside the mapping's node without being one of its
+// children -- the spine walk cannot see it. A line's first non-blank byte
+// decides: a "#" inside a value is preceded by the "-" or quote that starts
+// the value, so a real value is never mistaken for a comment.
+func trimTrailingCommentLines(src []byte, start, end uint) uint {
+	for end > start {
+		// The last byte inside the extent, and the start of the line holding
+		// it. Working from the last byte rather than from end keeps a final
+		// newline attached to the line it terminates: an extent ending just
+		// past one is that line ending, not an empty line after it, and
+		// dropping it would normalize a file's EOF newline away.
+		last := end - 1
+		lineStart := last
+		for lineStart > start && src[lineStart-1] != '\n' {
+			lineStart--
+		}
+		i := lineStart
+		for i <= last && (src[i] == ' ' || src[i] == '\t' || src[i] == '\n' || src[i] == '\r') {
+			i++
+		}
+		if i <= last && src[i] != '#' {
+			return end
+		}
+		end = lineStart
+	}
+	return end
+}
+
+// trimTrailingComment removes a mapping's trailing comments from both the
+// staged extent and the declaration-only one, whether they sit on the node's
+// own child spine or close the file behind it.
 func (y *yamlLanguage) trimTrailingComment(src []byte, node *ts.Node) uint {
+	return trimTrailingCommentLines(src, node.StartByte(), y.trimTrailingCommentSpine(src, node))
+}
+
+func (y *yamlLanguage) trimTrailingCommentSpine(src []byte, node *ts.Node) uint {
 	end := node.EndByte()
 	cur := node
 	for {
