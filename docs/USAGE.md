@@ -23,11 +23,10 @@ $ rgit commit -m "auth: reject expired tokens" \
     auth.go:ValidateToken auth.go:@imports
 ```
 
-`newfile.go` is untracked (never `git add`ed) but attributes per symbol
-exactly like a brand-new tracked file — there is no HEAD blob to diff
-against, so every declared symbol is wholly new. `config.ini` stays a single
-collapsed `(untracked)` row because it has no grammar to attribute by; a
-binary untracked file collapses the same way.
+`newfile.go` is untracked but attributes per symbol exactly like a brand-new
+tracked file — no HEAD blob to diff against, so every declared symbol is
+wholly new. `config.ini` stays a single collapsed `(untracked)` row because it
+has no grammar to attribute by; a binary untracked file collapses the same way.
 
 ## Global flags
 
@@ -36,8 +35,7 @@ Three, all given **before** the command: `-C <path>`, `--version`, and
 
 `-C <path>` runs as if `rgit` had been started in `<path>`, exactly as
 `git -C <path>` does — the repository is discovered from there, and a
-relative pathspec or anchor resolves against it, so passing `-C` is
-indistinguishable from having stood there:
+relative pathspec or anchor resolves against it:
 
 ```bash
 rgit -C ~/src/api diff --porcelain
@@ -50,10 +48,10 @@ Repeats accumulate, each read relative to the last (`-C a -C b` is `-C a/b`,
 an absolute path resetting), and `-C ""` is a no-op — git's own semantics in
 each case.
 
-The directory is checked before the command runs, so both refusals reach
-even a command that never opens a repository: no directory argument at all
-is a usage error (129), and a directory `rgit` cannot enter is fatal (128).
-The glued `-C<path>` spelling is a usage error, as it is in git.
+The directory is checked before the command runs, so both refusals reach even
+a command that never opens a repository: no directory argument is a usage
+error (129), and a directory `rgit` cannot enter is fatal (128). The glued
+`-C<path>` spelling is a usage error, as it is in git.
 
 ## Argument shape
 
@@ -66,12 +64,12 @@ All git pathspec magic is **leading**-colon (`:(exclude)`, `:(glob)`, `:/`). An
 
 **For `diff`, a bare `A..B` or `A...B` positional is pulled out before the
 precedence table below ever runs.** `git rev-parse --verify` (rule 3) fails
-outright on range syntax, so a range token would otherwise fall through
-every rule to an unresolvable-argument error instead of selecting a scope.
-Only a token with no existing worktree, index, or HEAD path of that exact name is
-treated as a range — git forbids `..` in ref names, but a legitimate
-relative pathspec like `../shared/util.go` also contains `..`, and path
-existence wins over the heuristic. At most one such token is accepted per
+outright on range syntax, so a range token would otherwise fall through every
+rule to an unresolvable-argument error. Only a token with no existing
+worktree, index, or HEAD path of that exact name is treated as a range — git
+forbids `..` in ref names, but a legitimate relative pathspec like
+`../shared/util.go` also contains `..`, so path existence wins over the
+heuristic. At most one such token is accepted per
 invocation; a second is a usage error (exit 129). `--range` is the explicit
 form of the same value and is mutually exclusive with the positional one.
 
@@ -94,29 +92,26 @@ Rule 3 splits at the **first** colon (`HEAD~1:f.go` is revision `HEAD~1`,
 path `f.go`), where rule 5 splits at the **last** — each rule uses the
 split git's own syntax needs at that position, not a shared convention.
 `rev:path` is real `git diff` syntax (`git diff HEAD~1:f.go HEAD:f.go`
-compares two blobs directly), and rule 3 exists first so it classifies
-correctly rather than being misread as a `FILE:NAME` anchor by rule 5.
+compares two blobs directly), and rule 3 exists first so it is not misread as
+a `FILE:NAME` anchor by rule 5.
 
 **Exactly two `rev:path` positionals naming the identical path** compare
 that one file across two revisions, attributed by symbol like any other
 scope: `rgit diff HEAD~1:auth.go HEAD:auth.go`. `--sym` still narrows
-rendering afterward, exactly as it does everywhere else. This is the one
-scope with no trailing pathspec of its own — `git diff <blob> <blob>` takes
-none, and the two blob refs already name the file completely — so
-combining it with `--file`/a pathspec, `--staged`/`--unstaged`, a revision
-range, or bare revision positionals is refused (exit 129). A single,
-unpaired `rev:path` positional is refused the same way: comparing two
-*arbitrary* blobs by revision names no single changed file to group rows
-under, and there is no honest guess for what the missing partner would
-have been. Name the file directly instead when you only meant a plain
+rendering afterward. This is the one scope with no trailing pathspec of its
+own — `git diff <blob> <blob>` takes none, and the two blob refs already name
+the file completely — so combining it with `--file`/a pathspec,
+`--staged`/`--unstaged`, a revision range, or bare revision positionals is
+refused (exit 129). A single, unpaired `rev:path` positional is refused the
+same way: comparing two *arbitrary* blobs by revision names no single changed
+file to group rows under. Name the file directly when you only meant a plain
 revision-scoped diff.
 
 **Paths are relative to the directory you run in, not the repository root** —
-git's own rule. From a subdirectory, naming a.go stages that directory's
-a.go under the repo root, and naming the root-relative path from there
-doubles the subdirectory prefix and finds nothing — exactly as git add
-behaves. Leading-colon magic is the exception git already defines: `:/` and
-`:(top)` are root-relative wherever you stand.
+git's own rule. From a subdirectory, naming a.go stages that directory's a.go
+under the repo root, and naming the root-relative path from there doubles the
+subdirectory prefix and finds nothing. Leading-colon magic is the exception
+git already defines: `:/` and `:(top)` are root-relative wherever you stand.
 Output is always root-relative, matching `git diff --numstat`.
 
 Files and symbols mix freely in one invocation:
