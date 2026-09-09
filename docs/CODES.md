@@ -370,6 +370,13 @@ themselves to — all three convert the identical resolved extent, so a range
 that disagreed with what blame blames would be a resolver bug, not a formatting
 difference.
 
+`--porcelain` terminates each record with NUL instead of a newline, leaving
+every field and its order unchanged. That is what makes the format total: a
+symbol may then contain any byte but NUL, which source text cannot carry (a
+file holding one is binary, and refused). Use it wherever the listing is
+parsed rather than read — the newline form is only safe while no grammar
+admits a newline into a name, which CSS grouped selectors once did.
+
 `SYMBOL` is last because it is the unbounded field: an anchor may carry
 container qualification, an ordinal (`init#2`), or a gopls-spelled receiver,
 while the range never contains a tab. Splitting on the first tab is therefore

@@ -594,6 +594,11 @@ session.go	NewSession
 not special-case an argument list that happens to hold one. It composes with
 `--with-lines`, whose range column follows the filename.
 
+`--porcelain` terminates each record with NUL rather than a newline, fields
+and order unchanged, so a symbol may contain any byte but NUL. Prefer it
+whenever the output is parsed. Format:
+[`CODES.md`](CODES.md#rgit-symbols---with-lines).
+
 Every file is resolved before any line is written, so an unreadable or
 unsupported file anywhere in the list leaves stdout untouched rather than half
 a listing — a truncated listing would otherwise read as "that file has no more
@@ -688,6 +693,7 @@ output shape is the point).
 | `-p`, `--patch` | (`diff`) Append git's own real patch body after the report. Suppressed by `--quiet`, mutually exclusive with `--porcelain`. |
 | `--with-header` | (`show`) Frame a single anchor the way several are framed. Implied by naming more than one. |
 | `--with-filename` | (`symbols`) Prefix every line with `FILE<TAB>`. Implied by naming more than one file, as `grep` does. |
+| `--porcelain` | (`symbols`) Terminate each record with NUL instead of a newline; fields unchanged. |
 | `--source REV` | (`show`) Read the symbol from `REV:FILE` instead of the worktree. Both spellings (`--source REV`, `--source=REV`). An unparseable revision is exit 128, distinct from a path absent at a real one (exit 3). |
 | `--since DATE`, `--until DATE` | (`log`) Bound history by date. A `FILE:SYMBOL` positional keeps the anchor form; otherwise these select unanchored path-scoped history. Forwarded to git's own `--since`/`--until` unparsed. |
 | `-n N`, `--max-count=N` | (`log`) Limit either history form to at most `N` commits; under `--follow-rename`, applies independently per rename segment, so the total may exceed `N`. Forwarded to git's own count limit; omitted by default, so history is unbounded. |

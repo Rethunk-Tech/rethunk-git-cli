@@ -368,3 +368,32 @@ func TestSymbols_ResolvesEveryFileBeforeWriting(t *testing.T) {
 	qt.Assert(t, qt.Equals(stdout, ""))
 	qt.Assert(t, qt.StringContains(stderr, "unsupported language"))
 }
+
+// TestSymbols_PorcelainNULRecords pins the record separator as the only thing
+// --porcelain moves: identical fields, identical order, NUL instead of a
+// newline. The guarantee it buys is that a symbol may contain any byte but
+// NUL -- which the CSS grouped-selector defect showed the newline form could
+// not promise.
+func TestSymbols_PorcelainNULRecords(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "b.go", "package a\n\nfunc C() int {\n\treturn 3\n}\n")
+
+	stdout, stderr, code := runApp(t, "symbols", "--porcelain", "a.go")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.Equals(stdout, "A\x00B\x00"))
+
+	// Every other flag composes with it unchanged.
+	stdout, _, code = runApp(t, "symbols", "--porcelain", "--with-lines", "a.go")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stdout, "3,6\tA\x008,10\tB\x00"))
+
+	stdout, _, code = runApp(t, "symbols", "--porcelain", "a.go", "b.go")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stdout, "a.go\tA\x00a.go\tB\x00b.go\tC\x00"))
+
+	// The default form is untouched -- the completion scripts parse it.
+	stdout, _, code = runApp(t, "symbols", "a.go")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stdout, "A\nB\n"))
+}

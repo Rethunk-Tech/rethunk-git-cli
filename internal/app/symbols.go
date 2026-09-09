@@ -12,7 +12,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
-const symbolsHelp = `usage: rgit symbols [--for-commit] [--with-lines] [--with-filename] <file>...
+const symbolsHelp = `usage: rgit symbols [--for-commit] [--with-lines] [--with-filename] [--porcelain] <file>...
 
 List every declared symbol that can be resolved from each worktree file or its
 HEAD blob.
@@ -25,6 +25,11 @@ HEAD blob.
                  Implied by naming more than one file, the way grep prefixes
                  only when several are named; pass it so a script need not
                  special-case an argument list that happens to hold one.
+--porcelain      Terminate each record with NUL instead of a newline. The
+                 fields are unchanged; only the record separator moves, so a
+                 symbol may contain any byte but NUL -- which source text
+                 cannot, a file carrying one being binary and refused. Use it
+                 wherever the listing is parsed rather than read.
 
 Every file is resolved before any line is written, so an unreadable or
 unsupported file anywhere in the list leaves stdout untouched rather than half
@@ -37,6 +42,7 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 	forCommit := false
 	withLines := false
 	withFilename := false
+	porcelain := false
 	positionals := make([]string, 0, 1)
 	for _, arg := range args {
 		switch arg {
@@ -49,6 +55,8 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 			withLines = true
 		case "--with-filename":
 			withFilename = true
+		case "--porcelain":
+			porcelain = true
 		default:
 			positionals = append(positionals, arg)
 		}
@@ -82,13 +90,20 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 	}
 
 	showName := withFilename || len(positionals) > 1
+	// The record separator is the only thing --porcelain moves. Every field
+	// stays where it was, and the symbol stays last, so a parser splits on
+	// NUL for records and on the first tabs for fields.
+	end := "\n"
+	if porcelain {
+		end = "\x00"
+	}
 	for i, lines := range listings {
 		for _, line := range lines {
 			if showName {
-				fmt.Fprintf(stdout, "%s\t%s\n", positionals[i], line)
+				fmt.Fprintf(stdout, "%s\t%s%s", positionals[i], line, end)
 				continue
 			}
-			fmt.Fprintln(stdout, line)
+			fmt.Fprintf(stdout, "%s%s", line, end)
 		}
 	}
 	return exitcode.Success
