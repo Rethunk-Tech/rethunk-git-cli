@@ -61,11 +61,12 @@ func (c *cssLanguage) OwnsTrailingSeparator() bool { return false }
 // keeping whatever blank line the author would have written by hand.
 func (c *cssLanguage) MembersSitFlush() bool { return false }
 
-// GroupedAnchors is true: a rule_set's own anchor is its whole selector list
-// ("html, body, h1"), while vscode-css-language-server reports one symbol per
-// selector in that list, each carrying the rule's identical range. Pairing on
-// any member is what lets the two describe the same rule.
-func (c *cssLanguage) GroupedAnchors() bool { return true }
+// GroupedAnchors is false: a grouped rule is indexed one anchor per selector
+// (ruleSetDeclarations), so an anchor names exactly one selector and pairs
+// with vscode-css-language-server's own symbol directly. The group-member
+// fallback exists for a language whose declaration carries several names in
+// one anchor; CSS no longer is one.
+func (c *cssLanguage) GroupedAnchors() bool { return false }
 
 // AllowsRawHeadingFallback is inherited from defaultLanguage: CSS has no
 // heading concept for the fallback to apply to.
@@ -134,40 +135,63 @@ func (c *cssLanguage) declarationFor(src []byte, node *ts.Node) (Declaration, bo
 // anchor a caller types back is ".parent .child", not the dot-joined
 // "parent.child" every other adapter's own convention produces.
 func (c *cssLanguage) ruleSetDeclarations(src []byte, node *ts.Node, container string) []Declaration {
-	d, ok := c.ruleSetDeclaration(src, node, container)
-	if !ok {
+	own := c.ruleSetDeclaration(src, node, container)
+	if len(own) == 0 {
 		return nil
 	}
-	out := []Declaration{d}
+	out := own
 	if block := cssBodyChild(node); block != nil {
 		for _, child := range namedChildren(block) {
 			if child.Kind() != "rule_set" {
 				continue
 			}
 			nested := child
-			out = append(out, c.ruleSetDeclarations(src, &nested, d.Bare)...)
+			out = append(out, c.ruleSetDeclarations(src, &nested, own[0].Bare)...)
 		}
 	}
 	return out
 }
 
-// ruleSetDeclaration reads a rule_set's own "selectors" child as Bare,
-// verbatim -- ".button-primary", "#app", "div", or a comma list like
-// ".a, .b" all stage as written, since a selector's bare name is its
-// selector text. rule_set has no fields, so "selectors" is found by
+// ruleSetDeclaration reports one Declaration per selector in a rule_set's
+// "selectors" child, every one carrying the rule_set itself as its extent:
+// `.a, .b { }` is addressable as either `.a` or `.b`, and staging either
+// stages the whole rule. rule_set has no fields, so "selectors" is found by
 // scanning for that node kind rather than a field lookup, the same way
 // cssAtRuleName below locates the body of an at-rule without one.
-func (c *cssLanguage) ruleSetDeclaration(src []byte, node *ts.Node, container string) (Declaration, bool) {
+//
+// The whole selector list was the anchor until a corpus run measured what
+// that costs. A grouped selector is written across lines in real
+// stylesheets, so the anchor carried newlines: `rgit symbols` broke its own
+// one-symbol-per-line contract and its "start,end<TAB>symbol" records, the
+// completion scripts that parse that output offered fragments, and no
+// selector in a group was addressable on its own. 66 of 137 surveyed
+// stylesheets group selectors across lines.
+//
+// Splitting on the grammar's own selector children rather than on "," is
+// what keeps `:is(h1, h2)` one selector: its comma belongs to the
+// pseudo-class argument, not the list.
+func (c *cssLanguage) ruleSetDeclaration(src []byte, node *ts.Node, container string) []Declaration {
 	for _, child := range namedChildren(node) {
-		if child.Kind() == "selectors" {
-			sep := ""
-			if container != "" {
-				sep = " "
-			}
-			return Declaration{Node: node, Bare: nodeText(src, &child), Container: container, Sep: sep}, true
+		if child.Kind() != "selectors" {
+			continue
 		}
+		sep := ""
+		if container != "" {
+			sep = " "
+		}
+		selectors := child
+		out := make([]Declaration, 0, selectors.NamedChildCount())
+		for _, sel := range namedChildren(&selectors) {
+			one := sel
+			name := strings.TrimSpace(nodeText(src, &one))
+			if name == "" {
+				continue
+			}
+			out = append(out, Declaration{Node: node, NameNode: &one, Bare: name, Container: container, Sep: sep})
+		}
+		return out
 	}
-	return Declaration{}, false
+	return nil
 }
 
 // cssAtRuleName names an at-rule-shaped statement by its full prelude --

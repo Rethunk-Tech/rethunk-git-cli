@@ -1593,9 +1593,11 @@ div {
 	_, ok = resolve.ForExtension(".sass")
 	qt.Assert(t, qt.IsFalse(ok))
 
-	// docs/ANCHORS.md's claim that a comma-joined selector list stages as
-	// one anchor, not two -- the fixture above only ever exercises single
-	// selectors.
+	// A grouped selector is indexed one anchor per selector, each staging
+	// the whole rule. The list itself is not an anchor: written across
+	// lines, as real stylesheets write it, its text carries newlines and
+	// broke both `rgit symbols`' one-per-line output and every completion
+	// script parsing it.
 	commaList := []byte(`.a, .b {
   color: red;
 }
@@ -1605,18 +1607,37 @@ div {
 }
 `)
 
-	// The comma-joined selector's own bare name is its full text, verbatim,
-	// not decomposed into ".a" and ".b" separately.
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", commaList, ".a, .b"),
+	// ".b" belongs to the group alone, so it is unambiguous and stages the
+	// whole grouped rule -- both selectors included.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", commaList, ".b"),
 		".a, .b {\n  color: red;\n}"))
 
-	// A lone ".a" elsewhere in the file is its own, unrelated rule -- the
-	// comma list is not reachable through either of its own parts.
-	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", commaList, ".a"), ".a {\n  color: blue;\n}"))
+	// ".a" now names two real rules -- the group and the standalone one --
+	// so it is ambiguous rather than silently picking one, the same
+	// collision behaviour every other language gets, with ordinals to
+	// disambiguate.
+	_, err = resolve.Resolve(lang, commaList, ".a")
+	var cssAmbiguous *resolve.ResolveError
+	qt.Assert(t, qt.ErrorAs(err, &cssAmbiguous))
+	qt.Assert(t, qt.Equals(cssAmbiguous.Code, exitcode.AnchorAmbiguous))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", commaList, ".a#1"),
+		".a, .b {\n  color: red;\n}"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", commaList, ".a#2"),
+		".a {\n  color: blue;\n}"))
 
-	_, err = resolve.Resolve(lang, commaList, ".b")
+	// The whole list is no longer a name anything answers to.
+	_, err = resolve.Resolve(lang, commaList, ".a, .b")
 	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
 	qt.Assert(t, qt.Equals(unresolvable.Code, exitcode.AnchorUnresolvable))
+
+	// A comma inside a pseudo-class argument is not a list separator: the
+	// split follows the grammar's own selector children, never the ",".
+	isList := []byte(`h1:is(h2, h3) {
+  color: red;
+}
+`)
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", isList, "h1:is(h2, h3)"),
+		"h1:is(h2, h3) {\n  color: red;\n}"))
 
 	// Native CSS Nesting (tree-sitter-css v0.25.0): a rule_set directly
 	// inside another rule_set's own block is now addressable, qualified by

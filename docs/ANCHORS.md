@@ -206,8 +206,18 @@ unaddressable by key — see
 [`LIMITATIONS.md`](LIMITATIONS.md#constructs-no-anchor-reaches) for why.
 
 A CSS selector's bare name is its own text, exactly as written —
-`.button-primary`, `#app`, `div`, or a comma-joined list like `.a, .b`, which
-stages as one anchor rather than two.
+`.button-primary`, `#app`, `div`. A grouped rule is indexed **one anchor per
+selector**, every one staging the whole rule: `.a, .b { … }` is addressable as
+`.a` or as `.b`, and either stages both selectors and the body. The list
+itself (`.a, .b`) is not an anchor.
+
+Real stylesheets write a group across lines, so naming the whole list made the
+anchor carry newlines — which broke `rgit symbols`' one-symbol-per-line output
+and left no member individually addressable. A selector that also appears in
+another rule collides like any other repeated name: exit 4, with ordinals
+(`.a#1`, `.a#2`) to pick one. A comma inside a pseudo-class argument is not a
+separator — `h1:is(h2, h3)` is one selector, because the split follows the
+grammar's own selector nodes rather than the `,` character.
 
 An at-rule (`@media`, `@supports`, `@keyframes`, `@font-face`, and any custom
 at-rule the grammar accepts) addresses by its full prelude, not the bare

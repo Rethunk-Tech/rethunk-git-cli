@@ -72,10 +72,15 @@ type declOnlyEndTrimmer interface {
 // LSP symbol ranges exclude doc comments, so comparing unnormalized extents
 // would hard-fail every documented symbol — ValidateToken is L5..L14 raw
 // but L9..L14 via gopls.
-func declOnlyExtent(lang Language, src []byte, node *ts.Node) Extent {
+func declOnlyExtent(lang Language, src []byte, d Declaration) Extent {
+	node := d.Node
 	end := node.EndByte()
 	if t, ok := lang.(declOnlyEndTrimmer); ok {
 		end = t.trimDeclOnlyEnd(src, node)
 	}
-	return Extent{Start: node.StartByte(), End: end}
+	start := node.StartByte()
+	if d.NameNode != nil {
+		start = d.NameNode.StartByte()
+	}
+	return Extent{Start: start, End: end}
 }

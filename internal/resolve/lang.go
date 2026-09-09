@@ -45,6 +45,19 @@ type Declaration struct {
 	// receiver type "A" for Go's (a *A) Get. Empty when there is none.
 	Container string
 
+	// NameNode, when set, is where the declaration-only extent starts
+	// instead of Node's own start. It exists for a declaration whose name
+	// sits inside a larger staged node: CSS indexes one anchor per selector
+	// in a grouped rule, all staging the same rule_set, and
+	// vscode-css-language-server ranges each of those from its own
+	// selector's line rather than the rule's. Without this the cross-check
+	// read that as a real extent disagreement on every group member.
+	//
+	// Only the compared extent moves; Node still decides what gets staged,
+	// the same division declOnlyEndTrimmer already draws. Nil for every
+	// declaration whose name starts where its node does.
+	NameNode *ts.Node
+
 	// Sep overrides containerQualified's (index.go) default "." join
 	// between Container and Bare, for the rare adapter whose own
 	// qualified-name convention is not a dot. CSS Nesting is the one case:
