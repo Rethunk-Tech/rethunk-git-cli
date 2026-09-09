@@ -21,6 +21,16 @@ Notable changes to `rgit`. The format follows
 
 ### Fixed
 
+- An item's outer attributes and doc comment are part of its extent in Rust.
+  tree-sitter makes `#[test]` a *sibling* of the item it annotates, so
+  deleting an attributed item left the attribute behind — measured, removing
+  one `#[test]` function from a `mod` committed a file with two consecutive
+  `#[test]` lines, which does not compile.
+
+- A Rust struct field and enum variant carry their own trailing comma.
+  Without it, deleting one field committed a file with a bare `,` on its own
+  line.
+
 - An anchor whose **name** contains a colon resolves. Argument classification
   split a token at its last colon only, so `s.css:a:hover` was read as the
   path `s.css:a` plus the name `hover` and refused — meaning `rgit` rejected
@@ -50,6 +60,16 @@ Notable changes to `rgit`. The format follows
   keep their full-extent comparison.
 
 ### Added
+
+- **Rust.** `.rs` resolves through a new grammar, closing
+  [#1](https://github.com/Rethunk-Tech/rethunk-git-cli/issues/1): every item,
+  plus struct fields, enum variants, trait and impl members, and the contents
+  of an inline `mod` — where a crate's tests live. Members qualify with
+  Rust's own `::` (`Config::new`, `tests::parses_empty`), and an impl block is
+  named as Rust reads it (`impl Config`, `impl Render for Config`) so it does
+  not collide with the struct of that name. `rust-analyzer` is wired for the
+  extent cross-check, measured at 939 of 939 symbols agreeing across a real
+  26-file crate.
 
 - Two corpus property tests. `internal/synth` replaces every declaration in a
   file with its own bytes and requires the file back byte-identical, which

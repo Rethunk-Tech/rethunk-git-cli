@@ -167,11 +167,12 @@ func buildIndex(lang Language, src []byte, root *ts.Node) *index {
 	syms := make([]*Symbol, len(decls))
 	for i := range decls {
 		d := decls[i]
-		syms[i] = &Symbol{
-			Decl:     d,
-			Full:     fullExtent(lang, src, d.Node),
-			DeclOnly: declOnlyExtent(lang, src, d),
+		full := fullExtent(lang, src, d.Node)
+		declOnly := declOnlyExtent(lang, src, d)
+		if c, ok := lang.(fullExtentCrossChecker); ok && c.crossCheckUsesFullExtent() {
+			declOnly = full
 		}
+		syms[i] = &Symbol{Decl: d, Full: full, DeclOnly: declOnly}
 	}
 
 	assignQualifiedNames(syms)

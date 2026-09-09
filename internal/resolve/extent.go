@@ -13,17 +13,59 @@ import (
 // above a symbol with no intervening blank line belongs to it; a blank line
 // breaks the association (docs/ANCHORS.md).
 func docStart(lang Language, src []byte, node *ts.Node) uint {
+	attaches := func(string) bool { return false }
+	if a, ok := lang.(prefixAttacher); ok {
+		attaches = a.attachesPrefix
+	}
+
 	start := node.StartByte()
 	prev := node.PrevNamedSibling()
-	for prev != nil && lang.IsComment(prev.Kind()) {
-		gap := src[prev.EndByte():start]
-		if bytes.Count(gap, []byte{'\n'}) > 1 {
-			break
+	for prev != nil {
+		switch {
+		case attaches(prev.Kind()):
+			// No blank-line rule: an attribute binds to its item as a
+			// matter of syntax, not layout, so a blank line between them
+			// does not break the association the way it does for a
+			// comment.
+		case lang.IsComment(prev.Kind()):
+			gap := src[prev.EndByte():start]
+			if bytes.Count(gap, []byte{'\n'}) > 1 {
+				return start
+			}
+		default:
+			return start
 		}
 		start = prev.StartByte()
 		prev = prev.PrevNamedSibling()
 	}
 	return start
+}
+
+// fullExtentCrossChecker is an optional refinement of Language for a server
+// whose documentSymbol range covers the declaration together with its own
+// doc comment and attributes, rather than the declaration alone.
+// declOnlyExtent exists because gopls and most others exclude a doc comment;
+// rust-analyzer includes it, so comparing Rust against the declaration-only
+// extent reported a disagreement on every documented item -- measured, 64 of
+// 183 symbols across three real files, every one differing only in where it
+// started.
+type fullExtentCrossChecker interface {
+	crossCheckUsesFullExtent() bool
+}
+
+// prefixAttacher is an optional refinement of Language for a grammar whose
+// declaration is preceded by sibling nodes that belong to it without being
+// comments. lang_rust.go is the only implementer: Rust's outer attributes
+// ("#[test]", "#[derive(Debug)]") are siblings of the item they annotate,
+// not children of it and not a wrapper around it the way Python's
+// decorated_definition wraps its decorators.
+//
+// Without this the extent starts after the attribute, so deleting an item
+// left its attribute orphaned -- measured, deleting one #[test] function
+// from a mod committed a file with two consecutive #[test] lines above the
+// surviving one, which does not compile.
+type prefixAttacher interface {
+	attachesPrefix(kind string) bool
 }
 
 // fullExtent is [docStart, extentEnd) — the symbol together with any leading
@@ -50,7 +92,28 @@ func extentEnd(lang Language, src []byte, node *ts.Node) uint {
 	if t, ok := lang.(trailingCommentTrimmer); ok {
 		return t.trimTrailingComment(src, node)
 	}
+	if e, ok := lang.(separatorExtender); ok {
+		return e.extendThroughSeparator(src, node)
+	}
 	return node.EndByte()
+}
+
+// separatorExtender is an optional refinement of Language for a grammar
+// that ends a list member before its own separator. lang_rust.go is the only
+// implementer: a struct field's and an enum variant's node stops at
+// "pub name: String", leaving the "," a sibling token of the list rather
+// than part of the member.
+//
+// Deleting such a member is what makes that a defect rather than a detail --
+// measured, removing one field from a struct committed a file with a bare
+// "," on its own line, which does not compile. Excising the separator along
+// with the member is what git's own diff of the same edit does.
+//
+// Mutually exclusive with trailingCommentTrimmer above, which no grammar
+// needs both of: one shrinks an over-wide extent, this one grows an
+// under-wide one.
+type separatorExtender interface {
+	extendThroughSeparator(src []byte, node *ts.Node) uint
 }
 
 // declOnlyEndTrimmer is declOnlyExtent's optional refinement, separate from
