@@ -57,19 +57,27 @@ func TestMain(m *testing.M) {
 	// os.Environ() with no per-call-site change, and the coverage data each
 	// invocation writes is real (many processes writing into the same
 	// directory is exactly what GOCOVERDIR is designed to accumulate).
-	coverDir, err := os.MkdirTemp("", "rgit-e2e-cover-*")
-	if err != nil {
+	//
+	// It lives beside the built binary rather than in its own temp root:
+	// under `go test -coverpkg=./...` a child's coverage flush was seen
+	// failing with "rename ... no such file or directory" because the
+	// directory had gone while cases were still running. A path under the
+	// build dir shares that directory's lifetime and its single cleanup,
+	// so nothing else on the machine shares a temp root with it.
+	coverDir := filepath.Join(filepath.Dir(bin), "cover")
+	if err := os.MkdirAll(coverDir, 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "create GOCOVERDIR for e2e tests:", err)
+		cleanup()
 		os.Exit(1)
 	}
 	if err := os.Setenv("GOCOVERDIR", coverDir); err != nil {
 		fmt.Fprintln(os.Stderr, "set GOCOVERDIR for e2e tests:", err)
+		cleanup()
 		os.Exit(1)
 	}
 
 	code := m.Run()
 	cleanup()
-	_ = os.RemoveAll(coverDir)
 	os.Exit(code)
 }
 
