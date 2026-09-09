@@ -16,6 +16,13 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # GitHub removes the Node 20 action runtime on 2026-09-16. mlugg/setup-zig still declares
+  # `using: node20` at its own latest release, so there is no version to upgrade to. This
+  # forces the post-cutover runtime now, on ordinary CI runs, rather than discovering on the
+  # 16th whether the action works under node24.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   # Native darwin/amd64 + darwin/arm64 build, kept as its own job because
   # it needs an actual macOS runner: zig (what the linux/windows matrix

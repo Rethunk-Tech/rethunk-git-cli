@@ -15,6 +15,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # GitHub removes the Node 20 action runtime on 2026-09-16. mlugg/setup-zig still declares
+  # `using: node20` at its own latest release, so there is no version to upgrade to. This
+  # forces the post-cutover runtime now, on ordinary CI runs, rather than discovering on the
+  # 16th whether the action works under node24.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 # No SQL lane here on purpose: any target that builds or tests SQL must
 # delegate to cmd/rgit-install, so -tags rgit_sql and parser generation stay
 # in exactly one place (AGENTS.md § Delegation boundary). Plain `go build`/
