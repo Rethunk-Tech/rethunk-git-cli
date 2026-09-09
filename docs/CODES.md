@@ -49,7 +49,8 @@ diff rather than mid-commit.
 
 ### Exit 12 is `commit`'s alone
 
-`rgit diff --sym`, `rgit blame`, and `rgit log` all resolve a `FILE:SYMBOL`
+`rgit diff --sym`, `rgit show`, `rgit blame`, and `rgit log` all resolve a
+`FILE:SYMBOL`
 anchor into JSON, YAML, or TOML exactly like any other anchor — none writes a
 blob, so there is nothing for the guard to protect. Only `rgit commit` would
 splice a synthesized extent into a blob and stage it, so only it refuses. Name
@@ -73,6 +74,17 @@ within one passes silently. Deliberate, not a gap: the anchors this
 resolver stages are whole declarations, never sub-line ranges, so a
 same-line disagreement has nothing narrower for either side to report
 against.
+
+### `show` shares the anchor codes, plus one of git's own
+
+`rgit show FILE:SYMBOL` resolves its one anchor exactly like `commit` does, so
+3, 4, and 9 carry their usual meanings and nothing is ever widened to a
+whole-file dump. Its one addition is `--source`: an unknown revision is **128**
+(`GitFailure`), matching git's own exit for a revision it cannot parse, while a
+path that is simply absent at a revision git does know stays **3**
+(`AnchorUnresolvable`). The two are distinguished deliberately — `cat-file`
+reports both as "no such object", and collapsing them would report a mistyped
+branch as a missing symbol.
 
 ### `blame` shares the anchor codes, not the staging ones
 

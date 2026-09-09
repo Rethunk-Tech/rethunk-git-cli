@@ -102,6 +102,7 @@ func TestCompletionFlags_MatchLiveFlagSets(t *testing.T) {
 	}{
 		{"diff", runDiffHelp(), rgitDiffFlags, []string{"-h", "--help"}},
 		{"commit", runCommitHelp(), rgitCommitFlags, []string{"-h", "--help", "-S"}},
+		{"show", runShowHelpText(), rgitShowFlags, []string{"-h", "--help"}},
 		{"blame", runBlameHelpText(), rgitBlameFlags, []string{"-h", "--help"}},
 		{"log", runLogHelpText(), rgitLogFlags, []string{"-h", "--help"}},
 		{"context", runContextHelpText(), rgitContextFlags, []string{"-h", "--help"}},
@@ -113,6 +114,7 @@ func TestCompletionFlags_MatchLiveFlagSets(t *testing.T) {
 	pwshFlagVariables := map[string]string{
 		"diff":       "$rgitDiffFlags",
 		"commit":     "$rgitCommitFlags",
+		"show":       "$rgitShowFlags",
 		"blame":      "$rgitBlameFlags",
 		"log":        "$rgitLogFlags",
 		"context":    "$rgitContextFlags",
@@ -163,7 +165,7 @@ func TestPwshCompletion_SymbolAndSilentDegrade(t *testing.T) {
 		"--for-commit",
 		"2>$null",
 		"catch {\n            return",
-		"$command -in @('diff', 'commit', 'blame', 'log')",
+		"$command -in @('diff', 'commit', 'show', 'blame', 'log')",
 	} {
 		if !strings.Contains(pwshCompletionScript, want) {
 			t.Errorf("pwsh completion script does not contain %q", want)
@@ -221,6 +223,13 @@ func runCompletionHelpText() string {
 // runBlameHelpText is named distinctly from blameHelp (the constant it
 // renders), matching runCompletionHelpText's own reasoning; runBlame takes
 // a context.Context the way runDiff and runCommit do.
+// runShowHelpText mirrors runBlameHelpText for runShow.
+func runShowHelpText() string {
+	var stdout, stderr strings.Builder
+	runShow(context.Background(), "", []string{"--help"}, &stdout, &stderr)
+	return stdout.String()
+}
+
 func runBlameHelpText() string {
 	var stdout, stderr strings.Builder
 	runBlame(context.Background(), "", []string{"--help"}, &stdout, &stderr)

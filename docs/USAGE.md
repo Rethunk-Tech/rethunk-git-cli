@@ -180,6 +180,50 @@ framing as `log -p` and `blame --porcelain`. Both come from the same
 comparison, so it covers the identical scope and pathspec filter as the report
 above it. Mutually exclusive with `--porcelain`.
 
+## Show
+
+```console
+$ rgit show auth.go:ValidateToken
+func ValidateToken(tok string) error {
+	if tok == "" {
+		return ErrEmpty
+	}
+	return nil
+}
+
+$ rgit show --source v1.4.0 auth.go:ValidateToken | diff - <(rgit show auth.go:ValidateToken)
+```
+
+`rgit show FILE:SYMBOL` writes one symbol's own bytes to stdout and nothing
+else — the byte extent the anchor resolves to, with no header, no decoration,
+and no trailing newline the file did not already carry. It is the only way to
+read a symbol as it stood at another revision, and it prints the same extent
+`commit` would splice, so reading and staging can never disagree about where a
+symbol starts and ends.
+
+The default source is the worktree file, falling back to its `HEAD` blob when
+the worktree copy has been deleted — the same default `blame` uses.
+
+`--source <rev>` reads `<rev>:FILE` instead, in either spelling git accepts
+(`--source v1.4.0` or `--source=v1.4.0`). The revision is verified before the
+read: git's own `cat-file` answers "no such object" to a typo'd revision and
+to a path genuinely absent at a real one alike, so without that check
+`--source mian` would report as a missing symbol rather than a missing branch.
+An unknown revision is exit 128 (git's own code for one); a path absent at a
+known revision is exit 3, the ordinary unresolvable-anchor code.
+
+`FILE` is always the path's **current** name. `show` does not follow renames —
+there is no `--follow-rename` here, unlike `blame` and `log`, because a single
+snapshot has no rename boundary to walk.
+
+An anchor that does not resolve is **never** widened to a whole-file dump — it
+is exit 3 (unresolvable), 4 (ambiguous), or 9 (unsupported language), the same
+codes every other anchor-taking command gives. See
+[`CODES.md`](CODES.md#exit-codes).
+
+Nothing is written: `show` reads, and there is no counterpart that splices a
+revision's bytes back into the worktree.
+
 ## Blame
 
 ```console
@@ -597,6 +641,7 @@ output shape is the point).
 | `--exit-code` | (`diff`) Exit 1 when anything is committable, 0 when clean. |
 | `--quiet` | (`diff`) Implies `--exit-code` and suppresses output. |
 | `-p`, `--patch` | (`diff`) Append git's own real patch body after the report. Suppressed by `--quiet`, mutually exclusive with `--porcelain`. |
+| `--source REV` | (`show`) Read the symbol from `REV:FILE` instead of the worktree. Both spellings (`--source REV`, `--source=REV`). An unparseable revision is exit 128, distinct from a path absent at a real one (exit 3). |
 | `--since DATE`, `--until DATE` | (`log`) Bound history by date. A `FILE:SYMBOL` positional keeps the anchor form; otherwise these select unanchored path-scoped history. Forwarded to git's own `--since`/`--until` unparsed. |
 | `-n N`, `--max-count=N` | (`log`) Limit either history form to at most `N` commits; under `--follow-rename`, applies independently per rename segment, so the total may exceed `N`. Forwarded to git's own count limit; omitted by default, so history is unbounded. |
 

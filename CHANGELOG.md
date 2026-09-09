@@ -8,6 +8,13 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit show FILE:SYMBOL` prints one symbol's own bytes to stdout — the same
+  extent `commit` would splice, verbatim, with no header and no added
+  newline. `--source <rev>` reads `<rev>:FILE` instead, which is the only way
+  to read a symbol as of a tag, branch, or commit; the revision is verified
+  first, so a typo'd one is exit 128 rather than a misreported missing symbol.
+  Nothing is written. See [`docs/USAGE.md`](docs/USAGE.md#show).
+
 - `.mdx` resolves through the Markdown grammar. MDX declares no headings of
   its own — an ESM `import`, a `<Component />`, a `{expression}` all parse as
   ordinary paragraph or `html_block` content — so a heading extent in an

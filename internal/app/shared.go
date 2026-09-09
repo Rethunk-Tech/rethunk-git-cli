@@ -419,12 +419,15 @@ func lineRange(src []byte, ext resolve.Extent) (start, end int) {
 	return startLine + 1, endLine + 1
 }
 
-// anchorCommandFlag is one boolean flag parseAnchorCommandArgs recognizes
-// alongside the single FILE:SYMBOL positional -- a token (or, for a short
-// and long spelling, several) and the bool it sets when seen.
+// anchorCommandFlag is one flag parseAnchorCommandArgs recognizes alongside
+// the single FILE:SYMBOL positional -- a token (or, for a short and long
+// spelling, several) and the destination it fills when seen. Exactly one of
+// set and val is non-nil: set marks a boolean flag, val a value-taking one
+// accepted in both git's spellings, "--flag value" and "--flag=value".
 type anchorCommandFlag struct {
 	tokens []string
 	set    *bool
+	val    *string
 }
 
 // parseAnchorCommandArgs is the "one FILE:SYMBOL positional plus a handful
@@ -454,7 +457,8 @@ type anchorCommandFlag struct {
 // meaningful when done is false.
 func parseAnchorCommandArgs(cmdName string, args []string, flags []anchorCommandFlag, help string, stdout, stderr io.Writer) (positional string, code exitcode.Code, done bool) {
 	havePositional := false
-	for _, a := range args {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
 		if a == "--help" || a == "-h" {
 			fmt.Fprint(stdout, help)
 			return "", exitcode.Success, true
@@ -462,9 +466,35 @@ func parseAnchorCommandArgs(cmdName string, args []string, flags []anchorCommand
 
 		matched := false
 		for _, f := range flags {
-			if slices.Contains(f.tokens, a) {
-				*f.set = true
+			switch {
+			case slices.Contains(f.tokens, a):
+				if f.val == nil {
+					*f.set = true
+				} else {
+					// A value-taking flag consumes the next argument
+					// whatever it looks like, including one starting with
+					// "-": git accepts `--source -1` for a revision spelled
+					// that way, and second-guessing the value here would
+					// refuse a legal one.
+					if i+1 >= len(args) {
+						fmt.Fprintf(stderr, "rgit: %s: %s requires a value\n", cmdName, a)
+						fmt.Fprint(stderr, help)
+						return "", exitcode.InvalidUsage, true
+					}
+					i++
+					*f.val = args[i]
+				}
 				matched = true
+			case f.val != nil:
+				for _, tok := range f.tokens {
+					if v, found := strings.CutPrefix(a, tok+"="); found {
+						*f.val = v
+						matched = true
+						break
+					}
+				}
+			}
+			if matched {
 				break
 			}
 		}

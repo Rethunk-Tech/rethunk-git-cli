@@ -17,7 +17,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 )
 
-const usageLine = "usage: rgit [--version] [-C <path>] <diff|commit|blame|log|context|languages|doctor|completion|symbols> [flags] [target...]"
+const usageLine = "usage: rgit [--version] [-C <path>] <diff|commit|show|blame|log|context|languages|doctor|completion|symbols> [flags] [target...]"
 
 // tsOnlyNotice is what any command that runs the diff cross-check --
 // currently rgit diff, rgit commit, and rgit context -- prints when no live
@@ -39,6 +39,7 @@ only that symbol's extent is staged.
 Commands:
   diff        Show what is committable: staged, unstaged, and untracked
   commit      Stage named targets and commit them
+  show        Print one symbol's own bytes, at the worktree or a revision
   blame       Blame bounded to one symbol's own extent
   log         Patch-free history of one symbol
   context     One-call repository orientation, as a record stream
@@ -52,7 +53,7 @@ Global flags (before the command):
   --version    print the version and exit
   -h, --help   show this help and exit
 
-Run 'rgit <command> --help' for that command's own flags -- blame, log,
+Run 'rgit <command> --help' for that command's own flags -- show, blame, log,
 languages, doctor, and symbols each have a real flag surface too, not only diff
 and commit.
 Full reference: docs/USAGE.md
@@ -109,6 +110,8 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 		return runDiff(ctx, dir, args[1:], stdout, stderr)
 	case "commit":
 		return runCommit(ctx, dir, args[1:], stdout, stderr)
+	case "show":
+		return runShow(ctx, dir, args[1:], stdout, stderr)
 	case "blame":
 		return runBlame(ctx, dir, args[1:], stdout, stderr)
 	case "log":

@@ -30,6 +30,10 @@ Restore one symbol's bytes from a revision into the worktree.
   is written; a failed splice leaves the file untouched.
 - **Why held.** It would be the only command that rewrites worktree bytes.
   Holding it keeps the surface non-destructive by design.
+- **Its read half already shipped.** `rgit show FILE:SYMBOL --source REV`
+  resolves the anchor in a revision's blob and prints that extent, which is
+  every step of the mechanism above except the splice and the write. Building
+  restore is now the backup contract and the guardrails, not the reading.
 
 ### Orphan-gopls handshake cleanup
 

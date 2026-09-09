@@ -17,7 +17,7 @@ Install, env vars, verify, uninstall: [docs/INSTALL.md](docs/INSTALL.md).
 
 `rgit commit` stages **one symbol at a time** instead of one file. Name `auth.go:ValidateToken` to commit that function — doc comment, attributes, body — leaving other edits in the file uncommitted.
 
-`rgit diff` shows committable anchors that `rgit commit` accepts. `rgit blame FILE:SYMBOL` and `rgit log FILE:SYMBOL` bound those commands to a symbol's extent ([docs/USAGE.md](docs/USAGE.md)). `rgit context` streams branch, warnings, diff rows, and recent commits in one call ([docs/CODES.md](docs/CODES.md#output-records)).
+`rgit diff` shows committable anchors that `rgit commit` accepts. `rgit show FILE:SYMBOL` prints one symbol's own bytes, at the worktree or at a revision (`--source`). `rgit blame FILE:SYMBOL` and `rgit log FILE:SYMBOL` bound those commands to a symbol's extent ([docs/USAGE.md](docs/USAGE.md)). `rgit context` streams branch, warnings, diff rows, and recent commits in one call ([docs/CODES.md](docs/CODES.md#output-records)).
 
 Everything else stays plain `git`. Full command reference: [docs/USAGE.md](docs/USAGE.md); anchors: [docs/ANCHORS.md](docs/ANCHORS.md).
 
