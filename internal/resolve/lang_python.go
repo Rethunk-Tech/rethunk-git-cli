@@ -1,6 +1,10 @@
 package resolve
 
-import ts "github.com/tree-sitter/go-tree-sitter"
+import (
+	"bytes"
+
+	ts "github.com/tree-sitter/go-tree-sitter"
+)
 
 func init() { register(newPythonLanguage()) }
 
@@ -161,6 +165,33 @@ func (p *pythonLanguage) decoratedDeclaration(src []byte, node *ts.Node) (Declar
 		}
 	}
 	return Declaration{}, false
+}
+
+// trimDeclOnlyEnd implements declOnlyEndTrimmer for assignments alone: a
+// multi-line binding's compared extent ends with its first line, which is
+// what pyright reports for one.
+//
+// pyright names the binding -- the line the identifier is on -- where
+// tree-sitter names the whole statement, so a "CONFIG = {" spanning four
+// lines was a hard extent mismatch (exit 6) on an ordinary dict literal,
+// and the anchor became unstageable the moment pyright was installed.
+// Measured on a 400-file corpus, 49 files carried at least one such binding.
+//
+// Scoped to expression_statement so it is narrower than the blanket
+// "accept any first-line server range" this project already rejected: a
+// function or class keeps its full-extent comparison, so a genuine
+// one-line extent bug there still fails. Like every other implementor of
+// this seam, it moves only what the cross-check compares -- the staged
+// extent is still the whole statement.
+func (p *pythonLanguage) trimDeclOnlyEnd(src []byte, node *ts.Node) uint {
+	if node.GrammarName() != "expression_statement" {
+		return node.EndByte()
+	}
+	start, end := node.StartByte(), node.EndByte()
+	if nl := bytes.IndexByte(src[start:end], '\n'); nl >= 0 {
+		return start + uint(nl)
+	}
+	return end
 }
 
 // assignmentDeclaration reports a module-level "X = 1" as an addressable var.

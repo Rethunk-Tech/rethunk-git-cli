@@ -24,16 +24,18 @@
 //
 // Pseudo-anchors are skipped, matching CrossCheckExtents.
 //
-// Every wired server must be reachable for a run to mean anything, and
-// pyright is the one this machine does not ship: without it Python is the
-// only wired grammar the cross-check has never been exercised against, which
-// is how its convention difference went unmeasured. Install it to a scratch
-// prefix and put that on PATH for the run alone -- never to a PATH directory,
-// which would silently swap the tool the rest of the session uses:
+// Every wired server must be reachable for a run to mean anything. Where a
+// server is not already installed, put it in a scratch prefix and on PATH for
+// the run alone rather than in a PATH directory, which would silently swap
+// the tool the rest of the session uses:
 //
 //	npm install --prefix /var/tmp/rgit-lsp-scratch pyright
 //	PATH="/var/tmp/rgit-lsp-scratch/node_modules/.bin:$PATH" \
 //	  go run -tags rgit_xcheck ./cmd/xcheck -root <workspace> <files...>
+//
+// Python was the grammar this went unrun against longest, and running it is
+// what turned pyright's binding-line convention from an assumption into
+// lang_python.go's own trimDeclOnlyEnd.
 package main
 
 import (

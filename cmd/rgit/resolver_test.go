@@ -2048,6 +2048,53 @@ func TestResolve_HTMLVoidElementDeclOnlyTrimmed(t *testing.T) {
 	qt.Assert(t, qt.Equals(pRes.DeclOnly, pRes.Extent))
 }
 
+// TestResolve_PythonMultiLineAssignmentDeclOnlyTrimmed pins the seam
+// declOnlyExtent consults for Python assignments: pyright names the binding's
+// own line where tree-sitter names the whole statement, so a multi-line
+// literal was a hard extent mismatch (exit 6) and the anchor became
+// unstageable the moment pyright was installed. DeclOnly ends with the first
+// line; Extent -- what actually gets staged -- is still the whole statement.
+//
+// A function keeps DeclOnly == Extent, which is the reason this is scoped to
+// expression_statement rather than applied to every declaration: a genuine
+// one-line extent bug on a def must still fail.
+func TestResolve_PythonMultiLineAssignmentDeclOnlyTrimmed(t *testing.T) {
+	t.Parallel()
+	src := []byte(`CONFIG = {
+    "a": 1,
+    "b": 2,
+}
+
+SINGLE = 1
+
+
+def validate(tok):
+    return bool(tok)
+`)
+	lang, ok := resolve.ForExtension(".py")
+	qt.Assert(t, qt.IsTrue(ok))
+
+	res, err := resolve.Resolve(lang, src, "CONFIG")
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(string(src[res.DeclOnly.Start:res.DeclOnly.End]), "CONFIG = {"))
+	qt.Assert(t, qt.Equals(string(src[res.Extent.Start:res.Extent.End]),
+		"CONFIG = {\n    \"a\": 1,\n    \"b\": 2,\n}"),
+		qt.Commentf("Extent (what gets staged) is still the whole statement"))
+
+	// A one-line binding has nothing to trim, so the two agree already --
+	// the trim is a no-op wherever tree-sitter and pyright never differed.
+	single, err := resolve.Resolve(lang, src, "SINGLE")
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(single.DeclOnly, single.Extent))
+
+	// A multi-line def is deliberately untouched: its full body is still
+	// what the cross-check compares.
+	fn, err := resolve.Resolve(lang, src, "validate")
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(fn.DeclOnly, fn.Extent))
+	qt.Assert(t, qt.StringContains(string(src[fn.DeclOnly.Start:fn.DeclOnly.End]), "return bool(tok)"))
+}
+
 func TestResolve_ForPathShebangFallback(t *testing.T) {
 	t.Parallel()
 	// A recognized extension is authoritative and never even looks at

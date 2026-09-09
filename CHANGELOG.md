@@ -6,6 +6,19 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A multi-line Python assignment is stageable by anchor again when
+  `pyright-langserver` is installed. pyright names the binding's own line
+  where tree-sitter names the whole statement, so `rgit commit
+  config.py:SETTINGS` on an ordinary multi-line dict failed with exit 6 and
+  every `rgit diff` on the file warned — and only once the optional server
+  `rgit doctor` recommends had been installed. 49 of 400 surveyed Python
+  files carry at least one such binding. The compared extent now ends with
+  the binding's first line (`declOnlyEndTrimmer`, the seam HTML and YAML
+  already use); the staged extent is unchanged, and functions and classes
+  keep their full-extent comparison.
+
 ### Added
 
 - `rgit show FILE:SYMBOL...` prints each named symbol's own bytes to stdout —

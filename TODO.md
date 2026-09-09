@@ -89,10 +89,21 @@ last table in a file extends to EOF. `configClient`
 **`vscode-markdown-language-server`** crashes at startup on an ESM/CJS
 `vscode-uri` interop fault. **SQL** has no language server.
 
-**Python multi-line assignments** are left disagreeing on purpose: `pyright`
-names the binding's first line where tree-sitter names the statement.
-Accepting any server range that is merely the anchor's first line would also
-accept a genuine one-line extent bug.
+**Python multi-line assignments** were left disagreeing until the corpus
+measurement was possible. `pyright` names the binding's first line where
+tree-sitter names the statement, and once pyright was installed that was a
+hard extent mismatch (exit 6) on an ordinary multi-line dict or tuple: the
+anchor became unstageable, and 49 of 400 surveyed Python files carried at
+least one. `cmd/xcheck` put numbers on it -- 4 of 6 symbols agreeing before,
+6 of 6 after.
+
+The fix is `pythonLanguage.trimDeclOnlyEnd` (`internal/resolve/lang_python.go`),
+the same `declOnlyEndTrimmer` seam HTML and YAML already use: the extent the
+cross-check compares ends with the binding's first line, while the extent that
+gets staged is still the whole statement. Scoped to `expression_statement`, so
+it is narrower than the blanket "accept any first-line server range" rejected
+here -- a function or class keeps its full-extent comparison, and a genuine
+one-line extent bug there still fails.
 
 ### Performance
 
