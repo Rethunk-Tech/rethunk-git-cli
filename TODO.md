@@ -82,15 +82,33 @@ ordered every shipped grammar.
 
 ### Cross-check baseline
 
-A 60-file fleet corpus across all ten wired grammars compares **885 symbols
-with 0 disagreements**, and 32 anchors the servers do not name (20 CSS
-at-rules and nested rules, 4 each in HTML, Python and shell). That is the
-number a later run is measured against; `make xcheck` runs the same
-comparison over the committed fixtures.
+A 220-file fleet corpus, 22 files in each of the ten wired grammars, compares
+**4,920 symbols with 0 disagreements**. That is the number a later run is
+measured against; `make xcheck` runs the same comparison over the committed
+fixtures, and `SYNTH_CORPUS` points the write-side property test at the same
+kind of list.
 
-Before CSS was indexed per selector the same corpus compared 603 with 120
-unnamed, so the difference is 282 anchors that were silently unverified
-rather than any change in agreement.
+158 anchors go unnamed, and both causes are understood rather than open: 127
+in CSS, where a selector heading several rules cannot be uniquely paired
+(`sameRange`), plus shell variable assignments and repeated names -- see the
+two entries below. An earlier 60-file run of the same shape compared 885 with
+32 unnamed; the ratios move with the corpus, the agreement does not.
+
+### Ordinal anchors go unpaired when the counts differ
+
+An anchor like `body#2` pairs with a server symbol only when the server
+reported the same number of same-named symbols the resolver found
+(`matchLSPSymbol`). Measured on real Python, it routinely does not: two
+module-level `body = ...` statements are two tree-sitter declarations but one
+pyright symbol, because a rebinding is not a second symbol to a type checker.
+The guard is correct as written -- indexing the server's list by an ordinal
+when the counts disagree pairs two unrelated declarations and reports a
+disagreement in which neither side is wrong.
+
+The shell half of the same column is a server limitation with nothing to fix
+here: `bash-language-server` reports no symbol at all for a variable
+assignment, so `f`, `err` and `DRY_RUN` are never named. Together these are
+the whole `notNamed` column: 32 of 917 anchors fleet-wide.
 
 ### Cross-check servers deliberately not wired
 

@@ -21,6 +21,16 @@ Notable changes to `rgit`. The format follows
 
 ### Fixed
 
+- An anchor whose **name** contains a colon resolves. Argument classification
+  split a token at its last colon only, so `s.css:a:hover` was read as the
+  path `s.css:a` plus the name `hover` and refused — meaning `rgit` rejected
+  anchors `rgit symbols` had just printed, for every CSS pseudo-class,
+  pseudo-element, `:is()`/`:not()`, and `@media (max-width: 600px)` prelude:
+  462 of 3054 anchors across 36 of 59 surveyed stylesheets. Rule 5 now tries
+  the last colon first and works leftwards to the first split whose left side
+  exists, so a path containing a colon still splits exactly as before. See
+  [`docs/USAGE.md`](docs/USAGE.md#argument-shape).
+
 - The CSS cross-check verifies what it could not before. A grouped rule's
   members are compared from their own selector's line, which is where
   `vscode-css-language-server` reports them (`Declaration.NameNode`); the
@@ -40,6 +50,14 @@ Notable changes to `rgit`. The format follows
   keep their full-extent comparison.
 
 ### Added
+
+- Two corpus property tests. `internal/synth` replaces every declaration in a
+  file with its own bytes and requires the file back byte-identical, which
+  drives the overlap coalescing and reverse-offset ordering against real
+  nested extents (`SYNTH_CORPUS` points it at any file list; 211 fleet files
+  pass). `cmd/rgit` perturbs one declaration, stages that anchor, and requires
+  the staged blob to equal the worktree file, across every wired grammar —
+  the colon-anchor defect above was its first finding.
 
 - `rgit symbols --porcelain` terminates each record with NUL instead of a
   newline, fields and order unchanged, so a symbol may contain any byte but
