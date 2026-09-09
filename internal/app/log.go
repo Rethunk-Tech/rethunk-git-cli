@@ -379,10 +379,10 @@ func runLogFollowRename(ctx context.Context, repo *gitx.Repo, file string, src [
 // runLogPathScoped is rgit log --since/--until's form: ordinary,
 // non-anchored git history bounded by date and, optionally, one or more
 // paths. Flags are parsed with pflag, matching commit.go and diff.go's own
-// style for a surface with value-taking flags -- shared.go's
-// parseAnchorCommandArgs only ever supported booleans, and this form's
-// arity (zero or more path positionals, none of them a required anchor)
-// does not fit its "exactly one positional" rule regardless.
+// style for a surface with value-taking flags -- this form's arity (zero or
+// more path positionals, none of them a required anchor) does not fit
+// shared.go's parseAnchorCommandArgs, which always requires at least one
+// anchor.
 func runLogPathScoped(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	var since, until string
 	var maxCount int

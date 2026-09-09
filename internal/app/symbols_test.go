@@ -30,12 +30,7 @@ func TestRun_SymbolsHelpAndUsage(t *testing.T) {
 	stdout, stderr, code := runApp(t, "symbols")
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.Equals(stdout, ""))
-	wantUsage := "rgit: symbols requires exactly one file argument\n" + symbolsHelp
-	qt.Assert(t, qt.Equals(stderr, wantUsage))
-
-	stdout, stderr, code = runApp(t, "symbols", "a.go", "b.go")
-	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-	qt.Assert(t, qt.Equals(stdout, ""))
+	wantUsage := "rgit: symbols requires at least one file argument\n" + symbolsHelp
 	qt.Assert(t, qt.Equals(stderr, wantUsage))
 }
 
@@ -329,4 +324,47 @@ func TestRunSymbolsAcceptsAbsolutePathInsideRoot(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.StringContains(stdout, "A"))
+}
+
+// TestSymbols_MultipleFilesPrefixLikeGrep pins the batch contract: one file
+// stays bare (the completion scripts parse that output), several prefix every
+// line with the path exactly as given, so a line composes straight back into a
+// FILE:SYMBOL anchor.
+func TestSymbols_MultipleFilesPrefixLikeGrep(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "b.go", "package a\n\nfunc C() int {\n\treturn 3\n}\n")
+
+	stdout, stderr, code := runApp(t, "symbols", "a.go")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.Equals(stdout, "A\nB\n"))
+
+	stdout, _, code = runApp(t, "symbols", "a.go", "b.go")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stdout, "a.go\tA\na.go\tB\nb.go\tC\n"))
+
+	// --with-filename gives one file the same shape, so a caller looping
+	// over an argument list need not branch on its length.
+	stdout, _, code = runApp(t, "symbols", "--with-filename", "a.go")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stdout, "a.go\tA\na.go\tB\n"))
+
+	// The prefix composes with --with-lines rather than replacing it.
+	stdout, _, code = runApp(t, "symbols", "--with-lines", "a.go", "b.go")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(stdout, "a.go\t3,6\tA"))
+	qt.Assert(t, qt.StringContains(stdout, "b.go\t3,5\tC"))
+}
+
+// TestSymbols_ResolvesEveryFileBeforeWriting pins the all-or-nothing rule: an
+// unsupported file anywhere in the list leaves stdout empty, so a truncated
+// listing can never be read as "that file has no more symbols".
+func TestSymbols_ResolvesEveryFileBeforeWriting(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "main.rs", "fn main() {}\n")
+
+	stdout, stderr, code := runApp(t, "symbols", "a.go", "main.rs")
+	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
+	qt.Assert(t, qt.Equals(stdout, ""))
+	qt.Assert(t, qt.StringContains(stderr, "unsupported language"))
 }

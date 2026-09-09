@@ -5,6 +5,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -15,7 +16,7 @@ import (
 )
 
 func TestShow_UsageRefusals(t *testing.T) {
-	assertAnchorUsageRefusals(t, "show")
+	assertAnchorUsageRefusals(t, "show", false)
 }
 
 // TestShow_PrintsExtentVerbatim pins the contract the command exists for:
@@ -104,4 +105,44 @@ func TestShow_MissingWorktreeFileFallsBackToHEAD(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.Equals(stdout, "// A returns one.\nfunc A() int {\n\treturn 1\n}"))
+}
+
+// TestShow_MultipleAnchorsAreLengthFramed pins the batch contract: one anchor
+// stays raw bytes so it still pipes, several are framed by a
+// "ANCHOR<TAB>NBYTES" line and exactly that many bytes. The length, not a
+// delimiter, is what makes the stream parseable -- a symbol's own text can
+// contain a line that looks like a header.
+func TestShow_MultipleAnchorsAreLengthFramed(t *testing.T) {
+	chdirTempRepo(t)
+
+	const a = "// A returns one.\nfunc A() int {\n\treturn 1\n}"
+	const b = "func B() int {\n\treturn 2\n}"
+
+	stdout, stderr, code := runApp(t, "show", "a.go:A", "a.go:B")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	want := "a.go:A\t" + strconv.Itoa(len(a)) + "\n" + a + "a.go:B\t" + strconv.Itoa(len(b)) + "\n" + b
+	qt.Assert(t, qt.Equals(stdout, want))
+
+	// --with-header frames a lone anchor identically, so a caller looping
+	// over an argument list need not branch on its length.
+	stdout, _, code = runApp(t, "show", "--with-header", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stdout, "a.go:A\t"+strconv.Itoa(len(a))+"\n"+a))
+
+	// The declared length is the extent's real byte count, so a reader can
+	// consume the stream without scanning for a separator at all.
+	qt.Assert(t, qt.IsTrue(strings.HasSuffix(stdout, a)))
+}
+
+// TestShow_ResolvesEveryAnchorBeforeWriting pins the all-or-nothing rule: a
+// failure anywhere in the list leaves stdout empty rather than emitting the
+// anchors that happened to come first.
+func TestShow_ResolvesEveryAnchorBeforeWriting(t *testing.T) {
+	chdirTempRepo(t)
+
+	stdout, stderr, code := runApp(t, "show", "a.go:A", "a.go:NoSuchSymbol")
+	qt.Assert(t, qt.Equals(code, exitcode.AnchorUnresolvable))
+	qt.Assert(t, qt.Equals(stdout, ""))
+	qt.Assert(t, qt.StringContains(stderr, "NoSuchSymbol"))
 }

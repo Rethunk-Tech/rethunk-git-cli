@@ -8,16 +8,27 @@ import (
 	"path/filepath"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
-const symbolsHelp = `usage: rgit symbols [--for-commit] [--with-lines] <file>
+const symbolsHelp = `usage: rgit symbols [--for-commit] [--with-lines] [--with-filename] <file>...
 
-List every declared symbol that can be resolved from the worktree file or its HEAD blob.
---for-commit  Omit structured-data symbols that commit refuses.
---with-lines  Emit "start,end<TAB>symbol" instead of the bare name, where the
-              range is git's own -L range for that symbol -- the same range
-              blame and log bound themselves to.
+List every declared symbol that can be resolved from each worktree file or its
+HEAD blob.
+--for-commit     Omit structured-data symbols that commit refuses.
+--with-lines     Emit "start,end<TAB>symbol" instead of the bare name, where
+                 the range is git's own -L range for that symbol -- the same
+                 range blame and log bound themselves to.
+--with-filename  Prefix every line with "FILE<TAB>", using the path exactly as
+                 given so it composes straight back into a FILE:SYMBOL anchor.
+                 Implied by naming more than one file, the way grep prefixes
+                 only when several are named; pass it so a script need not
+                 special-case an argument list that happens to hold one.
+
+Every file is resolved before any line is written, so an unreadable or
+unsupported file anywhere in the list leaves stdout untouched rather than half
+a listing.
 
 Full reference: docs/USAGE.md
 `
@@ -25,6 +36,7 @@ Full reference: docs/USAGE.md
 func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	forCommit := false
 	withLines := false
+	withFilename := false
 	positionals := make([]string, 0, 1)
 	for _, arg := range args {
 		switch arg {
@@ -35,12 +47,14 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 			forCommit = true
 		case "--with-lines":
 			withLines = true
+		case "--with-filename":
+			withFilename = true
 		default:
 			positionals = append(positionals, arg)
 		}
 	}
-	if len(positionals) != 1 {
-		fmt.Fprintln(stderr, "rgit: symbols requires exactly one file argument")
+	if len(positionals) == 0 {
+		fmt.Fprintln(stderr, "rgit: symbols requires at least one file argument")
 		fmt.Fprint(stderr, symbolsHelp)
 		return exitcode.InvalidUsage
 	}
@@ -55,13 +69,44 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 		return exitcode.GitFailure
 	}
 
-	path := positionals[0]
+	// Every file is resolved before anything is written, matching show's own
+	// all-or-nothing rule: a listing cut off midway reads as "that file has
+	// no more symbols", which is exactly the wrong conclusion.
+	listings := make([][]string, 0, len(positionals))
+	for _, positional := range positionals {
+		lines, code := symbolLines(ctx, root, prefix, repo, ignoreCase, positional, forCommit, withLines, stderr)
+		if code != exitcode.Success {
+			return code
+		}
+		listings = append(listings, lines)
+	}
+
+	showName := withFilename || len(positionals) > 1
+	for i, lines := range listings {
+		for _, line := range lines {
+			if showName {
+				fmt.Fprintf(stdout, "%s\t%s\n", positionals[i], line)
+				continue
+			}
+			fmt.Fprintln(stdout, line)
+		}
+	}
+	return exitcode.Success
+}
+
+// symbolLines is one file's worth of runSymbols: resolve the path, pick the
+// grammar, and render either bare anchors or git's own -L ranges. Split out
+// so the multi-file loop resolves every file before the first line is
+// written; every refusal has already been reported to stderr when code is
+// not Success.
+func symbolLines(ctx context.Context, root, prefix string, repo *gitx.Repo, ignoreCase bool, positional string, forCommit, withLines bool, stderr io.Writer) ([]string, exitcode.Code) {
+	path := positional
 	if filepath.IsAbs(path) {
 		var err error
 		path, err = filepath.Rel(root, path)
 		if err != nil {
-			fmt.Fprintf(stderr, "rgit: cannot resolve file %q: %v\n", positionals[0], err)
-			return exitcode.GitFailure
+			fmt.Fprintf(stderr, "rgit: cannot resolve file %q: %v\n", positional, err)
+			return nil, exitcode.GitFailure
 		}
 	} else {
 		path = filepath.Join(prefix, path)
@@ -75,7 +120,7 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 	// it symbols reads files above root that diff and blame refuse.
 	if err := checkPathEscape(root, path); err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return exitcode.InvalidUsage
+		return nil, exitcode.InvalidUsage
 	}
 
 	src, err := os.ReadFile(filepath.Join(root, path))
@@ -92,8 +137,8 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 			}
 		}
 		if err != nil || !headExists {
-			fmt.Fprintf(stderr, "rgit: cannot read %q: %v\n", positionals[0], err)
-			return exitcode.GitFailure
+			fmt.Fprintf(stderr, "rgit: cannot read %q: %v\n", positional, err)
+			return nil, exitcode.GitFailure
 		}
 	}
 
@@ -101,39 +146,37 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 		return headSrc, headExists, nil
 	})
 	if err != nil {
-		fmt.Fprintf(stderr, "rgit: cannot read %q: %v\n", positionals[0], err)
-		return exitcode.GitFailure
+		fmt.Fprintf(stderr, "rgit: cannot read %q: %v\n", positional, err)
+		return nil, exitcode.GitFailure
 	}
 	if !ok {
-		fmt.Fprintf(stderr, "rgit: unsupported language for %q%s\n", positionals[0], unsupportedLanguageHint(filepath.Ext(path)))
-		return exitcode.UnsupportedLanguage
+		fmt.Fprintf(stderr, "rgit: unsupported language for %q%s\n", positional, unsupportedLanguageHint(filepath.Ext(path)))
+		return nil, exitcode.UnsupportedLanguage
 	}
 	if forCommit && resolve.IsStructuredData(lang) {
-		return exitcode.Success
+		return nil, exitcode.Success
 	}
 
 	if withLines {
 		decls, err := resolve.DeclExtents(lang, src)
 		if err != nil {
-			fmt.Fprintf(stderr, "rgit: cannot resolve symbols in %q: %v\n", positionals[0], err)
-			return exitcode.GitFailure
+			fmt.Fprintf(stderr, "rgit: cannot resolve symbols in %q: %v\n", positional, err)
+			return nil, exitcode.GitFailure
 		}
+		lines := make([]string, 0, len(decls))
 		for _, decl := range decls {
 			// lineRange, not a second conversion: blame and log turn the
 			// same extent into the same range through it.
 			start, end := lineRange(src, decl.Extent)
-			fmt.Fprintf(stdout, "%d,%d\t%s\n", start, end, decl.Anchor)
+			lines = append(lines, fmt.Sprintf("%d,%d\t%s", start, end, decl.Anchor))
 		}
-		return exitcode.Success
+		return lines, exitcode.Success
 	}
 
 	symbols, err := resolve.DeclOrder(lang, src)
 	if err != nil {
-		fmt.Fprintf(stderr, "rgit: cannot resolve symbols in %q: %v\n", positionals[0], err)
-		return exitcode.GitFailure
+		fmt.Fprintf(stderr, "rgit: cannot resolve symbols in %q: %v\n", positional, err)
+		return nil, exitcode.GitFailure
 	}
-	for _, symbol := range symbols {
-		fmt.Fprintln(stdout, symbol)
-	}
-	return exitcode.Success
+	return symbols, exitcode.Success
 }

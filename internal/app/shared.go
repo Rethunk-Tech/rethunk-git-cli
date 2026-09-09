@@ -444,24 +444,28 @@ type anchorCommandFlag struct {
 //     found "anywhere" in args (the rule for every hand-parsed command),
 //     not only as the sole argument or only before the positional.
 //   - A recognized flag from flags sets its bool and is consumed.
-//   - A second positional, or an unrecognized "-"-prefixed token, is
-//     refused by name. "--" is exempt (never itself the positional): a
-//     bare "--" classifies to nothing and is refused by
+//   - A positional beyond maxPositionals, or an unrecognized "-"-prefixed
+//     token, is refused by name. "--" is exempt (never itself a
+//     positional): a bare "--" classifies to nothing and is refused by
 //     resolveAnchorExtent's own classification instead, with a message
 //     that names the anchor requirement rather than an "unrecognized
 //     argument" that would be true of nothing in particular.
-//   - Anything else becomes the positional.
+//   - Anything else becomes a positional.
+//
+// maxPositionals caps how many anchors the command accepts; 0 means
+// unlimited. blame and log pass 1 -- neither has any meaning for a second
+// anchor, since each bounds one git invocation to one line range -- while
+// show passes 0 and reads every anchor named.
 //
 // done is true whenever the caller must return code immediately (help
-// printed, or a refusal already written to stderr); positional is only
-// meaningful when done is false.
-func parseAnchorCommandArgs(cmdName string, args []string, flags []anchorCommandFlag, help string, stdout, stderr io.Writer) (positional string, code exitcode.Code, done bool) {
-	havePositional := false
+// printed, or a refusal already written to stderr); positionals is only
+// meaningful when done is false, and is guaranteed non-empty then.
+func parseAnchorCommandArgs(cmdName string, args []string, flags []anchorCommandFlag, maxPositionals int, help string, stdout, stderr io.Writer) (positionals []string, code exitcode.Code, done bool) {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		if a == "--help" || a == "-h" {
 			fmt.Fprint(stdout, help)
-			return "", exitcode.Success, true
+			return nil, exitcode.Success, true
 		}
 
 		matched := false
@@ -479,7 +483,7 @@ func parseAnchorCommandArgs(cmdName string, args []string, flags []anchorCommand
 					if i+1 >= len(args) {
 						fmt.Fprintf(stderr, "rgit: %s: %s requires a value\n", cmdName, a)
 						fmt.Fprint(stderr, help)
-						return "", exitcode.InvalidUsage, true
+						return nil, exitcode.InvalidUsage, true
 					}
 					i++
 					*f.val = args[i]
@@ -503,23 +507,22 @@ func parseAnchorCommandArgs(cmdName string, args []string, flags []anchorCommand
 		}
 
 		switch {
-		case havePositional:
+		case maxPositionals > 0 && len(positionals) >= maxPositionals:
 			fmt.Fprintf(stderr, "rgit: %s: unrecognized argument %q\n", cmdName, a)
 			fmt.Fprint(stderr, help)
-			return "", exitcode.InvalidUsage, true
+			return nil, exitcode.InvalidUsage, true
 		case a != "--" && strings.HasPrefix(a, "-"):
 			fmt.Fprintf(stderr, "rgit: %s: unrecognized argument %q\n", cmdName, a)
 			fmt.Fprint(stderr, help)
-			return "", exitcode.InvalidUsage, true
+			return nil, exitcode.InvalidUsage, true
 		default:
-			positional = a
-			havePositional = true
+			positionals = append(positionals, a)
 		}
 	}
-	if !havePositional {
+	if len(positionals) == 0 {
 		fmt.Fprintf(stderr, "rgit: %s requires a FILE:SYMBOL anchor\n", cmdName)
 		fmt.Fprint(stderr, help)
-		return "", exitcode.InvalidUsage, true
+		return nil, exitcode.InvalidUsage, true
 	}
-	return positional, exitcode.Success, false
+	return positionals, exitcode.Success, false
 }

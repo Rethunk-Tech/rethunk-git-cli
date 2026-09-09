@@ -8,12 +8,27 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
-- `rgit show FILE:SYMBOL` prints one symbol's own bytes to stdout — the same
-  extent `commit` would splice, verbatim, with no header and no added
-  newline. `--source <rev>` reads `<rev>:FILE` instead, which is the only way
-  to read a symbol as of a tag, branch, or commit; the revision is verified
-  first, so a typo'd one is exit 128 rather than a misreported missing symbol.
+- `rgit show FILE:SYMBOL...` prints each named symbol's own bytes to stdout —
+  the same extent `commit` would splice, verbatim, with no added newline.
+  `--source <rev>` reads `<rev>:FILE` instead, which is the only way to read a
+  symbol as of a tag, branch, or commit; the revision is verified first, so a
+  typo'd one is exit 128 rather than a misreported missing symbol. One anchor
+  prints raw bytes and pipes; several are framed `FILE:ANCHOR<TAB>NBYTES` so
+  the stream stays unambiguous without a delimiter that a symbol's own text
+  could collide with, and `--with-header` forces that framing for one.
   Nothing is written. See [`docs/USAGE.md`](docs/USAGE.md#show).
+
+- CI cross-compiles every published target on each push: a `make cross` job
+  (linux amd64/arm64, windows amd64) and a `make cross-darwin` job on a macOS
+  runner. Before this, the Go code was compiled only for linux in CI, so a
+  windows or darwin break first surfaced in `release.yml` at tag time, and
+  `internal/lsp/owner_windows.go` was compiled by no CI job at all. Tests
+  still run on linux only.
+
+- `rgit symbols` accepts several files. Naming more than one prefixes every
+  line with `FILE<TAB>`, as `grep` does; `--with-filename` forces the prefix
+  for one. Both commands resolve every target before writing anything, so a
+  failure leaves stdout untouched rather than half a listing.
 
 - `.mdx` resolves through the Markdown grammar. MDX declares no headings of
   its own — an ESM `import`, a `<Component />`, a `{expression}` all parse as

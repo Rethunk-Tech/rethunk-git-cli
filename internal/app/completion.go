@@ -123,11 +123,11 @@ const rgitCommitFlags = "-m --message -F --message-file -s --signoff --trailer -
 const rgitLanguagesFlags = "--porcelain --in-repo -h --help"
 const rgitDoctorFlags = "--porcelain --deep -h --help"
 const rgitCompletionFlags = "-h --help"
-const rgitShowFlags = "--source -h --help"
+const rgitShowFlags = "--source --with-header -h --help"
 const rgitBlameFlags = "-p --porcelain --follow-rename -h --help"
 const rgitLogFlags = "--porcelain -p --patch --follow-rename --since --until -n --max-count -h --help"
 const rgitContextFlags = "-h --help"
-const rgitSymbolsFlags = "--for-commit --with-lines -h --help"
+const rgitSymbolsFlags = "--for-commit --with-lines --with-filename -h --help"
 
 // bashCompletionScript is emitted verbatim by `rgit completion bash`. The
 // one dynamic piece -- symbol names after "FILE:" -- shells back out to

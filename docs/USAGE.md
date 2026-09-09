@@ -194,12 +194,34 @@ func ValidateToken(tok string) error {
 $ rgit show --source v1.4.0 auth.go:ValidateToken | diff - <(rgit show auth.go:ValidateToken)
 ```
 
-`rgit show FILE:SYMBOL` writes one symbol's own bytes to stdout and nothing
-else — the byte extent the anchor resolves to, with no header, no decoration,
-and no trailing newline the file did not already carry. It is the only way to
-read a symbol as it stood at another revision, and it prints the same extent
-`commit` would splice, so reading and staging can never disagree about where a
-symbol starts and ends.
+`rgit show FILE:SYMBOL...` writes each named symbol's own bytes to stdout —
+the byte extent the anchor resolves to, with no trailing newline the file did
+not already carry. It is the only way to read a symbol as it stood at another
+revision, and it prints the same extent `commit` would splice, so reading and
+staging can never disagree about where a symbol starts and ends.
+
+With **one** anchor and no `--with-header`, stdout is those bytes and nothing
+else, so it pipes. With **several**, each extent is framed by a header line
+`FILE:ANCHOR<TAB>NBYTES` followed by exactly `NBYTES` bytes:
+
+```console
+$ rgit show auth.go:ValidateToken auth.go:@imports
+auth.go:ValidateToken	118
+func ValidateToken(tok string) error {
+	...
+}auth.go:@imports	34
+import (
+	"errors"
+)
+```
+
+The length, not a delimiter, is what makes the stream unambiguous — a symbol's
+own text can contain anything, including a line that looks like a header.
+`--with-header` forces that framing for a single anchor too, so a script need
+not special-case an argument list that happens to hold one.
+
+Every anchor is resolved before any byte is written, so a failure anywhere in
+the list leaves stdout untouched rather than half a stream.
 
 The default source is the worktree file, falling back to its `HEAD` blob when
 the worktree copy has been deleted — the same default `blame` uses.
@@ -223,6 +245,9 @@ codes every other anchor-taking command gives. See
 
 Nothing is written: `show` reads, and there is no counterpart that splices a
 revision's bytes back into the worktree.
+
+`--source` applies to every anchor in one invocation — there is no per-anchor
+revision, so reading two symbols at two different revisions is two calls.
 
 ## Blame
 
@@ -533,10 +558,10 @@ $ rgit symbols auth.go
 ValidateToken
 ```
 
-`rgit symbols [--for-commit] [--with-lines] <file>` lists every declared symbol
-that can be resolved from the worktree file, or from the file's `HEAD` blob when
-the worktree copy has been deleted, one symbol per line. A path present in
-neither the worktree nor `HEAD` still errors. `--for-commit` omits
+`rgit symbols [--for-commit] [--with-lines] [--with-filename] <file>...` lists
+every declared symbol that can be resolved from each worktree file, or from a
+file's `HEAD` blob when the worktree copy has been deleted, one symbol per
+line. A path present in neither the worktree nor `HEAD` still errors. `--for-commit` omits
 structured-data symbols that `rgit commit` refuses; it still exits successfully
 without output when the file is a supported structured-data file.
 
@@ -554,9 +579,29 @@ The range is git's own `-L start,end` range for that symbol — the same range
 can be handed straight to a reader that takes a line range. The record format is
 in [`CODES.md`](CODES.md#rgit-symbols---with-lines).
 
-`--help`/`-h` prints the command's usage text and exits 0. Exactly one file
-argument is required; a missing or extra argument prints the usage text to
-stderr and exits with the invalid-usage code. A file that cannot be read from
+Naming **several** files prefixes every line with `FILE<TAB>`, using the path
+exactly as given so a line composes straight back into a `FILE:SYMBOL` anchor —
+the same rule `grep` follows, which prefixes only when several files are named:
+
+```console
+$ rgit symbols auth.go session.go
+auth.go	@imports
+auth.go	ValidateToken
+session.go	NewSession
+```
+
+`--with-filename` forces that prefix for a single file too, so a script need
+not special-case an argument list that happens to hold one. It composes with
+`--with-lines`, whose range column follows the filename.
+
+Every file is resolved before any line is written, so an unreadable or
+unsupported file anywhere in the list leaves stdout untouched rather than half
+a listing — a truncated listing would otherwise read as "that file has no more
+symbols".
+
+`--help`/`-h` prints the command's usage text and exits 0. At least one file
+argument is required; naming none prints the usage text to stderr and exits
+with the invalid-usage code. A file that cannot be read from
 either source or whose symbols cannot be resolved exits with the git-failure
 code, while an unsupported language exits with the unsupported-language code.
 See [`CODES.md`](CODES.md#exit-codes).
@@ -641,6 +686,8 @@ output shape is the point).
 | `--exit-code` | (`diff`) Exit 1 when anything is committable, 0 when clean. |
 | `--quiet` | (`diff`) Implies `--exit-code` and suppresses output. |
 | `-p`, `--patch` | (`diff`) Append git's own real patch body after the report. Suppressed by `--quiet`, mutually exclusive with `--porcelain`. |
+| `--with-header` | (`show`) Frame a single anchor the way several are framed. Implied by naming more than one. |
+| `--with-filename` | (`symbols`) Prefix every line with `FILE<TAB>`. Implied by naming more than one file, as `grep` does. |
 | `--source REV` | (`show`) Read the symbol from `REV:FILE` instead of the worktree. Both spellings (`--source REV`, `--source=REV`). An unparseable revision is exit 128, distinct from a path absent at a real one (exit 3). |
 | `--since DATE`, `--until DATE` | (`log`) Bound history by date. A `FILE:SYMBOL` positional keeps the anchor form; otherwise these select unanchored path-scoped history. Forwarded to git's own `--since`/`--until` unparsed. |
 | `-n N`, `--max-count=N` | (`log`) Limit either history form to at most `N` commits; under `--follow-rename`, applies independently per rename segment, so the total may exceed `N`. Forwarded to git's own count limit; omitted by default, so history is unbounded. |

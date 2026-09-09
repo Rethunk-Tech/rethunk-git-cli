@@ -20,7 +20,10 @@ import (
 // a bare pathspec, a bare "--", a second positional, and an unrecognized
 // flag. One table instead of two hand-copies that could drift the moment
 // only one of them is updated for a shared-loop change.
-func assertAnchorUsageRefusals(t *testing.T, cmd string) {
+// singleAnchor says the command takes exactly one anchor, so a second
+// positional is an error. show takes any number and opts out of that one
+// case; every other shape in the matrix still applies to it.
+func assertAnchorUsageRefusals(t *testing.T, cmd string, singleAnchor bool) {
 	t.Helper()
 
 	t.Chdir(t.TempDir())
@@ -59,12 +62,14 @@ func assertAnchorUsageRefusals(t *testing.T, cmd string) {
 		qt.Assert(t, qt.StringContains(stderr, "requires a FILE:SYMBOL anchor"))
 	})
 
-	t.Run("extra positional is refused", func(t *testing.T) {
-		chdirTempRepo(t)
-		_, stderr, code := runApp(t, cmd, "a.go:A", "a.go:B")
-		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-		qt.Assert(t, qt.StringContains(stderr, "unrecognized argument"))
-	})
+	if singleAnchor {
+		t.Run("extra positional is refused", func(t *testing.T) {
+			chdirTempRepo(t)
+			_, stderr, code := runApp(t, cmd, "a.go:A", "a.go:B")
+			qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+			qt.Assert(t, qt.StringContains(stderr, "unrecognized argument"))
+		})
+	}
 
 	// "unknown flag is refused before positional classification" pins that
 	// a "-"-prefixed token which is none of the command's own flags is
@@ -79,7 +84,7 @@ func assertAnchorUsageRefusals(t *testing.T, cmd string) {
 }
 
 func TestRun_BlameHelpAndUsage(t *testing.T) {
-	assertAnchorUsageRefusals(t, "blame")
+	assertAnchorUsageRefusals(t, "blame", true)
 }
 
 func TestRun_BlameHelpEquality(t *testing.T) {

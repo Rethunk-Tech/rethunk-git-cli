@@ -46,15 +46,16 @@ Full reference: docs/USAGE.md
 func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	porcelain := false
 	followRename := false
-	positional, code, done := parseAnchorCommandArgs("blame", args,
+	positionals, code, done := parseAnchorCommandArgs("blame", args,
 		[]anchorCommandFlag{
 			{tokens: []string{"-p", "--porcelain"}, set: &porcelain},
 			{tokens: []string{"--follow-rename"}, set: &followRename},
 		},
-		blameHelp, stdout, stderr)
+		1, blameHelp, stdout, stderr)
 	if done {
 		return code
 	}
+	positional := positionals[0]
 
 	headOnly := false
 	repo, file, src, res, anchorName, code := resolveAnchorExtent(ctx, dir, stderr, positional, "blame", blameHelp,
