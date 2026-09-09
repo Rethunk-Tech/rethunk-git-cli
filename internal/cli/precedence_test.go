@@ -101,6 +101,38 @@ func TestClassifyArgs_PrecedenceTable(t *testing.T) {
 	}
 }
 
+// TestClassifyArgs_Rule5NameMayContainColons pins both halves of rule 5's
+// scan. Starting at the last colon is what keeps a path that itself carries
+// one splitting as it always did; continuing leftwards is what lets a name
+// carry one, which CSS anchors do constantly ("a:hover", "*::before",
+// "@media (max-width: 600px)"). Before the scan, rgit refused anchors its own
+// `symbols` had printed -- 462 of 3054 across 36 of 59 surveyed stylesheets.
+func TestClassifyArgs_Rule5NameMayContainColons(t *testing.T) {
+	t.Parallel()
+	_, checker, revs, ctx := newClassifyRepo(t)
+
+	for _, tc := range []struct {
+		name, arg, file, sym string
+	}{
+		{"name carries colons", "a.go:a:hover", "a.go", "a:hover"},
+		{"name carries a doubled colon", "a.go:*::before", "a.go", "*::before"},
+		{"name carries a colon and spaces", "a.go:@media (max-width: 600px)", "a.go", "@media (max-width: 600px)"},
+		// The path itself contains a colon, and the last-colon split is
+		// still tried first, so this resolves exactly as it did before the
+		// scan existed rather than being cut at the path's own colon.
+		{"path carries a colon", "src/notes:draft.md:Heading", "src/notes:draft.md", "Heading"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ClassifyArgs(ctx, []string{tc.arg}, true, checker, revs)
+			qt.Assert(t, qt.IsNil(err))
+			qt.Assert(t, qt.DeepEquals(got, []Classification{{
+				Kind:   KindAnchor,
+				Anchor: Anchor{File: tc.file, Name: tc.sym},
+			}}))
+		})
+	}
+}
+
 // TestClassifyArgs_Rule6ListsWhatItTried is the error path: rule 6 exists to
 // say why a token was rejected, so the message has to name each rule that
 // was actually applied -- and only those, since rule 3 is diff-only.
@@ -121,7 +153,7 @@ func TestClassifyArgs_Rule6ListsWhatItTried(t *testing.T) {
 		// rev-parse --verify; saying it did was false.
 		"revision or rev:path (git rev-parse --verify)",
 		"existing path (worktree, index, or HEAD)",
-		"symbol anchor (existing path + name after last ':')",
+		"symbol anchor (existing path + name after a ':')",
 	}))
 	// Error() is what a caller actually reads (internal/app relays it
 	// verbatim behind "rgit: "), so its exact wording is pinned here too --
@@ -130,7 +162,7 @@ func TestClassifyArgs_Rule6ListsWhatItTried(t *testing.T) {
 	qt.Assert(t, qt.Equals(uerr.Error(),
 		`cannot classify "nosuch.go:Nope": rules considered: pathspec magic (leading ':'); `+
 			`revision or rev:path (git rev-parse --verify); existing path (worktree, index, or HEAD); `+
-			`symbol anchor (existing path + name after last ':')`))
+			`symbol anchor (existing path + name after a ':')`))
 
 	// Without revisions the rule-3 line must be absent rather than merely
 	// unmatched: a commit invocation never consulted rev-parse at all.

@@ -81,15 +81,24 @@ Resolution precedence, first match wins:
 | 2 | Starts with `:` | Git pathspec magic, passed through verbatim |
 | 3 | *(`diff` only)* resolves via `git rev-parse --verify` | Revision, or a `rev:path` blob reference — see below |
 | 4 | Names a path existing in the worktree, index, or HEAD | Pathspec |
-| 5 | Splits at the last `:` into an existing path + a name | Symbol anchor |
+| 5 | Splits at some `:` into an existing path + a name, trying the last first | Symbol anchor |
 | 6 | None of the above | Error listing each interpretation tried |
 
 No escaping is ever needed. `src/notes:draft.md` is a legal path, so rule 4
 claims it; `auth.go:ValidateToken` names nothing, so rule 5 splits it. Use
 `--sym` or `--file` to force the reading when a repo genuinely has both.
 
+Rule 5 tries the **last** colon first and then works leftwards, taking the
+first split whose left side is a path that exists. Trying the last first is
+what keeps a path that itself contains a colon splitting as it always has;
+continuing leftwards is what makes a *name* containing one reachable, which
+CSS needs constantly — `s.css:a:hover`, `s.css:*::before`, and
+`s.css:@media (max-width: 600px)` all resolve because `s.css` is found on a
+later try. Stopping at the last colon meant `rgit` refused anchors its own
+`rgit symbols` had just printed.
+
 Rule 3 splits at the **first** colon (`HEAD~1:f.go` is revision `HEAD~1`,
-path `f.go`), where rule 5 splits at the **last** — each rule uses the
+path `f.go`), where rule 5 starts from the **last** — each rule uses the
 split git's own syntax needs at that position, not a shared convention.
 `rev:path` is real `git diff` syntax (`git diff HEAD~1:f.go HEAD:f.go`
 compares two blobs directly), and rule 3 exists first so it is not misread as
