@@ -86,6 +86,44 @@ jobs:
       # its own exec.LookPath guard when nothing is installed.
       - run: go test -race ./internal/lsp/...
 
+  # Every other Go job here is ubuntu-latest, so without these two the
+  # published windows and darwin binaries would first be compiled at tag
+  # time, in release.yml -- a break there fails the release rather than the
+  # pull request that caused it. internal/lsp/owner_windows.go, the socket
+  # ownership check guarding LSP dial, has no other job that compiles it at
+  # all. Compile-only on purpose: running the suite on either platform is a
+  # separate question (the chmod/symlink cases would need skips first), and
+  # a link failure is the class of break these targets actually hit.
+  cross-compile:
+    name: cross-compile (linux, windows)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Rethunk-Tech/gh-actions/setup-go@45d60bff5148282bbbf11e6f2460829eab772cf2 # v1.9
+      # Same toolchain release.yml drives: rgit links tree-sitter through
+      # cgo, so CGO_ENABLED=0 is not an option and every target needs a real
+      # C compiler (docs/INSTALL.md § Cross builds).
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+      # Kept in step with release.yml: without the tree-sitter CLI `make
+      # cross` still builds, just SQL-less, and this job would then never
+      # compile the SQL grammar the release ships.
+      - run: npm install -g tree-sitter-cli
+      - run: make cross
+
+  cross-compile-darwin:
+    name: cross-compile (darwin)
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Rethunk-Tech/gh-actions/setup-go@45d60bff5148282bbbf11e6f2460829eab772cf2 # v1.9
+      # No zig: darwin is built natively by the runner's own clang and SDK,
+      # which is why it is a separate target from `make cross` at all
+      # (docs/INSTALL.md § Cross builds).
+      - run: npm install -g tree-sitter-cli
+      - run: make cross-darwin
+
   install-script:
     name: install script
     runs-on: ubuntu-latest
