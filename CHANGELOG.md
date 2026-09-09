@@ -6,58 +6,7 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
-### Changed
-
-- **A grouped CSS rule is indexed one anchor per selector**, each staging the
-  whole rule: `.a, .b { … }` answers to `.a` or `.b`, and the list itself is
-  no longer an anchor. Real stylesheets group selectors across lines — 66 of
-  137 surveyed do — so naming the whole list gave the anchor embedded
-  newlines, which broke `rgit symbols`' one-symbol-per-line output and its
-  `start,end<TAB>symbol` records, fed fragments to the completion scripts
-  that parse them, and left no selector in a group addressable on its own. A
-  selector repeated across rules now collides like any other name (exit 4,
-  ordinals to disambiguate). See
-  [`docs/ANCHORS.md`](docs/ANCHORS.md#language-support).
-
-### Fixed
-
-- An item's outer attributes and doc comment are part of its extent in Rust.
-  tree-sitter makes `#[test]` a *sibling* of the item it annotates, so
-  deleting an attributed item left the attribute behind — measured, removing
-  one `#[test]` function from a `mod` committed a file with two consecutive
-  `#[test]` lines, which does not compile.
-
-- A Rust struct field and enum variant carry their own trailing comma.
-  Without it, deleting one field committed a file with a bare `,` on its own
-  line.
-
-- An anchor whose **name** contains a colon resolves. Argument classification
-  split a token at its last colon only, so `s.css:a:hover` was read as the
-  path `s.css:a` plus the name `hover` and refused — meaning `rgit` rejected
-  anchors `rgit symbols` had just printed, for every CSS pseudo-class,
-  pseudo-element, `:is()`/`:not()`, and `@media (max-width: 600px)` prelude:
-  462 of 3054 anchors across 36 of 59 surveyed stylesheets. Rule 5 now tries
-  the last colon first and works leftwards to the first split whose left side
-  exists, so a path containing a colon still splits exactly as before. See
-  [`docs/USAGE.md`](docs/USAGE.md#argument-shape).
-
-- The CSS cross-check verifies what it could not before. A grouped rule's
-  members are compared from their own selector's line, which is where
-  `vscode-css-language-server` reports them (`Declaration.NameNode`); the
-  staged extent is unchanged. Measured over the same six stylesheets, anchors
-  the server never named fell from 108 of 296 to 20 of 460, with no
-  disagreements.
-
-- A multi-line Python assignment is stageable by anchor again when
-  `pyright-langserver` is installed. pyright names the binding's own line
-  where tree-sitter names the whole statement, so `rgit commit
-  config.py:SETTINGS` on an ordinary multi-line dict failed with exit 6 and
-  every `rgit diff` on the file warned — and only once the optional server
-  `rgit doctor` recommends had been installed. 49 of 400 surveyed Python
-  files carry at least one such binding. The compared extent now ends with
-  the binding's first line (`declOnlyEndTrimmer`, the seam HTML and YAML
-  already use); the staged extent is unchanged, and functions and classes
-  keep their full-extent comparison.
+## [2.1.0] — 2026-09-09
 
 ### Added
 
@@ -117,6 +66,59 @@ Notable changes to `rgit`. The format follows
   ordinary paragraph or `html_block` content — so a heading extent in an
   `.mdx` file is byte-identical to the same content in `.md`. MDX's own
   constructs stay unaddressable: [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
+
+### Changed
+
+- **A grouped CSS rule is indexed one anchor per selector**, each staging the
+  whole rule: `.a, .b { … }` answers to `.a` or `.b`, and the list itself is
+  no longer an anchor. Real stylesheets group selectors across lines — 66 of
+  137 surveyed do — so naming the whole list gave the anchor embedded
+  newlines, which broke `rgit symbols`' one-symbol-per-line output and its
+  `start,end<TAB>symbol` records, fed fragments to the completion scripts
+  that parse them, and left no selector in a group addressable on its own. A
+  selector repeated across rules now collides like any other name (exit 4,
+  ordinals to disambiguate). See
+  [`docs/ANCHORS.md`](docs/ANCHORS.md#language-support).
+
+### Fixed
+
+- An item's outer attributes and doc comment are part of its extent in Rust.
+  tree-sitter makes `#[test]` a *sibling* of the item it annotates, so
+  deleting an attributed item left the attribute behind — measured, removing
+  one `#[test]` function from a `mod` committed a file with two consecutive
+  `#[test]` lines, which does not compile.
+
+- A Rust struct field and enum variant carry their own trailing comma.
+  Without it, deleting one field committed a file with a bare `,` on its own
+  line.
+
+- An anchor whose **name** contains a colon resolves. Argument classification
+  split a token at its last colon only, so `s.css:a:hover` was read as the
+  path `s.css:a` plus the name `hover` and refused — meaning `rgit` rejected
+  anchors `rgit symbols` had just printed, for every CSS pseudo-class,
+  pseudo-element, `:is()`/`:not()`, and `@media (max-width: 600px)` prelude:
+  462 of 3054 anchors across 36 of 59 surveyed stylesheets. Rule 5 now tries
+  the last colon first and works leftwards to the first split whose left side
+  exists, so a path containing a colon still splits exactly as before. See
+  [`docs/USAGE.md`](docs/USAGE.md#argument-shape).
+
+- The CSS cross-check verifies what it could not before. A grouped rule's
+  members are compared from their own selector's line, which is where
+  `vscode-css-language-server` reports them (`Declaration.NameNode`); the
+  staged extent is unchanged. Measured over the same six stylesheets, anchors
+  the server never named fell from 108 of 296 to 20 of 460, with no
+  disagreements.
+
+- A multi-line Python assignment is stageable by anchor again when
+  `pyright-langserver` is installed. pyright names the binding's own line
+  where tree-sitter names the whole statement, so `rgit commit
+  config.py:SETTINGS` on an ordinary multi-line dict failed with exit 6 and
+  every `rgit diff` on the file warned — and only once the optional server
+  `rgit doctor` recommends had been installed. 49 of 400 surveyed Python
+  files carry at least one such binding. The compared extent now ends with
+  the binding's first line (`declOnlyEndTrimmer`, the seam HTML and YAML
+  already use); the staged extent is unchanged, and functions and classes
+  keep their full-extent comparison.
 
 ## [2.0.0] — 2026-09-08
 
