@@ -6,6 +6,14 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `.mdx` resolves through the Markdown grammar. MDX declares no headings of
+  its own — an ESM `import`, a `<Component />`, a `{expression}` all parse as
+  ordinary paragraph or `html_block` content — so a heading extent in an
+  `.mdx` file is byte-identical to the same content in `.md`. MDX's own
+  constructs stay unaddressable: [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
+
 ## [2.0.0] — 2026-09-08
 
 ### Removed

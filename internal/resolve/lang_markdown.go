@@ -25,7 +25,14 @@ func newMarkdownLanguage() *mdLanguage {
 
 func (m *mdLanguage) Name() string { return "markdown" }
 
-func (m *mdLanguage) Extensions() []string { return []string{".md", ".markdown"} }
+// Extensions covers .mdx on the block grammar alone. MDX's own additions --
+// an ESM import line, a `<Component />` element, a `{expression}` -- carry no
+// heading of their own and are not addressable; they parse as ordinary
+// paragraph and html_block content, so a heading extent in an MDX file is the
+// same extent it would be in Markdown. This is why .mdx registers where .scss
+// and .zsh do not: there the wrong grammar would mis-parse the addressable
+// constructs themselves (docs/LIMITATIONS.md).
+func (m *mdLanguage) Extensions() []string { return []string{".md", ".markdown", ".mdx"} }
 
 func (m *mdLanguage) TSLanguage() *ts.Language { return m.lang }
 

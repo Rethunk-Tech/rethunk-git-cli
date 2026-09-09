@@ -41,6 +41,12 @@ address. Stage the containing declaration or the path instead.
   key — tree-sitter-yaml's own scanner attaches it to whichever block was
   still open when it read the comment token, not to either neighboring key
   (still reachable via `@toplevel` or the whole file).
+- **Markdown/MDX** — in an `.mdx` file, MDX's own constructs: an ESM
+  `import`/`export` line, a `<Component />` element, and a `{expression}`.
+  None declares a heading, so none is addressable on its own; each parses as
+  ordinary paragraph or `html_block` content inside whatever heading contains
+  it, and a heading extent is byte-identical to the plain-Markdown one. An
+  import above the first heading is reachable via `@toplevel`.
 - **JSON** — an array, at any depth: the containing key addresses the whole
   array, never one element.
 - **TOML** — an inline table (`{ a = 1 }`) or array: a leaf, never descended

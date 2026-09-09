@@ -1196,6 +1196,47 @@ Second Usage options.
 		[]string{"install.options", "usage.options#1", "usage.options#2"}))
 }
 
+// TestResolve_MDXHeadingsUnaffectedByJSX pins the one thing .mdx registration
+// rests on: MDX's own additions carry no heading, so they land in an ordinary
+// paragraph or html_block and a heading extent is byte-identical to what the
+// same content would resolve to in plain Markdown.
+func TestResolve_MDXHeadingsUnaffectedByJSX(t *testing.T) {
+	t.Parallel()
+
+	src := []byte(`import { Callout } from "@/components/callout"
+
+# Install
+
+<Callout type="warn">Read this first.</Callout>
+
+## Options
+
+Body {frontmatter.title} text.
+
+# Usage
+
+Usage content.
+`)
+
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".mdx", src, "install"),
+		"# Install\n\n<Callout type=\"warn\">Read this first.</Callout>\n\n## Options\n\nBody {frontmatter.title} text.\n\n"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".mdx", src, "install.options"),
+		"## Options\n\nBody {frontmatter.title} text.\n\n"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".mdx", src, "usage"),
+		"# Usage\n\nUsage content.\n"))
+
+	// The leading ESM import is not an @imports anchor: markdown inherits
+	// defaultLanguage's empty ImportKinds, so it stays part of @toplevel.
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".mdx", src, "@toplevel"),
+		"import { Callout } from \"@/components/callout\"\n\n"))
+
+	mdx, ok := resolve.ForExtension(".mdx")
+	qt.Assert(t, qt.IsTrue(ok))
+	md, ok := resolve.ForExtension(".md")
+	qt.Assert(t, qt.IsTrue(ok))
+	qt.Assert(t, qt.Equals(mdx.Name(), md.Name()))
+}
+
 // TestResolve_YAML covers the grammar's own shapes in one pass: a realistic
 // workflow fixture for nesting/qualification/comment-grafting/pseudo-anchors,
 // then edge shapes a realistic fixture never exercises on its own (anchors/

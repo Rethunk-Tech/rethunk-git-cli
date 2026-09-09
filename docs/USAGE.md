@@ -414,7 +414,7 @@ css         .css
 go          .go
 html        .html .htm
 json        .json
-markdown    .md .markdown
+markdown    .md .markdown .mdx
 python      .py .pyi
 shell       .sh .bash
 sql         .sql                     (build-tag gated)
