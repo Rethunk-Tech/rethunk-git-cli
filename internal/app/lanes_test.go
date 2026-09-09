@@ -552,16 +552,16 @@ func TestRun_CommitGoTSPythonSymbolGranularityInOneInvocation(t *testing.T) {
 // TestRun_DiffUnsupportedLanguageSymReachesExtLookup closes internal/app's
 // own gap: diff.go's extForFailedSym (the file-extension lookup
 // unsupportedLanguageHint needs, read off resolve.ResolveError's own Path
-// field) was reachable only by building and execing the binary. main.rs is
+// field) was reachable only by building and execing the binary. main.rb is
 // genuinely unsupported, gated or otherwise, so no hint is expected here --
 // TestRun_UnsupportedLanguageGetsNoRebuildHint in app_test.go already pins
 // that half on the commit path; this pins that runDiff's own error handling
 // reaches the same lookup without one.
 func TestRun_DiffUnsupportedLanguageSymReachesExtLookup(t *testing.T) {
 	dir := chdirTempRepo(t)
-	writeAppFile(t, dir, "main.rs", "fn main() {}\n")
+	writeAppFile(t, dir, "main.rb", "def main; end\n")
 
-	_, stderr, code := runApp(t, "diff", "--sym", "main.rs:main")
+	_, stderr, code := runApp(t, "diff", "--sym", "main.rb:main")
 
 	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "rgit_sql")))

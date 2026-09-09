@@ -8,11 +8,10 @@ throughout: name the path instead of a symbol anchor.
 Any language with no tree-sitter grammar in this binary refuses a symbol
 anchor with exit 9. Run `rgit languages` (or `rgit doctor`) for the exact
 list the running binary supports; it drifts as grammars are added, which is
-why this file doesn't restate it. Rust, C, and C++ are the common examples
-with none, and stay unsupported on the same demand survey that ordered every
-shipped grammar: no repository surveyed contained any
-; config and data
-files in those ecosystems still stage by path in the meantime.
+why this file doesn't restate it. C and C++ are the common examples with
+none, and stay unsupported on the same demand survey that ordered every
+shipped grammar: no repository surveyed contained any; config and data files
+in those ecosystems still stage by path in the meantime.
 
 Two exclusions inside otherwise-supported languages are deliberate, not gaps
 waiting to close:
@@ -188,8 +187,8 @@ boundary, and emits git's bounded blame for each path segment.
 
 ## Language-server coverage
 
-The extent cross-check is live for Go, TypeScript/TSX, Python, Shell, YAML,
-JSON, CSS, Markdown, and HTML. TOML and SQL resolve with tree-sitter alone,
+The extent cross-check is live for Go, TypeScript/TSX, Python, Rust, Shell,
+YAML, JSON, CSS, Markdown, and HTML. TOML and SQL resolve with tree-sitter alone,
 permanently in `[ts-only]` mode — a supported result, not a degraded one:
 
 - **TOML** — `taplo` completes the LSP handshake, but its own ranges

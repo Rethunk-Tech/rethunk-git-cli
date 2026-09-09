@@ -4,6 +4,7 @@ import (
 	ts "github.com/tree-sitter/go-tree-sitter"
 	tsgo "github.com/tree-sitter/tree-sitter-go/bindings/go"
 	tspy "github.com/tree-sitter/tree-sitter-python/bindings/go"
+	tsrust "github.com/tree-sitter/tree-sitter-rust/bindings/go"
 	tsts "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 
 	tsmd "github.com/tree-sitter-grammars/tree-sitter-markdown/bindings/go"
@@ -32,6 +33,8 @@ import (
 func goGrammar() *ts.Language { return ts.NewLanguage(tsgo.Language()) }
 
 func pythonGrammar() *ts.Language { return ts.NewLanguage(tspy.Language()) }
+
+func rustGrammar() *ts.Language { return ts.NewLanguage(tsrust.Language()) }
 
 // typescriptGrammar parses .ts and .mts. TSX is a separate grammar rather than
 // a mode: the two disagree on whether angle brackets open a type assertion or

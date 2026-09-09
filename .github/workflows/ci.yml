@@ -153,6 +153,10 @@ jobs:
       # change what this job measures without the table changing too.
       - run: go install golang.org/x/tools/gopls@v0.23.0
 
+      # rust-analyzer ships as a rustup component, not on npm; the runner
+      # already has a Rust toolchain.
+      - run: rustup component add rust-analyzer
+
       # vscode-langservers-extracted supplies the json, css and html servers
       # from one package (docs/INSTALL.md § Language servers).
       - run: npm i -g @vtsls/language-server pyright bash-language-server yaml-language-server vscode-langservers-extracted

@@ -75,10 +75,17 @@ adapter model — a composite-parsing design question, not a registration.
 **Java, Kotlin, C#, Ruby, PHP, Swift, Terraform, Protobuf, GraphQL and Nix**
 were counted the same way and are the same answer: the whole fleet holds 15
 Kotlin files in one repository, 34 Protobuf in one, 7 Java in two, 7 C#, 6
-`.tf`, 4 Swift, and zero Ruby, PHP, GraphQL or Nix. Rust re-measured at 24
-files in one repository. Each is a single-repository concentration, the same
-shape that closed the earlier survey, and none clears the demand bar that
-ordered every shipped grammar.
+`.tf`, 4 Swift, and zero Ruby, PHP, GraphQL or Nix. Each is a
+single-repository concentration, the same shape that closed the earlier
+survey, and none clears the demand bar that ordered every shipped grammar.
+
+**Rust was counted the same way and shipped anyway**, which is what the file
+count alone got wrong. 26 files in one repository is the same
+single-repository shape as the rest, but `rgit symbols` is the designated
+tool for symbol lookup, so "no grammar" is not a smaller feature set for a
+Rust repository -- it is the whole workflow refusing, 11,812 lines of it. A
+grammar is ordered by whether a fleet repository needs it, not by how many
+files carry the extension.
 
 ### Cross-check baseline
 

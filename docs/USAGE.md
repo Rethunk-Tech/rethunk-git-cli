@@ -494,6 +494,7 @@ html        .html .htm
 json        .json
 markdown    .md .markdown .mdx
 python      .py .pyi
+rust        .rs
 shell       .sh .bash
 sql         .sql                     (build-tag gated)
 toml        .toml

@@ -351,6 +351,8 @@ func LanguageKindFor(path string) (kind protocol.LanguageKind, ok bool) {
 		return protocol.LanguageKindJavaScript, true
 	case ".py", ".pyi":
 		return protocol.LanguageKindPython, true
+	case ".rs":
+		return protocol.LanguageKindRust, true
 	case ".sh", ".bash":
 		return protocol.LanguageKindShellScript, true
 	case ".yaml", ".yml":

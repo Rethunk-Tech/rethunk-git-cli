@@ -182,8 +182,9 @@ Name the path instead. See [`CODES.md`](CODES.md#exit-12-is-commits-alone).
 
 ## Language support
 
-Eleven grammars ship unconditionally; a twelfth, SQL, ships only behind the
-`rgit_sql` build tag (see its own row). All twelve claim these extensions:
+Twelve grammars ship unconditionally; a thirteenth, SQL, ships only behind
+the `rgit_sql` build tag (see its own row). All thirteen claim these
+extensions:
 
 | Grammar | Extensions | Addresses |
 | --- | --- | --- |
@@ -191,6 +192,7 @@ Eleven grammars ship unconditionally; a twelfth, SQL, ships only behind the
 | TypeScript | `.ts`, `.mts`, `.cts` | Every top-level declaration |
 | TSX/JavaScript | `.tsx`, `.jsx`, `.js`, `.mjs`, `.cjs` | As above; plain JS parses under the TSX grammar, a superset that also accepts untyped JS |
 | Python | `.py`, `.pyi` | Every top-level declaration |
+| Rust | `.rs` | Every item, plus struct fields, enum variants, trait and impl members, and the contents of an inline `mod`. Members qualify with Rust's own `::` (`Config::new`, `tests::parses_empty`); an impl block is named as Rust reads it (`impl Config`, `impl Render for Config`) so it cannot collide with the struct of that name. An item's doc comment and outer attributes (`#[test]`) are part of its extent |
 | Markdown | `.md`, `.markdown` | Headings and their sections only — inline constructs such as emphasis, links, and code spans are not parsed and have nothing to address |
 | Shell | `.sh`, `.bash` | Functions and top-level variable assignments. Shell has no containers, so a redefined function disambiguates by ordinal the same way two same-named Go functions would |
 | YAML | `.yaml`, `.yml` | Mapping keys, container-qualified one level the same way a Markdown heading is. Sequence items and anything inside a flow-style `{...}`/`[...]` value have no name to address |

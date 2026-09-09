@@ -77,6 +77,15 @@ var servers = map[string]serverSpec{
 		transport: transportStdio,
 		stdioArgs: []string{"--stdio"},
 	},
+	"rust": {
+		name:      "rust-analyzer",
+		bin:       "rust-analyzer",
+		transport: transportStdio,
+		// rust-analyzer speaks stdio with no flag at all: unlike vtsls and
+		// pyright-langserver it has no --stdio to opt into, and unlike
+		// bash-language-server no subcommand either.
+		stdioArgs: nil,
+	},
 	"shell": {
 		name:      "bash-language-server",
 		bin:       "bash-language-server",

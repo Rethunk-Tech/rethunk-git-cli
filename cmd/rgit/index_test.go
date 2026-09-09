@@ -598,9 +598,9 @@ func TestStage_GitignoredUntrackedRefused(t *testing.T) {
 
 func TestStage_UnsupportedLanguageAnchorRefused(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.RepoWithFile(t, "notes.rs", "fn main() {}\n", "chore: add notes.rs")
+	dir, repo := gittest.RepoWithFile(t, "notes.rb", "def main; end\n", "chore: add notes.rb")
 
-	err := stageTargets(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("notes.rs", "main")})
+	err := stageTargets(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("notes.rb", "main")})
 	assertPathError(t, err, exitcode.UnsupportedLanguage)
 }
 

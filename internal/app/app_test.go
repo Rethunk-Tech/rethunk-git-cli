@@ -1305,13 +1305,13 @@ func TestRun_VersionReportsGrammars(t *testing.T) {
 // so it belongs in the untagged file rather than either build-specific one.
 func TestRun_UnsupportedLanguageGetsNoRebuildHint(t *testing.T) {
 	dir := chdirTempRepo(t)
-	writeAppFile(t, dir, "main.rs", "fn main() {}\n")
+	writeAppFile(t, dir, "main.rb", "def main; end\n")
 
-	_, stderr, code := runApp(t, "commit", "-m", "feat(x): y", "main.rs:main")
+	_, stderr, code := runApp(t, "commit", "-m", "feat(x): y", "main.rb:main")
 
 	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
-	qt.Assert(t, qt.StringContains(stderr, "no grammar registered for main.rs"))
-	qt.Assert(t, qt.StringContains(stderr, `extension ".rs"`))
+	qt.Assert(t, qt.StringContains(stderr, "no grammar registered for main.rb"))
+	qt.Assert(t, qt.StringContains(stderr, `extension ".rb"`))
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "rgit_sql")))
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "rebuild")))
 }

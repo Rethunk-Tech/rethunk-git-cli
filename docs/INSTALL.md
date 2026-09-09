@@ -170,6 +170,7 @@ cross-check, which catches build-tag, macro, and type-level mismatches.
 | Go | `gopls` | `go install golang.org/x/tools/gopls@v0.23.0` | Background daemon, reused |
 | TypeScript/JavaScript | `vtsls` | `npm i -g @vtsls/language-server` | One-shot subprocess per query |
 | Python | `pyright-langserver` | `npm i -g pyright` | One-shot subprocess per query |
+| Rust | `rust-analyzer` | `rustup component add rust-analyzer` | One-shot subprocess per query |
 | Shell | `bash-language-server` | `npm i -g bash-language-server` | One-shot subprocess per query |
 | YAML | `yaml-language-server` | `npm i -g yaml-language-server` | One-shot subprocess per query |
 | JSON | `vscode-json-language-server` | `npm i -g vscode-langservers-extracted` | One-shot subprocess per query |

@@ -83,6 +83,7 @@ cover-short:
 XCHECK_CORPUS ?= \
 	internal/resolve/testdata/xcheck/styles.css \
 	internal/resolve/testdata/xcheck/config.py \
+	internal/resolve/testdata/xcheck/lib.rs \
 	internal/resolve/testdata/xcheck/widget.ts \
 	internal/resolve/testdata/xcheck/panel.tsx \
 	internal/resolve/testdata/xcheck/page.html \

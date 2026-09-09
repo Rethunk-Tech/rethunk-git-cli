@@ -24,15 +24,15 @@ func TestOpenFilePlan_UnsupportedLanguageReason(t *testing.T) {
 	t.Run("unmapped extension with no shebang names both", func(t *testing.T) {
 		t.Parallel()
 		dir, repo := gittest.New(t)
-		gittest.Write(t, dir, "main.rs", "fn main() {}\n")
+		gittest.Write(t, dir, "main.rb", "def main; end\n")
 
-		_, err := openFilePlan(context.Background(), repo, dir, "main.rs")
+		_, err := openFilePlan(context.Background(), repo, dir, "main.rb")
 
 		var perr *PathError
 		if !errors.As(err, &perr) {
 			t.Fatalf("openFilePlan error = %v; want *PathError", err)
 		}
-		want := `no grammar registered for main.rs (extension ".rs", shebang unmapped)`
+		want := `no grammar registered for main.rb (extension ".rb", shebang unmapped)`
 		if perr.Reason != want {
 			t.Errorf("Reason = %q; want %q", perr.Reason, want)
 		}

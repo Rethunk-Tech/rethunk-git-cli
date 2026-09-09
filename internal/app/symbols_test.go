@@ -36,13 +36,13 @@ func TestRun_SymbolsHelpAndUsage(t *testing.T) {
 
 func TestRun_SymbolsUnsupportedLanguage(t *testing.T) {
 	dir := chdirTempRepo(t)
-	writeAppFile(t, dir, "main.rs", "fn main() {}\n")
+	writeAppFile(t, dir, "main.rb", "def main; end\n")
 
-	_, stderr, code := runApp(t, "symbols", "main.rs")
+	_, stderr, code := runApp(t, "symbols", "main.rb")
 	if code != exitcode.UnsupportedLanguage {
 		t.Fatalf("symbols unsupported-language exit code = %d, want %d", code, exitcode.UnsupportedLanguage)
 	}
-	want := "rgit: unsupported language for \"main.rs\"\n"
+	want := "rgit: unsupported language for \"main.rb\"\n"
 	if stderr != want {
 		t.Fatalf("symbols unsupported-language stderr = %q, want %q", stderr, want)
 	}
@@ -361,9 +361,9 @@ func TestSymbols_MultipleFilesPrefixLikeGrep(t *testing.T) {
 // listing can never be read as "that file has no more symbols".
 func TestSymbols_ResolvesEveryFileBeforeWriting(t *testing.T) {
 	dir := chdirTempRepo(t)
-	writeAppFile(t, dir, "main.rs", "fn main() {}\n")
+	writeAppFile(t, dir, "main.rb", "def main; end\n")
 
-	stdout, stderr, code := runApp(t, "symbols", "a.go", "main.rs")
+	stdout, stderr, code := runApp(t, "symbols", "a.go", "main.rb")
 	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
 	qt.Assert(t, qt.Equals(stdout, ""))
 	qt.Assert(t, qt.StringContains(stderr, "unsupported language"))

@@ -20,9 +20,9 @@ func TestRowHint_UnanchorableSuggestsToplevelOnlyForMarkdown(t *testing.T) {
 	t.Run("rowHint", func(t *testing.T) {
 		t.Parallel()
 		// Two rows, not six: go, typescript, and python all take the same
-		// --file-only branch as unknown.rs (unanchorableHint only ever asks
+		// --file-only branch as unknown.rb (unanchorableHint only ever asks
 		// "is lang == markdown?"), so one non-Markdown row already covers
-		// what the other three would only repeat. unknown.rs is kept over
+		// what the other three would only repeat. unknown.rb is kept over
 		// auth.go/svc.ts/svc.py because it is also the empty-lang case, not
 		// merely another named language. The two Markdown rows are not
 		// redundant with each other: both take the --sym ...@toplevel
@@ -36,7 +36,7 @@ func TestRowHint_UnanchorableSuggestsToplevelOnlyForMarkdown(t *testing.T) {
 		}{
 			{"README.md", "markdown", "-> use --sym README.md:@toplevel or --file README.md"},
 			{"docs/USAGE.markdown", "markdown", "-> use --sym docs/USAGE.markdown:@toplevel or --file docs/USAGE.markdown"},
-			{"unknown.rs", "", "-> use --file unknown.rs"},
+			{"unknown.rb", "", "-> use --file unknown.rb"},
 		}
 		for _, tt := range tests {
 			row := Row{Status: StatusUnanchorable, Added: "1", Deleted: "0"}
