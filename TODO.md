@@ -59,6 +59,14 @@ Svelte** in 0 of 47, where 18 of 47 carry `.tsx`. A single-file component also
 interleaves three grammars and does not fit the one-grammar-per-extension
 adapter model — a composite-parsing design question, not a registration.
 
+**Java, Kotlin, C#, Ruby, PHP, Swift, Terraform, Protobuf, GraphQL and Nix**
+were counted the same way and are the same answer: the whole fleet holds 15
+Kotlin files in one repository, 34 Protobuf in one, 7 Java in two, 7 C#, 6
+`.tf`, 4 Swift, and zero Ruby, PHP, GraphQL or Nix. Rust re-measured at 24
+files in one repository. Each is a single-repository concentration, the same
+shape that closed the earlier survey, and none clears the demand bar that
+ordered every shipped grammar.
+
 ### Cross-check servers deliberately not wired
 
 **taplo** (TOML) disagrees with tree-sitter on real ranges, measured twice
