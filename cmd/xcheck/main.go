@@ -55,6 +55,7 @@ func main() {
 	dump := flag.Bool("dump", false, "print every server symbol per file")
 	timeout := flag.Duration("timeout", 25*time.Second, "per-file budget")
 	rootFlag := flag.String("root", ".", "workspace root handed to the server")
+	strict := flag.Bool("strict", false, "exit non-zero on any disagreement or unreachable server")
 	flag.Parse()
 
 	root, _ := filepath.Abs(*rootFlag)
@@ -147,8 +148,19 @@ func main() {
 	}
 	sort.Strings(langs)
 	fmt.Println("\nlang\tfiles\tcompared\tagree\tdisagree\tnotNamed")
+	disagreed := 0
 	for _, l := range langs {
 		s := stats[l]
+		disagreed += s.disagree
 		fmt.Printf("%s\t%d\t%d\t%d\t%d\t%d\n", l, s.files, s.compared, s.agree, s.disagree, s.notNamed)
+	}
+
+	// notNamed is deliberately not a failure: a server legitimately declines
+	// to name some anchors (at-rules, nested rules) and always has. Only a
+	// real range disagreement, or a server that never answered at all, means
+	// the run measured something other than what it set out to.
+	if *strict && (disagreed > 0 || failed > 0) {
+		fmt.Fprintf(os.Stderr, "strict: %d disagreements, %d files with no server answer\n", disagreed, failed)
+		os.Exit(1)
 	}
 }

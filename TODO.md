@@ -80,6 +80,18 @@ files in one repository. Each is a single-repository concentration, the same
 shape that closed the earlier survey, and none clears the demand bar that
 ordered every shipped grammar.
 
+### Cross-check baseline
+
+A 60-file fleet corpus across all ten wired grammars compares **885 symbols
+with 0 disagreements**, and 32 anchors the servers do not name (20 CSS
+at-rules and nested rules, 4 each in HTML, Python and shell). That is the
+number a later run is measured against; `make xcheck` runs the same
+comparison over the committed fixtures.
+
+Before CSS was indexed per selector the same corpus compared 603 with 120
+unnamed, so the difference is 282 anchors that were silently unverified
+rather than any change in agreement.
+
 ### Cross-check servers deliberately not wired
 
 **taplo** (TOML) disagrees with tree-sitter on real ranges, measured twice

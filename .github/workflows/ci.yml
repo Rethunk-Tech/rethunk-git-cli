@@ -131,6 +131,43 @@ jobs:
       - run: npm install -g tree-sitter-cli
       - run: make cross-darwin
 
+  # The cross-check is the one thing no other job exercises: every grammar
+  # measured against its own language server, on a corpus carrying the shapes
+  # that have actually broken. It found both a pyright convention difference
+  # that made multi-line Python bindings unstageable and a CSS grouped-selector
+  # defect, neither of which any unit test saw -- because both were
+  # disagreements between rgit and a real server, not within rgit.
+  #
+  # The only CI job depending on external npm and Go tooling, which is why it
+  # is separate: its failure means "grammar and server drifted", not "the
+  # build is broken".
+  xcheck:
+    name: lsp cross-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Rethunk-Tech/gh-actions/setup-go@45d60bff5148282bbbf11e6f2460829eab772cf2 # v1.9
+
+      # Pinned to the version docs/INSTALL.md names, so a gopls release cannot
+      # change what this job measures without the table changing too.
+      - run: go install golang.org/x/tools/gopls@v0.23.0
+
+      # vscode-langservers-extracted supplies the json, css and html servers
+      # from one package (docs/INSTALL.md § Language servers).
+      - run: npm i -g @vtsls/language-server pyright bash-language-server yaml-language-server vscode-langservers-extracted
+
+      # marksman publishes no package; the release binary is the only route.
+      - name: install marksman
+        run: |
+          curl -fsSL -o /usr/local/bin/marksman \
+            https://github.com/artempyanykh/marksman/releases/latest/download/marksman-linux-x64
+          chmod +x /usr/local/bin/marksman
+
+      # Fails the job rather than reporting a smaller table: a run that
+      # silently skipped a server measures nothing about that language.
+      - run: make xcheck
+
   install-script:
     name: install script
     runs-on: ubuntu-latest

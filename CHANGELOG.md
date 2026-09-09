@@ -6,7 +6,27 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **A grouped CSS rule is indexed one anchor per selector**, each staging the
+  whole rule: `.a, .b { … }` answers to `.a` or `.b`, and the list itself is
+  no longer an anchor. Real stylesheets group selectors across lines — 66 of
+  137 surveyed do — so naming the whole list gave the anchor embedded
+  newlines, which broke `rgit symbols`' one-symbol-per-line output and its
+  `start,end<TAB>symbol` records, fed fragments to the completion scripts
+  that parse them, and left no selector in a group addressable on its own. A
+  selector repeated across rules now collides like any other name (exit 4,
+  ordinals to disambiguate). See
+  [`docs/ANCHORS.md`](docs/ANCHORS.md#language-support).
+
 ### Fixed
+
+- The CSS cross-check verifies what it could not before. A grouped rule's
+  members are compared from their own selector's line, which is where
+  `vscode-css-language-server` reports them (`Declaration.NameNode`); the
+  staged extent is unchanged. Measured over the same six stylesheets, anchors
+  the server never named fell from 108 of 296 to 20 of 460, with no
+  disagreements.
 
 - A multi-line Python assignment is stageable by anchor again when
   `pyright-langserver` is installed. pyright names the binding's own line
@@ -20,6 +40,17 @@ Notable changes to `rgit`. The format follows
   keep their full-extent comparison.
 
 ### Added
+
+- `rgit symbols --porcelain` terminates each record with NUL instead of a
+  newline, fields and order unchanged, so a symbol may contain any byte but
+  NUL. The newline form was only ever safe while no grammar admitted a
+  newline into a name.
+
+- `make xcheck` and a CI job run the LSP cross-check across every wired
+  grammar, over fixtures carrying the shapes that have actually broken. The
+  harness (`cmd/xcheck`, behind `-tags rgit_xcheck`) was committed but run by
+  nothing; its first corpus runs found both defects above. `-strict` makes an
+  unreachable server a failure rather than a quietly smaller table.
 
 - `rgit show FILE:SYMBOL...` prints each named symbol's own bytes to stdout —
   the same extent `commit` would splice, verbatim, with no added newline.

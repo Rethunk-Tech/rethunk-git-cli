@@ -28,7 +28,7 @@ SQL_TAGS = $(if $(wildcard $(SQL_CSRC)/parser.c),-tags rgit_sql,)
 .DEFAULT_GOAL := help
 
 .PHONY: help build install test test-short test-race cover cover-short \
-        fix-diff fix lint clean sql-parser cross cross-linux-amd64 \
+        xcheck fix-diff fix lint clean sql-parser cross cross-linux-amd64 \
         cross-linux-arm64 cross-windows-amd64 cross-darwin \
         cross-darwin-amd64 cross-darwin-arm64
 
@@ -38,6 +38,7 @@ help:
 	@echo "  install            build and install via cmd/rgit-install (PREFIX=dir to override)"
 	@echo "  test               go test ./...            (full suite, builds and execs the binary)"
 	@echo "  test-short         go test -short ./...      (unit lane -- the one a regression must fail)"
+	@echo "  xcheck             measure every grammar against its language server (needs all servers)"
 	@echo "  test-race          go test -race ./...       (full tree -- CI's own race job scopes to internal/lsp: jsonrpc2, the LSP spawn lock)"
 	@echo "  cover              coverage for the full suite, -coverpkg=./... as CONTRIBUTING.md requires"
 	@echo "  cover-short        coverage for the -short lane"
@@ -73,6 +74,30 @@ cover:
 cover-short:
 	go test -short -coverpkg=./... -coverprofile=short.out ./...
 	go tool cover -func=short.out | tail -1
+
+# XCHECK_CORPUS is every wired grammar in one list: fixtures for the
+# languages this repo does not otherwise contain, plus real files of its own
+# for the ones it does. The fixtures carry the shapes that actually broke --
+# a grouped CSS selector written across lines, a multi-line Python binding --
+# so a regression in either is a failing run rather than a silent drift.
+XCHECK_CORPUS ?= \
+	internal/resolve/testdata/xcheck/styles.css \
+	internal/resolve/testdata/xcheck/config.py \
+	internal/resolve/testdata/xcheck/widget.ts \
+	internal/resolve/testdata/xcheck/panel.tsx \
+	internal/resolve/testdata/xcheck/page.html \
+	internal/resolve/testdata/xcheck/manifest.json \
+	internal/app/show.go \
+	AGENTS.md \
+	.github/workflows/ci.yml \
+	scripts/install.sh
+
+# Measures every wired grammar against its own language server. Needs all of
+# them installed (docs/INSTALL.md § Language servers); -strict makes an
+# unreachable server a failure rather than a quietly smaller table, because a
+# run that silently skipped a language measures nothing about it.
+xcheck:
+	go run -tags rgit_xcheck ./cmd/xcheck -strict -root $(CURDIR) $(XCHECK_CORPUS)
 
 fix-diff:
 	go fix -diff ./...

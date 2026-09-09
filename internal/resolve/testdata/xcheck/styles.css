@@ -1,0 +1,31 @@
+/* Grouped selectors written across lines: the shape that made a rule's
+   anchor carry newlines before each selector was indexed on its own. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body,
+input,
+button {
+  margin: 0;
+}
+
+h1:is(h2, h3) {
+  font-weight: 600;
+}
+
+.card {
+  padding: 1rem;
+
+  .title {
+    font-weight: 700;
+  }
+}
+
+@media (max-width: 600px) {
+  .card {
+    padding: 0.5rem;
+  }
+}
