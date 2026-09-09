@@ -44,6 +44,15 @@ discovers and no server exposes, so neither is in scope.
 bit `STATUS` never carried. SCSS, zsh, JSONC, JSON5. Include-style pathspec
 flags. Any web surface: this is a CLI.
 
+**Staging without committing** — `rgit commit --stage-only`, or a separate
+`rgit add`. `internal/synth/stage.go` already stages before committing, so the
+flag would be an early return, but there is no unstage counterpart and cannot
+cheaply be one: `git reset` is pathspec-granular, so backing one symbol out of
+a synthesized blob means re-synthesizing the blob without it. Leaving a symbol
+staged would create a state `rgit` cannot undo. The batch case it would serve
+is already served — `rgit commit a.go:X b.ts:Y c.py:Z` stages a whole set in
+one call, and `--dry-run` previews that set without writing an object.
+
 ## Settled by measurement — do not re-litigate
 
 ### Grammars
