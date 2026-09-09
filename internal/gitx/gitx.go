@@ -975,6 +975,11 @@ func (r *Repo) stageCacheInfo(ctx context.Context, path string) (mode, sha strin
 		return "", "", false, err
 	}
 	trimmed := strings.TrimRight(string(out), "\n")
+	// Empty output means path is not in the index -- untracked, or staged for
+	// deletion. Splitting "" yields one empty line that parses as malformed.
+	if trimmed == "" {
+		return "", "", false, nil
+	}
 	for line := range strings.SplitSeq(trimmed, "\n") {
 		before, _, ok := strings.Cut(line, "\t")
 		if !ok {

@@ -781,6 +781,30 @@ func TestCommitOnlyUsesTemporaryIndex(t *testing.T) {
 	}
 }
 
+func TestCommitOnlyCommitsADeletedPath(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	gittest.Write(t, dir, "gone.txt", "gone\n")
+	gittest.Write(t, dir, "kept.txt", "kept\n")
+	gittest.Commit(t, dir, "chore: initial")
+	gittest.Git(t, dir, "rm", "--quiet", "gone.txt")
+
+	if _, err := repo.Commit(context.Background(), gitx.CommitOptions{
+		Messages:  []string{"chore: drop gone.txt"},
+		Only:      true,
+		OnlyPaths: []string{"gone.txt"},
+	}); err != nil {
+		t.Fatalf("Commit(Only, deleted path): %v", err)
+	}
+
+	if got := gittest.Git(t, dir, "ls-tree", "HEAD", "--", "gone.txt"); got != "" {
+		t.Errorf("HEAD gone.txt = %q; want absent from tree", got)
+	}
+	if got := gittest.Git(t, dir, "show", "HEAD:kept.txt"); got != "kept\n" {
+		t.Errorf("HEAD:kept.txt = %q; want untouched", got)
+	}
+}
+
 func TestCommitOnlyWithNoPathsLeavesOtherStagedWork(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.RepoWithFile(t, "base.txt", "base\n", "chore: initial")
