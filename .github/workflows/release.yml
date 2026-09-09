@@ -7,6 +7,10 @@ on:
   push:
     tags: ["v*"]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 # Read by default; only the publishing job widens to contents: write, and
 # only far enough to create a release.
 permissions:
