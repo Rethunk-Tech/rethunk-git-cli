@@ -94,6 +94,16 @@ names the binding's first line where tree-sitter names the statement.
 Accepting any server range that is merely the anchor's first line would also
 accept a genuine one-line extent bug.
 
+### Performance
+
+`rgit` was measured across the fleet's two largest repositories rather than
+tuned: on a 3,696-file repo, `context` is 0.03 s, `diff` under 0.01 s, and
+`diff --range HEAD~50..HEAD` 0.37 s; a 1,846-file repo answers the same three
+in 0.02 s, under 0.01 s, and 0.45 s. Startup is unmeasurable at 10 ms
+resolution despite the 18 MB cgo binary. There is no caching, indexing, or
+daemon work worth doing, and the absence of persistent state stays a design
+property rather than a cost.
+
 ### Dependencies
 
 **`go-git` is not used**, and the reason is not obvious from the code that
