@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Rethunk-Tech/gh-actions/setup-go@45d60bff5148282bbbf11e6f2460829eab772cf2 # v1.9
+      - uses: Rethunk-Tech/gh-actions/setup-go@5d07bd8adb2dda1caa11cacd886edf73e2e95afb # v1.10
       # cmd/rgit-install's own tests (TestRunPrereqChecks, TestFindSQLAdapter)
       # assert this in a real dev/CI environment -- not a build-time SQL
       # lane (this file's own top comment), just PATH presence for the
@@ -57,7 +57,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Rethunk-Tech/gh-actions/setup-go@45d60bff5148282bbbf11e6f2460829eab772cf2 # v1.9
+      - uses: Rethunk-Tech/gh-actions/setup-go@5d07bd8adb2dda1caa11cacd886edf73e2e95afb # v1.10
         with:
           run-lint: "true"
           run-govulncheck: "true"
@@ -68,7 +68,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Rethunk-Tech/gh-actions/setup-go@45d60bff5148282bbbf11e6f2460829eab772cf2 # v1.9
+      - uses: Rethunk-Tech/gh-actions/setup-go@5d07bd8adb2dda1caa11cacd886edf73e2e95afb # v1.10
       # Same reason the unit lane above installs this: cmd/rgit-install's
       # own tests run here too, unshortened by -short.
       - run: npm install -g tree-sitter-cli
@@ -86,7 +86,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Rethunk-Tech/gh-actions/setup-go@45d60bff5148282bbbf11e6f2460829eab772cf2 # v1.9
+      - uses: Rethunk-Tech/gh-actions/setup-go@5d07bd8adb2dda1caa11cacd886edf73e2e95afb # v1.10
       # Scoped to internal/lsp, not ./...: CONTRIBUTING.md names jsonrpc2
       # and the spawn lock -- both there -- as the concurrency that
       # matters. Every live-server case in this package skips cleanly via
@@ -107,7 +107,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Rethunk-Tech/gh-actions/setup-go@45d60bff5148282bbbf11e6f2460829eab772cf2 # v1.9
+      - uses: Rethunk-Tech/gh-actions/setup-go@5d07bd8adb2dda1caa11cacd886edf73e2e95afb # v1.10
       # Same toolchain release.yml drives: rgit links tree-sitter through
       # cgo, so CGO_ENABLED=0 is not an option and every target needs a real
       # C compiler (docs/INSTALL.md § Cross builds).
@@ -124,7 +124,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Rethunk-Tech/gh-actions/setup-go@45d60bff5148282bbbf11e6f2460829eab772cf2 # v1.9
+      - uses: Rethunk-Tech/gh-actions/setup-go@5d07bd8adb2dda1caa11cacd886edf73e2e95afb # v1.10
       # No zig: darwin is built natively by the runner's own clang and SDK,
       # which is why it is a separate target from `make cross` at all
       # (docs/INSTALL.md § Cross builds).
@@ -147,7 +147,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Rethunk-Tech/gh-actions/setup-go@45d60bff5148282bbbf11e6f2460829eab772cf2 # v1.9
+      - uses: Rethunk-Tech/gh-actions/setup-go@5d07bd8adb2dda1caa11cacd886edf73e2e95afb # v1.10
 
       # Pinned to the version docs/INSTALL.md names, so a gopls release cannot
       # change what this job measures without the table changing too.

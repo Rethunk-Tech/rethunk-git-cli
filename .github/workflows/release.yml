@@ -39,7 +39,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: Rethunk-Tech/gh-actions/setup-go@45d60bff5148282bbbf11e6f2460829eab772cf2 # v1.9
+      - uses: Rethunk-Tech/gh-actions/setup-go@5d07bd8adb2dda1caa11cacd886edf73e2e95afb # v1.10
 
       # Same reason the linux/windows job installs this: without it
       # cross-darwin still builds, just SQL-less (docs/INSTALL.md § SQL
@@ -94,7 +94,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: Rethunk-Tech/gh-actions/setup-go@45d60bff5148282bbbf11e6f2460829eab772cf2 # v1.9
+      - uses: Rethunk-Tech/gh-actions/setup-go@5d07bd8adb2dda1caa11cacd886edf73e2e95afb # v1.10
 
       # zig is the single cross-compilation toolchain `make cross` drives;
       # rgit links tree-sitter through cgo, so CGO_ENABLED=0 is not an
