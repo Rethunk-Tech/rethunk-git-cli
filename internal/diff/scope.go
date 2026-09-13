@@ -233,25 +233,12 @@ func ResolveScope(ctx context.Context, repo *gitx.Repo, opts Options) (Scope, er
 	case len(opts.Revisions) > 2:
 		return Scope{}, &UsageError{Msg: "at most two revision arguments are accepted"}
 	default:
-		base, err := committableBase(ctx, repo)
+		base, err := repo.CommittableBase(ctx)
 		if err != nil {
 			return Scope{}, err
 		}
 		return Scope{Old: revSide(base), New: worktreeSide(), NumstatArgs: []string{base}, IncludeUntracked: true}, nil
 	}
-}
-
-// committableBase is the old side of the default "everything committable"
-// scope: HEAD, or the empty tree on an unborn branch, where HEAD names no
-// commit and `git diff HEAD` fails outright. Every tracked path then reads
-// as an addition, which is what rgit commit would write as a root commit.
-func committableBase(ctx context.Context, repo *gitx.Repo) (string, error) {
-	if _, ok, err := repo.RevParseVerify(ctx, "HEAD"); err != nil {
-		return "", err
-	} else if ok {
-		return "HEAD", nil
-	}
-	return repo.EmptyTree(ctx)
 }
 
 // resolveRevPathScope builds the two-blob "A:f.go B:f.go" scope from a

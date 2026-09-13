@@ -97,6 +97,25 @@ func TestRun_OnlyLeavesOtherStagedWorkUncommitted(t *testing.T) {
 	qt.Assert(t, qt.StringContains(gitOut(t, dir, "status", "--porcelain"), "A  sibling.txt"))
 }
 
+// TestRun_OnlyOnUnbornBranchWritesRootCommit: --only builds its temporary
+// index from the committable base, which on a fresh repo is the empty tree,
+// not a HEAD that does not exist yet.
+func TestRun_OnlyOnUnbornBranchWritesRootCommit(t *testing.T) {
+	dir, _ := gittest.New(t)
+	t.Chdir(dir)
+	writeAppFile(t, dir, "a.txt", "x\n")
+	writeAppFile(t, dir, "sibling.txt", "staged separately\n")
+	gitOut(t, dir, "add", "--", "sibling.txt")
+
+	_, stderr, code := runApp(t, "commit", "--only", "-m", "feat(a): add a", "a.txt")
+
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
+	qt.Assert(t, qt.Not(qt.StringContains(stderr, "HEAD")))
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "ls-tree", "-r", "--name-only", "HEAD"), "a.txt\n"))
+	qt.Assert(t, qt.Equals(len(strings.Fields(gitOut(t, dir, "rev-list", "--parents", "-n", "1", "HEAD"))), 1))
+	qt.Assert(t, qt.StringContains(gitOut(t, dir, "status", "--porcelain"), "A  sibling.txt"))
+}
+
 func TestRun_OnlyWithNoTargetsRefusesWithoutAmend(t *testing.T) {
 	dir := chdirTempRepo(t)
 	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
@@ -386,8 +405,8 @@ func TestRun_ResetAuthorForwarded(t *testing.T) {
 
 // TestRun_DiffUnbornBranchListsEverythingCommittable: a fresh repo
 // with no HEAD cannot run `git diff HEAD` for the default scope, so it
-// compares against the empty tree instead (committableBase,
-// internal/diff/scope.go) -- both the staged and untracked halves of that
+// compares against the empty tree instead (gitx.Repo.CommittableBase)
+// -- both the staged and untracked halves of that
 // listing were only proven through the built binary
 // (cmd/rgit/rgit_e2e_test.go's identically named case); the unit lane
 // covered only the empty-tree base itself (internal/diff/scope_test.go),

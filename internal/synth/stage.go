@@ -682,7 +682,11 @@ type pathFile struct {
 func pathspecFileCounts(ctx context.Context, repo *gitx.Repo, root, pathspec string) (out []pathFile, warnings []string) {
 	seen := map[string]bool{}
 
-	entries, err := repo.DiffNumstat(ctx, "HEAD", "--", pathspec)
+	base, err := repo.CommittableBase(ctx)
+	var entries []gitx.NumstatEntry
+	if err == nil {
+		entries, err = repo.DiffNumstat(ctx, base, "--", pathspec)
+	}
 	if err != nil {
 		warnings = append(warnings, fmt.Sprintf("%s: tracked line counts unavailable: %v", pathspec, err))
 	}

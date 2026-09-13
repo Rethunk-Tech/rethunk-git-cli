@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -135,14 +136,17 @@ func TestRun_CommitRefusesStructuredDataSymbolViaRunApp(t *testing.T) {
 
 // TestRunCommit_CountingWarningsReachStderr proves synth.Plan's
 // CountingWarnings actually reaches a caller now that commit.go reads it,
-// rather than staying dead code. An untracked file on an unborn branch is
-// a real, reproducible case where `git diff --numstat HEAD` genuinely
-// fails -- there is no HEAD yet -- which is exactly the "line counts
-// could not be fully computed" case CountingWarnings exists for, not a
+// rather than staying dead code. An unreadable untracked file is a real,
+// reproducible case where line counts genuinely cannot be computed, not a
 // fake or injected error.
 func TestRunCommit_CountingWarningsReachStderr(t *testing.T) {
 	dir, _ := gittest.New(t)
 	gittest.Write(t, dir, "new.txt", "hello\n")
+	full := filepath.Join(dir, "new.txt")
+	if err := os.Chmod(full, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(full, 0o644) })
 	t.Chdir(dir)
 
 	var stdout, stderr strings.Builder
@@ -152,8 +156,8 @@ func TestRunCommit_CountingWarningsReachStderr(t *testing.T) {
 	}
 
 	got := stderr.String()
-	if !strings.Contains(got, "[warning]") || !strings.Contains(got, "tracked line counts unavailable") {
-		t.Errorf("stderr = %q; want a [warning] line about unavailable tracked line counts", got)
+	if !strings.Contains(got, "[warning] new.txt: line counts unavailable") {
+		t.Errorf("stderr = %q; want a [warning] line about new.txt's unavailable line counts", got)
 	}
 }
 

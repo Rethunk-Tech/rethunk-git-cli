@@ -172,16 +172,16 @@ func TestResolveRangeScope_ExplicitFormFallsBackToSingleRevision(t *testing.T) {
 }
 
 // TestCommittableBase_UnbornBranchFallsBackToEmptyTree covers
-// committableBase's own reason to exist: gittest.New's repo has no commit
-// yet, so HEAD is unborn and `git diff HEAD` would fail outright --
+// gitx.Repo.CommittableBase's reason to exist: gittest.New's repo has no
+// commit yet, so HEAD is unborn and `git diff HEAD` would fail outright --
 // docs/USAGE.md § Diff scope's documented fallback.
 func TestCommittableBase_UnbornBranchFallsBackToEmptyTree(t *testing.T) {
 	t.Parallel()
 	_, repo := gittest.New(t)
 
-	base, err := committableBase(context.Background(), repo)
+	base, err := repo.CommittableBase(context.Background())
 	if err != nil {
-		t.Fatalf("committableBase: %v", err)
+		t.Fatalf("CommittableBase: %v", err)
 	}
 	// git's own well-known empty tree SHA, constant across every repo.
 	const emptyTreeSHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"

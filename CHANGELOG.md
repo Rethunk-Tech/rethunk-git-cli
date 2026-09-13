@@ -6,6 +6,12 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `commit --only` on an unborn branch writes the root commit instead of
+  failing on `git read-tree HEAD`, and a pathspec target's line counts no
+  longer warn about a missing HEAD.
+
 ## [2.1.0] — 2026-09-09
 
 ### Added

@@ -510,6 +510,19 @@ func (r *Repo) EmptyTree(ctx context.Context) (sha string, err error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// CommittableBase is the tree a commit builds on: HEAD, or the empty tree on
+// an unborn branch, where HEAD names no commit and `git diff HEAD` or
+// `git read-tree HEAD` fails outright. Every tracked path then reads as an
+// addition, which is what the root commit will record.
+func (r *Repo) CommittableBase(ctx context.Context) (string, error) {
+	if _, ok, err := r.RevParseVerify(ctx, "HEAD"); err != nil {
+		return "", err
+	} else if ok {
+		return "HEAD", nil
+	}
+	return r.EmptyTree(ctx)
+}
+
 // UpdateIndexCacheinfo stages a single entry directly, as the final step
 // of blob synthesis: `git update-index --add --cacheinfo mode,sha,path`.
 func (r *Repo) UpdateIndexCacheinfo(ctx context.Context, mode, sha, path string) error {
@@ -918,14 +931,19 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 			return Result{}, &ExecError{Args: args, Err: err}
 		}
 		commitRepo = &Repo{root: r.root, env: withEnv(r.env, "GIT_INDEX_FILE", tempIndex)}
-		res, err := commitRepo.run(ctx, nil, "read-tree", "HEAD")
+		base, err := r.CommittableBase(ctx)
+		if err != nil {
+			_ = os.Remove(tempIndex)
+			return Result{}, err
+		}
+		res, err := commitRepo.run(ctx, nil, "read-tree", base)
 		if err != nil {
 			_ = os.Remove(tempIndex)
 			return Result{}, err
 		}
 		if res.ExitCode != 0 {
 			_ = os.Remove(tempIndex)
-			return Result{}, gitError([]string{"read-tree", "HEAD"}, res)
+			return Result{}, gitError([]string{"read-tree", base}, res)
 		}
 		for _, path := range opts.OnlyPaths {
 			mode, sha, found, err := r.stageCacheInfo(ctx, path)
@@ -1271,8 +1289,8 @@ type CommitSummary struct {
 //
 // An unborn branch (no commit yet) reports no commits at all rather than a
 // *GitError: RevParseVerify's own HEAD check is tried first, the same
-// "unborn branch is a normal state" convention internal/diff's
-// committableBase already applies, rather than pattern-matching `git log`'s
+// "unborn branch is a normal state" convention CommittableBase already
+// applies, rather than pattern-matching `git log`'s
 // own fatal-error text for the same fact.
 func (r *Repo) RecentCommits(ctx context.Context, limit int) ([]CommitSummary, error) {
 	if _, ok, err := r.RevParseVerify(ctx, "HEAD"); err != nil {
