@@ -916,8 +916,19 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 	}
 
 	commitRepo := r
-	var tempIndex string
+	var tempIndex, baseTree string
 	if opts.Only {
+		base, err := r.CommittableBase(ctx)
+		if err != nil {
+			return Result{}, err
+		}
+		// Resolved to a tree up front: the post-commit index sync diffs
+		// against it after HEAD has already moved.
+		out, err := r.checked(ctx, "rev-parse", "--verify", base+"^{tree}")
+		if err != nil {
+			return Result{}, err
+		}
+		baseTree = strings.TrimSpace(string(out))
 		file, err := os.CreateTemp("", "rgit-index-*")
 		if err != nil {
 			return Result{}, &ExecError{Args: args, Err: err}
@@ -931,19 +942,14 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 			return Result{}, &ExecError{Args: args, Err: err}
 		}
 		commitRepo = &Repo{root: r.root, env: withEnv(r.env, "GIT_INDEX_FILE", tempIndex)}
-		base, err := r.CommittableBase(ctx)
-		if err != nil {
-			_ = os.Remove(tempIndex)
-			return Result{}, err
-		}
-		res, err := commitRepo.run(ctx, nil, "read-tree", base)
+		res, err := commitRepo.run(ctx, nil, "read-tree", baseTree)
 		if err != nil {
 			_ = os.Remove(tempIndex)
 			return Result{}, err
 		}
 		if res.ExitCode != 0 {
 			_ = os.Remove(tempIndex)
-			return Result{}, gitError([]string{"read-tree", base}, res)
+			return Result{}, gitError([]string{"read-tree", baseTree}, res)
 		}
 		for _, path := range opts.OnlyPaths {
 			mode, sha, found, err := r.stageCacheInfo(ctx, path)
@@ -973,7 +979,66 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 	if res.ExitCode != 0 {
 		return res, gitError(args, res)
 	}
+	if opts.Only {
+		return res, r.syncCommittedEntries(ctx, commitRepo, baseTree)
+	}
 	return res, nil
+}
+
+// syncCommittedEntries copies into the real index each path the --only
+// commit changed from baseTree whose real entry disagrees with it. git runs
+// the pre-commit hook against the temporary index, so a hook's `git add`
+// reaches the commit but not the real index, which then sits one version
+// behind HEAD. Writing only disagreeing entries leaves unrelated staged work
+// alone and takes no index.lock when no hook staged anything.
+func (r *Repo) syncCommittedEntries(ctx context.Context, committed *Repo, baseTree string) error {
+	changed, err := committed.cachedEntries(ctx, baseTree)
+	if err != nil {
+		return err
+	}
+	current, err := r.cachedEntries(ctx, baseTree)
+	if err != nil {
+		return err
+	}
+	var info bytes.Buffer
+	for path, entry := range changed {
+		if current[path] != entry {
+			// A deletion carries mode 000000, which --index-info reads as remove.
+			fmt.Fprintf(&info, "%s %s\t%s\x00", entry.mode, entry.sha, path)
+		}
+	}
+	if info.Len() == 0 {
+		return nil
+	}
+	_, err = r.checkedStdin(ctx, &info, "update-index", "-z", "--index-info")
+	return err
+}
+
+type indexEntry struct{ mode, sha string }
+
+// cachedEntries maps every path whose index entry differs from tree to the
+// index side of `git diff-index --cached --raw`.
+func (r *Repo) cachedEntries(ctx context.Context, tree string) (map[string]indexEntry, error) {
+	out, err := r.checked(ctx, "diff-index", "--cached", "--no-renames", "-z", tree)
+	if err != nil {
+		return nil, err
+	}
+	entries := map[string]indexEntry{}
+	if len(out) == 0 {
+		return entries, nil
+	}
+	fields := strings.Split(strings.TrimSuffix(string(out), "\x00"), "\x00")
+	if len(fields)%2 != 0 {
+		return nil, fmt.Errorf("gitx: malformed diff-index output %q", out)
+	}
+	for i := 0; i < len(fields); i += 2 {
+		meta := strings.Fields(strings.TrimPrefix(fields[i], ":"))
+		if len(meta) != 5 {
+			return nil, fmt.Errorf("gitx: malformed diff-index record %q", fields[i])
+		}
+		entries[fields[i+1]] = indexEntry{mode: meta[1], sha: meta[3]}
+	}
+	return entries, nil
 }
 
 func withEnv(env []string, key, value string) []string {

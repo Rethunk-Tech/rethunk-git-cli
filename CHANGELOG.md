@@ -12,6 +12,10 @@ Notable changes to `rgit`. The format follows
   failing on `git read-tree HEAD`, and a pathspec target's line counts no
   longer warn about a missing HEAD.
 
+- `commit --only` copies paths a pre-commit hook staged into the real index,
+  so a hook that bumps and `git add`s a file no longer leaves the index one
+  version behind `HEAD` (`MM` in `git status`).
+
 ## [2.1.0] — 2026-09-09
 
 ### Added

@@ -781,6 +781,37 @@ func TestCommitOnlyUsesTemporaryIndex(t *testing.T) {
 	}
 }
 
+// A pre-commit hook that bumps and stages a file runs against --only's
+// temporary index; its bump must land in HEAD and in the real index, while
+// work staged before the commit stays staged.
+func TestCommitOnlySyncsHookStagedPathsToIndex(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t)
+	gittest.Write(t, dir, "a.txt", "a before\n")
+	gittest.Write(t, dir, "version.txt", "1\n")
+	gittest.Write(t, dir, "staged.txt", "staged before\n")
+	gittest.Commit(t, dir, "chore: initial")
+	gittest.InstallHook(t, dir, "pre-commit", "#!/bin/sh\necho 2 > version.txt\ngit add version.txt\n")
+	gittest.Write(t, dir, "a.txt", "a after\n")
+	gittest.Write(t, dir, "staged.txt", "staged after\n")
+	gittest.Git(t, dir, "add", "a.txt", "staged.txt")
+
+	if _, err := repo.Commit(context.Background(), gitx.CommitOptions{
+		Messages:  []string{"feat: update a"},
+		Only:      true,
+		OnlyPaths: []string{"a.txt"},
+	}); err != nil {
+		t.Fatalf("Commit(Only): %v", err)
+	}
+
+	if got := gittest.Git(t, dir, "show", "HEAD:version.txt"); got != "2\n" {
+		t.Errorf("HEAD:version.txt = %q; want the hook's bump", got)
+	}
+	if got := gittest.Git(t, dir, "status", "--porcelain"); got != "M  staged.txt\n" {
+		t.Errorf("status after --only commit = %q; want only staged.txt staged, index in sync with HEAD", got)
+	}
+}
+
 func TestCommitOnlyCommitsADeletedPath(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t)
