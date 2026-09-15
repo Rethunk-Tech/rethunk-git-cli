@@ -24,62 +24,11 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # Native darwin/amd64 + darwin/arm64 build, kept as its own job because
-  # it needs an actual macOS runner: zig (what the linux/windows matrix
-  # below uses) cannot supply a macOS SDK, so darwin has never been part of
-  # `make cross`'s own matrix (docs/INSTALL.md § Cross builds). A real Mac's
-  # own clang/SDK builds both darwin arches natively, no cross-compilation
-  # toolchain needed at all -- see Makefile's cross-darwin target.
-  release-darwin:
-    name: build darwin (macOS runner)
-    runs-on: macos-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
-      - uses: Rethunk-Tech/gh-actions/setup-go@5d07bd8adb2dda1caa11cacd886edf73e2e95afb # v1.10
-
-      # Same reason the linux/windows job installs this: without it
-      # cross-darwin still builds, just SQL-less (docs/INSTALL.md § SQL
-      # support). Kept in sync with that job's own step on purpose --
-      # skipping it here would ship a darwin artifact silently missing the
-      # grammar its linux/windows siblings carry.
-      - run: npm install -g tree-sitter-cli
-
-      - run: make cross-darwin
-
-      # Only the runner's own native arch can be exec'd directly --
-      # macos-latest is Apple Silicon (arm64) as of this writing, so the
-      # amd64 artifact is verified by `file` alone (a real Intel Mac or
-      # Rosetta would be needed to run it, neither of which this step
-      # assumes). `uname -m` rather than a hardcoded arch, so this keeps
-      # working the day GitHub's own default flips.
-      - name: smoke-test the native-arch artifact
-        run: |
-          case "$(uname -m)" in
-            arm64) suffix=darwin-arm64 ;;
-            x86_64) suffix=darwin-amd64 ;;
-            *) echo "::error::unrecognized runner arch $(uname -m)"; exit 1 ;;
-          esac
-          native=$(find dist -name "*-$suffix" -type f)
-          chmod +x "$native"
-          "$native" --version
-          "$native" languages | grep -q '^sql' || {
-            echo "::error::darwin artifact has no sql grammar"; exit 1;
-          }
-          for bin in dist/rgit-*-darwin-*; do file "$bin"; done
-
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.6.2
-        with:
-          name: darwin-binaries
-          path: dist/rgit-*-darwin-*
-          if-no-files-found: error
-
+  # No darwin job: fleet workflows run no macOS runners, and zig cannot
+  # link darwin without a macOS SDK (docs/INSTALL.md § Cross builds), so
+  # releases ship only what this Linux job can cross-compile.
   release:
     name: build and publish
-    needs: release-darwin
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -179,22 +128,6 @@ jobs:
           wine "$bin" languages | grep -q '^sql' || {
             echo "::error::release artifact has no sql grammar"; exit 1;
           }
-
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.0
-        with:
-          name: darwin-binaries
-          path: dist
-
-      # make cross's own SHA256SUMS (above) only ever covers the three
-      # files it just built -- regenerated here, over whatever dist/ holds
-      # once the darwin job's artifacts have landed alongside them, so the
-      # published checksums and signature cover every artifact this release
-      # actually ships, darwin included.
-      - name: regenerate SHA256SUMS over every artifact
-        run: |
-          cd dist
-          chmod +x rgit-*-darwin-*
-          sha256sum rgit-* > SHA256SUMS
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 

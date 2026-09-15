@@ -6,6 +6,14 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Removed
+
+- darwin/amd64 and darwin/arm64 release artifacts. Every CI and release job
+  now runs on Linux, where zig cannot link darwin without a macOS SDK, so
+  releases ship linux/amd64, linux/arm64 and windows/amd64 only.
+  `scripts/install.sh` exits with an error on macOS instead of fetching a
+  binary that no longer exists; build from source there.
+
 ### Fixed
 
 - `commit --only` on an unborn branch writes the root commit instead of

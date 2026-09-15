@@ -23,7 +23,10 @@ done
 os=$(uname -s)
 case "$os" in
   Linux) os_tag=linux ;;
-  Darwin) os_tag=darwin ;;
+  Darwin)
+    echo "install.sh: no macOS binaries are published -- build from source instead (docs/INSTALL.md § Build)" >&2
+    exit 1
+    ;;
   *)
     echo "install.sh: unsupported OS '$os' -- download the release binary directly (docs/INSTALL.md § Cross builds), or build from source instead" >&2
     exit 1
@@ -84,10 +87,7 @@ fi
 
 (
   cd "$tmp"
-  case "$os_tag" in
-    linux) grep " $asset\$" SHA256SUMS | sha256sum -c - ;;
-    darwin) grep " $asset\$" SHA256SUMS | shasum -a 256 -c - ;;
-  esac
+  grep " $asset\$" SHA256SUMS | sha256sum -c -
 )
 
 mkdir -p "$prefix"

@@ -78,15 +78,12 @@ Full anchor and qualification rules: [`ANCHORS.md`](ANCHORS.md).
 
 ## Build and platform limits
 
-- **darwin/amd64 and darwin/arm64 are not *cross*-built.** `rgit` links
-  tree-sitter through cgo, and darwin fails at link time through zig
-  without an actual macOS SDK (`-lresolv`, `-framework CoreFoundation`) —
-  `make cross`'s own zig-based matrix stays linux/windows only. They are
-  still built and published: the release workflow runs `make cross-darwin`
-  natively on a `macos-latest` GitHub-hosted runner, a separate job from
-  the cross-compiled linux/windows one, and `scripts/install.sh` downloads
-  and verifies the matching artifact on a Mac. Detail:
-  [`INSTALL.md`](INSTALL.md#cross-builds).
+- **No darwin binaries.** `rgit` links tree-sitter through cgo, and darwin
+  fails at link time through zig without an actual macOS SDK (`-lresolv`,
+  `-framework CoreFoundation`). Every build and release job runs on Linux,
+  so releases ship linux/amd64, linux/arm64 and windows/amd64 only, and
+  `scripts/install.sh` exits with an error on macOS; build from source
+  there. Detail: [`INSTALL.md`](INSTALL.md#cross-builds).
 - **SQL ships only behind the `rgit_sql` build tag.** A plain build works
   identically without it; a `.sql` anchor then exits 9 like any other
   unsupported language. Detail: [`INSTALL.md`](INSTALL.md#sql-support).

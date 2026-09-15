@@ -75,16 +75,16 @@ jobs:
       # its own exec.LookPath guard when nothing is installed.
       - run: go test -race ./internal/lsp/...
 
-  # Every other Go job here is ubuntu-latest, so without these two the
-  # published windows and darwin binaries would first be compiled at tag
-  # time, in release.yml -- a break there fails the release rather than the
-  # pull request that caused it. internal/lsp/owner_windows.go, the socket
+  # Every other Go job here builds for linux/amd64 only, so without this one
+  # the published linux/arm64 and windows binaries would first be compiled
+  # at tag time, in release.yml -- a break there fails the release rather
+  # than the pull request that caused it. internal/lsp/owner_windows.go, the socket
   # ownership check guarding LSP dial, has no other job that compiles it at
   # all. Compile-only on purpose: running the suite on either platform is a
   # separate question (the chmod/symlink cases would need skips first), and
   # a link failure is the class of break these targets actually hit.
   #
-  # One job per host rather than a job per target: runners bill each job
+  # One job rather than a job per target: runners bill each job
   # rounded up to the whole minute, so parallel legs would pay the setup
   # floor once per target. The speed comes from caching instead:
   #
@@ -133,19 +133,6 @@ jobs:
       - env:
           GOCACHE: ${{ runner.temp }}/go-build
         run: make -j3 -o sql-parser cross
-
-  cross-compile-darwin:
-    name: cross-compile (darwin)
-    runs-on: macos-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Rethunk-Tech/gh-actions/setup-go@5d07bd8adb2dda1caa11cacd886edf73e2e95afb # v1.10
-      # No zig: darwin is built natively by the runner's own clang and SDK,
-      # which is why it is a separate target from `make cross` at all
-      # (docs/INSTALL.md § Cross builds).
-      - run: npm install -g tree-sitter-cli
-      - run: make cross-darwin
 
   # The cross-check is the one thing no other job exercises: every grammar
   # measured against its own language server, on a corpus carrying the shapes
@@ -255,9 +242,10 @@ jobs:
             printf '%s\n' 'missing cosign/Sigstore dry-run plan' >&2
             exit 1
           }
-      # Exercise Darwin's asset and checksum selection without needing a Mac
-      # runner or touching the network.
-      - run: |
+      # No darwin binaries are published, so the script must refuse Darwin
+      # up front with a reason rather than 404 partway through a download.
+      - name: Refuse Darwin without network
+        run: |
           mock_bin="$(mktemp -d)"
           trap 'rm -rf "$mock_bin"' EXIT
           printf '%s\n' \
@@ -267,42 +255,18 @@ jobs:
             '  -m) printf "%s\n" arm64 ;;' \
             'esac' >"$mock_bin/uname"
           chmod +x "$mock_bin/uname"
-          output="$(
-            PATH="$mock_bin:$PATH" VERSION=v1.2.0 sh scripts/install.sh --dry-run
-          )"
+          if output="$(
+            PATH="$mock_bin:$PATH" VERSION=v1.2.0 sh scripts/install.sh --dry-run 2>&1
+          )"; then
+            printf '%s\n' "$output"
+            printf '%s\n' 'install.sh accepted Darwin' >&2
+            exit 1
+          fi
           printf '%s\n' "$output"
-          for expected in \
-            rgit-v1.2.0-darwin-arm64 \
-            SHA256SUMS
-          do
-            printf '%s\n' "$output" | grep -Fq "$expected" || {
-              printf 'missing expected output: %s\n' "$expected" >&2
-              exit 1
-            }
-          done
-      - run: |
-          mock_bin="$(mktemp -d)"
-          trap 'rm -rf "$mock_bin"' EXIT
-          printf '%s\n' \
-            '#!/bin/sh' \
-            "case \"\$1\" in" \
-            '  -s) printf "%s\n" Darwin ;;' \
-            '  -m) printf "%s\n" x86_64 ;;' \
-            'esac' >"$mock_bin/uname"
-          chmod +x "$mock_bin/uname"
-          output="$(
-            PATH="$mock_bin:$PATH" VERSION=v1.2.0 sh scripts/install.sh --dry-run
-          )"
-          printf '%s\n' "$output"
-          for expected in \
-            rgit-v1.2.0-darwin-amd64 \
-            SHA256SUMS
-          do
-            printf '%s\n' "$output" | grep -Fq "$expected" || {
-              printf 'missing expected output: %s\n' "$expected" >&2
-              exit 1
-            }
-          done
+          printf '%s\n' "$output" | grep -Fq 'no macOS binaries are published' || {
+            printf '%s\n' 'missing Darwin refusal message' >&2
+            exit 1
+          }
       - name: Verify optional cosign branch without network
         run: |
           fixture="$(mktemp -d)"

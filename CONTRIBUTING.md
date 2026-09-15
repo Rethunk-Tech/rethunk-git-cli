@@ -35,7 +35,7 @@ it; the tiered layout below is what keeps one authority per fact.
 
 Cutting a release: tag `vX.Y.Z`, which
 [`.github/workflows/release.yml`](.github/workflows/release.yml) turns into a
-GitHub release with the cross-built and natively-built binaries and their
+GitHub release with the cross-built binaries and their
 `SHA256SUMS`.
 
 That workflow also fails the release outright if any artifact's own `rgit
@@ -46,9 +46,6 @@ on every artifact it reaches:
 - linux/arm64 runs inside a matching arm64 container image under QEMU
   emulation, since it is dynamically linked against glibc and bare QEMU has no
   aarch64 sysroot to resolve that against
-- whichever darwin arch matches the `macos-latest` runner's own (arm64)
-  executes directly in its own job; the other darwin artifact is checked by
-  file type only, not executed
 
 See [`docs/INSTALL.md`](docs/INSTALL.md#cross-builds).
 

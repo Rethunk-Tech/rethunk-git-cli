@@ -76,7 +76,6 @@ fallback has to test the value rather than the exit status.
 | `cover`, `cover-short` | Coverage with `-coverpkg=./...`, as `CONTRIBUTING.md` requires |
 | `fix-diff`, `fix` | `go fix` preview and apply |
 | `cross` | Cross-compile linux/amd64, linux/arm64, windows/amd64 into `dist/`, with SQL when the tree-sitter CLI is present |
-| `cross-darwin` | Native-compile darwin/amd64, darwin/arm64 into `dist/` — run this on a macOS host, not cross-compiled by `cross` above |
 | `clean` | Remove build outputs |
 
 ## Cross builds
@@ -90,7 +89,7 @@ with [zig](https://ziglang.org) as the single cross-compilation tool:
 | linux/amd64 | yes | `zig cc -target x86_64-linux-gnu` |
 | linux/arm64 | yes | `zig cc -target aarch64-linux-gnu` |
 | windows/amd64 | yes | `zig cc -target x86_64-windows-gnu` |
-| darwin/amd64, darwin/arm64 | **no, not via zig** | needs a macOS SDK — see `cross-darwin` below |
+| darwin/amd64, darwin/arm64 | **no, not via zig** | needs a macOS SDK — not built or published |
 
 ```bash
 make cross                 # all three zig-cross-compiled targets, into dist/
@@ -104,21 +103,10 @@ CoreFoundation` from an actual macOS SDK — building with `-tags
 netgo,osusergo` does not clear it, which is why darwin is deliberately not
 in `make cross`'s own zig-based matrix.
 
-**`make cross-darwin` builds darwin/amd64 and darwin/arm64 natively — run
-it on an actual macOS host.** A Mac's own clang and SDK build both darwin
-arches without a cross-compilation toolchain at all (Xcode ships a
-universal SDK), so this target carries no `zig`/`CC` override the way
-`cross`'s three targets do:
-
-```bash
-make cross-darwin          # both darwin arches, into dist/ -- macOS host only
-```
-
-The release workflow (`.github/workflows/release.yml`) runs this on a
-`macos-latest` GitHub-hosted runner as its own job, so tagged releases ship
-`rgit-vX.Y.Z-darwin-amd64` and `rgit-vX.Y.Z-darwin-arm64` alongside the
-three zig-built artifacts, all covered by the same `SHA256SUMS` and its
-cosign signature.
+**No darwin binaries are published.** Every CI and release job runs on a
+Linux runner, so tagged releases ship exactly the three zig-built artifacts
+above, covered by `SHA256SUMS` and its cosign signature. On macOS, build
+from source (§ Build).
 
 **Cross binaries carry SQL when the build host can generate the parser.**
 `make cross` runs generation once through `cmd/rgit-install -generate-only`,
@@ -303,9 +291,9 @@ plan without touching the network at all, which is what CI runs to lint the
 script's own control flow on every push.
 
 **Scope is deliberately narrow.** `scripts/install.sh` supports
-linux/amd64, linux/arm64, darwin/amd64, and darwin/arm64; `install.ps1`
-supports Windows/amd64. Linux verifies the release line with `sha256sum`;
-macOS uses its native `shasum -a 256`. Neither installer installs a language
+linux/amd64 and linux/arm64 and exits with an error on macOS, where no
+release binary exists; `install.ps1` supports Windows/amd64. Linux verifies
+the release line with `sha256sum`. Neither installer installs a language
 server; both point at this documentation instead. There is no Homebrew
 formula: `rgit` links tree-sitter through cgo, so a formula would need to
 build from source per-platform (a bottle per target) rather than fetch one,
