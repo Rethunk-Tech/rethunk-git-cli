@@ -17,6 +17,12 @@ updates:
       go-dependencies:
         patterns:
           - "*"
+    # tree-sitter-markdown stops publishing Go bindings after v0.5.1, so any
+    # newer version fails `go mod tidy` on internal/resolve's import and takes
+    # the whole group down with it. v0.5.3's block parser is unchanged from
+    # v0.5.1; revisit when upstream ships a parser change.
+    ignore:
+      - dependency-name: github.com/tree-sitter-grammars/tree-sitter-markdown
 
   - package-ecosystem: github-actions
     directory: /
