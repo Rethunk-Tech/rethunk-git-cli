@@ -71,9 +71,9 @@ before tagging.
 10). Each file holds one happy path plus the edge cases that have actually
 bitten — no permutation laundry lists.
 
-The two test lanes below, plus `golangci-lint`, run in
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) on every push and pull
-request. The ≤30s suite-time budget and the coverage numbers in
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the full suite,
+which includes every `-short` test, plus `golangci-lint` on every push and
+pull request. The ≤30s suite-time budget and the coverage numbers in
 [§ Coverage](#coverage) are not enforced anywhere — CI runs no timing check
 and no coverage step — so both stay a review discipline rather than a CI
 gate.
