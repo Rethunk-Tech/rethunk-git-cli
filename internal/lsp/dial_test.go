@@ -18,10 +18,16 @@ import (
 // test's own name -- needed wherever a path built from it is bound as a
 // unix socket, which is capped at ~108 bytes (sun_path) on Linux and can
 // overflow once a long test name and privateSocketDir's own "rgit-<uid>"
-// subdirectory are both appended to it.
+// subdirectory are both appended to it. It roots at /tmp where one exists
+// rather than $TMPDIR: macOS runners and scratch harnesses set a TMPDIR long
+// enough to overflow sun_path on its own.
 func shortTempDir(t *testing.T) string {
 	t.Helper()
-	dir, err := os.MkdirTemp("", "rgit-lsp-test-")
+	base := ""
+	if info, err := os.Stat("/tmp"); err == nil && info.IsDir() {
+		base = "/tmp"
+	}
+	dir, err := os.MkdirTemp(base, "rgit-lsp-test-")
 	if err != nil {
 		t.Fatal(err)
 	}
