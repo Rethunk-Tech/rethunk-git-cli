@@ -32,25 +32,6 @@ env:
 # actions/runner-images' own software manifest), so no toolchain step is
 # needed here.
 jobs:
-  test:
-    name: test (unit lane)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Rethunk-Tech/gh-actions/setup-go@5d07bd8adb2dda1caa11cacd886edf73e2e95afb # v1.10
-      # cmd/rgit-install's own tests (TestRunPrereqChecks, TestFindSQLAdapter)
-      # assert this in a real dev/CI environment -- not a build-time SQL
-      # lane (this file's own top comment), just PATH presence for the
-      # prereq check itself. Same step release.yml's darwin/linux/windows
-      # jobs already carry, kept in sync on purpose.
-      - run: npm install -g tree-sitter-cli
-      # -short: the unit lane CONTRIBUTING.md calls where the guarantee
-      # lives. It also skips every live-language-server test cleanly (each
-      # checks testing.Short() and/or exec.LookPath before dialling), which
-      # matters here since this runner has no language servers installed.
-      - run: go test -short ./...
-
   lint:
     name: lint
     runs-on: ubuntu-latest
@@ -69,15 +50,16 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: Rethunk-Tech/gh-actions/setup-go@5d07bd8adb2dda1caa11cacd886edf73e2e95afb # v1.10
-      # Same reason the unit lane above installs this: cmd/rgit-install's
-      # own tests run here too, unshortened by -short.
+      # cmd/rgit-install's own tests (TestRunPrereqChecks, TestFindSQLAdapter)
+      # assert tree-sitter's PATH presence for the prereq check itself -- not
+      # a build-time SQL lane (this file's own top comment).
       - run: npm install -g tree-sitter-cli
-      # The unit lane above is where a regression must fail; this lane
-      # proves the assembled program behaves -- it builds the binary and
-      # execs it, which -short skips entirely. Without it, CONTRIBUTING's
-      # claim that these gates run on every push was true of two lanes out
-      # of three. The completion cases guard on exec.LookPath and skip
-      # cleanly when a shell (zsh here) is absent from the runner.
+      # No separate -short job: every testing.Short() branch in the suite
+      # only skips (a live-server test, or TestMain's binary build), so on
+      # the same runner this run executes every test the unit lane does,
+      # plus the end-to-end cases that build and exec the binary. Live
+      # server and completion cases guard on exec.LookPath and skip cleanly
+      # when a server or shell (zsh here) is absent from the runner.
       - run: go test ./...
 
   race:
@@ -101,6 +83,25 @@ jobs:
   # all. Compile-only on purpose: running the suite on either platform is a
   # separate question (the chmod/symlink cases would need skips first), and
   # a link failure is the class of break these targets actually hit.
+  #
+  # One job per host rather than a job per target: runners bill each job
+  # rounded up to the whole minute, so parallel legs would pay the setup
+  # floor once per target. The speed comes from caching instead:
+  #
+  # - The generated SQL parser is a pure function of cmd/rgit-install
+  #   (which pins the grammar version) and the tree-sitter CLI release, so
+  #   it is cached on exactly those and regenerated (~60s) only when either
+  #   changes. The CLI version is resolved rather than pinned so it stays
+  #   latest. Without the CLI the build still succeeds, just SQL-less, and
+  #   this job would never compile the SQL grammar the release ships.
+  # - GOCACHE gets a cache of its own, outside the one setup-go shares across
+  #   every job under a single key: the cgo grammars (the SQL parser alone is
+  #   17 MB of C) compile once per target and are reused until go.sum or the
+  #   generated parser changes. Go keys entries by GOOS/GOARCH/CC, so every
+  #   target in the job shares the one directory.
+  # - `-o sql-parser` stops `make cross` regenerating a parser the cache (or
+  #   the step before) already produced; -j builds the targets side by side
+  #   on the runner's cores.
   cross-compile:
     name: cross-compile (linux, windows)
     runs-on: ubuntu-latest
@@ -109,14 +110,29 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: Rethunk-Tech/gh-actions/setup-go@5d07bd8adb2dda1caa11cacd886edf73e2e95afb # v1.10
       # Same toolchain release.yml drives: rgit links tree-sitter through
-      # cgo, so CGO_ENABLED=0 is not an option and every target needs a real
-      # C compiler (docs/INSTALL.md § Cross builds).
+      # cgo, so every target needs a real C compiler (docs/INSTALL.md § Cross
+      # builds). setup-zig caches zig's global cache itself.
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
-      # Kept in step with release.yml: without the tree-sitter CLI `make
-      # cross` still builds, just SQL-less, and this job would then never
-      # compile the SQL grammar the release ships.
-      - run: npm install -g tree-sitter-cli
-      - run: make cross
+      - name: resolve tree-sitter CLI version
+        id: tscli
+        run: echo "version=$(npm view tree-sitter-cli version)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: sql-csrc
+        with:
+          path: internal/resolve/sqlgrammar/csrc
+          key: sql-csrc-${{ runner.os }}-${{ steps.tscli.outputs.version }}-${{ hashFiles('cmd/rgit-install/**', '!cmd/rgit-install/*_test.go') }}
+      - if: steps.sql-csrc.outputs.cache-hit != 'true'
+        env:
+          TSCLI_VERSION: ${{ steps.tscli.outputs.version }}
+        run: npm install -g "tree-sitter-cli@$TSCLI_VERSION" && make sql-parser
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/go-build
+          key: go-build-cross-${{ runner.os }}-${{ steps.tscli.outputs.version }}-${{ hashFiles('go.sum') }}
+          restore-keys: go-build-cross-${{ runner.os }}-
+      - env:
+          GOCACHE: ${{ runner.temp }}/go-build
+        run: make -j3 -o sql-parser cross
 
   cross-compile-darwin:
     name: cross-compile (darwin)
@@ -145,21 +161,55 @@ jobs:
     name: lsp cross-check
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # Pinned to the version docs/INSTALL.md names, so a gopls release cannot
+      # change what this job measures without the table changing too.
+      GOPLS_VERSION: v0.23.0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: Rethunk-Tech/gh-actions/setup-go@5d07bd8adb2dda1caa11cacd886edf73e2e95afb # v1.10
+        id: go
 
-      # Pinned to the version docs/INSTALL.md names, so a gopls release cannot
-      # change what this job measures without the table changing too.
-      - run: go install golang.org/x/tools/gopls@v0.23.0
+      # Compiling gopls is ~40s; the binary depends only on its own version
+      # and the Go release that builds it, so it is cached on those two.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: gopls
+        with:
+          path: ~/go/bin/gopls
+          key: gopls-${{ env.GOPLS_VERSION }}-${{ runner.os }}-go${{ steps.go.outputs.go-version }}
+      - if: steps.gopls.outputs.cache-hit != 'true'
+        run: go install "golang.org/x/tools/gopls@$GOPLS_VERSION"
 
       # rust-analyzer ships as a rustup component, not on npm; the runner
       # already has a Rust toolchain.
       - run: rustup component add rust-analyzer
 
       # vscode-langservers-extracted supplies the json, css and html servers
-      # from one package (docs/INSTALL.md § Language servers).
-      - run: npm i -g @vtsls/language-server pyright bash-language-server yaml-language-server vscode-langservers-extracted
+      # from one package (docs/INSTALL.md § Language servers). Each is
+      # resolved to its current release first and the cache keyed on those
+      # versions (plus node's), so the servers stay latest while an
+      # unchanged set restores from a private npm prefix instead of
+      # reinstalling.
+      - name: resolve language server versions
+        id: lsp
+        shell: bash
+        run: |
+          prefix="$RUNNER_TEMP/npm-global"
+          echo "NPM_CONFIG_PREFIX=$prefix" >> "$GITHUB_ENV"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+          for p in @vtsls/language-server pyright bash-language-server yaml-language-server vscode-langservers-extracted; do
+            v=$(npm view "$p" version)
+            printf '%s@%s\n' "$p" "$v"
+          done > "$RUNNER_TEMP/lsp-packages.txt"
+          cat "$RUNNER_TEMP/lsp-packages.txt"
+          echo "key=node$(node --version)-$(sha256sum "$RUNNER_TEMP/lsp-packages.txt" | cut -c1-16)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: lsp-cache
+        with:
+          path: ${{ runner.temp }}/npm-global
+          key: lsp-servers-${{ runner.os }}-${{ steps.lsp.outputs.key }}
+      - if: steps.lsp-cache.outputs.cache-hit != 'true'
+        run: xargs npm i -g < "$RUNNER_TEMP/lsp-packages.txt"
 
       # marksman publishes no package; the release binary is the only route.
       - name: install marksman
