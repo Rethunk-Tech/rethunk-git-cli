@@ -120,3 +120,32 @@ func TestEscalateToContainer_HTMLNestedInsertIgnoresTagCoincidence(t *testing.T)
 	qt.Assert(t, qt.Equals(stagedBlob(t, repo, "index.html"), want))
 	qt.Assert(t, qt.Equals(strings.Count(want, "<div id=\"app\">"), 1))
 }
+
+// TestPlanStage_StagesNewSiblingsTheAnchorReferences pins the closure an
+// anchored symbol needs to be committable on its own: a symbol whose new
+// text names sibling declarations that HEAD does not have yet must bring
+// those declarations with it, or HEAD lands referencing types that do not
+// exist there.
+//
+// The unrelated pre-existing sibling edit ("seconds") is the control: it is
+// exactly what the anchor exists to exclude, so widening must not sweep it in.
+func TestPlanStage_StagesNewSiblingsTheAnchorReferences(t *testing.T) {
+	t.Parallel()
+	head := "export type VideoPromptOverride = string;\n\nexport interface Clip {\n  id: string;\n}\n"
+	dir, repo := gittest.RepoWithFile(t, "types.ts", head, "chore: initial types.ts")
+
+	work := "export interface SvdVideoPrompt {\n  image: string;\n}\n\n" +
+		"export interface TextToVideoPrompt {\n  text: string;\n}\n\n" +
+		"export type VideoPromptOverride = SvdVideoPrompt | TextToVideoPrompt;\n\n" +
+		"export interface Clip {\n  id: string;\n  seconds: number;\n}\n"
+	gittest.Write(t, dir, "types.ts", work)
+
+	err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("types.ts", "VideoPromptOverride")})
+	qt.Assert(t, qt.IsNil(err))
+
+	staged := stagedBlob(t, repo, "types.ts")
+	qt.Assert(t, qt.IsTrue(strings.Contains(staged, "export interface SvdVideoPrompt")))
+	qt.Assert(t, qt.IsTrue(strings.Contains(staged, "export interface TextToVideoPrompt")))
+	qt.Assert(t, qt.IsTrue(strings.Contains(staged, "export type VideoPromptOverride = SvdVideoPrompt | TextToVideoPrompt;")))
+	qt.Assert(t, qt.IsFalse(strings.Contains(staged, "seconds")))
+}

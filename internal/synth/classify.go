@@ -443,3 +443,119 @@ func (fp *filePlan) insertionPoint(res *resolve.Resolution) (pos uint, seq int) 
 	}
 	return uint(len(fp.headSrc)), seq
 }
+
+// referencedNewSiblings names the top-level declarations this file adds that
+// op's own worktree text refers to by name. An anchored symbol whose new text
+// names a sibling HEAD does not have is not committable alone: the
+// synthesized blob would reference a declaration that exists nowhere in the
+// tree it lands in.
+//
+// Direct references only, same file, declarations absent from HEAD. Anything
+// wider would drag in edits to siblings that are already there, which is the
+// one thing the anchor exists to exclude.
+func (fp *filePlan) referencedNewSiblings(op editOp) []string {
+	if !fp.workExists || op.wend <= op.wstart {
+		return nil
+	}
+	text := fp.workSrc[op.wstart:op.wend]
+
+	var out []string
+	for _, name := range fp.workOrder {
+		if !isIdentifier(name) || !referencesIdentifier(text, name) {
+			continue
+		}
+		res, err := fp.workFile.Resolve(name)
+		if err != nil || res.Container != "" {
+			continue // a member is reachable only through its container
+		}
+		// The anchored symbol itself, or a declaration nested inside it:
+		// already carried by op's own text.
+		if res.Extent.Start >= op.wstart && res.Extent.End <= op.wend {
+			continue
+		}
+		if !fp.absentFromHead(name) {
+			continue
+		}
+		out = append(out, name)
+	}
+	return out
+}
+
+// absentFromHead reports whether name resolves to nothing at all in HEAD --
+// genuinely new, as opposed to present, or present more than once, which
+// comes back as an ambiguity that must not be read as absence.
+func (fp *filePlan) absentFromHead(name string) bool {
+	if !fp.headExists {
+		return true
+	}
+	_, err := fp.headFile.Resolve(name)
+	rerr, ok := resolve.AsResolveError(err)
+	return ok && rerr.Code == exitcode.AnchorUnresolvable
+}
+
+// addReferencedSiblings stages every new sibling the caller's own anchors
+// refer to but did not name, and reports each one so the commit lists what it
+// brought along rather than staging it silently.
+func (fp *filePlan) addReferencedSiblings(named map[string]bool) ([]autoOp, error) {
+	var want []string
+	for _, op := range fp.ops {
+		for _, name := range fp.referencedNewSiblings(op) {
+			if named[name] || slices.Contains(want, name) {
+				continue
+			}
+			want = append(want, name)
+		}
+	}
+
+	autos := make([]autoOp, 0, len(want))
+	for _, name := range want {
+		op, _, err := fp.classify(name)
+		if err != nil {
+			return nil, err
+		}
+		fp.ops = append(fp.ops, op)
+		autos = append(autos, autoOp{name: name, op: op})
+	}
+	return autos, nil
+}
+
+// referencesIdentifier reports whether name occurs in text as a whole
+// identifier rather than as a substring of a longer one.
+func referencesIdentifier(text []byte, name string) bool {
+	for off := 0; off <= len(text)-len(name); {
+		i := bytes.Index(text[off:], []byte(name))
+		if i < 0 {
+			return false
+		}
+		i += off
+		end := i + len(name)
+		if (i == 0 || !identByte(text[i-1])) && (end == len(text) || !identByte(text[end])) {
+			return true
+		}
+		off = i + 1
+	}
+	return false
+}
+
+// isIdentifier reports whether name is a plain source identifier. Anchor
+// spaces built from prose or selectors -- markdown slugs, CSS selectors,
+// HTML "tag#id" -- are excluded here rather than language by language: a
+// textual name match in those spaces says nothing about a reference.
+func isIdentifier(name string) bool {
+	if name == "" || (name[0] >= '0' && name[0] <= '9') {
+		return false
+	}
+	for i := 0; i < len(name); i++ {
+		if !identByte(name[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// identByte reports whether b can appear inside a source identifier. Every
+// byte above ASCII counts: a multi-byte letter is never a word boundary.
+func identByte(b byte) bool {
+	return b == '_' || b == '$' || b >= 0x80 ||
+		(b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9')
+}

@@ -285,6 +285,14 @@ func PlanStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 	}
 
 	for _, fp := range plan.files {
+		// Ahead of the cross-check, so a sibling pulled in here is verified
+		// against the language server in the same batched query its anchor is.
+		siblings, err := fp.addReferencedSiblings(named[fp.path])
+		if err != nil {
+			return nil, err
+		}
+		plan.addAutoResults(fp, siblings)
+
 		// One batched language-server query per file, not one per anchor --
 		// every anchor named in this file has already been
 		// resolved and its op built above, so a mismatch here still aborts
@@ -298,17 +306,7 @@ func PlanStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 		}
 
 		pseudos := fp.addPreamble(named[fp.path])
-		for _, po := range pseudos {
-			added, deleted := opLineCounts(fp, po.op)
-			plan.Results = append(plan.Results, TargetResult{
-				Target:  AnchorTarget(fp.path, po.name),
-				Outcome: Staged,
-				Added:   added,
-				Deleted: deleted,
-				Path:    fp.path,
-				start:   po.op.start,
-			})
-		}
+		plan.addAutoResults(fp, pseudos)
 		if len(pseudos) > 0 {
 			plan.Preamble = append(plan.Preamble, fp.path)
 		}
@@ -321,12 +319,32 @@ func PlanStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 	return plan, nil
 }
 
-// preambleOp pairs one auto-staged pseudo-anchor ("@header" or "@imports")
-// with the editOp addPreamble appended for it, so the caller can report the
+// autoOp pairs one anchor staged without the caller naming it -- a new
+// file's "@header"/"@imports", or a new sibling an anchored symbol
+// references -- with the editOp appended for it, so the caller can report the
 // same magnitude it just staged rather than a bare file name.
-type preambleOp struct {
+type autoOp struct {
 	name string
 	op   editOp
+}
+
+// addAutoResults turns auto-staged anchors into their own result rows.
+// Rolling their line counts into whichever symbol the caller named would
+// misattribute bytes to a symbol that never touched them, and docs/USAGE.md
+// requires a --dry-run preview and the commit it previews to be comparable
+// line for line.
+func (p *Plan) addAutoResults(fp *filePlan, autos []autoOp) {
+	for _, a := range autos {
+		added, deleted := opLineCounts(fp, a.op)
+		p.Results = append(p.Results, TargetResult{
+			Target:  AnchorTarget(fp.path, a.name),
+			Outcome: Staged,
+			Added:   added,
+			Deleted: deleted,
+			Path:    fp.path,
+			start:   a.op.start,
+		})
+	}
 }
 
 // addPreamble stages @header and @imports for a file that does not exist in
@@ -343,12 +361,6 @@ type preambleOp struct {
 // the same rule insertionPoint uses, so the header sorts ahead of the
 // imports and both ahead of every declaration by construction.
 //
-// The returned pairs are the caller's to turn into their own TargetResult
-// rows (docs/USAGE.md: a --dry-run preview and the commit it previews must
-// be "comparable line for line") -- rolling their line counts into whichever
-// symbol the caller named would misattribute bytes to a symbol that never
-// touched them.
-//
 // Each pseudo-anchor's extent absorbs its mandatory trailing separator where
 // the language owns one (resolve.OwnsTrailingSeparator): gofmt always leaves
 // one blank line after Go's package clause and import block, so that line is
@@ -357,7 +369,7 @@ type preambleOp struct {
 // The synthesized blob is unaffected
 // either way: mergeInsertTies' joinWithSeparator renormalizes every insert's
 // boundary regardless.
-func (fp *filePlan) addPreamble(named map[string]bool) (pairs []preambleOp) {
+func (fp *filePlan) addPreamble(named map[string]bool) (pairs []autoOp) {
 	if fp.headExists || !fp.workExists {
 		return nil
 	}
@@ -395,7 +407,7 @@ func (fp *filePlan) addPreamble(named map[string]bool) (pairs []preambleOp) {
 			text:  append([]byte(nil), fp.workSrc[ext.Start:ext.End]...),
 		}
 		fp.ops = append(fp.ops, op)
-		pairs = append(pairs, preambleOp{name: pseudo, op: op})
+		pairs = append(pairs, autoOp{name: pseudo, op: op})
 	}
 	return pairs
 }

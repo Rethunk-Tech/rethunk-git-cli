@@ -16,6 +16,12 @@ Notable changes to `rgit`. The format follows
 
 ### Fixed
 
+- A `FILE:SYMBOL` anchor stages the new top-level declarations that symbol's
+  own text references, so a union alias widened over two brand new interfaces
+  no longer commits a `HEAD` referencing types that exist nowhere in it. Direct
+  references only, same file, and only declarations `HEAD` lacks; edits to
+  siblings already there stay excluded.
+
 - `commit --only` on an unborn branch writes the root commit instead of
   failing on `git read-tree HEAD`, and a pathspec target's line counts no
   longer warn about a missing HEAD.

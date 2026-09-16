@@ -3,7 +3,8 @@
 How to name a symbol. For the grammar that decides whether an argument *is* an
 anchor, see [`USAGE.md`](USAGE.md#argument-shape).
 
-An anchor is `FILE:NAME`. It stages that symbol's extent and nothing else.
+An anchor is `FILE:NAME`. It stages that symbol's extent, plus the little that
+extent cannot stand without — see below.
 
 ## What an extent covers
 
@@ -29,6 +30,13 @@ naming the path.
 
 Overlapping or nested anchors in one file merge into a single contiguous extent
 before staging.
+
+A symbol whose new text names top-level declarations the same file adds — a
+union alias over two brand new interfaces — stages those declarations with it,
+each on its own row. Without them `HEAD` lands holding a symbol that references
+declarations existing nowhere in that tree. Direct references only, same file,
+and only declarations `HEAD` does not already have: an edit to a sibling that is
+already there is precisely what the anchor excludes.
 
 ## Qualification
 
