@@ -194,10 +194,10 @@ above it. Mutually exclusive with `--porcelain`.
 ```console
 $ rgit show auth.go:ValidateToken
 func ValidateToken(tok string) error {
-	if tok == "" {
-		return ErrEmpty
-	}
-	return nil
+ if tok == "" {
+  return ErrEmpty
+ }
+ return nil
 }
 
 $ rgit show --source v1.4.0 auth.go:ValidateToken | diff - <(rgit show auth.go:ValidateToken)
@@ -209,25 +209,29 @@ not already carry. It is the only way to read a symbol as it stood at another
 revision, and it prints the same extent `commit` would splice, so reading and
 staging can never disagree about where a symbol starts and ends.
 
-With **one** anchor and no `--with-header`, stdout is those bytes and nothing
+With **one** anchor and neither `--porcelain` nor `--with-header`, stdout is those bytes and nothing
 else, so it pipes. With **several**, each extent is framed by a header line
 `FILE:ANCHOR<TAB>NBYTES` followed by exactly `NBYTES` bytes:
 
 ```console
 $ rgit show auth.go:ValidateToken auth.go:@imports
-auth.go:ValidateToken	118
+auth.go:ValidateToken 118
 func ValidateToken(tok string) error {
-	...
-}auth.go:@imports	34
+ ...
+}auth.go:@imports 34
 import (
-	"errors"
+ "errors"
 )
 ```
 
 The length, not a delimiter, is what makes the stream unambiguous — a symbol's
 own text can contain anything, including a line that looks like a header.
-`--with-header` forces that framing for a single anchor too, so a script need
-not special-case an argument list that happens to hold one.
+`--porcelain` forces that framing for every extent, single-anchor and
+multi-anchor alike, so a script need not special-case an argument list that
+happens to hold one — this is the machine-readable framing scripts should
+parse; the record grammar is in
+[`CODES.md`](CODES.md#rgit-show---porcelain). `--with-header` is a deprecated
+alias for `--porcelain` and still works identically.
 
 Every anchor is resolved before any byte is written, so a failure anywhere in
 the list leaves stdout untouched rather than half a stream.
@@ -595,9 +599,9 @@ the same rule `grep` follows, which prefixes only when several files are named:
 
 ```console
 $ rgit symbols auth.go session.go
-auth.go	@imports
-auth.go	ValidateToken
-session.go	NewSession
+auth.go @imports
+auth.go ValidateToken
+session.go NewSession
 ```
 
 `--with-filename` forces that prefix for a single file too, so a script need
@@ -661,7 +665,9 @@ section above: `blame` takes `-p`/`--porcelain`, `--follow-rename`, and
 `--help`; `languages` takes `--porcelain`, `--in-repo`, and `--help`; `log`
 takes `--porcelain`, `-p`/`--patch` (mutually exclusive with it),
 `--follow-rename`, `-n`/`--max-count`, `--help`, and — only in its
-`--since`/`--until` shape — `--since`/`--until` themselves; `symbols` takes
+`--since`/`--until` shape — `--since`/`--until` themselves; `show` takes
+`--source`, `--porcelain`, `--with-header` (deprecated alias for
+`--porcelain`), and `--help`; `symbols` takes
 `--for-commit`, `--with-lines`, and `--help`; `doctor` takes `--porcelain`,
 `--deep`, and `--help`; `completion` and `context` take no flags beyond
 `--help`/`-h` (`completion` also takes its shell argument; `context`'s fixed
@@ -701,7 +707,8 @@ output shape is the point).
 | `--exit-code` | (`diff`) Exit 1 when anything is committable, 0 when clean. |
 | `--quiet` | (`diff`) Implies `--exit-code` and suppresses output. |
 | `-p`, `--patch` | (`diff`) Append git's own real patch body after the report. Suppressed by `--quiet`, mutually exclusive with `--porcelain`. |
-| `--with-header` | (`show`) Frame a single anchor the way several are framed. Implied by naming more than one. |
+| `--with-header` | (`show`) Deprecated alias for `--porcelain` (below); identical framing. Retained so existing scripts keep working. |
+| `--porcelain` | (`show`) Frame every extent the way several are framed (`FILE:ANCHOR<TAB>NBYTES` + exactly `NBYTES` bytes). Single-anchor and multi-anchor both framed; the machine-readable framing scripts should parse. |
 | `--with-filename` | (`symbols`) Prefix every line with `FILE<TAB>`. Implied by naming more than one file, as `grep` does. |
 | `--porcelain` | (`symbols`) Terminate each record with NUL instead of a newline; fields unchanged. |
 | `--source REV` | (`show`) Read the symbol from `REV:FILE` instead of the worktree. Both spellings (`--source REV`, `--source=REV`). An unparseable revision is exit 128, distinct from a path absent at a real one (exit 3). |

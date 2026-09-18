@@ -130,6 +130,24 @@ symbols` and `rgit symbols --for-commit` (`internal/app/completion.go`), while
 --porcelain` (`internal/app/context.go`). Reordering or adding a column is a
 breaking change in-tree, not just for external scripts.
 
+### The three `--porcelain` dialects
+
+`--porcelain` is not one format but three dialects, fixed per command so
+scripts can rely on them without probing:
+
+| Dialect | Commands | Record separator | Shape |
+| --- | --- | --- | --- |
+| TSV + newline | `diff`, `commit`, `languages`, `doctor`, `log` | newline | `FIELD<TAB>FIELD...` records, no header — see each section below (`context`'s fixed record stream is the same TSV + newline shape, with a leading type tag per line) |
+| NUL-terminated | `symbols` | NUL | Identical fields and order to the newline form; only the record separator moves, so a symbol may contain any byte but NUL |
+| Passthrough git format | `blame` | git's own | No rgit record shape at all: `--porcelain` passes straight through to git's own `git blame --porcelain` output, unmodified |
+
+`rgit show --porcelain` is the one further shape: length-framed
+`FILE:ANCHOR<TAB>NBYTES` headers followed by exactly `NBYTES` bytes (see
+`rgit show --porcelain` below), because a symbol's own bytes can contain
+anything, including a line that looks like a header. Existing bytes are
+unchanged by any of this: adding `--porcelain` never moves a default
+human-readable layout or an existing `--porcelain` record.
+
 ### `rgit diff --porcelain`
 
 ```text
@@ -381,6 +399,34 @@ admits a newline into a name, which CSS grouped selectors once did.
 container qualification, an ordinal (`init#2`), or a gopls-spelled receiver,
 while the range never contains a tab. Splitting on the first tab is therefore
 always correct.
+
+### `rgit show --porcelain`
+
+```text
+auth.go:ValidateToken 118
+func ValidateToken(tok string) error {
+ ...
+}auth.go:@imports 34
+import (
+ "errors"
+)
+```
+
+Under `--porcelain`, every extent is framed by a header line
+`FILE:ANCHOR<TAB>NBYTES` followed by exactly `NBYTES` bytes — the same
+framing multi-anchor output already uses, now applied unconditionally, so a
+script need not special-case an argument list that happens to hold one.
+Single-anchor and multi-anchor output are both framed; without the flag,
+single-anchor output stays raw bytes, byte-identical to before.
+
+The length, not a delimiter, is what makes the stream unambiguous — a
+symbol's own bytes can contain anything, including a line that looks like a
+header, so a reader consumes `NBYTES` bytes after each header without
+scanning for a separator at all.
+
+`--with-header` is a deprecated alias for `--porcelain`: identical framing,
+retained so existing scripts keep working. Prefer `--porcelain` in new
+scripts.
 
 ## Rules the diff and commit forms obey
 
