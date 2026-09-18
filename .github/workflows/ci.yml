@@ -43,6 +43,19 @@ jobs:
           run-lint: "true"
           run-govulncheck: "true"
 
+  unit:
+    name: test (unit lane, -short)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Rethunk-Tech/gh-actions/setup-go@68f159b435d9b129b8baf36436079c3e76fb3222 # v1.11
+      # The unit lane is where the guarantee lives (CONTRIBUTING.md § Tests):
+      # a regression must fail here. -short skips only the built-binary
+      # end-to-end file and the live-server cross-checks, so this job
+      # enforces that every other test passes without them.
+      - run: go test -short ./...
+
   e2e:
     name: test (full suite)
     runs-on: ubuntu-latest
@@ -54,12 +67,11 @@ jobs:
       # assert tree-sitter's PATH presence for the prereq check itself -- not
       # a build-time SQL lane (this file's own top comment).
       - run: npm install -g tree-sitter-cli
-      # No separate -short job: every testing.Short() branch in the suite
-      # only skips (a live-server test, or TestMain's binary build), so on
-      # the same runner this run executes every test the unit lane does,
-      # plus the end-to-end cases that build and exec the binary. Live
-      # server and completion cases guard on exec.LookPath and skip cleanly
-      # when a server or shell (zsh here) is absent from the runner.
+      # The -short lane runs as its own job (see above); this run executes
+      # everything, plus the end-to-end cases that build and exec the
+      # binary. Live server and completion cases guard on exec.LookPath
+      # and skip cleanly when a server or shell (zsh here) is absent from
+      # the runner.
       - run: go test ./...
 
   race:
