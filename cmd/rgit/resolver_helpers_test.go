@@ -1,22 +1,16 @@
 // Resolver coverage, per CONTRIBUTING.md's three-file test budget. Byte
 // offsets below reflect real tree-sitter output against each fixture, not
 // grammar docs.
+
+// Grammar coverage is split per language (resolver_<lang>_test.go,
+// resolver_sql_test.go); this file holds the helpers they share.
 package main
 
 import (
 	"context"
-	"net"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/go-quicktest/qt"
-
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsptest"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
