@@ -89,6 +89,34 @@ jobs:
       # cleanly via its own exec.LookPath guard when nothing is installed.
       - run: go test -race ./...
 
+  coverage:
+    name: coverage + timing (informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Rethunk-Tech/gh-actions/setup-go@68f159b435d9b129b8baf36436079c3e76fb3222 # v1.11
+      # Informational only: emits the totals and the wall time, gates on
+      # nothing. Always pass -coverpkg=./... (CONTRIBUTING.md § Coverage):
+      # much of the suite drives code from another package, so per-package
+      # numbers alone report 0.0% where heavy coverage exists. The number
+      # that matters is the -short one, since that is the lane a regression
+      # has to fail in -- compare the two, but no threshold fails this job.
+      - name: cover (full) + wall time
+        run: |
+          start=$(date +%s)
+          go test -coverpkg=./... -coverprofile=coverage.out ./...
+          end=$(date +%s)
+          echo "wall time (full): $((end - start))s"
+          go tool cover -func=coverage.out | tail -1
+      - name: cover (short) + wall time
+        run: |
+          start=$(date +%s)
+          go test -short -coverpkg=./... -coverprofile=short.out ./...
+          end=$(date +%s)
+          echo "wall time (short): $((end - start))s"
+          go tool cover -func=short.out | tail -1
+
   # Every other Go job here builds for linux/amd64 only, so without this one
   # the published linux/arm64 and windows binaries would first be compiled
   # at tag time, in release.yml -- a break there fails the release rather
