@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	qt "github.com/go-quicktest/qt"
@@ -133,12 +134,13 @@ func TestPrereqFatal(t *testing.T) {
 
 func TestRunPrereqChecks(t *testing.T) {
 	t.Parallel()
-	// Real toolchain, run from within this checkout: go, git, and cgo are
-	// all hard requirements to even build this repo (AGENTS.md's delegation
-	// boundary, CONTRIBUTING.md's cgo note), so this environment always
-	// passes all four fatal checks -- pinning that the orchestration itself
-	// (five checks, in this order, no fatal when the environment is sound)
-	// stays wired correctly, not any one check's own probing logic.
+	// Real toolchain, run from within this checkout: go, git, CGO, and a
+	// C compiler are hard requirements to even build this repo
+	// (AGENTS.md's delegation boundary, CONTRIBUTING.md's cgo note), so
+	// this environment always passes those four -- pinning that the
+	// orchestration itself (five checks, fatal nil when those four are
+	// sound) stays wired correctly. tree-sitter CLI is informational:
+	// SQL generation degrades without it.
 	checks, fatal := runPrereqChecks()
 	qt.Assert(t, qt.IsNil(fatal))
 	qt.Assert(t, qt.HasLen(checks, 5))
@@ -146,11 +148,11 @@ func TestRunPrereqChecks(t *testing.T) {
 	names := make([]string, len(checks))
 	for i, c := range checks {
 		names[i] = c.Name
-		qt.Assert(t, qt.IsTrue(c.OK), qt.Commentf("check %q failed in a real dev/CI environment", c.Name))
+		fatalOK := c.Name == "go toolchain" || c.Name == "git" || c.Name == "CGO_ENABLED" || strings.HasPrefix(c.Name, "C compiler (")
+		if fatalOK {
+			qt.Assert(t, qt.IsTrue(c.OK), qt.Commentf("fatal check %q failed", c.Name))
+		}
 	}
-	// go, git, and the C compiler carry a fixed name; CGO_ENABLED and
-	// tree-sitter CLI's names are also fixed (the C compiler's alone
-	// interpolates $CC, so it is checked by prefix).
 	qt.Assert(t, qt.SliceContains(names, "go toolchain"))
 	qt.Assert(t, qt.SliceContains(names, "git"))
 	qt.Assert(t, qt.SliceContains(names, "CGO_ENABLED"))
