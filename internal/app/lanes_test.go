@@ -146,33 +146,40 @@ func TestRun_OnlyAmendWithNoTargetsLeavesOtherStagedWork(t *testing.T) {
 	qt.Assert(t, qt.StringContains(gitOut(t, dir, "status", "--porcelain"), "A  sibling.txt"))
 }
 
-// TestRun_HookRejectionLeavesStagingIntact pins AGENTS.md's other inherited
-// behaviour: a hook that rejects the commit must never roll staging back.
+// TestRun_HookRejectionRestoresStaging pins docs/USAGE.md's hook-rejection
+// rollback: a hook that rejects the commit restores the pre-staged index
+// state -- the anchor blob is un-staged, the worktree keeps its bytes.
 // This is deliberately covered in both lanes (rgit_e2e_test.go's own
-// TestCommit_HookRejectionLeavesStagingIntact): a real hook firing is
+// TestCommit_HookRejectionRestoresStaging): a real hook firing is
 // process-level enough that losing either lane would leave a gap the other
 // cannot see -- the unit lane exercises app.Run's own gitx.Repo.Commit call,
 // the e2e lane exercises the same guarantee through the built binary's own
 // exit code as a caller observes it.
-func TestRun_HookRejectionLeavesStagingIntact(t *testing.T) {
+func TestRun_HookRejectionRestoresStaging(t *testing.T) {
 	dir := chdirTempRepo(t)
 	// Both A and B change in the worktree; only A is named, so B's own edit
 	// staying unstaged is what makes the index-vs-worktree difference below
 	// mean something.
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
+	workA, err := os.ReadFile(filepath.Join(dir, "a.go"))
+	qt.Assert(t, qt.IsNil(err))
 	gittest.InstallHook(t, dir, "pre-commit", "#!/bin/sh\nexit 1\n")
 
 	_, _, code := runApp(t, "commit", "-m", "feat(a): update A", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))
 
-	// Nothing rolled back: A's synthesized edit is still staged.
+	// Rolled back: the index reads HEAD again, A's synthesized edit unstaged.
 	indexed := gitOut(t, dir, "show", ":a.go")
-	qt.Assert(t, qt.StringContains(indexed, "return 111"))
-	qt.Assert(t, qt.Not(qt.StringContains(indexed, "return 222")))
-	// Staged (index differs from HEAD) AND unstaged (B's own edit, worktree
-	// differs from index) both hold: git's porcelain reports "MM".
+	qt.Assert(t, qt.Not(qt.StringContains(indexed, "return 111")))
+	qt.Assert(t, qt.StringContains(indexed, "return 1"))
+	// Index matches HEAD while the worktree still differs from it: git's
+	// porcelain reports " M", unstaged only.
 	status := gitOut(t, dir, "status", "--porcelain")
-	qt.Assert(t, qt.StringContains(status, "MM a.go"))
+	qt.Assert(t, qt.Equals(status, " M a.go\n"))
+	// The worktree file itself is never touched by the rollback.
+	after, err := os.ReadFile(filepath.Join(dir, "a.go"))
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(string(after), string(workA)))
 }
 
 // TestRun_AmendWithNoMessageReusesHeadSubject pins docs/USAGE.md: rgit never

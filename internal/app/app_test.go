@@ -751,7 +751,7 @@ func TestRun_GPGSignShorthandReachesGit(t *testing.T) {
 // This is deliberately pinned again in
 // cmd/rgit/rgit_e2e_test.go's TestCommit_PushWithNoUpstreamNamesTheFix, the
 // same dual-pin CONTRIBUTING.md sanctions for hook rejection
-// (lanes_test.go's own TestRun_HookRejectionLeavesStagingIntact) -- but for
+// (lanes_test.go's own TestRun_HookRejectionRestoresStaging) -- but for
 // a different reason than duplication would suggest. The two cases trigger
 // genuinely different git failures that both leave HasUpstream negative:
 // no remote configured at all here, versus a real remote with no upstream

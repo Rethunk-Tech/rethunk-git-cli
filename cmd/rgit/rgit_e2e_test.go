@@ -781,7 +781,7 @@ func TestCommit_HappyPath(t *testing.T) {
 	}
 }
 
-func TestCommit_HookRejectionLeavesStagingIntact(t *testing.T) {
+func TestCommit_HookRejectionRestoresStaging(t *testing.T) {
 	t.Parallel()
 	repo := initRepoWithFile(t, "auth.go", commitHappyV1)
 	gittest.Write(t, repo, "auth.go", commitHappyV2)
@@ -790,14 +790,19 @@ func TestCommit_HookRejectionLeavesStagingIntact(t *testing.T) {
 	got := runRgit(t, repo, "commit", "auth.go:A", "-m", "feat(auth): update A")
 	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.GitFailure)))
 
-	// Nothing rolled back: A's synthesized edit is still staged.
+	// Rolled back: the index reads HEAD again, A's synthesized edit unstaged.
 	indexed := gittest.Git(t, repo, "show", ":auth.go")
-	qt.Assert(t, qt.StringContains(indexed, "return 100"))
-	qt.Assert(t, qt.Not(qt.StringContains(indexed, "return 200")))
-	// Staged (index differs from HEAD) AND unstaged (B's edit, worktree
-	// differs from index) both hold: git's porcelain reports "MM".
+	qt.Assert(t, qt.Not(qt.StringContains(indexed, "return 100")))
+	qt.Assert(t, qt.StringContains(indexed, "return 1"))
+	// Index matches HEAD while the worktree still differs from it: git's
+	// porcelain reports " M", unstaged only.
 	status := gittest.Git(t, repo, "status", "--porcelain")
-	qt.Assert(t, qt.StringContains(status, "MM auth.go"))
+	qt.Assert(t, qt.Equals(status, " M auth.go\n"))
+
+	// The worktree file itself is never touched by the rollback.
+	onDisk, err := os.ReadFile(filepath.Join(repo, "auth.go"))
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(string(onDisk), commitHappyV2))
 }
 
 func TestCommit_PositionalPathspecParityWithFileFlag(t *testing.T) {
