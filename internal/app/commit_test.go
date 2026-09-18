@@ -202,3 +202,56 @@ func TestRunCommit_IndexOnlyPathSymbolAnchor(t *testing.T) {
 		t.Errorf("HEAD:new.go = %q; want New function", got)
 	}
 }
+
+// TestCommit_HookFailureRestoresPrestagedState pins the hook-rejection
+// rollback: when the commit fails, the index reads exactly as before rgit
+// staged anything -- the named anchor is unstaged, unrelated pre-staged
+// work survives, the worktree is byte-identical, and stderr names the
+// touched path with the no-worktree-changes hint. The exit code is
+// unchanged: a hook rejection is still exitcode.GitFailure.
+func TestCommit_HookFailureRestoresPrestagedState(t *testing.T) {
+	dir, _ := gittest.New(t)
+	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	gittest.Write(t, dir, "sibling.txt", "base\n")
+	gittest.Commit(t, dir, "chore: initial")
+
+	// Unrelated pre-staged work the rollback must preserve.
+	gittest.Write(t, dir, "sibling.txt", "staged change\n")
+	gittest.Git(t, dir, "add", "--", "sibling.txt")
+	// The named edit to stage.
+	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	workA, err := os.ReadFile(filepath.Join(dir, "a.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	gittest.InstallHook(t, dir, "pre-commit", "#!/bin/sh\nexit 1\n")
+	t.Chdir(dir)
+
+	var stdout, stderr strings.Builder
+	code := runCommit(context.Background(), "", []string{"-m", "fix(a): update A", "a.go:A"}, &stdout, &stderr)
+	if code != exitcode.GitFailure {
+		t.Fatalf("runCommit = %v; want exitcode.GitFailure; stderr: %s", code, stderr.String())
+	}
+	if got := gittest.Git(t, dir, "show", ":a.go"); strings.Contains(got, "return 111") {
+		t.Errorf(":a.go = %q; want HEAD content, named anchor rolled back", got)
+	}
+	if got := gittest.Git(t, dir, "show", ":sibling.txt"); !strings.Contains(got, "staged change") {
+		t.Errorf(":sibling.txt = %q; want pre-staged change preserved", got)
+	}
+	// a.go unstaged again (worktree differs from index) while the sibling
+	// stays staged exactly as it was: entries sort by path, and the
+	// unstaged " M" sorts before the staged "M ".
+	if got := gittest.Git(t, dir, "status", "--porcelain"); got != " M a.go\nM  sibling.txt\n" {
+		t.Errorf("status = %q; want the unstaged a.go edit plus the pre-staged sibling", got)
+	}
+	for _, want := range []string{"a.go", "no worktree files were changed"} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Errorf("stderr = %q; want it to mention %q", stderr.String(), want)
+		}
+	}
+	if after, err := os.ReadFile(filepath.Join(dir, "a.go")); err != nil {
+		t.Fatal(err)
+	} else if string(after) != string(workA) {
+		t.Errorf("worktree a.go changed by the failed commit: before %q, after %q", workA, after)
+	}
+}
