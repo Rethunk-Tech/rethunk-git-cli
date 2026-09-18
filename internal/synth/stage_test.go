@@ -176,6 +176,98 @@ func TestStage_PromisorMissingBlobIsAnError(t *testing.T) {
 	}
 }
 
+// TestStage_MidLoopFailureLeavesIndexUntouched pins Apply's atomicity: when
+// the second file's staging fails after the first already staged, the
+// caller's index must read exactly as before Apply ran -- the earlier blob
+// went to a temp index that is discarded, and unrelated pre-staged work
+// survives. Deleting b.go after resolution forces the failure inside Apply
+// itself (resolveMode stats a worktree file the plan recorded as present),
+// past the point a files-one-at-a-time staging would already have dirtied
+// the index.
+//
+// Not parallel: temp-index construction swaps the process-wide
+// GIT_INDEX_FILE around gitx.New, and Go only runs sequential tests
+// exclusively of parallel ones.
+func TestStage_MidLoopFailureLeavesIndexUntouched(t *testing.T) {
+	dir, repo := gittest.New(t)
+	ctx := context.Background()
+	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n")
+	gittest.Write(t, dir, "b.go", "package b\n\nfunc B() int {\n\treturn 2\n}\n")
+	gittest.Write(t, dir, "other.txt", "staged\n")
+	gittest.Commit(t, dir, "chore: initial")
+
+	// Unrelated pre-staged work the failure must preserve.
+	gittest.Write(t, dir, "other.txt", "staged change\n")
+	gittest.Git(t, dir, "add", "--", "other.txt")
+
+	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n")
+	gittest.Write(t, dir, "b.go", "package b\n\nfunc B() int {\n\treturn 222\n}\n")
+	plan, err := PlanStage(ctx, repo, dir, []Target{AnchorTarget("a.go", "A"), AnchorTarget("b.go", "B")})
+	if err != nil {
+		t.Fatalf("PlanStage: %v", err)
+	}
+	if err := os.Remove(filepath.Join(dir, "b.go")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := plan.Apply(ctx, repo, dir); err == nil {
+		t.Fatal("Apply = nil; want the deleted file's mode lookup to fail")
+	}
+
+	if got := strings.TrimSpace(gittest.Git(t, dir, "diff", "--cached", "--name-only")); got != "other.txt" {
+		t.Errorf("staged after failed Apply = %q; want only pre-staged other.txt", got)
+	}
+	if got := gittest.Git(t, dir, "show", ":other.txt"); !strings.Contains(got, "staged change") {
+		t.Errorf(":other.txt = %q; want pre-staged change preserved", got)
+	}
+	if got := gittest.Git(t, dir, "show", ":a.go"); strings.Contains(got, "return 111") {
+		t.Errorf(":a.go = %q; want HEAD content, nothing of the failed stage", got)
+	}
+	if got, err := os.ReadFile(filepath.Join(dir, "a.go")); err != nil {
+		t.Fatal(err)
+	} else if !strings.Contains(string(got), "return 111") {
+		t.Errorf("worktree a.go = %q; want the edit still there, untouched", got)
+	}
+}
+
+// TestStage_SuccessStagesExactlyPlannedBlobs pins the success path of the
+// same machinery: the planned anchor's blob lands in the index, nothing
+// else moves, and the worktree is byte-identical before and after.
+//
+// Not parallel, for the same process-environment reason as
+// TestStage_MidLoopFailureLeavesIndexUntouched.
+func TestStage_SuccessStagesExactlyPlannedBlobs(t *testing.T) {
+	dir, repo := gittest.New(t)
+	ctx := context.Background()
+	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	gittest.Commit(t, dir, "chore: initial")
+	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	before, err := os.ReadFile(filepath.Join(dir, "a.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := stageTargets(ctx, repo, dir, []Target{AnchorTarget("a.go", "A")}); err != nil {
+		t.Fatalf("stageTargets: %v", err)
+	}
+
+	indexed := gittest.Git(t, dir, "show", ":a.go")
+	if !strings.Contains(indexed, "return 111") {
+		t.Errorf(":a.go = %q; want the synthesized A edit staged", indexed)
+	}
+	if !strings.Contains(indexed, "return 2") {
+		t.Errorf(":a.go = %q; want B's HEAD body carried through", indexed)
+	}
+	if got := strings.TrimSpace(gittest.Git(t, dir, "status", "--porcelain")); got != "M  a.go" {
+		t.Errorf("status = %q; want exactly the staged a.go edit", got)
+	}
+	if after, err := os.ReadFile(filepath.Join(dir, "a.go")); err != nil {
+		t.Fatal(err)
+	} else if string(after) != string(before) {
+		t.Errorf("worktree a.go changed by staging: before %q, after %q", before, after)
+	}
+}
+
 // stageTargets runs synth's two steps back to back. Production always keeps
 // them apart -- rgit commit resolves first so --dry-run and the exit-11
 // "nothing to commit" check can decide before anything is written.
