@@ -786,7 +786,7 @@ the commit proceeds.
 `rgit` is `git add <pathspec> && git commit` at symbol granularity, so:
 
 - Work you staged before invoking `rgit` **comes along** with the commit, unless `--only` is given.
-- A hook rejecting the commit **leaves staging in place**; nothing is rolled back.
+- A hook rejecting the commit rolls staging back to its pre-commit state: the index is snapshotted before anything is staged, synthesized blobs are staged through a temporary index that replaces the real one only on success, and a failed commit restores the snapshot while naming the paths it touched. Only index entries ever move -- no worktree file is written.
 - Hooks are not policed — a hook may stage paths you did not name, exactly as
   under plain `git commit`. Use `--no-verify` to disable them.
 - During an in-progress merge, cherry-pick, or revert, omitting `-m` and `-F`
