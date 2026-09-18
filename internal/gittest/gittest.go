@@ -161,9 +161,10 @@ func Unmerged(t testing.TB, dir, blob, path string) {
 }
 
 // InstallHook writes an executable git hook into dir's real .git/hooks --
-// e.g. a pre-commit hook that exits non-zero, to exercise AGENTS.md's "a
-// rejected commit leaves staging in place" rule against a real hook rather
-// than something rgit only believes git does with one.
+// e.g. a pre-commit hook that exits non-zero, to exercise docs/USAGE.md's
+// "a rejected commit rolls staging back to its pre-commit state, index-only
+// with no worktree writes" rule against a real hook rather than something
+// rgit only believes git does with one.
 func InstallHook(t testing.TB, dir, name, script string) {
 	t.Helper()
 	path := filepath.Join(dir, ".git", "hooks", name)

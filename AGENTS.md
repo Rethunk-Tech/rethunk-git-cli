@@ -33,7 +33,7 @@ Inherited behaviour: [docs/USAGE.md § Behaviour inherited from git](docs/USAGE.
 2. **Blob synthesis** — blob as if only named symbols changed.
 3. **Argument precedence** — pathspec vs revision vs anchor.
 
-Hooks, filters, pathspecs, trailers, amend — git's. No `go-git`.
+Hooks, filters, pathspecs, trailers, amend — git's. No `go-git`. One deliberate divergence: a hook rejecting the commit rolls staging back to its pre-commit state, index entries only, no worktree file written (docs/USAGE.md § Behaviour inherited from git).
 
 ## Synthesis invariants
 
