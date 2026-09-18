@@ -853,8 +853,9 @@ type CommitOptions struct {
 // same reason.
 //
 // A non-zero exit — including a hook rejection — is reported as a
-// *GitError; per AGENTS.md, staging is never rolled back on that path, and
-// Commit does not attempt to.
+// *GitError; Commit itself does not roll staging back — the caller restores
+// the index to its pre-commit snapshot on failure (see SnapshotIndex/Restore
+// in internal/synth/stage.go and the hook bullet in docs/USAGE.md).
 func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 	args := []string{"commit"}
 	for _, m := range opts.Messages {
