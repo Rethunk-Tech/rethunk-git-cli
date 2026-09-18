@@ -185,10 +185,10 @@ func TestStage_PromisorMissingBlobIsAnError(t *testing.T) {
 // past the point a files-one-at-a-time staging would already have dirtied
 // the index.
 //
-// Not parallel: temp-index construction swaps the process-wide
-// GIT_INDEX_FILE around gitx.New, and Go only runs sequential tests
-// exclusively of parallel ones.
+// The temp index lives on the Repo, so this is safe to run beside other
+// tests that also talk to git.
 func TestStage_MidLoopFailureLeavesIndexUntouched(t *testing.T) {
+	t.Parallel()
 	dir, repo := gittest.New(t)
 	ctx := context.Background()
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n")
@@ -233,10 +233,8 @@ func TestStage_MidLoopFailureLeavesIndexUntouched(t *testing.T) {
 // TestStage_SuccessStagesExactlyPlannedBlobs pins the success path of the
 // same machinery: the planned anchor's blob lands in the index, nothing
 // else moves, and the worktree is byte-identical before and after.
-//
-// Not parallel, for the same process-environment reason as
-// TestStage_MidLoopFailureLeavesIndexUntouched.
 func TestStage_SuccessStagesExactlyPlannedBlobs(t *testing.T) {
+	t.Parallel()
 	dir, repo := gittest.New(t)
 	ctx := context.Background()
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")

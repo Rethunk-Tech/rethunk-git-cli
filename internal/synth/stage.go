@@ -11,7 +11,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/diff"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
@@ -601,15 +600,6 @@ func (p *Plan) Apply(ctx context.Context, repo *gitx.Repo, root string) error {
 	return nil
 }
 
-// tempIndexMu serializes construction of a temp-index Repo. gitx captures
-// GIT_INDEX_FILE from the process environment at New time and offers no
-// per-Repo override, so pointing one Repo at a temp index requires swapping
-// the variable around the New call; the mutex keeps two concurrent Applies
-// from crossing their temps. Once built, the Repo carries its own copy of
-// the environment and no longer reads the process one, so only the
-// construction itself holds the lock.
-var tempIndexMu sync.Mutex
-
 // tempStaging is an Apply in progress: a temp index file seeded from the
 // caller's own, plus a Repo pointed at it. abort discards the temp (the
 // caller's index was never touched); swap moves it over the caller's index.
@@ -639,8 +629,11 @@ func newTempStaging(ctx context.Context, root string) (*tempStaging, error) {
 	switch {
 	case err == nil:
 		if _, err := tmpFile.Write(seed); err != nil {
-			tmpFile.Close()
-			os.Remove(tmp)
+			if cerr := tmpFile.Close(); cerr != nil {
+				_ = os.Remove(tmp)
+				return nil, cerr
+			}
+			_ = os.Remove(tmp)
 			return nil, err
 		}
 		if info, serr := os.Stat(final); serr == nil {
@@ -650,31 +643,34 @@ func newTempStaging(ctx context.Context, root string) (*tempStaging, error) {
 			_ = tmpFile.Chmod(info.Mode())
 		}
 		if err := tmpFile.Close(); err != nil {
-			os.Remove(tmp)
+			_ = os.Remove(tmp)
 			return nil, err
 		}
 	case os.IsNotExist(err):
-		tmpFile.Close()
-		os.Remove(tmp)
+		if err := tmpFile.Close(); err != nil {
+			_ = os.Remove(tmp)
+			return nil, err
+		}
+		if err := os.Remove(tmp); err != nil {
+			return nil, err
+		}
 	default:
-		tmpFile.Close()
-		os.Remove(tmp)
+		if cerr := tmpFile.Close(); cerr != nil {
+			_ = os.Remove(tmp)
+			return nil, cerr
+		}
+		_ = os.Remove(tmp)
 		return nil, err
 	}
 	var mode os.FileMode = 0o644
 	if info, serr := os.Stat(final); serr == nil {
 		mode = info.Mode()
 	}
-	tempIndexMu.Lock()
-	prev, had := os.LookupEnv("GIT_INDEX_FILE")
-	_ = os.Setenv("GIT_INDEX_FILE", tmp)
-	tr := gitx.New(root)
-	if had {
-		_ = os.Setenv("GIT_INDEX_FILE", prev)
-	} else {
-		_ = os.Unsetenv("GIT_INDEX_FILE")
-	}
-	tempIndexMu.Unlock()
+	// Repo carries env; construction must not mutate the process.
+	// callerIndexPath still reads process GIT_INDEX_FILE when the caller
+	// set it -- that is git's own contract. Only the temp-index pointer
+	// lives on the Repo.
+	tr := gitx.New(root).WithIndexFile(tmp)
 	return &tempStaging{repo: tr, tmp: tmp, final: final, mode: mode}, nil
 }
 
