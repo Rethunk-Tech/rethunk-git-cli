@@ -71,12 +71,14 @@ before tagging.
 10). Each file holds one happy path plus the edge cases that have actually
 bitten — no permutation laundry lists.
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the full suite,
-which includes every `-short` test, plus `golangci-lint` on every push and
-pull request. The ≤30s suite-time budget and the coverage numbers in
-[§ Coverage](#coverage) are not enforced anywhere — CI runs no timing check
-and no coverage step — so both stay a review discipline rather than a CI
-gate.
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the full suite
+(which includes every `-short` test) as well as a separate `-short` unit
+job, plus `golangci-lint` on every push and pull request. A coverage +
+timing job also runs, but it is informational only: it emits the full and
+`-short` totals with `-coverpkg=./...` and the wall time, and gates on no
+threshold. The ≤30s suite-time budget and the coverage numbers in
+[§ Coverage](#coverage) are therefore still a review discipline rather than
+a CI gate.
 
 Which of the two lanes a case belongs in is the first decision:
 
@@ -133,13 +135,13 @@ the suite for shared state each time.
 ```bash
 go test ./...          # full suite, end-to-end cases included
 go test -short ./...   # unit lane: skips the built binary and the live server
-go test -race ./...    # the concurrency that matters: jsonrpc2, the spawn lock
+go test -race ./...    # full tree: jsonrpc2, the spawn lock, internal/diff, internal/gitx
 ```
 
-CI's own race job scopes to `./internal/lsp/...` rather than `./...` —
-jsonrpc2 and the spawn lock live there, and racing every other package on
-every push was not worth the extra minutes. Run `-race ./...` locally
-before touching concurrent code anywhere else in the tree.
+CI's own race job runs `-race ./...` over the full tree — jsonrpc2 and
+the spawn lock live in `./internal/lsp/...`, with further concurrent paths
+in `internal/diff` and `internal/gitx`. The raced run still fits the job
+timeout, so there is no scoped lane to keep in sync.
 
 ### Coverage
 
