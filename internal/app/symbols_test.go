@@ -397,3 +397,13 @@ func TestSymbols_PorcelainNULRecords(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stdout, "A\nB\n"))
 }
+
+// TestSymbols_HelpSteersParsersToPorcelain pins the machine-contract
+// steering: the first help line names --porcelain as the NUL-terminated
+// parsing form, so a script reading usage knows which flag to reach for.
+// Output bytes are unchanged -- only this help line moves.
+func TestSymbols_HelpSteersParsersToPorcelain(t *testing.T) {
+	first, _, _ := strings.Cut(symbolsHelp, "\n")
+	qt.Assert(t, qt.StringContains(first, "--porcelain"))
+	qt.Assert(t, qt.StringContains(first, "NUL"))
+}

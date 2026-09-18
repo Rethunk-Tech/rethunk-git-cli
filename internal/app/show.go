@@ -18,7 +18,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 )
 
-const showHelp = `usage: rgit show FILE:SYMBOL... [--source <rev>] [--with-header]
+const showHelp = `usage: rgit show FILE:SYMBOL... [--source <rev>] [--porcelain] [--with-header]
 
 Print each named symbol's own bytes -- exactly the extent the anchor resolves
 to, with no trailing newline the file did not already carry.
@@ -26,11 +26,15 @@ to, with no trailing newline the file did not already carry.
 --source <rev>  Read <rev>:FILE instead of the worktree, the only way to read
                 a symbol as of a tag, branch, or commit. FILE is always the
                 path's *current* name; this does not follow renames.
---with-header   Frame a single anchor the way several are framed, so a script
+--porcelain     Frame every extent the way several are framed, so a script
                 need not special-case an argument list that happens to hold
-                one.
+                one. Single-anchor and multi-anchor output are both framed;
+                this is the machine-readable framing scripts should parse.
+--with-header   Deprecated alias for --porcelain, retained so existing
+                scripts keep working. Identical framing; prefer --porcelain
+                in new scripts.
 
-With one anchor and no --with-header, stdout is those bytes and nothing else,
+With one anchor and neither --porcelain nor --with-header, stdout is those bytes and nothing else,
 so it pipes. With several, each extent is framed by a header line
 "FILE:ANCHOR<TAB>NBYTES" followed by exactly NBYTES bytes: a symbol's own text
 can contain anything, including a line that looks like a header, so the length
@@ -56,9 +60,11 @@ Full reference: docs/USAGE.md
 func runShow(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	source := ""
 	withHeader := false
+	porcelain := false
 	positionals, code, done := parseAnchorCommandArgs("show", args,
 		[]anchorCommandFlag{
 			{tokens: []string{"--source"}, val: &source},
+			{tokens: []string{"--porcelain"}, set: &porcelain},
 			{tokens: []string{"--with-header"}, set: &withHeader},
 		},
 		0, showHelp, stdout, stderr)
@@ -81,7 +87,7 @@ func runShow(ctx context.Context, dir string, args []string, stdout, stderr io.W
 		extents = append(extents, src[res.Extent.Start:res.Extent.End])
 	}
 
-	framed := withHeader || len(extents) > 1
+	framed := porcelain || withHeader || len(extents) > 1
 	var out bytes.Buffer
 	for i, ext := range extents {
 		if framed {

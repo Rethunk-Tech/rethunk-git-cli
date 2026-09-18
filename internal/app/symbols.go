@@ -12,7 +12,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
-const symbolsHelp = `usage: rgit symbols [--for-commit] [--with-lines] [--with-filename] [--porcelain] <file>...
+const symbolsHelp = `usage: rgit symbols [--for-commit] [--with-lines] [--with-filename] [--porcelain] <file>... (parsers: use --porcelain for NUL-terminated records)
 
 List every declared symbol that can be resolved from each worktree file or its
 HEAD blob.

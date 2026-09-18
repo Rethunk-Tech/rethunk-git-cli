@@ -146,3 +146,53 @@ func TestShow_ResolvesEveryAnchorBeforeWriting(t *testing.T) {
 	qt.Assert(t, qt.Equals(stdout, ""))
 	qt.Assert(t, qt.StringContains(stderr, "NoSuchSymbol"))
 }
+
+// TestShow_PorcelainFramesSingleAndMultiAnchors pins the machine-readable
+// contract: --porcelain frames unconditionally, using the same
+// FILE:TAB:NBYTES length framing multi-anchor output already uses. Without
+// the flag, single-anchor output stays raw bytes, byte-identical to before.
+func TestShow_PorcelainFramesSingleAndMultiAnchors(t *testing.T) {
+	chdirTempRepo(t)
+
+	const a = "// A returns one.\nfunc A() int {\n\treturn 1\n}"
+	const b = "func B() int {\n\treturn 2\n}"
+
+	// Single anchor under --porcelain is framed.
+	stdout, stderr, code := runApp(t, "show", "--porcelain", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.Equals(stdout, "a.go:A\t"+strconv.Itoa(len(a))+"\n"+a))
+
+	// Multi-anchor under --porcelain matches the default multi-anchor
+	// framing exactly -- the flag changes when framing applies, never the
+	// framing itself.
+	porcelainMulti, _, code := runApp(t, "show", "--porcelain", "a.go:A", "a.go:B")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	defaultMulti, _, code := runApp(t, "show", "a.go:A", "a.go:B")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(porcelainMulti, defaultMulti))
+	qt.Assert(t, qt.Equals(porcelainMulti, "a.go:A\t"+strconv.Itoa(len(a))+"\n"+a+"a.go:B\t"+strconv.Itoa(len(b))+"\n"+b))
+
+	// Without the flag, single-anchor output is still raw bytes.
+	raw, _, code := runApp(t, "show", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(raw, a))
+}
+
+// TestShow_WithHeaderIsAPorcelainAlias pins --with-header as a deprecated
+// alias that still works: identical bytes to --porcelain, in both arities.
+func TestShow_WithHeaderIsAPorcelainAlias(t *testing.T) {
+	chdirTempRepo(t)
+
+	singlePorcelain, _, code := runApp(t, "show", "--porcelain", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	singleHeader, _, code := runApp(t, "show", "--with-header", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(singleHeader, singlePorcelain))
+
+	multiPorcelain, _, code := runApp(t, "show", "--porcelain", "a.go:A", "a.go:B")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	multiHeader, _, code := runApp(t, "show", "--with-header", "a.go:A", "a.go:B")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(multiHeader, multiPorcelain))
+}
