@@ -858,3 +858,13 @@ func TestCommitOnlyWithNoPathsLeavesOtherStagedWork(t *testing.T) {
 		t.Errorf("cached paths after --only amend = %q; want extra.txt only", got)
 	}
 }
+
+func TestWithIndexFileDoesNotMutateProcessEnv(t *testing.T) {
+	t.Parallel()
+	before, had := os.LookupEnv("GIT_INDEX_FILE")
+	_ = gitx.New(t.TempDir()).WithIndexFile(filepath.Join(t.TempDir(), "index"))
+	got, still := os.LookupEnv("GIT_INDEX_FILE")
+	if had != still || got != before {
+		t.Fatalf("GIT_INDEX_FILE process env changed: before had=%v val=%q, after had=%v val=%q", had, before, still, got)
+	}
+}

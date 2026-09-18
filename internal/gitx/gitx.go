@@ -69,6 +69,13 @@ func (r *Repo) Reroot(dir string) *Repo {
 	return &Repo{root: dir, env: r.env}
 }
 
+// WithIndexFile returns a Repo whose git invocations use path as
+// GIT_INDEX_FILE. The process environment is left alone: Repo already
+// carries env, and construction must not mutate the process.
+func (r *Repo) WithIndexFile(path string) *Repo {
+	return &Repo{root: r.root, env: withEnv(r.env, "GIT_INDEX_FILE", path)}
+}
+
 // Result is the raw outcome of a git invocation that ran to completion,
 // whatever its exit status. A non-zero ExitCode is not itself an error —
 // see the package doc for how individual methods interpret it.
