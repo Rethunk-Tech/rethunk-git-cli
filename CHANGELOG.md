@@ -6,6 +6,20 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `rgit show --porcelain` emits the length-framed records documented for
+  multi-anchor `show`; `--with-header` remains as a deprecated alias.
+  See [`docs/USAGE.md`](docs/USAGE.md#show) and
+  [`docs/CODES.md`](docs/CODES.md).
+
+### Changed
+
+- Staging is atomic: a temp index is swapped over the caller's index only
+  on success. A hook-rejected commit restores the pre-commit index
+  snapshot; only index entries move, no worktree file is written. See
+  [`docs/USAGE.md`](docs/USAGE.md#behaviour-inherited-from-git).
+
 ### Removed
 
 - darwin/amd64 and darwin/arm64 release artifacts. Every CI and release job
@@ -29,6 +43,8 @@ Notable changes to `rgit`. The format follows
 - `commit --only` copies paths a pre-commit hook staged into the real index,
   so a hook that bumps and `git add`s a file no longer leaves the index one
   version behind `HEAD` (`MM` in `git status`).
+
+- `commit --only` accepts a path staged for deletion.
 
 ## [2.1.0] — 2026-09-09
 
