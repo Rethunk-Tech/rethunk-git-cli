@@ -228,6 +228,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 
 	var targetResults []synth.TargetResult
 	var onlyPaths []string
+	var indexSnap *synth.IndexSnapshot
 	if targetCount > 0 {
 		checker := &cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}
 		classified, err := cli.ClassifyArgs(ctx, positionalsGiven, false, checker, cli.GitRevisionResolver{Repo: repo})
@@ -316,6 +317,18 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 			return exitcode.Success
 		}
 
+		// Snapshot the index before staging anything: Apply stages
+		// atomically through a temp index, but the commit itself -- hooks
+		// included -- still runs against the real one, so a failure there
+		// needs this snapshot to roll the index back to. Refusing to
+		// proceed when the snapshot itself fails is the non-destructive
+		// answer: staging nothing beats staging what cannot be restored.
+		snap, serr := synth.SnapshotIndex(ctx, root)
+		if serr != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", serr)
+			return exitcode.GitFailure
+		}
+		indexSnap = snap
 		if err := plan.Apply(ctx, repo, root); err != nil {
 			code, msg := mapStageError(err)
 			fmt.Fprintf(stderr, "rgit: %s\n", msg)
@@ -366,8 +379,13 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		opts.MessageFile = f.msgFile
 	}
 
-	// AGENTS.md: a hook rejecting the commit leaves staging in place, and
-	// rgit does not roll it back -- Commit's own error is simply reported.
+	// A hook rejecting the commit rolls staging back to the pre-staging
+	// snapshot: Apply stages atomically, but the commit (and any hook it
+	// runs) still sees the real index, so without this a rejection would
+	// strand the just-staged blobs there. Restore covers every commit
+	// failure, not just hook rejections -- git reports both the same way,
+	// and the snapshot already holds any pre-existing staged work, so
+	// restoring it destroys nothing either way. Exit code is unchanged.
 	res, err := repo.Commit(ctx, opts)
 	// Hook output goes to the user either way: on success it is the
 	// formatter or codegen telling them what it did, and on failure it is
@@ -377,6 +395,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	}
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		rollbackIndex(stderr, indexSnap, targetResults)
 		return exitcode.GitFailure
 	}
 	switch {
@@ -528,6 +547,30 @@ func targetResultPaths(results []synth.TargetResult) []string {
 		paths = append(paths, result.Path)
 	}
 	return paths
+}
+
+// rollbackIndex restores the pre-staging index snapshot after a failed
+// commit and says what it did: the exact paths Apply had staged, plus the
+// reminder that rollback is index-only and no worktree byte moved. A nil
+// snapshot means nothing was staged by this invocation (an amend or
+// allow-empty over the index as it stands), so there is nothing to undo.
+// A restore failure is reported, not hidden: the commit already failed,
+// and silence would leave the caller believing staging was rolled back
+// when it was not.
+func rollbackIndex(stderr io.Writer, snap *synth.IndexSnapshot, results []synth.TargetResult) {
+	if snap == nil {
+		return
+	}
+	if rerr := snap.Restore(); rerr != nil {
+		fmt.Fprintf(stderr, "rgit: restoring pre-commit index: %v\n", rerr)
+		return
+	}
+	fmt.Fprintf(stderr, "rgit: commit failed; staging rolled back to its pre-commit state")
+	if touched := targetResultPaths(results); len(touched) > 0 {
+		fmt.Fprintf(stderr, ": %s", strings.Join(touched, ", "))
+	}
+	fmt.Fprintln(stderr)
+	fmt.Fprintln(stderr, "rgit: no worktree files were changed")
 }
 
 // mapStageError turns a synth/resolve error into the exit code
