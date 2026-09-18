@@ -75,17 +75,19 @@ jobs:
       - run: go test ./...
 
   race:
-    name: race (internal/lsp)
+    name: race (full tree)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: Rethunk-Tech/gh-actions/setup-go@68f159b435d9b129b8baf36436079c3e76fb3222 # v1.11
-      # Scoped to internal/lsp, not ./...: CONTRIBUTING.md names jsonrpc2
-      # and the spawn lock -- both there -- as the concurrency that
-      # matters. Every live-server case in this package skips cleanly via
-      # its own exec.LookPath guard when nothing is installed.
-      - run: go test -race ./internal/lsp/...
+      # Full tree, not just internal/lsp: jsonrpc2 and the spawn lock live
+      # there (CONTRIBUTING.md § Tests), but internal/diff and internal/gitx
+      # hold concurrent paths of their own, so a scoped race run stopped
+      # proving anything about the rest. The suite stays <=30s unraced, so
+      # the raced run still fits this timeout. Every live-server case skips
+      # cleanly via its own exec.LookPath guard when nothing is installed.
+      - run: go test -race ./...
 
   # Every other Go job here builds for linux/amd64 only, so without this one
   # the published linux/arm64 and windows binaries would first be compiled
