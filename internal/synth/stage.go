@@ -6,10 +6,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/diff"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
@@ -535,11 +537,15 @@ func (fp *filePlan) close() {
 // Apply is the plan's only side-effecting step: pathspecs delegate to one
 // `git add`, and every file's synthesized blob is written and staged through
 // its own hash-object + update-index pair. PlanStage already resolved every
-// target, so a resolution failure never reaches here -- but an I/O error
-// inside this loop (a full disk, a permission race) can still leave an
-// earlier file's blob staged while a later one fails. That is inherited git
-// behaviour: N independent git invocations, each durable the instant it
-// returns, and a caller wanting the index back has `git reset`.
+// target, so a resolution failure never reaches here.
+//
+// Staging is atomic at the index level. Every index write goes to a temp
+// index file seeded as a byte copy of the caller's own, and the temp is
+// swapped over the caller's index only after the last write succeeds -- so
+// an I/O failure mid-loop (a full disk, a permission race, a worktree file
+// deleted between resolution and staging) leaves the caller's index exactly
+// as found instead of leaving earlier files staged. Only index entries
+// move; no worktree file is ever written.
 //
 // A filePlan whose every op is Unchanged is not skipped, even though its
 // blob is byte-identical to fp.headSrc. `git add path` re-stages path's
@@ -550,27 +556,231 @@ func (fp *filePlan) close() {
 // naming any anchor there collapses its index entry back to
 // HEAD-plus-named-anchors, the same as every other named path.
 func (p *Plan) Apply(ctx context.Context, repo *gitx.Repo, root string) error {
+	if len(p.pathspecs) == 0 && len(p.files) == 0 {
+		return nil
+	}
+	staging, err := newTempStaging(ctx, root)
+	if err != nil {
+		return err
+	}
+	swapped := false
+	defer func() {
+		if !swapped {
+			staging.abort()
+		}
+	}()
 	if len(p.pathspecs) > 0 {
-		if err := repo.Add(ctx, p.pathspecs...); err != nil {
+		if err := staging.repo.Add(ctx, p.pathspecs...); err != nil {
 			return err
 		}
 	}
 	for _, fp := range p.files {
 		content := inheritEOF(fp, applyEdits(fp.headSrc, fp.ops))
 
+		// Reads go to the caller's repo: its index is the pre-staging
+		// state the temp copy was seeded from, and no write below touches
+		// another path's entry, so per-path answers agree either way.
 		mode, err := resolveMode(ctx, repo, root, fp.path, fp.worktreeExists)
 		if err != nil {
 			return err
 		}
+		// hash-object writes an object, never the index, so it is safe on
+		// either repo; only the update-index below must target the temp.
 		sha, err := repo.HashObject(ctx, fp.path, content)
 		if err != nil {
 			return err
 		}
-		if err := repo.UpdateIndexCacheinfo(ctx, mode, sha, fp.path); err != nil {
+		if err := staging.repo.UpdateIndexCacheinfo(ctx, mode, sha, fp.path); err != nil {
 			return err
 		}
 	}
+	if err := staging.swap(); err != nil {
+		return err
+	}
+	swapped = true
 	return nil
+}
+
+// tempIndexMu serializes construction of a temp-index Repo. gitx captures
+// GIT_INDEX_FILE from the process environment at New time and offers no
+// per-Repo override, so pointing one Repo at a temp index requires swapping
+// the variable around the New call; the mutex keeps two concurrent Applies
+// from crossing their temps. Once built, the Repo carries its own copy of
+// the environment and no longer reads the process one, so only the
+// construction itself holds the lock.
+var tempIndexMu sync.Mutex
+
+// tempStaging is an Apply in progress: a temp index file seeded from the
+// caller's own, plus a Repo pointed at it. abort discards the temp (the
+// caller's index was never touched); swap moves it over the caller's index.
+type tempStaging struct {
+	repo  *gitx.Repo
+	tmp   string
+	final string
+	mode  os.FileMode
+}
+
+// newTempStaging seeds a temp index file beside the caller's own (same
+// directory, so the later swap is an atomic rename) as a byte copy of it,
+// and returns a Repo writing to the temp. A caller with no index file yet
+// -- a fresh repository with nothing staged -- leaves the temp missing too,
+// so git creates it on first write exactly as it would the real one.
+func newTempStaging(ctx context.Context, root string) (*tempStaging, error) {
+	final, err := callerIndexPath(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+	tmpFile, err := os.CreateTemp(filepath.Dir(final), "rgit-index-*")
+	if err != nil {
+		return nil, err
+	}
+	tmp := tmpFile.Name()
+	seed, err := os.ReadFile(final)
+	switch {
+	case err == nil:
+		if _, err := tmpFile.Write(seed); err != nil {
+			tmpFile.Close()
+			os.Remove(tmp)
+			return nil, err
+		}
+		if info, serr := os.Stat(final); serr == nil {
+			// Best effort: the swap below renames, which preserves the
+			// temp's own mode, so matching it to the original keeps the
+			// caller's index permissions stable across a stage.
+			_ = tmpFile.Chmod(info.Mode())
+		}
+		if err := tmpFile.Close(); err != nil {
+			os.Remove(tmp)
+			return nil, err
+		}
+	case os.IsNotExist(err):
+		tmpFile.Close()
+		os.Remove(tmp)
+	default:
+		tmpFile.Close()
+		os.Remove(tmp)
+		return nil, err
+	}
+	var mode os.FileMode = 0o644
+	if info, serr := os.Stat(final); serr == nil {
+		mode = info.Mode()
+	}
+	tempIndexMu.Lock()
+	prev, had := os.LookupEnv("GIT_INDEX_FILE")
+	_ = os.Setenv("GIT_INDEX_FILE", tmp)
+	tr := gitx.New(root)
+	if had {
+		_ = os.Setenv("GIT_INDEX_FILE", prev)
+	} else {
+		_ = os.Unsetenv("GIT_INDEX_FILE")
+	}
+	tempIndexMu.Unlock()
+	return &tempStaging{repo: tr, tmp: tmp, final: final, mode: mode}, nil
+}
+
+// swap moves the staged temp index over the caller's index. Both live in
+// the same directory, so a rename does it atomically; the byte copy is only
+// a cross-device fallback that same-directory placement already rules out.
+// A temp nothing was ever written to -- e.g. Add's already-staged no-op
+// path -- means the caller's index is already exactly right and there is
+// nothing to move.
+func (s *tempStaging) swap() error {
+	if _, err := os.Stat(s.tmp); os.IsNotExist(err) {
+		return nil
+	}
+	if err := os.Rename(s.tmp, s.final); err == nil {
+		return nil
+	} else if data, rerr := os.ReadFile(s.tmp); rerr != nil {
+		return rerr
+	} else if werr := os.WriteFile(s.final, data, s.mode); werr != nil {
+		return werr
+	} else {
+		_ = os.Remove(s.tmp)
+		return nil
+	}
+}
+
+// abort discards the temp index after a staging failure. The caller's index
+// was never written, so removing the temp is the whole rollback.
+func (s *tempStaging) abort() {
+	_ = os.Remove(s.tmp)
+}
+
+// callerIndexPath resolves the index file the caller's git invocations use:
+// $GIT_INDEX_FILE when set (a relative value resolves against root, the
+// directory every git invocation here runs from), else <gitdir>/index. The
+// git directory comes from git itself rather than assuming root/.git, so
+// linked worktrees, submodules, and GIT_DIR overrides all resolve to the
+// file git would actually use.
+//
+// This shells out to one read-only `git rev-parse` probe. Package gitx is
+// otherwise the sole place that execs git; the probe lives here because
+// gitx exposes no index-path accessor, and it delegates no git behaviour --
+// it only asks git where its own file is, so staging and rollback can treat
+// that file opaquely.
+func callerIndexPath(ctx context.Context, root string) (string, error) {
+	if v, ok := os.LookupEnv("GIT_INDEX_FILE"); ok && v != "" {
+		if filepath.IsAbs(v) {
+			return v, nil
+		}
+		return filepath.Join(root, v), nil
+	}
+	out, err := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--absolute-git-dir").Output()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(strings.TrimSpace(string(out)), "index"), nil
+}
+
+// IndexSnapshot is a byte copy of the caller's index file, taken so a later
+// failure (a hook rejecting the commit) can put the index back exactly as
+// found. Data is nil when no index file existed; restoring that removes the
+// file again rather than leaving an empty one behind.
+type IndexSnapshot struct {
+	path    string
+	data    []byte
+	mode    os.FileMode
+	existed bool
+}
+
+// SnapshotIndex copies the caller's current index file. Pure read: it never
+// writes the index, the temp, or any worktree file.
+func SnapshotIndex(ctx context.Context, root string) (*IndexSnapshot, error) {
+	path, err := callerIndexPath(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &IndexSnapshot{path: path}, nil
+		}
+		return nil, err
+	}
+	mode := os.FileMode(0o644)
+	if info, serr := os.Stat(path); serr == nil {
+		mode = info.Mode()
+	}
+	return &IndexSnapshot{path: path, data: data, mode: mode, existed: true}, nil
+}
+
+// Restore writes the snapshot back over the current index file, or removes
+// the file when none existed at snapshot time. Index-only, like everything
+// else here: no worktree byte moves.
+func (s *IndexSnapshot) Restore() error {
+	if s == nil {
+		return nil
+	}
+	if !s.existed {
+		if err := os.Remove(s.path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	if err := os.WriteFile(s.path, s.data, s.mode); err != nil {
+		return err
+	}
+	return os.Chmod(s.path, s.mode)
 }
 
 // inheritEOF supplies the trailing newline for a file with no HEAD blob to
