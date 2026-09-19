@@ -48,8 +48,8 @@ go run ./cmd/rgit-install -prefix ~/.local/bin
 go build -ldflags="-s -w" -o rgit ./cmd/rgit
 ```
 
-The binary is ~13.5 MB stripped (13740 KB), or ~16 MB with `-tags rgit_sql`
-(16156 KB); the grammars account for nearly all of it — Shell adds ~1332 KB
+The binary is ~14.8 MB stripped (15116 KB), or ~17.1 MB with `-tags rgit_sql`
+(17532 KB); the grammars account for nearly all of it — Shell adds ~1332 KB
 and Markdown ~768 KB, and cgo links per object file, so a grammar's unused
 inline copy cannot be dropped.
 

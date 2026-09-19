@@ -455,7 +455,7 @@ is a usage error, not a help request — see § Exit codes.
 
 ```console
 $ rgit --version
-rgit v2.0.0
+rgit v2.1.0
 optional grammars: sql
 built with go1.27.1, linux/amd64
 ```

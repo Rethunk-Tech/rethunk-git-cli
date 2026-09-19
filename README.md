@@ -31,7 +31,7 @@ Build and runbook: [HUMANS.md](HUMANS.md).
 - **Closed loop** — `rgit diff` emits exactly the anchors `rgit commit` consumes.
 - **Verified extents** — tree-sitter resolves; a language server cross-checks; mismatch hard-fails on `commit`.
 - **Git semantics** — git exit codes, pathspecs, hooks, and config throughout.
-- **Eleven grammars ship** — SQL behind `rgit_sql` tag; anything else stages by path ([docs/LIMITATIONS.md](docs/LIMITATIONS.md)).
+- **Twelve grammars ship unconditionally** — a thirteenth, SQL, behind `rgit_sql` tag; anything else stages by path ([docs/LIMITATIONS.md](docs/LIMITATIONS.md)).
 
 ## Documentation
 
