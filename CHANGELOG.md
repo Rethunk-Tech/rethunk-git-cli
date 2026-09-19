@@ -6,6 +6,8 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-09-19
+
 ### Added
 
 - `rgit show --porcelain` emits the length-framed records documented for
