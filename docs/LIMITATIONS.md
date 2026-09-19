@@ -3,6 +3,16 @@
 What `rgit` does not do, and why. Where a workaround exists, it's the same one
 throughout: name the path instead of a symbol anchor.
 
+## Worktree bytes are never rewritten or discarded
+
+`rgit` has no command that rewrites or discards a worktree byte — no
+`restore`, no `reset`, nothing that touches a file outside the index and the
+objects git already writes for a commit. This is a permanent design
+property, not a gap waiting to be filled: it is what makes `rgit` safe as a
+fleet-wide commit path with nothing to undo. `rgit show FILE:SYMBOL --source
+REV` reads a symbol's bytes from any revision without this restriction —
+reading a revision is not writing the worktree.
+
 ## Unsupported languages
 
 Any language with no tree-sitter grammar in this binary refuses a symbol
