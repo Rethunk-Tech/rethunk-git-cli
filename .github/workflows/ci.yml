@@ -241,10 +241,16 @@ jobs:
         run: xargs npm i -g < "$RUNNER_TEMP/lsp-packages.txt"
 
       # marksman publishes no package; the release binary is the only route.
+      # Pinned rather than /latest/download/: that endpoint is an extra redirect
+      # that 504s under load, and an unpinned binary changes the cross-check
+      # baseline without a commit.
       - name: install marksman
+        env:
+          MARKSMAN_VERSION: "2026-02-08"
         run: |
-          curl -fsSL -o /usr/local/bin/marksman \
-            https://github.com/artempyanykh/marksman/releases/latest/download/marksman-linux-x64
+          curl -fsSL --retry 5 --retry-all-errors --retry-max-time 120 \
+            -o /usr/local/bin/marksman \
+            "https://github.com/artempyanykh/marksman/releases/download/${MARKSMAN_VERSION}/marksman-linux-x64"
           chmod +x /usr/local/bin/marksman
 
       # Fails the job rather than reporting a smaller table: a run that
