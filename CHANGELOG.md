@@ -4,14 +4,14 @@ Notable changes to `rgit`. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
 ### Fixed
 
 - `rgit log --since` / `--until` no longer treats an existing path that
   contains a colon (`src/notes:draft.md`) as a `FILE:SYMBOL` anchor. Form
   selection uses the same six-rule table as `commit` and `diff`. See
   [`docs/USAGE.md`](docs/USAGE.md#log-by-date-and-path).
-
-## [Unreleased]
 
 ## [2.2.0] - 2026-09-19
 
