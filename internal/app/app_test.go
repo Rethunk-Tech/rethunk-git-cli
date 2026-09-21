@@ -635,7 +635,6 @@ func TestRun_DiffFromSubdirectory(t *testing.T) {
 // file's extension, the exact collision the prior allSyms-name-matching
 // implementation could not tell apart.
 func TestExtForFailedSym(t *testing.T) {
-	t.Parallel()
 
 	for _, tc := range []struct {
 		name    string
@@ -670,7 +669,6 @@ func TestExtForFailedSym(t *testing.T) {
 }
 
 func TestExpandGPGSignShorthand(t *testing.T) {
-	t.Parallel()
 
 	for _, tc := range []struct {
 		name string
@@ -701,7 +699,6 @@ func TestExpandGPGSignShorthand(t *testing.T) {
 // changing what ArgsLenAtDash reports, or an off-by-one in the splice)
 // would still pass `go test -short ./...` without this.
 func TestRestoreDoubleDash_ReconstructsThroughRealPflag(t *testing.T) {
-	t.Parallel()
 
 	for _, tc := range []struct {
 		name string
