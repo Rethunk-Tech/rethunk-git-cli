@@ -320,6 +320,18 @@ func TestRun_LogPathScopedPaths(t *testing.T) {
 		qt.Assert(t, qt.StringContains(stdout, "bump y"))
 	})
 
+	t.Run("an existing path that contains a colon is still a pathspec", func(t *testing.T) {
+		writeAppFile(t, dir, "src/notes:draft.md", "draft\n")
+		gittest.Commit(t, dir, "docs: colon-named draft")
+
+		stdout, stderr, code := runApp(t, "log", "--since=2000-01-01", "src/notes:draft.md")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "colon-named draft"))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "bump x")))
+		qt.Assert(t, qt.Not(qt.StringContains(stderr, "FILE:SYMBOL")))
+	})
+
 	t.Run("zero paths with --since is the whole repository's history", func(t *testing.T) {
 		stdout, _, code := runApp(t, "log", "--since=2000-01-01")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))

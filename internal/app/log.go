@@ -11,7 +11,9 @@
 //     path-scoped history with no symbol at all, the shape the operator's
 //     own tooling otherwise has to fall back to plain `git log --since=...
 //     -- <paths>` for. Selected by the presence of --since/--until when no
-//     positional is a FILE:SYMBOL anchor; every positional is a pathspec.
+//     positional classifies as a FILE:SYMBOL anchor (the six-rule table,
+//     not a colon heuristic: an existing path like src/notes:draft.md is
+//     still a pathspec); every positional is a pathspec.
 //
 // One guardrail is non-negotiable for both:
 // patches are opt-in (-p/--patch), never default -- the default stream is
@@ -30,6 +32,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
@@ -94,10 +97,13 @@ func hasTimeRangeFlag(args []string) bool {
 	return false
 }
 
-// hasLogAnchor reports whether a positional has FILE:SYMBOL shape. A leading
-// colon is git pathspec magic, and -- makes every following token a pathspec,
-// so neither can select the anchor form.
-func hasLogAnchor(args []string) bool {
+// logInteriorColonPositionals collects positionals that look like they
+// might be FILE:SYMBOL anchors: an interior colon, not leading-colon
+// pathspec magic, and not after "--". A colon is not enough on its own --
+// src/notes:draft.md is a legal path (docs/USAGE.md rule 4) -- so callers
+// that pick between log's two forms still have to classify each token.
+func logInteriorColonPositionals(args []string) []string {
+	var out []string
 	afterSeparator := false
 	for i := 0; i < len(args); i++ {
 		a := args[i]
@@ -117,17 +123,58 @@ func hasLogAnchor(args []string) bool {
 		case a == "--porcelain", a == "-p", a == "--patch", a == "--follow-rename", a == "--help", a == "-h":
 			continue
 		case strings.Contains(a, ":") && !strings.HasPrefix(a, ":"):
-			return true
+			out = append(out, a)
 		}
 	}
-	return false
+	return out
 }
 
 func runLog(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
-	if hasTimeRangeFlag(args) && !hasLogAnchor(args) {
-		return runLogPathScoped(ctx, dir, args, stdout, stderr)
+	if hasTimeRangeFlag(args) {
+		anchor, code := logTimeRangeSelectsAnchor(ctx, dir, args, stderr)
+		if code != exitcode.Success {
+			return code
+		}
+		if !anchor {
+			return runLogPathScoped(ctx, dir, args, stdout, stderr)
+		}
 	}
 	return runLogAnchor(ctx, dir, args, stdout, stderr)
+}
+
+// logTimeRangeSelectsAnchor reports whether a --since/--until invocation
+// should keep the FILE:SYMBOL form. The cheap colon scan is only a filter:
+// an existing path that itself contains a colon is a pathspec, the same
+// rule 4 commit and diff already apply, and that form is path-scoped
+// history. A token that classifies as KindAnchor, or that fails
+// classification entirely (so runLogAnchor can print its own message),
+// keeps the symbol-scoped form.
+func logTimeRangeSelectsAnchor(ctx context.Context, dir string, args []string, stderr io.Writer) (bool, exitcode.Code) {
+	candidates := logInteriorColonPositionals(args)
+	if len(candidates) == 0 {
+		return false, exitcode.Success
+	}
+
+	root, prefix, repo, code := openRepo(ctx, dir, stderr)
+	if code != exitcode.Success {
+		return false, code
+	}
+	checker := &cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}
+	revs := cli.GitRevisionResolver{Repo: repo}
+	for _, a := range candidates {
+		classified, err := cli.ClassifyArgs(ctx, []string{a}, false, checker, revs)
+		if err != nil {
+			if _, ok := errors.AsType[*cli.UnresolvedArgError](err); ok {
+				return true, exitcode.Success
+			}
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return false, exitcode.GitFailure
+		}
+		if len(classified) > 0 && classified[0].Kind == cli.KindAnchor {
+			return true, exitcode.Success
+		}
+	}
+	return false, exitcode.Success
 }
 
 // runLogAnchor is rgit log's FILE:SYMBOL form. Its small flag surface is

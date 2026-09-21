@@ -370,9 +370,12 @@ a1b2c3d fix(auth): reject expired tokens
 ```
 
 `--since=DATE` or `--until=DATE` (either alone, or together) selects ordinary
-git history bounded by date only when no positional is a `FILE:SYMBOL`
-anchor. With an anchor, the symbol-scoped form above remains selected.
-Otherwise, one or more trailing positionals are pathspecs. Values are
+git history bounded by date only when no positional classifies as a
+`FILE:SYMBOL` anchor — the same six-rule table as `commit` and `diff`, so
+an existing path that itself contains a colon (`src/notes:draft.md`) stays
+a pathspec and does not need `--` to keep it out of the anchor form. With
+an anchor, the symbol-scoped form above remains selected. Otherwise, one
+or more trailing positionals are pathspecs. Values are
 forwarded to git's own `--since`/`--until` unparsed, so anything git accepts
 there (`"2024-01-01"`, `"2 weeks ago"`) works here too. With no paths, the
 unanchored form is the whole repository's history in that window, matching
