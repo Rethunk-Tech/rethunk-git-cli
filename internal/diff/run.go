@@ -410,7 +410,7 @@ func NumstatPath(raw string) (oldPath, newPath string) {
 			inner := raw[braceStart+1 : braceEnd]
 			if before, after, ok := strings.Cut(inner, " => "); ok {
 				prefix, suffix := raw[:braceStart], raw[braceEnd+1:]
-				return prefix + before + suffix, prefix + after + suffix
+				return braceSide(prefix, before, suffix), braceSide(prefix, after, suffix)
 			}
 		}
 	}
@@ -418,6 +418,17 @@ func NumstatPath(raw string) (oldPath, newPath string) {
 		return before, after
 	}
 	return raw, raw
+}
+
+// braceSide rebuilds one side of git's "prefix{old => new}suffix" form.
+// An empty side means the path gained or lost directory levels there, and
+// git keeps the separator on both prefix and suffix ("a/{ => lib}/f.ts"),
+// so exactly one of the two is dropped.
+func braceSide(prefix, side, suffix string) string {
+	if side == "" {
+		return prefix + strings.TrimPrefix(suffix, "/")
+	}
+	return prefix + side + suffix
 }
 
 // effectivePathspecs unions --file/bare-pathspec targets with --sym/bare-

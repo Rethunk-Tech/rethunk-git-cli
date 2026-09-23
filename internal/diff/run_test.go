@@ -778,6 +778,8 @@ func TestNumstatPath(t *testing.T) {
 		{"no rename", "unchanged.go", "unchanged.go", "unchanged.go"},
 		{"full rename", "old.go => new.go", "old.go", "new.go"},
 		{"common-prefix brace shorthand", "pkg/{old => new}/file.go", "pkg/old/file.go", "pkg/new/file.go"},
+		{"brace shorthand, empty old side", "a/{ => lib/server}/f.ts", "a/f.ts", "a/lib/server/f.ts"},
+		{"brace shorthand, empty new side", "a/{lib => }/f.ts", "a/lib/f.ts", "a/f.ts"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			oldPath, newPath := NumstatPath(tc.raw)
@@ -1034,5 +1036,34 @@ func TestRun_UntrackedFileThatVanishesIsWarnedNotFatal(t *testing.T) {
 	}
 	if !warned {
 		t.Errorf("Warnings = %v; want one naming dangling.go, so the skip is not silent", report.Warnings)
+	}
+}
+
+// TestRun_StagedRenameAcrossDirectoryDepth pins the brace-shorthand form
+// where one side is empty ("a/{ => lib/server}/f.ts"): the empty side's
+// path has exactly one separator between prefix and suffix, so HEAD content
+// resolves in both directions.
+func TestRun_StagedRenameAcrossDirectoryDepth(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ name, from, to string }{
+		{"into new subdirectory", "a/f.ts", "a/lib/server/f.ts"},
+		{"out of subdirectory", "a/lib/f.ts", "a/f.ts"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dir, repo := gittest.RepoWithFile(t, tc.from, "export const x = 1;\n", "chore: initial")
+			if err := os.MkdirAll(filepath.Join(dir, filepath.Dir(tc.to)), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			gittest.Git(t, dir, "mv", tc.from, tc.to)
+
+			report, err := Run(context.Background(), repo, dir, Options{Staged: true})
+			if err != nil {
+				t.Fatalf("Run --staged after %s -> %s: %v", tc.from, tc.to, err)
+			}
+			if _, ok := findFile(report.Files, tc.to); !ok {
+				t.Errorf("report.Files = %+v; want an entry for %s", report.Files, tc.to)
+			}
+		})
 	}
 }
