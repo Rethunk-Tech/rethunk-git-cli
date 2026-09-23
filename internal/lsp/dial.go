@@ -80,21 +80,11 @@ func dialSocket(ctx context.Context, spec serverSpec, repoRoot string) (*Client,
 				// in this same loop, or trySpawnDaemon below if this was
 				// the last one, reclaim the path instead of every future
 				// invocation staying pinned to a dead listener forever.
-				//
-				// Accepted best-effort gap: unlinking the directory entry
-				// does not stop whatever process is still listening on the
-				// inode behind it. If that process is a genuinely live
-				// (if slow or stuck) gopls rather than a truly dead one, a
-				// respawn here binds a fresh inode at the same path and
-				// strands the old process, unreachable, until its own
-				// -listen.timeout idle shutdown (servers.go's daemonArgs)
-				// reclaims it. A handshake failure this deep into
-				// dialBudget+queryDeadline is itself strong evidence of a
-				// stuck process (a healthy gopls answers in
-				// single-digit milliseconds), so this is not
-				// treated as a case worth a shutdown RPC or kill-by-pid:
-				// no dialled server here exposes either, and there is
-				// nothing to key a kill on beyond the socket path itself.
+				// A handshake this slow means a stuck daemon (a healthy
+				// gopls answers in milliseconds), so the process rgit
+				// spawned behind the socket is stopped too rather than
+				// stranded on an unreachable inode until its idle timeout.
+				stopStrandedDaemon(spec, candidate)
 				_ = os.Remove(candidate)
 			}
 			continue
@@ -245,6 +235,7 @@ func trySpawnDaemon(spec serverSpec, sockPath string) {
 	if err := cmd.Start(); err != nil {
 		return
 	}
+	writePIDFile(sockPath, cmd.Process.Pid)
 	// Detach: the daemon outlives this process by design, so there is
 	// nothing here to Wait() on.
 	_ = cmd.Process.Release()

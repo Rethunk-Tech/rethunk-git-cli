@@ -161,6 +161,9 @@ func TestTrySpawnDaemon_SuccessfulSpawnCleansUpItsOwnLock(t *testing.T) {
 	if _, err := os.Stat(sockPath + ".lock"); !os.IsNotExist(err) {
 		t.Errorf("lock file = %v; want removed once the spawn completed", err)
 	}
+	if _, err := os.Stat(pidPath(sockPath)); err != nil {
+		t.Errorf("pidfile = %v; want written for the spawned daemon", err)
+	}
 }
 
 // TestTrySpawnDaemon_StartFailureIsToleratedSilently covers cmd.Start()
