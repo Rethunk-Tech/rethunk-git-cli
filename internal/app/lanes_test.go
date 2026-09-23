@@ -116,6 +116,23 @@ func TestRun_OnlyOnUnbornBranchWritesRootCommit(t *testing.T) {
 	qt.Assert(t, qt.StringContains(gitOut(t, dir, "status", "--porcelain"), "A  sibling.txt"))
 }
 
+// TestRun_OnlyDirectoryTargetCommitsRenameWhole: a directory target expands
+// to both sides of a rename inside it, so the old path leaves HEAD too.
+func TestRun_OnlyDirectoryTargetCommitsRenameWhole(t *testing.T) {
+	dir := chdirTempRepo(t)
+	writeAppFile(t, dir, "d/a.txt", "x\n")
+	gitOut(t, dir, "add", "--", "d/a.txt")
+	gitOut(t, dir, "commit", "-q", "-m", "add d/a")
+	gitOut(t, dir, "mv", "d/a.txt", "d/b.txt")
+
+	_, stderr, code := runApp(t, "commit", "--only", "-m", "refactor(d): rename", "d")
+
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
+	head := gitOut(t, dir, "ls-tree", "-r", "--name-only", "HEAD", "--", "d")
+	qt.Assert(t, qt.Equals(head, "d/b.txt\n"))
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "status", "--porcelain"), ""))
+}
+
 func TestRun_OnlyWithNoTargetsRefusesWithoutAmend(t *testing.T) {
 	dir := chdirTempRepo(t)
 	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))

@@ -903,23 +903,25 @@ func pathspecFileCounts(ctx context.Context, repo *gitx.Repo, root, pathspec str
 	base, err := repo.CommittableBase(ctx)
 	var entries []gitx.NumstatEntry
 	if err == nil {
-		entries, err = repo.DiffNumstat(ctx, base, "--", pathspec)
+		// --no-renames: each row's path feeds the --only commit list, so a
+		// rename inside the pathspec must yield its old path as a deletion
+		// row, not collapse into one row naming only the new path.
+		entries, err = repo.DiffNumstat(ctx, "--no-renames", base, "--", pathspec)
 	}
 	if err != nil {
 		warnings = append(warnings, fmt.Sprintf("%s: tracked line counts unavailable: %v", pathspec, err))
 	}
 	for _, e := range entries {
-		_, newPath := diff.NumstatPath(e.Path)
-		if seen[newPath] {
+		if seen[e.Path] {
 			continue
 		}
-		seen[newPath] = true
+		seen[e.Path] = true
 		a, aerr := strconv.Atoi(e.Added)
 		d, derr := strconv.Atoi(e.Deleted)
 		if aerr != nil || derr != nil {
 			a, d = 0, 0 // binary: git wrote "-" for both
 		}
-		out = append(out, pathFile{path: newPath, added: a, deleted: d})
+		out = append(out, pathFile{path: e.Path, added: a, deleted: d})
 	}
 
 	others, err := repo.LsFilesOthers(ctx, "--", pathspec)
