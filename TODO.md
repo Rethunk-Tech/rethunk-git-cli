@@ -11,13 +11,6 @@ constructs no anchor reaches — are in
 
 ## Accepted, not built
 
-### Orphan-gopls handshake cleanup
-
-A managed socket whose handshake failed is unlinked
-(`internal/lsp/dial.go`). A live-but-stuck `gopls` behind it is left to its own
-`-listen.timeout=10m`. A shutdown RPC or kill-by-pid needs a PID `rgit` never
-discovers and no server exposes, so neither is in scope.
-
 ### Not queued
 
 `rgit context` staged/unstaged split — it would be a second `diffpkg.Run` for a

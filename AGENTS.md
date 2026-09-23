@@ -55,4 +55,4 @@ Tree-sitter resolves; LSP **verifies** declaration-only extent (doc comment stri
 
 ## State
 
-No persistent state. Creates only LSP socket and spawn lock under UID-scoped `rgit-<uid>` in `$XDG_RUNTIME_DIR` (or system temp), `0700`, owner-verified before dial (`internal/lsp/dial.go`). Repository state is git's alone.
+No persistent state. Creates only the LSP socket, its spawn lock, and the spawned daemon's pidfile under UID-scoped `rgit-<uid>` in `$XDG_RUNTIME_DIR` (or system temp), `0700`, owner-verified before dial (`internal/lsp/dial.go`). Repository state is git's alone.

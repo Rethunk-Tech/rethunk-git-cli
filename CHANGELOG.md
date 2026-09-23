@@ -8,6 +8,11 @@ Notable changes to `rgit`. The format follows
 
 ### Fixed
 
+- A stuck `gopls` daemon that `rgit` started and whose handshake fails is now
+  terminated rather than stranded until its idle timeout (Linux only). `rgit`
+  records the daemon's PID beside its socket and signals it only while that
+  PID's command line is still the one it launched.
+
 - `rgit log --since` / `--until` no longer treats an existing path that
   contains a colon (`src/notes:draft.md`) as a `FILE:SYMBOL` anchor. Form
   selection uses the same six-rule table as `commit` and `diff`. See
