@@ -848,8 +848,10 @@ type CommitOptions struct {
 	GPGSign      bool
 	GPGSignKeyID string
 	NoGPGSign    bool
-	Only         bool
-	OnlyPaths    []string
+	// OnlyPaths are pathspecs; Only commits baseTree plus every index entry
+	// they match that differs from it.
+	Only      bool
+	OnlyPaths []string
 }
 
 // Commit runs `git commit` with opts translated to flags and returns its
@@ -959,20 +961,16 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 			_ = os.Remove(tempIndex)
 			return Result{}, gitError([]string{"read-tree", baseTree}, res)
 		}
-		for _, path := range opts.OnlyPaths {
-			mode, sha, found, err := r.stageCacheInfo(ctx, path)
+		if len(opts.OnlyPaths) > 0 {
+			// Expanded against the real index, not trusted as a file list: a
+			// directory pathspec must carry every entry under it that differs
+			// from baseTree, deletions included, or the commit is partial.
+			entries, err := r.cachedEntries(ctx, baseTree, opts.OnlyPaths...)
 			if err != nil {
 				_ = os.Remove(tempIndex)
 				return Result{}, err
 			}
-			if !found {
-				if _, err := commitRepo.checked(ctx, "update-index", "--force-remove", "--", path); err != nil {
-					_ = os.Remove(tempIndex)
-					return Result{}, err
-				}
-				continue
-			}
-			if err := commitRepo.UpdateIndexCacheinfo(ctx, mode, sha, path); err != nil {
+			if err := commitRepo.writeEntries(ctx, entries); err != nil {
 				_ = os.Remove(tempIndex)
 				return Result{}, err
 			}
@@ -1008,26 +1006,39 @@ func (r *Repo) syncCommittedEntries(ctx context.Context, committed *Repo, baseTr
 	if err != nil {
 		return err
 	}
-	var info bytes.Buffer
-	for path, entry := range changed {
-		if current[path] != entry {
-			// A deletion carries mode 000000, which --index-info reads as remove.
-			fmt.Fprintf(&info, "%s %s\t%s\x00", entry.mode, entry.sha, path)
+	for path, entry := range current {
+		if changed[path] == entry {
+			delete(changed, path)
 		}
 	}
-	if info.Len() == 0 {
+	return r.writeEntries(ctx, changed)
+}
+
+// writeEntries applies entries to r's index in one update-index call. A
+// deletion carries mode 000000, which --index-info reads as remove.
+func (r *Repo) writeEntries(ctx context.Context, entries map[string]indexEntry) error {
+	if len(entries) == 0 {
 		return nil
 	}
-	_, err = r.checkedStdin(ctx, &info, "update-index", "-z", "--index-info")
+	var info bytes.Buffer
+	for path, entry := range entries {
+		fmt.Fprintf(&info, "%s %s\t%s\x00", entry.mode, entry.sha, path)
+	}
+	_, err := r.checkedStdin(ctx, &info, "update-index", "-z", "--index-info")
 	return err
 }
 
 type indexEntry struct{ mode, sha string }
 
 // cachedEntries maps every path whose index entry differs from tree to the
-// index side of `git diff-index --cached --raw`.
-func (r *Repo) cachedEntries(ctx context.Context, tree string) (map[string]indexEntry, error) {
-	out, err := r.checked(ctx, "diff-index", "--cached", "--no-renames", "-z", tree)
+// index side of `git diff-index --cached --raw`, limited to pathspecs when
+// any are given.
+func (r *Repo) cachedEntries(ctx context.Context, tree string, pathspecs ...string) (map[string]indexEntry, error) {
+	args := []string{"diff-index", "--cached", "--no-renames", "-z", tree}
+	if len(pathspecs) > 0 {
+		args = append(append(args, "--"), pathspecs...)
+	}
+	out, err := r.checked(ctx, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -1058,33 +1069,6 @@ func withEnv(env []string, key, value string) []string {
 		}
 	}
 	return append(result, prefix+value)
-}
-
-func (r *Repo) stageCacheInfo(ctx context.Context, path string) (mode, sha string, found bool, err error) {
-	out, err := r.checked(ctx, "ls-files", "--stage", "--", path)
-	if err != nil {
-		return "", "", false, err
-	}
-	trimmed := strings.TrimRight(string(out), "\n")
-	// Empty output means path is not in the index -- untracked, or staged for
-	// deletion. Splitting "" yields one empty line that parses as malformed.
-	if trimmed == "" {
-		return "", "", false, nil
-	}
-	for line := range strings.SplitSeq(trimmed, "\n") {
-		before, _, ok := strings.Cut(line, "\t")
-		if !ok {
-			return "", "", false, fmt.Errorf("gitx: malformed ls-files --stage line %q", line)
-		}
-		fields := strings.Fields(before)
-		if len(fields) != 3 {
-			return "", "", false, fmt.Errorf("gitx: malformed ls-files --stage line %q", line)
-		}
-		if fields[2] == "0" {
-			return fields[0], fields[1], true, nil
-		}
-	}
-	return "", "", false, nil
 }
 
 // Push runs a bare `git push` -- rgit commit's only caller never has a

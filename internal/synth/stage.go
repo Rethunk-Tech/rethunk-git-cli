@@ -893,8 +893,9 @@ type pathFile struct {
 // lines to report.
 //
 // warnings holds one message per query that failed outright -- neither
-// query's failure changes what gets staged, since Apply stages pathspec via
-// plain `git add` regardless of whether this preview could count it, but a
+// query's failure changes what gets staged or committed: Apply stages the
+// pathspec via plain `git add`, and --only hands git the pathspec itself to
+// expand against the index, so this listing is never the commit list. But a
 // preview built on a partial answer must say so rather than presenting an
 // understated total as if it were exact.
 func pathspecFileCounts(ctx context.Context, repo *gitx.Repo, root, pathspec string) (out []pathFile, warnings []string) {
@@ -903,9 +904,8 @@ func pathspecFileCounts(ctx context.Context, repo *gitx.Repo, root, pathspec str
 	base, err := repo.CommittableBase(ctx)
 	var entries []gitx.NumstatEntry
 	if err == nil {
-		// --no-renames: each row's path feeds the --only commit list, so a
-		// rename inside the pathspec must yield its old path as a deletion
-		// row, not collapse into one row naming only the new path.
+		// --no-renames: a rename inside the pathspec is listed as the
+		// deletion and the addition it stages, not one row naming the new path.
 		entries, err = repo.DiffNumstat(ctx, "--no-renames", base, "--", pathspec)
 	}
 	if err != nil {

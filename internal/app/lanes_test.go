@@ -133,6 +133,40 @@ func TestRun_OnlyDirectoryTargetCommitsRenameWhole(t *testing.T) {
 	qt.Assert(t, qt.Equals(gitOut(t, dir, "status", "--porcelain"), ""))
 }
 
+// TestRun_OnlyDirectoryTargetSurvivesFailedPreviewCounts: the per-file
+// preview's numstat query failing must not shrink what an --only directory
+// target commits. A git shim fails every --numstat call and passes the rest
+// through to the real git.
+func TestRun_OnlyDirectoryTargetSurvivesFailedPreviewCounts(t *testing.T) {
+	dir := chdirTempRepo(t)
+	for _, name := range []string{"d/a.txt", "d/b.txt", "d/c.txt"} {
+		writeAppFile(t, dir, name, name+"\n")
+	}
+	gitOut(t, dir, "add", "--", "d")
+	gitOut(t, dir, "commit", "-q", "-m", "add d")
+	writeAppFile(t, dir, "d/a.txt", "edited\n")
+	gitOut(t, dir, "rm", "-q", "--", "d/b.txt")
+	writeAppFile(t, dir, "d/n.txt", "new\n")
+	writeAppFile(t, dir, "sibling.txt", "staged separately\n")
+	gitOut(t, dir, "add", "--", "sibling.txt")
+
+	realGit, err := exec.LookPath("git")
+	qt.Assert(t, qt.IsNil(err))
+	shimDir := t.TempDir()
+	shim := "#!/bin/sh\ncase \" $* \" in *\" --numstat \"*) echo 'shim: numstat refused' >&2; exit 1;; esac\nexec '" + realGit + "' \"$@\"\n"
+	qt.Assert(t, qt.IsNil(os.WriteFile(filepath.Join(shimDir, "git"), []byte(shim), 0o755)))
+	t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	_, stderr, code := runApp(t, "commit", "--only", "-m", "feat(d): update", "d")
+
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
+	qt.Assert(t, qt.StringContains(stderr, "tracked line counts unavailable"))
+	head := gitOut(t, dir, "ls-tree", "-r", "--name-only", "HEAD", "--", "d")
+	qt.Assert(t, qt.Equals(head, "d/a.txt\nd/c.txt\nd/n.txt\n"))
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "show", "HEAD:d/a.txt"), "edited\n"))
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "status", "--porcelain"), "A  sibling.txt\n"))
+}
+
 func TestRun_OnlyWithNoTargetsRefusesWithoutAmend(t *testing.T) {
 	dir := chdirTempRepo(t)
 	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))

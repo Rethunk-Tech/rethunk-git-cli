@@ -335,7 +335,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 			return code
 		}
 		if f.only {
-			onlyPaths = targetResultPaths(targetResults)
+			onlyPaths = onlyPathspecs(targetResults)
 		}
 	} else if f.dryRun {
 		if f.porcelain {
@@ -531,6 +531,29 @@ func targetLabel(t synth.Target) string {
 		return t.Pathspec
 	}
 	return t.Symbol.Path + ":" + t.Symbol.Anchor
+}
+
+// onlyPathspecs is what --only commits: a path target's pathspec as given,
+// so git expands it against the index the way `git commit --only` does, and
+// a changed symbol target's file, taken literally.
+func onlyPathspecs(results []synth.TargetResult) []string {
+	seen := make(map[string]struct{}, len(results))
+	specs := make([]string, 0, len(results))
+	for _, result := range results {
+		spec := result.Target.Pathspec
+		if spec == "" {
+			if result.Outcome == synth.Unchanged {
+				continue
+			}
+			spec = ":(literal)" + result.Target.Symbol.Path
+		}
+		if _, ok := seen[spec]; ok {
+			continue
+		}
+		seen[spec] = struct{}{}
+		specs = append(specs, spec)
+	}
+	return specs
 }
 
 func targetResultPaths(results []synth.TargetResult) []string {
