@@ -1052,7 +1052,7 @@ func TestRun_StagedRenameAcrossDirectoryDepth(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			dir, repo := gittest.RepoWithFile(t, tc.from, "export const x = 1;\n", "chore: initial")
-			if err := os.MkdirAll(filepath.Join(dir, filepath.Dir(tc.to)), 0o755); err != nil {
+			if err := os.MkdirAll(filepath.Join(dir, filepath.Dir(tc.to)), 0o750); err != nil {
 				t.Fatal(err)
 			}
 			gittest.Git(t, dir, "mv", tc.from, tc.to)

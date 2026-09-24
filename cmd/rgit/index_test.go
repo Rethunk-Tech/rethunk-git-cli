@@ -539,7 +539,7 @@ func TestStage_SubmoduleAndSymlinkPathStaging(t *testing.T) {
 	qt.Assert(t, qt.IsNil(os.Symlink("target.txt", filepath.Join(dir, "link.txt"))))
 
 	subDir := filepath.Join(dir, "sub")
-	qt.Assert(t, qt.IsNil(os.MkdirAll(subDir, 0o755)))
+	qt.Assert(t, qt.IsNil(os.MkdirAll(subDir, 0o750)))
 	gittest.Git(t, subDir, "init", "-q")
 	gittest.Git(t, subDir, "config", "user.email", "sub@example.com")
 	gittest.Git(t, subDir, "config", "user.name", "Sub")

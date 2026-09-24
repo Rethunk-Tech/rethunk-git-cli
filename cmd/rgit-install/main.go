@@ -521,7 +521,7 @@ func finalizeGenerated(staging, final string) error {
 			// Restore exactly what was there before finalize started --
 			// the whole point of moving it aside instead of deleting it.
 			if restoreErr := os.Rename(old, final); restoreErr != nil {
-				return fmt.Errorf("finalize %s: %w (restoring prior version also failed: %v -- it is preserved at %s)", final, err, restoreErr, old)
+				return fmt.Errorf("finalize %s: %w (restoring prior version also failed: %w -- it is preserved at %s)", final, err, restoreErr, old)
 			}
 		}
 		return fmt.Errorf("finalize %s: %w", final, err)

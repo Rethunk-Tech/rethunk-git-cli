@@ -68,7 +68,7 @@ func TestStage_RoundTripsWorktreeForEveryDeclaration(t *testing.T) {
 
 			repo := initRepoWithFile(t, name, string(src))
 			path := filepath.Join(repo, name)
-			if err := os.WriteFile(path, worktree, 0o644); err != nil {
+			if err := os.WriteFile(path, worktree, 0o600); err != nil {
 				t.Fatalf("write worktree %s: %v", name, err)
 			}
 

@@ -13,7 +13,7 @@ import (
 func TestReadPathspecFileSkipsEmptyLines(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "targets")
-	if err := os.WriteFile(path, []byte("a.go\n\nb.go\n"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("a.go\n\nb.go\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -26,7 +26,7 @@ func TestReadPathspecFileSkipsEmptyLines(t *testing.T) {
 func TestReadPathspecFileNulPreservesNewline(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "targets")
-	if err := os.WriteFile(path, []byte("a\nb.go\x00other.go\x00"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("a\nb.go\x00other.go\x00"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -59,7 +59,7 @@ func TestReadPathspecFileStdin(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "targets")
-			if err := os.WriteFile(path, []byte(test.contents), 0o644); err != nil {
+			if err := os.WriteFile(path, []byte(test.contents), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			stdin, err := os.Open(path)
@@ -86,7 +86,7 @@ func TestRunPathspecFromFileMatchesPositionals(t *testing.T) {
 	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
 	path := filepath.Join(t.TempDir(), "targets")
-	if err := os.WriteFile(path, []byte("a.go:A\n"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("a.go:A\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -123,7 +123,7 @@ func TestRun_PathspecFromFileNulMatchesPositionals(t *testing.T) {
 	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
 	path := filepath.Join(t.TempDir(), "targets")
-	if err := os.WriteFile(path, []byte("a.go:A\x00"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("a.go:A\x00"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

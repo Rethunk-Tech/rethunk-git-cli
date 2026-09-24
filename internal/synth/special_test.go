@@ -45,7 +45,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 
 	t.Run("symlink deleted from the worktree classifies via HEAD's 120000 entry", func(t *testing.T) {
 		dir, repo := gittest.New(t)
-		if err := os.WriteFile(filepath.Join(dir, "target.txt"), []byte("x\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "target.txt"), []byte("x\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.Symlink("target.txt", filepath.Join(dir, "link.txt")); err != nil {
@@ -69,13 +69,13 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	t.Run("submodule directory removed from the worktree classifies via HEAD's 160000 entry", func(t *testing.T) {
 		dir, repo := gittest.New(t)
 		subDir := filepath.Join(dir, "sub")
-		if err := os.MkdirAll(subDir, 0o755); err != nil {
+		if err := os.MkdirAll(subDir, 0o750); err != nil {
 			t.Fatal(err)
 		}
 		gittest.Git(t, subDir, "init", "-q")
 		gittest.Git(t, subDir, "config", "user.email", "sub@example.com")
 		gittest.Git(t, subDir, "config", "user.name", "Sub")
-		if err := os.WriteFile(filepath.Join(subDir, "x.txt"), []byte("x\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(subDir, "x.txt"), []byte("x\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		gittest.Git(t, subDir, "add", "x.txt")
@@ -105,13 +105,13 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 		// check HEAD's own tree mode rather than settling for pathRegular.
 		dir, repo := gittest.New(t)
 		subDir := filepath.Join(dir, "sub")
-		if err := os.MkdirAll(subDir, 0o755); err != nil {
+		if err := os.MkdirAll(subDir, 0o750); err != nil {
 			t.Fatal(err)
 		}
 		gittest.Git(t, subDir, "init", "-q")
 		gittest.Git(t, subDir, "config", "user.email", "sub@example.com")
 		gittest.Git(t, subDir, "config", "user.name", "Sub")
-		if err := os.WriteFile(filepath.Join(subDir, "x.txt"), []byte("x\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(subDir, "x.txt"), []byte("x\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		gittest.Git(t, subDir, "add", "x.txt")
@@ -138,7 +138,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 
 	t.Run("binary file deleted from the worktree classifies via HEAD's content", func(t *testing.T) {
 		dir, repo := gittest.New(t)
-		if err := os.WriteFile(filepath.Join(dir, "blob.bin"), []byte("a\x00b\x00c"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "blob.bin"), []byte("a\x00b\x00c"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		commitSpecial(t, dir, "blob.bin")
@@ -158,7 +158,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 
 	t.Run("regular file deleted from the worktree classifies as pathRegular via HEAD", func(t *testing.T) {
 		dir, repo := gittest.New(t)
-		if err := os.WriteFile(filepath.Join(dir, "plain.go"), []byte("package p\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "plain.go"), []byte("package p\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		commitSpecial(t, dir, "plain.go")
@@ -178,7 +178,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 
 	t.Run("plain directory in the worktree classifies as pathRegular, not a submodule", func(t *testing.T) {
 		dir, repo := gittest.New(t)
-		if err := os.MkdirAll(filepath.Join(dir, "plaindir"), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(dir, "plaindir"), 0o750); err != nil {
 			t.Fatal(err)
 		}
 
@@ -193,7 +193,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 
 	t.Run("binary file present in the worktree refuses a symbol anchor", func(t *testing.T) {
 		dir, repo := gittest.New(t)
-		if err := os.WriteFile(filepath.Join(dir, "blob.bin"), []byte("a\x00b\x00c"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "blob.bin"), []byte("a\x00b\x00c"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 
@@ -205,7 +205,8 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 		// untracked file included) and refusalFor's pathBinary case in the
 		// same call, the way a real anchor target actually reaches both.
 		_, err := openFilePlan(ctx, repo, dir, "blob.bin")
-		pathErr, ok := err.(*PathError)
+		var pathErr *PathError
+		ok := errors.As(err, &pathErr)
 		if !ok {
 			t.Fatalf("openFilePlan error = %v (%T); want *PathError", err, err)
 		}

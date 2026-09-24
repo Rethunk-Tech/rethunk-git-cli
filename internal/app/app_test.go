@@ -452,7 +452,7 @@ func TestRun_PathEscapeIsRefused(t *testing.T) {
 	t.Parallel()
 	dir := tempRepo(t)
 	outside := filepath.Join(filepath.Dir(dir), "outside.go")
-	if err := os.WriteFile(outside, []byte("package outside\n"), 0o644); err != nil {
+	if err := os.WriteFile(outside, []byte("package outside\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{
@@ -866,7 +866,7 @@ func assertShellParses(t *testing.T, shell, script string) {
 		t.Skipf("%s not on PATH", shell)
 	}
 	f := filepath.Join(t.TempDir(), "rgit-completion")
-	if err := os.WriteFile(f, []byte(script), 0o644); err != nil {
+	if err := os.WriteFile(f, []byte(script), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if out, err := exec.CommandContext(context.Background(), path, "-n", f).CombinedOutput(); err != nil {
@@ -885,7 +885,7 @@ func assertPwshParses(t *testing.T, script string) {
 	}
 
 	file := filepath.Join(t.TempDir(), "rgit-completion.ps1")
-	if err := os.WriteFile(file, []byte(script), 0o644); err != nil {
+	if err := os.WriteFile(file, []byte(script), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

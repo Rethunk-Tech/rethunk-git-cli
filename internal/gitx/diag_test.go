@@ -20,12 +20,12 @@ func TestHasStash(t *testing.T) {
 	qt.Assert(t, qt.IsFalse(hasStash))
 
 	path := filepath.Join(dir, "tracked.txt")
-	if err := os.WriteFile(path, []byte("before\n"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("before\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	gittest.Git(t, dir, "add", "tracked.txt")
 	gittest.Git(t, dir, "commit", "-m", "initial")
-	if err := os.WriteFile(path, []byte("after\n"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("after\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	gittest.Git(t, dir, "stash", "push", "-m", "test")

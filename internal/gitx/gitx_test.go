@@ -95,7 +95,7 @@ func TestSequencerOpAndIgnoreCase(t *testing.T) {
 	if op, found, err := repo.SequencerOp(ctx); err != nil || found || op != "" {
 		t.Fatalf("SequencerOp(clean) = (%q, %v, %v); want empty", op, found, err)
 	}
-	if err := os.WriteFile(dir+"/.git/MERGE_HEAD", []byte(sha+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(dir+"/.git/MERGE_HEAD", []byte(sha+"\n"), 0o600); err != nil {
 		t.Fatalf("write MERGE_HEAD: %v", err)
 	}
 	if op, found, err := repo.SequencerOp(ctx); err != nil || !found || op != "merge" {

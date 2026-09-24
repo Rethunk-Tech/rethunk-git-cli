@@ -310,8 +310,8 @@ func TestCopyFile(t *testing.T) {
 		dir := t.TempDir()
 		src := filepath.Join(dir, "src.txt")
 		dst := filepath.Join(dir, "nested", "dst.txt")
-		qt.Assert(t, qt.IsNil(os.WriteFile(src, []byte("hello"), 0o644)))
-		qt.Assert(t, qt.IsNil(os.MkdirAll(filepath.Dir(dst), 0o755)))
+		qt.Assert(t, qt.IsNil(os.WriteFile(src, []byte("hello"), 0o600)))
+		qt.Assert(t, qt.IsNil(os.MkdirAll(filepath.Dir(dst), 0o750)))
 		qt.Assert(t, qt.IsNil(copyFile(src, dst)))
 
 		got, err := os.ReadFile(dst)
@@ -338,8 +338,8 @@ func TestFinalizeGenerated(t *testing.T) {
 		dir := t.TempDir()
 		final := filepath.Join(dir, "csrc")
 		staging := filepath.Join(dir, "csrc.tmp")
-		qt.Assert(t, qt.IsNil(os.MkdirAll(staging, 0o755)))
-		qt.Assert(t, qt.IsNil(os.WriteFile(filepath.Join(staging, "new.txt"), []byte("new"), 0o644)))
+		qt.Assert(t, qt.IsNil(os.MkdirAll(staging, 0o750)))
+		qt.Assert(t, qt.IsNil(os.WriteFile(filepath.Join(staging, "new.txt"), []byte("new"), 0o600)))
 
 		qt.Assert(t, qt.IsNil(finalizeGenerated(staging, final)))
 
@@ -352,12 +352,12 @@ func TestFinalizeGenerated(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
 		final := filepath.Join(dir, "csrc")
-		qt.Assert(t, qt.IsNil(os.MkdirAll(final, 0o755)))
-		qt.Assert(t, qt.IsNil(os.WriteFile(filepath.Join(final, "old.txt"), []byte("old"), 0o644)))
+		qt.Assert(t, qt.IsNil(os.MkdirAll(final, 0o750)))
+		qt.Assert(t, qt.IsNil(os.WriteFile(filepath.Join(final, "old.txt"), []byte("old"), 0o600)))
 
 		staging := filepath.Join(dir, "csrc.tmp")
-		qt.Assert(t, qt.IsNil(os.MkdirAll(staging, 0o755)))
-		qt.Assert(t, qt.IsNil(os.WriteFile(filepath.Join(staging, "new.txt"), []byte("new"), 0o644)))
+		qt.Assert(t, qt.IsNil(os.MkdirAll(staging, 0o750)))
+		qt.Assert(t, qt.IsNil(os.WriteFile(filepath.Join(staging, "new.txt"), []byte("new"), 0o600)))
 
 		qt.Assert(t, qt.IsNil(finalizeGenerated(staging, final)))
 
@@ -378,9 +378,9 @@ func TestFinalizeGenerated(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
 		final := filepath.Join(dir, "csrc")
-		qt.Assert(t, qt.IsNil(os.MkdirAll(final, 0o755)))
+		qt.Assert(t, qt.IsNil(os.MkdirAll(final, 0o750)))
 		marker := filepath.Join(final, "marker.txt")
-		qt.Assert(t, qt.IsNil(os.WriteFile(marker, []byte("prior generation"), 0o644)))
+		qt.Assert(t, qt.IsNil(os.WriteFile(marker, []byte("prior generation"), 0o600)))
 
 		staging := filepath.Join(dir, "csrc.tmp-never-created")
 
@@ -402,8 +402,8 @@ func TestSQLCSRCContentHash(t *testing.T) {
 		t.Helper()
 		pkgDir := t.TempDir()
 		csrc := filepath.Join(pkgDir, "csrc")
-		qt.Assert(t, qt.IsNil(os.MkdirAll(csrc, 0o755)))
-		qt.Assert(t, qt.IsNil(os.WriteFile(filepath.Join(csrc, "parser.c"), []byte(content), 0o644)))
+		qt.Assert(t, qt.IsNil(os.MkdirAll(csrc, 0o750)))
+		qt.Assert(t, qt.IsNil(os.WriteFile(filepath.Join(csrc, "parser.c"), []byte(content), 0o600)))
 		return pkgDir
 	}
 
@@ -445,7 +445,7 @@ func TestParserABIVersion(t *testing.T) {
 	write := func(t *testing.T, content string) string {
 		t.Helper()
 		path := filepath.Join(t.TempDir(), "parser.c")
-		qt.Assert(t, qt.IsNil(os.WriteFile(path, []byte(content), 0o644)))
+		qt.Assert(t, qt.IsNil(os.WriteFile(path, []byte(content), 0o600)))
 		return path
 	}
 

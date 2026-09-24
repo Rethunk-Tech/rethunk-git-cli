@@ -168,7 +168,7 @@ func TestResolve_CrossCheckLiveGopls(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module fixture\n\ngo 1.21\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module fixture\n\ngo 1.21\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	src := []byte(`package p
@@ -180,7 +180,7 @@ func ValidateToken(t string) error {
 }
 `)
 	path := filepath.Join(dir, "auth.go")
-	if err := os.WriteFile(path, src, 0o644); err != nil {
+	if err := os.WriteFile(path, src, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -256,7 +256,7 @@ func TestResolve_CrossCheckLiveHTML(t *testing.T) {
 </html>
 `)
 	path := filepath.Join(dir, "fixture.html")
-	if err := os.WriteFile(path, src, 0o644); err != nil {
+	if err := os.WriteFile(path, src, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -285,7 +285,7 @@ func TestResolve_CrossCheckLiveHTML(t *testing.T) {
 	// stripped from its Name; staged anchors stay tag#id.
 	classSrc := []byte(`<div id="widget" class="foo bar">x</div>` + "\n")
 	classPath := filepath.Join(dir, "class.html")
-	if err := os.WriteFile(classPath, classSrc, 0o644); err != nil {
+	if err := os.WriteFile(classPath, classSrc, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	classRes, err := resolve.Resolve(lang, classSrc, "div#widget")

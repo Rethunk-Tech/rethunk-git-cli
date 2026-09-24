@@ -222,7 +222,7 @@ func TestDialStdio_CloseTearsDownConnectionThenProcess(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "fixture.sh")
 	src := []byte("foo() {\n  echo hi\n}\n")
-	if err := os.WriteFile(path, src, 0o644); err != nil {
+	if err := os.WriteFile(path, src, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -316,7 +316,7 @@ func TestPrivateSocketDir_RejectsLoosePermissions(t *testing.T) {
 	base := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", base)
 	dir := filepath.Join(base, fmt.Sprintf("rgit-%d", os.Getuid()))
-	if err := os.Mkdir(dir, 0o755); err != nil {
+	if err := os.Mkdir(dir, 0o750); err != nil {
 		t.Fatal(err)
 	}
 

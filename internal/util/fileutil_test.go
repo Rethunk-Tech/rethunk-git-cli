@@ -39,7 +39,7 @@ func TestLooksBinary(t *testing.T) {
 func TestGitFileMode(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "file")
-	if err := os.WriteFile(path, []byte("content"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("content"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -68,7 +68,7 @@ func TestReadFileIfExists(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "file")
 	want := []byte("content")
-	if err := os.WriteFile(path, want, 0o644); err != nil {
+	if err := os.WriteFile(path, want, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -96,7 +96,7 @@ func TestLooksBinaryFile(t *testing.T) {
 	dir := t.TempDir()
 
 	textPath := filepath.Join(dir, "text.txt")
-	if err := os.WriteFile(textPath, []byte("hello world\n"), 0o644); err != nil {
+	if err := os.WriteFile(textPath, []byte("hello world\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if binary, err := LooksBinaryFile(textPath); err != nil || binary {
@@ -104,7 +104,7 @@ func TestLooksBinaryFile(t *testing.T) {
 	}
 
 	binPath := filepath.Join(dir, "blob.bin")
-	if err := os.WriteFile(binPath, []byte("a\x00b"), 0o644); err != nil {
+	if err := os.WriteFile(binPath, []byte("a\x00b"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if binary, err := LooksBinaryFile(binPath); err != nil || !binary {
@@ -120,7 +120,7 @@ func TestLooksBinaryFile(t *testing.T) {
 		large[i] = 'a'
 	}
 	large[BinarySampleLimit+500] = 0
-	if err := os.WriteFile(largePath, large, 0o644); err != nil {
+	if err := os.WriteFile(largePath, large, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if binary, err := LooksBinaryFile(largePath); err != nil || binary {

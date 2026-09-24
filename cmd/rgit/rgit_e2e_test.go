@@ -68,7 +68,7 @@ func TestMain(m *testing.M) {
 	// build dir shares that directory's lifetime and its single cleanup,
 	// so nothing else on the machine shares a temp root with it.
 	coverDir := filepath.Join(filepath.Dir(bin), "cover")
-	if err := os.MkdirAll(coverDir, 0o755); err != nil {
+	if err := os.MkdirAll(coverDir, 0o750); err != nil {
 		fmt.Fprintln(os.Stderr, "create GOCOVERDIR for e2e tests:", err)
 		cleanup()
 		os.Exit(1)
@@ -646,14 +646,14 @@ func TestDiff_BinaryRowUsesDashCounts(t *testing.T) {
 	t.Parallel()
 	binary := []byte("PNGFAKE\x00\x01binary")
 	repo, _ := gittest.New(t)
-	if err := os.WriteFile(filepath.Join(repo, "logo.bin"), binary, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(repo, "logo.bin"), binary, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	gittest.Git(t, repo, "add", "--", "logo.bin")
 	gittest.Git(t, repo, "commit", "-q", "-m", "add binary")
 
 	changed := append(append([]byte(nil), binary...), 'X')
-	if err := os.WriteFile(filepath.Join(repo, "logo.bin"), changed, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(repo, "logo.bin"), changed, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1503,7 +1503,7 @@ func TestCompletion_FishOffersSubcommandsAndFlags(t *testing.T) {
 	// __fish_complete_directories appends its own "\tDirectory" hint to
 	// each candidate, unlike this script's own plain printf'd ones, so the
 	// match is by prefix rather than exact equality.
-	qt.Assert(t, qt.IsNil(os.Mkdir(filepath.Join(repo, "sub"), 0o755)))
+	qt.Assert(t, qt.IsNil(os.Mkdir(filepath.Join(repo, "sub"), 0o750)))
 	got = runFishCompletion(t, repo, script.Stdout, "-C", "")
 	sawSubdir := false
 	for _, c := range got {

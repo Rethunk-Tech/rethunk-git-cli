@@ -206,7 +206,7 @@ func TestRun_ContextSequencerRecordSortsAfterBranch(t *testing.T) {
 	t.Parallel()
 	dir := tempRepo(t)
 	sha := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
-	if err := os.WriteFile(filepath.Join(dir, ".git", "MERGE_HEAD"), []byte(sha+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".git", "MERGE_HEAD"), []byte(sha+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Remove(filepath.Join(dir, ".git", "MERGE_HEAD")) })

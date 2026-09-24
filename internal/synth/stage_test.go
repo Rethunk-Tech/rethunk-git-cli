@@ -131,7 +131,7 @@ func TestPathspecFileCounts_UnreadableUntrackedFileWarns(t *testing.T) {
 	ctx := context.Background()
 
 	full := filepath.Join(dir, "secret.txt")
-	if err := os.WriteFile(full, []byte("shh\n"), 0o644); err != nil {
+	if err := os.WriteFile(full, []byte("shh\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(full, 0o000); err != nil {

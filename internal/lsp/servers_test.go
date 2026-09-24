@@ -44,7 +44,7 @@ func TestDial_NewServers(t *testing.T) {
 
 			dir := t.TempDir()
 			path := filepath.Join(dir, "fixture"+tc.ext)
-			if err := os.WriteFile(path, []byte(tc.src), 0o644); err != nil {
+			if err := os.WriteFile(path, []byte(tc.src), 0o600); err != nil {
 				t.Fatal(err)
 			}
 

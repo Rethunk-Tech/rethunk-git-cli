@@ -1,6 +1,7 @@
 package resolve
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -183,7 +184,7 @@ func TestMatchAndCompare_CorruptedOffsetFailsLoudly(t *testing.T) {
 	if err == nil {
 		t.Fatal("err = nil; want a reported internal-inconsistency error")
 	}
-	if _, ok := err.(*ResolveError); ok {
+	if errors.As(err, new(*ResolveError)) {
 		t.Errorf("err = %T (%v); want a plain error, not exitcode.ExtentMismatch's own -- this is not a real tree-sitter/language-server disagreement", err, err)
 	}
 }

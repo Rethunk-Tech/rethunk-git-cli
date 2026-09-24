@@ -34,7 +34,7 @@ func TestPeekShebangLine(t *testing.T) {
 	t.Run("no newline in the peeked window", func(t *testing.T) {
 		t.Parallel()
 		path := filepath.Join(t.TempDir(), "noeol")
-		if err := os.WriteFile(path, []byte("#!/bin/sh"), 0o644); err != nil {
+		if err := os.WriteFile(path, []byte("#!/bin/sh"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		line, ok := peekShebangLine(path)
@@ -53,7 +53,7 @@ func TestPeekShebangLine(t *testing.T) {
 	t.Run("empty file reports ok=false", func(t *testing.T) {
 		t.Parallel()
 		path := filepath.Join(t.TempDir(), "empty")
-		if err := os.WriteFile(path, nil, 0o644); err != nil {
+		if err := os.WriteFile(path, nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if _, ok := peekShebangLine(path); ok {

@@ -55,7 +55,7 @@ func TestRunSymbolsListsCleanWorktreeDeclarations(t *testing.T) {
 	root := t.TempDir()
 	source := []byte("package demo\n\nconst answer = 42\n\nfunc First() {}\n\ntype Thing struct{}\n\nfunc (Thing) Method() {}\n")
 	gittest.Git(t, root, "init", "--quiet")
-	if err := os.WriteFile(filepath.Join(root, "main.go"), source, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "main.go"), source, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	gittest.Git(t, root, "add", "main.go")
@@ -80,7 +80,7 @@ func TestRunSymbolsHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
 	root := t.TempDir()
 	gittest.Git(t, root, "init", "--quiet")
 	gittest.Git(t, root, "config", "core.ignorecase", "true")
-	if err := os.WriteFile(filepath.Join(root, "Foo.GO"), []byte("package demo\n\nfunc First() {}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "Foo.GO"), []byte("package demo\n\nfunc First() {}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -107,7 +107,7 @@ func TestRun_SymbolsListsHeadDeclarationsWhenWorktreeFileIsGone(t *testing.T) {
 	root := t.TempDir()
 	source := []byte("package demo\n\nfunc Foo() {}\n")
 	gittest.Git(t, root, "init", "--quiet")
-	if err := os.WriteFile(filepath.Join(root, "a.go"), source, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "a.go"), source, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	gittest.Git(t, root, "add", "a.go")
@@ -146,7 +146,7 @@ func TestRunSymbolsStructuredDataCommitMode(t *testing.T) {
 	root := t.TempDir()
 	source := []byte("{\n  \"name\": \"demo\",\n  \"enabled\": true\n}\n")
 	gittest.Git(t, root, "init", "--quiet")
-	if err := os.WriteFile(filepath.Join(root, "config.json"), source, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "config.json"), source, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	gittest.Git(t, root, "add", "config.json")
@@ -183,7 +183,7 @@ func TestRunCommitHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
 	// all ("empty ident name").
 	gittest.Git(t, root, "config", "user.email", "rgit-test@example.com")
 	gittest.Git(t, root, "config", "user.name", "rgit Test")
-	if err := os.WriteFile(filepath.Join(root, "Foo.GO"), []byte("package demo\n\nfunc First() {}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "Foo.GO"), []byte("package demo\n\nfunc First() {}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -207,7 +207,7 @@ func symbolsFixture(t *testing.T, name, source string) string {
 	t.Helper()
 	root := t.TempDir()
 	gittest.Git(t, root, "init", "--quiet")
-	if err := os.WriteFile(filepath.Join(root, name), []byte(source), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, name), []byte(source), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	gittest.Git(t, root, "add", name)
@@ -312,7 +312,7 @@ func TestRunSymbolsRefusesPathAboveRoot(t *testing.T) {
 	dir := tempRepo(t)
 
 	outside := filepath.Join(filepath.Dir(dir), "outside.go")
-	if err := os.WriteFile(outside, []byte("package x\n\nfunc SecretOutside() {}\n"), 0o644); err != nil {
+	if err := os.WriteFile(outside, []byte("package x\n\nfunc SecretOutside() {}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
