@@ -51,7 +51,7 @@ func TestGitFileMode(t *testing.T) {
 		t.Errorf("GitFileMode(0644) = %q; want 100644", mode)
 	}
 
-	if err := os.Chmod(path, 0o755); err != nil {
+	if err := os.Chmod(path, 0o755); err != nil { //nolint:gosec // executable mode is the behavior under test
 		t.Fatal(err)
 	}
 	info, err = os.Stat(path)

@@ -178,7 +178,7 @@ func TestTrySpawnDaemon_StartFailureIsToleratedSilently(t *testing.T) {
 	// cannot Parallel because t.Setenv("PATH", ...) below
 	binDir := t.TempDir()
 	fakeBin := filepath.Join(binDir, "not-a-real-executable")
-	if err := os.WriteFile(fakeBin, []byte("this is not an executable\n"), 0o755); err != nil {
+	if err := os.WriteFile(fakeBin, []byte("this is not an executable\n"), 0o755); err != nil { //nolint:gosec // executable mode is the behavior under test
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -512,7 +512,7 @@ func TestTrySpawnDaemon_StaleLockRetriesAndSpawns(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "spawned")
 	fakeBin := filepath.Join(binDir, "rgit-test-marker-bin")
 	script := "#!/bin/sh\ntouch \"" + marker + "\"\n"
-	if err := os.WriteFile(fakeBin, []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(fakeBin, []byte(script), 0o755); err != nil { //nolint:gosec // executable mode is the behavior under test
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))

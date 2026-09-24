@@ -163,7 +163,7 @@ func writeFakeGit(t *testing.T, versionLine string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "fake-git.sh")
 	script := "#!/bin/sh\necho '" + versionLine + "'\n"
-	qt.Assert(t, qt.IsNil(os.WriteFile(path, []byte(script), 0o755)))
+	qt.Assert(t, qt.IsNil(os.WriteFile(path, []byte(script), 0o755))) //nolint:gosec // executable helper is the behavior under test
 	return path
 }
 

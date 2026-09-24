@@ -429,7 +429,7 @@ func countingGitWrapper(t *testing.T) (bin, countFile string) {
 	script := "#!/bin/sh\n" +
 		"case \" $* \" in *\\ cat-file\\ *) printf x >> " + shellQuote(countFile) + " ;; esac\n" +
 		"exec " + shellQuote(gitPath) + " \"$@\"\n"
-	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0o755); err != nil { //nolint:gosec // executable git shim is the behavior under test
 		t.Fatal(err)
 	}
 	return bin, countFile

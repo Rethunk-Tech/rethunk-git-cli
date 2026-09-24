@@ -147,7 +147,11 @@ func TestRunCommit_CountingWarningsReachStderr(t *testing.T) {
 	if err := os.Chmod(full, 0o000); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(full, 0o644) })
+	t.Cleanup(func() {
+		if err := os.Chmod(full, 0o644); err != nil { //nolint:gosec // restore the test fixture mode
+			t.Errorf("restore test fixture mode: %v", err)
+		}
+	})
 
 	var stdout, stderr strings.Builder
 	code := runCommit(context.Background(), dir, []string{"-m", "chore: add new.txt", "--dry-run", "new.txt"}, &stdout, &stderr)

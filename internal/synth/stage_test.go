@@ -137,7 +137,11 @@ func TestPathspecFileCounts_UnreadableUntrackedFileWarns(t *testing.T) {
 	if err := os.Chmod(full, 0o000); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(full, 0o644) })
+	t.Cleanup(func() {
+		if err := os.Chmod(full, 0o644); err != nil { //nolint:gosec // restore the test fixture mode
+			t.Errorf("restore test fixture mode: %v", err)
+		}
+	})
 
 	files, warnings := pathspecFileCounts(ctx, repo, dir, "secret.txt")
 

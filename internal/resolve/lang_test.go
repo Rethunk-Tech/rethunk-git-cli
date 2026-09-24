@@ -16,7 +16,7 @@ func TestPeekShebangLine(t *testing.T) {
 	t.Run("ordinary shebang line", func(t *testing.T) {
 		t.Parallel()
 		path := filepath.Join(t.TempDir(), "script.sh")
-		if err := os.WriteFile(path, []byte("#!/bin/sh\necho hi\n"), 0o755); err != nil {
+		if err := os.WriteFile(path, []byte("#!/bin/sh\necho hi\n"), 0o755); err != nil { //nolint:gosec // executable mode is the behavior under test
 			t.Fatal(err)
 		}
 		line, ok := peekShebangLine(path)
@@ -369,7 +369,7 @@ func TestLanguageForPath_UsesHEADWhenWorktreeIsAbsent(t *testing.T) {
 		t.Errorf("HEAD sample calls = %d; want 1", calls)
 	}
 
-	if err := os.WriteFile(filepath.Join(root, "hook"), []byte("#!/usr/bin/perl\n"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "hook"), []byte("#!/usr/bin/perl\n"), 0o755); err != nil { //nolint:gosec // executable mode is the behavior under test
 		t.Fatal(err)
 	}
 	calls = 0
