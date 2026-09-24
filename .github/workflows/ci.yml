@@ -43,8 +43,13 @@ jobs:
           run-lint: "true"
           run-govulncheck: "true"
 
+  # Each suite runs once, carrying every flag CI needs from it. Coverage is
+  # informational: the totals print, no threshold gates. Always
+  # -coverpkg=./... (CONTRIBUTING.md § Coverage): much of the suite drives
+  # code from another package, so per-package numbers report 0.0% where heavy
+  # coverage exists.
   unit:
-    name: test (unit lane, -short)
+    name: test (unit lane, -short, coverage)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -53,11 +58,13 @@ jobs:
       # The unit lane is where the guarantee lives (CONTRIBUTING.md § Tests):
       # a regression must fail here. -short skips only the built-binary
       # end-to-end file and the live-server cross-checks, so this job
-      # enforces that every other test passes without them.
-      - run: go test -short ./...
+      # enforces that every other test passes without them. Its coverage is
+      # the number that matters for the same reason.
+      - run: go test -short -coverpkg=./... -coverprofile=short.out ./...
+      - run: go tool cover -func=short.out | tail -1
 
-  e2e:
-    name: test (full suite)
+  full:
+    name: test (full suite, -race, coverage)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -67,55 +74,14 @@ jobs:
       # assert tree-sitter's PATH presence for the prereq check itself -- not
       # a build-time SQL lane (this file's own top comment).
       - run: npm install -g tree-sitter-cli
-      # The -short lane runs as its own job (see above); this run executes
-      # everything, plus the end-to-end cases that build and exec the
-      # binary. Live server and completion cases guard on exec.LookPath
-      # and skip cleanly when a server or shell (zsh here) is absent from
-      # the runner.
-      - run: go test ./...
-
-  race:
-    name: race (full tree)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Rethunk-Tech/gh-actions/setup-go@68f159b435d9b129b8baf36436079c3e76fb3222 # v1.11
-      # Full tree, not just internal/lsp: jsonrpc2 and the spawn lock live
-      # there (CONTRIBUTING.md § Tests), but internal/diff and internal/gitx
-      # hold concurrent paths of their own, so a scoped race run stopped
-      # proving anything about the rest. The suite stays <=30s unraced, so
-      # the raced run still fits this timeout. Every live-server case skips
-      # cleanly via its own exec.LookPath guard when nothing is installed.
-      - run: go test -race ./...
-
-  coverage:
-    name: coverage + timing (informational)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Rethunk-Tech/gh-actions/setup-go@68f159b435d9b129b8baf36436079c3e76fb3222 # v1.11
-      # Informational only: emits the totals and the wall time, gates on
-      # nothing. Always pass -coverpkg=./... (CONTRIBUTING.md § Coverage):
-      # much of the suite drives code from another package, so per-package
-      # numbers alone report 0.0% where heavy coverage exists. The number
-      # that matters is the -short one, since that is the lane a regression
-      # has to fail in -- compare the two, but no threshold fails this job.
-      - name: cover (full) + wall time
-        run: |
-          start=$(date +%s)
-          go test -coverpkg=./... -coverprofile=coverage.out ./...
-          end=$(date +%s)
-          echo "wall time (full): $((end - start))s"
-          go tool cover -func=coverage.out | tail -1
-      - name: cover (short) + wall time
-        run: |
-          start=$(date +%s)
-          go test -short -coverpkg=./... -coverprofile=short.out ./...
-          end=$(date +%s)
-          echo "wall time (short): $((end - start))s"
-          go tool cover -func=short.out | tail -1
+      # Everything, plus the end-to-end cases that build and exec the binary,
+      # raced over the full tree: jsonrpc2 and the spawn lock live in
+      # internal/lsp, but internal/diff and internal/gitx hold concurrent
+      # paths of their own. Live server and completion cases guard on
+      # exec.LookPath and skip cleanly when a server or shell (zsh here) is
+      # absent from the runner.
+      - run: go test -race -coverpkg=./... -coverprofile=coverage.out ./...
+      - run: go tool cover -func=coverage.out | tail -1
 
   # Every other Go job here builds for linux/amd64 only, so without this one
   # the published linux/arm64 and windows binaries would first be compiled

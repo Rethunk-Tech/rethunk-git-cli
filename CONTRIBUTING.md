@@ -71,14 +71,12 @@ before tagging.
 10). Each file holds one happy path plus the edge cases that have actually
 bitten — no permutation laundry lists.
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the full suite
-(which includes every `-short` test) as well as a separate `-short` unit
-job, plus `golangci-lint` on every push and pull request. A coverage +
-timing job also runs, but it is informational only: it emits the full and
-`-short` totals with `-coverpkg=./...` and the wall time, and gates on no
-threshold. The ≤30s suite-time budget and the coverage numbers in
-[§ Coverage](#coverage) are therefore still a review discipline rather than
-a CI gate.
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs each lane once:
+the `-short` unit lane, and the full suite (which includes every `-short`
+test) under `-race`, plus `golangci-lint` on every push and pull request.
+Both test jobs print their `-coverpkg=./...` totals but gate on no
+threshold, so the ≤30s suite-time budget and the coverage numbers in
+[§ Coverage](#coverage) are a review discipline rather than a CI gate.
 
 Which of the two lanes a case belongs in is the first decision:
 
@@ -143,10 +141,9 @@ go test -short ./...   # unit lane: skips the built binary and the live server
 go test -race ./...    # full tree: jsonrpc2, the spawn lock, internal/diff, internal/gitx
 ```
 
-CI's own race job runs `-race ./...` over the full tree — jsonrpc2 and
+CI's full-suite job runs under `-race` over the whole tree — jsonrpc2 and
 the spawn lock live in `./internal/lsp/...`, with further concurrent paths
-in `internal/diff` and `internal/gitx`. The raced run still fits the job
-timeout, so there is no scoped lane to keep in sync.
+in `internal/diff` and `internal/gitx`.
 
 ### Coverage
 
