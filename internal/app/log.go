@@ -1,4 +1,4 @@
-// The `rgit log` command surface, two invocation shapes sharing one exit-
+// Package app implements the `rgit log` command surface, two invocation shapes sharing one exit-
 // code table and one patch-free-by-default rule (docs/USAGE.md § Log):
 //
 //   - `rgit log FILE:SYMBOL` -- patch-free history of one symbol, one

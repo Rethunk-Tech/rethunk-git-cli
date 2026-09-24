@@ -1,4 +1,4 @@
-// The `rgit doctor` command surface: reports environment health at *run*
+// Package app implements the `rgit doctor` command surface: reports environment health at *run*
 // time -- what a caller can actually reach right now -- rather than at
 // install time, which cmd/rgit-install's own runPrereqChecks already
 // covers for a build from source. Its output shape ("[ok]/MISSING name

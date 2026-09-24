@@ -1,4 +1,4 @@
-// The `rgit blame FILE:SYMBOL` command surface: git blame bounded to one
+// Package app implements the `rgit blame FILE:SYMBOL` command surface: git blame bounded to one
 // symbol's own extent instead of a whole file. It is a thin caller over
 // anchor resolution and `git blame -L` -- no new resolution machinery, no
 // second attribution path. docs/USAGE.md § Blame's own guardrail is

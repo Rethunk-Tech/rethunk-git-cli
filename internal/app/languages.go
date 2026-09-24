@@ -1,4 +1,4 @@
-// The `rgit languages` command surface: lists every grammar compiled into
+// Package app implements the `rgit languages` command surface: lists every grammar compiled into
 // this binary -- name, extensions, and whether it exists only because a
 // build tag selected it. resolve.Languages() is the only supported way to
 // learn this (AGENTS.md's delegation boundary keeps rgit out of resolve's

@@ -1,4 +1,4 @@
-// The `rgit commit` command surface: flag parsing, validation, and dispatch
+// Package app implements the `rgit commit` command surface: flag parsing, validation, and dispatch
 // into internal/synth. Flags and exit codes are specified in docs/USAGE.md.
 package app
 

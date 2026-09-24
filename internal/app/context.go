@@ -1,4 +1,4 @@
-// The `rgit context` command surface: one-call repository orientation for
+// Package app implements the `rgit context` command surface: one-call repository orientation for
 // an agent's first turn -- branch and upstream, optional diagnostics,
 // committable diff rows, then recent commit subjects, as a single
 // fixed-shape record stream.

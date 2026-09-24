@@ -731,17 +731,18 @@ func (r *Repo) IgnoreCase(ctx context.Context) (bool, error) {
 	return r.ignoreCase, r.ignoreCaseErr
 }
 
-// DiffNumstat runs `git diff --numstat` with the given extra arguments
-// (revision ranges, --staged, pathspecs, ...) and returns each line's raw
-// fields. Added/Deleted stay strings because git prints "-" for a binary
-// file's counts; Path is passed through verbatim, including git's own
-// "old => new" rename shorthand, for the diff-rendering layer to interpret.
+// NumstatEntry holds the raw fields from one `git diff --numstat` line.
 type NumstatEntry struct {
 	Added   string
 	Deleted string
 	Path    string
 }
 
+// DiffNumstat runs `git diff --numstat` with the given extra arguments
+// (revision ranges, --staged, pathspecs, ...) and returns each line's raw
+// fields. Added/Deleted stay strings because git prints "-" for a binary
+// file's counts; Path is passed through verbatim, including git's own
+// "old => new" rename shorthand, for the diff-rendering layer to interpret.
 func (r *Repo) DiffNumstat(ctx context.Context, extra ...string) ([]NumstatEntry, error) {
 	out, err := r.checked(ctx, append([]string{"diff", "--numstat"}, extra...)...)
 	if err != nil {

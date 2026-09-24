@@ -1,4 +1,4 @@
-// The `rgit completion` command surface: prints a shell completion script
+// Package app implements the `rgit completion` command surface: prints a shell completion script
 // for bash, zsh, fish, or PowerShell. There is nothing to resolve or synthesize here, so
 // unlike diff and commit this needs no repository at all -- see
 // docs/USAGE.md § Shell completion.

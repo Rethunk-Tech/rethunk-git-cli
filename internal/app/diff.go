@@ -1,4 +1,4 @@
-// The `rgit diff` command surface: flag parsing, validation, and dispatch
+// Package app implements the `rgit diff` command surface: flag parsing, validation, and dispatch
 // into internal/diff. Flags and exit codes are specified in docs/USAGE.md.
 package app
 

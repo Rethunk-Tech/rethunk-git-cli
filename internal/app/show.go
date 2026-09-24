@@ -1,4 +1,4 @@
-// The `rgit show FILE:SYMBOL...` command surface: each named symbol's own
+// Package app implements the `rgit show FILE:SYMBOL...` command surface: each named symbol's own
 // bytes, verbatim, at the worktree or at a revision. It is a thin caller over
 // the same anchor resolution blame and log use -- no new resolution
 // machinery, and nothing is written. The extent it prints is byte-for-byte
