@@ -248,11 +248,11 @@ func (c *Client) DocumentSymbols(ctx context.Context, path string, src []byte) (
 // every last declaration in a file.
 func trimTrailingBlankLines(src []byte, syms []Symbol) {
 	lines := bytes.Split(src, []byte{'\n'})
-	lastIdx := uint32(len(lines) - 1) //nolint:gosec // LSP line numbers are uint32 and the split source is addressable in this process
+	lastIdx := int64(len(lines) - 1)
 	for i := range syms {
 		sym := &syms[i]
 		end := sym.EndLine
-		for end > sym.StartLine && end < lastIdx && len(bytes.TrimSpace(lines[end])) == 0 {
+		for end > sym.StartLine && int64(end) < lastIdx && len(bytes.TrimSpace(lines[end])) == 0 {
 			end--
 		}
 		sym.EndLine = end
