@@ -505,7 +505,7 @@ const ShebangPeekBytes = shebangPeekBytes
 // internal/synth and internal/diff both reach it through
 // LanguageForWorktreePathFolding below rather than each reading their own prefix.
 func peekShebangLine(fullPath string) ([]byte, bool) {
-	f, err := os.Open(fullPath)
+	f, err := os.Open(fullPath) //nolint:gosec // fullPath is constructed from the selected repository root and relative path
 	if err != nil {
 		return nil, false
 	}

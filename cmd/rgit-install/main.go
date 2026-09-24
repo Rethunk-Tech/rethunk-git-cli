@@ -536,7 +536,7 @@ func finalizeGenerated(staging, final string) error {
 // its `#define LANGUAGE_VERSION N` line -- the cheap, direct check for what
 // tree-sitter.json is supposed to guarantee (see runSQLGeneration).
 func parserABIVersion(path string) (int, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // path is the generated parser file selected by this installer
 	if err != nil {
 		return 0, err
 	}
@@ -552,7 +552,7 @@ func parserABIVersion(path string) (int, error) {
 }
 
 func copyFile(src, dst string) error {
-	data, err := os.ReadFile(src)
+	data, err := os.ReadFile(src) //nolint:gosec // src is one of the installer-selected generated inputs
 	if err != nil {
 		return err
 	}
@@ -676,7 +676,7 @@ func sqlCSRCContentHash(pkgDir string) (string, error) {
 
 	h := sha256.New()
 	for _, p := range paths {
-		data, err := os.ReadFile(p)
+		data, err := os.ReadFile(p) //nolint:gosec // p comes from WalkDir rooted at the installer-selected csrc directory
 		if err != nil {
 			return "", err
 		}

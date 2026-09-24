@@ -626,7 +626,7 @@ func newTempStaging(ctx context.Context, root string) (*tempStaging, error) {
 		return nil, err
 	}
 	tmp := tmpFile.Name()
-	seed, err := os.ReadFile(final)
+	seed, err := os.ReadFile(final) //nolint:gosec // final is git's resolved index path returned by callerIndexPath
 	switch {
 	case err == nil:
 		if _, err := tmpFile.Write(seed); err != nil {
@@ -757,7 +757,7 @@ func SnapshotIndex(ctx context.Context, root string) (*IndexSnapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // path is git's resolved index path returned by callerIndexPath
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &IndexSnapshot{path: path}, nil
@@ -945,7 +945,7 @@ func pathspecFileCounts(ctx context.Context, repo *gitx.Repo, root, pathspec str
 			continue
 		}
 		seen[rel] = true
-		content, rerr := os.ReadFile(filepath.Join(root, rel))
+		content, rerr := os.ReadFile(filepath.Join(root, rel)) //nolint:gosec // rel comes from git's own untracked-file listing under root
 		if rerr != nil {
 			// A transient read failure (permissions, a race with something
 			// else removing the file) would otherwise understate the

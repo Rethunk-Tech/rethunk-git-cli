@@ -93,7 +93,7 @@ func readPathspecFile(path string, nul bool) ([]string, error) {
 	if path == "-" {
 		data, err = io.ReadAll(os.Stdin)
 	} else {
-		data, err = os.ReadFile(path)
+		data, err = os.ReadFile(path) //nolint:gosec // --pathspec-from-file explicitly asks rgit to read this caller-supplied file
 	}
 	if err != nil {
 		return nil, err

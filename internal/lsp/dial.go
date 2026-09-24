@@ -264,7 +264,7 @@ func trySpawnDaemon(ctx context.Context, spec serverSpec, sockPath string) {
 func acquireSpawnLock(sockPath string) (*os.File, bool) {
 	lockPath := sockPath + ".lock"
 	for range 2 {
-		lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600) //nolint:gosec // lockPath is derived from the verified private socket path
 		if err == nil {
 			return lock, true
 		}

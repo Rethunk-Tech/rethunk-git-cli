@@ -24,7 +24,7 @@ func GitFileMode(info os.FileInfo) string {
 // and it matches gitx.CatFile's convention for the same question asked of a
 // tree, so the two sides of a comparison read alike.
 func ReadFileIfExists(path string) (content []byte, exists bool, err error) {
-	content, err = os.ReadFile(path)
+	content, err = os.ReadFile(path) //nolint:gosec // callers supply paths resolved within the selected worktree
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, false, nil
@@ -51,7 +51,7 @@ func LooksBinary(content []byte) bool {
 // symbol anchor's target) has no other reason to touch bytes past that
 // sample.
 func LooksBinaryFile(path string) (bool, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // callers supply paths resolved within the selected worktree
 	if err != nil {
 		return false, err
 	}

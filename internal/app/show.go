@@ -126,7 +126,7 @@ func showSource(source string) anchorSourceFunc {
 			}
 			return blob, "", true, nil
 		}
-		blob, err := os.ReadFile(filepath.Join(root, file))
+		blob, err := os.ReadFile(filepath.Join(root, file)) //nolint:gosec // file is resolved and root-checked before this worktree read
 		if err == nil {
 			return blob, "", true, nil
 		}
