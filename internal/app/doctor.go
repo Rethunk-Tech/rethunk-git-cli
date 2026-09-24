@@ -67,7 +67,7 @@ func runDoctor(ctx context.Context, dir string, args []string, stdout, stderr io
 		}
 	}
 
-	essential, fatal := runEnvironmentChecks()
+	essential, fatal := runEnvironmentChecks(ctx)
 
 	lspServers := lsp.Servers()
 	servers := make([]prereq.Check, 0, len(lspServers))
@@ -180,7 +180,7 @@ func writeDoctorRecord(buf *strings.Builder, kind string, c prereq.Check) {
 // rebuilding with -tags rgit_sql is the fix for a gated .sql miss, and a
 // caller who just saw that hint should be able to check the one thing
 // standing between them and it without hunting through docs/INSTALL.md.
-func runEnvironmentChecks() (checks []prereq.Check, fatal error) {
+func runEnvironmentChecks(ctx context.Context) (checks []prereq.Check, fatal error) {
 	git := prereq.LookPath("git", "git", "not found on PATH -- rgit shells out to git for everything (AGENTS.md)")
 	checks = append(checks, git)
 	if !git.OK {
@@ -190,7 +190,7 @@ func runEnvironmentChecks() (checks []prereq.Check, fatal error) {
 		// with whatever error that git version produces rather than failing
 		// doctor outright, matching how a missing language server degrades
 		// rather than blocks.
-		checks = append(checks, prereq.CheckGitVersion(git.Detail, prereq.MinGitVersion))
+		checks = append(checks, prereq.CheckGitVersion(ctx, git.Detail, prereq.MinGitVersion))
 	}
 
 	ts := prereq.LookPath("tree-sitter CLI", "tree-sitter", "optional -- only needed to rebuild with SQL support, see docs/INSTALL.md § SQL support")

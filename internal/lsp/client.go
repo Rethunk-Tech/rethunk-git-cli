@@ -172,18 +172,18 @@ func (c *Client) DocumentSymbols(ctx context.Context, path string, src []byte) (
 	// within one invocation re-open the same file, so every didOpen above
 	// must be matched by a didClose here -- otherwise open documents
 	// accumulate in the server for as long as it stays up. A
-	// fresh, short-lived context rather than ctx: ctx is already scoped to
-	// this one query and may be at or past queryDeadline by the time a slow
-	// documentSymbol round trip below returns, which would silently drop
-	// this notification exactly when a real server (not the deadline) is
-	// the reason it is late.
-	defer func() {
-		closeCtx, closeCancel := context.WithTimeout(context.Background(), queryDeadline())
+	// fresh, short-lived context derived without cancellation rather than
+	// ctx: ctx is already scoped to this one query and may be at or past
+	// queryDeadline by the time a slow documentSymbol round trip below
+	// returns, which would silently drop this notification exactly when a
+	// real server (not the deadline) is the reason it is late.
+	defer func(baseCtx context.Context) {
+		closeCtx, closeCancel := context.WithTimeout(baseCtx, queryDeadline())
 		defer closeCancel()
 		_ = c.server.DidClose(closeCtx, &protocol.DidCloseTextDocumentParams{
 			TextDocument: protocol.TextDocumentIdentifier{URI: docURI},
 		})
-	}()
+	}(context.WithoutCancel(ctx))
 
 	result, err := c.server.DocumentSymbol(ctx, &protocol.DocumentSymbolParams{
 		TextDocument: protocol.TextDocumentIdentifier{URI: docURI},

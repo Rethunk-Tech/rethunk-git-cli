@@ -93,14 +93,14 @@ func dialSocket(ctx context.Context, spec serverSpec, repoRoot string) (*Client,
 	}
 
 	// Re-verify here too, immediately before the spawn attempt, for the
-	// same reason as the dial above -- trySpawnDaemon itself takes a bare
-	// sockPath and does not re-check its directory (its own unit tests
+	// same reason as the dial above -- trySpawnDaemon itself accepts an
+	// arbitrary socket path and does not re-check its directory (its own unit tests
 	// deliberately drive it against an arbitrary path, decoupled from
 	// privateSocketDir's trust check; folding the check into trySpawnDaemon
 	// would force every one of those to also construct a verified private
 	// directory just to exercise the lock/spawn logic they actually test).
 	if managedOK && verifyPrivateDir(filepath.Dir(sockPath)) {
-		trySpawnDaemon(spec, sockPath)
+		trySpawnDaemon(ctx, spec, sockPath)
 	}
 	return nil, true
 }
@@ -199,7 +199,7 @@ func runtimeDir() string {
 // noise, not for correctness). This invocation never waits on the daemon
 // it just started — the load-bearing rule is that spawning must not block
 // the current query.
-func trySpawnDaemon(spec serverSpec, sockPath string) {
+func trySpawnDaemon(ctx context.Context, spec serverSpec, sockPath string) {
 	if _, err := exec.LookPath(spec.bin); err != nil {
 		return
 	}
@@ -223,9 +223,9 @@ func trySpawnDaemon(spec serverSpec, sockPath string) {
 	// spawn-on-demand would otherwise silently never recover. Only a socket
 	// nothing answers is removed -- a live daemon actually listening there
 	// is left alone.
-	unlinkDeadSocket(sockPath)
+	unlinkDeadSocket(ctx, sockPath)
 
-	cmd := exec.CommandContext(context.Background(), spec.bin, spec.daemonArgs(sockPath)...)
+	cmd := exec.CommandContext(context.WithoutCancel(ctx), spec.bin, spec.daemonArgs(sockPath)...)
 	cmd.Stdin = nil
 	// The daemon's own stderr is diagnostic noise about itself, not about
 	// this rgit invocation; discard it rather than let it interleave with
@@ -284,11 +284,11 @@ func acquireSpawnLock(sockPath string) (*os.File, bool) {
 // correct standalone rather than relying on some earlier caller having
 // already proven the path dead. A live daemon actually listening at
 // sockPath answers the dial and is left alone.
-func unlinkDeadSocket(sockPath string) {
+func unlinkDeadSocket(ctx context.Context, sockPath string) {
 	if _, err := os.Stat(sockPath); err != nil {
 		return
 	}
-	conn, err := (&net.Dialer{Timeout: dialBudget()}).DialContext(context.Background(), "unix", sockPath)
+	conn, err := (&net.Dialer{Timeout: dialBudget()}).DialContext(ctx, "unix", sockPath)
 	if err != nil {
 		_ = os.Remove(sockPath)
 		return

@@ -66,7 +66,7 @@ func TestTrySpawnDaemon_BinaryNotOnPATH(t *testing.T) {
 	sockPath := filepath.Join(t.TempDir(), "rgit-test.sock")
 	spec := serverSpec{name: "test", bin: "rgit-lsp-test-binary-does-not-exist", daemonArgs: noopDaemonArgs}
 
-	trySpawnDaemon(spec, sockPath)
+	trySpawnDaemon(t.Context(), spec, sockPath)
 
 	if _, err := os.Stat(sockPath + ".lock"); !os.IsNotExist(err) {
 		t.Errorf("lock file = %v; want no lock created when the binary is absent", err)
@@ -88,7 +88,7 @@ func TestTrySpawnDaemon_FreshLockIsLeftAlone(t *testing.T) {
 	// A real binary must be reachable for LookPath to get past its own
 	// early return -- otherwise this would pass for the wrong reason.
 	spec := serverSpec{name: "test", bin: "true", daemonArgs: noopDaemonArgs}
-	trySpawnDaemon(spec, sockPath)
+	trySpawnDaemon(t.Context(), spec, sockPath)
 
 	if _, err := os.Stat(lockPath); err != nil {
 		t.Errorf("lock file removed; want a fresh lock left in place: %v", err)
@@ -105,7 +105,7 @@ func TestTrySpawnDaemon_StaleLockIsCleared(t *testing.T) {
 	writeStaleLock(t, sockPath)
 
 	spec := serverSpec{name: "test", bin: "true", daemonArgs: noopDaemonArgs}
-	trySpawnDaemon(spec, sockPath)
+	trySpawnDaemon(t.Context(), spec, sockPath)
 
 	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
 		t.Errorf("lock file = %v; want the stale lock removed", err)
@@ -140,7 +140,7 @@ func TestTrySpawnDaemon_SymlinkLockIsNeverAged(t *testing.T) {
 	}
 
 	spec := serverSpec{name: "test", bin: "true", daemonArgs: noopDaemonArgs}
-	trySpawnDaemon(spec, sockPath)
+	trySpawnDaemon(t.Context(), spec, sockPath)
 
 	if _, err := os.Lstat(lockPath); err != nil {
 		t.Errorf("symlink lock removed (%v); want it left in place untouched", err)
@@ -156,7 +156,7 @@ func TestTrySpawnDaemon_SuccessfulSpawnCleansUpItsOwnLock(t *testing.T) {
 	sockPath := filepath.Join(t.TempDir(), "rgit-test.sock")
 	spec := serverSpec{name: "test", bin: "true", daemonArgs: noopDaemonArgs}
 
-	trySpawnDaemon(spec, sockPath)
+	trySpawnDaemon(t.Context(), spec, sockPath)
 
 	if _, err := os.Stat(sockPath + ".lock"); !os.IsNotExist(err) {
 		t.Errorf("lock file = %v; want removed once the spawn completed", err)
@@ -186,7 +186,7 @@ func TestTrySpawnDaemon_StartFailureIsToleratedSilently(t *testing.T) {
 	sockPath := filepath.Join(t.TempDir(), "rgit-test.sock")
 	spec := serverSpec{name: "test", bin: "not-a-real-executable", daemonArgs: noopDaemonArgs}
 
-	trySpawnDaemon(spec, sockPath)
+	trySpawnDaemon(t.Context(), spec, sockPath)
 
 	// The lock is still cleaned up by the same deferred cleanup regardless
 	// of whether the spawn it guarded actually succeeded.
@@ -476,7 +476,7 @@ func TestUnlinkDeadSocket_RemovesDeadSocketFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	unlinkDeadSocket(sockPath)
+	unlinkDeadSocket(t.Context(), sockPath)
 
 	if _, err := os.Stat(sockPath); !os.IsNotExist(err) {
 		t.Errorf("socket file = %v; want removed once nothing answers it", err)
@@ -491,7 +491,7 @@ func TestUnlinkDeadSocket_LeavesLiveSocketAlone(t *testing.T) {
 	sockPath := filepath.Join(shortTempDir(t), "rgit-test.sock")
 	lsptest.Listen(t, sockPath, lsptest.HangUp)
 
-	unlinkDeadSocket(sockPath)
+	unlinkDeadSocket(t.Context(), sockPath)
 
 	if _, err := os.Stat(sockPath); err != nil {
 		t.Errorf("socket file = %v; want left in place -- something is listening", err)
@@ -521,7 +521,7 @@ func TestTrySpawnDaemon_StaleLockRetriesAndSpawns(t *testing.T) {
 	writeStaleLock(t, sockPath)
 
 	spec := serverSpec{name: "test", bin: "rgit-test-marker-bin", daemonArgs: noopDaemonArgs}
-	trySpawnDaemon(spec, sockPath)
+	trySpawnDaemon(t.Context(), spec, sockPath)
 
 	deadline := time.Now().Add(2 * time.Second)
 	for {

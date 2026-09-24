@@ -98,7 +98,7 @@ func TestCheckGitVersion(t *testing.T) {
 		t.Parallel()
 		gitPath, err := exec.LookPath("git")
 		qt.Assert(t, qt.IsNil(err))
-		c := CheckGitVersion(gitPath, MinGitVersion)
+		c := CheckGitVersion(t.Context(), gitPath, MinGitVersion)
 		qt.Assert(t, qt.Equals(c.Name, "git version"))
 		qt.Assert(t, qt.IsTrue(c.OK))
 		qt.Assert(t, qt.Not(qt.Equals(c.Detail, "")))
@@ -106,7 +106,7 @@ func TestCheckGitVersion(t *testing.T) {
 
 	t.Run("an unreachable binary is not fatal, just unconfirmed", func(t *testing.T) {
 		t.Parallel()
-		c := CheckGitVersion("rgit-prereq-test-does-not-exist", MinGitVersion)
+		c := CheckGitVersion(t.Context(), "rgit-prereq-test-does-not-exist", MinGitVersion)
 		qt.Assert(t, qt.IsFalse(c.OK))
 		qt.Assert(t, qt.Equals(c.Detail, "could not run `git --version`"))
 	})
@@ -114,7 +114,7 @@ func TestCheckGitVersion(t *testing.T) {
 	t.Run("a version below the floor reports both numbers", func(t *testing.T) {
 		t.Parallel()
 		script := belowFloor
-		c := CheckGitVersion(script, GitVersion{Major: 2, Minor: 32, Patch: 0})
+		c := CheckGitVersion(t.Context(), script, GitVersion{Major: 2, Minor: 32, Patch: 0})
 		qt.Assert(t, qt.IsFalse(c.OK))
 		qt.Assert(t, qt.Equals(c.Detail, "2.20.1 found, need >= 2.32.0 -- see docs/INSTALL.md § Prerequisites"))
 	})
@@ -122,7 +122,7 @@ func TestCheckGitVersion(t *testing.T) {
 	t.Run("a version at the floor passes", func(t *testing.T) {
 		t.Parallel()
 		script := atFloor
-		c := CheckGitVersion(script, GitVersion{Major: 2, Minor: 32, Patch: 0})
+		c := CheckGitVersion(t.Context(), script, GitVersion{Major: 2, Minor: 32, Patch: 0})
 		qt.Assert(t, qt.IsTrue(c.OK))
 		qt.Assert(t, qt.Equals(c.Detail, "2.32.0"))
 	})
@@ -130,7 +130,7 @@ func TestCheckGitVersion(t *testing.T) {
 	t.Run("platform-suffixed output still parses", func(t *testing.T) {
 		t.Parallel()
 		script := appleSuffix
-		c := CheckGitVersion(script, GitVersion{Major: 2, Minor: 32, Patch: 0})
+		c := CheckGitVersion(t.Context(), script, GitVersion{Major: 2, Minor: 32, Patch: 0})
 		qt.Assert(t, qt.IsTrue(c.OK))
 		qt.Assert(t, qt.Equals(c.Detail, "2.39.3"))
 	})
@@ -138,7 +138,7 @@ func TestCheckGitVersion(t *testing.T) {
 	t.Run("platform-suffixed Windows output still parses", func(t *testing.T) {
 		t.Parallel()
 		script := winSuffix
-		c := CheckGitVersion(script, MinGitVersion)
+		c := CheckGitVersion(t.Context(), script, MinGitVersion)
 		qt.Assert(t, qt.IsTrue(c.OK))
 		qt.Assert(t, qt.Equals(c.Detail, "2.43.0"))
 	})
@@ -146,7 +146,7 @@ func TestCheckGitVersion(t *testing.T) {
 	t.Run("unparseable output is reported, not silently accepted", func(t *testing.T) {
 		t.Parallel()
 		script := unparseable
-		c := CheckGitVersion(script, MinGitVersion)
+		c := CheckGitVersion(t.Context(), script, MinGitVersion)
 		qt.Assert(t, qt.IsFalse(c.OK))
 		qt.Assert(t, qt.Equals(c.Detail, `unparseable `+"`git --version`"+` output "not a version string"`))
 	})

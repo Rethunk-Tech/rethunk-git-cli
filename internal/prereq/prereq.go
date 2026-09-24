@@ -81,8 +81,8 @@ var gitVersionRe = regexp.MustCompile(`(\d+)\.(\d+)\.(\d+)`)
 // with an unparseable-output Detail means the floor could not be
 // confirmed, not that git is absent -- callers that already have a
 // separate git-presence Check should treat this one as informational.
-func CheckGitVersion(bin string, minVersion GitVersion) Check {
-	out, err := exec.CommandContext(context.Background(), bin, "--version").Output()
+func CheckGitVersion(ctx context.Context, bin string, minVersion GitVersion) Check {
+	out, err := exec.CommandContext(ctx, bin, "--version").Output()
 	if err != nil {
 		return Check{Name: "git version", OK: false, Detail: "could not run `git --version`"}
 	}
