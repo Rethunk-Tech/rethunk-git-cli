@@ -26,11 +26,12 @@ func TestRun_LogHelpAndUsage(t *testing.T) {
 }
 
 func TestRun_LogHelpEquality(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
 	for _, flag := range []string{"--help", "-h"} {
 		t.Run(flag, func(t *testing.T) {
-			stdout, stderr, code := runApp(t, "log", flag)
+			stdout, stderr, code := runApp(t, "-C", cwd, "log", flag)
 			qt.Assert(t, qt.Equals(code, exitcode.Success))
 			qt.Assert(t, qt.Equals(stdout, logHelp))
 			qt.Assert(t, qt.Equals(stderr, ""))
@@ -39,7 +40,7 @@ func TestRun_LogHelpEquality(t *testing.T) {
 
 	for _, flag := range []string{"--help", "-h"} {
 		t.Run("path-scoped "+flag, func(t *testing.T) {
-			stdout, stderr, code := runApp(t, "log", "--since=2000-01-01", flag)
+			stdout, stderr, code := runApp(t, "-C", cwd, "log", "--since=2000-01-01", flag)
 			qt.Assert(t, qt.Equals(code, exitcode.Success))
 			qt.Assert(t, qt.Equals(stdout, logHelp))
 			qt.Assert(t, qt.Equals(stderr, ""))
@@ -52,9 +53,10 @@ func TestRun_LogHelpEquality(t *testing.T) {
 // blob rather than the worktree file, since history is a question about
 // what has already been committed.
 func TestRun_LogUnresolvableAnchor(t *testing.T) {
-	chdirTempRepo(t)
+	t.Parallel()
+	cwd := tempRepo(t)
 
-	stdout, stderr, code := runApp(t, "log", "a.go:NoSuchFunc")
+	stdout, stderr, code := runApp(t, "-C", cwd, "log", "a.go:NoSuchFunc")
 	qt.Assert(t, qt.Equals(code, exitcode.AnchorUnresolvable))
 	qt.Assert(t, qt.Equals(stdout, ""))
 	qt.Assert(t, qt.StringContains(stderr, `"NoSuchFunc"`))
@@ -63,12 +65,13 @@ func TestRun_LogUnresolvableAnchor(t *testing.T) {
 // TestRun_LogAmbiguousAnchor mirrors blame's own case: a bare name matching
 // two container-qualified members is exit 4, not a silent pick of either.
 func TestRun_LogAmbiguousAnchor(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "b.go", "package a\n\ntype X struct{}\n\nfunc (x X) Get() int { return 1 }\n\n"+
 		"type Y struct{}\n\nfunc (y Y) Get() int { return 2 }\n")
 	gittest.Commit(t, dir, "chore: two Gets")
 
-	_, stderr, code := runApp(t, "log", "b.go:Get")
+	_, stderr, code := runApp(t, "-C", dir, "log", "b.go:Get")
 	qt.Assert(t, qt.Equals(code, exitcode.AnchorAmbiguous))
 	qt.Assert(t, qt.StringContains(stderr, "ambiguous"))
 }
@@ -77,17 +80,18 @@ func TestRun_LogAmbiguousAnchor(t *testing.T) {
 // against HEAD, so the dup file must be committed before the ordinal anchor
 // warns.
 func TestRun_LogOrdinalAnchorWarns(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "dup.go", "package main\n\nfunc init() { println(1) }\n\nfunc init() { println(2) }\n")
 	gitOut(t, dir, "add", "dup.go")
 	gitOut(t, dir, "commit", "-m", "chore: two inits")
 
-	_, stderr, code := runApp(t, "log", "dup.go:init#2")
+	_, stderr, code := runApp(t, "-C", dir, "log", "dup.go:init#2")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(stderr, "dup.go:init#2"))
 	qt.Assert(t, qt.StringContains(stderr, "positional"))
 
-	_, stderr, code = runApp(t, "log", "a.go:A")
+	_, stderr, code = runApp(t, "-C", dir, "log", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "positional")))
 }
@@ -96,11 +100,12 @@ func TestRun_LogOrdinalAnchorWarns(t *testing.T) {
 // registered at all, the same code blame and commit give an identical
 // anchor.
 func TestRun_LogUnsupportedLanguage(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "note.txt", "hello\n")
 	gitOut(t, dir, "add", "note.txt")
 
-	_, stderr, code := runApp(t, "log", "note.txt:Anything")
+	_, stderr, code := runApp(t, "-C", dir, "log", "note.txt:Anything")
 	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
 	qt.Assert(t, qt.StringContains(stderr, "unsupported language"))
 }
@@ -112,7 +117,8 @@ func TestRun_LogUnsupportedLanguage(t *testing.T) {
 // no patch marker may leak into the default output no matter how many
 // commits touched the symbol.
 func TestRun_LogDefaultIsPatchFreeAndListsOnlyTouchingCommits(t *testing.T) {
-	dir := chdirTempRepo(t) // "chore: initial" already touches A and B
+	t.Parallel()
+	dir := tempRepo(t) // "chore: initial" already touches A and B
 
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 	gittest.Commit(t, dir, "fix(a): bump A")
@@ -120,7 +126,7 @@ func TestRun_LogDefaultIsPatchFreeAndListsOnlyTouchingCommits(t *testing.T) {
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
 	gittest.Commit(t, dir, "fix(b): bump B")
 
-	stdout, stderr, code := runApp(t, "log", "a.go:A")
+	stdout, stderr, code := runApp(t, "-C", dir, "log", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.Not(qt.StringContains(stdout, "diff --git")))
@@ -136,11 +142,12 @@ func TestRun_LogDefaultIsPatchFreeAndListsOnlyTouchingCommits(t *testing.T) {
 // TestRun_LogPorcelainEmitsTabSeparatedRecords pins docs/CODES.md's
 // HASH<TAB>SUBJECT record shape: exactly two fields per line, no header.
 func TestRun_LogPorcelainEmitsTabSeparatedRecords(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 	gittest.Commit(t, dir, "fix(a): bump A")
 
-	stdout, stderr, code := runApp(t, "log", "--porcelain", "a.go:A")
+	stdout, stderr, code := runApp(t, "-C", dir, "log", "--porcelain", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 
@@ -156,13 +163,14 @@ func TestRun_LogPorcelainEmitsTabSeparatedRecords(t *testing.T) {
 // TestRun_LogPatchFlagIncludesPatch pins that -p/--patch actually reaches
 // git: unlike the default, its output carries the real patch body.
 func TestRun_LogPatchFlagIncludesPatch(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 	gittest.Commit(t, dir, "fix(a): bump A")
 
 	for _, flag := range []string{"-p", "--patch"} {
 		t.Run(flag, func(t *testing.T) {
-			stdout, _, code := runApp(t, "log", flag, "a.go:A")
+			stdout, _, code := runApp(t, "-C", dir, "log", flag, "a.go:A")
 			qt.Assert(t, qt.Equals(code, exitcode.Success))
 			qt.Assert(t, qt.StringContains(stdout, "diff --git"))
 			qt.Assert(t, qt.StringContains(stdout, "return 111"))
@@ -180,12 +188,13 @@ func TestRun_LogPatchFlagIncludesPatch(t *testing.T) {
 // blob. Resolving against HEAD, as this command does, is immune to that by
 // construction.
 func TestRun_LogResolvesAgainstHEADNotWorktree(t *testing.T) {
-	dir := chdirTempRepo(t) // "chore: initial" touches A
+	t.Parallel()
+	dir := tempRepo(t) // "chore: initial" touches A
 
 	writeAppFile(t, dir, "a.go", "package a\n\n// leading comment shifting everything below\n\n"+
 		"// A returns one.\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 
-	stdout, stderr, code := runApp(t, "log", "a.go:A")
+	stdout, stderr, code := runApp(t, "-C", dir, "log", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.StringContains(stdout, "chore: initial"))
@@ -273,17 +282,19 @@ func TestRun_LogAnchorSince(t *testing.T) {
 }
 
 func TestRun_LogAnchorBeforeSeparatorKeepsAnchorShape(t *testing.T) {
-	chdirTempRepo(t)
+	t.Parallel()
+	cwd := tempRepo(t)
 
-	_, stderr, code := runApp(t, "log", "a.go:A", "--since=2000-01-01", "--")
+	_, stderr, code := runApp(t, "-C", cwd, "log", "a.go:A", "--since=2000-01-01", "--")
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.StringContains(stderr, `unrecognized argument "--"`))
 }
 
 func TestRun_LogRejectsLoneSeparatorAnchor(t *testing.T) {
-	chdirTempRepo(t)
+	t.Parallel()
+	cwd := tempRepo(t)
 
-	_, stderr, code := runApp(t, "log", "--")
+	_, stderr, code := runApp(t, "-C", cwd, "log", "--")
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.StringContains(stderr, `cannot be used as a FILE:SYMBOL anchor`))
 }
@@ -292,7 +303,8 @@ func TestRun_LogRejectsLoneSeparatorAnchor(t *testing.T) {
 // or more trailing positionals are pathspecs, not an anchor, narrowing
 // history the same way plain `git log -- path` does.
 func TestRun_LogPathScopedPaths(t *testing.T) {
-	dir := chdirTempRepo(t) // "chore: initial" touches only a.go
+	t.Parallel()
+	dir := tempRepo(t) // "chore: initial" touches only a.go
 
 	writeAppFile(t, dir, "x.txt", "x\n")
 	writeAppFile(t, dir, "y.txt", "y\n")
@@ -305,7 +317,7 @@ func TestRun_LogPathScopedPaths(t *testing.T) {
 	gittest.Commit(t, dir, "fix(y): bump y")
 
 	t.Run("one path narrows to only its own touching commits", func(t *testing.T) {
-		stdout, stderr, code := runApp(t, "log", "--since=2000-01-01", "x.txt")
+		stdout, stderr, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "x.txt")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stderr, ""))
 		qt.Assert(t, qt.StringContains(stdout, "bump x"))
@@ -314,7 +326,7 @@ func TestRun_LogPathScopedPaths(t *testing.T) {
 	})
 
 	t.Run("multiple paths union their own touching commits", func(t *testing.T) {
-		stdout, _, code := runApp(t, "log", "--since=2000-01-01", "x.txt", "y.txt")
+		stdout, _, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "x.txt", "y.txt")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.StringContains(stdout, "bump x"))
 		qt.Assert(t, qt.StringContains(stdout, "bump y"))
@@ -324,7 +336,7 @@ func TestRun_LogPathScopedPaths(t *testing.T) {
 		writeAppFile(t, dir, "src/notes:draft.md", "draft\n")
 		gittest.Commit(t, dir, "docs: colon-named draft")
 
-		stdout, stderr, code := runApp(t, "log", "--since=2000-01-01", "src/notes:draft.md")
+		stdout, stderr, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "src/notes:draft.md")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stderr, ""))
 		qt.Assert(t, qt.StringContains(stdout, "colon-named draft"))
@@ -333,7 +345,7 @@ func TestRun_LogPathScopedPaths(t *testing.T) {
 	})
 
 	t.Run("zero paths with --since is the whole repository's history", func(t *testing.T) {
-		stdout, _, code := runApp(t, "log", "--since=2000-01-01")
+		stdout, _, code := runApp(t, "-C", dir, "log", "--since=2000-01-01")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.StringContains(stdout, "bump x"))
 		qt.Assert(t, qt.StringContains(stdout, "bump y"))
@@ -341,7 +353,7 @@ func TestRun_LogPathScopedPaths(t *testing.T) {
 	})
 
 	t.Run("--since narrows the anchorless form the same as any other filter", func(t *testing.T) {
-		stdout, _, code := runApp(t, "log", "--since=2000-01-01", "--until=2000-01-02")
+		stdout, _, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "--until=2000-01-02")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stdout, ""))
 	})
@@ -350,7 +362,8 @@ func TestRun_LogPathScopedPaths(t *testing.T) {
 // TestRun_LogPathScopedMaxCount pins git's own count limit on the
 // path-scoped form, including both spellings and the unbounded default.
 func TestRun_LogPathScopedMaxCount(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	for i, subject := range []string{"fix: second", "fix: third", "fix: fourth"} {
 		writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn "+string(rune('2'+i))+"\n}\n")
 		gitOut(t, dir, "add", "a.go")
@@ -358,7 +371,7 @@ func TestRun_LogPathScopedMaxCount(t *testing.T) {
 	}
 
 	t.Run("-n limits output", func(t *testing.T) {
-		stdout, stderr, code := runApp(t, "log", "--since=2000-01-01", "-n", "2", "a.go")
+		stdout, stderr, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "-n", "2", "a.go")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stderr, ""))
 		qt.Assert(t, qt.StringContains(stdout, "fix: fourth"))
@@ -368,7 +381,7 @@ func TestRun_LogPathScopedMaxCount(t *testing.T) {
 	})
 
 	t.Run("--max-count limits output", func(t *testing.T) {
-		stdout, stderr, code := runApp(t, "log", "--since=2000-01-01", "--max-count=1", "a.go")
+		stdout, stderr, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "--max-count=1", "a.go")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stderr, ""))
 		qt.Assert(t, qt.StringContains(stdout, "fix: fourth"))
@@ -377,7 +390,7 @@ func TestRun_LogPathScopedMaxCount(t *testing.T) {
 	})
 
 	t.Run("without max-count output remains unbounded", func(t *testing.T) {
-		stdout, stderr, code := runApp(t, "log", "--since=2000-01-01", "a.go")
+		stdout, stderr, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "a.go")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stderr, ""))
 		qt.Assert(t, qt.StringContains(stdout, "fix: fourth"))
@@ -392,12 +405,13 @@ func TestRun_LogPathScopedMaxCount(t *testing.T) {
 // path-scoped shape, and that the two remain mutually exclusive there the
 // same as on the anchor shape (TestRun_LogHelpAndUsage covers that one).
 func TestRun_LogPathScopedOutputModes(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 	gittest.Commit(t, dir, "fix(a): bump A")
 
 	t.Run("--porcelain emits tab-separated records", func(t *testing.T) {
-		stdout, _, code := runApp(t, "log", "--since=2000-01-01", "--porcelain")
+		stdout, _, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "--porcelain")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		for line := range strings.SplitSeq(strings.TrimRight(stdout, "\n"), "\n") {
 			fields := strings.Split(line, "\t")
@@ -407,14 +421,14 @@ func TestRun_LogPathScopedOutputModes(t *testing.T) {
 	})
 
 	t.Run("-p/--patch includes the real patch body", func(t *testing.T) {
-		stdout, _, code := runApp(t, "log", "--since=2000-01-01", "-p", "a.go")
+		stdout, _, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "-p", "a.go")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.StringContains(stdout, "diff --git"))
 		qt.Assert(t, qt.StringContains(stdout, "return 111"))
 	})
 
 	t.Run("--porcelain and --patch are mutually exclusive", func(t *testing.T) {
-		_, stderr, code := runApp(t, "log", "--since=2000-01-01", "--porcelain", "--patch")
+		_, stderr, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "--porcelain", "--patch")
 		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 		qt.Assert(t, qt.StringContains(stderr, "mutually exclusive"))
 	})
@@ -426,13 +440,14 @@ func TestRun_LogPathScopedOutputModes(t *testing.T) {
 // unchecked because this shape parses with pflag instead of
 // parseAnchorCommandArgs.
 func TestRun_LogPathScopedPathEscapeIsRefused(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	outside := filepath.Join(filepath.Dir(dir), "outside.go")
 	if err := os.WriteFile(outside, []byte("package outside\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	_, stderr, code := runApp(t, "log", "--since=2000-01-01", "../outside.go")
+	_, stderr, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "../outside.go")
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.StringContains(stderr, "escapes the repository root"))
 }
@@ -444,12 +459,13 @@ func TestRun_LogPathScopedPathEscapeIsRefused(t *testing.T) {
 // share). cli.GitPathChecker's own existence rule already allows a
 // HEAD-only path through classification.
 func TestRun_LogSurvivesWorktreeDeletion(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	if err := os.Remove(filepath.Join(dir, "a.go")); err != nil {
 		t.Fatal(err)
 	}
 
-	stdout, stderr, code := runApp(t, "log", "a.go:A")
+	stdout, stderr, code := runApp(t, "-C", dir, "log", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.StringContains(stdout, "chore: initial"))
@@ -527,14 +543,15 @@ func TestRun_LogFollowRenameCrossesARenameThatReordersTheSymbol(t *testing.T) {
 // runs exactly once, gitx.FindRename reports found=false, and output is
 // byte-identical to the unflagged form.
 func TestRun_LogFollowRenameNoRenameMatchesDefault(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 	gittest.Commit(t, dir, "fix(a): bump A")
 
-	withoutFlag, _, code := runApp(t, "log", "a.go:A")
+	withoutFlag, _, code := runApp(t, "-C", dir, "log", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 
-	withFlag, _, code := runApp(t, "log", "a.go:A", "--follow-rename")
+	withFlag, _, code := runApp(t, "-C", dir, "log", "a.go:A", "--follow-rename")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 
 	qt.Assert(t, qt.Equals(withFlag, withoutFlag))
@@ -544,7 +561,8 @@ func TestRun_LogFollowRenameNoRenameMatchesDefault(t *testing.T) {
 // to each rename segment: one global remaining budget must not hide history
 // under an earlier path.
 func TestRun_LogFollowRenameMaxCountAppliesPerSegment(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 
 	writeAppFile(t, dir, "old.go", "package p\n\nfunc Foo() int {\n\treturn 1\n}\n\nfunc Bar() int {\n\treturn 100\n}\n")
 	gitOut(t, dir, "add", "old.go")
@@ -564,7 +582,7 @@ func TestRun_LogFollowRenameMaxCountAppliesPerSegment(t *testing.T) {
 	writeAppFile(t, dir, "new.go", "package p\n\nfunc Foo() int {\n\treturn 5\n}\n\nfunc Bar() int {\n\treturn 100\n}\n")
 	gittest.Commit(t, dir, "fix: bump new Foo")
 
-	stdout, stderr, code := runApp(t, "log", "new.go:Foo", "--follow-rename", "-n", "1")
+	stdout, stderr, code := runApp(t, "-C", dir, "log", "new.go:Foo", "--follow-rename", "-n", "1")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.StringContains(stdout, "fix: bump new Foo"))
@@ -576,17 +594,18 @@ func TestRun_LogFollowRenameMaxCountAppliesPerSegment(t *testing.T) {
 }
 
 func TestRun_LogHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	gitOut(t, dir, "config", "core.ignorecase", "true")
 	writeAppFile(t, dir, "Foo.GO", "package demo\n\nfunc First() {}\n")
 	gitOut(t, dir, "add", "Foo.GO")
 	gitOut(t, dir, "commit", "-m", "feat(demo): add First")
 
-	stdout, _, code := runApp(t, "log", "Foo.GO:First")
+	stdout, _, code := runApp(t, "-C", dir, "log", "Foo.GO:First")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(stdout, "feat(demo): add First"))
 
 	gitOut(t, dir, "config", "core.ignorecase", "false")
-	_, _, code = runApp(t, "log", "Foo.GO:First")
+	_, _, code = runApp(t, "-C", dir, "log", "Foo.GO:First")
 	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
 }

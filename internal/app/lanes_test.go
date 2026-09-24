@@ -35,10 +35,11 @@ import (
 // must still parse, reading one message and one target rather than stopping
 // at the first positional and misreading "-m"/"msg" as two more targets.
 func TestRun_InterspersedFlagAfterPositional(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 
-	stdout, stderr, code := runApp(t, "commit", "a.go:A", "-m", "fix(a): interspersed flag")
+	stdout, stderr, code := runApp(t, "-C", dir, "commit", "a.go:A", "-m", "fix(a): interspersed flag")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "requires a message")))
@@ -46,20 +47,22 @@ func TestRun_InterspersedFlagAfterPositional(t *testing.T) {
 }
 
 func TestRun_CommitSignoffAppendsSignedOffBy(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 
-	_, _, code := runApp(t, "commit", "-s", "-m", "fix(a): signoff", "a.go:A")
+	_, _, code := runApp(t, "-C", dir, "commit", "-s", "-m", "fix(a): signoff", "a.go:A")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(gitOut(t, dir, "log", "-1", "--format=%b"), "Signed-off-by: rgit Test <rgit-test@example.com>"))
 }
 
 func TestRun_CommitTrailerForwardsToGit(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 
-	_, _, code := runApp(t, "commit", "--trailer", "Refs: #1", "-m", "fix(a): trailer", "a.go:A")
+	_, _, code := runApp(t, "-C", dir, "commit", "--trailer", "Refs: #1", "-m", "fix(a): trailer", "a.go:A")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(gitOut(t, dir, "log", "-1", "--format=%b"), "Refs: #1"))
@@ -69,12 +72,13 @@ func TestRun_CommitTrailerForwardsToGit(t *testing.T) {
 // behaviour: work staged before invoking rgit comes along with the commit,
 // exactly as a bare `git commit` would carry it.
 func TestRun_PreStagedSiblingFileComesAlong(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 	writeAppFile(t, dir, "sibling.txt", "never named to rgit\n")
 	gitOut(t, dir, "add", "--", "sibling.txt")
 
-	_, _, code := runApp(t, "commit", "-m", "feat(a): update A", "a.go:A")
+	_, _, code := runApp(t, "-C", dir, "commit", "-m", "feat(a): update A", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 
 	show := gitOut(t, dir, "show", "--stat", "HEAD")
@@ -82,12 +86,13 @@ func TestRun_PreStagedSiblingFileComesAlong(t *testing.T) {
 }
 
 func TestRun_OnlyLeavesOtherStagedWorkUncommitted(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 	writeAppFile(t, dir, "sibling.txt", "staged separately\n")
 	gitOut(t, dir, "add", "--", "sibling.txt")
 
-	_, _, code := runApp(t, "commit", "--only", "-m", "fix(a): update A", "a.go:A")
+	_, _, code := runApp(t, "-C", dir, "commit", "--only", "-m", "fix(a): update A", "a.go:A")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	head := gitOut(t, dir, "ls-tree", "-r", "--name-only", "HEAD")
@@ -101,13 +106,13 @@ func TestRun_OnlyLeavesOtherStagedWorkUncommitted(t *testing.T) {
 // index from the committable base, which on a fresh repo is the empty tree,
 // not a HEAD that does not exist yet.
 func TestRun_OnlyOnUnbornBranchWritesRootCommit(t *testing.T) {
+	t.Parallel()
 	dir, _ := gittest.New(t)
-	t.Chdir(dir)
 	writeAppFile(t, dir, "a.txt", "x\n")
 	writeAppFile(t, dir, "sibling.txt", "staged separately\n")
 	gitOut(t, dir, "add", "--", "sibling.txt")
 
-	_, stderr, code := runApp(t, "commit", "--only", "-m", "feat(a): add a", "a.txt")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "--only", "-m", "feat(a): add a", "a.txt")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "HEAD")))
@@ -119,13 +124,14 @@ func TestRun_OnlyOnUnbornBranchWritesRootCommit(t *testing.T) {
 // TestRun_OnlyDirectoryTargetCommitsRenameWhole: a directory target expands
 // to both sides of a rename inside it, so the old path leaves HEAD too.
 func TestRun_OnlyDirectoryTargetCommitsRenameWhole(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "d/a.txt", "x\n")
 	gitOut(t, dir, "add", "--", "d/a.txt")
 	gitOut(t, dir, "commit", "-q", "-m", "add d/a")
 	gitOut(t, dir, "mv", "d/a.txt", "d/b.txt")
 
-	_, stderr, code := runApp(t, "commit", "--only", "-m", "refactor(d): rename", "d")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "--only", "-m", "refactor(d): rename", "d")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
 	head := gitOut(t, dir, "ls-tree", "-r", "--name-only", "HEAD", "--", "d")
@@ -168,13 +174,14 @@ func TestRun_OnlyDirectoryTargetSurvivesFailedPreviewCounts(t *testing.T) {
 }
 
 func TestRun_OnlyWithNoTargetsRefusesWithoutAmend(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 	writeAppFile(t, dir, "sibling.txt", "staged separately\n")
 	gitOut(t, dir, "add", "--", "a.go", "sibling.txt")
 
-	_, stderr, code := runApp(t, "commit", "--only", "--reuse-message=HEAD")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "--only", "--reuse-message=HEAD")
 
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.StringContains(stderr, "--only requires at least one target"))
@@ -185,11 +192,12 @@ func TestRun_OnlyWithNoTargetsRefusesWithoutAmend(t *testing.T) {
 }
 
 func TestRun_OnlyAmendWithNoTargetsLeavesOtherStagedWork(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "sibling.txt", "staged separately\n")
 	gitOut(t, dir, "add", "--", "sibling.txt")
 
-	_, _, code := runApp(t, "commit", "--only", "--amend")
+	_, _, code := runApp(t, "-C", dir, "commit", "--only", "--amend")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	head := gitOut(t, dir, "ls-tree", "-r", "--name-only", "HEAD")
@@ -207,7 +215,8 @@ func TestRun_OnlyAmendWithNoTargetsLeavesOtherStagedWork(t *testing.T) {
 // the e2e lane exercises the same guarantee through the built binary's own
 // exit code as a caller observes it.
 func TestRun_HookRejectionRestoresStaging(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	// Both A and B change in the worktree; only A is named, so B's own edit
 	// staying unstaged is what makes the index-vs-worktree difference below
 	// mean something.
@@ -216,7 +225,7 @@ func TestRun_HookRejectionRestoresStaging(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 	gittest.InstallHook(t, dir, "pre-commit", "#!/bin/sh\nexit 1\n")
 
-	_, _, code := runApp(t, "commit", "-m", "feat(a): update A", "a.go:A")
+	_, _, code := runApp(t, "-C", dir, "commit", "-m", "feat(a): update A", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))
 
 	// Rolled back: the index reads HEAD again, A's synthesized edit unstaged.
@@ -237,11 +246,12 @@ func TestRun_HookRejectionRestoresStaging(t *testing.T) {
 // opens an editor, so --amend with neither -m nor -F has exactly one
 // sensible meaning, `git commit --amend --no-edit`.
 func TestRun_AmendWithNoMessageReusesHeadSubject(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	before := gitOut(t, dir, "log", "-1", "--format=%s")
 
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	_, _, code := runApp(t, "commit", "--amend", "a.go:A")
+	_, _, code := runApp(t, "-C", dir, "commit", "--amend", "a.go:A")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), before))
@@ -249,7 +259,8 @@ func TestRun_AmendWithNoMessageReusesHeadSubject(t *testing.T) {
 }
 
 func TestRun_MergeWithNoMessageUsesMergeMessage(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	gitOut(t, dir, "checkout", "-q", "-b", "feature")
 	writeAppFile(t, dir, "feature.txt", "feature\n")
 	gitOut(t, dir, "add", "--", "feature.txt")
@@ -257,7 +268,7 @@ func TestRun_MergeWithNoMessageUsesMergeMessage(t *testing.T) {
 	gitOut(t, dir, "checkout", "-q", "main")
 	gitOut(t, dir, "merge", "--no-ff", "--no-commit", "feature")
 
-	_, stderr, code := runApp(t, "commit", "--no-verify", "feature.txt")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "--no-verify", "feature.txt")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "requires a message")))
@@ -267,7 +278,8 @@ func TestRun_MergeWithNoMessageUsesMergeMessage(t *testing.T) {
 }
 
 func TestRun_CherryPickWithNoMessageUsesCherryPickMessage(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	gitOut(t, dir, "checkout", "-q", "-b", "cherry-pick-source")
 	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 2 }\n")
 	gitOut(t, dir, "add", "--", "a.go")
@@ -279,7 +291,7 @@ func TestRun_CherryPickWithNoMessageUsesCherryPickMessage(t *testing.T) {
 	expectGitFailure(t, dir, "cherry-pick", source)
 	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 2 }\n")
 
-	_, stderr, code := runApp(t, "commit", "--no-verify", "a.go")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "--no-verify", "a.go")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "requires a message")))
@@ -287,7 +299,8 @@ func TestRun_CherryPickWithNoMessageUsesCherryPickMessage(t *testing.T) {
 }
 
 func TestRun_RebaseWithNoMessageRequiresMessage(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	gitOut(t, dir, "checkout", "-q", "-b", "rebase-source")
 	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 2 }\n")
 	gitOut(t, dir, "commit", "-qam", "feat: rebase source")
@@ -297,30 +310,32 @@ func TestRun_RebaseWithNoMessageRequiresMessage(t *testing.T) {
 	gitOut(t, dir, "checkout", "-q", "rebase-source")
 	expectGitFailure(t, dir, "rebase", "main")
 
-	_, stderr, code := runApp(t, "commit", "--no-verify", "a.go")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "--no-verify", "a.go")
 
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.StringContains(stderr, "requires a message"))
 
 	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 2 }\n")
-	_, _, code = runApp(t, "commit", "--no-verify", "-m", "fix: continue rebase", "a.go")
+	_, _, code = runApp(t, "-C", dir, "commit", "--no-verify", "-m", "fix: continue rebase", "a.go")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), "fix: continue rebase\n"))
 }
 
 func TestRun_CommitWithoutMessageOutsideSequencerIsUsageError(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 2 }\n")
 
-	_, stderr, code := runApp(t, "commit", "--no-verify", "a.go")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "--no-verify", "a.go")
 
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.StringContains(stderr, "commit requires a message"))
 }
 
 func TestRun_RevertWithNoMessageUsesRevertMessage(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 2 }\n")
 	gitOut(t, dir, "commit", "-qam", "feat: revert target")
 	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 3 }\n")
@@ -328,7 +343,7 @@ func TestRun_RevertWithNoMessageUsesRevertMessage(t *testing.T) {
 	expectGitFailure(t, dir, "revert", "HEAD~1")
 	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 1 }\n")
 
-	_, stderr, code := runApp(t, "commit", "--no-verify", "a.go")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "--no-verify", "a.go")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "requires a message")))
@@ -348,7 +363,8 @@ func expectGitFailure(t *testing.T, dir string, args ...string) {
 // "fixup!"/"squash! <subject>" itself -- the message-required validation
 // must not fire for either.
 func TestRun_FixupAndSquashGenerateAutosquashMessages(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	target := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
 
 	for i, tc := range []struct{ flag, wantPrefix string }{
@@ -356,14 +372,15 @@ func TestRun_FixupAndSquashGenerateAutosquashMessages(t *testing.T) {
 		{"--squash", "squash! "},
 	} {
 		writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn "+strings.Repeat("1", i+3)+"\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-		_, _, code := runApp(t, "commit", tc.flag+"="+target, "a.go:A")
+		_, _, code := runApp(t, "-C", dir, "commit", tc.flag+"="+target, "a.go:A")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), tc.wantPrefix+"chore: initial\n"))
 	}
 }
 
 func TestRun_FixupAmendAndRewordPrefixes(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	target := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
 
 	for i, tc := range []struct {
@@ -379,7 +396,7 @@ func TestRun_FixupAmendAndRewordPrefixes(t *testing.T) {
 			args = append(args, "--allow-empty")
 		}
 		args = append(args, "a.go:A")
-		_, _, code := runApp(t, args...)
+		_, _, code := runApp(t, append([]string{"-C", dir}, args...)...)
 
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), tc.wantPrefix+"chore: initial\n"))
@@ -393,11 +410,12 @@ func TestRun_FixupAmendAndRewordPrefixes(t *testing.T) {
 // through the built binary (cmd/rgit/rgit_e2e_test.go's identically named
 // case).
 func TestRun_FixupWithMessageAppendsRatherThanConflicts(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	target := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
 
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	_, _, code := runApp(t, "commit", "--fixup="+target, "-m", "UNIQUE_BODY_MARKER", "a.go:A")
+	_, _, code := runApp(t, "-C", dir, "commit", "--fixup="+target, "-m", "UNIQUE_BODY_MARKER", "a.go:A")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	body := gitOut(t, dir, "log", "-1", "--format=%B")
@@ -415,22 +433,24 @@ func TestRun_FixupWithMessageAppendsRatherThanConflicts(t *testing.T) {
 // successful commit here is proof --no-gpg-sign actually reached git ahead
 // of the config rather than the config never having fired at all.
 func TestRun_NoGPGSignOverridesConfiguredGPGSign(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	gitOut(t, dir, "config", "gpg.program", "/bin/false")
 	gitOut(t, dir, "config", "commit.gpgsign", "true")
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 
-	_, _, code := runApp(t, "commit", "--no-gpg-sign", "-m", "fix(a): bump", "a.go:A")
+	_, _, code := runApp(t, "-C", dir, "commit", "--no-gpg-sign", "-m", "fix(a): bump", "a.go:A")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 }
 
 // TestRun_AuthorAndDateForwarded pins plain forwarding of both flags to git.
 func TestRun_AuthorAndDateForwarded(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 
-	_, _, code := runApp(t, "commit",
+	_, _, code := runApp(t, "-C", dir, "commit",
 		"--author", "Ada Lovelace <ada@example.com>",
 		"--date", "2005-04-07T22:13:13",
 		"-m", "fix(a): bump", "a.go:A")
@@ -444,16 +464,17 @@ func TestRun_AuthorAndDateForwarded(t *testing.T) {
 // paired with --amend, it takes the author identity from the committer
 // instead of carrying the original forward.
 func TestRun_ResetAuthorForwarded(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	_, _, code := runApp(t, "commit",
+	_, _, code := runApp(t, "-C", dir, "commit",
 		"--author", "Ada Lovelace <ada@example.com>",
 		"-m", "fix(a): bump", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%an"), "Ada Lovelace\n"))
 
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 222\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	_, _, code = runApp(t, "commit", "--amend", "--reset-author", "a.go:A")
+	_, _, code = runApp(t, "-C", dir, "commit", "--amend", "--reset-author", "a.go:A")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	// gittest.New's own committer identity, not Ada's.
@@ -470,14 +491,14 @@ func TestRun_ResetAuthorForwarded(t *testing.T) {
 // covered only the empty-tree base itself (internal/diff/scope_test.go),
 // not a real listing through it.
 func TestRun_DiffUnbornBranchListsEverythingCommittable(t *testing.T) {
+	t.Parallel()
 	dir, _ := gittest.New(t)
-	t.Chdir(dir)
 
 	writeAppFile(t, dir, "staged.go", "package auth\n\nfunc Staged() int { return 3 }\n")
 	gitOut(t, dir, "add", "--", "staged.go")
 	writeAppFile(t, dir, "untracked.go", "package auth\n\nfunc Untracked() int { return 4 }\n")
 
-	stdout, _, code := runApp(t, "diff", "--porcelain")
+	stdout, _, code := runApp(t, "-C", dir, "diff", "--porcelain")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	// staged.go and untracked.go are both brand-new files, so both attribute
 	// per symbol (each one's @header preamble plus its own function) rather
@@ -494,7 +515,8 @@ func TestRun_DiffUnbornBranchListsEverythingCommittable(t *testing.T) {
 // remote, upstream already configured, and repo.Push actually reaching it
 // successfully.
 func TestRun_PushAfterSuccessfulCommit(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	remote := t.TempDir()
 	gittest.Git(t, remote, "init", "-q", "--bare")
 	gitOut(t, dir, "remote", "add", "origin", remote)
@@ -502,7 +524,7 @@ func TestRun_PushAfterSuccessfulCommit(t *testing.T) {
 	gitOut(t, dir, "push", "-q", "-u", "origin", branch)
 
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	_, _, code := runApp(t, "commit", "--push", "-m", "fix(a): bump", "a.go:A")
+	_, _, code := runApp(t, "-C", dir, "commit", "--push", "-m", "fix(a): bump", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 
 	local := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
@@ -516,7 +538,8 @@ func TestRun_PushAfterSuccessfulCommit(t *testing.T) {
 // the index (formatModeNote, and contentSide.mode on indexSide
 // specifically, which only --staged/--unstaged ever select).
 func TestRun_DiffUntrackedFileAndModeChange(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "untracked.go", "package a\n\nfunc U() int { return 1 }\n")
 
 	if err := os.Chmod(filepath.Join(dir, "a.go"), 0o755); err != nil {
@@ -524,7 +547,7 @@ func TestRun_DiffUntrackedFileAndModeChange(t *testing.T) {
 	}
 
 	// Default scope: worktree mode against HEAD's, plus the untracked file.
-	stdout, _, code := runApp(t, "diff", "--porcelain")
+	stdout, _, code := runApp(t, "-C", dir, "diff", "--porcelain")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(stdout, "untracked.go\tU\tMOD\t"))
 	qt.Assert(t, qt.StringContains(stdout, "a.go\t\tMODE\t"))
@@ -532,7 +555,7 @@ func TestRun_DiffUntrackedFileAndModeChange(t *testing.T) {
 	// --staged: New is indexSide(), so staging the mode change routes its
 	// own mode() through repo.LsFilesStage rather than a worktree os.Stat.
 	gitOut(t, dir, "add", "a.go")
-	staged, _, code := runApp(t, "diff", "--staged", "--porcelain")
+	staged, _, code := runApp(t, "-C", dir, "diff", "--staged", "--porcelain")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(staged, "a.go\t\tMODE\t"))
 }
@@ -547,8 +570,8 @@ func TestRun_DiffUntrackedFileAndModeChange(t *testing.T) {
 // `-short`. gittest.New is used directly, not chdirTempRepo, so the only
 // file in the repository is the extensionless script itself.
 func TestRun_CommitExtensionlessShebangResolvesShellSymbol(t *testing.T) {
+	t.Parallel()
 	dir, _ := gittest.New(t)
-	t.Chdir(dir)
 
 	writeAppFile(t, dir, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v1\n}\n\nbar() {\n  echo bar\n}\n")
 	gitOut(t, dir, "add", "-A")
@@ -556,7 +579,7 @@ func TestRun_CommitExtensionlessShebangResolvesShellSymbol(t *testing.T) {
 
 	writeAppFile(t, dir, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v2\n}\n\nbar() {\n  echo changed too\n}\n")
 
-	_, _, code := runApp(t, "commit", "-m", "fix: bump foo only", "pre-commit:foo")
+	_, _, code := runApp(t, "-C", dir, "commit", "-m", "fix: bump foo only", "pre-commit:foo")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 
 	head := gitOut(t, dir, "show", "HEAD:pre-commit")
@@ -572,8 +595,8 @@ func TestRun_CommitExtensionlessShebangResolvesShellSymbol(t *testing.T) {
 // through the TypeScript adapter, and one named function stages while its
 // sibling's edit stays uncommitted.
 func TestRun_CommitExtensionlessNodeShebangResolvesTypeScriptSymbol(t *testing.T) {
+	t.Parallel()
 	dir, _ := gittest.New(t)
-	t.Chdir(dir)
 
 	writeAppFile(t, dir, "run", "#!/usr/bin/env npx tsx\n\nfunction foo(): void {\n  console.log('v1')\n}\n\nfunction bar(): void {\n  console.log('bar')\n}\n")
 	gitOut(t, dir, "add", "-A")
@@ -581,7 +604,7 @@ func TestRun_CommitExtensionlessNodeShebangResolvesTypeScriptSymbol(t *testing.T
 
 	writeAppFile(t, dir, "run", "#!/usr/bin/env npx tsx\n\nfunction foo(): void {\n  console.log('v2')\n}\n\nfunction bar(): void {\n  console.log('changed too')\n}\n")
 
-	_, _, code := runApp(t, "commit", "-m", "fix: bump foo only", "run:foo")
+	_, _, code := runApp(t, "-C", dir, "commit", "-m", "fix: bump foo only", "run:foo")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 
 	head := gitOut(t, dir, "show", "HEAD:run")
@@ -598,8 +621,8 @@ func TestRun_CommitExtensionlessNodeShebangResolvesTypeScriptSymbol(t *testing.T
 // e2e case proved was that naming all three together in one invocation
 // does not let one grammar's plan step over another's.
 func TestRun_CommitGoTSPythonSymbolGranularityInOneInvocation(t *testing.T) {
+	t.Parallel()
 	dir, _ := gittest.New(t)
-	t.Chdir(dir)
 
 	writeAppFile(t, dir, "auth.go", "package auth\n\nfunc GoA() int { return 1 }\n\nfunc GoB() int { return 1 }\n")
 	writeAppFile(t, dir, "app.ts", "export function TsA(): number { return 1 }\n\nexport function TsB(): number { return 1 }\n")
@@ -611,7 +634,7 @@ func TestRun_CommitGoTSPythonSymbolGranularityInOneInvocation(t *testing.T) {
 	writeAppFile(t, dir, "app.ts", "export function TsA(): number { return 2 }\n\nexport function TsB(): number { return 2 }\n")
 	writeAppFile(t, dir, "svc.py", "def py_a():\n    return 2\n\n\ndef py_b():\n    return 2\n")
 
-	_, _, code := runApp(t, "commit", "-m", "fix: bump the first of each",
+	_, _, code := runApp(t, "-C", dir, "commit", "-m", "fix: bump the first of each",
 		"auth.go:GoA", "app.ts:TsA", "svc.py:py_a")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 
@@ -635,21 +658,23 @@ func TestRun_CommitGoTSPythonSymbolGranularityInOneInvocation(t *testing.T) {
 // that half on the commit path; this pins that runDiff's own error handling
 // reaches the same lookup without one.
 func TestRun_DiffUnsupportedLanguageSymReachesExtLookup(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "main.rb", "def main; end\n")
 
-	_, stderr, code := runApp(t, "diff", "--sym", "main.rb:main")
+	_, stderr, code := runApp(t, "-C", dir, "diff", "--sym", "main.rb:main")
 
 	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "rgit_sql")))
 }
 
 func TestRun_AmendWithNoTargetsReusesHead(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	beforeTree := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD^{tree}"))
 	beforeSubject := gitOut(t, dir, "log", "-1", "--format=%s")
 
-	_, stderr, code := runApp(t, "commit", "--amend")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "--amend")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
@@ -658,10 +683,11 @@ func TestRun_AmendWithNoTargetsReusesHead(t *testing.T) {
 }
 
 func TestRun_AllowEmptyWithNoTargets(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
 
-	_, stderr, code := runApp(t, "commit", "--allow-empty", "-m", "chore: ping")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "--allow-empty", "-m", "chore: ping")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
@@ -671,18 +697,19 @@ func TestRun_AllowEmptyWithNoTargets(t *testing.T) {
 }
 
 func TestRun_FixupAndSquashWithNoTargetsUseIndex(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	target := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
 
 	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 2 }\n")
 	gitOut(t, dir, "add", "--", "a.go")
-	_, _, code := runApp(t, "commit", "--fixup="+target)
+	_, _, code := runApp(t, "-C", dir, "commit", "--fixup="+target)
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), "fixup! chore: initial\n"))
 
 	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 3 }\n")
 	gitOut(t, dir, "add", "--", "a.go")
-	_, _, code = runApp(t, "commit", "--squash="+target)
+	_, _, code = runApp(t, "-C", dir, "commit", "--squash="+target)
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), "squash! chore: initial\n"))
 }
@@ -699,11 +726,12 @@ func TestRun_ReuseMessageWithChdir(t *testing.T) {
 }
 
 func TestRun_ReuseMessageWithNoTargetsUsesIndex(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 222\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 	gitOut(t, dir, "add", "--", "a.go")
 
-	_, stderr, code := runApp(t, "commit", "--reuse-message=HEAD")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "--reuse-message=HEAD")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
@@ -712,18 +740,20 @@ func TestRun_ReuseMessageWithNoTargetsUsesIndex(t *testing.T) {
 }
 
 func TestRun_ReuseMessageWithExplicitMessageUsesGitFailure(t *testing.T) {
-	chdirTempRepo(t)
+	t.Parallel()
+	cwd := tempRepo(t)
 
-	_, stderr, code := runApp(t, "commit", "--reuse-message=HEAD", "-m", "extra", "--allow-empty")
+	_, stderr, code := runApp(t, "-C", cwd, "commit", "--reuse-message=HEAD", "-m", "extra", "--allow-empty")
 
 	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "[warning] message does not look like")))
 }
 
 func TestRun_ReeditMessageRefused(t *testing.T) {
-	chdirTempRepo(t)
+	t.Parallel()
+	cwd := tempRepo(t)
 
-	_, stderr, code := runApp(t, "commit", "--reedit-message")
+	_, stderr, code := runApp(t, "-C", cwd, "commit", "--reedit-message")
 
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.StringContains(stderr, "--reedit-message"))

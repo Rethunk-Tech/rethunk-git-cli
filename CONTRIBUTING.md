@@ -129,8 +129,8 @@ shared daemon nor spawns one that outlives it.
 
 Tests run in parallel — every top-level test case in this repo calls
 `t.Parallel()`. A case that needs `t.Setenv` or `t.Chdir` cannot, and must say
-so: `internal/app`'s cases change directory, because `openRepo` resolves the
-repository from the working directory. Everything else builds its own temp
+so: `internal/app` reaches its temp repository with `-C dir` instead, and only
+the cases that exercise working-directory resolution itself change directory. Everything else builds its own temp
 repository, most often via `internal/gittest`, and shares nothing with any
 other case, which is what makes `t.Parallel()` safe to add without auditing
 the suite for shared state each time.

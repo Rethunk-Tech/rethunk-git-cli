@@ -52,10 +52,10 @@ func TestRun_ContextHelpAndUsage(t *testing.T) {
 // all and nothing on stderr -- no live language server is ever consulted
 // when there is nothing to cross-check.
 func TestRun_ContextEmptyRepoEmitsNothing(t *testing.T) {
+	t.Parallel()
 	dir, _ := gittest.New(t)
-	t.Chdir(dir)
 
-	stdout, stderr, code := runApp(t, "context")
+	stdout, stderr, code := runApp(t, "-C", dir, "context")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stdout, ""))
 	qt.Assert(t, qt.Equals(stderr, ""))
@@ -130,10 +130,11 @@ func TestRun_ContextEmitsWarningRecords(t *testing.T) {
 // (the same 5 rgit diff --porcelain emits, plus the leading type tag), W has
 // either 2 or 3, and none of them ever carries a header.
 func TestRun_ContextRecordsAreTabSeparatedWithExpectedFieldCounts(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 
-	stdout, _, code := runApp(t, "context")
+	stdout, _, code := runApp(t, "-C", dir, "context")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 
 	sawBranch := false
@@ -166,10 +167,11 @@ func TestRun_ContextRecordsAreTabSeparatedWithExpectedFieldCounts(t *testing.T) 
 // (chdirTempRepo never pushes anywhere), and sorts before every F and C
 // record -- a single, cheap record ahead of the two budget-competing halves.
 func TestRun_ContextBranchRecordSortsFirstAndReportsNoUpstream(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "new.txt", "untracked content\n")
 
-	stdout, _, code := runApp(t, "context")
+	stdout, _, code := runApp(t, "-C", dir, "context")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 
 	lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
@@ -182,11 +184,12 @@ func TestRun_ContextBranchRecordSortsFirstAndReportsNoUpstream(t *testing.T) {
 }
 
 func TestRun_ContextDetachedHeadEmitsHashRecord(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	sha := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
 	gitOut(t, dir, "checkout", "-q", "--detach", "HEAD")
 
-	stdout, _, code := runApp(t, "context")
+	stdout, _, code := runApp(t, "-C", dir, "context")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
@@ -200,14 +203,15 @@ func TestRun_ContextDetachedHeadEmitsHashRecord(t *testing.T) {
 }
 
 func TestRun_ContextSequencerRecordSortsAfterBranch(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	sha := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
 	if err := os.WriteFile(filepath.Join(dir, ".git", "MERGE_HEAD"), []byte(sha+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Remove(filepath.Join(dir, ".git", "MERGE_HEAD")) })
 
-	stdout, _, code := runApp(t, "context")
+	stdout, _, code := runApp(t, "-C", dir, "context")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
@@ -217,12 +221,13 @@ func TestRun_ContextSequencerRecordSortsAfterBranch(t *testing.T) {
 }
 
 func TestRun_ContextStashAndSparseRecords(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 3\n}\n")
 	gitOut(t, dir, "stash", "push", "-m", "context-test")
 	gitOut(t, dir, "config", "core.sparseCheckout", "true")
 
-	stdout, _, code := runApp(t, "context")
+	stdout, _, code := runApp(t, "-C", dir, "context")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	stashIdx := strings.Index(stdout, "W\tstash\n")
 	sparseIdx := strings.Index(stdout, "W\tsparse\n")
@@ -231,7 +236,7 @@ func TestRun_ContextStashAndSparseRecords(t *testing.T) {
 
 	gitOut(t, dir, "stash", "drop")
 	gitOut(t, dir, "config", "--unset", "core.sparseCheckout")
-	stdout, _, code = runApp(t, "context")
+	stdout, _, code = runApp(t, "-C", dir, "context")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Not(qt.StringContains(stdout, "W\tstash\n")))
 	qt.Assert(t, qt.Not(qt.StringContains(stdout, "W\tsparse\n")))

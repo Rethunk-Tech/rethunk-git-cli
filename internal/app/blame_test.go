@@ -88,11 +88,12 @@ func TestRun_BlameHelpAndUsage(t *testing.T) {
 }
 
 func TestRun_BlameHelpEquality(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
 	for _, flag := range []string{"--help", "-h"} {
 		t.Run(flag, func(t *testing.T) {
-			stdout, stderr, code := runApp(t, "blame", flag)
+			stdout, stderr, code := runApp(t, "-C", cwd, "blame", flag)
 			qt.Assert(t, qt.Equals(code, exitcode.Success))
 			qt.Assert(t, qt.Equals(stdout, blameHelp))
 			qt.Assert(t, qt.Equals(stderr, ""))
@@ -107,9 +108,10 @@ func TestRun_BlameHelpEquality(t *testing.T) {
 // fallback would still exit non-zero-adjacent but would leak the file's
 // blame anyway.
 func TestRun_BlameUnresolvableAnchorNeverWidensToWholeFile(t *testing.T) {
-	chdirTempRepo(t)
+	t.Parallel()
+	cwd := tempRepo(t)
 
-	stdout, stderr, code := runApp(t, "blame", "a.go:NoSuchFunc")
+	stdout, stderr, code := runApp(t, "-C", cwd, "blame", "a.go:NoSuchFunc")
 	qt.Assert(t, qt.Equals(code, exitcode.AnchorUnresolvable))
 	qt.Assert(t, qt.Equals(stdout, ""))
 	qt.Assert(t, qt.StringContains(stderr, `"NoSuchFunc"`))
@@ -119,12 +121,13 @@ func TestRun_BlameUnresolvableAnchorNeverWidensToWholeFile(t *testing.T) {
 // path the unresolvable case uses, for a bare name that names two
 // container-qualified members.
 func TestRun_BlameAmbiguousAnchor(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "b.go", "package a\n\ntype X struct{}\n\nfunc (x X) Get() int { return 1 }\n\n"+
 		"type Y struct{}\n\nfunc (y Y) Get() int { return 2 }\n")
 	gittest.Commit(t, dir, "chore: two Gets")
 
-	_, stderr, code := runApp(t, "blame", "b.go:Get")
+	_, stderr, code := runApp(t, "-C", dir, "blame", "b.go:Get")
 	qt.Assert(t, qt.Equals(code, exitcode.AnchorAmbiguous))
 	qt.Assert(t, qt.StringContains(stderr, "ambiguous"))
 }
@@ -132,11 +135,12 @@ func TestRun_BlameAmbiguousAnchor(t *testing.T) {
 // TestRun_BlameUnsupportedLanguage pins exit 9 for a file with no grammar
 // registered at all, the same code rgit commit gives an identical anchor.
 func TestRun_BlameUnsupportedLanguage(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "note.txt", "hello\n")
 	gitOut(t, dir, "add", "note.txt")
 
-	_, stderr, code := runApp(t, "blame", "note.txt:Anything")
+	_, stderr, code := runApp(t, "-C", dir, "blame", "note.txt:Anything")
 	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
 	qt.Assert(t, qt.StringContains(stderr, "unsupported language"))
 }
@@ -147,9 +151,10 @@ func TestRun_BlameUnsupportedLanguage(t *testing.T) {
 // proving the -L bound actually narrowed git's own blame rather than
 // covering the whole file.
 func TestRun_BlameBoundsToTheSymbolExtent(t *testing.T) {
-	chdirTempRepo(t)
+	t.Parallel()
+	cwd := tempRepo(t)
 
-	stdout, stderr, code := runApp(t, "blame", "a.go:A")
+	stdout, stderr, code := runApp(t, "-C", cwd, "blame", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.StringContains(stdout, "return 1"))
@@ -159,16 +164,16 @@ func TestRun_BlameBoundsToTheSymbolExtent(t *testing.T) {
 // TestRun_BlameDeletedWorktreeUsesHEAD keeps blame and its line range tied to
 // the same HEAD blob when the worktree copy is absent.
 func TestRun_BlameDeletedWorktreeUsesHEAD(t *testing.T) {
+	t.Parallel()
 	dir, _ := gittest.New(t)
 	writeAppFile(t, dir, "gone.go", "package gone\n\nfunc Gone() int {\n\treturn 1\n}\n\nfunc Other() int {\n\treturn 2\n}\n")
 	gittest.Commit(t, dir, "chore: add gone.go")
-	t.Chdir(dir)
 
 	if err := os.Remove(filepath.Join(dir, "gone.go")); err != nil {
 		t.Fatal(err)
 	}
 
-	stdout, stderr, code := runApp(t, "blame", "gone.go:Gone")
+	stdout, stderr, code := runApp(t, "-C", dir, "blame", "gone.go:Gone")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.StringContains(stdout, "return 1"))
@@ -179,9 +184,10 @@ func TestRun_BlameDeletedWorktreeUsesHEAD(t *testing.T) {
 // git's own porcelain blame format names the author on its own line, which
 // the default human-readable format does not.
 func TestRun_BlamePorcelainReachesGit(t *testing.T) {
-	chdirTempRepo(t)
+	t.Parallel()
+	cwd := tempRepo(t)
 
-	stdout, _, code := runApp(t, "blame", "a.go:A", "--porcelain")
+	stdout, _, code := runApp(t, "-C", cwd, "blame", "a.go:A", "--porcelain")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(stdout, "\nauthor "))
 }
@@ -191,17 +197,18 @@ func TestRun_BlamePorcelainReachesGit(t *testing.T) {
 // on stderr, but only when the anchor is actually ordinal-shaped -- a
 // uniquely named anchor on the same file must stay silent.
 func TestRun_BlameOrdinalAnchorWarns(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "dup.go", "package main\n\nfunc init() { println(1) }\n\nfunc init() { println(2) }\n")
 	gitOut(t, dir, "add", "dup.go")
 
-	stdout, stderr, code := runApp(t, "blame", "dup.go:init#2")
+	stdout, stderr, code := runApp(t, "-C", dir, "blame", "dup.go:init#2")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(stdout, "println(2)"))
 	qt.Assert(t, qt.StringContains(stderr, "dup.go:init#2"))
 	qt.Assert(t, qt.StringContains(stderr, "positional"))
 
-	_, stderr, code = runApp(t, "blame", "a.go:A")
+	_, stderr, code = runApp(t, "-C", dir, "blame", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "positional")))
 }
@@ -211,10 +218,11 @@ func TestRun_BlameOrdinalAnchorWarns(t *testing.T) {
 // "git log -p" or "git diff -p", git blame's "-p" already means porcelain,
 // not patch -- blame has no patch mode to opt into).
 func TestRun_BlameShortPorcelainFlagMatchesGit(t *testing.T) {
-	chdirTempRepo(t)
+	t.Parallel()
+	cwd := tempRepo(t)
 
-	long, _, longCode := runApp(t, "blame", "a.go:A", "--porcelain")
-	short, _, shortCode := runApp(t, "blame", "a.go:A", "-p")
+	long, _, longCode := runApp(t, "-C", cwd, "blame", "a.go:A", "--porcelain")
+	short, _, shortCode := runApp(t, "-C", cwd, "blame", "a.go:A", "-p")
 	qt.Assert(t, qt.Equals(shortCode, exitcode.Success))
 	qt.Assert(t, qt.Equals(shortCode, longCode))
 	qt.Assert(t, qt.Equals(short, long))
@@ -271,12 +279,13 @@ func TestRun_BlameFollowRenameCrossesARenameThatReordersTheSymbol(t *testing.T) 
 // TestRun_BlameFollowRenameNoRenameMatchesDefault pins the no-rename path:
 // the flag adds no second output segment when FindRename reports no boundary.
 func TestRun_BlameFollowRenameNoRenameMatchesDefault(t *testing.T) {
-	chdirTempRepo(t)
+	t.Parallel()
+	cwd := tempRepo(t)
 
-	withoutFlag, _, code := runApp(t, "blame", "a.go:A")
+	withoutFlag, _, code := runApp(t, "-C", cwd, "blame", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 
-	withFlag, _, code := runApp(t, "blame", "a.go:A", "--follow-rename")
+	withFlag, _, code := runApp(t, "-C", cwd, "blame", "a.go:A", "--follow-rename")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 
 	qt.Assert(t, qt.Equals(withFlag, withoutFlag))
@@ -286,9 +295,10 @@ func TestRun_BlameFollowRenameNoRenameMatchesDefault(t *testing.T) {
 // source independently from the blame output source: a dirty leading edit
 // must not shift the range passed to git blame for the HEAD blob.
 func TestRun_BlameFollowRenameResolvesAgainstHEADNotWorktree(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 
-	clean, stderr, code := runApp(t, "blame", "a.go:A", "--follow-rename")
+	clean, stderr, code := runApp(t, "-C", dir, "blame", "a.go:A", "--follow-rename")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 
@@ -296,28 +306,28 @@ func TestRun_BlameFollowRenameResolvesAgainstHEADNotWorktree(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 	writeAppFile(t, dir, "a.go", "// dirty leading edit\n\n"+string(src))
 
-	dirty, stderr, code := runApp(t, "blame", "a.go:A", "--follow-rename")
+	dirty, stderr, code := runApp(t, "-C", dir, "blame", "a.go:A", "--follow-rename")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.Equals(dirty, clean))
 }
 
 func TestRun_BlameHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	gittest.Git(t, root, "init", "--quiet")
 	gittest.Git(t, root, "config", "core.ignorecase", "true")
 	writeAppFile(t, root, "Foo.GO", "package demo\n\nfunc First() {}\n")
 	gittest.Git(t, root, "add", "Foo.GO")
 	gittest.Git(t, root, "-c", "user.name=rgit test", "-c", "user.email=rgit@example.invalid", "commit", "--quiet", "-m", "initial")
-	t.Chdir(root)
 
-	stdout, stderr, code := runApp(t, "blame", "Foo.GO:First")
+	stdout, stderr, code := runApp(t, "-C", root, "blame", "Foo.GO:First")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.StringContains(stdout, "First"))
 
 	gittest.Git(t, root, "config", "core.ignorecase", "false")
-	_, _, code = runApp(t, "blame", "Foo.GO:First")
+	_, _, code = runApp(t, "-C", root, "blame", "Foo.GO:First")
 	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
 }
 
@@ -329,7 +339,8 @@ func TestRun_BlameHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
 // fine. One fixture covers both because blame and log had the same bug at the
 // same point in the same shape.
 func TestRun_FollowRenameResolvesShebangLanguageBeforeTheRename(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	script := "#!/usr/bin/env python3\n\n\ndef greet():\n    return \"hi\"\n\n\ndef other():\n    return 2\n"
 	writeAppFile(t, dir, "oldtool", script)
 	gitOut(t, dir, "add", "oldtool")
@@ -342,14 +353,14 @@ func TestRun_FollowRenameResolvesShebangLanguageBeforeTheRename(t *testing.T) {
 	gittest.Commit(t, dir, "feat: extend")
 
 	t.Run("blame", func(t *testing.T) {
-		stdout, stderr, code := runApp(t, "blame", "newtool:greet", "--follow-rename")
+		stdout, stderr, code := runApp(t, "-C", dir, "blame", "newtool:greet", "--follow-rename")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Not(qt.StringContains(stderr, "unsupported language")))
 		qt.Assert(t, qt.StringContains(stdout, "def greet():"))
 	})
 
 	t.Run("log", func(t *testing.T) {
-		stdout, stderr, code := runApp(t, "log", "newtool:greet", "--follow-rename")
+		stdout, stderr, code := runApp(t, "-C", dir, "log", "newtool:greet", "--follow-rename")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Not(qt.StringContains(stderr, "unsupported language")))
 		qt.Assert(t, qt.StringContains(stdout, "feat: add tool"))

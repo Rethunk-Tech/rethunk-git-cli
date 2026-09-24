@@ -24,16 +24,17 @@ func TestShow_UsageRefusals(t *testing.T) {
 // newline -- and it is the worktree's bytes, not HEAD's, so what show prints
 // is what commit would stage.
 func TestShow_PrintsExtentVerbatim(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 
-	stdout, stderr, code := runApp(t, "show", "a.go:A")
+	stdout, stderr, code := runApp(t, "-C", dir, "show", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.Equals(stdout, "// A returns one.\nfunc A() int {\n\treturn 1\n}"))
 
 	// Uncommitted worktree edits are what the default source shows.
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns two.\nfunc A() int {\n\treturn 2\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	stdout, _, code = runApp(t, "show", "a.go:A")
+	stdout, _, code = runApp(t, "-C", dir, "show", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stdout, "// A returns two.\nfunc A() int {\n\treturn 2\n}"))
 }
@@ -44,7 +45,8 @@ func TestShow_PrintsExtentVerbatim(t *testing.T) {
 // "--source=rev" -- because the shared arg loop handles them on two separate
 // branches.
 func TestShow_SourceRevisionReadsThatBlob(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	head := strings.TrimSpace(gittest.Git(t, dir, "rev-parse", "HEAD"))
 
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns two.\nfunc A() int {\n\treturn 2\n}\n\nfunc B() int {\n\treturn 2\n}\n")
@@ -58,7 +60,7 @@ func TestShow_SourceRevisionReadsThatBlob(t *testing.T) {
 		// After the positional, not only before it.
 		{"show", "a.go:A", "--source", "HEAD~1"},
 	} {
-		stdout, stderr, code := runApp(t, args...)
+		stdout, stderr, code := runApp(t, append([]string{"-C", dir}, args...)...)
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stderr, ""))
 		qt.Assert(t, qt.Equals(stdout, original))
@@ -66,7 +68,7 @@ func TestShow_SourceRevisionReadsThatBlob(t *testing.T) {
 
 	// The default still reads the new bytes, so --source is genuinely
 	// selecting the blob rather than the test reading a stale worktree.
-	stdout, _, code := runApp(t, "show", "a.go:A")
+	stdout, _, code := runApp(t, "-C", dir, "show", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stdout, "// A returns two.\nfunc A() int {\n\treturn 2\n}"))
 }
@@ -76,20 +78,21 @@ func TestShow_SourceRevisionReadsThatBlob(t *testing.T) {
 // "no such object" to both, so without the check a typo'd revision would be
 // reported as a missing symbol.
 func TestShow_SourceDistinguishesBadRevisionFromAbsentPath(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 
-	_, stderr, code := runApp(t, "show", "--source", "nosuchrev", "a.go:A")
+	_, stderr, code := runApp(t, "-C", dir, "show", "--source", "nosuchrev", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))
 	qt.Assert(t, qt.StringContains(stderr, "not a valid revision: nosuchrev"))
 
 	writeAppFile(t, dir, "b.go", "package a\n\nfunc C() int {\n\treturn 3\n}\n")
 	gittest.Commit(t, dir, "feat: add b.go")
 
-	_, stderr, code = runApp(t, "show", "--source", "HEAD~1", "b.go:C")
+	_, stderr, code = runApp(t, "-C", dir, "show", "--source", "HEAD~1", "b.go:C")
 	qt.Assert(t, qt.Equals(code, exitcode.AnchorUnresolvable))
 	qt.Assert(t, qt.StringContains(stderr, "is absent at HEAD~1"))
 
-	_, stderr, code = runApp(t, "show", "--source")
+	_, stderr, code = runApp(t, "-C", dir, "show", "--source")
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.StringContains(stderr, "--source requires a value"))
 }
@@ -98,10 +101,11 @@ func TestShow_SourceDistinguishesBadRevisionFromAbsentPath(t *testing.T) {
 // a deleted worktree copy resolves against the HEAD blob rather than
 // refusing, and a path in neither says so.
 func TestShow_MissingWorktreeFileFallsBackToHEAD(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	qt.Assert(t, qt.IsNil(os.Remove(filepath.Join(dir, "a.go"))))
 
-	stdout, stderr, code := runApp(t, "show", "a.go:A")
+	stdout, stderr, code := runApp(t, "-C", dir, "show", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.Equals(stdout, "// A returns one.\nfunc A() int {\n\treturn 1\n}"))
@@ -113,12 +117,13 @@ func TestShow_MissingWorktreeFileFallsBackToHEAD(t *testing.T) {
 // delimiter, is what makes the stream parseable -- a symbol's own text can
 // contain a line that looks like a header.
 func TestShow_MultipleAnchorsAreLengthFramed(t *testing.T) {
-	chdirTempRepo(t)
+	t.Parallel()
+	cwd := tempRepo(t)
 
 	const a = "// A returns one.\nfunc A() int {\n\treturn 1\n}"
 	const b = "func B() int {\n\treturn 2\n}"
 
-	stdout, stderr, code := runApp(t, "show", "a.go:A", "a.go:B")
+	stdout, stderr, code := runApp(t, "-C", cwd, "show", "a.go:A", "a.go:B")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	want := "a.go:A\t" + strconv.Itoa(len(a)) + "\n" + a + "a.go:B\t" + strconv.Itoa(len(b)) + "\n" + b
@@ -126,7 +131,7 @@ func TestShow_MultipleAnchorsAreLengthFramed(t *testing.T) {
 
 	// --with-header frames a lone anchor identically, so a caller looping
 	// over an argument list need not branch on its length.
-	stdout, _, code = runApp(t, "show", "--with-header", "a.go:A")
+	stdout, _, code = runApp(t, "-C", cwd, "show", "--with-header", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stdout, "a.go:A\t"+strconv.Itoa(len(a))+"\n"+a))
 
@@ -139,9 +144,10 @@ func TestShow_MultipleAnchorsAreLengthFramed(t *testing.T) {
 // failure anywhere in the list leaves stdout empty rather than emitting the
 // anchors that happened to come first.
 func TestShow_ResolvesEveryAnchorBeforeWriting(t *testing.T) {
-	chdirTempRepo(t)
+	t.Parallel()
+	cwd := tempRepo(t)
 
-	stdout, stderr, code := runApp(t, "show", "a.go:A", "a.go:NoSuchSymbol")
+	stdout, stderr, code := runApp(t, "-C", cwd, "show", "a.go:A", "a.go:NoSuchSymbol")
 	qt.Assert(t, qt.Equals(code, exitcode.AnchorUnresolvable))
 	qt.Assert(t, qt.Equals(stdout, ""))
 	qt.Assert(t, qt.StringContains(stderr, "NoSuchSymbol"))
@@ -152,13 +158,14 @@ func TestShow_ResolvesEveryAnchorBeforeWriting(t *testing.T) {
 // FILE:TAB:NBYTES length framing multi-anchor output already uses. Without
 // the flag, single-anchor output stays raw bytes, byte-identical to before.
 func TestShow_PorcelainFramesSingleAndMultiAnchors(t *testing.T) {
-	chdirTempRepo(t)
+	t.Parallel()
+	cwd := tempRepo(t)
 
 	const a = "// A returns one.\nfunc A() int {\n\treturn 1\n}"
 	const b = "func B() int {\n\treturn 2\n}"
 
 	// Single anchor under --porcelain is framed.
-	stdout, stderr, code := runApp(t, "show", "--porcelain", "a.go:A")
+	stdout, stderr, code := runApp(t, "-C", cwd, "show", "--porcelain", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.Equals(stdout, "a.go:A\t"+strconv.Itoa(len(a))+"\n"+a))
@@ -166,15 +173,15 @@ func TestShow_PorcelainFramesSingleAndMultiAnchors(t *testing.T) {
 	// Multi-anchor under --porcelain matches the default multi-anchor
 	// framing exactly -- the flag changes when framing applies, never the
 	// framing itself.
-	porcelainMulti, _, code := runApp(t, "show", "--porcelain", "a.go:A", "a.go:B")
+	porcelainMulti, _, code := runApp(t, "-C", cwd, "show", "--porcelain", "a.go:A", "a.go:B")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	defaultMulti, _, code := runApp(t, "show", "a.go:A", "a.go:B")
+	defaultMulti, _, code := runApp(t, "-C", cwd, "show", "a.go:A", "a.go:B")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(porcelainMulti, defaultMulti))
 	qt.Assert(t, qt.Equals(porcelainMulti, "a.go:A\t"+strconv.Itoa(len(a))+"\n"+a+"a.go:B\t"+strconv.Itoa(len(b))+"\n"+b))
 
 	// Without the flag, single-anchor output is still raw bytes.
-	raw, _, code := runApp(t, "show", "a.go:A")
+	raw, _, code := runApp(t, "-C", cwd, "show", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(raw, a))
 }
@@ -182,17 +189,18 @@ func TestShow_PorcelainFramesSingleAndMultiAnchors(t *testing.T) {
 // TestShow_WithHeaderIsAPorcelainAlias pins --with-header as a deprecated
 // alias that still works: identical bytes to --porcelain, in both arities.
 func TestShow_WithHeaderIsAPorcelainAlias(t *testing.T) {
-	chdirTempRepo(t)
+	t.Parallel()
+	cwd := tempRepo(t)
 
-	singlePorcelain, _, code := runApp(t, "show", "--porcelain", "a.go:A")
+	singlePorcelain, _, code := runApp(t, "-C", cwd, "show", "--porcelain", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	singleHeader, _, code := runApp(t, "show", "--with-header", "a.go:A")
+	singleHeader, _, code := runApp(t, "-C", cwd, "show", "--with-header", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(singleHeader, singlePorcelain))
 
-	multiPorcelain, _, code := runApp(t, "show", "--porcelain", "a.go:A", "a.go:B")
+	multiPorcelain, _, code := runApp(t, "-C", cwd, "show", "--porcelain", "a.go:A", "a.go:B")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	multiHeader, _, code := runApp(t, "show", "--with-header", "a.go:A", "a.go:B")
+	multiHeader, _, code := runApp(t, "-C", cwd, "show", "--with-header", "a.go:A", "a.go:B")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(multiHeader, multiPorcelain))
 }

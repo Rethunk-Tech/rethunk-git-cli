@@ -20,15 +20,16 @@ import (
 // --version`'s agreement when the tag is on: both must name "sql" and mark
 // it gated.
 func TestRun_LanguagesListsSQLWhenTagged(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
-	stdout, _, code := runApp(t, "languages")
+	stdout, _, code := runApp(t, "-C", cwd, "languages")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(stdout, "sql"))
 	qt.Assert(t, qt.StringContains(stdout, ".sql"))
 	qt.Assert(t, qt.StringContains(stdout, "(build-tag gated)"))
 
-	version, _, code := runApp(t, "--version")
+	version, _, code := runApp(t, "-C", cwd, "--version")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(version, "optional grammars: sql"))
 }
@@ -36,9 +37,10 @@ func TestRun_LanguagesListsSQLWhenTagged(t *testing.T) {
 // TestRun_LanguagesPorcelainMarksSQLGatedWhenTagged pins SQL's build-specific
 // fields: with the grammar compiled in, its record reads "1" and "ts-only".
 func TestRun_LanguagesPorcelainMarksSQLGatedWhenTagged(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
-	stdout, _, code := runApp(t, "languages", "--porcelain")
+	stdout, _, code := runApp(t, "-C", cwd, "languages", "--porcelain")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(stdout, "sql\t.sql\t1\tts-only\n"))
 }
@@ -47,9 +49,10 @@ func TestRun_LanguagesPorcelainMarksSQLGatedWhenTagged(t *testing.T) {
 // above: its "Grammars compiled in" section reuses the same
 // resolve.Languages() data, so it must never disagree with `rgit languages`.
 func TestRun_DoctorListsSQLWhenTagged(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
-	stdout, _, code := runApp(t, "doctor")
+	stdout, _, code := runApp(t, "-C", cwd, "doctor")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(stdout, "sql"))
 }
@@ -61,12 +64,13 @@ func TestRun_DoctorListsSQLWhenTagged(t *testing.T) {
 // (languages_nosql_test.go) -- and carries no rebuild hint, since there is
 // nothing left to rebuild for.
 func TestRun_SQLAnchorWithTagResolvesNormally(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "q.sql", "CREATE TABLE users (id INT);\n")
 	gittest.Commit(t, dir, "chore: add sql fixture")
 	writeAppFile(t, dir, "q.sql", "CREATE TABLE users (id INT);\nCREATE TABLE accounts (id INT);\n")
 
-	_, stderr, code := runApp(t, "commit", "-m", "feat(x): y", "q.sql:NoSuchSymbol")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "-m", "feat(x): y", "q.sql:NoSuchSymbol")
 
 	qt.Assert(t, qt.Equals(code, exitcode.AnchorUnresolvable))
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "rgit_sql")))

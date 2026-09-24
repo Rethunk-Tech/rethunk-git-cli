@@ -95,10 +95,10 @@ func TestRunCommit_RefusesSymbolAnchorOnStructuredData(t *testing.T) {
 // TestRun_CommitRefusesStructuredDataSymbolViaRunApp pins runApp dispatch:
 // symbols lists the resolvable key name, while commit refuses package.json:name.
 func TestRun_CommitRefusesStructuredDataSymbolViaRunApp(t *testing.T) {
+	t.Parallel()
 	dir, _ := gittest.RepoWithFile(t, "package.json", `{"name": "before"}`+"\n", "chore: add structured data")
-	t.Chdir(dir)
 
-	stdout, stderr, code := runApp(t, "symbols", "package.json")
+	stdout, stderr, code := runApp(t, "-C", dir, "symbols", "package.json")
 	if code != exitcode.Success {
 		t.Fatalf("runApp symbols = %v; want exitcode.Success; stderr: %s", code, stderr)
 	}
@@ -107,7 +107,7 @@ func TestRun_CommitRefusesStructuredDataSymbolViaRunApp(t *testing.T) {
 	}
 
 	gittest.Write(t, dir, "package.json", `{"name": "after"}`+"\n")
-	stdout, stderr, code = runApp(t, "commit", "-m", "chore: bump", "package.json:name")
+	stdout, stderr, code = runApp(t, "-C", dir, "commit", "-m", "chore: bump", "package.json:name")
 	if code != exitcode.StructuredDataAnchorRefused {
 		t.Fatalf("runApp commit FILE:SYMBOL = %v; want exitcode.StructuredDataAnchorRefused; stderr: %s", code, stderr)
 	}
@@ -119,7 +119,7 @@ func TestRun_CommitRefusesStructuredDataSymbolViaRunApp(t *testing.T) {
 		t.Errorf("stderr = %q; want %q", stderr, wantStderr)
 	}
 
-	stdout, stderr, code = runApp(t, "commit", "-m", "chore: bump", "package.json")
+	stdout, stderr, code = runApp(t, "-C", dir, "commit", "-m", "chore: bump", "package.json")
 	if code != exitcode.Success {
 		t.Fatalf("runApp commit by path = %v; want exitcode.Success; stderr: %s", code, stderr)
 	}
@@ -140,6 +140,7 @@ func TestRun_CommitRefusesStructuredDataSymbolViaRunApp(t *testing.T) {
 // reproducible case where line counts genuinely cannot be computed, not a
 // fake or injected error.
 func TestRunCommit_CountingWarningsReachStderr(t *testing.T) {
+	t.Parallel()
 	dir, _ := gittest.New(t)
 	gittest.Write(t, dir, "new.txt", "hello\n")
 	full := filepath.Join(dir, "new.txt")
@@ -147,10 +148,9 @@ func TestRunCommit_CountingWarningsReachStderr(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(full, 0o644) })
-	t.Chdir(dir)
 
 	var stdout, stderr strings.Builder
-	code := runCommit(context.Background(), "", []string{"-m", "chore: add new.txt", "--dry-run", "new.txt"}, &stdout, &stderr)
+	code := runCommit(context.Background(), dir, []string{"-m", "chore: add new.txt", "--dry-run", "new.txt"}, &stdout, &stderr)
 	if code != exitcode.Success {
 		t.Fatalf("runCommit --dry-run = %v; stdout: %s; stderr: %s", code, stdout.String(), stderr.String())
 	}
@@ -181,6 +181,7 @@ func TestCommitTargets_UnhandledKindErrorsRatherThanSkips(t *testing.T) {
 }
 
 func TestRunCommit_IndexOnlyPathSymbolAnchor(t *testing.T) {
+	t.Parallel()
 	dir, _ := gittest.New(t)
 	gittest.Write(t, dir, "new.go", "package p\n\nfunc New() {}\n")
 	gittest.Git(t, dir, "add", "new.go")
@@ -190,12 +191,11 @@ func TestRunCommit_IndexOnlyPathSymbolAnchor(t *testing.T) {
 	if _, err := os.Stat(dir + "/new.go"); !os.IsNotExist(err) {
 		t.Fatalf("os.Stat(new.go) = %v; want os.IsNotExist", err)
 	}
-	t.Chdir(dir)
 	if got := gitOut(t, dir, "show", ":new.go"); !strings.Contains(got, "func New()") {
 		t.Errorf("git show :new.go = %q; want New function", got)
 	}
 
-	_, stderr, code := runApp(t, "commit", "-m", "feat(p): add New", "new.go:New")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "-m", "feat(p): add New", "new.go:New")
 	if code != exitcode.Success {
 		t.Fatalf("runApp commit FILE:SYMBOL = %v; want exitcode.Success; stderr: %s", code, stderr)
 	}
@@ -211,6 +211,7 @@ func TestRunCommit_IndexOnlyPathSymbolAnchor(t *testing.T) {
 // touched path with the no-worktree-changes hint. The exit code is
 // unchanged: a hook rejection is still exitcode.GitFailure.
 func TestCommit_HookFailureRestoresPrestagedState(t *testing.T) {
+	t.Parallel()
 	dir, _ := gittest.New(t)
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 	gittest.Write(t, dir, "sibling.txt", "base\n")
@@ -226,10 +227,9 @@ func TestCommit_HookFailureRestoresPrestagedState(t *testing.T) {
 		t.Fatal(err)
 	}
 	gittest.InstallHook(t, dir, "pre-commit", "#!/bin/sh\nexit 1\n")
-	t.Chdir(dir)
 
 	var stdout, stderr strings.Builder
-	code := runCommit(context.Background(), "", []string{"-m", "fix(a): update A", "a.go:A"}, &stdout, &stderr)
+	code := runCommit(context.Background(), dir, []string{"-m", "fix(a): update A", "a.go:A"}, &stdout, &stderr)
 	if code != exitcode.GitFailure {
 		t.Fatalf("runCommit = %v; want exitcode.GitFailure; stderr: %s", code, stderr.String())
 	}

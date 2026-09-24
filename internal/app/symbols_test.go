@@ -16,18 +16,19 @@ import (
 )
 
 func TestRun_SymbolsHelpAndUsage(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
 	for _, arg := range []string{"--help", "-h"} {
 		t.Run(arg, func(t *testing.T) {
-			stdout, stderr, code := runApp(t, "symbols", arg)
+			stdout, stderr, code := runApp(t, "-C", cwd, "symbols", arg)
 			qt.Assert(t, qt.Equals(code, exitcode.Success))
 			qt.Assert(t, qt.Equals(stdout, symbolsHelp))
 			qt.Assert(t, qt.Equals(stderr, ""))
 		})
 	}
 
-	stdout, stderr, code := runApp(t, "symbols")
+	stdout, stderr, code := runApp(t, "-C", cwd, "symbols")
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.Equals(stdout, ""))
 	wantUsage := "rgit: symbols requires at least one file argument\n" + symbolsHelp
@@ -35,10 +36,11 @@ func TestRun_SymbolsHelpAndUsage(t *testing.T) {
 }
 
 func TestRun_SymbolsUnsupportedLanguage(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "main.rb", "def main; end\n")
 
-	_, stderr, code := runApp(t, "symbols", "main.rb")
+	_, stderr, code := runApp(t, "-C", dir, "symbols", "main.rb")
 	if code != exitcode.UnsupportedLanguage {
 		t.Fatalf("symbols unsupported-language exit code = %d, want %d", code, exitcode.UnsupportedLanguage)
 	}
@@ -171,6 +173,7 @@ func TestRunSymbolsStructuredDataCommitMode(t *testing.T) {
 }
 
 func TestRunCommitHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	gittest.Git(t, root, "init", "--quiet")
 	gittest.Git(t, root, "config", "core.ignorecase", "true")
@@ -184,8 +187,7 @@ func TestRunCommitHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Chdir(root)
-	_, stderr, code := runApp(t, "commit", "-m", "feat(demo): stage First", "Foo.GO:First")
+	_, stderr, code := runApp(t, "-C", root, "commit", "-m", "feat(demo): stage First", "Foo.GO:First")
 	if code != exitcode.Success {
 		t.Fatalf("commit Foo.GO:First with core.ignorecase=true = %d, stderr = %q", code, stderr)
 	}
@@ -306,7 +308,8 @@ func TestRunSymbolsWithLinesAgreesWithResolvedExtent(t *testing.T) {
 // repoPath it has to reach for explicitly -- and the case it missed read
 // files outside the repository and exited 0.
 func TestRunSymbolsRefusesPathAboveRoot(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 
 	outside := filepath.Join(filepath.Dir(dir), "outside.go")
 	if err := os.WriteFile(outside, []byte("package x\n\nfunc SecretOutside() {}\n"), 0o644); err != nil {
@@ -315,7 +318,7 @@ func TestRunSymbolsRefusesPathAboveRoot(t *testing.T) {
 
 	for _, arg := range []string{"../outside.go", outside} {
 		t.Run(arg, func(t *testing.T) {
-			stdout, stderr, code := runApp(t, "symbols", arg)
+			stdout, stderr, code := runApp(t, "-C", dir, "symbols", arg)
 			qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 			qt.Assert(t, qt.Equals(stdout, ""))
 			qt.Assert(t, qt.StringContains(stderr, "escapes the repository root"))
@@ -327,9 +330,10 @@ func TestRunSymbolsRefusesPathAboveRoot(t *testing.T) {
 // escape check: the absolute-path branch is why symbols cannot simply call
 // repoPath, so a fix that routed through it would silently drop this.
 func TestRunSymbolsAcceptsAbsolutePathInsideRoot(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 
-	stdout, stderr, code := runApp(t, "symbols", filepath.Join(dir, "a.go"))
+	stdout, stderr, code := runApp(t, "-C", dir, "symbols", filepath.Join(dir, "a.go"))
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.StringContains(stdout, "A"))
@@ -340,26 +344,27 @@ func TestRunSymbolsAcceptsAbsolutePathInsideRoot(t *testing.T) {
 // line with the path exactly as given, so a line composes straight back into a
 // FILE:SYMBOL anchor.
 func TestSymbols_MultipleFilesPrefixLikeGrep(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "b.go", "package a\n\nfunc C() int {\n\treturn 3\n}\n")
 
-	stdout, stderr, code := runApp(t, "symbols", "a.go")
+	stdout, stderr, code := runApp(t, "-C", dir, "symbols", "a.go")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.Equals(stdout, "A\nB\n"))
 
-	stdout, _, code = runApp(t, "symbols", "a.go", "b.go")
+	stdout, _, code = runApp(t, "-C", dir, "symbols", "a.go", "b.go")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stdout, "a.go\tA\na.go\tB\nb.go\tC\n"))
 
 	// --with-filename gives one file the same shape, so a caller looping
 	// over an argument list need not branch on its length.
-	stdout, _, code = runApp(t, "symbols", "--with-filename", "a.go")
+	stdout, _, code = runApp(t, "-C", dir, "symbols", "--with-filename", "a.go")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stdout, "a.go\tA\na.go\tB\n"))
 
 	// The prefix composes with --with-lines rather than replacing it.
-	stdout, _, code = runApp(t, "symbols", "--with-lines", "a.go", "b.go")
+	stdout, _, code = runApp(t, "-C", dir, "symbols", "--with-lines", "a.go", "b.go")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(stdout, "a.go\t3,6\tA"))
 	qt.Assert(t, qt.StringContains(stdout, "b.go\t3,5\tC"))
@@ -369,10 +374,11 @@ func TestSymbols_MultipleFilesPrefixLikeGrep(t *testing.T) {
 // unsupported file anywhere in the list leaves stdout empty, so a truncated
 // listing can never be read as "that file has no more symbols".
 func TestSymbols_ResolvesEveryFileBeforeWriting(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "main.rb", "def main; end\n")
 
-	stdout, stderr, code := runApp(t, "symbols", "a.go", "main.rb")
+	stdout, stderr, code := runApp(t, "-C", dir, "symbols", "a.go", "main.rb")
 	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
 	qt.Assert(t, qt.Equals(stdout, ""))
 	qt.Assert(t, qt.StringContains(stderr, "unsupported language"))
@@ -384,25 +390,26 @@ func TestSymbols_ResolvesEveryFileBeforeWriting(t *testing.T) {
 // NUL -- which the CSS grouped-selector defect showed the newline form could
 // not promise.
 func TestSymbols_PorcelainNULRecords(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "b.go", "package a\n\nfunc C() int {\n\treturn 3\n}\n")
 
-	stdout, stderr, code := runApp(t, "symbols", "--porcelain", "a.go")
+	stdout, stderr, code := runApp(t, "-C", dir, "symbols", "--porcelain", "a.go")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.Equals(stdout, "A\x00B\x00"))
 
 	// Every other flag composes with it unchanged.
-	stdout, _, code = runApp(t, "symbols", "--porcelain", "--with-lines", "a.go")
+	stdout, _, code = runApp(t, "-C", dir, "symbols", "--porcelain", "--with-lines", "a.go")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stdout, "3,6\tA\x008,10\tB\x00"))
 
-	stdout, _, code = runApp(t, "symbols", "--porcelain", "a.go", "b.go")
+	stdout, _, code = runApp(t, "-C", dir, "symbols", "--porcelain", "a.go", "b.go")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stdout, "a.go\tA\x00a.go\tB\x00b.go\tC\x00"))
 
 	// The default form is untouched -- the completion scripts parse it.
-	stdout, _, code = runApp(t, "symbols", "a.go")
+	stdout, _, code = runApp(t, "-C", dir, "symbols", "a.go")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stdout, "A\nB\n"))
 }

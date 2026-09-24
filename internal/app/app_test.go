@@ -41,15 +41,22 @@ func runApp(t *testing.T, args ...string) (stdout, stderr string, code exitcode.
 	return out.String(), errBuf.String(), code
 }
 
-// chdirTempRepo creates a real repository with one committed Go file and
-// makes it the working directory for the duration of the test.
-func chdirTempRepo(t *testing.T) string {
+// tempRepo creates a real repository with one committed Go file. Tests
+// reach it with `-C dir` rather than t.Chdir so they can run in parallel.
+func tempRepo(t *testing.T) string {
 	t.Helper()
 	dir, _ := gittest.New(t)
 
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 	gittest.Commit(t, dir, "chore: initial")
+	return dir
+}
 
+// chdirTempRepo is tempRepo made the working directory, for the cases that
+// exercise cwd resolution itself or need t.Setenv.
+func chdirTempRepo(t *testing.T) string {
+	t.Helper()
+	dir := tempRepo(t)
 	t.Chdir(dir)
 	return dir
 }
@@ -75,7 +82,8 @@ func gitOut(t *testing.T, dir string, args ...string) string {
 // repository is ever opened: the three help spellings, --version, an
 // unknown command, and the bare invocation docs/CODES.md pins at 129.
 func TestRun_TopLevelDispatch(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
 	for _, tc := range []struct {
 		name       string
@@ -98,7 +106,7 @@ func TestRun_TopLevelDispatch(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			stdout, stderr, code := runApp(t, tc.args...)
+			stdout, stderr, code := runApp(t, append([]string{"-C", cwd}, tc.args...)...)
 			qt.Assert(t, qt.Equals(code, tc.wantCode))
 			if tc.wantStdout != "" {
 				qt.Assert(t, qt.StringContains(stdout, tc.wantStdout))
@@ -114,14 +122,15 @@ func TestRun_TopLevelDispatch(t *testing.T) {
 // at exit 0 rather than being treated as the usage error every other parse
 // failure produces -- pflag reports both as an error from Parse.
 func TestRun_SubcommandHelp(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
 	for _, args := range [][]string{
 		{"diff", "--help"}, {"diff", "-h"},
 		{"commit", "--help"}, {"commit", "-h"},
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
-			stdout, _, code := runApp(t, args...)
+			stdout, _, code := runApp(t, append([]string{"-C", cwd}, args...)...)
 			qt.Assert(t, qt.Equals(code, exitcode.Success))
 			qt.Assert(t, qt.StringContains(stdout, "usage: rgit "+args[0]))
 			qt.Assert(t, qt.StringContains(stdout, "--sym"))
@@ -135,7 +144,8 @@ func TestRun_SubcommandHelp(t *testing.T) {
 // combinations alike. A missing commit message is checked after openRepo
 // (TestRun_CommitWithoutMessageOutsideSequencerIsUsageError).
 func TestRun_UsageErrors(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
 	for _, tc := range []struct {
 		name string
@@ -183,7 +193,7 @@ func TestRun_UsageErrors(t *testing.T) {
 		want: "--porcelain and --quiet are mutually exclusive",
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, stderr, code := runApp(t, tc.args...)
+			_, stderr, code := runApp(t, append([]string{"-C", cwd}, tc.args...)...)
 			qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 			qt.Assert(t, qt.StringContains(stderr, tc.want))
 		})
@@ -310,10 +320,11 @@ func TestRun_ChdirRefusals(t *testing.T) {
 // surface: classification, target building, synthesis, the real git commit,
 // and the per-target listing git cannot produce itself.
 func TestRun_CommitStagesOneSymbol(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
 
-	stdout, _, code := runApp(t, "commit", "-m", "fix(a): bump A", "a.go:A")
+	stdout, _, code := runApp(t, "-C", dir, "commit", "-m", "fix(a): bump A", "a.go:A")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(stdout, "a.go:A"))
@@ -329,15 +340,16 @@ func TestRun_CommitStagesOneSymbol(t *testing.T) {
 // other on the same targets: --dry-run must write nothing, and --porcelain
 // must emit records with no human preamble.
 func TestRun_CommitDryRunAndPorcelain(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 
-	plain, _, code := runApp(t, "commit", "--dry-run", "-m", "fix(a): bump", "a.go:A")
+	plain, _, code := runApp(t, "-C", dir, "commit", "--dry-run", "-m", "fix(a): bump", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(plain, "dry run:"))
 
-	records, _, code := runApp(t, "commit", "--dry-run", "--porcelain", "-m", "fix(a): bump", "a.go:A")
+	records, _, code := runApp(t, "-C", dir, "commit", "--dry-run", "--porcelain", "-m", "fix(a): bump", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Not(qt.StringContains(records, "dry run:")))
 	qt.Assert(t, qt.StringContains(records, "a.go\tA\t"))
@@ -353,10 +365,11 @@ func TestRun_CommitDryRunAndPorcelain(t *testing.T) {
 // diagnostics: -q silences the summary and the listing, while the warning
 // for a target with nothing to commit still reaches stderr.
 func TestRun_CommitQuietSuppressesStdoutOnly(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 
-	stdout, stderr, code := runApp(t, "commit", "-q", "-m", "fix(a): bump", "a.go:A", "a.go:B")
+	stdout, stderr, code := runApp(t, "-C", dir, "commit", "-q", "-m", "fix(a): bump", "a.go:A", "a.go:B")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stdout, ""))
@@ -368,17 +381,18 @@ func TestRun_CommitQuietSuppressesStdoutOnly(t *testing.T) {
 // repository to reach: a contradiction between the two spellings of one
 // path, an unresolvable anchor, and every named target already clean.
 func TestRun_CommitExitCodes(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 
 	t.Run("one path named both ways is exit 5", func(t *testing.T) {
 		writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 3\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-		_, stderr, code := runApp(t, "commit", "-m", "fix(a): x", "a.go", "a.go:A")
+		_, stderr, code := runApp(t, "-C", dir, "commit", "-m", "fix(a): x", "a.go", "a.go:A")
 		qt.Assert(t, qt.Equals(code, exitcode.ContradictoryAnchors))
 		qt.Assert(t, qt.StringContains(stderr, "named both as a path and as a symbol anchor"))
 	})
 
 	t.Run("an unresolvable anchor is exit 3", func(t *testing.T) {
-		_, stderr, code := runApp(t, "commit", "-m", "fix(a): x", "a.go:NoSuchSymbol")
+		_, stderr, code := runApp(t, "-C", dir, "commit", "-m", "fix(a): x", "a.go:NoSuchSymbol")
 		qt.Assert(t, qt.Equals(code, exitcode.AnchorUnresolvable))
 		qt.Assert(t, qt.StringContains(stderr, "NoSuchSymbol"))
 	})
@@ -392,21 +406,21 @@ func TestRun_CommitExitCodes(t *testing.T) {
 	// keep did-you-mean candidates on the commit path).
 	t.Run("an unresolvable anchor close to a real one suggests it", func(t *testing.T) {
 		writeAppFile(t, dir, "b.go", "package a\n\nfunc DoesExist() int {\n\treturn 1\n}\n")
-		_, stderr, code := runApp(t, "commit", "-m", "fix(a): x", "b.go:DoesExit")
+		_, stderr, code := runApp(t, "-C", dir, "commit", "-m", "fix(a): x", "b.go:DoesExit")
 		qt.Assert(t, qt.Equals(code, exitcode.AnchorUnresolvable))
 		qt.Assert(t, qt.StringContains(stderr, "did you mean: DoesExist?"))
 	})
 
 	t.Run("every target unchanged is exit 11 and names each skipped target", func(t *testing.T) {
 		writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-		_, stderr, code := runApp(t, "commit", "-m", "fix(a): x", "a.go:A", "a.go:B")
+		_, stderr, code := runApp(t, "-C", dir, "commit", "-m", "fix(a): x", "a.go:A", "a.go:B")
 		qt.Assert(t, qt.Equals(code, exitcode.NothingToCommit))
 		qt.Assert(t, qt.StringContains(stderr, "target 'a.go:A' has no uncommitted changes"))
 		qt.Assert(t, qt.StringContains(stderr, "target 'a.go:B' has no uncommitted changes"))
 	})
 
 	t.Run("--allow-empty suppresses exit 11", func(t *testing.T) {
-		_, _, code := runApp(t, "commit", "--allow-empty", "-m", "chore: empty", "a.go:A")
+		_, _, code := runApp(t, "-C", dir, "commit", "--allow-empty", "-m", "chore: empty", "a.go:A")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 	})
 }
@@ -414,10 +428,11 @@ func TestRun_CommitExitCodes(t *testing.T) {
 // TestRun_CommitWarnsOnNonConventionalMessage pins the advisory: the shape
 // check writes to stderr and must never change the outcome.
 func TestRun_CommitWarnsOnNonConventionalMessage(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 9\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 
-	_, stderr, code := runApp(t, "commit", "-m", "just some words", "a.go:A")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "-m", "just some words", "a.go:A")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(stderr, "does not look like"))
@@ -432,7 +447,8 @@ func TestRun_CommitWarnsOnNonConventionalMessage(t *testing.T) {
 // classification entirely and goes straight to it; the positional case
 // needs a file that genuinely exists above the root to get that far.
 func TestRun_PathEscapeIsRefused(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	outside := filepath.Join(filepath.Dir(dir), "outside.go")
 	if err := os.WriteFile(outside, []byte("package outside\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -444,7 +460,7 @@ func TestRun_PathEscapeIsRefused(t *testing.T) {
 		{"commit", "-m", "feat(x): y", "../outside.go"},
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
-			_, stderr, code := runApp(t, args...)
+			_, stderr, code := runApp(t, append([]string{"-C", dir}, args...)...)
 			qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 			qt.Assert(t, qt.StringContains(stderr, "escapes the repository root"))
 		})
@@ -455,13 +471,14 @@ func TestRun_PathEscapeIsRefused(t *testing.T) {
 // rejected on both commands rather than silently ignored, which would
 // leave a caller reading an unfiltered diff believing it was filtered.
 func TestRun_MalformedSymIsRefused(t *testing.T) {
-	chdirTempRepo(t)
+	t.Parallel()
+	cwd := tempRepo(t)
 
 	for _, args := range [][]string{
 		{"commit", "-m", "feat(x): y", "--sym", "a.go"},
 		{"diff", "--sym", "a.go"},
 	} {
-		_, stderr, code := runApp(t, args...)
+		_, stderr, code := runApp(t, append([]string{"-C", cwd}, args...)...)
 		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 		qt.Assert(t, qt.StringContains(stderr, "malformed --sym value"))
 	}
@@ -471,16 +488,17 @@ func TestRun_MalformedSymIsRefused(t *testing.T) {
 // --porcelain's records, --sym filtering, and the --quiet/--exit-code pair
 // that makes it scriptable.
 func TestRun_DiffScopesAndOutput(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 
 	t.Run("clean tree prints nothing and exits 0", func(t *testing.T) {
-		stdout, _, code := runApp(t, "diff")
+		stdout, _, code := runApp(t, "-C", dir, "diff")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stdout, ""))
 	})
 
 	t.Run("--quiet on a clean tree exits 0", func(t *testing.T) {
-		stdout, _, code := runApp(t, "diff", "--quiet")
+		stdout, _, code := runApp(t, "-C", dir, "diff", "--quiet")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stdout, ""))
 	})
@@ -488,14 +506,14 @@ func TestRun_DiffScopesAndOutput(t *testing.T) {
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 
 	t.Run("default scope attributes the hunk to its symbol", func(t *testing.T) {
-		stdout, _, code := runApp(t, "diff")
+		stdout, _, code := runApp(t, "-C", dir, "diff")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.StringContains(stdout, "a.go"))
 		qt.Assert(t, qt.StringContains(stdout, "A"))
 	})
 
 	t.Run("--porcelain emits five tab-separated fields", func(t *testing.T) {
-		stdout, _, code := runApp(t, "diff", "--porcelain")
+		stdout, _, code := runApp(t, "-C", dir, "diff", "--porcelain")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		for line := range strings.SplitSeq(strings.TrimRight(stdout, "\n"), "\n") {
 			qt.Assert(t, qt.Equals(len(strings.Split(line, "\t")), 5))
@@ -504,25 +522,25 @@ func TestRun_DiffScopesAndOutput(t *testing.T) {
 	})
 
 	t.Run("--sym filters to one anchor", func(t *testing.T) {
-		stdout, _, code := runApp(t, "diff", "--porcelain", "--sym", "a.go:A")
+		stdout, _, code := runApp(t, "-C", dir, "diff", "--porcelain", "--sym", "a.go:A")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.StringContains(stdout, "a.go\tA\t"))
 		qt.Assert(t, qt.Not(qt.StringContains(stdout, "\tB\t")))
 	})
 
 	t.Run("--exit-code reports a dirty tree as 1", func(t *testing.T) {
-		_, _, code := runApp(t, "diff", "--exit-code")
+		_, _, code := runApp(t, "-C", dir, "diff", "--exit-code")
 		qt.Assert(t, qt.Equals(code, exitcode.Code(1)))
 	})
 
 	t.Run("--quiet implies --exit-code and prints nothing", func(t *testing.T) {
-		stdout, _, code := runApp(t, "diff", "--quiet")
+		stdout, _, code := runApp(t, "-C", dir, "diff", "--quiet")
 		qt.Assert(t, qt.Equals(code, exitcode.Code(1)))
 		qt.Assert(t, qt.Equals(stdout, ""))
 	})
 
 	t.Run("an unresolvable --sym is refused, not reported clean", func(t *testing.T) {
-		_, stderr, code := runApp(t, "diff", "--sym", "a.go:NoSuchSymbol")
+		_, stderr, code := runApp(t, "-C", dir, "diff", "--sym", "a.go:NoSuchSymbol")
 		qt.Assert(t, qt.Equals(code, exitcode.AnchorUnresolvable))
 		qt.Assert(t, qt.StringContains(stderr, "NoSuchSymbol"))
 	})
@@ -533,14 +551,14 @@ func TestRun_DiffScopesAndOutput(t *testing.T) {
 	writeAppFile(t, dir, "dup.go", "package a\n\nfunc init() { println(1) }\n\nfunc init() { println(2) }\n")
 
 	t.Run("an ordinal --sym anchor warns", func(t *testing.T) {
-		_, stderr, code := runApp(t, "diff", "--sym", "dup.go:init#2")
+		_, stderr, code := runApp(t, "-C", dir, "diff", "--sym", "dup.go:init#2")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.StringContains(stderr, "dup.go:init#2"))
 		qt.Assert(t, qt.StringContains(stderr, "positional"))
 	})
 
 	t.Run("a uniquely named --sym anchor does not warn", func(t *testing.T) {
-		_, stderr, code := runApp(t, "diff", "--sym", "a.go:A")
+		_, stderr, code := runApp(t, "-C", dir, "diff", "--sym", "a.go:A")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Not(qt.StringContains(stderr, "positional")))
 	})
@@ -559,11 +577,12 @@ func TestRun_DiffScopesAndOutput(t *testing.T) {
 // without this test also being the thing that goes stale the next time
 // RenderText's own format changes.
 func TestRun_DiffPatchFlag(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 
 	t.Run("default output is unchanged by the patch feature's existence", func(t *testing.T) {
-		stdout, _, code := runApp(t, "diff")
+		stdout, _, code := runApp(t, "-C", dir, "diff")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 
 		repo := gitx.New(dir)
@@ -577,7 +596,7 @@ func TestRun_DiffPatchFlag(t *testing.T) {
 	t.Run("-p/--patch includes the real patch body after the report", func(t *testing.T) {
 		for _, flag := range []string{"-p", "--patch"} {
 			t.Run(flag, func(t *testing.T) {
-				stdout, _, code := runApp(t, "diff", flag)
+				stdout, _, code := runApp(t, "-C", dir, "diff", flag)
 				qt.Assert(t, qt.Equals(code, exitcode.Success))
 				qt.Assert(t, qt.StringContains(stdout, "a.go"))
 				qt.Assert(t, qt.StringContains(stdout, "diff --git"))
@@ -587,13 +606,13 @@ func TestRun_DiffPatchFlag(t *testing.T) {
 	})
 
 	t.Run("--porcelain and --patch are mutually exclusive", func(t *testing.T) {
-		_, stderr, code := runApp(t, "diff", "--porcelain", "--patch")
+		_, stderr, code := runApp(t, "-C", dir, "diff", "--porcelain", "--patch")
 		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 		qt.Assert(t, qt.StringContains(stderr, "mutually exclusive"))
 	})
 
 	t.Run("--quiet suppresses the patch body too", func(t *testing.T) {
-		stdout, _, code := runApp(t, "diff", "--patch", "--quiet")
+		stdout, _, code := runApp(t, "-C", dir, "diff", "--patch", "--quiet")
 		qt.Assert(t, qt.Equals(code, exitcode.Code(1)))
 		qt.Assert(t, qt.Equals(stdout, ""))
 	})
@@ -728,11 +747,12 @@ func TestRestoreDoubleDash_ReconstructsThroughRealPflag(t *testing.T) {
 // gpg.program pointed at a binary that always fails turns any signing
 // attempt into a deterministic failure, which is proof the flag arrived.
 func TestRun_GPGSignShorthandReachesGit(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	gittest.Git(t, dir, "config", "gpg.program", "/bin/false")
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 5\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 
-	_, stderr, code := runApp(t, "commit", "-SDEADBEEF", "-m", "feat(a): signed", "a.go:A")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "-SDEADBEEF", "-m", "feat(a): signed", "a.go:A")
 
 	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))
 	qt.Assert(t, qt.StringContains(stderr, "sign"))
@@ -760,10 +780,11 @@ func TestRun_GPGSignShorthandReachesGit(t *testing.T) {
 // code, but only the e2e twin proves the hint fires for the specific
 // failure its own text names.
 func TestRun_PushFailureReportsUpstreamHint(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 
-	stdout, stderr, code := runApp(t, "commit", "--push", "-m", "fix(a): bump", "a.go:A")
+	stdout, stderr, code := runApp(t, "-C", dir, "commit", "--push", "-m", "fix(a): bump", "a.go:A")
 
 	qt.Assert(t, qt.Equals(code, exitcode.PushFailed))
 	// AGENTS.md: a push failure never rolls back the commit that preceded
@@ -785,7 +806,8 @@ func TestRun_PushFailureReportsUpstreamHint(t *testing.T) {
 // Each row also has to match git's own numstat for that file, since the
 // aggregate it replaced did.
 func TestRun_PathspecListsEveryFileItStages(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "apps/svc/one.go", "package svc\n\nfunc One() int {\n\treturn 1\n}\n")
 	writeAppFile(t, dir, "apps/svc/notes.txt", "x\n")
 	gittest.Commit(t, dir, "chore: fixture")
@@ -796,7 +818,7 @@ func TestRun_PathspecListsEveryFileItStages(t *testing.T) {
 	// pathspec, so it belongs in the listing too.
 	writeAppFile(t, dir, "apps/svc/two.go", "package svc\n\nfunc Two() int {\n\treturn 2\n}\n")
 
-	stdout, _, code := runApp(t, "commit", "--dry-run", "--porcelain", "-m", "chore: svc", "apps/svc")
+	stdout, _, code := runApp(t, "-C", dir, "commit", "--dry-run", "--porcelain", "-m", "chore: svc", "apps/svc")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 
 	got := map[string]string{}
@@ -818,11 +840,12 @@ func TestRun_PathspecListsEveryFileItStages(t *testing.T) {
 // listing, because `git add` is what reports "did not match any files" and
 // it only gets the chance if the target is still staged.
 func TestRun_PathspecMatchingNothingStillListsItself(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "kept/keep.txt", "x\n")
 	gittest.Commit(t, dir, "chore: fixture")
 
-	stdout, _, code := runApp(t, "commit", "--dry-run", "--porcelain", "-m", "chore: none", "kept")
+	stdout, _, code := runApp(t, "-C", dir, "commit", "--dry-run", "--porcelain", "-m", "chore: none", "kept")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(stdout, "kept\t\t0\t0"))
@@ -888,10 +911,11 @@ if ($null -ne $errors -and $errors.Count -gt 0) {
 // the usage error docs/CODES.md gives every other malformed argument for
 // anything else.
 func TestRun_Completion(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
 	t.Run("bash", func(t *testing.T) {
-		stdout, stderr, code := runApp(t, "completion", "bash")
+		stdout, stderr, code := runApp(t, "-C", cwd, "completion", "bash")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stderr, ""))
 		qt.Assert(t, qt.StringContains(stdout, "complete -F _rgit_completion rgit"))
@@ -906,7 +930,7 @@ func TestRun_Completion(t *testing.T) {
 	})
 
 	t.Run("zsh", func(t *testing.T) {
-		stdout, stderr, code := runApp(t, "completion", "zsh")
+		stdout, stderr, code := runApp(t, "-C", cwd, "completion", "zsh")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stderr, ""))
 		qt.Assert(t, qt.StringContains(stdout, "compdef _rgit rgit"))
@@ -916,7 +940,7 @@ func TestRun_Completion(t *testing.T) {
 	})
 
 	t.Run("fish", func(t *testing.T) {
-		stdout, stderr, code := runApp(t, "completion", "fish")
+		stdout, stderr, code := runApp(t, "-C", cwd, "completion", "fish")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stderr, ""))
 		qt.Assert(t, qt.StringContains(stdout, "complete -c rgit -f -a '(__rgit_complete)'"))
@@ -926,7 +950,7 @@ func TestRun_Completion(t *testing.T) {
 	})
 
 	t.Run("pwsh", func(t *testing.T) {
-		stdout, stderr, code := runApp(t, "completion", "pwsh")
+		stdout, stderr, code := runApp(t, "-C", cwd, "completion", "pwsh")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stderr, ""))
 		qt.Assert(t, qt.StringContains(stdout, "Register-ArgumentCompleter -Native -CommandName rgit"))
@@ -938,7 +962,7 @@ func TestRun_Completion(t *testing.T) {
 	})
 
 	t.Run("--help prints usage and exits 0", func(t *testing.T) {
-		stdout, stderr, code := runApp(t, "completion", "--help")
+		stdout, stderr, code := runApp(t, "-C", cwd, "completion", "--help")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stdout, completionHelp))
 		qt.Assert(t, qt.Equals(stderr, ""))
@@ -960,7 +984,7 @@ func TestRun_Completion(t *testing.T) {
 			{"pwsh -h", "pwsh", "-h"},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
-				stdout, stderr, code := runApp(t, "completion", tc.shell, tc.help)
+				stdout, stderr, code := runApp(t, "-C", cwd, "completion", tc.shell, tc.help)
 				qt.Assert(t, qt.Equals(code, exitcode.Success))
 				qt.Assert(t, qt.Equals(stdout, completionHelp))
 				qt.Assert(t, qt.Equals(stderr, ""))
@@ -977,7 +1001,7 @@ func TestRun_Completion(t *testing.T) {
 		{"too many args", []string{"completion", "bash", "zsh"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			stdout, stderr, code := runApp(t, tc.args...)
+			stdout, stderr, code := runApp(t, append([]string{"-C", cwd}, tc.args...)...)
 			qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 			qt.Assert(t, qt.Equals(stdout, ""))
 			qt.Assert(t, qt.Not(qt.Equals(stderr, "")))
@@ -994,9 +1018,10 @@ func TestRun_Completion(t *testing.T) {
 // (languages_sql_test.go, languages_nosql_test.go), which is exactly why
 // this case avoids asserting either way about it.
 func TestRun_Languages(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
-	stdout, stderr, code := runApp(t, "languages")
+	stdout, stderr, code := runApp(t, "-C", cwd, "languages")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	for _, want := range []string{"go", ".go", "css", ".css", "typescript", ".ts"} {
@@ -1010,9 +1035,10 @@ func TestRun_Languages(t *testing.T) {
 // "sql" record appears, and what its GATED field reads, is build-specific
 // and covered separately (languages_sql_test.go, languages_nosql_test.go).
 func TestRun_LanguagesPorcelain(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
-	stdout, stderr, code := runApp(t, "languages", "--porcelain")
+	stdout, stderr, code := runApp(t, "-C", cwd, "languages", "--porcelain")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	// No stray human decoration leaking into the machine form.
@@ -1037,9 +1063,10 @@ func TestRun_LanguagesPorcelain(t *testing.T) {
 // always compiles in, per TestRun_Languages's own always-present list),
 // even though the underlying binary still contains every grammar regardless.
 func TestRun_LanguagesInRepo(t *testing.T) {
-	chdirTempRepo(t) // commits a.go, a Go file, and nothing else
+	t.Parallel()
+	cwd := tempRepo(t) // commits a.go, a Go file, and nothing else
 
-	stdout, stderr, code := runApp(t, "languages", "--in-repo")
+	stdout, stderr, code := runApp(t, "-C", cwd, "languages", "--in-repo")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.StringContains(stdout, "go"))
@@ -1051,18 +1078,20 @@ func TestRun_LanguagesInRepo(t *testing.T) {
 // "rgit languages" (TestRun_Languages), and fails clearly rather than
 // silently listing nothing or every grammar.
 func TestRun_LanguagesInRepoOutsideRepoErrors(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
-	_, stderr, code := runApp(t, "languages", "--in-repo")
+	_, stderr, code := runApp(t, "-C", cwd, "languages", "--in-repo")
 	qt.Assert(t, qt.Not(qt.Equals(code, exitcode.Success)))
 	qt.Assert(t, qt.Not(qt.Equals(stderr, "")))
 }
 
 // TestRun_LanguagesHelpAndUsage covers the non-listing usage error path.
 func TestRun_LanguagesHelpAndUsage(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
-	stdout, stderr, code := runApp(t, "languages", "extra")
+	stdout, stderr, code := runApp(t, "-C", cwd, "languages", "extra")
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.Equals(stdout, ""))
 	wantUsage := "rgit: languages: unrecognized argument \"extra\"\n" + languagesHelp
@@ -1073,9 +1102,10 @@ func TestRun_LanguagesHelpAndUsage(t *testing.T) {
 // test environment always has git on PATH, so the essential check passes
 // regardless of which optional tools happen to be installed.
 func TestRun_Doctor(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
-	stdout, stderr, code := runApp(t, "doctor")
+	stdout, stderr, code := runApp(t, "-C", cwd, "doctor")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.StringContains(stdout, "[ok]"))
@@ -1113,9 +1143,10 @@ func TestRun_Doctor(t *testing.T) {
 // KIND/NAME/STATUS/DETAIL row per check, no header, and no grammar rows --
 // "rgit languages --porcelain" already owns that listing.
 func TestRun_DoctorPorcelain(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
-	stdout, stderr, code := runApp(t, "doctor", "--porcelain")
+	stdout, stderr, code := runApp(t, "-C", cwd, "doctor", "--porcelain")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.Not(qt.StringContains(stdout, "Environment:")))
@@ -1139,13 +1170,14 @@ func TestRun_DoctorPorcelain(t *testing.T) {
 // hard requirement) always meets internal/prereq.MinGitVersion, so both
 // output forms carry an "ok" git version row alongside the plain git row.
 func TestRun_DoctorReportsGitVersion(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
-	stdout, _, code := runApp(t, "doctor")
+	stdout, _, code := runApp(t, "-C", cwd, "doctor")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(stdout, "git version"))
 
-	stdout, _, code = runApp(t, "doctor", "--porcelain")
+	stdout, _, code = runApp(t, "-C", cwd, "doctor", "--porcelain")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.StringContains(stdout, "env\tgit version\tok\t"))
 }
@@ -1280,9 +1312,10 @@ func TestRun_DoctorMissingGitIsFatal(t *testing.T) {
 // without a separate `rgit languages` call. Which word that second line
 // carries is build-specific (languages_sql_test.go, languages_nosql_test.go).
 func TestRun_VersionReportsGrammars(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
-	stdout, _, code := runApp(t, "--version")
+	stdout, _, code := runApp(t, "-C", cwd, "--version")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	lines := strings.SplitN(stdout, "\n", 2)
 	qt.Assert(t, qt.Equals(lines[0], "rgit v0.0.0-test"))
@@ -1304,10 +1337,11 @@ func TestRun_VersionReportsGrammars(t *testing.T) {
 // languages_nosql_test.go), which does. True regardless of -tags rgit_sql,
 // so it belongs in the untagged file rather than either build-specific one.
 func TestRun_UnsupportedLanguageGetsNoRebuildHint(t *testing.T) {
-	dir := chdirTempRepo(t)
+	t.Parallel()
+	dir := tempRepo(t)
 	writeAppFile(t, dir, "main.rb", "def main; end\n")
 
-	_, stderr, code := runApp(t, "commit", "-m", "feat(x): y", "main.rb:main")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "-m", "feat(x): y", "main.rb:main")
 
 	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
 	qt.Assert(t, qt.StringContains(stderr, "no grammar registered for main.rb"))
@@ -1322,9 +1356,10 @@ func TestRun_UnsupportedLanguageGetsNoRebuildHint(t *testing.T) {
 // at exit 129, so a target rule 6 rejects reads as this and not a bare
 // "invalid argument" -- with "rules considered" in the message.
 func TestRun_UnclassifiableArgReportsRulesConsidered(t *testing.T) {
-	chdirTempRepo(t)
+	t.Parallel()
+	cwd := tempRepo(t)
 
-	_, stderr, code := runApp(t, "commit", "-m", "feat(x): y", "nosuch.go:Nope")
+	_, stderr, code := runApp(t, "-C", cwd, "commit", "-m", "feat(x): y", "nosuch.go:Nope")
 
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.StringContains(stderr, `rgit: cannot classify "nosuch.go:Nope": rules considered:`))
@@ -1338,11 +1373,12 @@ func TestRun_UnclassifiableArgReportsRulesConsidered(t *testing.T) {
 // help as a binary file and knocked the column alignment out for every flag
 // below it.
 func TestRun_HelpIsPlainText(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
 	for _, args := range [][]string{{"--help"}, {"commit", "--help"}, {"diff", "--help"}} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
-			stdout, _, code := runApp(t, args...)
+			stdout, _, code := runApp(t, append([]string{"-C", cwd}, args...)...)
 			qt.Assert(t, qt.Equals(code, exitcode.Success))
 			if i := strings.IndexFunc(stdout, func(r rune) bool {
 				return r < 0x20 && r != '\n' && r != '\t'

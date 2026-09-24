@@ -13,12 +13,12 @@ import (
 )
 
 func TestRunCommit_PorcelainEmitsCommitSHA(t *testing.T) {
+	t.Parallel()
 	dir, _ := gittest.RepoWithFile(t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n", "feat: add A")
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 2\n}\n")
-	t.Chdir(dir)
 
 	var stdout, stderr strings.Builder
-	code := runCommit(context.Background(), "", []string{"--dry-run", "--porcelain", "-m", "fix: update A", "a.go"}, &stdout, &stderr)
+	code := runCommit(context.Background(), dir, []string{"--dry-run", "--porcelain", "-m", "fix: update A", "a.go"}, &stdout, &stderr)
 	if code != exitcode.Success {
 		t.Fatalf("dry-run porcelain = %v; stdout: %s; stderr: %s", code, stdout.String(), stderr.String())
 	}
@@ -28,7 +28,7 @@ func TestRunCommit_PorcelainEmitsCommitSHA(t *testing.T) {
 
 	stdout.Reset()
 	stderr.Reset()
-	code = runCommit(context.Background(), "", []string{"--porcelain", "-m", "fix: update A", "a.go"}, &stdout, &stderr)
+	code = runCommit(context.Background(), dir, []string{"--porcelain", "-m", "fix: update A", "a.go"}, &stdout, &stderr)
 	if code != exitcode.Success {
 		t.Fatalf("porcelain commit = %v; stdout: %s; stderr: %s", code, stdout.String(), stderr.String())
 	}
@@ -47,7 +47,7 @@ func TestRunCommit_PorcelainEmitsCommitSHA(t *testing.T) {
 
 	stdout.Reset()
 	stderr.Reset()
-	code = runCommit(context.Background(), "", []string{"--allow-empty", "--porcelain", "-m", "chore: empty", "a.go:A"}, &stdout, &stderr)
+	code = runCommit(context.Background(), dir, []string{"--allow-empty", "--porcelain", "-m", "chore: empty", "a.go:A"}, &stdout, &stderr)
 	if code != exitcode.Success {
 		t.Fatalf("allow-empty porcelain = %v; stdout: %s; stderr: %s", code, stdout.String(), stderr.String())
 	}
@@ -58,12 +58,12 @@ func TestRunCommit_PorcelainEmitsCommitSHA(t *testing.T) {
 }
 
 func TestRunCommit_QuietSuccessEmptyStdout(t *testing.T) {
+	t.Parallel()
 	dir, _ := gittest.RepoWithFile(t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n", "feat: add A")
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 2\n}\n")
-	t.Chdir(dir)
 
 	var stdout, stderr strings.Builder
-	code := runCommit(context.Background(), "", []string{"--quiet", "-m", "fix: update A", "a.go"}, &stdout, &stderr)
+	code := runCommit(context.Background(), dir, []string{"--quiet", "-m", "fix: update A", "a.go"}, &stdout, &stderr)
 	if code != exitcode.Success {
 		t.Fatalf("quiet commit = %v; stdout: %s; stderr: %s", code, stdout.String(), stderr.String())
 	}
@@ -78,6 +78,7 @@ func TestRunCommit_QuietSuccessEmptyStdout(t *testing.T) {
 // past instant (ctime is not settable, hence trustctime off), which is what
 // a same-tick edit looks like under load.
 func TestRunCommit_SameTickEditIsCommitted(t *testing.T) {
+	t.Parallel()
 	dir, _ := gittest.New(t)
 	gittest.Git(t, dir, "config", "core.trustctime", "false")
 	path := filepath.Join(dir, "a.go")
@@ -93,10 +94,9 @@ func TestRunCommit_SameTickEditIsCommitted(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	t.Chdir(dir)
 
 	var stdout, stderr strings.Builder
-	if code := runCommit(context.Background(), "", []string{"--quiet", "-m", "fix: update A", "a.go"}, &stdout, &stderr); code != exitcode.Success {
+	if code := runCommit(context.Background(), dir, []string{"--quiet", "-m", "fix: update A", "a.go"}, &stdout, &stderr); code != exitcode.Success {
 		t.Fatalf("commit = %v; stderr: %s", code, stderr.String())
 	}
 	if got := gittest.Git(t, dir, "show", "HEAD:a.go"); !strings.Contains(got, "return 2") {

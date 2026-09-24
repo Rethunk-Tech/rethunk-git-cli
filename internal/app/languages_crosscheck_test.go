@@ -11,11 +11,12 @@ import (
 )
 
 func TestRun_LanguagesHelpEquality(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
 	for _, arg := range []string{"--help", "-h"} {
 		t.Run(arg, func(t *testing.T) {
-			stdout, stderr, code := runApp(t, "languages", arg)
+			stdout, stderr, code := runApp(t, "-C", cwd, "languages", arg)
 			qt.Assert(t, qt.Equals(code, exitcode.Success))
 			qt.Assert(t, qt.Equals(stdout, languagesHelp))
 			qt.Assert(t, qt.Equals(stderr, ""))
@@ -24,9 +25,10 @@ func TestRun_LanguagesHelpEquality(t *testing.T) {
 }
 
 func TestRun_LanguagesPorcelainCrossCheckColumn(t *testing.T) {
-	t.Chdir(t.TempDir())
+	t.Parallel()
+	cwd := t.TempDir()
 
-	stdout, stderr, code := runApp(t, "languages", "--porcelain")
+	stdout, stderr, code := runApp(t, "-C", cwd, "languages", "--porcelain")
 	qt.Assert(t, qt.Equals(code, 0))
 	qt.Assert(t, qt.Equals(stderr, ""))
 
