@@ -225,7 +225,7 @@ func trySpawnDaemon(ctx context.Context, spec serverSpec, sockPath string) {
 	// is left alone.
 	unlinkDeadSocket(ctx, sockPath)
 
-	cmd := exec.CommandContext(context.WithoutCancel(ctx), spec.bin, spec.daemonArgs(sockPath)...)
+	cmd := exec.CommandContext(context.WithoutCancel(ctx), spec.bin, spec.daemonArgs(sockPath)...) //nolint:gosec // spec is an internal server entry and the socket path was verified before spawn
 	cmd.Stdin = nil
 	// The daemon's own stderr is diagnostic noise about itself, not about
 	// this rgit invocation; discard it rather than let it interleave with
@@ -308,7 +308,7 @@ func dialStdio(ctx context.Context, spec serverSpec, repoRoot string) (*Client, 
 	// CommandContext, unlike the daemon spawn above: this process is meant
 	// to live only as long as the query, so a cancelled context must take
 	// it down rather than leave it running on a pipe nobody reads.
-	cmd := exec.CommandContext(ctx, spec.bin, spec.stdioArgs...)
+	cmd := exec.CommandContext(ctx, spec.bin, spec.stdioArgs...) //nolint:gosec // spec and its argv are fixed internal server registry entries
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, true

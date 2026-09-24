@@ -732,7 +732,7 @@ func callerIndexPath(ctx context.Context, root string) (string, error) {
 		}
 		return filepath.Join(root, v), nil
 	}
-	out, err := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--absolute-git-dir").Output()
+	out, err := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--absolute-git-dir").Output() //nolint:gosec // root is rgit's selected repository path, passed as git -C argv rather than shell input
 	if err != nil {
 		return "", err
 	}

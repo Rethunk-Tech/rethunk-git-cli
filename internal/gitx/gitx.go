@@ -126,7 +126,7 @@ func (e *GitError) Error() string {
 // behaving normally, not failing to run.
 func (r *Repo) run(ctx context.Context, stdin io.Reader, args ...string) (Result, error) {
 	full := append([]string{"-C", r.root}, args...)
-	cmd := exec.CommandContext(ctx, "git", full...)
+	cmd := exec.CommandContext(ctx, "git", full...) //nolint:gosec // rgit deliberately delegates git-shaped arguments directly, never through a shell
 	cmd.Env = r.env
 	cmd.Stdin = stdin
 
@@ -276,7 +276,7 @@ func (r *Repo) catFilePathStatus(ctx context.Context, rev, path string) (known, 
 func (r *Repo) CatFileSample(ctx context.Context, rev, path string, limit int) (sample []byte, exists bool, err error) {
 	args := []string{"cat-file", "-p", rev + ":" + path}
 	full := append([]string{"-C", r.root}, args...)
-	cmd := exec.CommandContext(ctx, "git", full...)
+	cmd := exec.CommandContext(ctx, "git", full...) //nolint:gosec // rev:path is a git object selector passed as one argv element, never shell code
 	cmd.Env = r.env
 	// Every other helper in this package buffers stderr through run()'s own
 	// bytes.Buffer; this one builds its *exec.Cmd by hand (it needs
@@ -364,7 +364,7 @@ func (r *Repo) BatchCatFile(ctx context.Context, requests []BatchCatFileRequest)
 
 	args := []string{"cat-file", "--batch"}
 	full := append([]string{"-C", r.root}, args...)
-	cmd := exec.CommandContext(ctx, "git", full...)
+	cmd := exec.CommandContext(ctx, "git", full...) //nolint:gosec // requested rev:path selectors are passed directly to git, never through a shell
 	cmd.Env = r.env
 
 	stdin, err := cmd.StdinPipe()

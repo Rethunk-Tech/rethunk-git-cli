@@ -65,7 +65,7 @@ func RepoWithFile(t testing.TB, rel, content, message string) (dir string, repo 
 // caller can assert on it without a second spelling of this function.
 func Git(t testing.TB, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.CommandContext(context.Background(), "git", args...)
+	cmd := exec.CommandContext(context.Background(), "git", args...) //nolint:gosec // fixture arguments go directly to the real git binary, never through a shell
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -88,7 +88,7 @@ func Git(t testing.TB, dir string, args ...string) string {
 func disableAutoMaintenance(t testing.TB, dir string) {
 	t.Helper()
 	for _, kv := range [][2]string{{"gc.auto", "0"}, {"maintenance.auto", "false"}} {
-		cmd := exec.CommandContext(context.Background(), "git", "config", kv[0], kv[1])
+		cmd := exec.CommandContext(context.Background(), "git", "config", kv[0], kv[1]) //nolint:gosec // fixed test config values go directly to git, never through a shell
 		cmd.Dir = dir
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git config %s %s: %v: %s", kv[0], kv[1], err, out)
@@ -101,7 +101,7 @@ func disableAutoMaintenance(t testing.TB, dir string) {
 // input format is more precise than a sequence of command-line arguments.
 func GitInput(t testing.TB, dir, input string, args ...string) string {
 	t.Helper()
-	cmd := exec.CommandContext(context.Background(), "git", args...)
+	cmd := exec.CommandContext(context.Background(), "git", args...) //nolint:gosec // fixture arguments go directly to the real git binary, never through a shell
 	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader(input)
 	out, err := cmd.CombinedOutput()

@@ -244,7 +244,7 @@ func prereqFatal(goCheck, gitCheck, cgoCheck, ccCheck prereq.Check, cc string) e
 }
 
 func goEnv(name string) string {
-	out, err := exec.CommandContext(context.Background(), "go", "env", name).Output()
+	out, err := exec.CommandContext(context.Background(), "go", "env", name).Output() //nolint:gosec // name is selected from installer-owned Go environment probes, not user input
 	if err != nil {
 		return ""
 	}
@@ -571,7 +571,7 @@ func relTo(root, path string) string {
 // that stamp unset rather than inventing a version scheme this repo has
 // not established.
 func gitVersion(repoRoot string) string {
-	out, err := exec.CommandContext(context.Background(), "git", "-C", repoRoot, "describe", "--tags", "--always", "--dirty").Output()
+	out, err := exec.CommandContext(context.Background(), "git", "-C", repoRoot, "describe", "--tags", "--always", "--dirty").Output() //nolint:gosec // repoRoot is passed as git's -C argument, never interpreted by a shell
 	if err != nil {
 		return ""
 	}
@@ -620,7 +620,7 @@ func installArgs(sql bool, ver string) []string {
 // reflected rather than silently served from a stale cached object -- the
 // exact regression sqlCSRCContentHash (tested) exists to prevent.
 func runInstall(repoRoot string, sql bool, sqlPkgDir, ver, prefix string) error {
-	cmd := exec.CommandContext(context.Background(), "go", installArgs(sql, ver)...)
+	cmd := exec.CommandContext(context.Background(), "go", installArgs(sql, ver)...) //nolint:gosec // installer-owned go flags and repository-derived version are passed without a shell
 	cmd.Dir = repoRoot
 	env := append(os.Environ(), "GOBIN="+prefix)
 	if sql {
