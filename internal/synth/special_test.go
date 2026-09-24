@@ -42,9 +42,10 @@ func commitSpecial(ctx context.Context, t *testing.T, dir string, paths ...strin
 func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
+	t.Cleanup(cancel)
 
 	t.Run("symlink deleted from the worktree classifies via HEAD's 120000 entry", func(t *testing.T) {
+		t.Parallel()
 		dir, repo := gittest.New(ctx, t)
 		if err := os.WriteFile(filepath.Join(dir, "target.txt"), []byte("x\n"), 0o600); err != nil {
 			t.Fatal(err)
@@ -68,6 +69,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	})
 
 	t.Run("submodule directory removed from the worktree classifies via HEAD's 160000 entry", func(t *testing.T) {
+		t.Parallel()
 		dir, repo := gittest.New(ctx, t)
 		subDir := filepath.Join(dir, "sub")
 		if err := os.MkdirAll(subDir, 0o750); err != nil {
@@ -98,6 +100,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	})
 
 	t.Run("uninitialized submodule directory classifies via HEAD's 160000 entry, not pathRegular", func(t *testing.T) {
+		t.Parallel()
 		// "git submodule deinit" leaves the directory itself in the
 		// worktree, emptied of its own ".git" -- unlike the case above,
 		// where the whole directory is gone. classifyWorktreeEntry's own
@@ -138,6 +141,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	})
 
 	t.Run("binary file deleted from the worktree classifies via HEAD's content", func(t *testing.T) {
+		t.Parallel()
 		dir, repo := gittest.New(ctx, t)
 		if err := os.WriteFile(filepath.Join(dir, "blob.bin"), []byte("a\x00b\x00c"), 0o600); err != nil {
 			t.Fatal(err)
@@ -158,6 +162,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	})
 
 	t.Run("regular file deleted from the worktree classifies as pathRegular via HEAD", func(t *testing.T) {
+		t.Parallel()
 		dir, repo := gittest.New(ctx, t)
 		if err := os.WriteFile(filepath.Join(dir, "plain.go"), []byte("package p\n"), 0o600); err != nil {
 			t.Fatal(err)
@@ -178,6 +183,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	})
 
 	t.Run("plain directory in the worktree classifies as pathRegular, not a submodule", func(t *testing.T) {
+		t.Parallel()
 		dir, repo := gittest.New(ctx, t)
 		if err := os.MkdirAll(filepath.Join(dir, "plaindir"), 0o750); err != nil {
 			t.Fatal(err)
@@ -193,6 +199,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	})
 
 	t.Run("binary file present in the worktree refuses a symbol anchor", func(t *testing.T) {
+		t.Parallel()
 		dir, repo := gittest.New(ctx, t)
 		if err := os.WriteFile(filepath.Join(dir, "blob.bin"), []byte("a\x00b\x00c"), 0o600); err != nil {
 			t.Fatal(err)
@@ -217,6 +224,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	})
 
 	t.Run("path present on neither side classifies as pathRegular", func(t *testing.T) {
+		t.Parallel()
 		dir, repo := gittest.New(ctx, t)
 		// An empty repo: the path was never committed and never existed in
 		// the worktree either. classifyPath's job is refusing an
@@ -282,6 +290,7 @@ func TestStage_RefusesIndexWorktreeBits(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			dir, repo := gittest.New(t.Context(), t)
 			gittest.Write(t, dir, "tracked.go", "package p\n\nfunc Keep() {}\n")
 			commitSpecial(t.Context(), t, dir, "tracked.go")
@@ -314,6 +323,7 @@ func TestCheckGitignoreRefusal_IndexEntryCountsAsTracked(t *testing.T) {
 	t.Parallel()
 
 	t.Run("intent-to-add entry is allowed", func(t *testing.T) {
+		t.Parallel()
 		dir, repo := gittest.New(t.Context(), t)
 		gittest.Write(t, dir, ".gitignore", "skip-me.go\n")
 		gittest.Write(t, dir, "skip-me.go", "package p\n")
@@ -326,6 +336,7 @@ func TestCheckGitignoreRefusal_IndexEntryCountsAsTracked(t *testing.T) {
 	})
 
 	t.Run("folded index name is allowed", func(t *testing.T) {
+		t.Parallel()
 		dir, repo := gittest.New(t.Context(), t)
 		gittest.Git(t.Context(), t, dir, "config", "core.ignorecase", "true")
 		gittest.Write(t, dir, ".gitignore", "skip-me.go\n")
@@ -339,6 +350,7 @@ func TestCheckGitignoreRefusal_IndexEntryCountsAsTracked(t *testing.T) {
 	})
 
 	t.Run("never-indexed entry is refused", func(t *testing.T) {
+		t.Parallel()
 		dir, repo := gittest.New(t.Context(), t)
 		gittest.Write(t, dir, ".gitignore", "skip-me.go\n")
 		gittest.Write(t, dir, "skip-me.go", "package p\n")

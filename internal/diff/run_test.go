@@ -321,6 +321,7 @@ func TestRun_SymFilterMatchesAnyAcceptedAliasSpelling(t *testing.T) {
 		{"Markdown raw heading text", SymRef{File: "doc.md", Name: "Diff Scope"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			report, err := Run(context.Background(), repo, dir, Options{Syms: []SymRef{tt.sym}})
 			if err != nil {
 				t.Fatalf("Run(%+v): %v", tt.sym, err)
@@ -697,6 +698,7 @@ func TestRun_ScopeUsageErrorsAreTyped(t *testing.T) {
 		want: "a two-blob \"A:f.go B:f.go\" scope is exclusive of every other scope selector and pathspec",
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			_, err := Run(context.Background(), repo, dir, tc.opts)
 
 			var uerr *UsageError
@@ -782,6 +784,7 @@ func TestNumstatPath(t *testing.T) {
 		{"brace shorthand, empty new side", "a/{lib => }/f.ts", "a/lib/f.ts", "a/f.ts"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			oldPath, newPath := NumstatPath(tc.raw)
 			if oldPath != tc.oldPath || newPath != tc.newPath {
 				t.Errorf("NumstatPath(%q) = (%q, %q); want (%q, %q)", tc.raw, oldPath, newPath, tc.oldPath, tc.newPath)

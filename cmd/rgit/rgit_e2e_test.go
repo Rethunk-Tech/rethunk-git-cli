@@ -195,6 +195,7 @@ func TestContradictoryPathAndAnchor(t *testing.T) {
 	}
 	for _, tc := range contradictory {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			got := runRgit(t, setup(t), tc.args...)
 			qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.ContradictoryAnchors)))
 			qt.Assert(t, qt.StringContains(got.Stderr, "named both as a path and as a symbol anchor"))
@@ -202,6 +203,7 @@ func TestContradictoryPathAndAnchor(t *testing.T) {
 	}
 
 	t.Run("different files are not a contradiction", func(t *testing.T) {
+		t.Parallel()
 		// The rule is per path, not "a path and an anchor were both given".
 		repo := setup(t)
 		gittest.Write(t, repo, "other.go", "package main\n\nfunc C() int {\n\treturn 3\n}\n")
@@ -218,6 +220,7 @@ func TestCommit_AnnouncesPreambleAndOrdinalAnchors(t *testing.T) {
 	// must be "announced on stderr", and an ordinal, a last resort, must
 	// "warn and suggest qualification".
 	t.Run("new-file preamble is announced", func(t *testing.T) {
+		t.Parallel()
 		repo, _ := gittest.New(t.Context(), t)
 		gittest.Write(t, repo, "new.go", "package main\n\nimport \"fmt\"\n\nfunc Hi() { fmt.Println(\"hi\") }\n")
 
@@ -229,6 +232,7 @@ func TestCommit_AnnouncesPreambleAndOrdinalAnchors(t *testing.T) {
 	})
 
 	t.Run("ordinal anchors warn", func(t *testing.T) {
+		t.Parallel()
 		repo, _ := gittest.New(t.Context(), t)
 		gittest.Write(t, repo, "dup.go", "package main\n\nfunc init() { println(1) }\n\nfunc init() { println(2) }\n")
 
@@ -240,6 +244,7 @@ func TestCommit_AnnouncesPreambleAndOrdinalAnchors(t *testing.T) {
 	})
 
 	t.Run("a uniquely named anchor does not warn", func(t *testing.T) {
+		t.Parallel()
 		// The warning must key on the ordinal form, not fire on every anchor.
 		repo, _ := gittest.New(t.Context(), t)
 		gittest.Write(t, repo, "one.go", "package main\n\nfunc Only() {}\n")
@@ -287,6 +292,7 @@ func TestDiff_CrossCheckReportsWithoutGating(t *testing.T) {
 func TestDocumentedPathsWithoutOtherCoverage(t *testing.T) {
 	t.Parallel()
 	t.Run("no reachable language server degrades to ts-only", func(t *testing.T) {
+		t.Parallel()
 		// Degraded resolution is normal, announced once, and never blocks.
 		//
 		// Both routes to a server have to be closed, or this passes or fails
@@ -981,6 +987,7 @@ func TestHelp_TopLevelExitsZeroOnEverySpelling(t *testing.T) {
 	repo, _ := gittest.New(t.Context(), t)
 	for _, spelling := range []string{"--help", "-h", "help"} {
 		t.Run(spelling, func(t *testing.T) {
+			t.Parallel()
 			got := runRgit(t, repo, spelling)
 			qt.Assert(t, qt.Equals(got.ExitCode, 0))
 			// TestMain sets GOCOVERDIR for the whole process, so the
@@ -1031,6 +1038,7 @@ func TestHelp_SubcommandExitsZeroAndDoesNotLeakPflag(t *testing.T) {
 	for sub, wantFlag := range map[string]string{"commit": "--amend", "diff": "--porcelain"} {
 		for _, spelling := range []string{"--help", "-h"} {
 			t.Run(sub+" "+spelling, func(t *testing.T) {
+				t.Parallel()
 				got := runRgit(t, repo, sub, spelling)
 				qt.Assert(t, qt.Equals(got.ExitCode, 0))
 				qt.Assert(t, qt.Not(qt.StringContains(got.Stdout, "pflag")))
@@ -1494,6 +1502,7 @@ func TestCompletion_FishOffersSubcommandsAndFlags(t *testing.T) {
 	qt.Assert(t, qt.Not(qt.SliceContains(got, "-p")))
 
 	t.Run("symbols offers --for-commit", func(t *testing.T) {
+		t.Parallel()
 		got := runFishCompletion(t, repo, script.Stdout, "symbols", "--")
 		qt.Assert(t, qt.SliceContains(got, "--for-commit"))
 	})

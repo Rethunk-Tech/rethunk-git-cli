@@ -31,6 +31,7 @@ func TestRun_LogHelpEquality(t *testing.T) {
 
 	for _, flag := range []string{"--help", "-h"} {
 		t.Run(flag, func(t *testing.T) {
+			t.Parallel()
 			stdout, stderr, code := runApp(t, "-C", cwd, "log", flag)
 			qt.Assert(t, qt.Equals(code, exitcode.Success))
 			qt.Assert(t, qt.Equals(stdout, logHelp))
@@ -40,6 +41,7 @@ func TestRun_LogHelpEquality(t *testing.T) {
 
 	for _, flag := range []string{"--help", "-h"} {
 		t.Run("path-scoped "+flag, func(t *testing.T) {
+			t.Parallel()
 			stdout, stderr, code := runApp(t, "-C", cwd, "log", "--since=2000-01-01", flag)
 			qt.Assert(t, qt.Equals(code, exitcode.Success))
 			qt.Assert(t, qt.Equals(stdout, logHelp))
@@ -170,6 +172,7 @@ func TestRun_LogPatchFlagIncludesPatch(t *testing.T) {
 
 	for _, flag := range []string{"-p", "--patch"} {
 		t.Run(flag, func(t *testing.T) {
+			t.Parallel()
 			stdout, _, code := runApp(t, "-C", dir, "log", flag, "a.go:A")
 			qt.Assert(t, qt.Equals(code, exitcode.Success))
 			qt.Assert(t, qt.StringContains(stdout, "diff --git"))
@@ -304,19 +307,22 @@ func TestRun_LogRejectsLoneSeparatorAnchor(t *testing.T) {
 // history the same way plain `git log -- path` does.
 func TestRun_LogPathScopedPaths(t *testing.T) {
 	t.Parallel()
-	dir := tempRepo(t) // "chore: initial" touches only a.go
-
-	writeAppFile(t, dir, "x.txt", "x\n")
-	writeAppFile(t, dir, "y.txt", "y\n")
-	gittest.Commit(t.Context(), t, dir, "chore: add x and y")
-
-	writeAppFile(t, dir, "x.txt", "x2\n")
-	gittest.Commit(t.Context(), t, dir, "fix(x): bump x")
-
-	writeAppFile(t, dir, "y.txt", "y2\n")
-	gittest.Commit(t.Context(), t, dir, "fix(y): bump y")
+	setupHistory := func(t *testing.T) string {
+		t.Helper()
+		dir := tempRepo(t)
+		writeAppFile(t, dir, "x.txt", "x\n")
+		writeAppFile(t, dir, "y.txt", "y\n")
+		gittest.Commit(t.Context(), t, dir, "chore: add x and y")
+		writeAppFile(t, dir, "x.txt", "x2\n")
+		gittest.Commit(t.Context(), t, dir, "fix(x): bump x")
+		writeAppFile(t, dir, "y.txt", "y2\n")
+		gittest.Commit(t.Context(), t, dir, "fix(y): bump y")
+		return dir
+	}
 
 	t.Run("one path narrows to only its own touching commits", func(t *testing.T) {
+		t.Parallel()
+		dir := setupHistory(t)
 		stdout, stderr, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "x.txt")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stderr, ""))
@@ -326,6 +332,8 @@ func TestRun_LogPathScopedPaths(t *testing.T) {
 	})
 
 	t.Run("multiple paths union their own touching commits", func(t *testing.T) {
+		t.Parallel()
+		dir := setupHistory(t)
 		stdout, _, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "x.txt", "y.txt")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.StringContains(stdout, "bump x"))
@@ -333,6 +341,8 @@ func TestRun_LogPathScopedPaths(t *testing.T) {
 	})
 
 	t.Run("an existing path that contains a colon is still a pathspec", func(t *testing.T) {
+		t.Parallel()
+		dir := setupHistory(t)
 		writeAppFile(t, dir, "src/notes:draft.md", "draft\n")
 		gittest.Commit(t.Context(), t, dir, "docs: colon-named draft")
 
@@ -345,6 +355,8 @@ func TestRun_LogPathScopedPaths(t *testing.T) {
 	})
 
 	t.Run("zero paths with --since is the whole repository's history", func(t *testing.T) {
+		t.Parallel()
+		dir := setupHistory(t)
 		stdout, _, code := runApp(t, "-C", dir, "log", "--since=2000-01-01")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.StringContains(stdout, "bump x"))
@@ -353,6 +365,8 @@ func TestRun_LogPathScopedPaths(t *testing.T) {
 	})
 
 	t.Run("--since narrows the anchorless form the same as any other filter", func(t *testing.T) {
+		t.Parallel()
+		dir := setupHistory(t)
 		stdout, _, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "--until=2000-01-02")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stdout, ""))
@@ -371,6 +385,7 @@ func TestRun_LogPathScopedMaxCount(t *testing.T) {
 	}
 
 	t.Run("-n limits output", func(t *testing.T) {
+		t.Parallel()
 		stdout, stderr, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "-n", "2", "a.go")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stderr, ""))
@@ -381,6 +396,7 @@ func TestRun_LogPathScopedMaxCount(t *testing.T) {
 	})
 
 	t.Run("--max-count limits output", func(t *testing.T) {
+		t.Parallel()
 		stdout, stderr, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "--max-count=1", "a.go")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stderr, ""))
@@ -390,6 +406,7 @@ func TestRun_LogPathScopedMaxCount(t *testing.T) {
 	})
 
 	t.Run("without max-count output remains unbounded", func(t *testing.T) {
+		t.Parallel()
 		stdout, stderr, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "a.go")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stderr, ""))
@@ -411,6 +428,7 @@ func TestRun_LogPathScopedOutputModes(t *testing.T) {
 	gittest.Commit(t.Context(), t, dir, "fix(a): bump A")
 
 	t.Run("--porcelain emits tab-separated records", func(t *testing.T) {
+		t.Parallel()
 		stdout, _, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "--porcelain")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		for line := range strings.SplitSeq(strings.TrimRight(stdout, "\n"), "\n") {
@@ -421,6 +439,7 @@ func TestRun_LogPathScopedOutputModes(t *testing.T) {
 	})
 
 	t.Run("-p/--patch includes the real patch body", func(t *testing.T) {
+		t.Parallel()
 		stdout, _, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "-p", "a.go")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.StringContains(stdout, "diff --git"))
@@ -428,6 +447,7 @@ func TestRun_LogPathScopedOutputModes(t *testing.T) {
 	})
 
 	t.Run("--porcelain and --patch are mutually exclusive", func(t *testing.T) {
+		t.Parallel()
 		_, stderr, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "--porcelain", "--patch")
 		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 		qt.Assert(t, qt.StringContains(stderr, "mutually exclusive"))

@@ -21,6 +21,7 @@ func TestRun_SymbolsHelpAndUsage(t *testing.T) {
 
 	for _, arg := range []string{"--help", "-h"} {
 		t.Run(arg, func(t *testing.T) {
+			t.Parallel()
 			stdout, stderr, code := runApp(t, "-C", cwd, "symbols", arg)
 			qt.Assert(t, qt.Equals(code, exitcode.Success))
 			qt.Assert(t, qt.Equals(stdout, symbolsHelp))
@@ -318,6 +319,7 @@ func TestRunSymbolsRefusesPathAboveRoot(t *testing.T) {
 
 	for _, arg := range []string{"../outside.go", outside} {
 		t.Run(arg, func(t *testing.T) {
+			t.Parallel()
 			stdout, stderr, code := runApp(t, "-C", dir, "symbols", arg)
 			qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 			qt.Assert(t, qt.Equals(stdout, ""))

@@ -177,6 +177,7 @@ func TestTrimTrailingBlankLines(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			syms := []Symbol{{Name: "x", StartLine: tt.start, EndLine: tt.end}}
 			trimTrailingBlankLines(src, syms)
 			if syms[0].EndLine != tt.wantTrimmedEnd {

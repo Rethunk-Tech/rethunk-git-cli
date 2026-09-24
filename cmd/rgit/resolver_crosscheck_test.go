@@ -64,6 +64,7 @@ func TestLSP_DocumentSymbolsDecodesBothUnionShapes(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			serverConn, clientConn := net.Pipe()
 			errCh := make(chan error, 1)
 			go func() { errCh <- lsptest.ServeMockLSP(serverConn, tc.resultJSON, lsptest.MockServerHooks{}) }()
@@ -98,6 +99,7 @@ func ValidateToken(t string) error {
 	res := mustResolve(t, src, "ValidateToken")
 
 	t.Run("matching range confirms clean", func(t *testing.T) {
+		t.Parallel()
 		found, err := resolve.MatchAndCompare(src, res, []lsp.Symbol{
 			{Name: "ValidateToken", StartLine: 3, EndLine: 5},
 		})
@@ -106,6 +108,7 @@ func ValidateToken(t string) error {
 	})
 
 	t.Run("disagreement is exit 6 with both ranges attached", func(t *testing.T) {
+		t.Parallel()
 		found, err := resolve.MatchAndCompare(src, res, []lsp.Symbol{
 			{Name: "ValidateToken", StartLine: 3, EndLine: 6},
 		})
@@ -119,12 +122,14 @@ func ValidateToken(t string) error {
 	})
 
 	t.Run("server outline not naming the anchor degrades, is not an error", func(t *testing.T) {
+		t.Parallel()
 		found, err := resolve.MatchAndCompare(src, res, nil)
 		qt.Assert(t, qt.IsFalse(found))
 		qt.Assert(t, qt.IsNil(err))
 	})
 
 	t.Run("gopls receiver spelling normalizes for comparison", func(t *testing.T) {
+		t.Parallel()
 		methodSrc := []byte(`package p
 
 type A struct{}
@@ -142,6 +147,7 @@ func (a *A) Get() int { return 1 }
 	})
 
 	t.Run("ordinal anchor matches the Nth same-named symbol in order", func(t *testing.T) {
+		t.Parallel()
 		initSrc := []byte(`package p
 
 func init() { println(1) }
@@ -201,7 +207,7 @@ func ValidateToken(t string) error {
 	}
 
 	var (
-		degraded = true
+		degraded bool
 		err      error
 	)
 	for deadline := time.Now().Add(3 * time.Second); ; {

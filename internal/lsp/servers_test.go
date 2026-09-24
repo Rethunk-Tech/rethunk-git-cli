@@ -38,6 +38,7 @@ func TestDial_NewServers(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.lang, func(t *testing.T) {
+			t.Parallel()
 			if _, err := exec.LookPath(tc.bin); err != nil {
 				t.Skipf("%s not on PATH", tc.bin)
 			}

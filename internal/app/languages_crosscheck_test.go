@@ -16,6 +16,7 @@ func TestRun_LanguagesHelpEquality(t *testing.T) {
 
 	for _, arg := range []string{"--help", "-h"} {
 		t.Run(arg, func(t *testing.T) {
+			t.Parallel()
 			stdout, stderr, code := runApp(t, "-C", cwd, "languages", arg)
 			qt.Assert(t, qt.Equals(code, exitcode.Success))
 			qt.Assert(t, qt.Equals(stdout, languagesHelp))

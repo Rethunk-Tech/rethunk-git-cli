@@ -249,12 +249,14 @@ func TestBuildContextStream(t *testing.T) {
 	t.Parallel()
 
 	t.Run("everything fits, no marker", func(t *testing.T) {
+		t.Parallel()
 		records := []string{"C\th1\tsubject one\n", "F\ta.go\tA\tMOD\t1\t0\n"}
 		got := buildContextStream(records, 4096)
 		qt.Assert(t, qt.Equals(got, records[0]+records[1]))
 	})
 
 	t.Run("budget exceeded keeps only what fits and appends one marker", func(t *testing.T) {
+		t.Parallel()
 		records := []string{"12345\n", "12345\n", "12345\n", "12345\n", "12345\n"} // 6 bytes each, 30 total
 		got := buildContextStream(records, 26)                                     // room for two records plus the X line, not three
 		qt.Assert(t, qt.Equals(got, "12345\n12345\nX\tTRUNCATED\t3\n"))
@@ -269,6 +271,7 @@ func TestBuildContextStream(t *testing.T) {
 	// to also fit the marker alongside any of it, must still shed every
 	// record rather than let the marker overrun budget.
 	t.Run("the X record itself never pushes the stream past budget", func(t *testing.T) {
+		t.Parallel()
 		records := []string{"12345\n", "12345\n", "12345\n"} // 6 bytes each, 18 total
 		const budget = 17                                    // less than the 18-byte total; appending the X line here overran budget
 		got := buildContextStream(records, budget)
@@ -277,6 +280,7 @@ func TestBuildContextStream(t *testing.T) {
 	})
 
 	t.Run("no records is the empty string", func(t *testing.T) {
+		t.Parallel()
 		qt.Assert(t, qt.Equals(buildContextStream(nil, 4096), ""))
 	})
 
@@ -286,6 +290,7 @@ func TestBuildContextStream(t *testing.T) {
 	// TestRun_ContextEmitsDiffRowsBeforeCommits; this fixture proves the
 	// truncation mechanics honor whatever order it hands in.
 	t.Run("truncation drops from the end regardless of record type", func(t *testing.T) {
+		t.Parallel()
 		records := []string{"F\ta.go\tA\tMOD\t1\t0\n", "C\th1\tsubject one\n", "C\th2\tsubject two\n"}
 		got := buildContextStream(records, 40) // room for the F row and the marker, not either C row
 		qt.Assert(t, qt.StringContains(got, "F\ta.go\tA\tMOD\t1\t0\n"))
@@ -295,6 +300,7 @@ func TestBuildContextStream(t *testing.T) {
 	})
 
 	t.Run("W diagnostics consume budget before F rows", func(t *testing.T) {
+		t.Parallel()
 		records := []string{
 			"B\tmain\t\t0\t0\n",
 			"W\tts-only\n",

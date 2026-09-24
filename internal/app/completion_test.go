@@ -126,6 +126,7 @@ func TestCompletionFlags_MatchLiveFlagSets(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			live := map[string]bool{}
 			for _, m := range flagTokenRe.FindAllStringSubmatch(tt.stdout, -1) {
 				if m[1] != "" {
@@ -280,6 +281,7 @@ func TestHandWrittenHelpFullReferenceFooter(t *testing.T) {
 	const footer = "Full reference: docs/USAGE.md"
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			if err := assertHelpFooterSuffix(tt.help, footer, tt.wantBlankLineBefore); err != nil {
 				t.Fatal(err)
 			}

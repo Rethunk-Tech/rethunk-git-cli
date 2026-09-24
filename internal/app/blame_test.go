@@ -93,6 +93,7 @@ func TestRun_BlameHelpEquality(t *testing.T) {
 
 	for _, flag := range []string{"--help", "-h"} {
 		t.Run(flag, func(t *testing.T) {
+			t.Parallel()
 			stdout, stderr, code := runApp(t, "-C", cwd, "blame", flag)
 			qt.Assert(t, qt.Equals(code, exitcode.Success))
 			qt.Assert(t, qt.Equals(stdout, blameHelp))
@@ -353,6 +354,7 @@ func TestRun_FollowRenameResolvesShebangLanguageBeforeTheRename(t *testing.T) {
 	gittest.Commit(t.Context(), t, dir, "feat: extend")
 
 	t.Run("blame", func(t *testing.T) {
+		t.Parallel()
 		stdout, stderr, code := runApp(t, "-C", dir, "blame", "newtool:greet", "--follow-rename")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Not(qt.StringContains(stderr, "unsupported language")))
@@ -360,6 +362,7 @@ func TestRun_FollowRenameResolvesShebangLanguageBeforeTheRename(t *testing.T) {
 	})
 
 	t.Run("log", func(t *testing.T) {
+		t.Parallel()
 		stdout, stderr, code := runApp(t, "-C", dir, "log", "newtool:greet", "--follow-rename")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Not(qt.StringContains(stderr, "unsupported language")))
