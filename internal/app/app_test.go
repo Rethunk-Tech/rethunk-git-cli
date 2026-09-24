@@ -126,8 +126,10 @@ func TestRun_SubcommandHelp(t *testing.T) {
 	cwd := t.TempDir()
 
 	for _, args := range [][]string{
-		{"diff", "--help"}, {"diff", "-h"},
-		{"commit", "--help"}, {"commit", "-h"},
+		{"diff", "--help"},
+		{"diff", "-h"},
+		{"commit", "--help"},
+		{"commit", "-h"},
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			stdout, _, code := runApp(t, append([]string{"-C", cwd}, args...)...)
@@ -623,7 +625,7 @@ func TestRun_DiffPatchFlag(t *testing.T) {
 func TestRun_DiffFromSubdirectory(t *testing.T) {
 	dir := chdirTempRepo(t)
 	writeAppFile(t, dir, "pkg/deep/c.go", "package deep\n\nfunc C() int {\n\treturn 1\n}\n")
-	cmd := exec.Command("git", "add", "-A")
+	cmd := exec.CommandContext(context.Background(), "git", "add", "-A")
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git add: %v: %s", err, out)
@@ -867,7 +869,7 @@ func assertShellParses(t *testing.T, shell, script string) {
 	if err := os.WriteFile(f, []byte(script), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := exec.Command(path, "-n", f).CombinedOutput(); err != nil {
+	if out, err := exec.CommandContext(context.Background(), path, "-n", f).CombinedOutput(); err != nil {
 		t.Fatalf("%s -n %s: %v: %s", shell, f, err, out)
 	}
 }
@@ -899,7 +901,7 @@ if ($null -ne $errors -and $errors.Count -gt 0) {
     exit 1
 }
 `
-	cmd := exec.Command(path, "-NoProfile", "-NonInteractive", "-Command", parseScript)
+	cmd := exec.CommandContext(context.Background(), path, "-NoProfile", "-NonInteractive", "-Command", parseScript)
 	cmd.Env = append(os.Environ(), "RGIT_COMPLETION_SCRIPT="+file)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("pwsh parser: %v: %s", err, output)

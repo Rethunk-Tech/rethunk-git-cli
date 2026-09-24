@@ -15,6 +15,7 @@
 package prereq
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os/exec"
@@ -81,7 +82,7 @@ var gitVersionRe = regexp.MustCompile(`(\d+)\.(\d+)\.(\d+)`)
 // confirmed, not that git is absent -- callers that already have a
 // separate git-presence Check should treat this one as informational.
 func CheckGitVersion(bin string, minVersion GitVersion) Check {
-	out, err := exec.Command(bin, "--version").Output()
+	out, err := exec.CommandContext(context.Background(), bin, "--version").Output()
 	if err != nil {
 		return Check{Name: "git version", OK: false, Detail: "could not run `git --version`"}
 	}

@@ -465,7 +465,7 @@ func TestUnlinkDeadSocket_RemovesDeadSocketFile(t *testing.T) {
 	// dial attempt enough for a stray connect to land inside it. Running
 	// serially keeps that window narrow and the assertion deterministic.
 	sockPath := filepath.Join(shortTempDir(t), "rgit-test.sock")
-	ln, err := net.Listen("unix", sockPath)
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "unix", sockPath)
 	if err != nil {
 		t.Fatal(err)
 	}

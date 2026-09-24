@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -169,7 +170,7 @@ func fatalMessage(format string, args ...any) string {
 // already accounts for GOFLAGS, workspace files, and everything else that
 // can move where "the module" is.
 func resolveRepoRoot() (string, error) {
-	out, err := exec.Command("go", "env", "GOMOD").Output()
+	out, err := exec.CommandContext(context.Background(), "go", "env", "GOMOD").Output()
 	if err != nil {
 		return "", fmt.Errorf("go env GOMOD: %w", err)
 	}
@@ -243,7 +244,7 @@ func prereqFatal(goCheck, gitCheck, cgoCheck, ccCheck prereq.Check, cc string) e
 }
 
 func goEnv(name string) string {
-	out, err := exec.Command("go", "env", name).Output()
+	out, err := exec.CommandContext(context.Background(), "go", "env", name).Output()
 	if err != nil {
 		return ""
 	}
@@ -281,7 +282,7 @@ func firstField(s string) string {
 // never reads, while CgoFiles/Name are still populated from the syntax
 // scan that ran before the embed pattern was resolved.
 func findSQLAdapter(repoRoot string) (dir string, ok bool) {
-	cmd := exec.Command("go", "list", "-tags", "rgit_sql", "-e", "-json", "./...")
+	cmd := exec.CommandContext(context.Background(), "go", "list", "-tags", "rgit_sql", "-e", "-json", "./...")
 	cmd.Dir = repoRoot
 	out, err := cmd.Output()
 	if err != nil {
@@ -376,7 +377,7 @@ func generateSQLParserWith(repoRoot, pkgDir string, dryRun bool, lookPath func(s
 func downloadSQLGrammarModule(repoRoot string) (string, error) {
 	versioned := sqlGrammarModule + "@" + sqlGrammarVersion
 
-	dlCmd := exec.Command("go", "mod", "download", versioned)
+	dlCmd := exec.CommandContext(context.Background(), "go", "mod", "download", versioned)
 	dlCmd.Dir = repoRoot
 	var stderr bytes.Buffer
 	dlCmd.Stderr = &stderr
@@ -384,7 +385,7 @@ func downloadSQLGrammarModule(repoRoot string) (string, error) {
 		return "", fmt.Errorf("go mod download %s: %w: %s", versioned, err, stderr.String())
 	}
 
-	cmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", versioned)
+	cmd := exec.CommandContext(context.Background(), "go", "list", "-m", "-f", "{{.Dir}}", versioned)
 	cmd.Dir = repoRoot
 	out, err := cmd.Output()
 	if err != nil {
@@ -430,7 +431,7 @@ func runSQLGeneration(modDir, pkgDir string) error {
 		return err
 	}
 
-	cmd := exec.Command("tree-sitter", "generate")
+	cmd := exec.CommandContext(context.Background(), "tree-sitter", "generate")
 	cmd.Dir = scratch
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -570,7 +571,7 @@ func relTo(root, path string) string {
 // that stamp unset rather than inventing a version scheme this repo has
 // not established.
 func gitVersion(repoRoot string) string {
-	out, err := exec.Command("git", "-C", repoRoot, "describe", "--tags", "--always", "--dirty").Output()
+	out, err := exec.CommandContext(context.Background(), "git", "-C", repoRoot, "describe", "--tags", "--always", "--dirty").Output()
 	if err != nil {
 		return ""
 	}
@@ -619,7 +620,7 @@ func installArgs(sql bool, ver string) []string {
 // reflected rather than silently served from a stale cached object -- the
 // exact regression sqlCSRCContentHash (tested) exists to prevent.
 func runInstall(repoRoot string, sql bool, sqlPkgDir, ver, prefix string) error {
-	cmd := exec.Command("go", installArgs(sql, ver)...)
+	cmd := exec.CommandContext(context.Background(), "go", installArgs(sql, ver)...)
 	cmd.Dir = repoRoot
 	env := append(os.Environ(), "GOBIN="+prefix)
 	if sql {

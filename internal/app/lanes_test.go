@@ -18,6 +18,7 @@
 package app
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -352,7 +353,7 @@ func TestRun_RevertWithNoMessageUsesRevertMessage(t *testing.T) {
 
 func expectGitFailure(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd := exec.CommandContext(context.Background(), "git", append([]string{"-C", dir}, args...)...)
 	if err := cmd.Run(); err == nil {
 		t.Fatalf("git %v succeeded; want failure", args)
 	}

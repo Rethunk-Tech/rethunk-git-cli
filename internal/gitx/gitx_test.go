@@ -117,7 +117,7 @@ func TestSequencerOpAndIgnoreCase(t *testing.T) {
 
 func hashObject(t *testing.T, dir, content string) string {
 	t.Helper()
-	cmd := exec.Command("git", "-C", dir, "hash-object", "-w", "--stdin")
+	cmd := exec.CommandContext(context.Background(), "git", "-C", dir, "hash-object", "-w", "--stdin")
 	cmd.Stdin = strings.NewReader(content)
 	out, err := cmd.Output()
 	if err != nil {
@@ -326,7 +326,7 @@ func newBloblessClone(t *testing.T) (string, *gitx.Repo) {
 
 func runGitInput(t *testing.T, dir, input string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd := exec.CommandContext(context.Background(), "git", append([]string{"-C", dir}, args...)...)
 	cmd.Stdin = strings.NewReader(input)
 	out, err := cmd.Output()
 	if err != nil {

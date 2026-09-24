@@ -225,7 +225,7 @@ func trySpawnDaemon(spec serverSpec, sockPath string) {
 	// is left alone.
 	unlinkDeadSocket(sockPath)
 
-	cmd := exec.Command(spec.bin, spec.daemonArgs(sockPath)...)
+	cmd := exec.CommandContext(context.Background(), spec.bin, spec.daemonArgs(sockPath)...)
 	cmd.Stdin = nil
 	// The daemon's own stderr is diagnostic noise about itself, not about
 	// this rgit invocation; discard it rather than let it interleave with

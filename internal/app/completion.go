@@ -120,14 +120,16 @@ const rgitCommitFlags = "-m --message -F --message-file -s --signoff --trailer -
 // pflag.FlagSet.
 // TestCompletionFlags_MatchLiveFlagSets checks all of them against their
 // own --help output the same way.
-const rgitLanguagesFlags = "--porcelain --in-repo -h --help"
-const rgitDoctorFlags = "--porcelain --deep -h --help"
-const rgitCompletionFlags = "-h --help"
-const rgitShowFlags = "--source --porcelain --with-header -h --help"
-const rgitBlameFlags = "-p --porcelain --follow-rename -h --help"
-const rgitLogFlags = "--porcelain -p --patch --follow-rename --since --until -n --max-count -h --help"
-const rgitContextFlags = "-h --help"
-const rgitSymbolsFlags = "--for-commit --with-lines --with-filename --porcelain -h --help"
+const (
+	rgitLanguagesFlags  = "--porcelain --in-repo -h --help"
+	rgitDoctorFlags     = "--porcelain --deep -h --help"
+	rgitCompletionFlags = "-h --help"
+	rgitShowFlags       = "--source --porcelain --with-header -h --help"
+	rgitBlameFlags      = "-p --porcelain --follow-rename -h --help"
+	rgitLogFlags        = "--porcelain -p --patch --follow-rename --since --until -n --max-count -h --help"
+	rgitContextFlags    = "-h --help"
+	rgitSymbolsFlags    = "--for-commit --with-lines --with-filename --porcelain -h --help"
+)
 
 // bashCompletionScript is emitted verbatim by `rgit completion bash`. The
 // one dynamic piece -- symbol names after "FILE:" -- shells back out to
