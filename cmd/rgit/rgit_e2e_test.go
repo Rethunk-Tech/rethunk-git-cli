@@ -1157,13 +1157,13 @@ func TestCommit_PorcelainEmitsRecords(t *testing.T) {
 	qt.Assert(t, qt.Equals(dry.ExitCode, 0))
 	qt.Assert(t, qt.StringContains(dry.Stdout, "g.go\tG\t"))
 
-	real := runRgit(t, repo, "commit", "--porcelain",
+	commitResult := runRgit(t, repo, "commit", "--porcelain",
 		"-m", "feat(g): add G", "g.go:G", "notes.txt")
-	qt.Assert(t, qt.Equals(real.ExitCode, 0))
+	qt.Assert(t, qt.Equals(commitResult.ExitCode, 0))
 
 	sha := strings.TrimSpace(gittest.Git(t.Context(), t, repo, "rev-parse", "HEAD"))
-	qt.Assert(t, qt.Equals(real.Stdout, "H\t"+sha+"\n"+dry.Stdout))
-	qt.Assert(t, qt.Equals(strings.Contains(real.Stdout, "file changed"), false))
+	qt.Assert(t, qt.Equals(commitResult.Stdout, "H\t"+sha+"\n"+dry.Stdout))
+	qt.Assert(t, qt.Equals(strings.Contains(commitResult.Stdout, "file changed"), false))
 }
 
 // --- shell completion ---------------------------------------------------

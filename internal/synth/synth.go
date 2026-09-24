@@ -326,14 +326,14 @@ func spliceInsert(out []byte, op editOp) []byte {
 // resolve.ExtendThroughOwnedSeparator), so those fall back to the minimum
 // when gap is nil.
 func widerGap(member bool, gap []byte) []byte {
-	min := "\n\n"
+	minimum := "\n\n"
 	if member {
-		min = "\n"
+		minimum = "\n"
 	}
-	if len(gap) > len(min) {
+	if len(gap) > len(minimum) {
 		return gap
 	}
-	return []byte(min)
+	return []byte(minimum)
 }
 
 // joinWithSeparator concatenates a and b, trimming any newlines a already

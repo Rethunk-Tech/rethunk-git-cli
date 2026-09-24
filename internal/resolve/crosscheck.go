@@ -37,14 +37,14 @@ func CrossCheckExtents(ctx context.Context, sess *lsp.Session, lang Language, re
 	// Pseudo resolutions never reach a verdict, so a list holding nothing
 	// else has nothing to ask about -- exempt, not degraded, and not worth
 	// a round trip to discover.
-	comparable := false
+	hasComparable := false
 	for _, res := range list {
 		if res != nil && !res.Pseudo {
-			comparable = true
+			hasComparable = true
 			break
 		}
 	}
-	if !comparable {
+	if !hasComparable {
 		return false, nil
 	}
 	client, deg := sess.Dial(ctx, lang.Name(), repoRoot)
