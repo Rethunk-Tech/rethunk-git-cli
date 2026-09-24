@@ -1,7 +1,6 @@
 package lsp
 
 import (
-	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -28,7 +27,7 @@ func standInSpec(ignoreTERM bool) serverSpec {
 
 func startStandIn(t *testing.T, spec serverSpec, sockPath string) *exec.Cmd {
 	t.Helper()
-	cmd := exec.CommandContext(context.Background(), spec.bin, spec.daemonArgs(sockPath)...)
+	cmd := exec.CommandContext(t.Context(), spec.bin, spec.daemonArgs(sockPath)...) //nolint:gosec // test uses the internal stand-in server spec with a fixture socket
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}

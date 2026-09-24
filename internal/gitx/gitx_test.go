@@ -117,7 +117,7 @@ func TestSequencerOpAndIgnoreCase(t *testing.T) {
 
 func hashObject(t *testing.T, dir, content string) string {
 	t.Helper()
-	cmd := exec.CommandContext(context.Background(), "git", "-C", dir, "hash-object", "-w", "--stdin")
+	cmd := exec.CommandContext(t.Context(), "git", "-C", dir, "hash-object", "-w", "--stdin") //nolint:gosec // test invokes the real git binary with a fixture repository path
 	cmd.Stdin = strings.NewReader(content)
 	out, err := cmd.Output()
 	if err != nil {
@@ -327,7 +327,7 @@ func newBloblessClone(t *testing.T) (string, *gitx.Repo) {
 
 func runGitInput(t *testing.T, dir, input string, args ...string) string {
 	t.Helper()
-	cmd := exec.CommandContext(context.Background(), "git", append([]string{"-C", dir}, args...)...)
+	cmd := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir}, args...)...) //nolint:gosec // test arguments go directly to the real git binary, never through a shell
 	cmd.Stdin = strings.NewReader(input)
 	out, err := cmd.Output()
 	if err != nil {
