@@ -73,9 +73,8 @@ type Declaration struct {
 	Sep string
 }
 
-// Language adapts one tree-sitter grammar. An implementation reports which
-// nodes are addressable and how they are named; it does not compute extents.
-type Language interface {
+// Grammar identifies the language: its name, the file suffixes it claims and its compiled grammar.
+type Grammar interface {
 	// Name is the identifier used in diagnostics and language-server routing,
 	// e.g. "go", "typescript", "python".
 	Name() string
@@ -86,7 +85,10 @@ type Language interface {
 
 	// TSLanguage returns the compiled grammar.
 	TSLanguage() *ts.Language
+}
 
+// Structure reads the syntax tree: comments, declarations, imports and headers.
+type Structure interface {
 	// IsComment reports whether a node kind is a comment, for doc attribution.
 	IsComment(kind string) bool
 
@@ -115,7 +117,10 @@ type Language interface {
 	// HeaderKinds lists the node kinds belonging to @header — shebang,
 	// build tags, copyright, package clause.
 	HeaderKinds() []string
+}
 
+// Layout describes how declarations sit in the text around them.
+type Layout interface {
 	// OwnsTrailingSeparator reports whether lang's own formatting convention
 	// deterministically inserts exactly one blank line after @header or
 	// @imports, so that blank line is as much part of the region as its own
@@ -155,6 +160,14 @@ type Language interface {
 	// cross-check pairs on any member (crosscheck.go's matchLSPSymbol).
 	// defaultLanguage answers false.
 	GroupedAnchors() bool
+}
+
+// Language adapts one tree-sitter grammar. An implementation reports which
+// nodes are addressable and how they are named; it does not compute extents.
+type Language interface {
+	Grammar
+	Structure
+	Layout
 }
 
 // StructuredDataLanguage marks a format `rgit commit`'s symbol-splice guard
