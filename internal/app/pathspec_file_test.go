@@ -62,7 +62,7 @@ func TestReadPathspecFileStdin(t *testing.T) {
 			if err := os.WriteFile(path, []byte(test.contents), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			stdin, err := os.Open(path)
+			stdin, err := os.Open(path) //nolint:gosec // path is inside the test temp directory
 			if err != nil {
 				t.Fatal(err)
 			}

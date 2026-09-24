@@ -42,7 +42,7 @@ func TestStage_RoundTripsWorktreeForEveryDeclaration(t *testing.T) {
 			continue
 		}
 		name := entry.Name()
-		src, err := os.ReadFile(filepath.Join(dir, name))
+		src, err := os.ReadFile(filepath.Join(dir, name)) //nolint:gosec // corpus entries come from the fixed in-repo testdata directory
 		if err != nil {
 			t.Fatalf("read %s: %v", name, err)
 		}
@@ -68,7 +68,7 @@ func TestStage_RoundTripsWorktreeForEveryDeclaration(t *testing.T) {
 
 			repo := initRepoWithFile(t, name, string(src))
 			path := filepath.Join(repo, name)
-			if err := os.WriteFile(path, worktree, 0o600); err != nil {
+			if err := os.WriteFile(path, worktree, 0o600); err != nil { //nolint:gosec // corpus filenames are written under a test temp directory
 				t.Fatalf("write worktree %s: %v", name, err)
 			}
 

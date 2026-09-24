@@ -27,7 +27,7 @@ func TestApplyEdits_IdentitySpliceIsByteIdentical(t *testing.T) {
 		name := filepath.Base(path)
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			src, err := os.ReadFile(path)
+			src, err := os.ReadFile(path) //nolint:gosec // identity corpus paths are explicit test inputs
 			if err != nil {
 				t.Fatalf("read %s: %v", name, err)
 			}
@@ -70,7 +70,7 @@ func TestApplyEdits_IdentitySpliceIsByteIdentical(t *testing.T) {
 func identityCorpus(t *testing.T) []string {
 	t.Helper()
 	if list := os.Getenv("SYNTH_CORPUS"); list != "" {
-		data, err := os.ReadFile(list)
+		data, err := os.ReadFile(list) //nolint:gosec // SYNTH_CORPUS is an explicit test-only fixture list
 		if err != nil {
 			t.Fatalf("read SYNTH_CORPUS %s: %v", list, err)
 		}

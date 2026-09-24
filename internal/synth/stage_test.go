@@ -223,7 +223,7 @@ func TestStage_MidLoopFailureLeavesIndexUntouched(t *testing.T) {
 	if got := gittest.Git(t.Context(), t, dir, "show", ":a.go"); strings.Contains(got, "return 111") {
 		t.Errorf(":a.go = %q; want HEAD content, nothing of the failed stage", got)
 	}
-	if got, err := os.ReadFile(filepath.Join(dir, "a.go")); err != nil {
+	if got, err := os.ReadFile(filepath.Join(dir, "a.go")); err != nil { //nolint:gosec // path is inside the test temp directory
 		t.Fatal(err)
 	} else if !strings.Contains(string(got), "return 111") {
 		t.Errorf("worktree a.go = %q; want the edit still there, untouched", got)
@@ -240,7 +240,7 @@ func TestStage_SuccessStagesExactlyPlannedBlobs(t *testing.T) {
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 	gittest.Commit(t.Context(), t, dir, "chore: initial")
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	before, err := os.ReadFile(filepath.Join(dir, "a.go"))
+	before, err := os.ReadFile(filepath.Join(dir, "a.go")) //nolint:gosec // path is inside the test temp directory
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +259,7 @@ func TestStage_SuccessStagesExactlyPlannedBlobs(t *testing.T) {
 	if got := strings.TrimSpace(gittest.Git(t.Context(), t, dir, "status", "--porcelain")); got != "M  a.go" {
 		t.Errorf("status = %q; want exactly the staged a.go edit", got)
 	}
-	if after, err := os.ReadFile(filepath.Join(dir, "a.go")); err != nil {
+	if after, err := os.ReadFile(filepath.Join(dir, "a.go")); err != nil { //nolint:gosec // path is inside the test temp directory
 		t.Fatal(err)
 	} else if string(after) != string(before) {
 		t.Errorf("worktree a.go changed by staging: before %q, after %q", before, after)

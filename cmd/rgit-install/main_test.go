@@ -314,7 +314,7 @@ func TestCopyFile(t *testing.T) {
 		qt.Assert(t, qt.IsNil(os.MkdirAll(filepath.Dir(dst), 0o750)))
 		qt.Assert(t, qt.IsNil(copyFile(src, dst)))
 
-		got, err := os.ReadFile(dst)
+		got, err := os.ReadFile(dst) //nolint:gosec // path is inside the test temp directory
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(string(got), "hello"))
 	})
@@ -343,7 +343,7 @@ func TestFinalizeGenerated(t *testing.T) {
 
 		qt.Assert(t, qt.IsNil(finalizeGenerated(staging, final)))
 
-		got, err := os.ReadFile(filepath.Join(final, "new.txt"))
+		got, err := os.ReadFile(filepath.Join(final, "new.txt")) //nolint:gosec // path is inside the test temp directory
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(string(got), "new"))
 	})
@@ -363,7 +363,7 @@ func TestFinalizeGenerated(t *testing.T) {
 
 		_, err := os.Stat(filepath.Join(final, "old.txt"))
 		qt.Assert(t, qt.IsTrue(os.IsNotExist(err)))
-		got, err := os.ReadFile(filepath.Join(final, "new.txt"))
+		got, err := os.ReadFile(filepath.Join(final, "new.txt")) //nolint:gosec // path is inside the test temp directory
 		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(string(got), "new"))
 		_, err = os.Stat(final + ".old")
@@ -387,7 +387,7 @@ func TestFinalizeGenerated(t *testing.T) {
 		err := finalizeGenerated(staging, final)
 		qt.Assert(t, qt.IsNotNil(err))
 
-		got, rerr := os.ReadFile(marker)
+		got, rerr := os.ReadFile(marker) //nolint:gosec // path is inside the test temp directory
 		qt.Assert(t, qt.IsNil(rerr))
 		qt.Assert(t, qt.Equals(string(got), "prior generation"))
 		_, statErr := os.Stat(final + ".old")

@@ -221,7 +221,7 @@ func TestRun_HookRejectionRestoresStaging(t *testing.T) {
 	// staying unstaged is what makes the index-vs-worktree difference below
 	// mean something.
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
-	workA, err := os.ReadFile(filepath.Join(dir, "a.go"))
+	workA, err := os.ReadFile(filepath.Join(dir, "a.go")) //nolint:gosec // path is inside the test temp directory
 	qt.Assert(t, qt.IsNil(err))
 	gittest.InstallHook(t.Context(), t, dir, "pre-commit", "#!/bin/sh\nexit 1\n")
 
@@ -237,7 +237,7 @@ func TestRun_HookRejectionRestoresStaging(t *testing.T) {
 	status := gitOut(t, dir, "status", "--porcelain")
 	qt.Assert(t, qt.Equals(status, " M a.go\n"))
 	// The worktree file itself is never touched by the rollback.
-	after, err := os.ReadFile(filepath.Join(dir, "a.go"))
+	after, err := os.ReadFile(filepath.Join(dir, "a.go")) //nolint:gosec // path is inside the test temp directory
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(string(after), string(workA)))
 }

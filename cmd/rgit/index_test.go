@@ -84,7 +84,7 @@ func TestStage_SingleSymbolSynthesizedIntoRealIndex(t *testing.T) {
 	qt.Assert(t, qt.Equals(indexBlob(t, repo, "greet.go"), want))
 
 	// The worktree file itself is never touched by staging.
-	onDisk, err := os.ReadFile(filepath.Join(dir, "greet.go"))
+	onDisk, err := os.ReadFile(filepath.Join(dir, "greet.go")) //nolint:gosec // path is inside the test temp directory
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(string(onDisk), work))
 
