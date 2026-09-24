@@ -492,44 +492,64 @@ const shebangPeekBytes = 256
 const ShebangPeekBytes = shebangPeekBytes
 
 // peekShebangLine reads at most shebangPeekBytes from the worktree file at
-// fullPath and returns its first line, for ForPath's shebang fallback. ok is
-// false when fullPath cannot be opened at all -- most commonly, no worktree
-// copy exists there: a path resolved only against HEAD, the index, or an
-// arbitrary revision (most often a file deleted from the worktree). Callers
-// degrade to whatever they did before shebang sniffing existed -- extension
-// lookup is unaffected either way, since it never calls this at all.
+// relPath and returns its first line, for ForPath's shebang fallback. exists
+// is false when no worktree copy exists; peeked is false when the copy exists
+// but cannot provide a non-empty opening line. Callers degrade to whatever
+// they did before shebang sniffing existed -- extension lookup is unaffected
+// either way, since it never calls this at all.
 //
 // The bounded read is deliberate and shared by every caller: a binary file,
 // or one with no newline in its opening bytes, must never be read in full
 // just to learn it has no shebang. This is the one place that logic lives;
 // internal/synth and internal/diff both reach it through
 // LanguageForWorktreePathFolding below rather than each reading their own prefix.
-func peekShebangLine(fullPath string) ([]byte, bool) {
-	f, err := os.Open(fullPath) //nolint:gosec // fullPath is constructed from the selected repository root and relative path
+func peekShebangLine(rootDir, relPath string) (line []byte, exists, peeked bool) {
+	root, err := os.OpenRoot(rootDir)
 	if err != nil {
-		return nil, false
+		return nil, false, false
 	}
-	defer func() { _ = f.Close() }()
+	defer func() {
+		if closeErr := root.Close(); closeErr != nil {
+			line = nil
+			exists = false
+			peeked = false
+		}
+	}()
+
+	f, err := root.Open(relPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, false
+		}
+		return nil, true, false
+	}
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			line = nil
+			exists = false
+			peeked = false
+		}
+	}()
 
 	raw, err := bufio.NewReader(io.LimitReader(f, shebangPeekBytes)).ReadString('\n')
 	if err != nil && !errors.Is(err, io.EOF) {
 		// Running out of bytes within the peek window (or the whole file,
 		// for one shorter than shebangPeekBytes) is expected and not an
 		// error worth reporting -- io.EOF is exactly what ReadString
-		// returns for both. Anything else (fullPath naming a directory,
+		// returns for both. Anything else (relPath naming a directory,
 		// whose Open succeeds but whose Read does not, and other genuine
-		// I/O failures) means fullPath cannot be trusted the same way a
-		// failed os.Open above cannot.
-		return nil, false
+		// I/O failures) means relPath cannot be trusted the same way a
+		// failed root.Open above cannot.
+		return nil, true, false
 	}
 	if len(raw) == 0 {
 		// Nothing was actually read -- an empty file, most commonly.
 		// Reporting ok=true here would let a zero-byte read look
 		// identical to a genuine (if shebang-less) first line to every
 		// caller that only checks the bool.
-		return nil, false
+		return nil, true, false
 	}
-	return []byte(raw), true
+	return []byte(raw), true, true
 }
 
 // HeadShebangSample supplies a bounded sample of a path's HEAD blob. It is a
@@ -552,19 +572,18 @@ func LanguageForPathFolding(root, relPath string, fold bool, headSample HeadSheb
 	if lang, ok := ForExtensionFolding(filepath.Ext(relPath), fold); ok {
 		return lang, true, false, nil
 	}
-	fullPath := filepath.Join(root, relPath)
-	line, peeked := peekShebangLine(fullPath)
+	line, exists, peeked := peekShebangLine(root, relPath)
 	if peeked {
 		lang, ok = ForPathFolding(relPath, line, fold)
 		return lang, ok, true, nil
 	}
-	if _, statErr := os.Stat(fullPath); statErr == nil || !errors.Is(statErr, os.ErrNotExist) {
+	if exists {
 		return nil, false, false, nil
 	}
 	if headSample == nil {
 		return nil, false, false, nil
 	}
-	line, exists, err := headSample()
+	line, exists, err = headSample()
 	if err != nil {
 		return nil, false, false, err
 	}

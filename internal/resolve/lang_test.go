@@ -15,12 +15,13 @@ func TestPeekShebangLine(t *testing.T) {
 
 	t.Run("ordinary shebang line", func(t *testing.T) {
 		t.Parallel()
-		path := filepath.Join(t.TempDir(), "script.sh")
+		dir := t.TempDir()
+		path := filepath.Join(dir, "script.sh")
 		if err := os.WriteFile(path, []byte("#!/bin/sh\necho hi\n"), 0o755); err != nil { //nolint:gosec // executable mode is the behavior under test
 			t.Fatal(err)
 		}
-		line, ok := peekShebangLine(path)
-		if !ok {
+		line, exists, ok := peekShebangLine(dir, "script.sh")
+		if !exists || !ok {
 			t.Fatal("peekShebangLine() ok = false; want true")
 		}
 		if string(line) != "#!/bin/sh\n" {
@@ -33,12 +34,13 @@ func TestPeekShebangLine(t *testing.T) {
 	// treated as a legitimate partial read, not an error.
 	t.Run("no newline in the peeked window", func(t *testing.T) {
 		t.Parallel()
-		path := filepath.Join(t.TempDir(), "noeol")
+		dir := t.TempDir()
+		path := filepath.Join(dir, "noeol")
 		if err := os.WriteFile(path, []byte("#!/bin/sh"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		line, ok := peekShebangLine(path)
-		if !ok {
+		line, exists, ok := peekShebangLine(dir, "noeol")
+		if !exists || !ok {
 			t.Fatal("peekShebangLine() ok = false; want true for a short, newline-less file")
 		}
 		if string(line) != "#!/bin/sh" {
@@ -52,18 +54,20 @@ func TestPeekShebangLine(t *testing.T) {
 	// checks the bool.
 	t.Run("empty file reports ok=false", func(t *testing.T) {
 		t.Parallel()
-		path := filepath.Join(t.TempDir(), "empty")
+		dir := t.TempDir()
+		path := filepath.Join(dir, "empty")
 		if err := os.WriteFile(path, nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if _, ok := peekShebangLine(path); ok {
+		_, exists, ok := peekShebangLine(dir, "empty")
+		if !exists || ok {
 			t.Error("peekShebangLine() ok = true for an empty file; want false")
 		}
 	})
 
 	t.Run("missing file", func(t *testing.T) {
 		t.Parallel()
-		if _, ok := peekShebangLine(filepath.Join(t.TempDir(), "does-not-exist")); ok {
+		if _, exists, ok := peekShebangLine(t.TempDir(), "does-not-exist"); exists || ok {
 			t.Error("peekShebangLine() ok = true for a missing file; want false")
 		}
 	})
@@ -73,7 +77,7 @@ func TestPeekShebangLine(t *testing.T) {
 	// discarded and this still reported ok=true.
 	t.Run("directory reports ok=false", func(t *testing.T) {
 		t.Parallel()
-		if _, ok := peekShebangLine(t.TempDir()); ok {
+		if _, exists, ok := peekShebangLine(t.TempDir(), "."); !exists || ok {
 			t.Error("peekShebangLine() ok = true for a directory; want false")
 		}
 	})

@@ -74,7 +74,7 @@ func classifyPath(ctx context.Context, repo *gitx.Repo, root, path string) (path
 	info, statErr := os.Lstat(full)
 	switch {
 	case statErr == nil:
-		kind, isDir, err := classifyWorktreeEntry(full, info)
+		kind, isDir, err := classifyWorktreeEntry(root, path, info)
 		if err != nil || kind != pathRegular || !isDir {
 			return kind, err
 		}
@@ -126,11 +126,12 @@ func classifyTreeEntry(ctx context.Context, repo *gitx.Repo, path string) (pathK
 	return pathRegular, nil
 }
 
-func classifyWorktreeEntry(full string, info os.FileInfo) (kind pathKind, isDir bool, err error) {
+func classifyWorktreeEntry(root, path string, info os.FileInfo) (kind pathKind, isDir bool, err error) {
 	if info.Mode()&os.ModeSymlink != 0 {
 		return pathSymlink, false, nil
 	}
 	if info.IsDir() {
+		full := filepath.Join(root, path)
 		if _, err := os.Stat(filepath.Join(full, ".git")); err == nil {
 			return pathGitlink, true, nil
 		}
@@ -139,7 +140,7 @@ func classifyWorktreeEntry(full string, info os.FileInfo) (kind pathKind, isDir 
 		// pathRegular (an uninitialized submodule is exactly this shape).
 		return pathRegular, true, nil
 	}
-	binary, berr := util.LooksBinaryFile(full)
+	binary, berr := util.LooksBinaryFile(root, path)
 	if berr != nil {
 		return pathRegular, false, berr
 	}

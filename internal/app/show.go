@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
@@ -126,7 +125,7 @@ func showSource(source string) anchorSourceFunc {
 			}
 			return blob, "", true, nil
 		}
-		blob, err := os.ReadFile(filepath.Join(root, file)) //nolint:gosec // file is resolved and root-checked before this worktree read
+		blob, err := readWorktreeFile(root, file)
 		if err == nil {
 			return blob, "", true, nil
 		}

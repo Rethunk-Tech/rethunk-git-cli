@@ -72,20 +72,32 @@ func TestReadFileIfExists(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	content, exists, err := ReadFileIfExists(path)
+	content, exists, err := ReadFileIfExists(dir, "file")
 	if err != nil || !exists || string(content) != string(want) {
 		t.Errorf("ReadFileIfExists(existing) = %q, %v, %v; want %q, true, nil", content, exists, err, want)
 	}
 
-	content, exists, err = ReadFileIfExists(filepath.Join(dir, "missing"))
+	content, exists, err = ReadFileIfExists(dir, "missing")
 	if err != nil || exists || content != nil {
 		t.Errorf("ReadFileIfExists(missing) = %q, %v, %v; want nil, false, nil", content, exists, err)
+	}
+
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "secret"), []byte("not in root"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "escape")); err != nil {
+		t.Fatal(err)
+	}
+	content, exists, err = ReadFileIfExists(dir, filepath.Join("escape", "secret"))
+	if err == nil || exists || content != nil {
+		t.Errorf("ReadFileIfExists(symlink escape) = %q, %v, %v; want nil, false, an error", content, exists, err)
 	}
 
 	if err := os.Chmod(path, 0); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = ReadFileIfExists(path)
+	_, _, err = ReadFileIfExists(dir, "file")
 	if err == nil {
 		t.Skip("permission checks are unavailable when running as root")
 	}
@@ -99,7 +111,7 @@ func TestLooksBinaryFile(t *testing.T) {
 	if err := os.WriteFile(textPath, []byte("hello world\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if binary, err := LooksBinaryFile(textPath); err != nil || binary {
+	if binary, err := LooksBinaryFile(dir, "text.txt"); err != nil || binary {
 		t.Errorf("LooksBinaryFile(text) = %v, %v; want false, nil", binary, err)
 	}
 
@@ -107,7 +119,7 @@ func TestLooksBinaryFile(t *testing.T) {
 	if err := os.WriteFile(binPath, []byte("a\x00b"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if binary, err := LooksBinaryFile(binPath); err != nil || !binary {
+	if binary, err := LooksBinaryFile(dir, "blob.bin"); err != nil || !binary {
 		t.Errorf("LooksBinaryFile(binary) = %v, %v; want true, nil", binary, err)
 	}
 
@@ -123,11 +135,11 @@ func TestLooksBinaryFile(t *testing.T) {
 	if err := os.WriteFile(largePath, large, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if binary, err := LooksBinaryFile(largePath); err != nil || binary {
+	if binary, err := LooksBinaryFile(dir, "large.txt"); err != nil || binary {
 		t.Errorf("LooksBinaryFile(large, NUL past limit) = %v, %v; want false, nil", binary, err)
 	}
 
-	if _, err := LooksBinaryFile(filepath.Join(dir, "missing")); err == nil {
+	if _, err := LooksBinaryFile(dir, "missing"); err == nil {
 		t.Error("LooksBinaryFile(missing) = nil error; want a real error")
 	}
 }

@@ -315,7 +315,7 @@ func buildUntrackedReport(ctx context.Context, repo *gitx.Repo, root, path strin
 	// race on the same listing already does in synth's preview counts;
 	// returning the error instead let one vanished temp file fail the whole
 	// report, every other file included.
-	content, exists, err := util.ReadFileIfExists(filepath.Join(root, path))
+	content, exists, err := util.ReadFileIfExists(root, path)
 	if !exists {
 		reason := "no longer present"
 		if err != nil {

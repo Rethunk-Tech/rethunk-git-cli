@@ -225,7 +225,7 @@ func trySpawnDaemon(ctx context.Context, spec serverSpec, sockPath string) {
 	// is left alone.
 	unlinkDeadSocket(ctx, sockPath)
 
-	cmd := exec.CommandContext(context.WithoutCancel(ctx), spec.bin, spec.daemonArgs(sockPath)...) //nolint:gosec // spec is an internal server entry and the socket path was verified before spawn
+	cmd := exec.CommandContext(context.WithoutCancel(ctx), spec.bin, spec.daemonArgs(sockPath)...) //nolint:gosec // spec is an internal server registry entry; the socket path is one argv value, never shell input
 	cmd.Stdin = nil
 	// The daemon's own stderr is diagnostic noise about itself, not about
 	// this rgit invocation; discard it rather than let it interleave with
@@ -263,16 +263,38 @@ func trySpawnDaemon(ctx context.Context, spec serverSpec, sockPath string) {
 // and worth removing out from under whatever actually holds it.
 func acquireSpawnLock(sockPath string) (*os.File, bool) {
 	lockPath := sockPath + ".lock"
+	lockName := filepath.Base(lockPath)
+	root, err := os.OpenRoot(filepath.Dir(lockPath))
+	if err != nil {
+		return nil, false
+	}
 	for range 2 {
-		lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600) //nolint:gosec // lockPath is derived from the verified private socket path
+		lock, err := root.OpenFile(lockName, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if err == nil {
+			if closeErr := root.Close(); closeErr != nil {
+				if lockCloseErr := lock.Close(); lockCloseErr != nil {
+					return nil, false
+				}
+				return nil, false
+			}
 			return lock, true
 		}
-		info, statErr := os.Lstat(lockPath)
+		info, statErr := root.Lstat(lockName)
 		if statErr != nil || !info.Mode().IsRegular() || time.Since(info.ModTime()) <= staleLockAge {
+			if closeErr := root.Close(); closeErr != nil {
+				return nil, false
+			}
 			return nil, false
 		}
-		_ = os.Remove(lockPath)
+		if removeErr := root.Remove(lockName); removeErr != nil {
+			if closeErr := root.Close(); closeErr != nil {
+				return nil, false
+			}
+			return nil, false
+		}
+	}
+	if closeErr := root.Close(); closeErr != nil {
+		return nil, false
 	}
 	return nil, false
 }

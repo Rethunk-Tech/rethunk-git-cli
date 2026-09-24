@@ -443,7 +443,7 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 		return nil, err
 	}
 
-	workSrc, worktreeExists, err := util.ReadFileIfExists(filepath.Join(root, path))
+	workSrc, worktreeExists, err := util.ReadFileIfExists(root, path)
 	if err != nil {
 		return nil, err
 	}
@@ -626,7 +626,7 @@ func newTempStaging(ctx context.Context, root string) (*tempStaging, error) {
 		return nil, err
 	}
 	tmp := tmpFile.Name()
-	seed, err := os.ReadFile(final) //nolint:gosec // final is git's resolved index path returned by callerIndexPath
+	seed, err := os.ReadFile(final) //nolint:gosec // final is the caller's Git index path returned by callerIndexPath
 	switch {
 	case err == nil:
 		if _, err := tmpFile.Write(seed); err != nil {
@@ -699,7 +699,7 @@ func (s *tempStaging) swap() error {
 		return nil
 	} else if data, rerr := os.ReadFile(s.tmp); rerr != nil {
 		return rerr
-	} else if werr := os.WriteFile(s.final, data, s.mode); werr != nil { //nolint:gosec // s.final is git's resolved index path captured during staging setup
+	} else if werr := os.WriteFile(s.final, data, s.mode); werr != nil { //nolint:gosec // s.final is the caller's Git index path captured during staging setup
 		return werr
 	} else {
 		_ = os.Remove(s.tmp)
@@ -757,7 +757,7 @@ func SnapshotIndex(ctx context.Context, root string) (*IndexSnapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := os.ReadFile(path) //nolint:gosec // path is git's resolved index path returned by callerIndexPath
+	data, err := os.ReadFile(path) //nolint:gosec // path is the caller's Git index path returned by callerIndexPath
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &IndexSnapshot{path: path}, nil
@@ -945,13 +945,16 @@ func pathspecFileCounts(ctx context.Context, repo *gitx.Repo, root, pathspec str
 			continue
 		}
 		seen[rel] = true
-		content, rerr := os.ReadFile(filepath.Join(root, rel)) //nolint:gosec // rel comes from git's own untracked-file listing under root
-		if rerr != nil {
+		content, exists, rerr := util.ReadFileIfExists(root, rel)
+		if rerr != nil || !exists {
 			// A transient read failure (permissions, a race with something
 			// else removing the file) would otherwise understate the
 			// preview's total with no sign that anything was skipped --
 			// exactly the silent gap the numstat/ls-files failures above
 			// already warn about.
+			if rerr == nil {
+				rerr = os.ErrNotExist
+			}
 			warnings = append(warnings, fmt.Sprintf("%s: line counts unavailable: %v", rel, rerr))
 			continue
 		}

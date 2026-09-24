@@ -68,6 +68,19 @@ func repoPath(root, prefix, path string) (string, error) {
 	return p, nil
 }
 
+func readWorktreeFile(rootDir, path string) (data []byte, err error) {
+	root, err := os.OpenRoot(rootDir)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if closeErr := root.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+	return root.ReadFile(path)
+}
+
 // newTargetFlagSet builds the flag set both subcommands start from: git's
 // own interspersed parsing (git accepts flags after positionals, and stdlib
 // flag does not), errors reported by us rather than by pflag's usage

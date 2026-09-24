@@ -536,7 +536,7 @@ func finalizeGenerated(staging, final string) error {
 // its `#define LANGUAGE_VERSION N` line -- the cheap, direct check for what
 // tree-sitter.json is supposed to guarantee (see runSQLGeneration).
 func parserABIVersion(path string) (int, error) {
-	data, err := os.ReadFile(path) //nolint:gosec // path is the generated parser file selected by this installer
+	data, err := readInstallerFile(path)
 	if err != nil {
 		return 0, err
 	}
@@ -552,11 +552,37 @@ func parserABIVersion(path string) (int, error) {
 }
 
 func copyFile(src, dst string) error {
-	data, err := os.ReadFile(src) //nolint:gosec // src is one of the installer-selected generated inputs
+	data, err := readInstallerFile(src)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(dst, data, 0o600) //nolint:gosec // dst is one of the installer-selected generated outputs
+	return writeInstallerFile(dst, data, 0o600)
+}
+
+func readInstallerFile(path string) (data []byte, err error) {
+	root, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if closeErr := root.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+	return root.ReadFile(filepath.Base(path))
+}
+
+func writeInstallerFile(path string, data []byte, perm os.FileMode) (err error) {
+	root, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if closeErr := root.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+	return root.WriteFile(filepath.Base(path), data, perm)
 }
 
 func relTo(root, path string) string {
@@ -658,7 +684,7 @@ func runInstall(repoRoot string, sql bool, sqlPkgDir, ver, prefix string) error 
 // sqlCSRCContentHash hashes every file under pkgDir/csrc, in path order, so
 // buildBinary can fold the result into CGO_CFLAGS. See buildBinary for why
 // this exists rather than relying on Go's ordinary dependency tracking.
-func sqlCSRCContentHash(pkgDir string) (string, error) {
+func sqlCSRCContentHash(pkgDir string) (result string, err error) {
 	csrc := filepath.Join(pkgDir, "csrc")
 	var paths []string
 	if err := filepath.WalkDir(csrc, func(path string, d fs.DirEntry, err error) error {
@@ -674,18 +700,33 @@ func sqlCSRCContentHash(pkgDir string) (string, error) {
 	}
 	slices.Sort(paths)
 
+	root, err := os.OpenRoot(csrc)
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		if closeErr := root.Close(); closeErr != nil && err == nil {
+			result = ""
+			err = closeErr
+		}
+	}()
+
 	h := sha256.New()
 	for _, p := range paths {
-		data, err := os.ReadFile(p) //nolint:gosec // p comes from WalkDir rooted at the installer-selected csrc directory
-		if err != nil {
-			return "", err
-		}
 		rel, err := filepath.Rel(csrc, p)
 		if err != nil {
 			return "", err
 		}
-		_, _ = io.WriteString(h, rel)
-		_, _ = h.Write(data)
+		data, err := root.ReadFile(rel)
+		if err != nil {
+			return "", err
+		}
+		if _, err := io.WriteString(h, rel); err != nil {
+			return "", err
+		}
+		if _, err := h.Write(data); err != nil {
+			return "", err
+		}
 	}
 	return hex.EncodeToString(h.Sum(nil))[:16], nil
 }

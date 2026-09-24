@@ -71,7 +71,7 @@ func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.
 				headOnly = true
 				return src, "", true, nil
 			}
-			src, err := os.ReadFile(filepath.Join(root, file)) //nolint:gosec // file is resolved and root-checked before this worktree read
+			src, err := readWorktreeFile(root, file)
 			if err != nil {
 				if os.IsNotExist(err) {
 					src, exists, err := repo.CatFile(ctx, "HEAD", file)

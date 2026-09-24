@@ -169,7 +169,7 @@ func Unmerged(ctx context.Context, t testing.TB, dir, blob, path string) {
 func InstallHook(ctx context.Context, t testing.TB, dir, name, script string) {
 	t.Helper()
 	path := filepath.Join(dir, ".git", "hooks", name)
-	if err := os.WriteFile(path, []byte(script), 0o700); err != nil { //nolint:gosec // git hooks must retain owner execute permission; this fixture contains no secret
+	if err := os.WriteFile(path, []byte(script), 0o700); err != nil { //nolint:gosec // this fixture's git hooks must retain owner execute permission
 		t.Fatal(err)
 	}
 }

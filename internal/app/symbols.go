@@ -138,7 +138,7 @@ func symbolLines(ctx context.Context, root, prefix string, repo *gitx.Repo, igno
 		return nil, exitcode.InvalidUsage
 	}
 
-	src, err := os.ReadFile(filepath.Join(root, path)) //nolint:gosec // checkPathEscape validated the resolved repository-relative path above
+	src, err := readWorktreeFile(root, path)
 	var headSrc []byte
 	headExists := false
 	if err != nil {

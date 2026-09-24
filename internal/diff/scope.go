@@ -48,7 +48,7 @@ func revSide(rev string) contentSide { return contentSide{kind: sideRev, rev: re
 func (s contentSide) read(ctx context.Context, repo *gitx.Repo, root, path string, cache *blobCache) (content []byte, exists bool, err error) {
 	switch s.kind {
 	case sideWorktree:
-		return util.ReadFileIfExists(filepath.Join(root, path))
+		return util.ReadFileIfExists(root, path)
 	case sideIndex:
 		// CatFile builds rev+":"+path; an empty rev yields ":path", which
 		// git reads as the index's stage-0 entry.
@@ -57,7 +57,7 @@ func (s contentSide) read(ctx context.Context, repo *gitx.Repo, root, path strin
 			return nil, false, err
 		}
 		if unmerged {
-			return util.ReadFileIfExists(filepath.Join(root, path))
+			return util.ReadFileIfExists(root, path)
 		}
 		if cache != nil {
 			if res, ok := cache.lookup("", path); ok {
@@ -90,7 +90,7 @@ func readUnmergedWorktree(ctx context.Context, repo *gitx.Repo, root, path strin
 	if !unmerged {
 		return nil, false, nil
 	}
-	return util.ReadFileIfExists(filepath.Join(root, path))
+	return util.ReadFileIfExists(root, path)
 }
 
 // mode returns the git file mode recorded for path on this side, for
