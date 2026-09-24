@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/diff"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
@@ -645,6 +646,16 @@ func newTempStaging(ctx context.Context, root string) (*tempStaging, error) {
 		if err := tmpFile.Close(); err != nil {
 			_ = os.Remove(tmp)
 			return nil, err
+		}
+		// git trusts a matching stat only for entries older than the index
+		// file's own mtime (racy-git). A copy stamped "now" would make an
+		// edit that kept size and mtime tick read as clean, so `git add`
+		// stages nothing; carrying the original mtime keeps git's check.
+		if info, serr := os.Stat(final); serr == nil {
+			if err := os.Chtimes(tmp, time.Time{}, info.ModTime()); err != nil {
+				_ = os.Remove(tmp)
+				return nil, err
+			}
 		}
 	case os.IsNotExist(err):
 		if err := tmpFile.Close(); err != nil {
