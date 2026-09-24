@@ -11,6 +11,7 @@ import (
 )
 
 func TestReadPathspecFileSkipsEmptyLines(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "targets")
 	if err := os.WriteFile(path, []byte("a.go\n\nb.go\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -23,6 +24,7 @@ func TestReadPathspecFileSkipsEmptyLines(t *testing.T) {
 }
 
 func TestReadPathspecFileNulPreservesNewline(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "targets")
 	if err := os.WriteFile(path, []byte("a\nb.go\x00other.go\x00"), 0o644); err != nil {
 		t.Fatal(err)

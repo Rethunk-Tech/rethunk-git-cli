@@ -13,6 +13,7 @@ import (
 )
 
 func TestRun_LanguagesInRepoUntrackedGo(t *testing.T) {
+	t.Parallel()
 	dir, _ := gittest.New(t)
 	gittest.Write(t, dir, "main.go", "package main\n")
 
@@ -26,6 +27,7 @@ func TestRun_LanguagesInRepoUntrackedGo(t *testing.T) {
 }
 
 func TestRun_LanguagesInRepoHeadOnlyPythonShebang(t *testing.T) {
+	t.Parallel()
 	dir, _ := gittest.RepoWithFile(t, "tool", "#!/usr/bin/env python3\nprint('ok')\n", "chore: add python script")
 	if err := os.Remove(filepath.Join(dir, "tool")); err != nil {
 		t.Fatal(err)
@@ -41,6 +43,7 @@ func TestRun_LanguagesInRepoHeadOnlyPythonShebang(t *testing.T) {
 }
 
 func TestRun_LanguagesInRepoMarkdownOmitsGo(t *testing.T) {
+	t.Parallel()
 	dir, _ := gittest.New(t)
 	gittest.Write(t, dir, "README.md", "# docs\n")
 

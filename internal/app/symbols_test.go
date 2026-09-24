@@ -49,6 +49,7 @@ func TestRun_SymbolsUnsupportedLanguage(t *testing.T) {
 }
 
 func TestRunSymbolsListsCleanWorktreeDeclarations(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	source := []byte("package demo\n\nconst answer = 42\n\nfunc First() {}\n\ntype Thing struct{}\n\nfunc (Thing) Method() {}\n")
 	gittest.Git(t, root, "init", "--quiet")
@@ -73,6 +74,7 @@ func TestRunSymbolsListsCleanWorktreeDeclarations(t *testing.T) {
 }
 
 func TestRunSymbolsHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	gittest.Git(t, root, "init", "--quiet")
 	gittest.Git(t, root, "config", "core.ignorecase", "true")
@@ -99,6 +101,7 @@ func TestRunSymbolsHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
 }
 
 func TestRun_SymbolsListsHeadDeclarationsWhenWorktreeFileIsGone(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	source := []byte("package demo\n\nfunc Foo() {}\n")
 	gittest.Git(t, root, "init", "--quiet")
@@ -122,6 +125,7 @@ func TestRun_SymbolsListsHeadDeclarationsWhenWorktreeFileIsGone(t *testing.T) {
 }
 
 func TestRun_SymbolsMissingUntrackedFileStillErrors(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	gittest.Git(t, root, "init", "--quiet")
 
@@ -136,6 +140,7 @@ func TestRun_SymbolsMissingUntrackedFileStillErrors(t *testing.T) {
 }
 
 func TestRunSymbolsStructuredDataCommitMode(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	source := []byte("{\n  \"name\": \"demo\",\n  \"enabled\": true\n}\n")
 	gittest.Git(t, root, "init", "--quiet")
@@ -209,6 +214,7 @@ func symbolsFixture(t *testing.T, name, source string) string {
 }
 
 func TestRunSymbolsWithLinesEmitsLineRanges(t *testing.T) {
+	t.Parallel()
 	root := symbolsFixture(t, "main.go", withLinesSource)
 
 	var stdout, stderr strings.Builder
@@ -225,6 +231,7 @@ func TestRunSymbolsWithLinesEmitsLineRanges(t *testing.T) {
 // The bare form is the one every existing caller already parses, so it stays
 // byte-identical whether or not the new flag exists.
 func TestRunSymbolsBareOutputUnchangedByWithLines(t *testing.T) {
+	t.Parallel()
 	root := symbolsFixture(t, "main.go", withLinesSource)
 
 	var stdout, stderr strings.Builder
@@ -238,6 +245,7 @@ func TestRunSymbolsBareOutputUnchangedByWithLines(t *testing.T) {
 }
 
 func TestRunSymbolsWithLinesForCommitStillOmitsStructuredData(t *testing.T) {
+	t.Parallel()
 	root := symbolsFixture(t, "config.json", "{\n  \"name\": \"demo\"\n}\n")
 
 	var stdout, stderr strings.Builder
@@ -256,6 +264,7 @@ func TestRunSymbolsWithLinesForCommitStillOmitsStructuredData(t *testing.T) {
 // than through the table --with-lines itself read, is what would catch a
 // second resolution path drifting away from the first.
 func TestRunSymbolsWithLinesAgreesWithResolvedExtent(t *testing.T) {
+	t.Parallel()
 	root := symbolsFixture(t, "main.go", withLinesSource)
 	src := []byte(withLinesSource)
 
@@ -403,6 +412,7 @@ func TestSymbols_PorcelainNULRecords(t *testing.T) {
 // parsing form, so a script reading usage knows which flag to reach for.
 // Output bytes are unchanged -- only this help line moves.
 func TestSymbols_HelpSteersParsersToPorcelain(t *testing.T) {
+	t.Parallel()
 	first, _, _ := strings.Cut(symbolsHelp, "\n")
 	qt.Assert(t, qt.StringContains(first, "--porcelain"))
 	qt.Assert(t, qt.StringContains(first, "NUL"))

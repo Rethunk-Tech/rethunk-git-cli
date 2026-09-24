@@ -170,6 +170,7 @@ func TestRunCommit_CountingWarningsReachStderr(t *testing.T) {
 // moment it does, not stage a partial commit with nothing on stderr to
 // say why.
 func TestCommitTargets_UnhandledKindErrorsRatherThanSkips(t *testing.T) {
+	t.Parallel()
 	_, err := commitTargets("/repo", "", []cli.Classification{{Kind: cli.KindRevision, Revision: "HEAD"}}, nil, nil)
 	if err == nil {
 		t.Fatal("commitTargets: want an error for an unhandled classification kind, got nil")

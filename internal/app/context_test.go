@@ -241,6 +241,7 @@ func TestRun_ContextStashAndSparseRecords(t *testing.T) {
 // directly against a tiny budget, rather than building a repository large
 // enough to exceed the real 16 KiB one.
 func TestBuildContextStream(t *testing.T) {
+	t.Parallel()
 
 	t.Run("everything fits, no marker", func(t *testing.T) {
 		records := []string{"C\th1\tsubject one\n", "F\ta.go\tA\tMOD\t1\t0\n"}
