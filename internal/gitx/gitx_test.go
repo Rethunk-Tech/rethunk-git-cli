@@ -156,7 +156,7 @@ func TestAdd_AlreadyStagedDeletionSucceeds(t *testing.T) {
 func TestAdd_MixedAlreadyStagedDeletionStagesTheRest(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
+	t.Cleanup(cancel)
 	dir, repo := gittest.New(ctx, t)
 
 	gittest.Write(t, dir, "gone.md", "bye\n")
@@ -174,6 +174,8 @@ func TestAdd_MixedAlreadyStagedDeletionStagesTheRest(t *testing.T) {
 	}
 
 	t.Run("genuine bad pathspec still errors and stages nothing", func(t *testing.T) {
+		t.Parallel()
+		dir, repo := gittest.New(ctx, t)
 		gittest.Write(t, dir, "other.txt", "c\n")
 		gittest.Commit(ctx, t, dir, "chore: other.txt")
 		gittest.Write(t, dir, "other.txt", "c-modified\n")

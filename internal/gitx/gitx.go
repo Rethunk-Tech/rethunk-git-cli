@@ -210,8 +210,8 @@ func (r *Repo) CatFile(ctx context.Context, rev, path string) (content []byte, e
 		return nil, false, err
 	}
 	if res.ExitCode != 0 {
-		exists, err := r.catFileFailure(ctx, rev, path, args, res)
-		return nil, exists, err
+		err := r.catFileFailure(ctx, rev, path, args, res)
+		return nil, false, err
 	}
 	return res.Stdout, true, nil
 }
@@ -219,15 +219,15 @@ func (r *Repo) CatFile(ctx context.Context, rev, path string) (content []byte, e
 // catFileFailure preserves the normal absent-path answer while surfacing a
 // known-but-unreadable promisor object. A tree lookup is the distinction
 // cat-file -p itself does not expose: it reports both cases as exit 128.
-func (r *Repo) catFileFailure(ctx context.Context, rev, path string, args []string, res Result) (exists bool, err error) {
+func (r *Repo) catFileFailure(ctx context.Context, rev, path string, args []string, res Result) error {
 	known, submodule, err := r.catFilePathStatus(ctx, rev, path)
 	if err != nil {
-		return false, err
+		return err
 	}
 	if !known || submodule {
-		return false, nil
+		return nil
 	}
-	return false, gitError(args, res)
+	return gitError(args, res)
 }
 
 func (r *Repo) catFilePathStatus(ctx context.Context, rev, path string) (known, submodule bool, err error) {
@@ -324,8 +324,8 @@ func (r *Repo) CatFileSample(ctx context.Context, rev, path string, limit int) (
 	if werr := cmd.Wait(); werr != nil {
 		if exitErr, ok := errors.AsType[*exec.ExitError](werr); ok {
 			res := Result{ExitCode: exitErr.ExitCode(), Stderr: stderr.Bytes()}
-			exists, err := r.catFileFailure(ctx, rev, path, args, res)
-			return nil, exists, err
+			err := r.catFileFailure(ctx, rev, path, args, res)
+			return nil, false, err
 		}
 		return nil, false, &ExecError{Args: args, Err: werr}
 	}

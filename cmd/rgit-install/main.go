@@ -300,9 +300,9 @@ func parseSQLAdapterListing(out []byte) (dir string, ok bool) {
 	dec := json.NewDecoder(bytes.NewReader(out))
 	for dec.More() {
 		var pkg struct {
-			Dir      string
-			Name     string
-			CgoFiles []string
+			Dir      string   `json:"Dir"`
+			Name     string   `json:"Name"`
+			CgoFiles []string `json:"CgoFiles"`
 		}
 		if err := dec.Decode(&pkg); err != nil {
 			return "", false

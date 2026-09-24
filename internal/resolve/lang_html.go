@@ -138,7 +138,7 @@ func (h *htmlLanguage) declarationsFor(src []byte, node *ts.Node) []Declaration 
 //
 // A node with a real end_tag or an explicit self_closing_tag is returned
 // unchanged: neither absorbs trailing content the way a void element does.
-func (h *htmlLanguage) trimDeclOnlyEnd(src []byte, node *ts.Node) uint {
+func (h *htmlLanguage) trimDeclOnlyEnd(_ []byte, node *ts.Node) uint {
 	var startTagEnd uint
 	hasStartTag := false
 	for _, child := range namedChildren(node) {

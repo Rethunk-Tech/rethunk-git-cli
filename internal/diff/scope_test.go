@@ -16,9 +16,9 @@ import (
 // commit of their own. That is the minimum shape that makes A...B's merge
 // base different from both A and B, which is the whole thing
 // resolveRangeScope's three-dot form exists to get right.
-func newDivergentRepo(t *testing.T) (dir string, repo *gitx.Repo, baseSHA string) {
+func newDivergentRepo(t *testing.T) (repo *gitx.Repo, baseSHA string) {
 	t.Helper()
-	dir, repo = gittest.New(t.Context(), t)
+	dir, repo := gittest.New(t.Context(), t)
 
 	gittest.Write(t, dir, "f.txt", "base\n")
 	gittest.Commit(t.Context(), t, dir, "chore: base")
@@ -32,7 +32,7 @@ func newDivergentRepo(t *testing.T) (dir string, repo *gitx.Repo, baseSHA string
 	gittest.Write(t, dir, "f.txt", "base\nmain\n")
 	gittest.Commit(t.Context(), t, dir, "chore: main")
 
-	return dir, repo, baseSHA
+	return repo, baseSHA
 }
 
 // TestResolveRangeScope_ThreeDotUsesMergeBaseTwoDotUsesLiteralA is
@@ -43,7 +43,7 @@ func newDivergentRepo(t *testing.T) (dir string, repo *gitx.Repo, baseSHA string
 // unit lane, not only in cmd/rgit/rgit_e2e_test.go's slow lane.
 func TestResolveRangeScope_ThreeDotUsesMergeBaseTwoDotUsesLiteralA(t *testing.T) {
 	t.Parallel()
-	_, repo, base := newDivergentRepo(t)
+	repo, base := newDivergentRepo(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
@@ -79,10 +79,6 @@ func TestResolveRangeScope_ThreeDotUsesMergeBaseTwoDotUsesLiteralA(t *testing.T)
 // and only that type, to exit 129 rather than exit 128.
 func TestResolveRangeScope_ErrorPaths(t *testing.T) {
 	t.Parallel()
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	dir, repo := gittest.RepoWithFile(ctx, t, "f.txt", "one\n", "chore: fixture")
-
 	// One case per separator, not one per missing side: scope.go's own
 	// check is a single `a == "" || b == ""`, so a missing left endpoint
 	// and a missing right endpoint hit the identical branch -- a second
@@ -96,6 +92,9 @@ func TestResolveRangeScope_ErrorPaths(t *testing.T) {
 		{"two-dot missing right endpoint", "HEAD..", `malformed revision range "HEAD.."`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := t.Context()
+			_, repo := gittest.RepoWithFile(ctx, t, "f.txt", "one\n", "chore: fixture")
 			_, err := resolveRangeScope(ctx, repo, tc.token)
 			var uerr *UsageError
 			if !errors.As(err, &uerr) {
@@ -108,6 +107,9 @@ func TestResolveRangeScope_ErrorPaths(t *testing.T) {
 	}
 
 	t.Run("no merge base between two orphan branches", func(t *testing.T) {
+		t.Parallel()
+		ctx := t.Context()
+		dir, repo := gittest.RepoWithFile(ctx, t, "f.txt", "one\n", "chore: fixture")
 		gittest.Git(ctx, t, dir, "checkout", "-q", "--orphan", "isolated")
 		gittest.Git(ctx, t, dir, "commit", "-q", "-m", "chore: isolated root")
 		gittest.Git(ctx, t, dir, "checkout", "-q", "main")
@@ -131,7 +133,7 @@ func TestResolveRangeScope_ErrorPaths(t *testing.T) {
 // and internal/app must route them to different exit codes.
 func TestResolveRangeScope_MergeBaseExecFailureIsNotAUsageError(t *testing.T) {
 	t.Parallel()
-	_, repo, _ := newDivergentRepo(t)
+	repo, _ := newDivergentRepo(t)
 
 	// A context already canceled before the call means git is never even
 	// started (gitx's own contract: "binary missing, context canceled" is
@@ -227,6 +229,7 @@ func TestExtractRangeToken_DetectsRangeNotAPath(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("range token pulled out, non-range args left in rest", func(t *testing.T) {
+		t.Parallel()
 		token, rest, err := ExtractRangeToken(ctx, []string{"a.go", "HEAD..HEAD~1"}, checker)
 		if err != nil {
 			t.Fatalf("ExtractRangeToken: %v", err)
@@ -243,6 +246,7 @@ func TestExtractRangeToken_DetectsRangeNotAPath(t *testing.T) {
 	// is a pathspec, always"): a range-shaped token past it must never be
 	// pulled out, even though it would qualify on its own.
 	t.Run("-- stops the range scan", func(t *testing.T) {
+		t.Parallel()
 		args := []string{"a.go", "--", "HEAD..HEAD~1"}
 		token, rest, err := ExtractRangeToken(ctx, args, checker)
 		if err != nil {
@@ -261,6 +265,7 @@ func TestExtractRangeToken_DetectsRangeNotAPath(t *testing.T) {
 	// meant, so both a rgit diff and a --range flag can only ever supply
 	// one.
 	t.Run("multiple range-shaped arguments is an error", func(t *testing.T) {
+		t.Parallel()
 		_, _, err := ExtractRangeToken(ctx, []string{"main..feature", "HEAD..HEAD~1"}, checker)
 		want := `multiple revision-range-shaped arguments given: "main..feature" and "HEAD..HEAD~1"`
 		if err == nil || err.Error() != want {
@@ -281,6 +286,8 @@ func TestExtractRangeToken_DetectsRangeNotAPath(t *testing.T) {
 	// and PrefixPath's own root-relative rebasing is what makes "../shared/
 	// util.go" resolve to the real "shared/util.go" from prefix "sub".
 	t.Run("an existing ../path wins over range-shaped parsing", func(t *testing.T) {
+		t.Parallel()
+		dir, repo := gittest.New(ctx, t)
 		gittest.Write(t, dir, "shared/util.go", "package shared\n")
 		subChecker := &cli.GitPathChecker{Root: dir, Prefix: "sub", Repo: repo}
 

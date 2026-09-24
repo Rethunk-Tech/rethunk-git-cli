@@ -46,7 +46,7 @@ func BenchmarkAttribution_200MemberClass(b *testing.B) {
 	oldSrc, newSrc := buildLargeGoClassFixture(200)
 
 	for b.Loop() {
-		if _, _, err := attributeSymbols(lang, oldSrc, newSrc, 200, 200); err != nil {
+		if _, err := attributeSymbols(lang, oldSrc, newSrc, 200, 200); err != nil {
 			b.Fatal(err)
 		}
 	}

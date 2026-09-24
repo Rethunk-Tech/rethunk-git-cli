@@ -70,7 +70,11 @@ func TestStopStrandedDaemon_EscalatesToKill(t *testing.T) {
 	if err := cmd.Wait(); !errors.As(err, &exitErr) {
 		t.Fatalf("Wait() = %v; want the stand-in killed", err)
 	}
-	if ws := exitErr.Sys().(syscall.WaitStatus); !ws.Signaled() || ws.Signal() != syscall.SIGKILL {
+	ws, ok := exitErr.Sys().(syscall.WaitStatus)
+	if !ok {
+		t.Fatalf("stand-in exit status = %T; want syscall.WaitStatus", exitErr.Sys())
+	}
+	if !ws.Signaled() || ws.Signal() != syscall.SIGKILL {
 		t.Errorf("stand-in exit = %v; want SIGKILL after ignoring SIGTERM", ws)
 	}
 	if _, err := os.Stat(pidPath(sockPath)); !os.IsNotExist(err) {

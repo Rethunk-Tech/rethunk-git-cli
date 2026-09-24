@@ -24,7 +24,7 @@ import (
 //	a.go                 committed, exists at HEAD and in the worktree
 //	src/notes:draft.md   a legal path that itself contains a colon
 //	gone.go              committed, then deleted from the worktree
-func newClassifyRepo(t *testing.T) (root string, checker *GitPathChecker, revs GitRevisionResolver, ctx context.Context) {
+func newClassifyRepo(t *testing.T) (checker *GitPathChecker, revs GitRevisionResolver, ctx context.Context) {
 	t.Helper()
 	root, repo := gittest.New(t.Context(), t)
 
@@ -36,7 +36,7 @@ func newClassifyRepo(t *testing.T) (root string, checker *GitPathChecker, revs G
 		t.Fatal(err)
 	}
 
-	return root, &GitPathChecker{Root: root, Repo: repo}, GitRevisionResolver{Repo: repo}, context.Background()
+	return &GitPathChecker{Root: root, Repo: repo}, GitRevisionResolver{Repo: repo}, context.Background()
 }
 
 // TestClassifyArgs_PrecedenceTable walks docs/USAGE.md § Argument shape's
@@ -45,7 +45,7 @@ func newClassifyRepo(t *testing.T) (root string, checker *GitPathChecker, revs G
 // since several tokens satisfy more than one test.
 func TestClassifyArgs_PrecedenceTable(t *testing.T) {
 	t.Parallel()
-	_, checker, revs, ctx := newClassifyRepo(t)
+	checker, revs, ctx := newClassifyRepo(t)
 
 	for _, tc := range []struct {
 		name           string
@@ -94,6 +94,7 @@ func TestClassifyArgs_PrecedenceTable(t *testing.T) {
 		want: []Classification{{Kind: KindAnchor, Anchor: Anchor{File: "gone.go", Name: "Gone"}}},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			got, err := ClassifyArgs(ctx, tc.args, tc.allowRevisions, checker, revs)
 			qt.Assert(t, qt.IsNil(err))
 			qt.Assert(t, qt.DeepEquals(got, tc.want))
@@ -109,7 +110,7 @@ func TestClassifyArgs_PrecedenceTable(t *testing.T) {
 // `symbols` had printed -- 462 of 3054 across 36 of 59 surveyed stylesheets.
 func TestClassifyArgs_Rule5NameMayContainColons(t *testing.T) {
 	t.Parallel()
-	_, checker, revs, ctx := newClassifyRepo(t)
+	checker, revs, ctx := newClassifyRepo(t)
 
 	for _, tc := range []struct {
 		name, arg, file, sym string
@@ -123,6 +124,7 @@ func TestClassifyArgs_Rule5NameMayContainColons(t *testing.T) {
 		{"path carries a colon", "src/notes:draft.md:Heading", "src/notes:draft.md", "Heading"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			got, err := ClassifyArgs(ctx, []string{tc.arg}, true, checker, revs)
 			qt.Assert(t, qt.IsNil(err))
 			qt.Assert(t, qt.DeepEquals(got, []Classification{{
@@ -138,7 +140,7 @@ func TestClassifyArgs_Rule5NameMayContainColons(t *testing.T) {
 // was actually applied -- and only those, since rule 3 is diff-only.
 func TestClassifyArgs_Rule6ListsWhatItTried(t *testing.T) {
 	t.Parallel()
-	_, checker, revs, ctx := newClassifyRepo(t)
+	checker, revs, ctx := newClassifyRepo(t)
 
 	_, err := ClassifyArgs(ctx, []string{"nosuch.go:Nope"}, true, checker, revs)
 

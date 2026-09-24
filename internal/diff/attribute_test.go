@@ -98,7 +98,7 @@ func TestAttributeSymbols_GoInlineMultiNameConstFallsBackUnanchorable(t *testing
 	oldSrc := []byte("package p\n\nconst a, b = 1, 2\n")
 	newSrc := []byte("package p\n\nconst a, b = 1, 3\n")
 
-	rows, _, err := attributeSymbols(lang, oldSrc, newSrc, 1, 1)
+	rows, err := attributeSymbols(lang, oldSrc, newSrc, 1, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestAttributeSymbols_MarkdownSectionOwnParagraphSurvivesNestedSetext(t *tes
 	newSrc := []byte("# Usage\n\n## Options\n\nFirst options.\n\n## Options\n\n" +
 		"Second options paragraph, edited.\n\nSetext Title\n============\n\nBody after.\n")
 
-	rows, _, err := attributeSymbols(lang, oldSrc, newSrc, 1, 1)
+	rows, err := attributeSymbols(lang, oldSrc, newSrc, 1, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,16 +168,17 @@ func TestAttributeSymbols_MarkdownSectionOwnParagraphSurvivesNestedSetext(t *tes
 // attributeSymbols opens both sides itself, for a test with nothing already
 // parsed to hand in. Production always has a *resolve.File open already and
 // calls attributeSymbolsOpen directly.
-func attributeSymbols(lang resolve.Language, oldSrc, newSrc []byte, totalAdded, totalDeleted int) ([]Row, []string, error) {
+func attributeSymbols(lang resolve.Language, oldSrc, newSrc []byte, totalAdded, totalDeleted int) ([]Row, error) {
 	oldFile, err := resolve.Open(lang, oldSrc)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer oldFile.Close()
 	newFile, err := resolve.Open(lang, newSrc)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer newFile.Close()
-	return attributeSymbolsOpen(lang, oldSrc, newSrc, oldFile, newFile, totalAdded, totalDeleted)
+	rows, _, err := attributeSymbolsOpen(lang, oldSrc, newSrc, oldFile, newFile, totalAdded, totalDeleted)
+	return rows, err
 }

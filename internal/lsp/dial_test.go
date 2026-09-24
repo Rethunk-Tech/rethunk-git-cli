@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -21,18 +22,25 @@ import (
 // subdirectory are both appended to it. It roots at /tmp where one exists
 // rather than $TMPDIR: macOS runners and scratch harnesses set a TMPDIR long
 // enough to overflow sun_path on its own.
+var shortTempDirSeq atomic.Uint64
+
 func shortTempDir(t *testing.T) string {
 	t.Helper()
-	base := ""
+	dir := t.TempDir()
+	base := filepath.Dir(dir)
 	if info, err := os.Stat("/tmp"); err == nil && info.IsDir() {
 		base = "/tmp"
 	}
-	dir, err := os.MkdirTemp(base, "rgit-lsp-test-")
-	if err != nil {
-		t.Fatal(err)
+	link := filepath.Join(base, fmt.Sprintf("rgit-lsp-test-%d-%d", os.Getpid(), shortTempDirSeq.Add(1)))
+	if err := os.Symlink(dir, link); err != nil {
+		t.Fatalf("create short temp symlink: %v", err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	return dir
+	t.Cleanup(func() {
+		if err := os.Remove(link); err != nil && !os.IsNotExist(err) {
+			t.Errorf("remove short temp symlink: %v", err)
+		}
+	})
+	return link
 }
 
 // noopDaemonArgs is a serverSpec.daemonArgs for a test spec whose "daemon"
