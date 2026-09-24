@@ -521,7 +521,7 @@ func TestStage_ModeOnlyChangeStages(t *testing.T) {
 
 	// --sym cannot express a mode change (docs/USAGE.md); a mode-only
 	// edit stages by pathspec instead.
-	qt.Assert(t, qt.IsNil(os.Chmod(filepath.Join(dir, "script.sh"), 0o755)))
+	qt.Assert(t, qt.IsNil(os.Chmod(filepath.Join(dir, "script.sh"), 0o755))) //nolint:gosec // executable mode is the behavior under test
 
 	mustStage(t, repo, dir, synth.PathTarget("script.sh"))
 
@@ -832,7 +832,7 @@ func TestStage_ModeInheritsFromHEADWhenWorktreeFileGone(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t.Context(), t)
 	gittest.Write(t, dir, "gone.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	qt.Assert(t, qt.IsNil(os.Chmod(filepath.Join(dir, "gone.go"), 0o755)))
+	qt.Assert(t, qt.IsNil(os.Chmod(filepath.Join(dir, "gone.go"), 0o755))) //nolint:gosec // executable mode is the behavior under test
 	gittest.Commit(t.Context(), t, dir, "chore: add executable gone.go")
 
 	qt.Assert(t, qt.IsNil(os.Remove(filepath.Join(dir, "gone.go"))))

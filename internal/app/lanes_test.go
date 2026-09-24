@@ -160,7 +160,7 @@ func TestRun_OnlyDirectoryTargetSurvivesFailedPreviewCounts(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 	shimDir := t.TempDir()
 	shim := "#!/bin/sh\ncase \" $* \" in *\" --numstat \"*) echo 'shim: numstat refused' >&2; exit 1;; esac\nexec '" + realGit + "' \"$@\"\n"
-	qt.Assert(t, qt.IsNil(os.WriteFile(filepath.Join(shimDir, "git"), []byte(shim), 0o755)))
+	qt.Assert(t, qt.IsNil(os.WriteFile(filepath.Join(shimDir, "git"), []byte(shim), 0o755))) //nolint:gosec // executable git shim is the behavior under test
 	t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	_, stderr, code := runApp(t, "commit", "--only", "-m", "feat(d): update", "d")
@@ -542,7 +542,7 @@ func TestRun_DiffUntrackedFileAndModeChange(t *testing.T) {
 	dir := tempRepo(t)
 	writeAppFile(t, dir, "untracked.go", "package a\n\nfunc U() int { return 1 }\n")
 
-	if err := os.Chmod(filepath.Join(dir, "a.go"), 0o755); err != nil {
+	if err := os.Chmod(filepath.Join(dir, "a.go"), 0o755); err != nil { //nolint:gosec // executable mode is the behavior under test
 		t.Fatal(err)
 	}
 

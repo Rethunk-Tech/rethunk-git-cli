@@ -1213,7 +1213,7 @@ func isolatedPATHWithGopls(t *testing.T) string {
 	if err := os.Symlink(gitPath, filepath.Join(bin, "git")); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(bin, "gopls"), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(bin, "gopls"), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil { //nolint:gosec // executable helper is the behavior under test
 		t.Fatal(err)
 	}
 	return bin

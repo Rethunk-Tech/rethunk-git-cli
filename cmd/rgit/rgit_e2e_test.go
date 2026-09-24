@@ -633,7 +633,7 @@ func TestDiff_ModeRowOnChmod(t *testing.T) {
 	t.Parallel()
 	repo := initRepoWithFile(t, "script.sh", "#!/bin/sh\necho hi\n")
 
-	if err := os.Chmod(filepath.Join(repo, "script.sh"), 0o755); err != nil {
+	if err := os.Chmod(filepath.Join(repo, "script.sh"), 0o755); err != nil { //nolint:gosec // executable mode is the behavior under test
 		t.Fatal(err)
 	}
 
