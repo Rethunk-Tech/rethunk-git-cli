@@ -387,8 +387,8 @@ func TestPrivateSocketDir_BaseMissingFailsClosed(t *testing.T) {
 // --- a stale/incompatible managed socket must not pin every future
 // invocation to [ts-only] forever ---
 
-// TestDialSocket_HandshakeFailureUnlinksManagedSocketAndDegrades covers the
-// bug directly: a listener that accepts but never speaks the handshake (a
+// TestDialSocket_HandshakeFailureUnlinksManagedSocketAndDegrades covers this
+// directly: a listener that accepts but never speaks the handshake (a
 // stale or incompatible daemon's shape) must be unlinked once this
 // invocation gives up on it, so the very next invocation can reclaim the
 // path via spawn-on-demand instead of finding the same dead listener
