@@ -55,9 +55,9 @@ func TestStage_RoundTripsWorktreeForEveryDeclaration(t *testing.T) {
 			t.Errorf("symbols %s: exit %d: %s", name, list.ExitCode, list.Stderr)
 			continue
 		}
-		anchors := strings.Split(strings.TrimSuffix(list.Stdout, "\x00"), "\x00")
+		anchors := strings.SplitSeq(strings.TrimSuffix(list.Stdout, "\x00"), "\x00")
 
-		for _, anchor := range anchors {
+		for anchor := range anchors {
 			if anchor == "" {
 				continue
 			}
@@ -105,7 +105,7 @@ func perturbDeclaration(t *testing.T, repo, name string, src []byte, anchor stri
 		return nil, false
 	}
 	var start, end int
-	for _, rec := range strings.Split(strings.TrimSuffix(res.Stdout, "\x00"), "\x00") {
+	for rec := range strings.SplitSeq(strings.TrimSuffix(res.Stdout, "\x00"), "\x00") {
 		lineRange, sym, found := strings.Cut(rec, "\t")
 		if !found || sym != anchor {
 			continue
