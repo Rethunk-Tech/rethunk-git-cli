@@ -364,7 +364,7 @@ func (r *Repo) BatchCatFile(ctx context.Context, requests []BatchCatFileRequest)
 
 	args := []string{"cat-file", "--batch"}
 	full := append([]string{"-C", r.root}, args...)
-	cmd := exec.CommandContext(ctx, "git", full...) //nolint:gosec // requested rev:path selectors are passed directly to git, never through a shell
+	cmd := exec.CommandContext(ctx, "git", full...) //nolint:gosec // argv is fixed (git -C root cat-file --batch); rev:path selectors travel over stdin, never argv
 	cmd.Env = r.env
 
 	stdin, err := cmd.StdinPipe()
