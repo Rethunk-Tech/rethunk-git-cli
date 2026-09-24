@@ -313,6 +313,7 @@ func ExtractRangeToken(ctx context.Context, args []string, paths cli.PathChecker
 	}
 
 	found := -1
+	var foundToken string
 	for i := 0; i < limit; i++ {
 		a := args[i]
 		if strings.HasPrefix(a, ":") || !strings.Contains(a, "..") {
@@ -326,9 +327,10 @@ func ExtractRangeToken(ctx context.Context, args []string, paths cli.PathChecker
 			continue
 		}
 		if found >= 0 {
-			return "", nil, &UsageError{Msg: fmt.Sprintf("multiple revision-range-shaped arguments given: %q and %q", args[found], a)}
+			return "", nil, &UsageError{Msg: fmt.Sprintf("multiple revision-range-shaped arguments given: %q and %q", foundToken, a)}
 		}
 		found = i
+		foundToken = a
 	}
 	if found < 0 {
 		return "", args, nil
@@ -337,5 +339,5 @@ func ExtractRangeToken(ctx context.Context, args []string, paths cli.PathChecker
 	rest = make([]string, 0, len(args)-1)
 	rest = append(rest, args[:found]...)
 	rest = append(rest, args[found+1:]...)
-	return args[found], rest, nil
+	return foundToken, rest, nil
 }
