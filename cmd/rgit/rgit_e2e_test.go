@@ -110,7 +110,7 @@ func buildRgit() (bin string, cleanup func(), err error) {
 	// (lsp.Session: "not safe for concurrent use"). The concurrency worth
 	// checking is the jsonrpc2 read goroutine and the daemon spawn lock,
 	// both in-process: `go test -race ./...` reaches them and this does not.
-	cmd := exec.CommandContext(context.Background(), "go", "build", "-cover", "-o", bin, ".")
+	cmd := exec.CommandContext(context.Background(), "go", "build", "-cover", "-o", bin, ".") //nolint:gosec // e2e builds this checkout with fixed arguments and a test-temp output
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -128,7 +128,7 @@ type rgitResult struct {
 func runRgit(t *testing.T, repoDir string, args ...string) rgitResult {
 	t.Helper()
 	requireBinary(t)
-	cmd := exec.CommandContext(context.Background(), rgitBin, args...)
+	cmd := exec.CommandContext(t.Context(), rgitBin, args...) //nolint:gosec // e2e invokes the test-built binary directly with fixture CLI arguments
 	cmd.Dir = repoDir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -1186,7 +1186,7 @@ func runBashCompletion(t *testing.T, repo, bashScript string, words ...string) [
 		"_rgit_completion\n" +
 		`printf '%s\n' "${COMPREPLY[@]}"` + "\n"
 
-	cmd := exec.CommandContext(context.Background(), bashPath, "-c", driver)
+	cmd := exec.CommandContext(t.Context(), bashPath, "-c", driver) //nolint:gosec // completion tests intentionally execute the discovered shell with generated input
 	cmd.Dir = repo
 	cmd.Env = append(os.Environ(), "PATH="+filepath.Dir(rgitBin)+string(os.PathListSeparator)+os.Getenv("PATH"))
 	out, err := cmd.CombinedOutput()
@@ -1295,7 +1295,7 @@ func runZshCompletion(t *testing.T, repo, zshScript string, words ...string) []s
 		"CURRENT=" + fmt.Sprint(len(compWords)) + "\n" +
 		"_rgit\n"
 
-	cmd := exec.CommandContext(context.Background(), zshPath, "-f", "-c", driver)
+	cmd := exec.CommandContext(t.Context(), zshPath, "-f", "-c", driver) //nolint:gosec // completion tests intentionally execute the discovered shell with generated input
 	cmd.Dir = repo
 	cmd.Env = append(os.Environ(), "PATH="+filepath.Dir(rgitBin)+string(os.PathListSeparator)+os.Getenv("PATH"))
 	out, err := cmd.CombinedOutput()
@@ -1361,7 +1361,7 @@ func runFishCompletion(t *testing.T, repo, fishScript string, words ...string) [
 	driver := fishScript + "\n" +
 		`complete -C"` + strings.ReplaceAll(cmdline, `"`, `\"`) + `"` + "\n"
 
-	cmd := exec.CommandContext(context.Background(), fishPath, "--no-config", "-c", driver)
+	cmd := exec.CommandContext(t.Context(), fishPath, "--no-config", "-c", driver) //nolint:gosec // completion tests intentionally execute the discovered shell with generated input
 	cmd.Dir = repo
 	cmd.Env = append(os.Environ(), "PATH="+filepath.Dir(rgitBin)+string(os.PathListSeparator)+os.Getenv("PATH"))
 	out, err := cmd.CombinedOutput()
@@ -1427,7 +1427,7 @@ func runPwshCompletion(t *testing.T, repo, pwshScript string, words ...string) [
 		"$completion = [System.Management.Automation.CommandCompletion]::CompleteInput($line, $line.Length, $null)\n" +
 		"$completion.CompletionMatches | ForEach-Object { $_.CompletionText }\n"
 
-	cmd := exec.CommandContext(context.Background(), pwshPath, "-NoProfile", "-NonInteractive", "-Command", driver)
+	cmd := exec.CommandContext(t.Context(), pwshPath, "-NoProfile", "-NonInteractive", "-Command", driver) //nolint:gosec // completion tests intentionally execute the discovered shell with generated input
 	cmd.Dir = repo
 	cmd.Env = append(os.Environ(), "PATH="+filepath.Dir(rgitBin)+string(os.PathListSeparator)+os.Getenv("PATH"))
 	out, err := cmd.CombinedOutput()

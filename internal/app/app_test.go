@@ -869,7 +869,7 @@ func assertShellParses(t *testing.T, shell, script string) {
 	if err := os.WriteFile(f, []byte(script), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := exec.CommandContext(context.Background(), path, "-n", f).CombinedOutput(); err != nil {
+	if out, err := exec.CommandContext(t.Context(), path, "-n", f).CombinedOutput(); err != nil { //nolint:gosec // parser test invokes the discovered shell with a generated fixture
 		t.Fatalf("%s -n %s: %v: %s", shell, f, err, out)
 	}
 }
@@ -901,7 +901,7 @@ if ($null -ne $errors -and $errors.Count -gt 0) {
     exit 1
 }
 `
-	cmd := exec.CommandContext(context.Background(), path, "-NoProfile", "-NonInteractive", "-Command", parseScript)
+	cmd := exec.CommandContext(t.Context(), path, "-NoProfile", "-NonInteractive", "-Command", parseScript) //nolint:gosec // parser test invokes the discovered PowerShell with generated input
 	cmd.Env = append(os.Environ(), "RGIT_COMPLETION_SCRIPT="+file)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("pwsh parser: %v: %s", err, output)

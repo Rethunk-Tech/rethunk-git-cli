@@ -46,7 +46,7 @@ func (f fakeDirInfo) Sys() any         { return &syscall.Stat_t{Uid: f.uid} }
 func TestSameOwner_ForeignUIDIsRejected(t *testing.T) {
 	t.Parallel()
 
-	self := uint32(os.Getuid())
+	self := uint32(os.Getuid()) //nolint:gosec // syscall.Stat_t.Uid is uint32 on supported Unix targets
 
 	if !sameOwner(fakeDirInfo{uid: self}) {
 		t.Error("sameOwner() = false for this process's own UID; want true")
