@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 
@@ -93,7 +94,12 @@ func NewClient(handshakeCtx context.Context, rwc io.ReadWriteCloser, root string
 	// DocumentSymbols call too.
 	_, conn, server := protocol.NewClient(context.Background(), configClient{}, stream)
 
-	pid := int32(os.Getpid())
+	pidValue := os.Getpid()
+	if pidValue > math.MaxInt32 {
+		_ = conn.Close()
+		return nil, fmt.Errorf("lsp: process id %d exceeds LSP int32 range", pidValue)
+	}
+	pid := int32(pidValue) //nolint:gosec // range check above rejects values outside LSP's int32 ProcessID field
 	// The workspace is announced through workspaceFolders, not the rootUri
 	// the LSP spec deprecates in its favour. The two are not interchangeable
 	// on the wire: a server only reads workspaceFolders if the client says it

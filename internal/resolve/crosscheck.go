@@ -1,9 +1,9 @@
 package resolve
 
 import (
-	"bytes"
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -203,12 +203,20 @@ func isSpaceByte(b byte) bool {
 // lineOf converts a byte offset to a 0-based line number, matching LSP's
 // Position.Line convention directly so callers never juggle a 1-based/
 // 0-based mismatch across the comparison. ok=false means offset exceeds
-// len(src), which src[:offset] would otherwise panic on rather than report.
+// len(src), or the line count cannot fit LSP's uint32 field.
 func lineOf(src []byte, offset uint) (line uint32, ok bool) {
 	if offset > uint(len(src)) {
 		return 0, false
 	}
-	return uint32(bytes.Count(src[:offset], []byte{'\n'})), true
+	for _, b := range src[:offset] {
+		if b == '\n' {
+			if line == math.MaxUint32 {
+				return 0, false
+			}
+			line++
+		}
+	}
+	return line, true
 }
 
 func formatRange(start, end uint32) string {
