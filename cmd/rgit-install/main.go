@@ -556,7 +556,7 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(dst, data, 0o600)
+	return os.WriteFile(dst, data, 0o600) //nolint:gosec // dst is one of the installer-selected generated outputs
 }
 
 func relTo(root, path string) string {

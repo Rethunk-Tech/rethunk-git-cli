@@ -699,7 +699,7 @@ func (s *tempStaging) swap() error {
 		return nil
 	} else if data, rerr := os.ReadFile(s.tmp); rerr != nil {
 		return rerr
-	} else if werr := os.WriteFile(s.final, data, s.mode); werr != nil {
+	} else if werr := os.WriteFile(s.final, data, s.mode); werr != nil { //nolint:gosec // s.final is git's resolved index path captured during staging setup
 		return werr
 	} else {
 		_ = os.Remove(s.tmp)
