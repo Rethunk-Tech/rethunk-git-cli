@@ -72,7 +72,7 @@ func (s contentSide) read(ctx context.Context, repo *gitx.Repo, root, path strin
 			return content, exists, err
 		}
 		return readUnmergedWorktree(ctx, repo, root, path)
-	default:
+	case sideRev:
 		if cache != nil {
 			if res, ok := cache.lookup(s.rev, path); ok {
 				return res.Content, res.Exists, nil
@@ -80,6 +80,7 @@ func (s contentSide) read(ctx context.Context, repo *gitx.Repo, root, path strin
 		}
 		return repo.CatFile(ctx, s.rev, path)
 	}
+	return nil, false, fmt.Errorf("diff: unknown content side kind %d", s.kind)
 }
 
 func readUnmergedWorktree(ctx context.Context, repo *gitx.Repo, root, path string) ([]byte, bool, error) {
@@ -108,13 +109,14 @@ func (s contentSide) mode(ctx context.Context, repo *gitx.Repo, root, path strin
 		return util.GitFileMode(info), true, nil
 	case sideIndex:
 		return repo.LsFilesStage(ctx, path)
-	default:
+	case sideRev:
 		entry, found, err := repo.LsTree(ctx, s.rev, path)
 		if err != nil || !found {
 			return "", found, err
 		}
 		return entry.Mode, true, nil
 	}
+	return "", false, fmt.Errorf("diff: unknown content side kind %d", s.kind)
 }
 
 // blobCache holds every git-backed blob buildFileReport's own per-file loop
@@ -160,7 +162,7 @@ func prefetchBlobs(ctx context.Context, repo *gitx.Repo, scope Scope, oldPaths, 
 			return
 		case sideIndex:
 			requests = append(requests, gitx.BatchCatFileRequest{Path: path})
-		default:
+		case sideRev:
 			requests = append(requests, gitx.BatchCatFileRequest{Rev: s.rev, Path: path})
 		}
 	}

@@ -42,9 +42,10 @@ func (s Status) Porcelain() string {
 		return "MODE"
 	case StatusBinary:
 		return "BINARY"
-	default: // StatusMod, StatusNoSymbols
+	case StatusMod, StatusNoSymbols:
 		return "MOD"
 	}
+	return "MOD"
 }
 
 // Row is one line of rgit diff output. Symbol is empty for every

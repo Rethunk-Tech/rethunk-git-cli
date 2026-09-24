@@ -863,6 +863,7 @@ func opLineCounts(fp *filePlan, op editOp) (added, deleted int) {
 		if int(op.end) <= len(fp.headSrc) && op.start <= op.end {
 			old = fp.headSrc[op.start:op.end]
 		}
+	case editInsert:
 	}
 	added, deleted = diff.LineCounts(old, op.text)
 
@@ -876,6 +877,7 @@ func opLineCounts(fp *filePlan, op editOp) (added, deleted int) {
 		if !op.member && len(fp.headSrc) > 0 {
 			added++
 		}
+	case editReplace:
 	}
 	return added, deleted
 }

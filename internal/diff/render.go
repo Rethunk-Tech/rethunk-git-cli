@@ -49,9 +49,10 @@ func rowLabel(row Row) string {
 		return "(binary)"
 	case StatusNoSymbols:
 		return "(no symbols)"
-	default:
+	case StatusMod, StatusDeleted:
 		return ""
 	}
+	return ""
 }
 
 // rowStatusWord is the third column, used only to mark a named symbol row
@@ -90,9 +91,10 @@ func rowHint(path, lang string, row Row) string {
 		return "-> use --file " + path
 	case StatusMode:
 		return "-> use rgit commit " + path
-	default:
+	case StatusMod, StatusDeleted, StatusBinary, StatusNoSymbols:
 		return ""
 	}
+	return ""
 }
 
 // unanchorableHint is the (unanchorable) row's own suggestion. For most

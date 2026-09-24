@@ -71,6 +71,19 @@ func (e *ResolveError) Error() string {
 		label = "ambiguous"
 	case exitcode.UnsupportedLanguage:
 		label = "unsupported language"
+	case exitcode.Success,
+		exitcode.AnchorUnresolvable,
+		exitcode.ContradictoryAnchors,
+		exitcode.ExtentMismatch,
+		exitcode.PathRefused,
+		exitcode.PushFailed,
+		exitcode.SpecialPathRefused,
+		exitcode.NothingToCommit,
+		exitcode.StructuredDataAnchorRefused,
+		exitcode.GitFailure,
+		exitcode.InvalidUsage:
+		// Keep the default unresolved label for codes that do not have
+		// a more specific resolution error message.
 	}
 	if len(e.Candidates) == 0 {
 		return fmt.Sprintf("resolve: %q: %s", e.Anchor, label)

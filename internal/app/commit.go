@@ -658,13 +658,11 @@ func commitTargets(root, prefix string, classified []cli.Classification, files, 
 			if err := addAnchor(c.Anchor.File, c.Anchor.Name); err != nil {
 				return nil, err
 			}
-		default:
+		case cli.KindRevision, cli.KindRevPath:
 			// classified is built with allowRevisions=false (above), so
-			// KindRevision/KindRevPath never reach here today -- but a
-			// silent skip would stage nothing for a positional the caller
-			// named, with no line on stderr to say why, if that ever
-			// changes. An internal error is honest; committing part of what
-			// was asked for without saying so is not.
+			// these cases never reach here today. An internal error is
+			// honest if that invariant changes; silently staging only part
+			// of what was requested is not.
 			return nil, fmt.Errorf("internal error: commitTargets: unhandled classification kind %v", c.Kind)
 		}
 	}

@@ -168,9 +168,10 @@ func refusalFor(path string, kind pathKind) error {
 		return &PathError{Code: exitcode.SpecialPathRefused, Path: path, Reason: "skip-worktree; name the path instead of a symbol"}
 	case pathAssumeUnchanged:
 		return &PathError{Code: exitcode.SpecialPathRefused, Path: path, Reason: "assume-unchanged; name the path instead of a symbol"}
-	default:
+	case pathRegular:
 		return nil
 	}
+	return nil
 }
 
 // checkGitignoreRefusal implements "gitignored and untracked" exit 7,
