@@ -340,7 +340,7 @@ func moduleMembers(mod *ts.Node, container string, src []byte) []Declaration {
 }
 
 // newTypeScriptLanguage claims .ts, .mts, .cts.
-func newTypeScriptLanguage() Language {
+func newTypeScriptLanguage() *tsFamily {
 	return &tsFamily{
 		name: "typescript",
 		exts: []string{".ts", ".mts", ".cts"},
@@ -352,7 +352,7 @@ func newTypeScriptLanguage() Language {
 // parse under the TSX grammar rather than the TypeScript one: TSX is a
 // superset that also accepts untyped JS, and routing .js through it is what
 // lets a .jsx file with no extension change still resolve JSX elements.
-func newTSXLanguage() Language {
+func newTSXLanguage() *tsFamily {
 	return &tsFamily{
 		name: "tsx",
 		exts: []string{".tsx", ".jsx", ".js", ".mjs", ".cjs"},

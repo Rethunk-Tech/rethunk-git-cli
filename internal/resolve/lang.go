@@ -274,7 +274,7 @@ func register(l Language) {
 // ForExtension returns the adapter claiming ext (including the leading dot).
 // A false result means the language is unsupported, which callers report as
 // exit 9 — not an error, since naming the path still works.
-func ForExtension(ext string) (Language, bool) {
+func ForExtension(ext string) (Language, bool) { //nolint:ireturn // selects one of a dozen registered grammar adapters at runtime by extension
 	ensureLanguagesRegistered()
 	l, ok := registered[ext]
 	return l, ok
@@ -282,7 +282,7 @@ func ForExtension(ext string) (Language, bool) {
 
 // ForExtensionFolding returns the adapter claiming ext. It preserves exact
 // lookup first and only folds case when the caller explicitly requests it.
-func ForExtensionFolding(ext string, fold bool) (Language, bool) {
+func ForExtensionFolding(ext string, fold bool) (Language, bool) { //nolint:ireturn // selects one of a dozen registered grammar adapters at runtime by extension
 	if l, ok := ForExtension(ext); ok {
 		return l, true
 	}
@@ -400,7 +400,7 @@ var shebangExtension = map[string]string{
 // bounded prefix gets the same answer a full read would have given. content
 // may be nil (the path exists only in HEAD), in which case this behaves
 // exactly like ForExtensionFolding.
-func ForPathFolding(path string, content []byte, fold bool) (Language, bool) {
+func ForPathFolding(path string, content []byte, fold bool) (Language, bool) { //nolint:ireturn // selects one of a dozen registered grammar adapters at runtime by extension or content sniff
 	if l, ok := ForExtensionFolding(filepath.Ext(path), fold); ok {
 		return l, true
 	}
@@ -594,7 +594,7 @@ type HeadShebangSample func() (sample []byte, exists bool, err error)
 // independent of ok: a source with no shebang or an unmapped interpreter
 // still has peeked=true. headSample may be nil when HEAD fallback is not
 // available -- LanguageForWorktreePathFolding is that case named.
-func LanguageForPathFolding(root, relPath string, fold bool, headSample HeadShebangSample) (lang Language, ok, peeked bool, err error) {
+func LanguageForPathFolding(root, relPath string, fold bool, headSample HeadShebangSample) (lang Language, ok, peeked bool, err error) { //nolint:ireturn // selects one of a dozen registered grammar adapters at runtime by extension or content sniff
 	if lang, ok := ForExtensionFolding(filepath.Ext(relPath), fold); ok {
 		return lang, true, false, nil
 	}
@@ -624,7 +624,7 @@ func LanguageForPathFolding(root, relPath string, fold bool, headSample HeadSheb
 // bounded shebang peek of the worktree copy, optionally folding its
 // extension. Callers that can fall back to a HEAD blob use
 // LanguageForPathFolding directly.
-func LanguageForWorktreePathFolding(root, relPath string, fold bool) (lang Language, ok, peeked bool) {
+func LanguageForWorktreePathFolding(root, relPath string, fold bool) (lang Language, ok, peeked bool) { //nolint:ireturn // selects one of a dozen registered grammar adapters at runtime by extension or content sniff
 	lang, ok, peeked, _ = LanguageForPathFolding(root, relPath, fold, nil)
 	return lang, ok, peeked
 }

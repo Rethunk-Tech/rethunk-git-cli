@@ -14,7 +14,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
-func resolverGoLang(t *testing.T) resolve.Language {
+func resolverGoLang(t *testing.T) resolve.Language { //nolint:ireturn // resolve.ForExtension's own concrete type is unexported; this forwards its interface value to resolve.Resolve
 	t.Helper()
 	lang, ok := resolve.ForExtension(".go")
 	if !ok {
