@@ -377,7 +377,7 @@ func TestStage_MemberDeletionKeepsTheFileParseable(t *testing.T) {
 // TestStage_YAMLNestedKeyByteIdenticalRoundTrip pins the acceptance bar
 // for this grammar: YAML's indentation handling is exactly where synthesis
 // bugs are easiest to hide, so a nested key's own replace must reproduce
-// the worktree byte-for-byte, not merely "close."
+// the worktree byte-for-byte, not merely "close.".
 func TestStage_YAMLNestedKeyByteIdenticalRoundTrip(t *testing.T) {
 	t.Parallel()
 	head := "name: CI\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: go build ./...\n\n" +

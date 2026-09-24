@@ -42,7 +42,8 @@ func BucketClassified(classified []cli.Classification) (revisions, files []strin
 	case len(revPaths) == 1:
 		return nil, nil, nil, nil, &UsageError{Msg: fmt.Sprintf(
 			"rev:path blob reference (%s:%s) has no paired blob to compare against; name two, "+
-				"\"A:%s B:%s\", or name the file directly", revPaths[0].Rev, revPaths[0].Path, revPaths[0].Path, revPaths[0].Path)}
+				"\"A:%s B:%s\", or name the file directly", revPaths[0].Rev, revPaths[0].Path, revPaths[0].Path, revPaths[0].Path,
+		)}
 	default:
 		names := make([]string, len(revPaths))
 		for i, rp := range revPaths {
@@ -51,6 +52,7 @@ func BucketClassified(classified []cli.Classification) (revisions, files []strin
 		return nil, nil, nil, nil, &UsageError{Msg: fmt.Sprintf(
 			"rev:path blob references (%s) are not a supported diff scope; "+
 				"exactly two naming the identical path, \"A:f.go B:f.go\", compare that file across revisions",
-			strings.Join(names, ", "))}
+			strings.Join(names, ", "),
+		)}
 	}
 }

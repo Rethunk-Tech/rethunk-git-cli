@@ -9,7 +9,7 @@ import (
 // RenderText renders report in the default aligned layout from
 // docs/USAGE.md § Commands. An empty report renders as the empty string,
 // matching docs/INSTALL.md: "A repo with no uncommitted changes prints
-// nothing."
+// nothing.".
 func RenderText(report *Report) string {
 	if report == nil || len(report.Files) == 0 {
 		return ""

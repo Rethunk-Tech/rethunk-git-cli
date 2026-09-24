@@ -594,7 +594,7 @@ type HeadShebangSample func() (sample []byte, exists bool, err error)
 // independent of ok: a source with no shebang or an unmapped interpreter
 // still has peeked=true. headSample may be nil when HEAD fallback is not
 // available -- LanguageForWorktreePathFolding is that case named.
-func LanguageForPathFolding(root, relPath string, fold bool, headSample HeadShebangSample) (lang Language, ok bool, peeked bool, err error) {
+func LanguageForPathFolding(root, relPath string, fold bool, headSample HeadShebangSample) (lang Language, ok, peeked bool, err error) {
 	if lang, ok := ForExtensionFolding(filepath.Ext(relPath), fold); ok {
 		return lang, true, false, nil
 	}
@@ -624,7 +624,7 @@ func LanguageForPathFolding(root, relPath string, fold bool, headSample HeadSheb
 // bounded shebang peek of the worktree copy, optionally folding its
 // extension. Callers that can fall back to a HEAD blob use
 // LanguageForPathFolding directly.
-func LanguageForWorktreePathFolding(root, relPath string, fold bool) (lang Language, ok bool, peeked bool) {
+func LanguageForWorktreePathFolding(root, relPath string, fold bool) (lang Language, ok, peeked bool) {
 	lang, ok, peeked, _ = LanguageForPathFolding(root, relPath, fold, nil)
 	return lang, ok, peeked
 }
