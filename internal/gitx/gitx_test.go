@@ -686,6 +686,14 @@ func TestErrorMessagesNameTheCommand(t *testing.T) {
 	if got, want := gerr.Error(), "git commit -m x: exit 128: fatal: nothing to commit"; got != want {
 		t.Errorf("GitError.Error() = %q; want %q", got, want)
 	}
+	quiet := &gitx.GitError{
+		Args:     []string{"commit", "-m", "x"},
+		ExitCode: 1,
+		Stdout:   []byte("On branch main\nnothing to commit, working tree clean\n"),
+	}
+	if got, want := quiet.Error(), "git commit -m x: exit 1: On branch main\nnothing to commit, working tree clean"; got != want {
+		t.Errorf("GitError.Error() with empty stderr = %q; want %q", got, want)
+	}
 
 	// ExecError: git never ran. It wraps the cause, so errors.Is/As still
 	// reach it -- callers distinguish "git failed" from "git is missing".

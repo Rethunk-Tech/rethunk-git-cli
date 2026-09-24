@@ -107,10 +107,17 @@ type GitError struct {
 	Args     []string
 	ExitCode int
 	Stderr   []byte
+	// Stdout is the reason when Stderr is empty: `git commit` prints
+	// "nothing to commit" and exits 1 with nothing on stderr.
+	Stdout []byte
 }
 
 func (e *GitError) Error() string {
-	return fmt.Sprintf("git %s: exit %d: %s", strings.Join(e.Args, " "), e.ExitCode, bytes.TrimSpace(e.Stderr))
+	reason := bytes.TrimSpace(e.Stderr)
+	if len(reason) == 0 {
+		reason = bytes.TrimSpace(e.Stdout)
+	}
+	return fmt.Sprintf("git %s: exit %d: %s", strings.Join(e.Args, " "), e.ExitCode, reason)
 }
 
 // run executes git with args against the repo root. err is non-nil only
@@ -140,7 +147,7 @@ func (r *Repo) run(ctx context.Context, stdin io.Reader, args ...string) (Result
 // logical args (as passed to the exported method, not the -C-prefixed
 // form run() actually executed).
 func gitError(args []string, res Result) *GitError {
-	return &GitError{Args: args, ExitCode: res.ExitCode, Stderr: res.Stderr}
+	return &GitError{Args: args, ExitCode: res.ExitCode, Stderr: res.Stderr, Stdout: res.Stdout}
 }
 
 // checked runs git and returns stdout, treating any non-zero exit as a
