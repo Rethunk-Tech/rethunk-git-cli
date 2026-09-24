@@ -2,8 +2,6 @@ package resolve
 
 import ts "github.com/tree-sitter/go-tree-sitter"
 
-func init() { register(newJSONLanguage()) }
-
 // jsonLanguage adapts the tree-sitter JSON grammar.
 //
 // Unlike CSS or YAML, JSON's grammar does declare real fields: a "pair"

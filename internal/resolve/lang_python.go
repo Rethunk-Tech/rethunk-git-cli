@@ -6,8 +6,6 @@ import (
 	ts "github.com/tree-sitter/go-tree-sitter"
 )
 
-func init() { register(newPythonLanguage()) }
-
 // pythonLanguage adapts the tree-sitter Python grammar.
 type pythonLanguage struct {
 	defaultLanguage

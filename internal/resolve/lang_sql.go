@@ -15,8 +15,6 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve/sqlgrammar"
 )
 
-func init() { register(newSQLLanguage()) }
-
 // sqlGrammar constructs the compiled SQL grammar. Kept here rather than in
 // grammars.go, unlike every other grammar in this resolver: grammars.go is
 // compiled unconditionally, and internal/resolve/sqlgrammar's own single Go
@@ -36,6 +34,10 @@ type sqlLanguage struct {
 
 func newSQLLanguage() *sqlLanguage {
 	return &sqlLanguage{lang: sqlGrammar()}
+}
+
+func registerSQLLanguage() {
+	register(newSQLLanguage())
 }
 
 func (l *sqlLanguage) Name() string { return "sql" }

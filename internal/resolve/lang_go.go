@@ -6,8 +6,6 @@ import (
 	ts "github.com/tree-sitter/go-tree-sitter"
 )
 
-func init() { register(newGoLanguage()) }
-
 type goLanguage struct {
 	defaultLanguage
 	lang *ts.Language

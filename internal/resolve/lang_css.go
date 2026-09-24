@@ -6,8 +6,6 @@ import (
 	ts "github.com/tree-sitter/go-tree-sitter"
 )
 
-func init() { register(newCSSLanguage()) }
-
 // cssLanguage adapts the tree-sitter CSS grammar. tree-sitter-css declares
 // no fields at all -- rule_set, at_rule, media_statement, declaration, and
 // import_statement all report an empty "fields" object in node-types.json,

@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	ts "github.com/tree-sitter/go-tree-sitter"
 )
@@ -230,14 +231,37 @@ func namedDecl(src []byte, extent, nameHost *ts.Node) (Declaration, bool) {
 	return Declaration{Node: extent, Bare: nodeText(src, name)}, true
 }
 
-// registered holds every adapter, keyed by file extension. Adapters add
-// themselves from an init function in their own file so that adding a grammar
-// touches exactly one file and no shared registry.
-var registered = map[string]Language{}
+// registered holds every adapter, keyed by file extension. Registration is
+// lazy so callers pay for grammar construction only when the resolver is
+// first used.
+var (
+	registered   = map[string]Language{}
+	registerOnce sync.Once
+)
+
+func registerLanguages() {
+	register(newCSSLanguage())
+	register(newGoLanguage())
+	register(newHTMLLanguage())
+	register(newJSONLanguage())
+	register(newMarkdownLanguage())
+	register(newPythonLanguage())
+	register(newRustLanguage())
+	register(newShellLanguage())
+	register(newTOMLLanguage())
+	register(newTypeScriptLanguage())
+	register(newTSXLanguage())
+	register(newYAMLLanguage())
+	registerSQLLanguage()
+}
+
+func ensureLanguagesRegistered() {
+	registerOnce.Do(registerLanguages)
+}
 
 // register claims each of l's extensions. It panics on a duplicate claim,
 // which can only be a programming error: two grammars fighting over one
-// extension would make resolution depend on package initialisation order.
+// extension would make resolution depend on registration order.
 func register(l Language) {
 	for _, ext := range l.Extensions() {
 		if prior, dup := registered[ext]; dup {
@@ -251,6 +275,7 @@ func register(l Language) {
 // A false result means the language is unsupported, which callers report as
 // exit 9 — not an error, since naming the path still works.
 func ForExtension(ext string) (Language, bool) {
+	ensureLanguagesRegistered()
 	l, ok := registered[ext]
 	return l, ok
 }
@@ -310,6 +335,7 @@ type LanguageInfo struct {
 // matching every other sorted listing this resolver produces (sortResults,
 // internal/synth's own stage.go).
 func Languages() []LanguageInfo {
+	ensureLanguagesRegistered()
 	seen := map[string]bool{}
 	var out []LanguageInfo
 	for _, l := range registered {

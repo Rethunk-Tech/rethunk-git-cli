@@ -2,8 +2,6 @@ package resolve
 
 import ts "github.com/tree-sitter/go-tree-sitter"
 
-func init() { register(newTOMLLanguage()) }
-
 // tomlLanguage adapts the tree-sitter TOML grammar.
 //
 // Like CSS and YAML, this grammar declares no fields at all -- "document",

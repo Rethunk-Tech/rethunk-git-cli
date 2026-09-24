@@ -14,8 +14,8 @@ import "testing"
 //   - tag absent: ForExtension(".sql") is unregistered, and GatedTag(".sql")
 //     must name SQLBuildTag as the tag that would register it (gated.go's
 //     "genuinely unsupported" case does not apply -- .sql has a known gate).
-//   - tag present: ForExtension(".sql") is registered (lang_sql.go's own
-//     init), and GatedTag(".sql") must report ok=false -- gated.go's own
+//   - tag present: ForExtension(".sql") is registered (lang_sql.go's tagged
+//     registration), and GatedTag(".sql") must report ok=false -- gated.go's own
 //     doc comment: a caller must never be told "install a tag" for a
 //     grammar already working.
 //

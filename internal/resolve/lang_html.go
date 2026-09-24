@@ -6,8 +6,6 @@ import (
 	ts "github.com/tree-sitter/go-tree-sitter"
 )
 
-func init() { register(newHTMLLanguage()) }
-
 // htmlLanguage adapts the tree-sitter HTML grammar. tree-sitter-html
 // declares no fields at all -- element, start_tag, self_closing_tag,
 // attribute, and every other node kind report an empty "fields" object in

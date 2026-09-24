@@ -6,8 +6,6 @@ import (
 	ts "github.com/tree-sitter/go-tree-sitter"
 )
 
-func init() { register(newRustLanguage()) }
-
 // rustLanguage adapts the tree-sitter Rust grammar.
 type rustLanguage struct {
 	defaultLanguage

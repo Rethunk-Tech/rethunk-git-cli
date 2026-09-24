@@ -4,8 +4,6 @@ import (
 	ts "github.com/tree-sitter/go-tree-sitter"
 )
 
-func init() { register(newShellLanguage()) }
-
 // shellLanguage adapts the tree-sitter Bash grammar.
 //
 // Claims .sh and .bash only, deliberately not .zsh: the grammar is a

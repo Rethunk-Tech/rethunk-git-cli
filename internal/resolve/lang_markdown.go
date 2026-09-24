@@ -6,8 +6,6 @@ import (
 	ts "github.com/tree-sitter/go-tree-sitter"
 )
 
-func init() { register(newMarkdownLanguage()) }
-
 // mdLanguage adapts the tree-sitter Markdown grammar's BLOCK half only.
 // Headings and their nesting into sections are entirely a block-level
 // concern; the separate inline grammar (emphasis, links, code spans) is

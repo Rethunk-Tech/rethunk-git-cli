@@ -4,8 +4,6 @@ import (
 	ts "github.com/tree-sitter/go-tree-sitter"
 )
 
-func init() { register(newYAMLLanguage()) }
-
 // yamlLanguage adapts the tree-sitter YAML grammar.
 //
 // YAML is whitespace-sensitive in a way no other grammar here is: a

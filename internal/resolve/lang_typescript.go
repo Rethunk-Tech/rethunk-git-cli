@@ -359,8 +359,3 @@ func newTSXLanguage() Language {
 		lang: tsxGrammar(),
 	}
 }
-
-func init() {
-	register(newTypeScriptLanguage())
-	register(newTSXLanguage())
-}
