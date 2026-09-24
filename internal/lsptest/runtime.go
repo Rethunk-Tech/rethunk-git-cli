@@ -21,11 +21,11 @@ func RunWithoutManagedDaemon(m *testing.M) int {
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 	untrusted := filepath.Join(dir, fmt.Sprintf("rgit-%d", os.Getuid()))
-	if err := os.Mkdir(untrusted, 0o755); err != nil {
+	if err := os.Mkdir(untrusted, 0o755); err != nil { //nolint:gosec // fixture intentionally creates an untrusted world-readable runtime directory
 		fmt.Fprintln(os.Stderr, "lsptest:", err)
 		return 1
 	}
-	if err := os.Chmod(untrusted, 0o755); err != nil {
+	if err := os.Chmod(untrusted, 0o755); err != nil { //nolint:gosec // fixture must remain world-readable to exercise fail-closed trust checks
 		fmt.Fprintln(os.Stderr, "lsptest:", err)
 		return 1
 	}

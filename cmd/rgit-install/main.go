@@ -469,7 +469,7 @@ func runSQLGeneration(modDir, pkgDir string) error {
 	defer func() { _ = os.RemoveAll(staging) }()
 
 	treeSitterDir := filepath.Join(staging, "tree_sitter")
-	if err := os.MkdirAll(treeSitterDir, 0o755); err != nil {
+	if err := os.MkdirAll(treeSitterDir, 0o750); err != nil {
 		return err
 	}
 	copies := [][2]string{
@@ -556,7 +556,7 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(dst, data, 0o644)
+	return os.WriteFile(dst, data, 0o600)
 }
 
 func relTo(root, path string) string {

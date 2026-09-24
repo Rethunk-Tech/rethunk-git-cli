@@ -134,10 +134,10 @@ func BloblessClone(t testing.TB) (dir string, repo *gitx.Repo) {
 func Write(t testing.TB, dir, rel, content string) {
 	t.Helper()
 	full := filepath.Join(dir, rel)
-	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(full, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -169,7 +169,7 @@ func Unmerged(t testing.TB, dir, blob, path string) {
 func InstallHook(t testing.TB, dir, name, script string) {
 	t.Helper()
 	path := filepath.Join(dir, ".git", "hooks", name)
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(path, []byte(script), 0o700); err != nil { //nolint:gosec // git hooks must retain owner execute permission; this fixture contains no secret
 		t.Fatal(err)
 	}
 }
