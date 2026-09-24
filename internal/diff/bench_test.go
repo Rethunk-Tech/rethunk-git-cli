@@ -59,12 +59,12 @@ func BenchmarkAttribution_200MemberClass(b *testing.B) {
 // independent LSP round trips to make.
 func buildCrossCheckFixture(b *testing.B, n int) (dir string, repo *gitx.Repo) {
 	b.Helper()
-	dir, repo = gittest.New(b)
+	dir, repo = gittest.New(b.Context(), b)
 	for i := range n {
 		gittest.Write(b, dir, fmt.Sprintf("m%d.py", i), fmt.Sprintf("def f%d():\n    return %d\n", i, i))
 		gittest.Write(b, dir, fmt.Sprintf("m%d.ts", i), fmt.Sprintf("export function f%d(): number {\n  return %d;\n}\n", i, i))
 	}
-	gittest.Commit(b, dir, "chore: initial fixture")
+	gittest.Commit(b.Context(), b, dir, "chore: initial fixture")
 	for i := range n {
 		gittest.Write(b, dir, fmt.Sprintf("m%d.py", i), fmt.Sprintf("def f%d():\n    return %d\n", i, i+1))
 		gittest.Write(b, dir, fmt.Sprintf("m%d.ts", i), fmt.Sprintf("export function f%d(): number {\n  return %d;\n}\n", i, i+1))

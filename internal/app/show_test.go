@@ -47,10 +47,10 @@ func TestShow_PrintsExtentVerbatim(t *testing.T) {
 func TestShow_SourceRevisionReadsThatBlob(t *testing.T) {
 	t.Parallel()
 	dir := tempRepo(t)
-	head := strings.TrimSpace(gittest.Git(t, dir, "rev-parse", "HEAD"))
+	head := strings.TrimSpace(gittest.Git(t.Context(), t, dir, "rev-parse", "HEAD"))
 
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns two.\nfunc A() int {\n\treturn 2\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	gittest.Commit(t, dir, "feat: A returns two")
+	gittest.Commit(t.Context(), t, dir, "feat: A returns two")
 
 	const original = "// A returns one.\nfunc A() int {\n\treturn 1\n}"
 	for _, args := range [][]string{
@@ -86,7 +86,7 @@ func TestShow_SourceDistinguishesBadRevisionFromAbsentPath(t *testing.T) {
 	qt.Assert(t, qt.StringContains(stderr, "not a valid revision: nosuchrev"))
 
 	writeAppFile(t, dir, "b.go", "package a\n\nfunc C() int {\n\treturn 3\n}\n")
-	gittest.Commit(t, dir, "feat: add b.go")
+	gittest.Commit(t.Context(), t, dir, "feat: add b.go")
 
 	_, stderr, code = runApp(t, "-C", dir, "show", "--source", "HEAD~1", "b.go:C")
 	qt.Assert(t, qt.Equals(code, exitcode.AnchorUnresolvable))

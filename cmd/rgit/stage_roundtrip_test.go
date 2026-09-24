@@ -77,7 +77,7 @@ func TestStage_RoundTripsWorktreeForEveryDeclaration(t *testing.T) {
 				t.Errorf("%s:%s commit exit %d: %s", name, anchor, res.ExitCode, res.Stderr)
 				continue
 			}
-			got := gittest.Git(t, repo, "show", "HEAD:"+name)
+			got := gittest.Git(t.Context(), t, repo, "show", "HEAD:"+name)
 			if got != string(worktree) {
 				t.Errorf("%s:%s staged blob is not the worktree file\nwant %d bytes, got %d",
 					name, anchor, len(worktree), len(got))

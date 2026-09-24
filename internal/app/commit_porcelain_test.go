@@ -14,7 +14,7 @@ import (
 
 func TestRunCommit_PorcelainEmitsCommitSHA(t *testing.T) {
 	t.Parallel()
-	dir, _ := gittest.RepoWithFile(t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n", "feat: add A")
+	dir, _ := gittest.RepoWithFile(t.Context(), t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n", "feat: add A")
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 2\n}\n")
 
 	var stdout, stderr strings.Builder
@@ -33,7 +33,7 @@ func TestRunCommit_PorcelainEmitsCommitSHA(t *testing.T) {
 		t.Fatalf("porcelain commit = %v; stdout: %s; stderr: %s", code, stdout.String(), stderr.String())
 	}
 
-	sha := strings.TrimSpace(gittest.Git(t, dir, "rev-parse", "HEAD"))
+	sha := strings.TrimSpace(gittest.Git(t.Context(), t, dir, "rev-parse", "HEAD"))
 	lines := strings.Split(strings.TrimRight(stdout.String(), "\n"), "\n")
 	if len(lines) != 2 {
 		t.Fatalf("porcelain output = %q; want SHA plus one target row", stdout.String())
@@ -59,7 +59,7 @@ func TestRunCommit_PorcelainEmitsCommitSHA(t *testing.T) {
 
 func TestRunCommit_QuietSuccessEmptyStdout(t *testing.T) {
 	t.Parallel()
-	dir, _ := gittest.RepoWithFile(t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n", "feat: add A")
+	dir, _ := gittest.RepoWithFile(t.Context(), t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n", "feat: add A")
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 2\n}\n")
 
 	var stdout, stderr strings.Builder
@@ -79,15 +79,15 @@ func TestRunCommit_QuietSuccessEmptyStdout(t *testing.T) {
 // a same-tick edit looks like under load.
 func TestRunCommit_SameTickEditIsCommitted(t *testing.T) {
 	t.Parallel()
-	dir, _ := gittest.New(t)
-	gittest.Git(t, dir, "config", "core.trustctime", "false")
+	dir, _ := gittest.New(t.Context(), t)
+	gittest.Git(t.Context(), t, dir, "config", "core.trustctime", "false")
 	path := filepath.Join(dir, "a.go")
 	tick := time.Now().Add(-time.Hour)
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n")
 	if err := os.Chtimes(path, tick, tick); err != nil {
 		t.Fatal(err)
 	}
-	gittest.Commit(t, dir, "feat: add A")
+	gittest.Commit(t.Context(), t, dir, "feat: add A")
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 2\n}\n")
 	for _, p := range []string{path, filepath.Join(dir, ".git", "index")} {
 		if err := os.Chtimes(p, tick, tick); err != nil {
@@ -99,7 +99,7 @@ func TestRunCommit_SameTickEditIsCommitted(t *testing.T) {
 	if code := runCommit(context.Background(), dir, []string{"--quiet", "-m", "fix: update A", "a.go"}, &stdout, &stderr); code != exitcode.Success {
 		t.Fatalf("commit = %v; stderr: %s", code, stderr.String())
 	}
-	if got := gittest.Git(t, dir, "show", "HEAD:a.go"); !strings.Contains(got, "return 2") {
+	if got := gittest.Git(t.Context(), t, dir, "show", "HEAD:a.go"); !strings.Contains(got, "return 2") {
 		t.Fatalf("HEAD:a.go = %q; want the same-tick edit committed", got)
 	}
 }

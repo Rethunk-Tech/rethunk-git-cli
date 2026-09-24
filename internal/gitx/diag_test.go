@@ -12,7 +12,7 @@ import (
 )
 
 func TestHasStash(t *testing.T) {
-	dir, repo := gittest.New(t)
+	dir, repo := gittest.New(t.Context(), t)
 	ctx := context.Background()
 
 	hasStash, err := repo.HasStash(ctx)
@@ -23,37 +23,37 @@ func TestHasStash(t *testing.T) {
 	if err := os.WriteFile(path, []byte("before\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	gittest.Git(t, dir, "add", "tracked.txt")
-	gittest.Git(t, dir, "commit", "-m", "initial")
+	gittest.Git(t.Context(), t, dir, "add", "tracked.txt")
+	gittest.Git(t.Context(), t, dir, "commit", "-m", "initial")
 	if err := os.WriteFile(path, []byte("after\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	gittest.Git(t, dir, "stash", "push", "-m", "test")
+	gittest.Git(t.Context(), t, dir, "stash", "push", "-m", "test")
 
 	hasStash, err = repo.HasStash(ctx)
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.IsTrue(hasStash))
 
-	gittest.Git(t, dir, "stash", "drop")
+	gittest.Git(t.Context(), t, dir, "stash", "drop")
 	hasStash, err = repo.HasStash(ctx)
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.IsFalse(hasStash))
 }
 
 func TestSparseCheckout(t *testing.T) {
-	dir, repo := gittest.New(t)
+	dir, repo := gittest.New(t.Context(), t)
 	ctx := context.Background()
 
 	sparse, err := repo.SparseCheckout(ctx)
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.IsFalse(sparse))
 
-	gittest.Git(t, dir, "config", "core.sparseCheckout", "true")
+	gittest.Git(t.Context(), t, dir, "config", "core.sparseCheckout", "true")
 	sparse, err = repo.SparseCheckout(ctx)
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.IsTrue(sparse))
 
-	gittest.Git(t, dir, "config", "--unset", "core.sparseCheckout")
+	gittest.Git(t.Context(), t, dir, "config", "--unset", "core.sparseCheckout")
 	sparse, err = repo.SparseCheckout(ctx)
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.IsFalse(sparse))

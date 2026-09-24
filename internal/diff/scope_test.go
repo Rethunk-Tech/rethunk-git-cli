@@ -18,19 +18,19 @@ import (
 // resolveRangeScope's three-dot form exists to get right.
 func newDivergentRepo(t *testing.T) (dir string, repo *gitx.Repo, baseSHA string) {
 	t.Helper()
-	dir, repo = gittest.New(t)
+	dir, repo = gittest.New(t.Context(), t)
 
 	gittest.Write(t, dir, "f.txt", "base\n")
-	gittest.Commit(t, dir, "chore: base")
-	baseSHA = strings.TrimSpace(gittest.Git(t, dir, "rev-parse", "HEAD"))
+	gittest.Commit(t.Context(), t, dir, "chore: base")
+	baseSHA = strings.TrimSpace(gittest.Git(t.Context(), t, dir, "rev-parse", "HEAD"))
 
-	gittest.Git(t, dir, "checkout", "-q", "-b", "feature")
+	gittest.Git(t.Context(), t, dir, "checkout", "-q", "-b", "feature")
 	gittest.Write(t, dir, "f.txt", "base\nfeature\n")
-	gittest.Commit(t, dir, "chore: feature")
+	gittest.Commit(t.Context(), t, dir, "chore: feature")
 
-	gittest.Git(t, dir, "checkout", "-q", "main")
+	gittest.Git(t.Context(), t, dir, "checkout", "-q", "main")
 	gittest.Write(t, dir, "f.txt", "base\nmain\n")
-	gittest.Commit(t, dir, "chore: main")
+	gittest.Commit(t.Context(), t, dir, "chore: main")
 
 	return dir, repo, baseSHA
 }
@@ -44,7 +44,8 @@ func newDivergentRepo(t *testing.T) (dir string, repo *gitx.Repo, baseSHA string
 func TestResolveRangeScope_ThreeDotUsesMergeBaseTwoDotUsesLiteralA(t *testing.T) {
 	t.Parallel()
 	_, repo, base := newDivergentRepo(t)
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
 
 	threeDot, err := resolveRangeScope(ctx, repo, "main...feature")
 	if err != nil {
@@ -78,8 +79,9 @@ func TestResolveRangeScope_ThreeDotUsesMergeBaseTwoDotUsesLiteralA(t *testing.T)
 // and only that type, to exit 129 rather than exit 128.
 func TestResolveRangeScope_ErrorPaths(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.RepoWithFile(t, "f.txt", "one\n", "chore: fixture")
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	dir, repo := gittest.RepoWithFile(ctx, t, "f.txt", "one\n", "chore: fixture")
 
 	// One case per separator, not one per missing side: scope.go's own
 	// check is a single `a == "" || b == ""`, so a missing left endpoint
@@ -106,9 +108,9 @@ func TestResolveRangeScope_ErrorPaths(t *testing.T) {
 	}
 
 	t.Run("no merge base between two orphan branches", func(t *testing.T) {
-		gittest.Git(t, dir, "checkout", "-q", "--orphan", "isolated")
-		gittest.Git(t, dir, "commit", "-q", "-m", "chore: isolated root")
-		gittest.Git(t, dir, "checkout", "-q", "main")
+		gittest.Git(ctx, t, dir, "checkout", "-q", "--orphan", "isolated")
+		gittest.Git(ctx, t, dir, "commit", "-q", "-m", "chore: isolated root")
+		gittest.Git(ctx, t, dir, "checkout", "-q", "main")
 
 		_, err := resolveRangeScope(ctx, repo, "main...isolated")
 		var uerr *UsageError
@@ -154,7 +156,7 @@ func TestResolveRangeScope_MergeBaseExecFailureIsNotAUsageError(t *testing.T) {
 // a range separator.
 func TestResolveRangeScope_ExplicitFormFallsBackToSingleRevision(t *testing.T) {
 	t.Parallel()
-	_, repo := gittest.RepoWithFile(t, "f.txt", "one\n", "chore: fixture")
+	_, repo := gittest.RepoWithFile(t.Context(), t, "f.txt", "one\n", "chore: fixture")
 
 	scope, err := resolveRangeScope(context.Background(), repo, "HEAD")
 	if err != nil {
@@ -177,7 +179,7 @@ func TestResolveRangeScope_ExplicitFormFallsBackToSingleRevision(t *testing.T) {
 // docs/USAGE.md § Diff scope's documented fallback.
 func TestCommittableBase_UnbornBranchFallsBackToEmptyTree(t *testing.T) {
 	t.Parallel()
-	_, repo := gittest.New(t)
+	_, repo := gittest.New(t.Context(), t)
 
 	base, err := repo.CommittableBase(context.Background())
 	if err != nil {
@@ -192,11 +194,11 @@ func TestCommittableBase_UnbornBranchFallsBackToEmptyTree(t *testing.T) {
 
 func TestContentSideRead_UnmergedFallsBackToWorktree(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.RepoWithFile(t, "conflict.txt", "base\n", "chore: add conflict fixture")
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "conflict.txt", "base\n", "chore: add conflict fixture")
 	gittest.Write(t, dir, "conflict.txt", "<<<<<<< ours\nworktree\n>>>>>>> theirs\n")
 
-	blob := strings.TrimSpace(gittest.Git(t, dir, "rev-parse", "HEAD:conflict.txt"))
-	gittest.Unmerged(t, dir, blob, "conflict.txt")
+	blob := strings.TrimSpace(gittest.Git(t.Context(), t, dir, "rev-parse", "HEAD:conflict.txt"))
+	gittest.Unmerged(t.Context(), t, dir, blob, "conflict.txt")
 
 	content, exists, err := indexSide().read(context.Background(), repo, dir, "conflict.txt", nil)
 	if err != nil {
@@ -220,7 +222,7 @@ func TestContentSideRead_UnmergedFallsBackToWorktree(t *testing.T) {
 // ls-tree/os.Stat answer, not this package's belief about one.
 func TestExtractRangeToken_DetectsRangeNotAPath(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
+	dir, repo := gittest.New(t.Context(), t)
 	checker := &cli.GitPathChecker{Root: dir, Repo: repo}
 	ctx := context.Background()
 

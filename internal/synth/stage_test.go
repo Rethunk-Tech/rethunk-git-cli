@@ -23,7 +23,7 @@ func TestOpenFilePlan_UnsupportedLanguageReason(t *testing.T) {
 
 	t.Run("unmapped extension with no shebang names both", func(t *testing.T) {
 		t.Parallel()
-		dir, repo := gittest.New(t)
+		dir, repo := gittest.New(t.Context(), t)
 		gittest.Write(t, dir, "main.rb", "def main; end\n")
 
 		_, err := openFilePlan(context.Background(), repo, dir, "main.rb")
@@ -40,7 +40,7 @@ func TestOpenFilePlan_UnsupportedLanguageReason(t *testing.T) {
 
 	t.Run("extensionless path with an unmapped shebang", func(t *testing.T) {
 		t.Parallel()
-		dir, repo := gittest.New(t)
+		dir, repo := gittest.New(t.Context(), t)
 		gittest.Write(t, dir, "bin/hook", "echo hi\n")
 
 		_, err := openFilePlan(context.Background(), repo, dir, "bin/hook")
@@ -57,7 +57,7 @@ func TestOpenFilePlan_UnsupportedLanguageReason(t *testing.T) {
 
 	t.Run("extensionless path deleted from the worktree samples HEAD", func(t *testing.T) {
 		t.Parallel()
-		dir, repo := gittest.RepoWithFile(t, "bin/hook", "echo hi\n", "chore: add hook")
+		dir, repo := gittest.RepoWithFile(t.Context(), t, "bin/hook", "echo hi\n", "chore: add hook")
 		if err := os.Remove(filepath.Join(dir, "bin", "hook")); err != nil {
 			t.Fatal(err)
 		}
@@ -77,10 +77,10 @@ func TestOpenFilePlan_UnsupportedLanguageReason(t *testing.T) {
 
 func TestOpenFilePlan_UsesNonEmptyIndexBlobWhenWorktreeGone(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
+	dir, repo := gittest.New(t.Context(), t)
 	want := "package sample\n\nfunc New() {}\n"
 	gittest.Write(t, dir, "new.go", want)
-	gittest.Git(t, dir, "add", "new.go")
+	gittest.Git(t.Context(), t, dir, "add", "new.go")
 	if err := os.Remove(filepath.Join(dir, "new.go")); err != nil {
 		t.Fatal(err)
 	}
@@ -103,9 +103,9 @@ func TestOpenFilePlan_UsesNonEmptyIndexBlobWhenWorktreeGone(t *testing.T) {
 
 func TestOpenFilePlan_RefusesEmptyIntentToAddWithoutWorktree(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
+	dir, repo := gittest.New(t.Context(), t)
 	gittest.Write(t, dir, "new.go", "package sample\n\nfunc New() {}\n")
-	gittest.Git(t, dir, "add", "-N", "new.go")
+	gittest.Git(t.Context(), t, dir, "add", "-N", "new.go")
 	if err := os.Remove(filepath.Join(dir, "new.go")); err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestOpenFilePlan_RefusesEmptyIntentToAddWithoutWorktree(t *testing.T) {
 // the total, and an unreadable untracked file is the same kind of gap.
 func TestPathspecFileCounts_UnreadableUntrackedFileWarns(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
+	dir, repo := gittest.New(t.Context(), t)
 	ctx := context.Background()
 
 	full := filepath.Join(dir, "secret.txt")
@@ -159,7 +159,7 @@ func TestPathspecFileCounts_UnreadableUntrackedFileWarns(t *testing.T) {
 
 func TestStage_PromisorMissingBlobIsAnError(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.BloblessClone(t)
+	dir, repo := gittest.BloblessClone(t.Context(), t)
 
 	// CatFile fails before symbol classification can inspect the missing blob.
 	err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("tracked.go", "@header")})
@@ -189,16 +189,16 @@ func TestStage_PromisorMissingBlobIsAnError(t *testing.T) {
 // tests that also talk to git.
 func TestStage_MidLoopFailureLeavesIndexUntouched(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
+	dir, repo := gittest.New(t.Context(), t)
 	ctx := context.Background()
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n")
 	gittest.Write(t, dir, "b.go", "package b\n\nfunc B() int {\n\treturn 2\n}\n")
 	gittest.Write(t, dir, "other.txt", "staged\n")
-	gittest.Commit(t, dir, "chore: initial")
+	gittest.Commit(t.Context(), t, dir, "chore: initial")
 
 	// Unrelated pre-staged work the failure must preserve.
 	gittest.Write(t, dir, "other.txt", "staged change\n")
-	gittest.Git(t, dir, "add", "--", "other.txt")
+	gittest.Git(t.Context(), t, dir, "add", "--", "other.txt")
 
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n")
 	gittest.Write(t, dir, "b.go", "package b\n\nfunc B() int {\n\treturn 222\n}\n")
@@ -214,13 +214,13 @@ func TestStage_MidLoopFailureLeavesIndexUntouched(t *testing.T) {
 		t.Fatal("Apply = nil; want the deleted file's mode lookup to fail")
 	}
 
-	if got := strings.TrimSpace(gittest.Git(t, dir, "diff", "--cached", "--name-only")); got != "other.txt" {
+	if got := strings.TrimSpace(gittest.Git(t.Context(), t, dir, "diff", "--cached", "--name-only")); got != "other.txt" {
 		t.Errorf("staged after failed Apply = %q; want only pre-staged other.txt", got)
 	}
-	if got := gittest.Git(t, dir, "show", ":other.txt"); !strings.Contains(got, "staged change") {
+	if got := gittest.Git(t.Context(), t, dir, "show", ":other.txt"); !strings.Contains(got, "staged change") {
 		t.Errorf(":other.txt = %q; want pre-staged change preserved", got)
 	}
-	if got := gittest.Git(t, dir, "show", ":a.go"); strings.Contains(got, "return 111") {
+	if got := gittest.Git(t.Context(), t, dir, "show", ":a.go"); strings.Contains(got, "return 111") {
 		t.Errorf(":a.go = %q; want HEAD content, nothing of the failed stage", got)
 	}
 	if got, err := os.ReadFile(filepath.Join(dir, "a.go")); err != nil {
@@ -235,10 +235,10 @@ func TestStage_MidLoopFailureLeavesIndexUntouched(t *testing.T) {
 // else moves, and the worktree is byte-identical before and after.
 func TestStage_SuccessStagesExactlyPlannedBlobs(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
+	dir, repo := gittest.New(t.Context(), t)
 	ctx := context.Background()
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	gittest.Commit(t, dir, "chore: initial")
+	gittest.Commit(t.Context(), t, dir, "chore: initial")
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 	before, err := os.ReadFile(filepath.Join(dir, "a.go"))
 	if err != nil {
@@ -249,14 +249,14 @@ func TestStage_SuccessStagesExactlyPlannedBlobs(t *testing.T) {
 		t.Fatalf("stageTargets: %v", err)
 	}
 
-	indexed := gittest.Git(t, dir, "show", ":a.go")
+	indexed := gittest.Git(t.Context(), t, dir, "show", ":a.go")
 	if !strings.Contains(indexed, "return 111") {
 		t.Errorf(":a.go = %q; want the synthesized A edit staged", indexed)
 	}
 	if !strings.Contains(indexed, "return 2") {
 		t.Errorf(":a.go = %q; want B's HEAD body carried through", indexed)
 	}
-	if got := strings.TrimSpace(gittest.Git(t, dir, "status", "--porcelain")); got != "M  a.go" {
+	if got := strings.TrimSpace(gittest.Git(t.Context(), t, dir, "status", "--porcelain")); got != "M  a.go" {
 		t.Errorf("status = %q; want exactly the staged a.go edit", got)
 	}
 	if after, err := os.ReadFile(filepath.Join(dir, "a.go")); err != nil {

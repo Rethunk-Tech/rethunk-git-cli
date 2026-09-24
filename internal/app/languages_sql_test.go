@@ -67,7 +67,7 @@ func TestRun_SQLAnchorWithTagResolvesNormally(t *testing.T) {
 	t.Parallel()
 	dir := tempRepo(t)
 	writeAppFile(t, dir, "q.sql", "CREATE TABLE users (id INT);\n")
-	gittest.Commit(t, dir, "chore: add sql fixture")
+	gittest.Commit(t.Context(), t, dir, "chore: add sql fixture")
 	writeAppFile(t, dir, "q.sql", "CREATE TABLE users (id INT);\nCREATE TABLE accounts (id INT);\n")
 
 	_, stderr, code := runApp(t, "-C", dir, "commit", "-m", "feat(x): y", "q.sql:NoSuchSymbol")

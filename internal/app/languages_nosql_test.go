@@ -64,7 +64,7 @@ func TestRun_LanguagesAndDoctorOmitSQLWithoutTag(t *testing.T) {
 	t.Run("sql anchor still refused, with a rebuild hint", func(t *testing.T) {
 		dir := chdirTempRepo(t)
 		writeAppFile(t, dir, "q.sql", "SELECT 1;\n")
-		gittest.Commit(t, dir, "chore: add sql fixture")
+		gittest.Commit(t.Context(), t, dir, "chore: add sql fixture")
 		writeAppFile(t, dir, "q.sql", "SELECT 2;\n")
 
 		_, stderr, code := runApp(t, "commit", "-m", "feat(x): y", "q.sql:Anything")
@@ -83,7 +83,7 @@ func TestRun_LanguagesAndDoctorOmitSQLWithoutTag(t *testing.T) {
 	t.Run("symbols reports the gated miss the same way commit does", func(t *testing.T) {
 		dir := chdirTempRepo(t)
 		writeAppFile(t, dir, "q.sql", "SELECT 1;\n")
-		gittest.Commit(t, dir, "chore: add sql fixture")
+		gittest.Commit(t.Context(), t, dir, "chore: add sql fixture")
 
 		_, stderr, code := runApp(t, "symbols", "q.sql")
 

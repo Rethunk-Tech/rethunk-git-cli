@@ -45,10 +45,10 @@ func runApp(t *testing.T, args ...string) (stdout, stderr string, code exitcode.
 // reach it with `-C dir` rather than t.Chdir so they can run in parallel.
 func tempRepo(t *testing.T) string {
 	t.Helper()
-	dir, _ := gittest.New(t)
+	dir, _ := gittest.New(t.Context(), t)
 
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	gittest.Commit(t, dir, "chore: initial")
+	gittest.Commit(t.Context(), t, dir, "chore: initial")
 	return dir
 }
 
@@ -75,7 +75,7 @@ func writeAppFile(t *testing.T, dir, rel, content string) {
 
 func gitOut(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	return gittest.Git(t, dir, args...)
+	return gittest.Git(t.Context(), t, dir, args...)
 }
 
 // TestRun_TopLevelDispatch covers every route that returns before a
@@ -751,7 +751,7 @@ func TestRestoreDoubleDash_ReconstructsThroughRealPflag(t *testing.T) {
 func TestRun_GPGSignShorthandReachesGit(t *testing.T) {
 	t.Parallel()
 	dir := tempRepo(t)
-	gittest.Git(t, dir, "config", "gpg.program", "/bin/false")
+	gittest.Git(t.Context(), t, dir, "config", "gpg.program", "/bin/false")
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 5\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 
 	_, stderr, code := runApp(t, "-C", dir, "commit", "-SDEADBEEF", "-m", "feat(a): signed", "a.go:A")
@@ -812,7 +812,7 @@ func TestRun_PathspecListsEveryFileItStages(t *testing.T) {
 	dir := tempRepo(t)
 	writeAppFile(t, dir, "apps/svc/one.go", "package svc\n\nfunc One() int {\n\treturn 1\n}\n")
 	writeAppFile(t, dir, "apps/svc/notes.txt", "x\n")
-	gittest.Commit(t, dir, "chore: fixture")
+	gittest.Commit(t.Context(), t, dir, "chore: fixture")
 
 	writeAppFile(t, dir, "apps/svc/one.go", "package svc\n\nfunc One() int {\n\treturn 111\n}\n")
 	writeAppFile(t, dir, "apps/svc/notes.txt", "x\ny\nz\n")
@@ -845,7 +845,7 @@ func TestRun_PathspecMatchingNothingStillListsItself(t *testing.T) {
 	t.Parallel()
 	dir := tempRepo(t)
 	writeAppFile(t, dir, "kept/keep.txt", "x\n")
-	gittest.Commit(t, dir, "chore: fixture")
+	gittest.Commit(t.Context(), t, dir, "chore: fixture")
 
 	stdout, _, code := runApp(t, "-C", dir, "commit", "--dry-run", "--porcelain", "-m", "chore: none", "kept")
 

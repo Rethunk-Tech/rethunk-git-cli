@@ -269,10 +269,10 @@ func TestInstallArgs(t *testing.T) {
 func TestGitVersion(t *testing.T) {
 	t.Parallel()
 
-	dir, _ := gittest.New(t)
+	dir, _ := gittest.New(t.Context(), t)
 	gittest.Write(t, dir, "f.txt", "one\n")
-	gittest.Commit(t, dir, "initial")
-	gittest.Git(t, dir, "tag", "v1.2.3")
+	gittest.Commit(t.Context(), t, dir, "initial")
+	gittest.Git(t.Context(), t, dir, "tag", "v1.2.3")
 
 	qt.Assert(t, qt.Equals(gitVersion(dir), "v1.2.3"))
 

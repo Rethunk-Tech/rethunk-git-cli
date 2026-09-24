@@ -108,7 +108,7 @@ func TestRun_OnlyLeavesOtherStagedWorkUncommitted(t *testing.T) {
 // not a HEAD that does not exist yet.
 func TestRun_OnlyOnUnbornBranchWritesRootCommit(t *testing.T) {
 	t.Parallel()
-	dir, _ := gittest.New(t)
+	dir, _ := gittest.New(t.Context(), t)
 	writeAppFile(t, dir, "a.txt", "x\n")
 	writeAppFile(t, dir, "sibling.txt", "staged separately\n")
 	gitOut(t, dir, "add", "--", "sibling.txt")
@@ -224,7 +224,7 @@ func TestRun_HookRejectionRestoresStaging(t *testing.T) {
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
 	workA, err := os.ReadFile(filepath.Join(dir, "a.go"))
 	qt.Assert(t, qt.IsNil(err))
-	gittest.InstallHook(t, dir, "pre-commit", "#!/bin/sh\nexit 1\n")
+	gittest.InstallHook(t.Context(), t, dir, "pre-commit", "#!/bin/sh\nexit 1\n")
 
 	_, _, code := runApp(t, "-C", dir, "commit", "-m", "feat(a): update A", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))
@@ -493,7 +493,7 @@ func TestRun_ResetAuthorForwarded(t *testing.T) {
 // not a real listing through it.
 func TestRun_DiffUnbornBranchListsEverythingCommittable(t *testing.T) {
 	t.Parallel()
-	dir, _ := gittest.New(t)
+	dir, _ := gittest.New(t.Context(), t)
 
 	writeAppFile(t, dir, "staged.go", "package auth\n\nfunc Staged() int { return 3 }\n")
 	gitOut(t, dir, "add", "--", "staged.go")
@@ -519,7 +519,7 @@ func TestRun_PushAfterSuccessfulCommit(t *testing.T) {
 	t.Parallel()
 	dir := tempRepo(t)
 	remote := t.TempDir()
-	gittest.Git(t, remote, "init", "-q", "--bare")
+	gittest.Git(t.Context(), t, remote, "init", "-q", "--bare")
 	gitOut(t, dir, "remote", "add", "origin", remote)
 	branch := strings.TrimSpace(gitOut(t, dir, "rev-parse", "--abbrev-ref", "HEAD"))
 	gitOut(t, dir, "push", "-q", "-u", "origin", branch)
@@ -529,7 +529,7 @@ func TestRun_PushAfterSuccessfulCommit(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 
 	local := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
-	qt.Assert(t, qt.Equals(strings.TrimSpace(gittest.Git(t, remote, "rev-parse", branch)), local))
+	qt.Assert(t, qt.Equals(strings.TrimSpace(gittest.Git(t.Context(), t, remote, "rev-parse", branch)), local))
 }
 
 // TestRun_DiffUntrackedFileAndModeChange holds `rgit diff`'s untracked and
@@ -572,7 +572,7 @@ func TestRun_DiffUntrackedFileAndModeChange(t *testing.T) {
 // file in the repository is the extensionless script itself.
 func TestRun_CommitExtensionlessShebangResolvesShellSymbol(t *testing.T) {
 	t.Parallel()
-	dir, _ := gittest.New(t)
+	dir, _ := gittest.New(t.Context(), t)
 
 	writeAppFile(t, dir, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v1\n}\n\nbar() {\n  echo bar\n}\n")
 	gitOut(t, dir, "add", "-A")
@@ -597,7 +597,7 @@ func TestRun_CommitExtensionlessShebangResolvesShellSymbol(t *testing.T) {
 // sibling's edit stays uncommitted.
 func TestRun_CommitExtensionlessNodeShebangResolvesTypeScriptSymbol(t *testing.T) {
 	t.Parallel()
-	dir, _ := gittest.New(t)
+	dir, _ := gittest.New(t.Context(), t)
 
 	writeAppFile(t, dir, "run", "#!/usr/bin/env npx tsx\n\nfunction foo(): void {\n  console.log('v1')\n}\n\nfunction bar(): void {\n  console.log('bar')\n}\n")
 	gitOut(t, dir, "add", "-A")
@@ -623,7 +623,7 @@ func TestRun_CommitExtensionlessNodeShebangResolvesTypeScriptSymbol(t *testing.T
 // does not let one grammar's plan step over another's.
 func TestRun_CommitGoTSPythonSymbolGranularityInOneInvocation(t *testing.T) {
 	t.Parallel()
-	dir, _ := gittest.New(t)
+	dir, _ := gittest.New(t.Context(), t)
 
 	writeAppFile(t, dir, "auth.go", "package auth\n\nfunc GoA() int { return 1 }\n\nfunc GoB() int { return 1 }\n")
 	writeAppFile(t, dir, "app.ts", "export function TsA(): number { return 1 }\n\nexport function TsB(): number { return 1 }\n")

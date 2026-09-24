@@ -23,7 +23,7 @@ import (
 // or in the worktree.
 func newDiffTestRepo(t *testing.T) (dir string, repo *gitx.Repo) {
 	t.Helper()
-	return gittest.RepoWithFile(t, "b.py", "def existing():\n    return 1\n", "chore: initial b.py")
+	return gittest.RepoWithFile(t.Context(), t, "b.py", "def existing():\n    return 1\n", "chore: initial b.py")
 }
 
 // assertUnresolvable is the shape every --sym failure in this file shares:
@@ -149,11 +149,11 @@ func TestRun_PatchPopulatesReportPatch(t *testing.T) {
 
 func TestRun_UnmergedPathUsesWorktreeConflictContent(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.RepoWithFile(t, "conflict.txt", "base\n", "chore: add conflict fixture")
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "conflict.txt", "base\n", "chore: add conflict fixture")
 	gittest.Write(t, dir, "conflict.txt", "<<<<<<< ours\nworktree\n>>>>>>> theirs\n")
 
-	blob := strings.TrimSpace(gittest.Git(t, dir, "rev-parse", "HEAD:conflict.txt"))
-	gittest.Unmerged(t, dir, blob, "conflict.txt")
+	blob := strings.TrimSpace(gittest.Git(t.Context(), t, dir, "rev-parse", "HEAD:conflict.txt"))
+	gittest.Unmerged(t.Context(), t, dir, blob, "conflict.txt")
 
 	report, err := Run(context.Background(), repo, dir, Options{
 		Files: []string{"conflict.txt"},
@@ -219,8 +219,8 @@ func TestRun_ExtensionlessShebangEnumeratesSymbols(t *testing.T) {
 	t.Parallel()
 	dir, repo := newDiffTestRepo(t)
 	gittest.Write(t, dir, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v1\n}\n\nbar() {\n  echo bar\n}\n")
-	gittest.Git(t, dir, "add", "pre-commit")
-	gittest.Git(t, dir, "commit", "-q", "-m", "add pre-commit")
+	gittest.Git(t.Context(), t, dir, "add", "pre-commit")
+	gittest.Git(t.Context(), t, dir, "commit", "-q", "-m", "add pre-commit")
 
 	// Edit foo only; bar stays clean and must not appear as a row.
 	gittest.Write(t, dir, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v2\n}\n\nbar() {\n  echo bar\n}\n")
@@ -306,8 +306,8 @@ func TestRun_SymFilterMatchesAnyAcceptedAliasSpelling(t *testing.T) {
 
 	gittest.Write(t, dir, "a.go", "package p\n\ntype A struct{}\n\nfunc (a *A) Get() int { return 1 }\n")
 	gittest.Write(t, dir, "doc.md", "# Diff Scope\n\nOriginal.\n")
-	gittest.Git(t, dir, "add", "a.go", "doc.md")
-	gittest.Git(t, dir, "commit", "-q", "-m", "chore: add a.go and doc.md")
+	gittest.Git(t.Context(), t, dir, "add", "a.go", "doc.md")
+	gittest.Git(t.Context(), t, dir, "commit", "-q", "-m", "chore: add a.go and doc.md")
 
 	gittest.Write(t, dir, "a.go", "package p\n\ntype A struct{}\n\nfunc (a *A) Get() int { return 2 }\n")
 	gittest.Write(t, dir, "doc.md", "# Diff Scope\n\nEdited.\n")
@@ -446,16 +446,16 @@ func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''
 // per-file loop even starts.
 func TestRun_BatchesGitCatFileAcrossManyChangedFiles(t *testing.T) {
 	// cannot Parallel because t.Setenv below
-	dir, repo := gittest.New(t)
+	dir, repo := gittest.New(t.Context(), t)
 	const fileCount = 12
 	for i := range fileCount {
 		gittest.Write(t, dir, fmt.Sprintf("f%d.go", i), fmt.Sprintf("package p\n\nfunc F%d() int { return %d }\n", i, i))
 	}
-	gittest.Commit(t, dir, "chore: initial")
+	gittest.Commit(t.Context(), t, dir, "chore: initial")
 	for i := range fileCount {
 		gittest.Write(t, dir, fmt.Sprintf("f%d.go", i), fmt.Sprintf("package p\n\nfunc F%d() int { return %d }\n", i, i+100))
 	}
-	gittest.Commit(t, dir, "chore: edit all")
+	gittest.Commit(t.Context(), t, dir, "chore: edit all")
 
 	bin, countFile := countingGitWrapper(t)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -534,7 +534,7 @@ func TestRun_NoResolvableDeclarationsIsNotDegraded(t *testing.T) {
 	t.Setenv("PATH", pathWithGitOnly(t))
 	// A Python file holding only a comment: parses, but declares nothing.
 	gittest.Write(t, dir, "empty.py", "# no declarations here\n")
-	gittest.Git(t, dir, "add", "empty.py")
+	gittest.Git(t.Context(), t, dir, "add", "empty.py")
 
 	report, err := Run(context.Background(), repo, dir, Options{Files: []string{"empty.py"}})
 	if err != nil {
@@ -629,7 +629,7 @@ func TestAttribute_TopLevelSymbolOwnsOneSeparator(t *testing.T) {
 			// and touches no shared package state, no t.Setenv, no t.Chdir --
 			// safe to run concurrently with its four siblings.
 			t.Parallel()
-			dir, repo := gittest.RepoWithFile(t, tc.path, tc.head, "chore: fixture")
+			dir, repo := gittest.RepoWithFile(t.Context(), t, tc.path, tc.head, "chore: fixture")
 			gittest.Write(t, dir, tc.path, tc.work)
 
 			if got := describeRows(rowsFor(t, dir, repo, tc.path)); got != tc.wantRows {
@@ -717,14 +717,14 @@ func TestRun_ScopeUsageErrorsAreTyped(t *testing.T) {
 // this feature by accident.
 func TestRun_RevPathTwoBlobScope(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.RepoWithFile(t, "a.go", "package p\n\nfunc Foo() int { return 1 }\n\nfunc Bar() int { return 2 }\n", "chore: v1")
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "a.go", "package p\n\nfunc Foo() int { return 1 }\n\nfunc Bar() int { return 2 }\n", "chore: v1")
 	gittest.Write(t, dir, "a.go", "package p\n\nfunc Foo() int { return 11 }\n\nfunc Bar() int { return 22 }\n")
-	gittest.Commit(t, dir, "chore: v2")
+	gittest.Commit(t.Context(), t, dir, "chore: v2")
 	// A third, unrelated commit -- proves the comparison is strictly
 	// between the two named revisions, not "HEAD and its parent" by
 	// coincidence.
 	gittest.Write(t, dir, "b.go", "package p\n\nfunc Unrelated() {}\n")
-	gittest.Commit(t, dir, "chore: unrelated change")
+	gittest.Commit(t.Context(), t, dir, "chore: unrelated change")
 
 	report, err := Run(context.Background(), repo, dir, Options{
 		RevPaths: []cli.RevPath{{Rev: "HEAD~2", Path: "a.go"}, {Rev: "HEAD~1", Path: "a.go"}},
@@ -801,10 +801,10 @@ func TestNumstatPath(t *testing.T) {
 func TestRun_FileAndRowOrderIsPathThenPosition(t *testing.T) {
 	t.Parallel()
 	src := "package p\n\nfunc Zebra() int { return 1 }\n\nfunc Apple() int { return 2 }\n"
-	dir, repo := gittest.New(t)
+	dir, repo := gittest.New(t.Context(), t)
 	gittest.Write(t, dir, "b.go", src)
 	gittest.Write(t, dir, "a.go", src)
-	gittest.Commit(t, dir, "chore: fixture")
+	gittest.Commit(t.Context(), t, dir, "chore: fixture")
 
 	edited := strings.NewReplacer("return 1", "return 11", "return 2", "return 22").Replace(src)
 	gittest.Write(t, dir, "a.go", edited)
@@ -830,7 +830,7 @@ func TestRun_FileAndRowOrderIsPathThenPosition(t *testing.T) {
 // one of them exactly like it would for a brand-new tracked file.
 func TestRun_UntrackedFileAttributesPerSymbol(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
+	dir, repo := gittest.New(t.Context(), t)
 	gittest.Write(t, dir, "new.go", "package p\n\nfunc First() int { return 1 }\n\nfunc Second() int { return 2 }\n")
 	// Deliberately never `git add`ed -- LsFilesOthers is what surfaces it.
 
@@ -874,7 +874,7 @@ func TestRun_UntrackedFileAttributesPerSymbol(t *testing.T) {
 // every sibling as its own row, so repeating it there would just be noise.
 func TestRun_ContainerEscalationNoticeOnlyUnderSymFilter(t *testing.T) {
 	// cannot Parallel because t.Setenv below
-	dir, repo := gittest.New(t)
+	dir, repo := gittest.New(t.Context(), t)
 	t.Setenv("PATH", pathWithGitOnly(t))
 	gittest.Write(t, dir, "new.ts", "class Widget {\n  foo(): number { return 1 }\n\n  bar(): number { return 2 }\n}\n")
 
@@ -920,11 +920,11 @@ func findFile(files []FileReport, path string) (FileReport, bool) {
 // hand for rendering, never exercising Run's own classification of one.
 func TestRun_BinaryChangeReportsDashCounts(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
+	dir, repo := gittest.New(t.Context(), t)
 	binary := []byte("PNGFAKE\x00\x01binary")
 	gittest.Write(t, dir, "logo.bin", string(binary))
-	gittest.Git(t, dir, "add", "--", "logo.bin")
-	gittest.Git(t, dir, "commit", "-q", "-m", "add binary")
+	gittest.Git(t.Context(), t, dir, "add", "--", "logo.bin")
+	gittest.Git(t.Context(), t, dir, "commit", "-q", "-m", "add binary")
 
 	changed := append(append([]byte(nil), binary...), 'X')
 	gittest.Write(t, dir, "logo.bin", string(changed))
@@ -981,7 +981,7 @@ func B() int {
 	return 2
 }
 `
-	dir, repo := gittest.RepoWithFile(t, "notes.go", before, "chore: fixture")
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "notes.go", before, "chore: fixture")
 	gittest.Write(t, dir, "notes.go", after)
 
 	rows := rowsFor(t, dir, repo, "notes.go")
@@ -1051,11 +1051,11 @@ func TestRun_StagedRenameAcrossDirectoryDepth(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			dir, repo := gittest.RepoWithFile(t, tc.from, "export const x = 1;\n", "chore: initial")
+			dir, repo := gittest.RepoWithFile(t.Context(), t, tc.from, "export const x = 1;\n", "chore: initial")
 			if err := os.MkdirAll(filepath.Join(dir, filepath.Dir(tc.to)), 0o750); err != nil {
 				t.Fatal(err)
 			}
-			gittest.Git(t, dir, "mv", tc.from, tc.to)
+			gittest.Git(t.Context(), t, dir, "mv", tc.from, tc.to)
 
 			report, err := Run(context.Background(), repo, dir, Options{Staged: true})
 			if err != nil {

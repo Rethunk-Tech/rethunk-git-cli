@@ -18,11 +18,11 @@ import (
 // which index_test.go's TestStage_SubmoduleAndSymlinkPathStaging already
 // covers for the worktree-present half of classifyPath.
 
-func commitSpecial(t *testing.T, dir string, paths ...string) {
+func commitSpecial(ctx context.Context, t *testing.T, dir string, paths ...string) {
 	t.Helper()
 	args := append([]string{"add"}, paths...)
-	gittest.Git(t, dir, args...)
-	gittest.Git(t, dir, "commit", "-q", "-m", "chore: commit special path")
+	gittest.Git(ctx, t, dir, args...)
+	gittest.Git(ctx, t, dir, "commit", "-q", "-m", "chore: commit special path")
 }
 
 // TestClassifyPath_HeadOnlyBranches covers classifyPath's HEAD-tree fallback
@@ -41,17 +41,18 @@ func commitSpecial(t *testing.T, dir string, paths ...string) {
 // anchors the symlink case for its worktree-present half.
 func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
 
 	t.Run("symlink deleted from the worktree classifies via HEAD's 120000 entry", func(t *testing.T) {
-		dir, repo := gittest.New(t)
+		dir, repo := gittest.New(ctx, t)
 		if err := os.WriteFile(filepath.Join(dir, "target.txt"), []byte("x\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.Symlink("target.txt", filepath.Join(dir, "link.txt")); err != nil {
 			t.Fatal(err)
 		}
-		commitSpecial(t, dir, "target.txt", "link.txt")
+		commitSpecial(ctx, t, dir, "target.txt", "link.txt")
 
 		if err := os.Remove(filepath.Join(dir, "link.txt")); err != nil {
 			t.Fatal(err)
@@ -67,21 +68,21 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	})
 
 	t.Run("submodule directory removed from the worktree classifies via HEAD's 160000 entry", func(t *testing.T) {
-		dir, repo := gittest.New(t)
+		dir, repo := gittest.New(ctx, t)
 		subDir := filepath.Join(dir, "sub")
 		if err := os.MkdirAll(subDir, 0o750); err != nil {
 			t.Fatal(err)
 		}
-		gittest.Git(t, subDir, "init", "-q")
-		gittest.Git(t, subDir, "config", "user.email", "sub@example.com")
-		gittest.Git(t, subDir, "config", "user.name", "Sub")
+		gittest.Git(ctx, t, subDir, "init", "-q")
+		gittest.Git(ctx, t, subDir, "config", "user.email", "sub@example.com")
+		gittest.Git(ctx, t, subDir, "config", "user.name", "Sub")
 		if err := os.WriteFile(filepath.Join(subDir, "x.txt"), []byte("x\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		gittest.Git(t, subDir, "add", "x.txt")
-		gittest.Git(t, subDir, "commit", "-q", "-m", "chore: sub commit")
+		gittest.Git(ctx, t, subDir, "add", "x.txt")
+		gittest.Git(ctx, t, subDir, "commit", "-q", "-m", "chore: sub commit")
 
-		commitSpecial(t, dir, "sub")
+		commitSpecial(ctx, t, dir, "sub")
 
 		if err := os.RemoveAll(subDir); err != nil {
 			t.Fatal(err)
@@ -103,21 +104,21 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 		// ".git present" heuristic cannot tell this apart from an ordinary
 		// directory by local shape alone; classifyPath must still cross-
 		// check HEAD's own tree mode rather than settling for pathRegular.
-		dir, repo := gittest.New(t)
+		dir, repo := gittest.New(ctx, t)
 		subDir := filepath.Join(dir, "sub")
 		if err := os.MkdirAll(subDir, 0o750); err != nil {
 			t.Fatal(err)
 		}
-		gittest.Git(t, subDir, "init", "-q")
-		gittest.Git(t, subDir, "config", "user.email", "sub@example.com")
-		gittest.Git(t, subDir, "config", "user.name", "Sub")
+		gittest.Git(ctx, t, subDir, "init", "-q")
+		gittest.Git(ctx, t, subDir, "config", "user.email", "sub@example.com")
+		gittest.Git(ctx, t, subDir, "config", "user.name", "Sub")
 		if err := os.WriteFile(filepath.Join(subDir, "x.txt"), []byte("x\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		gittest.Git(t, subDir, "add", "x.txt")
-		gittest.Git(t, subDir, "commit", "-q", "-m", "chore: sub commit")
+		gittest.Git(ctx, t, subDir, "add", "x.txt")
+		gittest.Git(ctx, t, subDir, "commit", "-q", "-m", "chore: sub commit")
 
-		commitSpecial(t, dir, "sub")
+		commitSpecial(ctx, t, dir, "sub")
 
 		// Deinit-shaped: the directory survives, empty, with no ".git".
 		if err := os.RemoveAll(filepath.Join(subDir, ".git")); err != nil {
@@ -137,11 +138,11 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	})
 
 	t.Run("binary file deleted from the worktree classifies via HEAD's content", func(t *testing.T) {
-		dir, repo := gittest.New(t)
+		dir, repo := gittest.New(ctx, t)
 		if err := os.WriteFile(filepath.Join(dir, "blob.bin"), []byte("a\x00b\x00c"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		commitSpecial(t, dir, "blob.bin")
+		commitSpecial(ctx, t, dir, "blob.bin")
 
 		if err := os.Remove(filepath.Join(dir, "blob.bin")); err != nil {
 			t.Fatal(err)
@@ -157,11 +158,11 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	})
 
 	t.Run("regular file deleted from the worktree classifies as pathRegular via HEAD", func(t *testing.T) {
-		dir, repo := gittest.New(t)
+		dir, repo := gittest.New(ctx, t)
 		if err := os.WriteFile(filepath.Join(dir, "plain.go"), []byte("package p\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		commitSpecial(t, dir, "plain.go")
+		commitSpecial(ctx, t, dir, "plain.go")
 
 		if err := os.Remove(filepath.Join(dir, "plain.go")); err != nil {
 			t.Fatal(err)
@@ -177,7 +178,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	})
 
 	t.Run("plain directory in the worktree classifies as pathRegular, not a submodule", func(t *testing.T) {
-		dir, repo := gittest.New(t)
+		dir, repo := gittest.New(ctx, t)
 		if err := os.MkdirAll(filepath.Join(dir, "plaindir"), 0o750); err != nil {
 			t.Fatal(err)
 		}
@@ -192,7 +193,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	})
 
 	t.Run("binary file present in the worktree refuses a symbol anchor", func(t *testing.T) {
-		dir, repo := gittest.New(t)
+		dir, repo := gittest.New(ctx, t)
 		if err := os.WriteFile(filepath.Join(dir, "blob.bin"), []byte("a\x00b\x00c"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -216,7 +217,7 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	})
 
 	t.Run("path present on neither side classifies as pathRegular", func(t *testing.T) {
-		dir, repo := gittest.New(t)
+		dir, repo := gittest.New(ctx, t)
 		// An empty repo: the path was never committed and never existed in
 		// the worktree either. classifyPath's job is refusing an
 		// addressable-but-wrong-kind path, not diagnosing absence -- that is
@@ -233,10 +234,10 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 
 func TestStage_RefusesUnmergedSymbol(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.RepoWithFile(t, "conflict.go", "package p\n\nfunc Keep() {}\n", "chore: add conflict fixture")
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "conflict.go", "package p\n\nfunc Keep() {}\n", "chore: add conflict fixture")
 
-	blob := strings.TrimSpace(gittest.Git(t, dir, "rev-parse", "HEAD:conflict.go"))
-	gittest.Unmerged(t, dir, blob, "conflict.go")
+	blob := strings.TrimSpace(gittest.Git(t.Context(), t, dir, "rev-parse", "HEAD:conflict.go"))
+	gittest.Unmerged(t.Context(), t, dir, blob, "conflict.go")
 
 	err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("conflict.go", "Keep")})
 	var pathErr *PathError
@@ -281,10 +282,10 @@ func TestStage_RefusesIndexWorktreeBits(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			dir, repo := gittest.New(t)
+			dir, repo := gittest.New(t.Context(), t)
 			gittest.Write(t, dir, "tracked.go", "package p\n\nfunc Keep() {}\n")
-			commitSpecial(t, dir, "tracked.go")
-			gittest.Git(t, dir, "update-index", test.mark, "tracked.go")
+			commitSpecial(t.Context(), t, dir, "tracked.go")
+			gittest.Git(t.Context(), t, dir, "update-index", test.mark, "tracked.go")
 
 			err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("tracked.go", "Keep")})
 			var pathErr *PathError
@@ -313,11 +314,11 @@ func TestCheckGitignoreRefusal_IndexEntryCountsAsTracked(t *testing.T) {
 	t.Parallel()
 
 	t.Run("intent-to-add entry is allowed", func(t *testing.T) {
-		dir, repo := gittest.New(t)
+		dir, repo := gittest.New(t.Context(), t)
 		gittest.Write(t, dir, ".gitignore", "skip-me.go\n")
 		gittest.Write(t, dir, "skip-me.go", "package p\n")
-		commitSpecial(t, dir, ".gitignore")
-		gittest.Git(t, dir, "add", "-f", "-N", "skip-me.go")
+		commitSpecial(t.Context(), t, dir, ".gitignore")
+		gittest.Git(t.Context(), t, dir, "add", "-f", "-N", "skip-me.go")
 
 		if err := checkGitignoreRefusal(context.Background(), repo, "skip-me.go"); err != nil {
 			t.Fatalf("checkGitignoreRefusal: %v; want nil", err)
@@ -325,12 +326,12 @@ func TestCheckGitignoreRefusal_IndexEntryCountsAsTracked(t *testing.T) {
 	})
 
 	t.Run("folded index name is allowed", func(t *testing.T) {
-		dir, repo := gittest.New(t)
-		gittest.Git(t, dir, "config", "core.ignorecase", "true")
+		dir, repo := gittest.New(t.Context(), t)
+		gittest.Git(t.Context(), t, dir, "config", "core.ignorecase", "true")
 		gittest.Write(t, dir, ".gitignore", "skip-me.go\n")
 		gittest.Write(t, dir, "Skip-Me.go", "package p\n")
-		commitSpecial(t, dir, ".gitignore")
-		gittest.Git(t, dir, "add", "-f", "-N", "Skip-Me.go")
+		commitSpecial(t.Context(), t, dir, ".gitignore")
+		gittest.Git(t.Context(), t, dir, "add", "-f", "-N", "Skip-Me.go")
 
 		if err := checkGitignoreRefusal(context.Background(), repo, "skip-me.go"); err != nil {
 			t.Fatalf("checkGitignoreRefusal: %v; want nil", err)
@@ -338,10 +339,10 @@ func TestCheckGitignoreRefusal_IndexEntryCountsAsTracked(t *testing.T) {
 	})
 
 	t.Run("never-indexed entry is refused", func(t *testing.T) {
-		dir, repo := gittest.New(t)
+		dir, repo := gittest.New(t.Context(), t)
 		gittest.Write(t, dir, ".gitignore", "skip-me.go\n")
 		gittest.Write(t, dir, "skip-me.go", "package p\n")
-		commitSpecial(t, dir, ".gitignore")
+		commitSpecial(t.Context(), t, dir, ".gitignore")
 
 		err := checkGitignoreRefusal(context.Background(), repo, "skip-me.go")
 		var pathErr *PathError

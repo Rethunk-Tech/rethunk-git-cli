@@ -25,9 +25,9 @@ func TestIndexWorktreeBits(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			dir, repo := gittest.RepoWithFile(t, "tracked.txt", "content\n", "test: add tracked file")
+			dir, repo := gittest.RepoWithFile(t.Context(), t, "tracked.txt", "content\n", "test: add tracked file")
 			for _, mark := range test.marks {
-				gittest.Git(t, dir, "update-index", mark, "tracked.txt")
+				gittest.Git(t.Context(), t, dir, "update-index", mark, "tracked.txt")
 			}
 
 			path := "tracked.txt"

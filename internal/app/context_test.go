@@ -53,7 +53,7 @@ func TestRun_ContextHelpAndUsage(t *testing.T) {
 // when there is nothing to cross-check.
 func TestRun_ContextEmptyRepoEmitsNothing(t *testing.T) {
 	t.Parallel()
-	dir, _ := gittest.New(t)
+	dir, _ := gittest.New(t.Context(), t)
 
 	stdout, stderr, code := runApp(t, "-C", dir, "context")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))

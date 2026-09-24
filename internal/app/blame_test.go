@@ -125,7 +125,7 @@ func TestRun_BlameAmbiguousAnchor(t *testing.T) {
 	dir := tempRepo(t)
 	writeAppFile(t, dir, "b.go", "package a\n\ntype X struct{}\n\nfunc (x X) Get() int { return 1 }\n\n"+
 		"type Y struct{}\n\nfunc (y Y) Get() int { return 2 }\n")
-	gittest.Commit(t, dir, "chore: two Gets")
+	gittest.Commit(t.Context(), t, dir, "chore: two Gets")
 
 	_, stderr, code := runApp(t, "-C", dir, "blame", "b.go:Get")
 	qt.Assert(t, qt.Equals(code, exitcode.AnchorAmbiguous))
@@ -165,9 +165,9 @@ func TestRun_BlameBoundsToTheSymbolExtent(t *testing.T) {
 // the same HEAD blob when the worktree copy is absent.
 func TestRun_BlameDeletedWorktreeUsesHEAD(t *testing.T) {
 	t.Parallel()
-	dir, _ := gittest.New(t)
+	dir, _ := gittest.New(t.Context(), t)
 	writeAppFile(t, dir, "gone.go", "package gone\n\nfunc Gone() int {\n\treturn 1\n}\n\nfunc Other() int {\n\treturn 2\n}\n")
-	gittest.Commit(t, dir, "chore: add gone.go")
+	gittest.Commit(t.Context(), t, dir, "chore: add gone.go")
 
 	if err := os.Remove(filepath.Join(dir, "gone.go")); err != nil {
 		t.Fatal(err)
@@ -244,12 +244,12 @@ func TestRun_BlameFollowRenameCrossesARenameThatReordersTheSymbol(t *testing.T) 
 	t.Setenv("GIT_AUTHOR_DATE", "2025-01-01T00:00:00")
 	t.Setenv("GIT_COMMITTER_DATE", "2025-01-01T00:00:00")
 	writeAppFile(t, dir, "new.go", "package p\n\nfunc Bar() int {\n\treturn 100\n}\n\nfunc Foo() int {\n\treturn 2\n}\n")
-	gittest.Commit(t, dir, "refactor: rename and reorder")
+	gittest.Commit(t.Context(), t, dir, "refactor: rename and reorder")
 
 	t.Setenv("GIT_AUTHOR_DATE", "2030-01-01T00:00:00")
 	t.Setenv("GIT_COMMITTER_DATE", "2030-01-01T00:00:00")
 	writeAppFile(t, dir, "new.go", "package p\n\nfunc Bar() int {\n\treturn 100\n}\n\nfunc Foo() int {\n\treturn 3\n}\n")
-	gittest.Commit(t, dir, "fix: bump Foo")
+	gittest.Commit(t.Context(), t, dir, "fix: bump Foo")
 
 	t.Run("without the flag, blame stops at the current name", func(t *testing.T) {
 		stdout, stderr, code := runApp(t, "blame", "new.go:Foo")
@@ -315,18 +315,18 @@ func TestRun_BlameFollowRenameResolvesAgainstHEADNotWorktree(t *testing.T) {
 func TestRun_BlameHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
-	gittest.Git(t, root, "init", "--quiet")
-	gittest.Git(t, root, "config", "core.ignorecase", "true")
+	gittest.Git(t.Context(), t, root, "init", "--quiet")
+	gittest.Git(t.Context(), t, root, "config", "core.ignorecase", "true")
 	writeAppFile(t, root, "Foo.GO", "package demo\n\nfunc First() {}\n")
-	gittest.Git(t, root, "add", "Foo.GO")
-	gittest.Git(t, root, "-c", "user.name=rgit test", "-c", "user.email=rgit@example.invalid", "commit", "--quiet", "-m", "initial")
+	gittest.Git(t.Context(), t, root, "add", "Foo.GO")
+	gittest.Git(t.Context(), t, root, "-c", "user.name=rgit test", "-c", "user.email=rgit@example.invalid", "commit", "--quiet", "-m", "initial")
 
 	stdout, stderr, code := runApp(t, "-C", root, "blame", "Foo.GO:First")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.StringContains(stdout, "First"))
 
-	gittest.Git(t, root, "config", "core.ignorecase", "false")
+	gittest.Git(t.Context(), t, root, "config", "core.ignorecase", "false")
 	_, _, code = runApp(t, "-C", root, "blame", "Foo.GO:First")
 	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
 }
@@ -350,7 +350,7 @@ func TestRun_FollowRenameResolvesShebangLanguageBeforeTheRename(t *testing.T) {
 	gitOut(t, dir, "commit", "-m", "refactor: rename tool")
 
 	writeAppFile(t, dir, "newtool", script+"\n\ndef added():\n    return 3\n")
-	gittest.Commit(t, dir, "feat: extend")
+	gittest.Commit(t.Context(), t, dir, "feat: extend")
 
 	t.Run("blame", func(t *testing.T) {
 		stdout, stderr, code := runApp(t, "-C", dir, "blame", "newtool:greet", "--follow-rename")

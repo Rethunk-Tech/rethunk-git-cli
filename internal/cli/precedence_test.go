@@ -26,12 +26,12 @@ import (
 //	gone.go              committed, then deleted from the worktree
 func newClassifyRepo(t *testing.T) (root string, checker *GitPathChecker, revs GitRevisionResolver, ctx context.Context) {
 	t.Helper()
-	root, repo := gittest.New(t)
+	root, repo := gittest.New(t.Context(), t)
 
 	gittest.Write(t, root, "a.go", "package a\n\nfunc A() {}\n")
 	gittest.Write(t, root, "src/notes:draft.md", "# draft\n")
 	gittest.Write(t, root, "gone.go", "package a\n\nfunc Gone() {}\n")
-	gittest.Commit(t, root, "chore: fixtures")
+	gittest.Commit(t.Context(), t, root, "chore: fixtures")
 	if err := os.Remove(filepath.Join(root, "gone.go")); err != nil {
 		t.Fatal(err)
 	}
@@ -182,9 +182,9 @@ func TestClassifyArgs_Rule6ListsWhatItTried(t *testing.T) {
 
 func TestGitPathChecker_IndexOnlyPathExists(t *testing.T) {
 	t.Parallel()
-	root, repo := gittest.New(t)
+	root, repo := gittest.New(t.Context(), t)
 	gittest.Write(t, root, "new.go", "package p\n\nfunc New() {}\n")
-	gittest.Git(t, root, "add", "new.go")
+	gittest.Git(t.Context(), t, root, "add", "new.go")
 	if err := os.Remove(filepath.Join(root, "new.go")); err != nil {
 		t.Fatal(err)
 	}
@@ -197,9 +197,9 @@ func TestGitPathChecker_IndexOnlyPathExists(t *testing.T) {
 
 func TestClassifyArgs_IndexOnlyPathIsAnAnchor(t *testing.T) {
 	t.Parallel()
-	root, repo := gittest.New(t)
+	root, repo := gittest.New(t.Context(), t)
 	gittest.Write(t, root, "new.go", "package p\n\nfunc New() {}\n")
-	gittest.Git(t, root, "add", "new.go")
+	gittest.Git(t.Context(), t, root, "add", "new.go")
 	if err := os.Remove(filepath.Join(root, "new.go")); err != nil {
 		t.Fatal(err)
 	}
@@ -221,12 +221,12 @@ func TestClassifyArgs_IndexOnlyPathIsAnAnchor(t *testing.T) {
 
 func TestGitPathChecker_IntentToAddIgnoredPathExists(t *testing.T) {
 	t.Parallel()
-	root, repo := gittest.New(t)
+	root, repo := gittest.New(t.Context(), t)
 	gittest.Write(t, root, ".gitignore", "skip-me.go\n")
 	gittest.Write(t, root, "skip-me.go", "package p\n")
-	gittest.Git(t, root, "add", ".gitignore")
-	gittest.Commit(t, root, "chore: add ignore rule")
-	gittest.Git(t, root, "add", "-f", "-N", "skip-me.go")
+	gittest.Git(t.Context(), t, root, "add", ".gitignore")
+	gittest.Commit(t.Context(), t, root, "chore: add ignore rule")
+	gittest.Git(t.Context(), t, root, "add", "-f", "-N", "skip-me.go")
 
 	checker := &GitPathChecker{Root: root, Repo: repo}
 	exists, err := checker.ExistsInWorktreeOrHEAD(context.Background(), "skip-me.go")
@@ -236,10 +236,10 @@ func TestGitPathChecker_IntentToAddIgnoredPathExists(t *testing.T) {
 
 func TestGitPathChecker_IgnoreCaseIndexOnlyPathExists(t *testing.T) {
 	t.Parallel()
-	root, repo := gittest.New(t)
-	gittest.Git(t, root, "config", "core.ignorecase", "true")
+	root, repo := gittest.New(t.Context(), t)
+	gittest.Git(t.Context(), t, root, "config", "core.ignorecase", "true")
 	gittest.Write(t, root, "Foo.go", "package p\n\nfunc Foo() {}\n")
-	gittest.Git(t, root, "add", "Foo.go")
+	gittest.Git(t.Context(), t, root, "add", "Foo.go")
 	if err := os.Remove(filepath.Join(root, "Foo.go")); err != nil {
 		t.Fatal(err)
 	}

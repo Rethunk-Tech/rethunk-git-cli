@@ -55,7 +55,7 @@ func TestRunCommit_RefusesSymbolAnchorOnStructuredData(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			dir, _ := gittest.RepoWithFile(t, tc.path, tc.before, "chore: add structured data")
+			dir, _ := gittest.RepoWithFile(t.Context(), t, tc.path, tc.before, "chore: add structured data")
 			gittest.Write(t, dir, tc.path, tc.after)
 			t.Chdir(dir)
 
@@ -96,7 +96,7 @@ func TestRunCommit_RefusesSymbolAnchorOnStructuredData(t *testing.T) {
 // symbols lists the resolvable key name, while commit refuses package.json:name.
 func TestRun_CommitRefusesStructuredDataSymbolViaRunApp(t *testing.T) {
 	t.Parallel()
-	dir, _ := gittest.RepoWithFile(t, "package.json", `{"name": "before"}`+"\n", "chore: add structured data")
+	dir, _ := gittest.RepoWithFile(t.Context(), t, "package.json", `{"name": "before"}`+"\n", "chore: add structured data")
 
 	stdout, stderr, code := runApp(t, "-C", dir, "symbols", "package.json")
 	if code != exitcode.Success {
@@ -141,7 +141,7 @@ func TestRun_CommitRefusesStructuredDataSymbolViaRunApp(t *testing.T) {
 // fake or injected error.
 func TestRunCommit_CountingWarningsReachStderr(t *testing.T) {
 	t.Parallel()
-	dir, _ := gittest.New(t)
+	dir, _ := gittest.New(t.Context(), t)
 	gittest.Write(t, dir, "new.txt", "hello\n")
 	full := filepath.Join(dir, "new.txt")
 	if err := os.Chmod(full, 0o000); err != nil {
@@ -182,9 +182,9 @@ func TestCommitTargets_UnhandledKindErrorsRatherThanSkips(t *testing.T) {
 
 func TestRunCommit_IndexOnlyPathSymbolAnchor(t *testing.T) {
 	t.Parallel()
-	dir, _ := gittest.New(t)
+	dir, _ := gittest.New(t.Context(), t)
 	gittest.Write(t, dir, "new.go", "package p\n\nfunc New() {}\n")
-	gittest.Git(t, dir, "add", "new.go")
+	gittest.Git(t.Context(), t, dir, "add", "new.go")
 	if err := os.Remove(dir + "/new.go"); err != nil {
 		t.Fatal(err)
 	}
@@ -212,37 +212,37 @@ func TestRunCommit_IndexOnlyPathSymbolAnchor(t *testing.T) {
 // unchanged: a hook rejection is still exitcode.GitFailure.
 func TestCommit_HookFailureRestoresPrestagedState(t *testing.T) {
 	t.Parallel()
-	dir, _ := gittest.New(t)
+	dir, _ := gittest.New(t.Context(), t)
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 	gittest.Write(t, dir, "sibling.txt", "base\n")
-	gittest.Commit(t, dir, "chore: initial")
+	gittest.Commit(t.Context(), t, dir, "chore: initial")
 
 	// Unrelated pre-staged work the rollback must preserve.
 	gittest.Write(t, dir, "sibling.txt", "staged change\n")
-	gittest.Git(t, dir, "add", "--", "sibling.txt")
+	gittest.Git(t.Context(), t, dir, "add", "--", "sibling.txt")
 	// The named edit to stage.
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 	workA, err := os.ReadFile(filepath.Join(dir, "a.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	gittest.InstallHook(t, dir, "pre-commit", "#!/bin/sh\nexit 1\n")
+	gittest.InstallHook(t.Context(), t, dir, "pre-commit", "#!/bin/sh\nexit 1\n")
 
 	var stdout, stderr strings.Builder
 	code := runCommit(context.Background(), dir, []string{"-m", "fix(a): update A", "a.go:A"}, &stdout, &stderr)
 	if code != exitcode.GitFailure {
 		t.Fatalf("runCommit = %v; want exitcode.GitFailure; stderr: %s", code, stderr.String())
 	}
-	if got := gittest.Git(t, dir, "show", ":a.go"); strings.Contains(got, "return 111") {
+	if got := gittest.Git(t.Context(), t, dir, "show", ":a.go"); strings.Contains(got, "return 111") {
 		t.Errorf(":a.go = %q; want HEAD content, named anchor rolled back", got)
 	}
-	if got := gittest.Git(t, dir, "show", ":sibling.txt"); !strings.Contains(got, "staged change") {
+	if got := gittest.Git(t.Context(), t, dir, "show", ":sibling.txt"); !strings.Contains(got, "staged change") {
 		t.Errorf(":sibling.txt = %q; want pre-staged change preserved", got)
 	}
 	// a.go unstaged again (worktree differs from index) while the sibling
 	// stays staged exactly as it was: entries sort by path, and the
 	// unstaged " M" sorts before the staged "M ".
-	if got := gittest.Git(t, dir, "status", "--porcelain"); got != " M a.go\nM  sibling.txt\n" {
+	if got := gittest.Git(t.Context(), t, dir, "status", "--porcelain"); got != " M a.go\nM  sibling.txt\n" {
 		t.Errorf("status = %q; want the unstaged a.go edit plus the pre-staged sibling", got)
 	}
 	for _, want := range []string{"a.go", "no worktree files were changed"} {

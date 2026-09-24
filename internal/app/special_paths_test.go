@@ -43,7 +43,7 @@ func TestRun_CommitRefusesUnmergedSymbol(t *testing.T) {
 	gitOut(t, dir, "add", "--", "conflict.go")
 	gitOut(t, dir, "commit", "-q", "-m", "chore: add conflict fixture")
 	blob := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD:conflict.go"))
-	gittest.Unmerged(t, dir, blob, "conflict.go")
+	gittest.Unmerged(t.Context(), t, dir, blob, "conflict.go")
 
 	_, stderr, code := runApp(t, "-C", dir, "commit", "-m", "fix(p): keep", "conflict.go:Keep")
 

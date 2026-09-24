@@ -11,7 +11,7 @@ import (
 
 func TestRun_PromisorMissingBlobIsAnError(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.BloblessClone(t)
+	dir, repo := gittest.BloblessClone(t.Context(), t)
 
 	report, err := Run(context.Background(), repo, dir, Options{
 		Files: []string{"tracked.go"},
@@ -34,7 +34,7 @@ func TestRun_PromisorMissingBlobIsAnError(t *testing.T) {
 
 func TestPrefetchBlobs_PromisorMissingBlobIsAnError(t *testing.T) {
 	t.Parallel()
-	_, repo := gittest.BloblessClone(t)
+	_, repo := gittest.BloblessClone(t.Context(), t)
 
 	cache, err := prefetchBlobs(
 		context.Background(),

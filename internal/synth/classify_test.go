@@ -39,7 +39,7 @@ func stagedBlob(t *testing.T, repo *gitx.Repo, path string) string {
 // what classify queues, before any dial ever happens.
 func TestClassify_DefersCrossCheckToOneBatchPerFile(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.RepoWithFile(t, "a.go", "package p\n\nfunc A() int { return 1 }\n\nfunc B() int { return 2 }\n", "chore: fixture")
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "a.go", "package p\n\nfunc A() int { return 1 }\n\nfunc B() int { return 2 }\n", "chore: fixture")
 	gittest.Write(t, dir, "a.go", "package p\n\nfunc A() int { return 11 }\n\nfunc B() int { return 22 }\n")
 
 	fp, err := openFilePlan(context.Background(), repo, dir, "a.go")
@@ -71,10 +71,10 @@ func TestClassify_DefersCrossCheckToOneBatchPerFile(t *testing.T) {
 // top-level insertion.
 func TestEscalateToContainer_AmbiguousContainerPropagates(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
+	dir, repo := gittest.New(t.Context(), t)
 	head := "[[servers]]\nhost = \"a\"\n\n[[servers]]\nhost = \"b\"\n"
 	gittest.Write(t, dir, "conf.toml", head)
-	gittest.Commit(t, dir, "chore: initial conf.toml")
+	gittest.Commit(t.Context(), t, dir, "chore: initial conf.toml")
 
 	// "port" is added only under the first table, so "servers.port" itself
 	// resolves uniquely -- it is escalateToContainer's own probe of the
@@ -105,10 +105,10 @@ func TestEscalateToContainer_AmbiguousContainerPropagates(t *testing.T) {
 // ordinary nearest-sibling position after section#content.
 func TestEscalateToContainer_HTMLNestedInsertIgnoresTagCoincidence(t *testing.T) {
 	t.Parallel()
-	dir, repo := gittest.New(t)
+	dir, repo := gittest.New(t.Context(), t)
 	head := "<div id=\"app\">\n  <section id=\"content\">v1</section>\n</div>\n"
 	gittest.Write(t, dir, "index.html", head)
-	gittest.Commit(t, dir, "chore: initial index.html")
+	gittest.Commit(t.Context(), t, dir, "chore: initial index.html")
 
 	work := "<div id=\"em\">\n<div id=\"app\">\n  <section id=\"content\">v1</section>\n  <em id=\"tagline\">Hi</em>\n</div>\n</div>\n"
 	gittest.Write(t, dir, "index.html", work)
@@ -132,7 +132,7 @@ func TestEscalateToContainer_HTMLNestedInsertIgnoresTagCoincidence(t *testing.T)
 func TestPlanStage_StagesNewSiblingsTheAnchorReferences(t *testing.T) {
 	t.Parallel()
 	head := "export type VideoPromptOverride = string;\n\nexport interface Clip {\n  id: string;\n}\n"
-	dir, repo := gittest.RepoWithFile(t, "types.ts", head, "chore: initial types.ts")
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "types.ts", head, "chore: initial types.ts")
 
 	work := "export interface SvdVideoPrompt {\n  image: string;\n}\n\n" +
 		"export interface TextToVideoPrompt {\n  text: string;\n}\n\n" +
