@@ -122,6 +122,11 @@ semantics can diverge from that assumption, and the gap is exactly what a
 double cannot catch. Reach for one only where the real thing is unreachable,
 and say at the seam what would catch its drift.
 
+The one real dependency the `-short` lane never reaches is the managed gopls
+daemon: `internal/lsptest.RunWithoutManagedDaemon` points `XDG_RUNTIME_DIR` at a
+directory rgit refuses to trust, so a unit run neither dials the machine's
+shared daemon nor spawns one that outlives it.
+
 **Write tests before implementation.**
 
 Tests run in parallel — every top-level test case in this repo calls

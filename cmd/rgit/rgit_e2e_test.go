@@ -23,6 +23,7 @@ import (
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsptest"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
@@ -39,7 +40,8 @@ func TestMain(m *testing.M) {
 	// do it, which is already too late to decide whether to build.
 	flag.Parse()
 	if testing.Short() {
-		os.Exit(m.Run())
+		// Only the full lane's live-gopls case wants a managed daemon.
+		os.Exit(lsptest.RunWithoutManagedDaemon(m))
 	}
 
 	bin, cleanup, err := buildRgit()
