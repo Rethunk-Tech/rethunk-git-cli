@@ -773,10 +773,8 @@ func TestCommitOnlyUsesTemporaryIndex(t *testing.T) {
 	gittest.Write(t, dir, "b.txt", "b after\n")
 	gittest.Git(t.Context(), t, dir, "add", "a.txt", "b.txt")
 
-	if _, err := repo.Commit(context.Background(), gitx.CommitOptions{
-		Messages:  []string{"feat: update a"},
-		Only:      true,
-		OnlyPaths: []string{"a.txt"},
+	if err := commitOnly(t, repo, []string{"a.txt"}, gitx.CommitOptions{
+		Messages: []string{"feat: update a"},
 	}); err != nil {
 		t.Fatalf("Commit(Only): %v", err)
 	}
@@ -807,10 +805,8 @@ func TestCommitOnlySyncsHookStagedPathsToIndex(t *testing.T) {
 	gittest.Write(t, dir, "staged.txt", "staged after\n")
 	gittest.Git(t.Context(), t, dir, "add", "a.txt", "staged.txt")
 
-	if _, err := repo.Commit(context.Background(), gitx.CommitOptions{
-		Messages:  []string{"feat: update a"},
-		Only:      true,
-		OnlyPaths: []string{"a.txt"},
+	if err := commitOnly(t, repo, []string{"a.txt"}, gitx.CommitOptions{
+		Messages: []string{"feat: update a"},
 	}); err != nil {
 		t.Fatalf("Commit(Only): %v", err)
 	}
@@ -831,10 +827,8 @@ func TestCommitOnlyCommitsADeletedPath(t *testing.T) {
 	gittest.Commit(t.Context(), t, dir, "chore: initial")
 	gittest.Git(t.Context(), t, dir, "rm", "--quiet", "gone.txt")
 
-	if _, err := repo.Commit(context.Background(), gitx.CommitOptions{
-		Messages:  []string{"chore: drop gone.txt"},
-		Only:      true,
-		OnlyPaths: []string{"gone.txt"},
+	if err := commitOnly(t, repo, []string{"gone.txt"}, gitx.CommitOptions{
+		Messages: []string{"chore: drop gone.txt"},
 	}); err != nil {
 		t.Fatalf("Commit(Only, deleted path): %v", err)
 	}
@@ -853,11 +847,9 @@ func TestCommitOnlyWithNoPathsLeavesOtherStagedWork(t *testing.T) {
 	gittest.Write(t, dir, "extra.txt", "staged only\n")
 	gittest.Git(t.Context(), t, dir, "add", "extra.txt")
 
-	if _, err := repo.Commit(context.Background(), gitx.CommitOptions{
-		Only:      true,
-		Amend:     true,
-		NoEdit:    true,
-		OnlyPaths: nil,
+	if err := commitOnly(t, repo, nil, gitx.CommitOptions{
+		Amend:  true,
+		NoEdit: true,
 	}); err != nil {
 		t.Fatalf("Commit(Only, no paths): %v", err)
 	}
@@ -878,4 +870,23 @@ func TestWithIndexFileDoesNotMutateProcessEnv(t *testing.T) {
 	if had != still || got != before {
 		t.Fatalf("GIT_INDEX_FILE process env changed: before had=%v val=%q, after had=%v val=%q", had, before, still, got)
 	}
+}
+
+// commitOnly commits paths the way rgit commit --only does: staged into a
+// private index seeded from HEAD, never into the real one.
+func commitOnly(t *testing.T, repo *gitx.Repo, paths []string, opts gitx.CommitOptions) error {
+	t.Helper()
+	only, err := repo.NewOnlyIndex(t.Context())
+	if err != nil {
+		t.Fatalf("NewOnlyIndex: %v", err)
+	}
+	defer only.Close()
+	if len(paths) > 0 {
+		if err := only.Repo.Add(t.Context(), paths...); err != nil {
+			t.Fatalf("Add(%v): %v", paths, err)
+		}
+	}
+	opts.Only = only
+	_, err = repo.Commit(t.Context(), opts)
+	return err
 }

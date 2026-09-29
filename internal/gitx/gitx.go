@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -856,10 +857,80 @@ type CommitOptions struct {
 	GPGSign      bool
 	GPGSignKeyID string
 	NoGPGSign    bool
-	// OnlyPaths are pathspecs; Only commits baseTree plus every index entry
-	// they match that differs from it.
-	Only      bool
-	OnlyPaths []string
+	// Only commits Only.Repo's private index instead of the real one, then
+	// copies the committed paths into the real index.
+	Only *OnlyIndex
+}
+
+// OnlyIndex is a private index for `rgit commit --only`, seeded with the
+// committable base's tree: the caller stages its targets into Repo, and the
+// commit is exactly that base plus those targets. The shared index is never
+// written before the commit, so concurrent committers in one checkout
+// cannot undo each other's staging.
+type OnlyIndex struct {
+	Repo       *Repo
+	Path       string
+	BaseCommit string // "" on an unborn branch
+	BaseTree   string
+}
+
+// NewOnlyIndex seeds a private index from HEAD's tree, or the empty tree on
+// an unborn branch. Callers hold LockCommits across it and the commit, so
+// HEAD cannot move under another rgit. Close removes the file.
+func (r *Repo) NewOnlyIndex(ctx context.Context) (*OnlyIndex, error) {
+	commit, _, err := r.RevParseVerify(ctx, "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	var tree string
+	if commit == "" {
+		tree, err = r.EmptyTree(ctx)
+	} else {
+		tree, err = r.checkedLine(ctx, "rev-parse", "--verify", commit+"^{tree}")
+	}
+	if err != nil {
+		return nil, err
+	}
+	dir, err := os.MkdirTemp("", "rgit-only-*")
+	if err != nil {
+		return nil, err
+	}
+	o := &OnlyIndex{Path: filepath.Join(dir, "index"), BaseCommit: commit, BaseTree: tree}
+	o.Repo = r.WithIndexFile(o.Path)
+	if _, err := o.Repo.checked(ctx, "read-tree", tree); err != nil {
+		o.Close()
+		return nil, err
+	}
+	return o, nil
+}
+
+// Close removes the private index.
+func (o *OnlyIndex) Close() { _ = os.RemoveAll(filepath.Dir(o.Path)) }
+
+// LockCommits serializes rgit's --only commits in one worktree: each builds
+// on the HEAD it read, and git's own ref check would only reject, not
+// rebase, a commit that raced another. The lock is an OS file lock, so a
+// crashed holder releases it. Writers other than rgit are not held off;
+// Commit detects one that moved HEAD in between.
+func (r *Repo) LockCommits(ctx context.Context) (unlock func(), err error) {
+	gitDir, err := r.checkedLine(ctx, "rev-parse", "--absolute-git-dir")
+	if err != nil {
+		return nil, err
+	}
+	root, err := os.OpenRoot(gitDir)
+	if err != nil {
+		return nil, err
+	}
+	f, err := root.OpenFile("rgit-commit.lock", os.O_CREATE|os.O_RDWR, 0o600)
+	_ = root.Close()
+	if err != nil {
+		return nil, err
+	}
+	if err := lockFile(f); err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	return func() { _ = f.Close() }, nil
 }
 
 // Commit runs `git commit` with opts translated to flags and returns its
@@ -934,58 +1005,9 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 	}
 
 	commitRepo := r
-	var tempIndex, baseTree string
-	if opts.Only {
-		base, err := r.CommittableBase(ctx)
-		if err != nil {
-			return Result{}, err
-		}
-		// Resolved to a tree up front: the post-commit index sync diffs
-		// against it after HEAD has already moved.
-		out, err := r.checked(ctx, "rev-parse", "--verify", base+"^{tree}")
-		if err != nil {
-			return Result{}, err
-		}
-		baseTree = strings.TrimSpace(string(out))
-		file, err := os.CreateTemp("", "rgit-index-*")
-		if err != nil {
-			return Result{}, &ExecError{Args: args, Err: err}
-		}
-		tempIndex = file.Name()
-		if err := file.Close(); err != nil {
-			_ = os.Remove(tempIndex)
-			return Result{}, &ExecError{Args: args, Err: err}
-		}
-		if err := os.Remove(tempIndex); err != nil {
-			return Result{}, &ExecError{Args: args, Err: err}
-		}
-		commitRepo = &Repo{root: r.root, env: withEnv(r.env, "GIT_INDEX_FILE", tempIndex)}
-		res, err := commitRepo.run(ctx, nil, "read-tree", baseTree)
-		if err != nil {
-			_ = os.Remove(tempIndex)
-			return Result{}, err
-		}
-		if res.ExitCode != 0 {
-			_ = os.Remove(tempIndex)
-			return Result{}, gitError([]string{"read-tree", baseTree}, res)
-		}
-		if len(opts.OnlyPaths) > 0 {
-			// Expanded against the real index, not trusted as a file list: a
-			// directory pathspec must carry every entry under it that differs
-			// from baseTree, deletions included, or the commit is partial.
-			entries, err := r.cachedEntries(ctx, baseTree, opts.OnlyPaths...)
-			if err != nil {
-				_ = os.Remove(tempIndex)
-				return Result{}, err
-			}
-			if err := commitRepo.writeEntries(ctx, entries); err != nil {
-				_ = os.Remove(tempIndex)
-				return Result{}, err
-			}
-		}
-		defer func() { _ = os.Remove(tempIndex) }()
+	if opts.Only != nil {
+		commitRepo = opts.Only.Repo
 	}
-
 	res, err := commitRepo.run(ctx, stdin, args...)
 	if err != nil {
 		return Result{}, err
@@ -993,18 +1015,32 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 	if res.ExitCode != 0 {
 		return res, gitError(args, res)
 	}
-	if opts.Only {
-		return res, r.syncCommittedEntries(ctx, commitRepo, baseTree)
+	if opts.Only == nil {
+		return res, nil
+	}
+	if !opts.Amend && opts.Only.BaseCommit != "" {
+		// git takes the parent from HEAD when it starts, not from the base
+		// the private index was built on. A writer outside rgit landing in
+		// between leaves a commit whose tree undoes that writer's change.
+		parent, err := r.checkedLine(ctx, "rev-parse", "--verify", "HEAD^1")
+		if err != nil {
+			return res, err
+		}
+		if parent != opts.Only.BaseCommit {
+			return res, fmt.Errorf("gitx: HEAD moved from %s to %s while committing; HEAD's tree was built on %s and may undo %s's changes", opts.Only.BaseCommit, parent, opts.Only.BaseCommit, parent)
+		}
+	}
+	if err := r.syncCommittedEntries(ctx, commitRepo, opts.Only.BaseTree); err != nil {
+		return res, fmt.Errorf("gitx: commit landed, but updating the index for its paths failed: %w", err)
 	}
 	return res, nil
 }
 
 // syncCommittedEntries copies into the real index each path the --only
-// commit changed from baseTree whose real entry disagrees with it. git runs
-// the pre-commit hook against the temporary index, so a hook's `git add`
-// reaches the commit but not the real index, which then sits one version
-// behind HEAD. Writing only disagreeing entries leaves unrelated staged work
-// alone and takes no index.lock when no hook staged anything.
+// commit changed from baseTree whose real entry disagrees with it, the way
+// `git commit --only` leaves the index matching HEAD for those paths; that
+// includes anything a pre-commit hook staged into the private index.
+// Writing only disagreeing entries leaves unrelated staged work alone.
 func (r *Repo) syncCommittedEntries(ctx context.Context, committed *Repo, baseTree string) error {
 	changed, err := committed.cachedEntries(ctx, baseTree)
 	if err != nil {

@@ -688,7 +688,7 @@ output shape is the point).
 | `--trailer TOKEN:VALUE` | Append a trailer (`Refs:`, `Co-authored-by:`). Repeatable, forwarded. |
 | `--amend` | Amend the previous commit. Anchors stage into it as they would a new commit. With neither `-m` nor `-F`, reuses HEAD's message unchanged (`--no-edit`) — `rgit` never opens an editor, so that is the only message an unattended `--amend` can have. Give `-m`/`-F` to replace it as usual. With no targets, skips staging and amends the index as it stands. |
 | `--allow-empty` | Permit a commit with no changes. Suppresses exit 11. With no targets, skips staging and commits the index as it stands; still requires `-m`/`-F` unless another auto-message flag is set. |
-| `-o`, `--only` | Commit only the named targets, leaving other staged paths in the index. Requires at least one target unless combined with `--amend`; anchors still synthesize their named extents before the commit. |
+| `-o`, `--only` | Commit only the named targets, leaving other staged paths in the index. Requires at least one target unless combined with `--amend`; anchors still synthesize their named extents before the commit. The commit is built from HEAD plus the targets in a private index, so the shared index is never staged into and a rejected commit leaves it untouched; afterwards the committed paths match HEAD in it. Concurrent `--only` commits in one worktree wait for each other (an OS lock on `rgit-commit.lock` in the git directory), so each builds on the one before. A writer other than `rgit` moving HEAD mid-commit is reported with exit 128 rather than silently built over. |
 | `--reuse-message=<commit>` | Reuse that commit's log message and authorship (`git commit --reuse-message`). Long form only — global `-C` is directory chdir and stays before the command. Mutually exclusive with `-m` the way git is (`-m` and `-C` cannot be used together). Does not require a separate `-m`. |
 | `--reedit-message` | Refused (exit 129). `rgit` never opens an editor; use `--reuse-message`. |
 | `--push` | Push upstream after a successful commit. No rollback on push failure. If the branch has no upstream configured, the exit-8 message names it and the fix (`git push -u origin <branch>`, or `push.autoSetupRemote`) — `rgit` never adds `-u` itself. |
@@ -789,7 +789,7 @@ the commit proceeds.
 `rgit` is `git add <pathspec> && git commit` at symbol granularity, so:
 
 - Work you staged before invoking `rgit` **comes along** with the commit, unless `--only` is given.
-- A hook rejecting the commit rolls staging back to its pre-commit state: the index is snapshotted before anything is staged, synthesized blobs are staged through a temporary index that replaces the real one only on success, and a failed commit restores the snapshot while naming the paths it touched. Only index entries ever move -- no worktree file is written.
+- A hook rejecting the commit rolls staging back to its pre-commit state (under `--only` nothing was staged, so there is nothing to roll back): the index is snapshotted before anything is staged, synthesized blobs are staged through a temporary index that replaces the real one only on success, and a failed commit restores the snapshot while naming the paths it touched. Only index entries ever move -- no worktree file is written.
 - Hooks are not policed — a hook may stage paths you did not name, exactly as
   under plain `git commit`. Use `--no-verify` to disable them.
 - During an in-progress merge, cherry-pick, or revert, omitting `-m` and `-F`

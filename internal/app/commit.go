@@ -226,8 +226,27 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		}
 	}
 
+	// --only commits HEAD plus the targets from a private index, so the
+	// shared index is never staged into and a concurrent rgit in the same
+	// checkout cannot undo this one's staging. The lock comes before
+	// planning because anchors are synthesized against HEAD, which must not
+	// move until the commit lands.
+	var only *gitx.OnlyIndex
+	if f.only && !f.dryRun {
+		unlock, err := repo.LockCommits(ctx)
+		if err != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return exitcode.GitFailure
+		}
+		defer unlock()
+		if only, err = repo.NewOnlyIndex(ctx); err != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return exitcode.GitFailure
+		}
+		defer only.Close()
+	}
+
 	var targetResults []synth.TargetResult
-	var onlyPaths []string
 	var indexSnap *synth.IndexSnapshot
 	if targetCount > 0 {
 		checker := &cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}
@@ -317,25 +336,28 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 			return exitcode.Success
 		}
 
-		// Snapshot the index before staging anything: Apply stages
-		// atomically through a temp index, but the commit itself -- hooks
-		// included -- still runs against the real one, so a failure there
-		// needs this snapshot to roll the index back to. Refusing to
-		// proceed when the snapshot itself fails is the non-destructive
-		// answer: staging nothing beats staging what cannot be restored.
-		snap, serr := synth.SnapshotIndex(ctx, root)
-		if serr != nil {
-			fmt.Fprintf(stderr, "rgit: %v\n", serr)
-			return exitcode.GitFailure
+		var stageErr error
+		if only != nil {
+			stageErr = plan.StageInto(ctx, repo, root, only.Repo)
+		} else {
+			// Snapshot the index before staging anything: Apply stages
+			// atomically through a temp index, but the commit itself -- hooks
+			// included -- still runs against the real one, so a failure there
+			// needs this snapshot to roll the index back to. Refusing to
+			// proceed when the snapshot itself fails is the non-destructive
+			// answer: staging nothing beats staging what cannot be restored.
+			snap, serr := synth.SnapshotIndex(ctx, root)
+			if serr != nil {
+				fmt.Fprintf(stderr, "rgit: %v\n", serr)
+				return exitcode.GitFailure
+			}
+			indexSnap = snap
+			stageErr = plan.Apply(ctx, repo, root)
 		}
-		indexSnap = snap
-		if err := plan.Apply(ctx, repo, root); err != nil {
-			code, msg := mapStageError(err)
+		if stageErr != nil {
+			code, msg := mapStageError(stageErr)
 			fmt.Fprintf(stderr, "rgit: %s\n", msg)
 			return code
-		}
-		if f.only {
-			onlyPaths = onlyPathspecs(targetResults)
 		}
 	} else if f.dryRun {
 		if f.porcelain {
@@ -364,8 +386,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		GPGSign:      f.gpgSignKey != "",
 		GPGSignKeyID: gpgSignKeyID(f.gpgSignKey),
 		NoGPGSign:    f.noGPGSign,
-		Only:         f.only,
-		OnlyPaths:    onlyPaths,
+		Only:         only,
 	}
 	if f.msgFile == "-" {
 		data, rerr := io.ReadAll(os.Stdin)
@@ -531,29 +552,6 @@ func targetLabel(t synth.Target) string {
 		return t.Pathspec
 	}
 	return t.Symbol.Path + ":" + t.Symbol.Anchor
-}
-
-// onlyPathspecs is what --only commits: a path target's pathspec as given,
-// so git expands it against the index the way `git commit --only` does, and
-// a changed symbol target's file, taken literally.
-func onlyPathspecs(results []synth.TargetResult) []string {
-	seen := make(map[string]struct{}, len(results))
-	specs := make([]string, 0, len(results))
-	for _, result := range results {
-		spec := result.Target.Pathspec
-		if spec == "" {
-			if result.Outcome == synth.Unchanged {
-				continue
-			}
-			spec = ":(literal)" + result.Target.Symbol.Path
-		}
-		if _, ok := seen[spec]; ok {
-			continue
-		}
-		seen[spec] = struct{}{}
-		specs = append(specs, spec)
-	}
-	return specs
 }
 
 func targetResultPaths(results []synth.TargetResult) []string {

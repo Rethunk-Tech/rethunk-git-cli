@@ -8,6 +8,12 @@ Notable changes to `rgit`. The format follows
 
 ### Fixed
 
+- `commit --only` is safe to run from several processes in one checkout at
+  once: it stages into a private index instead of the shared one and waits
+  its turn behind an OS lock, so every commit lands with exactly its own
+  paths and other staged work stays staged. See
+  [`docs/USAGE.md`](docs/USAGE.md#flags).
+
 - A stuck `gopls` daemon that `rgit` started and whose handshake fails is now
   terminated rather than stranded until its idle timeout (Linux only). `rgit`
   records the daemon's PID beside its socket and signals it only while that

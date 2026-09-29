@@ -569,8 +569,22 @@ func (p *Plan) Apply(ctx context.Context, repo *gitx.Repo, root string) error {
 			staging.abort()
 		}
 	}()
+	if err := p.StageInto(ctx, repo, root, staging.repo); err != nil {
+		return err
+	}
+	if err := staging.swap(); err != nil {
+		return err
+	}
+	swapped = true
+	return nil
+}
+
+// StageInto writes the plan's entries into index's index file, reading
+// modes and objects through repo. Apply wraps it with the atomic swap over
+// the caller's index; `commit --only` stages into a private index instead.
+func (p *Plan) StageInto(ctx context.Context, repo *gitx.Repo, root string, index *gitx.Repo) error {
 	if len(p.pathspecs) > 0 {
-		if err := staging.repo.Add(ctx, p.pathspecs...); err != nil {
+		if err := index.Add(ctx, p.pathspecs...); err != nil {
 			return err
 		}
 	}
@@ -590,14 +604,10 @@ func (p *Plan) Apply(ctx context.Context, repo *gitx.Repo, root string) error {
 		if err != nil {
 			return err
 		}
-		if err := staging.repo.UpdateIndexCacheinfo(ctx, mode, sha, fp.path); err != nil {
+		if err := index.UpdateIndexCacheinfo(ctx, mode, sha, fp.path); err != nil {
 			return err
 		}
 	}
-	if err := staging.swap(); err != nil {
-		return err
-	}
-	swapped = true
 	return nil
 }
 

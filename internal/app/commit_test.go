@@ -2,9 +2,11 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
@@ -258,5 +260,72 @@ func TestCommit_HookFailureRestoresPrestagedState(t *testing.T) {
 		t.Fatal(err)
 	} else if string(after) != string(workA) {
 		t.Errorf("worktree a.go changed by the failed commit: before %q, after %q", workA, after)
+	}
+}
+
+// Concurrent --only commits in one checkout each land exactly their own
+// path, and staged work that belongs to none of them stays staged.
+func TestRunCommit_OnlyConcurrentCommitsAllLand(t *testing.T) {
+	t.Parallel()
+	const workers, rounds = 6, 3
+	dir, _ := gittest.New(t.Context(), t)
+	for i := range workers {
+		gittest.Write(t, dir, fmt.Sprintf("f%d", i), "base\n")
+	}
+	gittest.Write(t, dir, "foreign", "base\n")
+	gittest.Commit(t.Context(), t, dir, "chore: base")
+	gittest.Write(t, dir, "foreign", "staged by someone else\n")
+	gittest.Git(t.Context(), t, dir, "add", "foreign")
+
+	errs := make(chan string, workers*rounds)
+	var wg sync.WaitGroup
+	for i := range workers {
+		wg.Go(func() {
+			name := fmt.Sprintf("f%d", i)
+			content := "base\n"
+			for r := range rounds {
+				content += fmt.Sprintf("w%d r%d\n", i, r)
+				if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+					errs <- err.Error()
+					return
+				}
+				var stdout, stderr strings.Builder
+				msg := fmt.Sprintf("chore(%s): round %d", name, r)
+				if code := runCommit(context.Background(), dir, []string{"--only", "-q", "-m", msg, name}, &stdout, &stderr); code != exitcode.Success {
+					errs <- fmt.Sprintf("%s: %v: %s", msg, code, stderr.String())
+				}
+			}
+		})
+	}
+	wg.Wait()
+	close(errs)
+	for e := range errs {
+		t.Error(e)
+	}
+
+	if got := gittest.Git(t.Context(), t, dir, "rev-list", "--count", "HEAD"); got != fmt.Sprintf("%d\n", workers*rounds+1) {
+		t.Errorf("commit count = %q; want %d", got, workers*rounds+1)
+	}
+	touched := map[string]string{}
+	subject := ""
+	for line := range strings.SplitSeq(gittest.Git(t.Context(), t, dir, "log", "--format=@%s", "--name-only", "HEAD~"+fmt.Sprint(workers*rounds)+"..HEAD"), "\n") {
+		if s, ok := strings.CutPrefix(line, "@"); ok {
+			subject = s
+		} else if line != "" {
+			touched[subject] += line + " "
+		}
+	}
+	for i := range workers {
+		for r := range rounds {
+			if msg := fmt.Sprintf("chore(f%d): round %d", i, r); touched[msg] != fmt.Sprintf("f%d ", i) {
+				t.Errorf("commit %q touched %q; want only f%d", msg, touched[msg], i)
+			}
+		}
+	}
+	if got := gittest.Git(t.Context(), t, dir, "log", "--format=%h", "--", "foreign"); strings.Count(got, "\n") != 1 {
+		t.Errorf("commits touching foreign = %q; want the base commit only", got)
+	}
+	if got := gittest.Git(t.Context(), t, dir, "status", "--porcelain"); got != "M  foreign\n" {
+		t.Errorf("status = %q; want only foreign staged, every committed path clean", got)
 	}
 }
