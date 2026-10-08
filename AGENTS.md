@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Internals for changing this repo. Usage: [HUMANS.md](HUMANS.md). Process: @CONTRIBUTING.md.
+Internals for changing this repo. Usage: [HUMANS.md](HUMANS.md). Process: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## The one invariant
 
