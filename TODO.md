@@ -121,10 +121,6 @@ of which `rgit` can use. Binary cost measured: stdlib 1644 KB, **pflag 1844
 (+12%)**, ffcli 1812, Cobra 2500 (+52%), Kong 3656 (+122%). Completion is
 hand-written because no framework shortens the dynamic `rgit symbols` half.
 
-**A private index was rejected.** Seeding one from HEAD to exclude pre-staged
-work needs snapshot, restore and rollback — roughly a third more mechanism —
-for semantics that diverge from `git add && git commit`.
-
 **The SQL parser is generated at build time, not vendored** (~27 s once, ~7.2 s
 to compile the C). `tree-sitter.json` must be copied beside the grammar or ABI
 14 is emitted silently, and the generated `.c` cannot sit beside the `.go` or
