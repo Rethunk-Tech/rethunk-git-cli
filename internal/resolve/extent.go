@@ -35,7 +35,13 @@ func docStart(lang Language, src []byte, node *ts.Node) uint {
 			if !binds(prev) {
 				return start
 			}
-			gap := src[prev.EndByte():start]
+			// A line comment node may end after its own newline (Rust's does),
+			// which would hide the blank line from the count below.
+			end := prev.EndByte()
+			for end > prev.StartByte() && (src[end-1] == '\n' || src[end-1] == '\r') {
+				end--
+			}
+			gap := src[end:start]
 			if bytes.Count(gap, []byte{'\n'}) > 1 {
 				return start
 			}

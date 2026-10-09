@@ -116,3 +116,13 @@ func TestResolve_RustInnerDocBelongsToTheFile(t *testing.T) {
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".rs", tight, "first"), "pub(crate) mod first;"))
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".rs", src, "f"), "/// Outer doc.\npub fn f() {}"))
 }
+
+// TestResolve_RustDocSeparatedByABlankLineDetaches pins the blank-line rule for
+// Rust, whose line_comment node ends after its own newline: a "///" comment
+// with a blank line before the item is not that item's doc.
+func TestResolve_RustDocSeparatedByABlankLineDetaches(t *testing.T) {
+	t.Parallel()
+	src := []byte("/// Stranded.\n\n/// Attached.\npub fn g() {}\n\n/// Also stranded.\n\npub fn h() {}\n")
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".rs", src, "g"), "/// Attached.\npub fn g() {}"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".rs", src, "h"), "pub fn h() {}"))
+}
