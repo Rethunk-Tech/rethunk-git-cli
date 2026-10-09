@@ -6,6 +6,8 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+## [2.2.2] - 2026-10-09
+
 ### Added
 
 - `.zsh`, `.zshrc`, `.zshenv`, `.zprofile` and `#!/usr/bin/env zsh` scripts resolve `FILE:SYMBOL` anchors through the
@@ -18,6 +20,10 @@ Notable changes to `rgit`. The format follows
   JSON5 language server reports symbols. `commit` refuses the anchor as it does for JSON.
 - `.jsonc` files resolve `FILE:KEY` anchors like JSON, with `//` and `/* */` comments attributed as doc
   comments and the symbol cross-checked against `vscode-json-language-server`.
+
+### Fixed
+
+- A Rust inner doc comment (`//!`, `/*! */`) documents the enclosing module, not the first item below it.
 
 ## [2.2.1] - 2026-10-09
 
