@@ -27,6 +27,22 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 )
 
+// init cuts every test process that imports this package off from the
+// developer's own git configuration, system and global. Ambient settings such
+// as commit.gpgsign=true or gpg.format=ssh otherwise change what git (and the
+// rgit binary the e2e tests exec) does underneath assertions that never
+// mention them. Tests that want a setting write it into their own repository.
+func init() {
+	for key, value := range map[string]string{
+		"GIT_CONFIG_GLOBAL":   os.DevNull,
+		"GIT_CONFIG_NOSYSTEM": "1",
+	} {
+		if err := os.Setenv(key, value); err != nil {
+			panic(err)
+		}
+	}
+}
+
 // New initialises an empty repository in a temp directory and returns it
 // alongside a gitx.Repo rooted there.
 //
