@@ -1,10 +1,14 @@
 # The cgo tree-sitter grammars cost about 115 CPU-s to compile cold, and gates that run together each compile
 # them again before any of them has filled the build cache. Chained, build fills the cache and the rest read it.
+# Race-instrumented, so the -race test below reuses these compiled grammars instead of compiling them a second time.
 [gates.build]
+run = "go build -race ./..."
 serial = true
 
+# GOFLAGS=-race makes lint and govulncheck load packages from the race build above, not compile a plain one.
 [gates.lint]
 serial = true
+env = { GOFLAGS = "-race" }
 
 [gates.test]
 run = "go test -race -short ./..."
@@ -12,3 +16,4 @@ serial = true
 
 [gates.vuln]
 serial = true
+env = { GOFLAGS = "-race" }
