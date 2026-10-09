@@ -48,17 +48,32 @@ files carry the extension.
 
 ### Cross-check baseline
 
-A 220-file fleet corpus, 22 files in each of the ten wired grammars, compares
-**4,920 symbols with 0 disagreements**. That is the number a later run is
-measured against; `make xcheck` runs the same comparison over the committed
-fixtures, and `SYNTH_CORPUS` points the write-side property test at the same
-kind of list.
+A 264-file fleet corpus (2026-10-09: 22 files in each of eleven wired grammars,
+21 `.jsonc`, 1 `.scss`; the fleet holds no `.zsh` file and the Go row is empty
+because Go is not compared against a language server) compares **5,157 symbols
+with 4 disagreements**. That is the number a later run is measured against;
+`make xcheck` runs the same comparison over the committed fixtures, and
+`SYNTH_CORPUS` points the write-side property test at the same kind of list.
+The files are every Nth file of each extension from the fleet checkouts
+(300 bytes to 150 kB, no vendored, built or `testdata` paths), and one run takes
+68 s.
 
-158 anchors go unnamed, and both causes are understood rather than open: 127
-in CSS, where a selector heading several rules cannot be uniquely paired
-(`sameRange`), plus shell variable assignments and repeated names -- see the
-two entries below. An earlier 60-file run of the same shape compared 885 with
-32 unnamed; the ratios move with the corpus, the agreement does not.
+The four disagreements are all inside the vendored `AlbinoGeek/biome` checkout.
+Two are CSS error-recovery fixtures (`declaration_emty.css`, an empty
+declaration `a { ; }`, and `casing.css`, one upper-cased `.attr` rule) where the
+CSS server ends the extent early. Two are Rust: in `biome_*_formatter/src/**/mod.rs`
+the leading `//!` inner doc comment is folded into the extent of the first
+`pub(crate) mod x;`, so tree-sitter's extent starts at line 1 where
+rust-analyzer's is the declaration line alone. The Rust pair is a resolver
+extent defect to fix, not a server limitation.
+
+507 anchors go unnamed: 242 in `.jsonc`, 161 in CSS and 83 in Rust (mostly the
+same biome checkout's generated files), 15 in shell, 3 in TSX, 2 in HTML and
+1 in Go. The CSS and shell causes are understood (a selector heading several
+rules cannot be uniquely paired (`sameRange`), shell variable assignments and
+repeated names -- see the two entries below); the `.jsonc` and Rust counts have
+not been broken down. An earlier 220-file run compared 4,920 symbols with 0
+disagreements and 158 unnamed; the ratios move with the corpus.
 
 ### Ordinal anchors go unpaired when the counts differ
 
