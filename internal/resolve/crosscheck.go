@@ -374,7 +374,23 @@ func qualifyLSPSymbol(s lsp.Symbol, sep string) string {
 	if s.Container == "" {
 		return normalizeAnchorInput(s.Name)
 	}
-	return joinQualified(s.Container, s.Name, sep)
+	return joinQualified(implTypeOf(s.Container), s.Name, sep)
+}
+
+// implTypeOf reduces rust-analyzer's container for an impl block ("impl
+// Config", "impl Render for Config") to the type the resolver qualifies its
+// members by (rustImplContainer), so an associated item compares against the
+// server's symbol instead of going unnamed. Any other container is returned
+// unchanged.
+func implTypeOf(container string) string {
+	rest, ok := strings.CutPrefix(container, "impl ")
+	if !ok {
+		return container
+	}
+	if _, typ, found := strings.Cut(rest, " for "); found {
+		return strings.TrimSpace(typ)
+	}
+	return strings.TrimSpace(rest)
 }
 
 // ParseOrdinal parses docs/ANCHORS.md's positional "Bare#N" anchor form:

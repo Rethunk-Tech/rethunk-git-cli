@@ -527,3 +527,23 @@ func TestTrailingCommentTrimKeepsTheEOFNewline(t *testing.T) {
 		t.Errorf("extent = %q; want no newline invented", got)
 	}
 }
+
+// TestQualifyLSPSymbol_RustImplContainer pins that rust-analyzer's container
+// for an impl block compares as the type the resolver qualifies its members
+// by, so "DisplayedLine<'a>::new" finds its server symbol rather than going
+// unnamed.
+func TestQualifyLSPSymbol_RustImplContainer(t *testing.T) {
+	t.Parallel()
+	for container, want := range map[string]string{
+		"impl Config":            "Config::new",
+		"impl DisplayedLine<'a>": "DisplayedLine<'a>::new",
+		"impl Render for Config": "Config::new",
+		"tests":                  "tests::new",
+		"impl Foo":               "Foo::new",
+	} {
+		got := qualifyLSPSymbol(lsp.Symbol{Name: "new", Container: container}, "::")
+		if got != want {
+			t.Errorf("container %q qualified as %q, want %q", container, got, want)
+		}
+	}
+}

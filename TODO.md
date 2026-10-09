@@ -49,9 +49,9 @@ files carry the extension.
 ### Cross-check baseline
 
 A 264-file fleet corpus (2026-10-09: 22 files in each of eleven wired grammars,
-21 `.jsonc`, 1 `.scss`; the fleet holds no `.zsh` file and the Go row is empty
-because Go is not compared against a language server) compares **5,157 symbols
-with 2 disagreements** (4 before the Rust fix below). That is the number a later run is measured against;
+21 `.jsonc`, 1 `.scss`; the fleet holds no `.zsh` file) compares **5,240 symbols
+with 2 disagreements** (4 before the Rust fix below; 5,157 before Rust impl members were compared).
+That is the number a later run is measured against;
 `make xcheck` runs the same comparison over the committed fixtures, and
 `SYNTH_CORPUS` points the write-side property test at the same kind of list.
 The files are every Nth file of each extension from the fleet checkouts
@@ -66,13 +66,25 @@ until a leading `//!` inner doc comment stopped being folded into the first
 `mod x;` extent (`commentBinder`); rust-analyzer now agrees on all 25 symbols
 in those two files.
 
-507 anchors go unnamed: 242 in `.jsonc`, 161 in CSS and 83 in Rust (mostly the
-same biome checkout's generated files), 15 in shell, 3 in TSX, 2 in HTML and
-1 in Go. The CSS and shell causes are understood (a selector heading several
-rules cannot be uniquely paired (`sameRange`), shell variable assignments and
-repeated names -- see the two entries below); the `.jsonc` and Rust counts have
-not been broken down. An earlier 220-file run compared 4,920 symbols with 0
-disagreements and 158 unnamed; the ratios move with the corpus.
+424 anchors go unnamed (507 before rust-analyzer's `impl Type` containers were
+read as the type, which left every impl member unnamed). By group:
+
+- CSS, 161: expected. 99 are one error-recovery fixture (`casing.css`) of
+  repeated and upper-cased selectors, 44 are `@custom-variant` / `@theme`
+  at-rules the server does not report, 18 are in other stylesheets
+  (`globals.css` 8), mostly selectors heading several rules (`sameRange`).
+- `.jsonc`, 242: all in one 4,000-line `biome.jsonc` (the other 20 files agree on
+  all 794). Not broken down: the likely cause is repeated key names such as
+  `level` under many rules, which the ordinal guard (below) refuses to pair.
+- Shell, 15: expected, variable assignments the server never names (below).
+- TSX, 3: `actual`, `useNavigate` and `skip` in one test file, locals and
+  destructured names; not examined.
+- HTML, 2: ids containing a dot (`a#toc-mod.io`), which the anchor syntax reads
+  as a class separator; a resolver gap, not fixed.
+- Go, 1: the blank identifier `_`; expected.
+
+An earlier 220-file run compared 4,920 symbols with 0 disagreements and 158
+unnamed; the ratios move with the corpus.
 
 ### Ordinal anchors go unpaired when the counts differ
 
