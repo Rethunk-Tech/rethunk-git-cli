@@ -468,7 +468,7 @@ func TestUnlinkDeadSocket_RemovesDeadSocketFile(t *testing.T) {
 	// cannot Parallel: asserts a real connect() against a just-closed unix
 	// listener fails fast enough to fall inside unlinkDeadSocket's
 	// dialBudget window (150ms). Verified flaky under -count=1 alongside
-	// this package's other now-parallel cases (~1 in 15 runs): heavier
+	// this package's other parallel cases (~1 in 15 runs): heavier
 	// concurrent scheduling load widens the gap between ln.Close() and the
 	// dial attempt enough for a stray connect to land inside it. Running
 	// serially keeps that window narrow and the assertion deterministic.

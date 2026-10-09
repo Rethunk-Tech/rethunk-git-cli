@@ -40,8 +40,8 @@ func TestRun_ContextHelpAndUsage(t *testing.T) {
 		} {
 			_, stderr, code := runApp(t, args...)
 			qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-			// n8: context and doctor now share refuseExtraArgs (shared.go),
-			// unifying on doctor's own "unrecognized argument %q" wording.
+			// context and doctor share refuseExtraArgs (shared.go) and its
+			// "unrecognized argument %q" wording.
 			qt.Assert(t, qt.StringContains(stderr, "unrecognized argument"))
 		}
 	})

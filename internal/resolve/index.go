@@ -107,8 +107,7 @@ func (e *ResolveError) Error() string {
 // assertion silently treats a wrapped ResolveError as "some other kind of
 // hard failure" instead of the typed resolution outcome it actually is.
 // Exported so every package needing this reads it from here once, rather
-// than each carrying its own copy the way internal/synth's classify.go used
-// to (isResolveError/asResolveError, now deleted in its favor).
+// than each carrying its own copy.
 func AsResolveError(err error) (*ResolveError, bool) {
 	if rerr, ok := errors.AsType[*ResolveError](err); ok {
 		return rerr, true

@@ -408,7 +408,7 @@ func TestDiff_DefaultScopePicksUpStagedUnstagedAndUntracked(t *testing.T) {
 	if _, ok := findRow(rows, "staged.go", "MOD"); !ok {
 		t.Errorf("default scope missed the staged-only new file staged.go: %+v", rows)
 	}
-	// Untracked, like staged, attributes per symbol now -- there is no
+	// Untracked, like staged, attributes per symbol -- there is no
 	// aggregate UNTRACKED row for a supported language.
 	if _, ok := findRow(rows, "untracked.go", "MOD"); !ok {
 		t.Errorf("default scope missed the untracked file untracked.go: %+v", rows)

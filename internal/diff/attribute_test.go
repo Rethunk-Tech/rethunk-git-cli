@@ -80,8 +80,8 @@ func TestTopLevelComma(t *testing.T) {
 
 // TestAttributeSymbols_GoInlineMultiNameConstFallsBackUnanchorable guards
 // the diff-layer half of lang_go.go's goSpecNameDeclarations fix: "a" and
-// "b" in "const a, b = 1, 2" now both resolve, sharing one extent, since
-// isMultiDeclaratorLang (attribute.go) now includes "go". exclusiveText's
+// "b" in "const a, b = 1, 2" both resolve, sharing one extent, since
+// isMultiDeclaratorLang (attribute.go) includes "go". exclusiveText's
 // own containment check treats two regions with the identical extent as
 // fully nested in each other, so both empty out rather than double-counting
 // the line or mis-attributing the change to whichever name sorts first --

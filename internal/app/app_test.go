@@ -695,8 +695,8 @@ func TestRun_DiffFromSubdirectory(t *testing.T) {
 // So -Ss means the key "s", not "sign plus signoff" -- the reason this
 // cannot be a general shorthand-chain expansion.
 // TestExtForFailedSym pins the lookup directly against
-// *resolve.ResolveError's own Path field, now that validateSym
-// (internal/diff/run.go) populates it: two ResolveErrors naming the
+// *resolve.ResolveError's own Path field, which validateSym
+// (internal/diff/run.go) populates: two ResolveErrors naming the
 // identical bare anchor but different Paths must resolve to their own
 // file's extension, the exact collision the prior allSyms-name-matching
 // implementation could not tell apart.

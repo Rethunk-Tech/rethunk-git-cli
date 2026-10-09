@@ -161,8 +161,8 @@ func classifyOne(ctx context.Context, a string, allowRevisions bool, paths PathC
 	// Rule 5. Try each colon from the LAST leftwards, taking the first
 	// whose left side is a path that exists. Starting at the last keeps a
 	// path that itself contains a colon (having already failed rule 4
-	// whole) splitting exactly as it always has: that candidate is tested
-	// first, so nothing that resolved before resolves differently now.
+	// whole) splitting as a plain colon path does: that candidate is tested
+	// first, so nothing that resolves as a whole path resolves differently.
 	//
 	// Continuing leftwards is what makes a name containing a colon
 	// reachable at all. A CSS anchor routinely carries one -- "a:hover",

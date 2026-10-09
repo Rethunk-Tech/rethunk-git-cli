@@ -137,8 +137,7 @@ func TestRun_CommitRefusesStructuredDataSymbolViaRunApp(t *testing.T) {
 }
 
 // TestRunCommit_CountingWarningsReachStderr proves synth.Plan's
-// CountingWarnings actually reaches a caller now that commit.go reads it,
-// rather than staying dead code. An unreadable untracked file is a real,
+// CountingWarnings reaches a caller through commit.go. An unreadable untracked file is a real,
 // reproducible case where line counts genuinely cannot be computed, not a
 // fake or injected error.
 func TestRunCommit_CountingWarningsReachStderr(t *testing.T) {

@@ -78,8 +78,8 @@ func TestRun_LanguagesAndDoctorOmitSQLWithoutTag(t *testing.T) {
 
 	// commit is not the only command that meets a gated grammar, and a
 	// gated miss is only useful if it says so wherever it happens: symbols
-	// used to refuse the same file with a bare message, leaving the reader
-	// to guess the grammar existed at all.
+	// must not refuse the same file with a bare message that leaves the
+	// reader guessing the grammar exists.
 	t.Run("symbols reports the gated miss the same way commit does", func(t *testing.T) {
 		dir := chdirTempRepo(t)
 		writeAppFile(t, dir, "q.sql", "SELECT 1;\n")

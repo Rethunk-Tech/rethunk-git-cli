@@ -116,7 +116,7 @@ div {
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", commaList, ".b"),
 		".a, .b {\n  color: red;\n}"))
 
-	// ".a" now names two real rules -- the group and the standalone one --
+	// ".a" names two real rules -- the group and the standalone one --
 	// so it is ambiguous rather than silently picking one, the same
 	// collision behaviour every other language gets, with ordinals to
 	// disambiguate.
@@ -129,7 +129,7 @@ div {
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".css", commaList, ".a#2"),
 		".a {\n  color: blue;\n}"))
 
-	// The whole list is no longer a name anything answers to.
+	// The whole list is not a name anything answers to.
 	_, err = resolve.Resolve(lang, commaList, ".a, .b")
 	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
 	qt.Assert(t, qt.Equals(unresolvable.Code, exitcode.AnchorUnresolvable))
@@ -144,7 +144,7 @@ div {
 		"h1:is(h2, h3) {\n  color: red;\n}"))
 
 	// Native CSS Nesting (tree-sitter-css v0.25.0): a rule_set directly
-	// inside another rule_set's own block is now addressable, qualified by
+	// inside another rule_set's own block is addressable, qualified by
 	// its immediate parent's own selector text through a literal space --
 	// the descendant combinator CSS itself would use to flatten the same
 	// nesting -- not the dot every other adapter's own Container

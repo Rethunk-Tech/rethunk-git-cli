@@ -185,7 +185,7 @@ func DeclOrder(lang Language, src []byte) ([]string, error) {
 
 // DeclExtents returns each top-level declaration's anchor and extent in src,
 // in source order — DeclOrder's table with the extent kept. Exported for the
-// same reason DeclOrder is: the qualification rules, and now the extent each
+// same reason DeclOrder is: the qualification rules, and the extent each
 // anchor names, have exactly one implementation to disagree with.
 func DeclExtents(lang Language, src []byte) ([]Declared, error) {
 	f, err := Open(lang, src)

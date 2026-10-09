@@ -63,7 +63,7 @@ func (c *cssLanguage) MembersSitFlush() bool { return false }
 // (ruleSetDeclarations), so an anchor names exactly one selector and pairs
 // with vscode-css-language-server's own symbol directly. The group-member
 // fallback exists for a language whose declaration carries several names in
-// one anchor; CSS no longer is one.
+// one anchor; CSS is not one.
 func (c *cssLanguage) GroupedAnchors() bool { return false }
 
 // AllowsRawHeadingFallback is inherited from defaultLanguage: CSS has no

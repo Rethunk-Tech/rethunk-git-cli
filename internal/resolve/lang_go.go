@@ -162,8 +162,8 @@ func goSpecDeclarations(node *ts.Node, src []byte) []Declaration {
 // keyword) coming along too, the same constraint goStructFields' shared
 // "A, B int" field line hits. Rather than resolve only the first name and
 // leave the rest silently unaddressable, every name here shares the
-// identical extent: resolving "b" now finds the whole spec, same as "a"
-// already did, instead of reporting b unresolvable. type_spec and
+// identical extent: resolving "b" finds the whole spec, same as "a",
+// instead of reporting b unresolvable. type_spec and
 // type_alias carry exactly one name, so this is a no-op split for them --
 // ChildByFieldName's own single-match behavior, generalized to read every
 // match rather than just the first.
