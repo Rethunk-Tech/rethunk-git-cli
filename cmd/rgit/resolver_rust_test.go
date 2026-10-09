@@ -96,3 +96,11 @@ mod tests {
 	// @imports spans the use declarations, never an item.
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".rs", src, "@imports"), "use std::fmt;"))
 }
+
+// TestResolve_RustHeader pins @header to the inner attribute run a file
+// opens with, stopping before the first item.
+func TestResolve_RustHeader(t *testing.T) {
+	t.Parallel()
+	src := []byte("#![allow(dead_code)]\n#![no_std]\n\nuse core::fmt;\n\npub fn f() {}\n")
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".rs", src, "@header"), "#![allow(dead_code)]\n#![no_std]"))
+}

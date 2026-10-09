@@ -149,3 +149,19 @@ func TestPlanStage_StagesNewSiblingsTheAnchorReferences(t *testing.T) {
 	qt.Assert(t, qt.IsTrue(strings.Contains(staged, "export type VideoPromptOverride = SvdVideoPrompt | TextToVideoPrompt;")))
 	qt.Assert(t, qt.IsFalse(strings.Contains(staged, "seconds")))
 }
+
+// TestStage_RustFieldSitsFlush pins Rust's MembersSitFlush: a new struct
+// field staged into a struct HEAD already has lands directly under its
+// sibling, with no blank line invented between them.
+func TestStage_RustFieldSitsFlush(t *testing.T) {
+	t.Parallel()
+	head := "pub struct Config {\n    pub name: String,\n}\n"
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "lib.rs", head, "chore: initial lib.rs")
+
+	work := "pub struct Config {\n    pub name: String,\n    pub size: usize,\n}\n"
+	gittest.Write(t, dir, "lib.rs", work)
+
+	err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("lib.rs", "Config::size")})
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(stagedBlob(t, repo, "lib.rs"), work))
+}
