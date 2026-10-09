@@ -52,26 +52,22 @@ func (s contentSide) read(ctx context.Context, repo *gitx.Repo, root, path strin
 	case sideIndex:
 		// CatFile builds rev+":"+path; an empty rev yields ":path", which
 		// git reads as the index's stage-0 entry.
-		unmerged, err := repo.IsUnmerged(ctx, path)
-		if err != nil {
-			return nil, false, err
+		var unmerged bool
+		if cache != nil && cache.unmerged != nil {
+			unmerged = cache.unmerged[path]
+		} else {
+			var err error
+			if unmerged, err = repo.IsUnmerged(ctx, path); err != nil {
+				return nil, false, err
+			}
 		}
 		if unmerged {
 			return util.ReadFileIfExists(root, path)
 		}
-		if cache != nil {
-			if res, ok := cache.lookup("", path); ok {
-				if res.Exists {
-					return res.Content, true, nil
-				}
-				return readUnmergedWorktree(ctx, repo, root, path)
-			}
+		if res, ok := cache.lookup("", path); ok {
+			return res.Content, res.Exists, nil
 		}
-		content, exists, err := repo.CatFile(ctx, "", path)
-		if err != nil || exists {
-			return content, exists, err
-		}
-		return readUnmergedWorktree(ctx, repo, root, path)
+		return repo.CatFile(ctx, "", path)
 	case sideRev:
 		if cache != nil {
 			if res, ok := cache.lookup(s.rev, path); ok {
@@ -81,17 +77,6 @@ func (s contentSide) read(ctx context.Context, repo *gitx.Repo, root, path strin
 		return repo.CatFile(ctx, s.rev, path)
 	}
 	return nil, false, fmt.Errorf("diff: unknown content side kind %d", s.kind)
-}
-
-func readUnmergedWorktree(ctx context.Context, repo *gitx.Repo, root, path string) ([]byte, bool, error) {
-	unmerged, err := repo.IsUnmerged(ctx, path)
-	if err != nil {
-		return nil, false, err
-	}
-	if !unmerged {
-		return nil, false, nil
-	}
-	return util.ReadFileIfExists(root, path)
 }
 
 // mode returns the git file mode recorded for path on this side, for
@@ -136,6 +121,9 @@ func (s contentSide) mode(ctx context.Context, repo *gitx.Repo, root, path strin
 // cache needs to guard against with its own error path.
 type blobCache struct {
 	byKey map[string]gitx.BatchCatFileResult
+	// unmerged is the index's unmerged paths, listed once; nil when the
+	// scope never reads the index.
+	unmerged map[string]bool
 }
 
 func blobCacheKey(rev, path string) string { return rev + ":" + path }
@@ -156,6 +144,13 @@ func (c *blobCache) lookup(rev, path string) (gitx.BatchCatFileResult, bool) {
 // names differ; every other change repeats the same path in both).
 func prefetchBlobs(ctx context.Context, repo *gitx.Repo, scope Scope, oldPaths, newPaths []string) (*blobCache, error) {
 	var requests []gitx.BatchCatFileRequest
+	var unmerged map[string]bool
+	if scope.Old.kind == sideIndex || scope.New.kind == sideIndex {
+		var err error
+		if unmerged, err = repo.UnmergedPaths(ctx); err != nil {
+			return nil, err
+		}
+	}
 	addSide := func(s contentSide, path string) {
 		switch s.kind {
 		case sideWorktree:
@@ -171,7 +166,7 @@ func prefetchBlobs(ctx context.Context, repo *gitx.Repo, scope Scope, oldPaths, 
 		addSide(scope.New, newPaths[i])
 	}
 	if len(requests) == 0 {
-		return &blobCache{byKey: map[string]gitx.BatchCatFileResult{}}, nil
+		return &blobCache{byKey: map[string]gitx.BatchCatFileResult{}, unmerged: unmerged}, nil
 	}
 
 	results, err := repo.BatchCatFile(ctx, requests)
@@ -182,7 +177,7 @@ func prefetchBlobs(ctx context.Context, repo *gitx.Repo, scope Scope, oldPaths, 
 	for i, req := range requests {
 		byKey[blobCacheKey(req.Rev, req.Path)] = results[i]
 	}
-	return &blobCache{byKey: byKey}, nil
+	return &blobCache{byKey: byKey, unmerged: unmerged}, nil
 }
 
 // Scope is one resolved rgit diff scope: the two sides to compare for

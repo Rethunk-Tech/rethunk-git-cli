@@ -303,3 +303,43 @@ func TestExtractRangeToken_DetectsRangeNotAPath(t *testing.T) {
 		}
 	})
 }
+
+func TestPrefetchBlobs_IndexSideListsUnmergedOnce(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "a.txt", "a\n", "chore: add a")
+	gittest.Write(t, dir, "a.txt", "b\n")
+	gittest.Git(t.Context(), t, dir, "add", "a.txt")
+
+	scope := Scope{Old: revSide("HEAD"), New: indexSide()}
+	cache, err := prefetchBlobs(t.Context(), repo, scope, []string{"a.txt"}, []string{"a.txt"})
+	if err != nil {
+		t.Fatalf("prefetchBlobs: %v", err)
+	}
+
+	// A cancelled context fails any git subprocess, so success proves the
+	// read answered from the cache without spawning ls-files per path.
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	content, exists, err := indexSide().read(ctx, repo, dir, "a.txt", cache)
+	if err != nil || !exists || string(content) != "b\n" {
+		t.Fatalf("indexSide.read = %q, %v, %v; want \"b\\n\", true, nil", content, exists, err)
+	}
+}
+
+func TestPrefetchBlobs_UnmergedPathReadsWorktree(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "conflict.txt", "base\n", "chore: add conflict fixture")
+	gittest.Write(t, dir, "conflict.txt", "<<<<<<<\n")
+	blob := strings.TrimSpace(gittest.Git(t.Context(), t, dir, "rev-parse", "HEAD:conflict.txt"))
+	gittest.Unmerged(t.Context(), t, dir, blob, "conflict.txt")
+
+	scope := Scope{Old: revSide("HEAD"), New: indexSide()}
+	cache, err := prefetchBlobs(t.Context(), repo, scope, []string{"conflict.txt"}, []string{"conflict.txt"})
+	if err != nil {
+		t.Fatalf("prefetchBlobs: %v", err)
+	}
+	content, exists, err := indexSide().read(t.Context(), repo, dir, "conflict.txt", cache)
+	if err != nil || !exists || string(content) != "<<<<<<<\n" {
+		t.Fatalf("indexSide.read = %q, %v, %v; want worktree content", content, exists, err)
+	}
+}

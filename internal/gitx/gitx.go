@@ -685,6 +685,22 @@ func (r *Repo) IsUnmerged(ctx context.Context, path string) (bool, error) {
 	return len(bytes.TrimSpace(out)) > 0, nil
 }
 
+// UnmergedPaths returns the set of every path with unmerged index entries,
+// in one `git ls-files -u` call.
+func (r *Repo) UnmergedPaths(ctx context.Context) (map[string]bool, error) {
+	out, err := r.checked(ctx, "ls-files", "-u", "-z")
+	if err != nil {
+		return nil, err
+	}
+	paths := map[string]bool{}
+	for rec := range strings.SplitSeq(string(out), "\x00") {
+		if _, path, ok := strings.Cut(rec, "\t"); ok {
+			paths[path] = true
+		}
+	}
+	return paths, nil
+}
+
 // SequencerOp reports the active git operation, if any. The pseudo-refs are
 // checked in precedence order because git can leave more than one around
 // while an operation is being continued.
