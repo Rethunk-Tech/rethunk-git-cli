@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Rethunk-Tech/gh-actions/setup-go@77071f0a197d38f7d90c9acf67547fdd990f269a # v1.14
+      - uses: Rethunk-Tech/gh-actions/setup-go@1417493f40c23b8826601ac9de8d7abda0b84ec6 # v1.15
         with:
           run-lint: "true"
           run-govulncheck: "true"
@@ -54,7 +54,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Rethunk-Tech/gh-actions/setup-go@77071f0a197d38f7d90c9acf67547fdd990f269a # v1.14
+      - uses: Rethunk-Tech/gh-actions/setup-go@1417493f40c23b8826601ac9de8d7abda0b84ec6 # v1.15
       # The unit lane is where the guarantee lives (CONTRIBUTING.md § Tests):
       # a regression must fail here. -short skips only the built-binary
       # end-to-end file and the live-server cross-checks, so this job
@@ -69,7 +69,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Rethunk-Tech/gh-actions/setup-go@77071f0a197d38f7d90c9acf67547fdd990f269a # v1.14
+      - uses: Rethunk-Tech/gh-actions/setup-go@1417493f40c23b8826601ac9de8d7abda0b84ec6 # v1.15
       # cmd/rgit-install's own tests (TestRunPrereqChecks, TestFindSQLAdapter)
       # assert tree-sitter's PATH presence for the prereq check itself -- not
       # a build-time SQL lane (this file's own top comment).
@@ -116,7 +116,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Rethunk-Tech/gh-actions/setup-go@77071f0a197d38f7d90c9acf67547fdd990f269a # v1.14
+      - uses: Rethunk-Tech/gh-actions/setup-go@1417493f40c23b8826601ac9de8d7abda0b84ec6 # v1.15
       # Same toolchain release.yml drives: rgit links tree-sitter through
       # cgo, so every target needs a real C compiler (docs/INSTALL.md § Cross
       # builds). setup-zig caches zig's global cache itself.
@@ -162,7 +162,7 @@ jobs:
       GOPLS_VERSION: v0.23.0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Rethunk-Tech/gh-actions/setup-go@77071f0a197d38f7d90c9acf67547fdd990f269a # v1.14
+      - uses: Rethunk-Tech/gh-actions/setup-go@1417493f40c23b8826601ac9de8d7abda0b84ec6 # v1.15
         id: go
 
       # Compiling gopls is ~40s; the binary depends only on its own version
