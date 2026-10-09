@@ -475,3 +475,10 @@ func TestParserABIVersion(t *testing.T) {
 		qt.Assert(t, qt.IsNotNil(err))
 	})
 }
+
+func TestCgoCFlagsWithHash_KeepsGoDefaults(t *testing.T) {
+	t.Parallel()
+	got := cgoCFlagsWithHash(t.TempDir(), os.Environ(), "abc")
+	qt.Assert(t, qt.IsTrue(strings.Contains(got, "-O2")))
+	qt.Assert(t, qt.IsTrue(strings.HasSuffix(got, "-DRGIT_SQL_CSRC_HASH=abc")))
+}

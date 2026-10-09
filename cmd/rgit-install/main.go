@@ -665,11 +665,7 @@ func runInstall(repoRoot string, sql bool, sqlPkgDir, ver, prefix string) error 
 		// build itself to report -- it will fail with a much clearer
 		// "no such file" than anything worth synthesizing here.
 		if hash, herr := sqlCSRCContentHash(sqlPkgDir); herr == nil {
-			flag := "-DRGIT_SQL_CSRC_HASH=" + hash
-			if existing := os.Getenv("CGO_CFLAGS"); existing != "" {
-				flag = existing + " " + flag
-			}
-			env = append(env, "CGO_CFLAGS="+flag)
+			env = append(env, "CGO_CFLAGS="+cgoCFlagsWithHash(repoRoot, env, hash))
 		}
 	}
 	cmd.Env = env
@@ -679,6 +675,23 @@ func runInstall(repoRoot string, sql bool, sqlPkgDir, ver, prefix string) error 
 		return fmt.Errorf("go install: %w: %s", err, stderr.String())
 	}
 	return nil
+}
+
+// cgoCFlagsWithHash appends the csrc cache-busting macro to the effective
+// CGO_CFLAGS. Go's default (-O2 -g) lives in `go env`, not os.Environ, so
+// starting from the process environment alone would replace it and compile
+// the grammar C unoptimized.
+func cgoCFlagsWithHash(dir string, env []string, hash string) string {
+	flag := "-DRGIT_SQL_CSRC_HASH=" + hash
+	cmd := exec.CommandContext(context.Background(), "go", "env", "CGO_CFLAGS")
+	cmd.Dir = dir
+	cmd.Env = env
+	if out, err := cmd.Output(); err == nil {
+		if existing := strings.TrimSpace(string(out)); existing != "" {
+			return existing + " " + flag
+		}
+	}
+	return flag
 }
 
 // sqlCSRCContentHash hashes every file under pkgDir/csrc, in path order, so
