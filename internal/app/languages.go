@@ -16,6 +16,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/diff"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
@@ -152,7 +153,7 @@ func renderLanguages(langs []resolve.LanguageInfo) string {
 	}
 	// Writes go to a strings.Builder, which never fails.
 	_ = tw.Flush()
-	return buf.String()
+	return diff.TrimLineEnds(buf.String())
 }
 
 // renderLanguagesPorcelain renders langs as docs/CODES.md's stable

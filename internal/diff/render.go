@@ -3,6 +3,7 @@ package diff
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"text/tabwriter"
 )
 
@@ -28,7 +29,7 @@ func RenderText(report *Report) string {
 	}
 	// Writes go to a bytes.Buffer, which never fails.
 	_ = tw.Flush()
-	return buf.String()
+	return TrimLineEnds(buf.String())
 }
 
 // rowLabel is the second column: the symbol name for an ordinary row, or
@@ -124,3 +125,8 @@ func unanchorableHint(path, lang string) string {
 	}
 	return "-> use --file " + path
 }
+
+var trailingSpace = regexp.MustCompile(`(?m)[ \t]+$`)
+
+// TrimLineEnds drops the padding tabwriter writes after an empty last cell.
+func TrimLineEnds(s string) string { return trailingSpace.ReplaceAllString(s, "") }

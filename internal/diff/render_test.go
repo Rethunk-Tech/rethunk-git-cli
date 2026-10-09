@@ -127,3 +127,15 @@ func TestRowLabelAndRowHint_ThinStatuses(t *testing.T) {
 		}
 	})
 }
+
+func TestRenderText_NoTrailingWhitespace(t *testing.T) {
+	t.Parallel()
+	report := &Report{Files: []FileReport{
+		{Path: "a.go", Rows: []Row{{Symbol: "F1", Status: StatusMod, Added: "1", Deleted: "1"}}, lang: "go"},
+	}}
+	for line := range strings.SplitSeq(RenderText(report), "\n") {
+		if line != strings.TrimRight(line, " \t") {
+			t.Errorf("line ends in whitespace: %q", line)
+		}
+	}
+}
