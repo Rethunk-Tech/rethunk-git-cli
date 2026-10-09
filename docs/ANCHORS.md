@@ -206,6 +206,7 @@ extensions:
 | YAML | `.yaml`, `.yml` | Mapping keys, container-qualified one level the same way a Markdown heading is. Sequence items and anything inside a flow-style `{...}`/`[...]` value have no name to address |
 | CSS | `.css` | Selectors and at-rules. `.scss`/`.sass` unsupported — see [`LIMITATIONS.md`](LIMITATIONS.md#unsupported-languages) |
 | JSON | `.json` | Object key paths, container-qualified one level the same way a YAML mapping key is. Arrays and non-object documents have nothing to address |
+| JSONC | `.jsonc` | As JSON, with `//` and `/* */` comments as doc comments. A trailing comma parses as an error node, so keys after it are not indexed |
 | TOML | `.toml` | Key paths and `[table]`/`[[array]]` headers, container-qualified one level. Inline tables and arrays have nothing to address inside them |
 | HTML | `.html`, `.htm` | An id-bearing element, tag-qualified (`div#app`), to any nesting depth. An element with no id has no anchor of its own — see [`LIMITATIONS.md`](LIMITATIONS.md#constructs-no-anchor-reaches) |
 | SQL | `.sql` | `CREATE TABLE`/`VIEW`/`FUNCTION`/`INDEX`/`TRIGGER`/`TYPE`, schema-qualified one level. Ships behind the `rgit_sql` build tag ([`INSTALL.md`](INSTALL.md#sql-support)) |

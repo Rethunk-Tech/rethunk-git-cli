@@ -86,6 +86,7 @@ XCHECK_CORPUS ?= \
 	internal/resolve/testdata/xcheck/panel.tsx \
 	internal/resolve/testdata/xcheck/page.html \
 	internal/resolve/testdata/xcheck/manifest.json \
+	internal/resolve/testdata/xcheck/settings.jsonc \
 	internal/app/show.go \
 	AGENTS.md \
 	.github/workflows/ci.yml \

@@ -113,6 +113,12 @@ var servers = map[string]serverSpec{
 		transport: transportStdio,
 		stdioArgs: []string{"--stdio"},
 	},
+	"jsonc": {
+		name:      "vscode-json-language-server",
+		bin:       "vscode-json-language-server",
+		transport: transportStdio,
+		stdioArgs: []string{"--stdio"},
+	},
 	"css": {
 		name:      "vscode-css-language-server",
 		bin:       "vscode-css-language-server",

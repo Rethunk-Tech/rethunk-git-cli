@@ -6,6 +6,11 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `.jsonc` files resolve `FILE:KEY` anchors like JSON, with `//` and `/* */` comments attributed as doc
+  comments and the symbol cross-checked against `vscode-json-language-server`.
+
 ## [2.2.1] - 2026-10-09
 
 ### Added

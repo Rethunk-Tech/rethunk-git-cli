@@ -502,6 +502,7 @@ css         .css
 go          .go
 html        .html .htm
 json        .json
+jsonc       .jsonc
 markdown    .md .markdown .mdx
 python      .py .pyi
 rust        .rs

@@ -366,6 +366,9 @@ func LanguageKindFor(path string) (kind protocol.LanguageKind, ok bool) {
 		return protocol.LanguageKindYAML, true
 	case ".json":
 		return protocol.LanguageKindJSON, true
+	case ".jsonc":
+		// No protocol constant: "jsonc" is the languageId VS Code's JSON server keys comment tolerance on.
+		return protocol.LanguageKind("jsonc"), true
 	case ".css":
 		return protocol.LanguageKindCSS, true
 	case ".md", ".markdown":

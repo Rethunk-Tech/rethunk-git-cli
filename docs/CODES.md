@@ -228,6 +228,7 @@ css<TAB>.css<TAB>0<TAB>wired
 go<TAB>.go<TAB>0<TAB>wired
 html<TAB>.html .htm<TAB>0<TAB>wired
 json<TAB>.json<TAB>0<TAB>wired
+jsonc<TAB>.jsonc<TAB>0<TAB>wired
 markdown<TAB>.md .markdown<TAB>0<TAB>wired
 python<TAB>.py .pyi<TAB>0<TAB>wired
 shell<TAB>.sh .bash<TAB>0<TAB>wired

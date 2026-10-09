@@ -1,0 +1,10 @@
+// editor settings
+{
+  // indentation
+  "editor": {
+    "tabSize": 2,
+    "wordWrap": "on"
+  },
+  /* the project name */
+  "name": "fixture"
+}

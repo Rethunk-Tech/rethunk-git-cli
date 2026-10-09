@@ -81,13 +81,16 @@ func (j *jsonLanguage) Declarations(src []byte, root *ts.Node) []Declaration {
 	return objectDeclarations(value, "", src)
 }
 
-// topValue returns document's own single value child: "document" wraps
-// exactly one named child, whatever JSON value the file's top level is.
+// topValue returns document's own value: the first named child that is not a
+// comment. JSONC puts comments ahead of the value, and a comment is a
+// named child of document the same as the value is.
 func topValue(root *ts.Node) *ts.Node {
-	if root.NamedChildCount() == 0 {
-		return nil
+	for _, child := range namedChildren(root) {
+		if child.Kind() != "comment" {
+			return &child
+		}
 	}
-	return root.NamedChild(0)
+	return nil
 }
 
 // objectDeclarations walks object's own "pair" children. A pair whose value
