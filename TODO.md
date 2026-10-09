@@ -13,8 +13,7 @@ constructs no anchor reaches — are in
 
 ### Not queued
 
-`rgit context` staged/unstaged split — it would be a second `diffpkg.Run` for a
-bit `STATUS` never carried. SCSS, zsh, JSONC, JSON5. Include-style pathspec
+SCSS, zsh, JSONC, JSON5. Include-style pathspec
 flags. Any web surface: this is a CLI.
 
 **Staging without committing** — `rgit commit --stage-only`, or a separate

@@ -35,3 +35,32 @@ func (r *Repo) SparseCheckout(ctx context.Context) (bool, error) {
 		return false, gitError(args, res)
 	}
 }
+
+// ChangedPaths lists the paths whose index differs from HEAD (staged) and
+// whose worktree differs from the index (unstaged), each via `git diff
+// --name-only -z` so no path-quoting rules apply. Untracked files are in
+// neither list.
+func (r *Repo) ChangedPaths(ctx context.Context) (staged, unstaged []string, err error) {
+	names := func(extra string) ([]string, error) {
+		args := []string{"diff", "--name-only", "-z", "--no-renames"}
+		if extra != "" {
+			args = append(args, extra)
+		}
+		out, cerr := r.checked(ctx, args...)
+		if cerr != nil {
+			return nil, cerr
+		}
+		trimmed := strings.Trim(string(out), "\x00")
+		if trimmed == "" {
+			return nil, nil
+		}
+		return strings.Split(trimmed, "\x00"), nil
+	}
+	if staged, err = names("--cached"); err != nil {
+		return nil, nil, err
+	}
+	if unstaged, err = names(""); err != nil {
+		return nil, nil, err
+	}
+	return staged, unstaged, nil
+}

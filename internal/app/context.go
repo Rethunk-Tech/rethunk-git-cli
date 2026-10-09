@@ -15,6 +15,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -71,6 +72,10 @@ Records, one per line, tab-separated, no header:
       stream's own leading type tag. See docs/CODES.md#output-records for
       what STATUS carries.
 
+  T<TAB>FILE<TAB>WHERE
+      One per changed file, in F-row order: where its change sits, staged,
+      unstaged, both, or untracked.
+
   C<TAB>HASH<TAB>SUBJECT
       One per recent commit, newest first, bounded to the last 20.
 
@@ -79,7 +84,7 @@ Records, one per line, tab-separated, no header:
       the stream reached its byte budget.
 
 The whole stream is capped at 16 KiB. B or H sorts first (a single record, cost
-next to nothing), then S, W diagnostics, F rows, and C rows. F rows survive
+next to nothing), then S, W diagnostics, F rows, T rows, and C rows. F rows survive
 truncation before C rows do: the diff section has no natural bound of its own,
 while commits are already bounded up front (the most recent 20, via git's own
 -n) and cost little to drop. The X record names how many rows were withheld.
@@ -176,6 +181,15 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 		return exitcode.GitFailure
 	}
 
+	// Which side each changed file is on is two cheap name-only queries, not
+	// a second attribution pass: the F rows stay the combined diff, and the
+	// T records below say where each file's change sits.
+	staged, unstaged, err := repo.ChangedPaths(ctx)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return exitcode.GitFailure
+	}
+
 	// Same diagnostics rgit diff itself prints for the identical report,
 	// on stderr rather than folded into the record stream.
 	if report.TSOnly {
@@ -224,6 +238,7 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 			records = append(records, "F\t"+line+"\n")
 		}
 	}
+	records = append(records, stageRecords(report, staged, unstaged)...)
 	for _, c := range commits {
 		records = append(records, fmt.Sprintf("C\t%s\t%s\n", c.Hash, c.Subject))
 	}
@@ -275,4 +290,25 @@ func buildContextStream(records []string, budget int) string {
 	}
 	fmt.Fprintf(&buf, "X\tTRUNCATED\t%d\n", len(records)-kept)
 	return buf.String()
+}
+
+// stageRecords renders one T record per file in the diff report: where its
+// change sits, `staged`, `unstaged`, `both`, or `untracked`. Files appear
+// in the order the F rows do, so a reader can pair them.
+func stageRecords(report *diffpkg.Report, staged, unstaged []string) []string {
+	var out []string
+	for _, f := range report.Files {
+		inStaged, inUnstaged := slices.Contains(staged, f.Path), slices.Contains(unstaged, f.Path)
+		where := "untracked"
+		switch {
+		case inStaged && inUnstaged:
+			where = "both"
+		case inStaged:
+			where = "staged"
+		case inUnstaged:
+			where = "unstaged"
+		}
+		out = append(out, fmt.Sprintf("T\t%s\t%s\n", f.Path, where))
+	}
+	return out
 }

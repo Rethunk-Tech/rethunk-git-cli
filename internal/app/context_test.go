@@ -146,7 +146,7 @@ func TestRun_ContextRecordsAreTabSeparatedWithExpectedFieldCounts(t *testing.T) 
 			qt.Assert(t, qt.Equals(len(fields), 5))
 		case "H", "S":
 			qt.Assert(t, qt.Equals(len(fields), 2))
-		case "C":
+		case "C", "T":
 			qt.Assert(t, qt.Equals(len(fields), 3))
 		case "F":
 			qt.Assert(t, qt.Equals(len(fields), 6))
@@ -322,4 +322,28 @@ func TestBuildContextStream(t *testing.T) {
 		withoutWGot := buildContextStream(withoutW, budget)
 		qt.Assert(t, qt.StringContains(withoutWGot, records[3]))
 	})
+}
+
+// TestRun_ContextReportsStagedAndUnstagedSeparately pins the T records: one
+// per changed file saying which side its change sits on, while the F rows
+// stay the combined diff.
+func TestRun_ContextReportsStagedAndUnstagedSeparately(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t) // commits a.go
+	writeAppFile(t, dir, "staged.txt", "one\n")
+	gitOut(t, dir, "add", "staged.txt")
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 9\n}\n")
+	writeAppFile(t, dir, "both.txt", "one\n")
+	gitOut(t, dir, "add", "both.txt")
+	writeAppFile(t, dir, "both.txt", "one\ntwo\n")
+	writeAppFile(t, dir, "new.txt", "untracked\n")
+
+	stdout, _, code := runApp(t, "-C", dir, "context")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(stdout, "T\tstaged.txt\tstaged\n"))
+	qt.Assert(t, qt.StringContains(stdout, "T\ta.go\tunstaged\n"))
+	qt.Assert(t, qt.StringContains(stdout, "T\tboth.txt\tboth\n"))
+	qt.Assert(t, qt.StringContains(stdout, "T\tnew.txt\tuntracked\n"))
+	qt.Assert(t, qt.IsTrue(strings.LastIndex(stdout, "F\t") < strings.Index(stdout, "T\t")))
+	qt.Assert(t, qt.IsTrue(strings.LastIndex(stdout, "T\t") < strings.Index(stdout, "C\t")))
 }

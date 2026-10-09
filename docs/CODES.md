@@ -313,12 +313,14 @@ W<TAB>ts-only
 W<TAB>warning<TAB>extent disagreement reported on stderr
 F<TAB>auth.go<TAB>ValidateToken<TAB>MOD<TAB>12<TAB>3
 F<TAB>config.ini<TAB><TAB>UNTRACKED<TAB>4<TAB>0
+T<TAB>auth.go<TAB>both
+T<TAB>config.ini<TAB>untracked
 C<TAB>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2<TAB>fix(auth): reject expired tokens
 C<TAB>9e8f7d6c5b4a9e8f7d6c5b4a9e8f7d6c5b4a9e8f<TAB>feat(auth): add ValidateToken
 X<TAB>TRUNCATED<TAB>3
 ```
 
-Seven record types, distinguished by the first field:
+Eight record types, distinguished by the first field:
 
 | Type | Fields after the type tag | Means |
 | --- | --- | --- |
@@ -330,11 +332,12 @@ Seven record types, distinguished by the first field:
 | `W` | `sparse` | One when `core.sparseCheckout` is true |
 | `W` | `warning`, `TEXT` | One per non-fatal diff warning. `TEXT` is the warning body without the human `[warning]` prefix; the identical `[warning] TEXT` line remains on stderr |
 | `F` | `FILE`, `SYMBOL`, `STATUS`, `ADDED`, `DELETED` | One `rgit diff --porcelain` row, identical fields — `STATUS` is the same six tokens § Output records defines above |
+| `T` | `FILE`, `WHERE` | One per file in the `F` rows, in their order: `WHERE` is `staged`, `unstaged`, `both` or `untracked` |
 | `C` | `HASH`, `SUBJECT` | One recent commit, newest first, bounded to the last 20 |
 | `X` | `TRUNCATED`, `COUNT` | At most one, always last: `COUNT` records were withheld to hold the 16 KiB byte budget |
 
 **A `B` or `H` record, when present, always sorts first, `S` follows it, `W`
-diagnostics follow that, and `F` records always precede `C` records** — a breaking change from the
+diagnostics follow that, and `F` records always precede `T` records, which precede `C` records** — a breaking change from the
 original commits-first order — **while an `X` record, when present, is always
 the last line.**
 

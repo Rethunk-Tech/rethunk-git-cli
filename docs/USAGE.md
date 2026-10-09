@@ -399,6 +399,8 @@ W<TAB>ts-only
 W<TAB>warning<TAB>extent disagreement reported on stderr
 F<TAB>auth.go<TAB>ValidateToken<TAB>MOD<TAB>12<TAB>3
 F<TAB>config.ini<TAB><TAB>UNTRACKED<TAB>4<TAB>0
+T<TAB>auth.go<TAB>both
+T<TAB>config.ini<TAB>untracked
 C<TAB>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2<TAB>fix(auth): reject expired tokens
 C<TAB>9e8f7d6c5b4a9e8f7d6c5b4a9e8f7d6c5b4a9e8f<TAB>feat(auth): add ValidateToken
 ```
@@ -414,7 +416,7 @@ call.
 **The output shape is fixed and takes no flags beyond `--help`.** A command
 with options becomes `git status` with extra steps — see
 [`AGENTS.md`](../AGENTS.md) for why the shape stays
-fixed rather than growing one. Seven record types, tab-separated, no header:
+fixed rather than growing one. Eight record types, tab-separated, no header:
 
 | Record | Fields | Meaning |
 | --- | --- | --- |
@@ -426,6 +428,7 @@ fixed rather than growing one. Seven record types, tab-separated, no header:
 | `W` | `sparse` | One when `core.sparseCheckout` is true. Absent on a full checkout |
 | `W` | `warning`, `TEXT` | One per non-fatal diff warning. `TEXT` is the warning body without the human `[warning]` prefix; the identical `[warning] TEXT` line remains on stderr |
 | `F` | `FILE`, `SYMBOL`, `STATUS`, `ADDED`, `DELETED` | One per `rgit diff --porcelain` row — identical fields, plus this stream's own leading type tag |
+| `T` | `FILE`, `WHERE` | One per file in the `F` rows, in their order: where its change sits, `staged`, `unstaged`, `both` or `untracked`. Two name-only git queries, not a second attribution pass |
 | `C` | `HASH`, `SUBJECT` | One per recent commit, newest first, bounded to the last 20 |
 | `X` | `TRUNCATED`, `COUNT` | At most one, always last: this many records were withheld to hold the byte budget |
 
