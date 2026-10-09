@@ -46,6 +46,12 @@ type Declaration struct {
 	// receiver type "A" for Go's (a *A) Get. Empty when there is none.
 	Container string
 
+	// Enclosing is the name of the declaration that really encloses this one when that is not
+	// Container -- Rust's impl members qualify by the type ("Config::new") but sit inside the
+	// block "impl Config", which is what an insertion must find. Empty when Container is the
+	// enclosing declaration.
+	Enclosing string
+
 	// NameNode, when set, is where the declaration-only extent starts
 	// instead of Node's own start. It exists for a declaration whose name
 	// sits inside a larger staged node: CSS indexes one anchor per selector

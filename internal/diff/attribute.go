@@ -416,14 +416,14 @@ func newlyEscalatedContainer(lang resolve.Language, oldFile, newFile declResolve
 	if err != nil || member.Container == "" {
 		return "", false
 	}
-	outer, err := newFile.Resolve(member.Container)
+	outer, err := newFile.Resolve(member.EnclosingName())
 	if err != nil || outer.Extent.Start > member.Extent.Start || member.Extent.End > outer.Extent.End {
 		return "", false // sibling, not parent (Go receiver)
 	}
-	if _, err := oldFile.Resolve(member.Container); err == nil {
+	if _, err := oldFile.Resolve(member.EnclosingName()); err == nil {
 		return "", false // container already exists on the old side
 	}
-	return member.Container, true
+	return member.EnclosingName(), true
 }
 
 // LineCounts line-diffs two extents' own text in isolation via go-udiff,

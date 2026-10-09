@@ -136,7 +136,11 @@ func rustDeclarations(src []byte, node *ts.Node, container string) []Declaration
 				continue
 			}
 			out = append(out, Declaration{Node: &item, Bare: name, Container: container, Sep: rustSep(container)})
-			out = append(out, rustMembers(src, &item, rustImplContainer(src, &item))...)
+			members := rustMembers(src, &item, rustImplContainer(src, &item))
+			for i := range members {
+				members[i].Enclosing = name
+			}
+			out = append(out, members...)
 			continue
 		}
 

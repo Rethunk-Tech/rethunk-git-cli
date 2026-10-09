@@ -279,7 +279,7 @@ func (fp *filePlan) escalateToContainer(member *resolve.Resolution) (res *resolv
 	if fp.lang.FlatContainer() {
 		return member, false, nil
 	}
-	container := member.Container
+	container := member.EnclosingName()
 
 	outer, werr := fp.workFile.Resolve(container)
 	if werr != nil {

@@ -30,6 +30,9 @@ type Resolution struct {
 	// sit in the worktree.
 	Container string
 
+	// Enclosing mirrors Declaration.Enclosing.
+	Enclosing string
+
 	// Sep is the join between Container and the bare name in Anchor --
 	// carried over from Declaration.Sep so the LSP cross-check (crosscheck.go's
 	// qualifyLSPSymbol) can qualify a server-reported symbol the same way
@@ -117,7 +120,7 @@ func (f *File) Resolve(anchor string) (*Resolution, error) {
 		return nil, err
 	}
 	flat := f.lang.FlatContainer()
-	return &Resolution{Extent: sym.Full, DeclOnly: sym.DeclOnly, Anchor: sym.Qualified, Container: sym.Decl.Container, Sep: sym.Decl.Sep, Flat: flat, SameName: sym.SameName, SlugAnchors: f.lang.AllowsRawHeadingFallback(), GroupedAnchors: f.lang.GroupedAnchors()}, nil
+	return &Resolution{Extent: sym.Full, DeclOnly: sym.DeclOnly, Anchor: sym.Qualified, Container: sym.Decl.Container, Enclosing: sym.Decl.Enclosing, Sep: sym.Decl.Sep, Flat: flat, SameName: sym.SameName, SlugAnchors: f.lang.AllowsRawHeadingFallback(), GroupedAnchors: f.lang.GroupedAnchors()}, nil
 }
 
 // DeclOrder returns the anchor rgit emits for each declaration, in source
@@ -298,4 +301,13 @@ func resolvePseudo(lang Language, src []byte, root *ts.Node, idx *index, anchor 
 		return nil, &ResolveError{Code: exitcode.AnchorUnresolvable, Anchor: anchor}
 	}
 	return &Resolution{Extent: ext, Anchor: anchor, Pseudo: true}, nil
+}
+
+// EnclosingName is the name of the declaration that encloses r: Enclosing when the adapter
+// sets one, else Container.
+func (r *Resolution) EnclosingName() string {
+	if r.Enclosing != "" {
+		return r.Enclosing
+	}
+	return r.Container
 }

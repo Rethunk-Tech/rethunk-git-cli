@@ -165,3 +165,31 @@ func TestStage_RustFieldSitsFlush(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(stagedBlob(t, repo, "lib.rs"), work))
 }
+
+// TestStage_RustImplMemberSitsFlush pins that a new method staged into an impl block HEAD already
+// has lands directly under its sibling, and that a method of an impl HEAD lacks brings the block.
+func TestStage_RustImplMemberSitsFlush(t *testing.T) {
+	t.Parallel()
+	head := "pub struct Config;\n\nimpl Config {\n    pub fn new() -> Self {\n        Self\n    }\n}\n"
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "lib.rs", head, "chore: initial lib.rs")
+
+	work := "pub struct Config;\n\nimpl Config {\n    pub fn new() -> Self {\n        Self\n    }\n    pub fn len(&self) -> usize {\n        0\n    }\n}\n"
+	gittest.Write(t, dir, "lib.rs", work)
+
+	err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("lib.rs", "Config::len")})
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(stagedBlob(t, repo, "lib.rs"), work))
+}
+
+func TestStage_RustMemberOfANewImplBringsTheBlock(t *testing.T) {
+	t.Parallel()
+	head := "pub struct Config;\n"
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "lib.rs", head, "chore: initial lib.rs")
+
+	work := "pub struct Config;\n\nimpl Config {\n    pub fn len(&self) -> usize {\n        0\n    }\n}\n"
+	gittest.Write(t, dir, "lib.rs", work)
+
+	err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("lib.rs", "Config::len")})
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(stagedBlob(t, repo, "lib.rs"), work))
+}
