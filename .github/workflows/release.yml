@@ -43,7 +43,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: Rethunk-Tech/gh-actions/setup-go@b9d364fb7e7d52abca0496428c7d8c64a0035f60 # main, golangci-lint v2.14.0 default
+      - uses: Rethunk-Tech/gh-actions/setup-go@77071f0a197d38f7d90c9acf67547fdd990f269a # v1.14
 
       # zig is the single cross-compilation toolchain `make cross` drives;
       # rgit links tree-sitter through cgo, so CGO_ENABLED=0 is not an
