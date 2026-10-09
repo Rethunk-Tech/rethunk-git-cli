@@ -104,3 +104,15 @@ func TestResolve_RustHeader(t *testing.T) {
 	src := []byte("#![allow(dead_code)]\n#![no_std]\n\nuse core::fmt;\n\npub fn f() {}\n")
 	qt.Assert(t, qt.Equals(mustResolveExt(t, ".rs", src, "@header"), "#![allow(dead_code)]\n#![no_std]"))
 }
+
+// TestResolve_RustInnerDocBelongsToTheFile pins that a "//!" comment at the
+// top of a file documents the enclosing module, so the first item below it
+// does not take it as its own doc the way it takes a "///" comment.
+func TestResolve_RustInnerDocBelongsToTheFile(t *testing.T) {
+	t.Parallel()
+	src := []byte("//! Generated. Do not edit.\n\npub(crate) mod first;\npub(crate) mod second;\n\n//! also module doc, inside a block.\n/// Outer doc.\npub fn f() {}\n")
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".rs", src, "first"), "pub(crate) mod first;"))
+	tight := []byte("//! Module doc.\npub(crate) mod first;\n")
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".rs", tight, "first"), "pub(crate) mod first;"))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".rs", src, "f"), "/// Outer doc.\npub fn f() {}"))
+}

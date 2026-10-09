@@ -17,6 +17,10 @@ func docStart(lang Language, src []byte, node *ts.Node) uint {
 	if a, ok := lang.(prefixAttacher); ok {
 		attaches = a.attachesPrefix
 	}
+	binds := func(*ts.Node) bool { return true }
+	if b, ok := lang.(commentBinder); ok {
+		binds = func(c *ts.Node) bool { return b.commentBindsToNext(src, c) }
+	}
 
 	start := node.StartByte()
 	prev := node.PrevNamedSibling()
@@ -28,6 +32,9 @@ func docStart(lang Language, src []byte, node *ts.Node) uint {
 			// does not break the association the way it does for a
 			// comment.
 		case lang.IsComment(prev.Kind()):
+			if !binds(prev) {
+				return start
+			}
 			gap := src[prev.EndByte():start]
 			if bytes.Count(gap, []byte{'\n'}) > 1 {
 				return start
@@ -39,6 +46,16 @@ func docStart(lang Language, src []byte, node *ts.Node) uint {
 		prev = prev.PrevNamedSibling()
 	}
 	return start
+}
+
+// commentBinder is an optional refinement of Language for a grammar with a
+// comment form that documents the enclosing scope rather than the item below
+// it. lang_rust.go is the only implementer: "//!" and "/*!" describe the
+// module or file they open, so rust-analyzer starts the first item after
+// one at the item itself, and folding the comment into that item's extent
+// made deleting the item delete the file's own documentation.
+type commentBinder interface {
+	commentBindsToNext(src []byte, comment *ts.Node) bool
 }
 
 // fullExtentCrossChecker is an optional refinement of Language for a server

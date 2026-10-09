@@ -1,6 +1,7 @@
 package resolve
 
 import (
+	"bytes"
 	"strings"
 
 	ts "github.com/tree-sitter/go-tree-sitter"
@@ -26,6 +27,13 @@ func (r *rustLanguage) TSLanguage() *ts.Language { return r.lang }
 // "///" and "//!" are line_comment nodes, not a distinct kind.
 func (r *rustLanguage) IsComment(kind string) bool {
 	return kind == "line_comment" || kind == "block_comment"
+}
+
+// commentBindsToNext implements commentBinder: an inner doc comment ("//!",
+// "/*!") documents the enclosing module, never the item that follows it.
+func (r *rustLanguage) commentBindsToNext(src []byte, comment *ts.Node) bool {
+	text := src[comment.StartByte():comment.EndByte()]
+	return !bytes.HasPrefix(text, []byte("//!")) && !bytes.HasPrefix(text, []byte("/*!"))
 }
 
 // attachesPrefix implements prefixAttacher for Rust's outer attributes.

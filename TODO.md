@@ -51,21 +51,20 @@ files carry the extension.
 A 264-file fleet corpus (2026-10-09: 22 files in each of eleven wired grammars,
 21 `.jsonc`, 1 `.scss`; the fleet holds no `.zsh` file and the Go row is empty
 because Go is not compared against a language server) compares **5,157 symbols
-with 4 disagreements**. That is the number a later run is measured against;
+with 2 disagreements** (4 before the Rust fix below). That is the number a later run is measured against;
 `make xcheck` runs the same comparison over the committed fixtures, and
 `SYNTH_CORPUS` points the write-side property test at the same kind of list.
 The files are every Nth file of each extension from the fleet checkouts
 (300 bytes to 150 kB, no vendored, built or `testdata` paths), and one run takes
 68 s.
 
-The four disagreements are all inside the vendored `AlbinoGeek/biome` checkout.
-Two are CSS error-recovery fixtures (`declaration_emty.css`, an empty
-declaration `a { ; }`, and `casing.css`, one upper-cased `.attr` rule) where the
-CSS server ends the extent early. Two are Rust: in `biome_*_formatter/src/**/mod.rs`
-the leading `//!` inner doc comment is folded into the extent of the first
-`pub(crate) mod x;`, so tree-sitter's extent starts at line 1 where
-rust-analyzer's is the declaration line alone. The Rust pair is a resolver
-extent defect to fix, not a server limitation.
+Both disagreements are CSS error-recovery fixtures inside the vendored
+`AlbinoGeek/biome` checkout (`declaration_emty.css`, an empty declaration
+`a { ; }`, and `casing.css`, one upper-cased `.attr` rule), where the CSS
+server ends the extent early. Two Rust files in the same checkout disagreed
+until a leading `//!` inner doc comment stopped being folded into the first
+`mod x;` extent (`commentBinder`); rust-analyzer now agrees on all 25 symbols
+in those two files.
 
 507 anchors go unnamed: 242 in `.jsonc`, 161 in CSS and 83 in Rust (mostly the
 same biome checkout's generated files), 15 in shell, 3 in TSX, 2 in HTML and
