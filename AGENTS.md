@@ -60,3 +60,5 @@ No persistent state. Creates only `rgit-commit.lock` in the git directory (`comm
 ## Gate budget
 
 `.gate.toml` chains build, lint, test and vuln because the cgo tree-sitter grammars cost about 115 CPU-s to compile cold and concurrent gates each compiled them. Measured 2026-10-09 with `gate --profile` at load 38 to 54 (throwaway Go and lint caches): cold was 39 s wall and 497 CPU-s concurrent, and is 32 s wall and 156 CPU-s chained, with `make build` 20 s of it. Warm went from 1.0 s to 2.0 s wall (6.7 to 7.3 CPU-s). Wall is not a verdict until a quiet-machine re-measure.
+
+The gate's test step is `go test -race -short ./...`, so the race detector runs locally on the unit lane (CI's full race run needs gopls, rust-analyzer and tree-sitter-cli, which `-short` skips). Measured 2026-10-09 at load 1.5 to 3 with the v0.6.5 `gate --profile`: warm 3.0 s wall and 8 CPU-s; cold (throwaway Go and lint caches) 54 s wall and 267 CPU-s, of which the `-race` test step is 34 s, because `-race` compiles the cgo grammars a second time into a separate cache. Warm is inside the 10 s budget; cold is over the 30 s bar by the price of that second compile.

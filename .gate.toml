@@ -7,7 +7,7 @@ serial = true
 serial = true
 
 [gates.test]
-run = "make test-short"
+run = "go test -race -short ./..."
 serial = true
 
 [gates.vuln]
