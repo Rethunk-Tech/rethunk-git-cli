@@ -8,6 +8,8 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit commit --stage-only` stages paths or `FILE:SYMBOL` targets into the real index without committing,
+  through the same resolution and atomic staging a commit uses; it needs no message and runs no hooks.
 - `rgit context` reports which side each changed file sits on: one `T<TAB>FILE<TAB>WHERE`
   record per `F` file (`staged`, `unstaged`, `both` or `untracked`), after the `F` rows and
   before the `C` rows. The `F` rows are unchanged; the `T` tag is new, so a consumer that

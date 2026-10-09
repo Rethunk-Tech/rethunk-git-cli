@@ -41,6 +41,7 @@ type commitFlags struct {
 	porcelain    bool
 	quiet        bool
 	only         bool
+	stageOnly    bool
 	pathspecFile string
 	pathspecNUL  bool
 	syms         []string
@@ -122,6 +123,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	fs.BoolVar(&f.porcelain, "porcelain", false, "list staged targets as stable tab-separated records")
 	fs.BoolVarP(&f.quiet, "quiet", "q", false, "suppress the commit summary and target listing")
 	fs.BoolVarP(&f.only, "only", "o", false, "commit only named targets")
+	fs.BoolVar(&f.stageOnly, "stage-only", false, "stage the named targets into the index without committing")
 	// -S is not registered as a shorthand here; expandGPGSignShorthand
 	// rewrites it before Parse, for the pflag reason documented there.
 	fs.StringVar(&f.gpgSignKey, "gpg-sign", "", "GPG-sign the commit; -S/-S<key-id>/--gpg-sign=<key-id>")
@@ -132,7 +134,9 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 
 	help := "usage: rgit commit [flags] [target...]\n\n" +
 		"Stage named targets -- pathspecs and/or FILE:NAME symbol anchors\n" +
-		"(e.g. auth.go:ValidateToken) -- and commit them.\n\n" +
+		"(e.g. auth.go:ValidateToken) -- and commit them, or with --stage-only\n" +
+		"stage them and stop. Un-staging is plain git: \"git restore --staged FILE\"\n" +
+		"is per file, so a half-staged symbol comes out with its whole file.\n\n" +
 		fs.FlagUsages() +
 		"\nFull reference: docs/USAGE.md\n"
 	if code, done := parseFlagsOrHelp(fs, expandGPGSignShorthand(args), stdout, stderr, help); done {
@@ -157,6 +161,27 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	if f.porcelain && f.quiet {
 		fmt.Fprintln(stderr, "rgit: --porcelain and --quiet are mutually exclusive")
 		return exitcode.InvalidUsage
+	}
+	if f.stageOnly {
+		conflict := ""
+		switch {
+		case f.only:
+			conflict = "--only"
+		case f.push:
+			conflict = "--push"
+		case f.amend:
+			conflict = "--amend"
+		case len(f.messages) > 0 || f.msgFile != "":
+			conflict = "-m/-F"
+		case f.fixup != "" || f.squash != "" || f.reuseMessage != "":
+			conflict = "--fixup/--squash/--reuse-message"
+		case f.allowEmpty:
+			conflict = "--allow-empty"
+		}
+		if conflict != "" {
+			fmt.Fprintf(stderr, "rgit: --stage-only and %s are mutually exclusive\n", conflict)
+			return exitcode.InvalidUsage
+		}
 	}
 	if f.pathspecNUL && f.pathspecFile == "" {
 		fmt.Fprintln(stderr, "rgit: --pathspec-file-nul requires --pathspec-from-file")
@@ -195,12 +220,16 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		fmt.Fprintln(stderr, "rgit: --only requires at least one target")
 		return exitcode.InvalidUsage
 	}
+	if f.stageOnly && targetCount == 0 {
+		fmt.Fprintln(stderr, "rgit: --stage-only requires at least one target")
+		return exitcode.InvalidUsage
+	}
 	if targetCount == 0 && !f.amend && !f.allowEmpty && f.fixup == "" && f.squash == "" && f.reuseMessage == "" {
 		fmt.Fprintln(stderr, "rgit: commit requires at least one target")
 		return exitcode.InvalidUsage
 	}
 
-	if f.reuseMessage == "" && !hasConventionalShape(f.messages) {
+	if !f.stageOnly && f.reuseMessage == "" && !hasConventionalShape(f.messages) {
 		// [warning], not "rgit: warning:" -- every other advisory in this
 		// command (below) and in diff.go already uses the bracketed form;
 		// one spelling for "advisory, not a refusal" across the surface.
@@ -212,7 +241,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		return code
 	}
 
-	if len(f.messages) == 0 && f.msgFile == "" && !autoMessage {
+	if !f.stageOnly && len(f.messages) == 0 && f.msgFile == "" && !autoMessage {
 		op, ok, err := repo.SequencerOp(ctx)
 		if err != nil {
 			fmt.Fprintf(stderr, "rgit: %v\n", err)
@@ -331,6 +360,25 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 			}
 			if !f.quiet {
 				fmt.Fprintln(stdout, "dry run: nothing written, nothing staged. Would commit:")
+				writeTargetListing(stdout, targetResults)
+			}
+			return exitcode.Success
+		}
+
+		if f.stageOnly {
+			// Staging without committing: no hooks run and nothing is
+			// committed, so there is no failure left to roll back. Apply is
+			// already atomic through its temp index.
+			if err := plan.Apply(ctx, repo, root); err != nil {
+				code, msg := mapStageError(err)
+				fmt.Fprintf(stderr, "rgit: %s\n", msg)
+				return code
+			}
+			switch {
+			case f.porcelain:
+				writeTargetRecords(stdout, targetResults)
+			case !f.quiet:
+				fmt.Fprintln(stdout, "staged, not committed:")
 				writeTargetListing(stdout, targetResults)
 			}
 			return exitcode.Success

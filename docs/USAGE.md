@@ -695,6 +695,7 @@ output shape is the point).
 | `--reuse-message=<commit>` | Reuse that commit's log message and authorship (`git commit --reuse-message`). Long form only — global `-C` is directory chdir and stays before the command. Mutually exclusive with `-m` the way git is (`-m` and `-C` cannot be used together). Does not require a separate `-m`. |
 | `--reedit-message` | Refused (exit 129). `rgit` never opens an editor; use `--reuse-message`. |
 | `--push` | Push upstream after a successful commit. No rollback on push failure. If the branch has no upstream configured, the exit-8 message names it and the fix (`git push -u origin <branch>`, or `push.autoSetupRemote`) — `rgit` never adds `-u` itself. |
+| `--stage-only` | Stage the named targets into the real index and stop: no message is needed, no hooks run, nothing is committed. Requires at least one target; mutually exclusive with `--only`, `--push`, `--amend`, `--allow-empty`, `-m`/`-F`, `--fixup`, `--squash` and `--reuse-message`. Staging is atomic like a commit's. There is no unstage: `git restore --staged FILE` works per file, so a symbol staged this way comes back out with its whole file's staged state. Prints `staged, not committed:` and the target listing (`--porcelain`: target records alone; `-q`: nothing). |
 | `--dry-run` | Preview only. Writes no objects, stages nothing, runs no hooks. Lists each target it resolved with that symbol's `+N/-M`, using the same counts as `rgit diff`. |
 | `--no-verify` | Skip git hooks (standard git meaning). Hooks run by default. |
 | `--fixup <commit>` | Autosquash fixup for `<commit>` (also accepts `amend:<commit>`/`reword:<commit>`, forwarded verbatim). Generates its own subject, so `-m`/`-F` are not required; either still appends as an extra body paragraph rather than conflicting. |
@@ -768,7 +769,7 @@ before decode. Closes #42." \
               auth.go:ValidateToken
 ```
 
-**Invalid combinations:** `--dry-run` + `--push`, `--staged`/`--unstaged` +
+**Invalid combinations:** `--stage-only` with any of its exclusions above, `--dry-run` + `--push`, `--staged`/`--unstaged` +
 a revision argument (a range, or one or two bare revisions), `--staged` +
 `--unstaged`, `--range` + a positional `A..B`/`A...B` range, `-m` + `-F`,
 `--porcelain` + `--quiet` (`diff`), `--porcelain` + `-p`/`--patch` (`diff`,

@@ -1447,3 +1447,41 @@ func TestRun_HelpIsPlainText(t *testing.T) {
 		})
 	}
 }
+
+// TestRun_CommitStageOnlyStagesASymbolWithoutCommitting pins --stage-only:
+// the named symbol's edit lands in the real index (and only that symbol's),
+// HEAD does not move, and no message is needed.
+func TestRun_CommitStageOnlyStagesASymbolWithoutCommitting(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
+
+	stdout, _, code := runApp(t, "-C", dir, "commit", "--stage-only", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(stdout, "staged, not committed"))
+	qt.Assert(t, qt.StringContains(stdout, "a.go"))
+
+	qt.Assert(t, qt.Equals(strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")), before))
+	staged := gitOut(t, dir, "show", ":a.go")
+	qt.Assert(t, qt.StringContains(staged, "return 111"))
+	qt.Assert(t, qt.Not(qt.StringContains(staged, "return 222")))
+	qt.Assert(t, qt.StringContains(gitOut(t, dir, "diff"), "return 222"))
+}
+
+func TestRun_CommitStageOnlyRefusals(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n")
+	for name, args := range map[string][]string{
+		"no target": {"commit", "--stage-only"},
+		"a message": {"commit", "--stage-only", "-m", "fix(a): x", "a.go"},
+		"--only":    {"commit", "--stage-only", "--only", "a.go"},
+		"--push":    {"commit", "--stage-only", "--push", "a.go"},
+		"--amend":   {"commit", "--stage-only", "--amend", "a.go"},
+	} {
+		_, _, code := runApp(t, append([]string{"-C", dir}, args...)...)
+		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage), qt.Commentf("%s", name))
+	}
+	qt.Assert(t, qt.Equals(strings.TrimSpace(gitOut(t, dir, "diff", "--cached", "--name-only")), ""))
+}
