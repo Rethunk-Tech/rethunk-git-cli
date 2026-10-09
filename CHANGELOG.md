@@ -24,6 +24,27 @@ Notable changes to `rgit`. The format follows
   selection uses the same six-rule table as `commit` and `diff`. See
   [`docs/USAGE.md`](docs/USAGE.md#log-by-date-and-path).
 
+- `rgit-install` builds the SQL grammar with Go's default C optimization
+  flags again; the previous installed binaries compiled the tree-sitter C
+  unoptimized and used 2x the CPU.
+
+- `rgit diff --staged` lists unmerged index entries once instead of spawning
+  `git ls-files -u` per file.
+
+- `diff` renames whose brace-form side is empty (`{ => sub}/f.go`) keep one
+  path separator.
+
+- `commit --only` expands path and directory targets against the index, and a
+  directory target commits a rename inside it whole.
+
+- A same-size edit made within the index's mtime tick is staged, not dropped,
+  under load.
+
+- Variable-file reads (installer, resolver, LSP socket directory, staging)
+  stay inside their intended root and no longer follow symlinks out of it.
+
+- Built with Go 1.27.2, which carries the `os` vulnerability fix.
+
 ## [2.2.0] - 2026-09-19
 
 ### Added
