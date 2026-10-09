@@ -6,6 +6,8 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-10-09
+
 ### Added
 
 - `rgit commit --stage-only` stages paths or `FILE:SYMBOL` targets into the real index without committing,
