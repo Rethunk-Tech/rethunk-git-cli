@@ -90,10 +90,7 @@ div {
 	qt.Assert(t, qt.Not(qt.StringContains(toplevel, "Global styles")))
 	qt.Assert(t, qt.Not(qt.StringContains(toplevel, "@import")))
 
-	// .css is claimed; .scss and .sass deliberately are not -- no SCSS/SASS
-	// tree-sitter grammar ships Go bindings.
-	_, ok = resolve.ForExtension(".scss")
-	qt.Assert(t, qt.IsFalse(ok))
+	// .css is claimed; the indented .sass syntax has no grammar here.
 	_, ok = resolve.ForExtension(".sass")
 	qt.Assert(t, qt.IsFalse(ok))
 

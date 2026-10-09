@@ -8,6 +8,9 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `.scss` files resolve `FILE:SYMBOL` anchors: rule sets (nested ones qualified by the parent selector), at-rules,
+  `@mixin`/`@function` by name and top-level `$variable`s, with `@use`/`@forward`/`@import` as `@imports`. Cross-checked
+  against `vscode-css-language-server`. `.sass` stays unsupported.
 - `.json5` files resolve `FILE:KEY` anchors (unquoted, single- and double-quoted keys) in `[ts-only]` mode; no
   JSON5 language server reports symbols. `commit` refuses the anchor as it does for JSON.
 - `.jsonc` files resolve `FILE:KEY` anchors like JSON, with `//` and `/* */` comments attributed as doc

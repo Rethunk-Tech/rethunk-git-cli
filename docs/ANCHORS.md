@@ -204,7 +204,8 @@ extensions:
 | Markdown | `.md`, `.markdown`, `.mdx` | Headings and their sections only — inline constructs such as emphasis, links, and code spans are not parsed and have nothing to address. MDX's own constructs (`import`/`export`, `<Component />`, `{expression}`) are not addressable — see [`LIMITATIONS.md`](LIMITATIONS.md#constructs-no-anchor-reaches) |
 | Shell | `.sh`, `.bash` | Functions and top-level variable assignments. Shell has no containers, so a redefined function disambiguates by ordinal the same way two same-named Go functions would |
 | YAML | `.yaml`, `.yml` | Mapping keys, container-qualified one level the same way a Markdown heading is. Sequence items and anything inside a flow-style `{...}`/`[...]` value have no name to address |
-| CSS | `.css` | Selectors and at-rules. `.scss`/`.sass` unsupported — see [`LIMITATIONS.md`](LIMITATIONS.md#unsupported-languages) |
+| CSS | `.css` | Selectors and at-rules. `.sass` (indented syntax) unsupported — see [`LIMITATIONS.md`](LIMITATIONS.md#unsupported-languages) |
+| SCSS | `.scss` | As CSS (selectors, natively nested rules, at-rules), plus `@mixin` and `@function` by identifier and top-level `$variable` declarations. `//` and `/* */` comments attach as doc comments; `@import`, `@use` and `@forward` form `@imports`. Control flow (`@if`, `@each`), `@include` and `@extend` have no name to address |
 | JSON | `.json` | Object key paths, container-qualified one level the same way a YAML mapping key is. Arrays and non-object documents have nothing to address |
 | JSONC | `.jsonc` | As JSON, with `//` and `/* */` comments as doc comments. A trailing comma parses as an error node, so keys after it are not indexed |
 | JSON5 | `.json5` | As JSON: unquoted and single-quoted keys name the same as double-quoted ones, container-qualified one level. Comments attach as doc comments |

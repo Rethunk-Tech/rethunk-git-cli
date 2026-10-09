@@ -232,6 +232,7 @@ json5<TAB>.json5<TAB>0<TAB>ts-only
 jsonc<TAB>.jsonc<TAB>0<TAB>wired
 markdown<TAB>.md .markdown<TAB>0<TAB>wired
 python<TAB>.py .pyi<TAB>0<TAB>wired
+scss<TAB>.scss<TAB>0<TAB>wired
 shell<TAB>.sh .bash<TAB>0<TAB>wired
 sql<TAB>.sql<TAB>1<TAB>ts-only
 toml<TAB>.toml<TAB>0<TAB>ts-only

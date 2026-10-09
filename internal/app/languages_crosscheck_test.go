@@ -43,6 +43,7 @@ func TestRun_LanguagesPorcelainCrossCheckColumn(t *testing.T) {
 		"markdown":   "wired",
 		"python":     "wired",
 		"rust":       "wired",
+		"scss":       "wired",
 		"shell":      "wired",
 		"sql":        "ts-only",
 		"toml":       "ts-only",

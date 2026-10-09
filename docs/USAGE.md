@@ -507,6 +507,7 @@ jsonc       .jsonc
 markdown    .md .markdown .mdx
 python      .py .pyi
 rust        .rs
+scss        .scss
 shell       .sh .bash
 sql         .sql                     (build-tag gated)
 toml        .toml

@@ -8,6 +8,7 @@ import (
 	tsts "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve/json5grammar"
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve/scssgrammar"
 	tsmd "github.com/tree-sitter-grammars/tree-sitter-markdown/bindings/go"
 	tstoml "github.com/tree-sitter-grammars/tree-sitter-toml/bindings/go"
 	tsyaml "github.com/tree-sitter-grammars/tree-sitter-yaml/bindings/go"
@@ -60,9 +61,8 @@ func bashGrammar() *ts.Language { return ts.NewLanguage(tsbash.Language()) }
 
 func yamlGrammar() *ts.Language { return ts.NewLanguage(tsyaml.Language()) }
 
-// cssGrammar parses .css. Not .scss/.sass: no SCSS/SASS tree-sitter grammar
-// ships Go bindings -- an upstream gap,
-// not a scoping choice, the same distinction lang_shell.go draws for .zsh.
+// cssGrammar parses .css. SCSS has its own grammar (scssGrammar): plain CSS
+// parsing yields ERROR nodes on nesting, variables and mixins.
 func cssGrammar() *ts.Language { return ts.NewLanguage(tscss.Language()) }
 
 func jsonGrammar() *ts.Language { return ts.NewLanguage(tsjson.Language()) }
@@ -71,6 +71,8 @@ func htmlGrammar() *ts.Language { return ts.NewLanguage(tshtml.Language()) }
 
 func tomlGrammar() *ts.Language { return ts.NewLanguage(tstoml.Language()) }
 
-// json5Grammar comes from vendored C (json5grammar): the upstream module's
-// go.mod declares a path Go refuses to fetch it under.
+// json5Grammar and scssGrammar come from vendored C (json5grammar,
+// scssgrammar): neither upstream repository is importable as a Go module.
 func json5Grammar() *ts.Language { return ts.NewLanguage(json5grammar.Language()) }
+
+func scssGrammar() *ts.Language { return ts.NewLanguage(scssgrammar.Language()) }

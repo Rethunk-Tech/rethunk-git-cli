@@ -268,6 +268,7 @@ func registerLanguages() {
 	register(newMarkdownLanguage())
 	register(newPythonLanguage())
 	register(newRustLanguage())
+	register(newSCSSLanguage())
 	register(newShellLanguage())
 	register(newTOMLLanguage())
 	register(newTypeScriptLanguage())

@@ -371,6 +371,8 @@ func LanguageKindFor(path string) (kind protocol.LanguageKind, ok bool) {
 		return protocol.LanguageKind("jsonc"), true
 	case ".css":
 		return protocol.LanguageKindCSS, true
+	case ".scss":
+		return protocol.LanguageKindSCSS, true
 	case ".md", ".markdown":
 		return protocol.LanguageKindMarkdown, true
 	case ".html", ".htm":

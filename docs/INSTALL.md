@@ -162,7 +162,7 @@ cross-check, which catches build-tag, macro, and type-level mismatches.
 | Shell | `bash-language-server` | `npm i -g bash-language-server` | One-shot subprocess per query |
 | YAML | `yaml-language-server` | `npm i -g yaml-language-server` | One-shot subprocess per query |
 | JSON, JSONC | `vscode-json-language-server` | `npm i -g vscode-langservers-extracted` | One-shot subprocess per query |
-| CSS | `vscode-css-language-server` | `npm i -g vscode-langservers-extracted` | One-shot subprocess per query |
+| CSS, SCSS | `vscode-css-language-server` | `npm i -g vscode-langservers-extracted` | One-shot subprocess per query |
 | Markdown | `marksman` | [GitHub release binary](https://github.com/artempyanykh/marksman/releases) — no package manager publishes it | One-shot subprocess per query |
 | HTML | `vscode-html-language-server` | `npm i -g vscode-langservers-extracted` | One-shot subprocess per query |
 

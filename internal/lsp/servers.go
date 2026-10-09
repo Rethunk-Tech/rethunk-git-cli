@@ -125,6 +125,12 @@ var servers = map[string]serverSpec{
 		transport: transportStdio,
 		stdioArgs: []string{"--stdio"},
 	},
+	"scss": {
+		name:      "vscode-css-language-server",
+		bin:       "vscode-css-language-server",
+		transport: transportStdio,
+		stdioArgs: []string{"--stdio"},
+	},
 	// marksman, not vscode-markdown-language-server: the latter crashes on
 	// startup on this machine, an ESM/CJS interop defect
 	// in its own bundled dependency, not a transport choice. marksman's own
