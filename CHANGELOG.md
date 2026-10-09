@@ -6,6 +6,16 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+## [2.2.3] - 2026-10-09
+
+### Fixed
+
+- A Rust doc comment (`///`) separated from the item below it by a blank line no longer extends the anchor: a blank line
+  detaches it when the node ends after its newline.
+- Rust impl members cross-check against rust-analyzer. Its `impl Type` and `impl Trait for Type` containers are read as
+  the type, which left every impl member unnamed, so members of an `impl` block resolve and compare instead of
+  degrading to `[ts-only]`.
+
 ## [2.2.2] - 2026-10-09
 
 ### Added
