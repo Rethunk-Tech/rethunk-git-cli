@@ -360,7 +360,7 @@ func LanguageKindFor(path string) (kind protocol.LanguageKind, ok bool) {
 		return protocol.LanguageKindPython, true
 	case ".rs":
 		return protocol.LanguageKindRust, true
-	case ".sh", ".bash":
+	case ".sh", ".bash", ".zsh", ".zshrc", ".zshenv", ".zprofile":
 		return protocol.LanguageKindShellScript, true
 	case ".yaml", ".yml":
 		return protocol.LanguageKindYAML, true

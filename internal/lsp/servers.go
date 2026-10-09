@@ -95,6 +95,14 @@ var servers = map[string]serverSpec{
 		// own docs show no dedicated flag for it.
 		stdioArgs: []string{"start"},
 	},
+	// zsh shares bash-language-server: it serves the "shellscript" languageId,
+	// whose symbols (functions) match zsh function definitions by name.
+	"zsh": {
+		name:      "bash-language-server",
+		bin:       "bash-language-server",
+		transport: transportStdio,
+		stdioArgs: []string{"start"},
+	},
 	// yaml, json, css, and markdown's servers hold to the same bar as the
 	// four above: their documentSymbol ranges match this resolver's own
 	// declOnlyExtent byte-for-byte on real fixtures, including the

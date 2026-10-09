@@ -54,21 +54,23 @@ func TestResolve_ForPathShebangFallback(t *testing.T) {
 	qt.Assert(t, qt.IsTrue(ok))
 	qt.Assert(t, qt.Equals(lang.Name(), "python"))
 
-	// zsh is a real interpreter, not a typo, and is deliberately refused:
-	// tree-sitter-bash would mis-parse zsh-only syntax rather than honestly
-	// fail. An unrecognized interpreter (perl) and a leading line that is
-	// an ordinary comment, not a shebang, both refuse the same way, as does
-	// an extensionless path with no content at all to sniff.
+	// zsh routes to its own adapter, not the Bash one. An unrecognized
+	// interpreter (perl) and a leading line that is an ordinary comment, not
+	// a shebang, both refuse, as does an extensionless path with no content
+	// at all to sniff.
+	zsh, ok := resolve.ForPathFolding("hooks/pre-commit", []byte("#!/bin/zsh\nfoo() {}\n"), false)
+	qt.Assert(t, qt.IsTrue(ok))
+	qt.Assert(t, qt.Equals(zsh.Name(), "zsh"))
+
 	for _, c := range []struct {
 		path    string
 		content string
 	}{
-		{"hooks/pre-commit", "#!/bin/zsh\nfoo() {}\n"},
 		{"hooks/pre-commit", "#!/usr/bin/env perl\n"},
 		{"hooks/pre-commit", "# just a comment, not a shebang\nfoo() {}\n"},
 		{"hooks/pre-commit", ""},
 	} {
-		_, ok := resolve.ForPathFolding(c.path, []byte(c.content), false)
+		_, ok = resolve.ForPathFolding(c.path, []byte(c.content), false)
 		qt.Assert(t, qt.IsFalse(ok), qt.Commentf("content %q", c.content))
 	}
 }

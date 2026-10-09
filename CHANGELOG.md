@@ -8,6 +8,9 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `.zsh`, `.zshrc`, `.zshenv`, `.zprofile` and `#!/usr/bin/env zsh` scripts resolve `FILE:SYMBOL` anchors through the
+  tree-sitter-zsh grammar, which parses `repeat`, glob qualifiers and parameter-expansion flags that the Bash grammar
+  turns into errors. Cross-checked against `bash-language-server`. The grammar adds about 4.4 MB to the stripped binary.
 - `.scss` files resolve `FILE:SYMBOL` anchors: rule sets (nested ones qualified by the parent selector), at-rules,
   `@mixin`/`@function` by name and top-level `$variable`s, with `@use`/`@forward`/`@import` as `@imports`. Cross-checked
   against `vscode-css-language-server`. `.sass` stays unsupported.

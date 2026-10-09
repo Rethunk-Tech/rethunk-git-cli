@@ -6,7 +6,7 @@ import (
 
 // shellLanguage adapts the tree-sitter Bash grammar.
 //
-// Claims .sh and .bash only, deliberately not .zsh: the grammar is a
+// Claims .sh and .bash only; .zsh has its own adapter (lang_zsh.go): the grammar is a
 // POSIX/Bash grammar, and zsh-only syntax (e.g. `foo=($( ))` word-splitting
 // differences, `[[ ]]` extensions, `repeat`, associative-array literals
 // zsh spells differently) produces ERROR nodes under it — the same reason

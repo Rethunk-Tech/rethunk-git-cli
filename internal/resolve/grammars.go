@@ -9,6 +9,7 @@ import (
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve/json5grammar"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve/scssgrammar"
+	tszsh "github.com/georgeharker/tree-sitter-zsh/bindings/go"
 	tsmd "github.com/tree-sitter-grammars/tree-sitter-markdown/bindings/go"
 	tstoml "github.com/tree-sitter-grammars/tree-sitter-toml/bindings/go"
 	tsyaml "github.com/tree-sitter-grammars/tree-sitter-yaml/bindings/go"
@@ -56,7 +57,7 @@ func tsxGrammar() *ts.Language { return ts.NewLanguage(tsts.LanguageTSX()) }
 func markdownGrammar() *ts.Language { return ts.NewLanguage(tsmd.Language()) }
 
 // bashGrammar parses .sh and .bash. Not .zsh: tree-sitter-bash is a POSIX/Bash
-// grammar and mis-parses zsh-only syntax (lang_shell.go).
+// grammar and mis-parses zsh-only syntax, which zshGrammar parses (lang_zsh.go).
 func bashGrammar() *ts.Language { return ts.NewLanguage(tsbash.Language()) }
 
 func yamlGrammar() *ts.Language { return ts.NewLanguage(tsyaml.Language()) }
@@ -76,3 +77,7 @@ func tomlGrammar() *ts.Language { return ts.NewLanguage(tstoml.Language()) }
 func json5Grammar() *ts.Language { return ts.NewLanguage(json5grammar.Language()) }
 
 func scssGrammar() *ts.Language { return ts.NewLanguage(scssgrammar.Language()) }
+
+// zshGrammar parses .zsh and zsh's startup dotfiles. Its parser is ~35 MB of
+// generated C, the largest grammar here by far (about +4.4 MB on the stripped binary).
+func zshGrammar() *ts.Language { return ts.NewLanguage(tszsh.Language()) }

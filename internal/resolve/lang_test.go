@@ -225,9 +225,8 @@ func TestShebangInterpreter_NodeJSEcosystem(t *testing.T) {
 // TestForPath_NodeJSEcosystemRoutesToTypeScript pins the acceptance
 // criteria's own fixtures end-to-end through ForPath: each extensionless
 // shebang resolves via the TypeScript adapter, an unmapped interpreter
-// (perl) still refuses, and zsh -- excluded on purpose, tree-sitter-bash
-// mis-parses it -- stays unmapped rather than silently routed to the shell
-// adapter.
+// (perl) still refuses, and zsh routes to its own adapter rather than the
+// shell one.
 func TestForPath_NodeJSEcosystemRoutesToTypeScript(t *testing.T) {
 	t.Parallel()
 
@@ -253,8 +252,8 @@ func TestForPath_NodeJSEcosystemRoutesToTypeScript(t *testing.T) {
 	if _, ok := ForPathFolding("script", []byte("#!/usr/bin/perl\nprint 1;\n"), false); ok {
 		t.Error(`ForPath with a perl shebang resolved; want exit-9 unmapped`)
 	}
-	if _, ok := ForPathFolding("script", []byte("#!/usr/bin/env zsh\necho hi\n"), false); ok {
-		t.Error("ForPath with a zsh shebang resolved; zsh stays excluded (tree-sitter-bash mis-parse)")
+	if lang, ok := ForPathFolding("script", []byte("#!/usr/bin/env zsh\necho hi\n"), false); !ok || lang.Name() != "zsh" {
+		t.Errorf("ForPath with a zsh shebang = (%v, %v); want the zsh adapter", lang, ok)
 	}
 }
 
@@ -300,7 +299,7 @@ func TestShebangExtensionLookup_VersionedFamilies(t *testing.T) {
 		{"bun1.2", ".ts", true},
 		{"deno", ".ts", true},
 		{"node-20", "", false},
-		{"zsh", "", false},
+		{"zsh", ".zsh", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.interp, func(t *testing.T) {

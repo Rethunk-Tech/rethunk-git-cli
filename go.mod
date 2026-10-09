@@ -26,6 +26,7 @@ require (
 )
 
 require (
+	github.com/georgeharker/tree-sitter-zsh v0.63.5 // indirect
 	github.com/go-json-experiment/json v0.0.0-20260820222146-c27c302e5fc3 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect

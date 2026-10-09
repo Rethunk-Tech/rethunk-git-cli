@@ -274,6 +274,7 @@ func registerLanguages() {
 	register(newTypeScriptLanguage())
 	register(newTSXLanguage())
 	register(newYAMLLanguage())
+	register(newZshLanguage())
 	registerSQLLanguage()
 }
 
@@ -385,15 +386,14 @@ func Languages() []LanguageInfo {
 // treats a shebang as an ordinary "comment" node regardless of how the
 // adapter was looked up (lang_python.go).
 //
-// zsh is deliberately absent, not merely unmapped: tree-sitter-bash
-// mis-parses zsh-only syntax, so silently routing it to the shell adapter
-// would produce wrong extents rather than an honest refusal (lang_shell.go).
-// Every other interpreter -- perl, ruby, node, a project's own wrapper
+// zsh routes to its own grammar (.zsh), never to the Bash one, which
+// mis-parses zsh-only syntax (lang_zsh.go). Every other interpreter -- perl, ruby, node, a project's own wrapper
 // script -- is left unmapped for the same reason: guessing wrong is worse
 // than the plain "no grammar registered" a caller already handles.
 var shebangExtension = map[string]string{
 	"bash": ".sh",
 	"sh":   ".sh",
+	"zsh":  ".zsh",
 
 	"python3": ".py",
 	"python":  ".py",

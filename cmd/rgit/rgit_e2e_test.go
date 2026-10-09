@@ -512,15 +512,15 @@ func TestCommit_ExtensionlessShebangResolvesShellSymbol(t *testing.T) {
 	qt.Assert(t, qt.StringContains(head, "echo v2"))
 	qt.Assert(t, qt.StringContains(head, "echo bar")) // bar's edit stayed uncommitted
 
-	// A zsh shebang is deliberately not routed to the shell grammar
-	// (tree-sitter-bash mis-parses zsh-only syntax), so an extensionless
-	// zsh script still refuses a symbol anchor -- the same exit 9 an
-	// unrecognized extension already gets, not a new failure mode.
-	gittest.Write(t, repo, "zsh-script", "#!/bin/zsh\n\nfoo() {\n  echo hi\n}\n")
+	// A zsh shebang routes to the zsh adapter, so an extensionless zsh
+	// script resolves a symbol anchor too -- zsh-only syntax included.
+	gittest.Write(t, repo, "zsh-script", "#!/bin/zsh\n\nfoo() {\n  repeat 2 print hi\n}\n")
 	gittest.Git(t.Context(), t, repo, "add", "-A")
 	gittest.Git(t.Context(), t, repo, "commit", "-q", "-m", "add zsh script")
-	got = runRgit(t, repo, "commit", "-m", "chore: touch", "zsh-script:foo")
-	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.UnsupportedLanguage)))
+	gittest.Write(t, repo, "zsh-script", "#!/bin/zsh\n\nfoo() {\n  repeat 3 print hi\n}\n")
+	got = runRgit(t, repo, "commit", "-m", "fix: repeat foo", "zsh-script:foo")
+	qt.Assert(t, qt.Equals(got.ExitCode, 0))
+	qt.Assert(t, qt.StringContains(gittest.Git(t.Context(), t, repo, "show", "HEAD:zsh-script"), "repeat 3"))
 }
 
 func TestCommit_FromSubdirectoryResolvesCWDRelativePaths(t *testing.T) {

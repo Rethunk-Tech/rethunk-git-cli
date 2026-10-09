@@ -50,6 +50,7 @@ func TestRun_LanguagesPorcelainCrossCheckColumn(t *testing.T) {
 		"tsx":        "wired",
 		"typescript": "wired",
 		"yaml":       "wired",
+		"zsh":        "wired",
 	}
 	compiled := map[string]bool{}
 	for _, language := range resolve.Languages() {

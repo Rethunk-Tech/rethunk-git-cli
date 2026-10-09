@@ -23,14 +23,11 @@ none, and stay unsupported on the same demand survey that ordered every
 shipped grammar: no repository surveyed contained any; config and data files
 in those ecosystems still stage by path in the meantime.
 
-Two exclusions inside otherwise-supported languages are deliberate, not gaps
+One exclusion inside an otherwise-supported language is deliberate, not a gap
 waiting to close:
 
 - **`.sass`** — the indented syntax has no tree-sitter grammar this binary
   ships; `.scss` is supported.
-- **`.zsh`** — `.sh`/`.bash` resolve via tree-sitter-bash, a POSIX/Bash
-  grammar that mis-parses zsh-only syntax. A wrong extent is worse than an
-  honest refusal, so `zsh` gets neither.
 
 ## Constructs no anchor reaches
 
@@ -195,7 +192,7 @@ boundary, and emits git's bounded blame for each path segment.
 ## Language-server coverage
 
 The extent cross-check is live for Go, TypeScript/TSX, Python, Rust, Shell,
-YAML, JSON, JSONC, CSS, SCSS, Markdown, and HTML. TOML, SQL, and JSON5 resolve with tree-sitter alone,
+YAML, JSON, JSONC, CSS, SCSS, Zsh, Markdown, and HTML. TOML, SQL, and JSON5 resolve with tree-sitter alone,
 permanently in `[ts-only]` mode — a supported result, not a degraded one:
 
 - **TOML** — `taplo` completes the LSP handshake, but its own ranges

@@ -514,6 +514,7 @@ toml        .toml
 tsx         .tsx .jsx .js .mjs .cjs
 typescript  .ts .mts .cts
 yaml        .yaml .yml
+zsh         .zsh .zshrc .zshenv .zprofile
 ```
 
 This sample is from a `-tags rgit_sql` build; a plain `go build`/`go install`

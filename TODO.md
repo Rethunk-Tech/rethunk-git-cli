@@ -13,7 +13,7 @@ constructs no anchor reaches — are in
 
 ### Not queued
 
-SCSS, zsh, JSONC, JSON5. Include-style pathspec
+Include-style pathspec
 flags. Any web surface: this is a CLI.
 
 ## Settled by measurement — do not re-litigate

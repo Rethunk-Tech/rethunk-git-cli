@@ -239,6 +239,7 @@ toml<TAB>.toml<TAB>0<TAB>ts-only
 tsx<TAB>.tsx .jsx .js .mjs .cjs<TAB>0<TAB>wired
 typescript<TAB>.ts .mts .cts<TAB>0<TAB>wired
 yaml<TAB>.yaml .yml<TAB>0<TAB>wired
+zsh<TAB>.zsh .zshrc .zshenv .zprofile<TAB>0<TAB>wired
 ```
 
 Sampled from a `-tags rgit_sql` build. One record per grammar compiled into

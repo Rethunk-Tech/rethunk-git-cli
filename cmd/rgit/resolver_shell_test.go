@@ -73,10 +73,10 @@ foo() {
 	qt.Assert(t, qt.ErrorAs(err, &unresolvable))
 	qt.Assert(t, qt.Equals(unresolvable.Code, exitcode.AnchorUnresolvable))
 
-	// .bash is claimed too; .zsh deliberately is not (lang_shell.go) --
-	// tree-sitter-bash mis-parses zsh-only syntax.
+	// .bash is claimed too; .zsh belongs to the zsh adapter (lang_zsh.go).
 	_, ok = resolve.ForExtension(".bash")
 	qt.Assert(t, qt.IsTrue(ok))
-	_, ok = resolve.ForExtension(".zsh")
-	qt.Assert(t, qt.IsFalse(ok))
+	zsh, ok := resolve.ForExtension(".zsh")
+	qt.Assert(t, qt.IsTrue(ok))
+	qt.Assert(t, qt.Equals(zsh.Name(), "zsh"))
 }
