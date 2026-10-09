@@ -502,6 +502,7 @@ css         .css
 go          .go
 html        .html .htm
 json        .json
+json5       .json5
 jsonc       .jsonc
 markdown    .md .markdown .mdx
 python      .py .pyi
@@ -522,7 +523,7 @@ omits the `sql` row entirely.
 columns retain the meanings above.
 
 `CROSS-CHECK` is `wired` for grammars with a language-server catalog entry and
-`ts-only` for TOML and SQL. It reports compile-time design wiring, not whether
+`ts-only` for TOML, SQL, and JSON5. It reports compile-time design wiring, not whether
 a server is reachable in this invocation; `rgit doctor` reports that
 environment status.
 
@@ -779,7 +780,7 @@ Naming one path both as a path and as a symbol anchor → exit 5, in whichever
 spelling: `--file` with `--sym`, or the positional forms `greet.go
 greet.go:A`.
 
-A `FILE:SYMBOL` anchor into a structured-data file (JSON, YAML, TOML) → exit
+A `FILE:SYMBOL` anchor into a structured-data file (JSON, JSONC, JSON5, YAML, TOML) → exit
 12: a spliced extent is not guaranteed to agree with the file's own grammar,
 and nothing would fail at commit time to say so. Name the path instead —
 `rgit commit package.json` stages the whole file, unaffected; `rgit diff`,

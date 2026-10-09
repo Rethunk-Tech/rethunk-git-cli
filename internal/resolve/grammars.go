@@ -7,6 +7,7 @@ import (
 	tsrust "github.com/tree-sitter/tree-sitter-rust/bindings/go"
 	tsts "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve/json5grammar"
 	tsmd "github.com/tree-sitter-grammars/tree-sitter-markdown/bindings/go"
 	tstoml "github.com/tree-sitter-grammars/tree-sitter-toml/bindings/go"
 	tsyaml "github.com/tree-sitter-grammars/tree-sitter-yaml/bindings/go"
@@ -69,3 +70,7 @@ func jsonGrammar() *ts.Language { return ts.NewLanguage(tsjson.Language()) }
 func htmlGrammar() *ts.Language { return ts.NewLanguage(tshtml.Language()) }
 
 func tomlGrammar() *ts.Language { return ts.NewLanguage(tstoml.Language()) }
+
+// json5Grammar comes from vendored C (json5grammar): the upstream module's
+// go.mod declares a path Go refuses to fetch it under.
+func json5Grammar() *ts.Language { return ts.NewLanguage(json5grammar.Language()) }

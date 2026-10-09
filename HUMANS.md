@@ -27,7 +27,7 @@ Everything else stays plain `git`. Full command reference: [docs/USAGE.md](docs/
 
 ## Anchor limits
 
-Anchors need a parsed syntax tree — refused on binaries, symlinks, submodules, and unsupported languages ([docs/LIMITATIONS.md](docs/LIMITATIONS.md#unsupported-languages)). `rgit commit` also refuses `FILE:SYMBOL` on JSON, YAML, or TOML (other commands still resolve); name the path instead. Details: [docs/ANCHORS.md § Paths that anchors cannot address](docs/ANCHORS.md#paths-that-anchors-cannot-address).
+Anchors need a parsed syntax tree — refused on binaries, symlinks, submodules, and unsupported languages ([docs/LIMITATIONS.md](docs/LIMITATIONS.md#unsupported-languages)). `rgit commit` also refuses `FILE:SYMBOL` on JSON, JSONC, JSON5, YAML, or TOML (other commands still resolve); name the path instead. Details: [docs/ANCHORS.md § Paths that anchors cannot address](docs/ANCHORS.md#paths-that-anchors-cannot-address).
 
 ## Degraded mode
 

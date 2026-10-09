@@ -264,6 +264,7 @@ func registerLanguages() {
 	register(newHTMLLanguage())
 	register(newJSONLanguage())
 	register(newJSONCLanguage())
+	register(newJSON5Language())
 	register(newMarkdownLanguage())
 	register(newPythonLanguage())
 	register(newRustLanguage())

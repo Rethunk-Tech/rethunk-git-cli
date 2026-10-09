@@ -18,8 +18,9 @@ import (
 // with a measured reason, matching LIMITATIONS.md -- everything else in
 // Languages() is expected to have a wired server.
 var neverWired = map[string]string{
-	"toml": "taplo completes the handshake but its ranges genuinely disagree with tree-sitter-toml on nested tables",
-	"sql":  "no maintained tool speaks documentSymbol for SQL",
+	"toml":  "taplo completes the handshake but its ranges genuinely disagree with tree-sitter-toml on nested tables",
+	"sql":   "no maintained tool speaks documentSymbol for SQL",
+	"json5": "no JSON5 language server reports document symbols; vscode-json-language-server parses strict JSON and JSONC only",
 }
 
 // TestServersMap_CoversEveryResolveLanguage is the reverse of

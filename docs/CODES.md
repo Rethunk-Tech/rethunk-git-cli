@@ -21,7 +21,7 @@ For the flags that produce these, see [`USAGE.md`](USAGE.md).
 | 9 | Unsupported / deferred language for a symbol anchor |
 | 10 | Symbol anchor refused on a special path (`commit` only: symlink, gitlink, binary, unmerged, skip-worktree, assume-unchanged) |
 | 11 | All named targets resolve but have no uncommitted changes |
-| 12 | Symbol anchor refused on a structured-data file (JSON, YAML, TOML) (`commit` only) |
+| 12 | Symbol anchor refused on a structured-data file (JSON, JSONC, JSON5, YAML, TOML) (`commit` only) |
 | 128 | Fatal git / system failure (includes hook rejection, GPG failure, a `-C` directory that cannot be entered) |
 | 129 | Invalid usage (bad flags, missing message, no targets, path escape, malformed `-C`) |
 
@@ -51,7 +51,7 @@ diff rather than mid-commit.
 
 `rgit diff --sym`, `rgit show`, `rgit blame`, and `rgit log` all resolve a
 `FILE:SYMBOL`
-anchor into JSON, YAML, or TOML exactly like any other anchor — none writes a
+anchor into JSON, JSONC, JSON5, YAML, or TOML exactly like any other anchor — none writes a
 blob, so there is nothing for the guard to protect. Only `rgit commit` would
 splice a synthesized extent into a blob and stage it, so only it refuses. Name
 the path instead: `rgit commit config.yaml` stages the whole file, unaffected.
@@ -228,6 +228,7 @@ css<TAB>.css<TAB>0<TAB>wired
 go<TAB>.go<TAB>0<TAB>wired
 html<TAB>.html .htm<TAB>0<TAB>wired
 json<TAB>.json<TAB>0<TAB>wired
+json5<TAB>.json5<TAB>0<TAB>ts-only
 jsonc<TAB>.jsonc<TAB>0<TAB>wired
 markdown<TAB>.md .markdown<TAB>0<TAB>wired
 python<TAB>.py .pyi<TAB>0<TAB>wired

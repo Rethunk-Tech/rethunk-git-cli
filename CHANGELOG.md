@@ -8,6 +8,8 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `.json5` files resolve `FILE:KEY` anchors (unquoted, single- and double-quoted keys) in `[ts-only]` mode; no
+  JSON5 language server reports symbols. `commit` refuses the anchor as it does for JSON.
 - `.jsonc` files resolve `FILE:KEY` anchors like JSON, with `//` and `/* */` comments attributed as doc
   comments and the symbol cross-checked against `vscode-json-language-server`.
 

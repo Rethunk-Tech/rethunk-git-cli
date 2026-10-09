@@ -182,7 +182,7 @@ paths. Name the path instead. Behaviour per kind:
 | Unmerged index path | `FILE:SYMBOL` refused with exit 10; name the path instead |
 | Skip-worktree / assume-unchanged | `FILE:SYMBOL` refused with exit 10; bits left unchanged. Name the path instead |
 
-A `FILE:SYMBOL` anchor into JSON, YAML, or TOML resolves fine for the read-only
+A `FILE:SYMBOL` anchor into JSON, JSONC, JSON5, YAML, or TOML resolves fine for the read-only
 `diff`, `blame`, and `log`, but `rgit commit` refuses it (exit 12): the format
 itself has no error `rgit` could rely on to catch a splice that disagrees with
 the file's own grammar, so the write it would produce is never trustworthy.
@@ -207,6 +207,7 @@ extensions:
 | CSS | `.css` | Selectors and at-rules. `.scss`/`.sass` unsupported — see [`LIMITATIONS.md`](LIMITATIONS.md#unsupported-languages) |
 | JSON | `.json` | Object key paths, container-qualified one level the same way a YAML mapping key is. Arrays and non-object documents have nothing to address |
 | JSONC | `.jsonc` | As JSON, with `//` and `/* */` comments as doc comments. A trailing comma parses as an error node, so keys after it are not indexed |
+| JSON5 | `.json5` | As JSON: unquoted and single-quoted keys name the same as double-quoted ones, container-qualified one level. Comments attach as doc comments |
 | TOML | `.toml` | Key paths and `[table]`/`[[array]]` headers, container-qualified one level. Inline tables and arrays have nothing to address inside them |
 | HTML | `.html`, `.htm` | An id-bearing element, tag-qualified (`div#app`), to any nesting depth. An element with no id has no anchor of its own — see [`LIMITATIONS.md`](LIMITATIONS.md#constructs-no-anchor-reaches) |
 | SQL | `.sql` | `CREATE TABLE`/`VIEW`/`FUNCTION`/`INDEX`/`TRIGGER`/`TYPE`, schema-qualified one level. Ships behind the `rgit_sql` build tag ([`INSTALL.md`](INSTALL.md#sql-support)) |

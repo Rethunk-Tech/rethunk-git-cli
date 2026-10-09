@@ -195,13 +195,14 @@ boundary, and emits git's bounded blame for each path segment.
 ## Language-server coverage
 
 The extent cross-check is live for Go, TypeScript/TSX, Python, Rust, Shell,
-YAML, JSON, CSS, Markdown, and HTML. TOML and SQL resolve with tree-sitter alone,
+YAML, JSON, JSONC, CSS, Markdown, and HTML. TOML, SQL, and JSON5 resolve with tree-sitter alone,
 permanently in `[ts-only]` mode — a supported result, not a degraded one:
 
 - **TOML** — `taplo` completes the LSP handshake, but its own ranges
   disagree with the extent `rgit` stages on an ordinary nested table, so
   installing it does not enable a cross-check.
 - **SQL** — no maintained tool speaks `documentSymbol` for SQL at all.
+- **JSON5** — no JSON5 language server reports document symbols; `vscode-json-language-server` parses strict JSON and JSONC only.
 
 **HTML wires with two narrower, safe carve-outs, not a full unwiring.**
 `vscode-html-language-server` names and ranges an ordinary id-bearing

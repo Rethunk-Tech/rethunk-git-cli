@@ -38,6 +38,7 @@ func TestRun_LanguagesPorcelainCrossCheckColumn(t *testing.T) {
 		"go":         "wired",
 		"html":       "wired",
 		"json":       "wired",
+		"json5":      "ts-only",
 		"jsonc":      "wired",
 		"markdown":   "wired",
 		"python":     "wired",
