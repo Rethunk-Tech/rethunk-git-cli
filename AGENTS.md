@@ -56,3 +56,7 @@ Tree-sitter resolves; LSP **verifies** declaration-only extent (doc comment stri
 ## State
 
 No persistent state. Creates only `rgit-commit.lock` in the git directory (`commit --only`'s OS lock), a `rgit-only-*` system-temp directory holding `commit --only`'s private index, a short-lived `rgit-index-*` copy beside the index while staging, and, for LSP, the socket, its spawn lock, and the spawned daemon's pidfile under UID-scoped `rgit-<uid>` in `$XDG_RUNTIME_DIR` (or system temp), `0700`, owner-verified before dial (`internal/lsp/dial.go`). Repository state is git's alone.
+
+## Gate budget
+
+`.gate.toml` chains build, lint, test and vuln because the cgo tree-sitter grammars cost about 115 CPU-s to compile cold and concurrent gates each compiled them. Measured 2026-10-09 with `gate --profile` at load 38 to 54 (throwaway Go and lint caches): cold was 39 s wall and 497 CPU-s concurrent, and is 32 s wall and 156 CPU-s chained, with `make build` 20 s of it. Warm went from 1.0 s to 2.0 s wall (6.7 to 7.3 CPU-s). Wall is not a verdict until a quiet-machine re-measure.

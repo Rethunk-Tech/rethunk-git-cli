@@ -1,2 +1,14 @@
+# The cgo tree-sitter grammars cost about 115 CPU-s to compile cold, and gates that run together each compile
+# them again before any of them has filled the build cache. Chained, build fills the cache and the rest read it.
+[gates.build]
+serial = true
+
+[gates.lint]
+serial = true
+
 [gates.test]
 run = "make test-short"
+serial = true
+
+[gates.vuln]
+serial = true
