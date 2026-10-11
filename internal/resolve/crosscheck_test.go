@@ -172,19 +172,38 @@ func TestMatchAndCompare_FlatHTMLDottedID(t *testing.T) {
 func TestMatchAndCompare_FlatHTMLDottedIDCollidesWithClassSuffix(t *testing.T) {
 	t.Parallel()
 
-	// nodeToName emits the same string for id "toc-mod.io" and for id
-	// "toc-mod" plus class "io". Different ranges mean neither anchor can
-	// be paired, which is what the server actually exposes.
-	src := []byte(`<a id="toc-mod" class="io">x</a>` + "\n" + `<a id="toc-mod.io">y</a>` + "\n")
-	symbols := []lsp.Symbol{
-		{Name: "a#toc-mod.io", StartLine: 0, EndLine: 0},
-		{Name: "a#toc-mod.io", StartLine: 1, EndLine: 1},
+	// nodeToName emits one string for id "toc-mod" plus class "io" and for
+	// id "toc-mod.io". The refusal is permanent: a repeated name is not
+	// paired, on two lines or on one. A shared line must not fall through
+	// to sameRange and take the first symbol.
+	split := []byte(`<a id="toc-mod" class="io">x</a>` + "\n" + `<a id="toc-mod.io">y</a>` + "\n")
+	oneLine := []byte(`<a id="toc-mod" class="io">x</a><a id="toc-mod.io">y</a>` + "\n")
+	cases := []struct {
+		src     []byte
+		symbols []lsp.Symbol
+	}{
+		{
+			src: split,
+			symbols: []lsp.Symbol{
+				{Name: "a#toc-mod.io", StartLine: 0, EndLine: 0},
+				{Name: "a#toc-mod.io", StartLine: 1, EndLine: 1},
+			},
+		},
+		{
+			src: oneLine,
+			symbols: []lsp.Symbol{
+				{Name: "a#toc-mod.io", StartLine: 0, EndLine: 0},
+				{Name: "a#toc-mod.io", StartLine: 0, EndLine: 0},
+			},
+		},
 	}
-	for _, anchor := range []string{"a#toc-mod", "a#toc-mod.io"} {
-		res := &Resolution{Anchor: anchor, Sep: "#", Flat: true, DeclOnly: Extent{Start: 0, End: uint(len(src) - 1)}}
-		found, err := MatchAndCompare(src, res, symbols)
-		if found {
-			t.Errorf("anchor %q found (err %v); want false -- the server name is ambiguous", anchor, err)
+	for _, tc := range cases {
+		for _, anchor := range []string{"a#toc-mod", "a#toc-mod.io"} {
+			res := &Resolution{Anchor: anchor, Sep: "#", Flat: true, DeclOnly: Extent{Start: 0, End: uint(len(tc.src) - 1)}}
+			found, err := MatchAndCompare(tc.src, res, tc.symbols)
+			if found || err != nil {
+				t.Errorf("src %q anchor %q found=%v err=%v; want refused, not paired and not an extent mismatch", tc.src, anchor, found, err)
+			}
 		}
 	}
 }

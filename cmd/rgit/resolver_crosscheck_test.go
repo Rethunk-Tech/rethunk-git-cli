@@ -307,4 +307,26 @@ func TestResolve_CrossCheckLiveHTML(t *testing.T) {
 	degraded, cerr = crossCheckOne(ctx, sess, lang, dir, classPath, classSrc, dotRes)
 	qt.Assert(t, qt.IsFalse(degraded))
 	qt.Assert(t, qt.IsNil(cerr))
+
+	// id "toc-mod" plus class "io" and id "toc-mod.io" are one server name.
+	// Both anchors are refused. An unambiguous sibling in the same file
+	// still cross-checks, and a dotted id with no colliding element still
+	// did above.
+	collideSrc := []byte(`<a id="toc-mod" class="io">x</a>` + "\n" + `<a id="toc-mod.io">y</a>` + "\n" + `<p id="ok">z</p>` + "\n")
+	collidePath := filepath.Join(dir, "collide.html")
+	if err := os.WriteFile(collidePath, collideSrc, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, anchor := range []string{"a#toc-mod", "a#toc-mod.io"} {
+		res, rerr := resolve.Resolve(lang, collideSrc, anchor)
+		qt.Assert(t, qt.IsNil(rerr))
+		degraded, cerr = crossCheckOne(ctx, sess, lang, dir, collidePath, collideSrc, res)
+		qt.Assert(t, qt.IsTrue(degraded), qt.Commentf("anchor %q", anchor))
+		qt.Assert(t, qt.IsNil(cerr), qt.Commentf("anchor %q", anchor))
+	}
+	okRes, rerr := resolve.Resolve(lang, collideSrc, "p#ok")
+	qt.Assert(t, qt.IsNil(rerr))
+	degraded, cerr = crossCheckOne(ctx, sess, lang, dir, collidePath, collideSrc, okRes)
+	qt.Assert(t, qt.IsFalse(degraded))
+	qt.Assert(t, qt.IsNil(cerr))
 }

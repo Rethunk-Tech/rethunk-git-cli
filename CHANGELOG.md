@@ -13,6 +13,7 @@ Notable changes to `rgit`. The format follows
 ### Fixed
 
 - An HTML id containing a dot (`a#toc-mod.io`) cross-checks against `vscode-html-language-server`. The dot stays part of the id; only a `.class` suffix appended after the full `tag#id` is the server's class list. See [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md#language-server-coverage).
+- An HTML cross-check refuses both anchors when one element's id is another's `tag#id` plus a class token (`<a id="toc-mod" class="io">` and `<a id="toc-mod.io">`). The language server emits one name for both, so neither is paired. See [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md#language-server-coverage).
 
 ## [2.2.3] - 2026-10-09
 

@@ -250,6 +250,9 @@ func formatRange(start, end uint32) string {
 // dot, so the first "." is not a class separator: "a#toc-mod.io" is the id,
 // and "a#toc-mod.io.widget" is that id plus the class "widget".
 // htmlServerNameMatches keeps the id and accepts only a suffix after it.
+// That concatenation is lossy: id "toc-mod" plus class "io" and id
+// "toc-mod.io" are both the name "a#toc-mod.io", and the symbol carries no
+// other field that splits them. htmlServerNamesCollide refuses the pair.
 // qualifyLSPSymbol's join is for every other language, where Container
 // really is an ancestor a server also reports as one.
 func matchLSPSymbol(anchor, sep string, flat, slugAnchors, groupedAnchors bool, sameName int, declStart uint32, declStartOK bool, symbols []lsp.Symbol) (lsp.Symbol, bool) {
@@ -289,7 +292,17 @@ func matchLSPSymbol(anchor, sep string, flat, slugAnchors, groupedAnchors bool, 
 	// line than the extent it was compared against. Symbols describing one
 	// declaration agree on its range; anything else is ambiguous and degrades
 	// to [ts-only] rather than guessing.
+	//
+	// HTML is stricter than that range check. nodeToName emits one string for
+	// id "toc-mod" plus class "io" and for id "toc-mod.io", and detail is
+	// empty, so the line range is the only difference. Two elements on one
+	// line agree on that range too; treating agreement as identity would pair
+	// the anchor with whichever symbol was listed first. A repeated HTML name
+	// is refused outright.
 	if len(byName) > 0 {
+		if flat && htmlServerNamesCollide(byName) {
+			return lsp.Symbol{}, false
+		}
 		if sameRange(byName) {
 			return byName[0], true
 		}
@@ -386,6 +399,24 @@ func htmlServerNameMatches(name, anchor string) bool {
 		return false
 	}
 	return name == anchor || strings.HasPrefix(name, anchor+".")
+}
+
+// htmlServerNamesCollide reports whether syms repeats a
+// vscode-html-language-server name. nodeToName concatenates the tag, the id,
+// and each class token into that one string and sets no detail, so
+// `<a id="toc-mod" class="io">` and `<a id="toc-mod.io">` are both
+// "a#toc-mod.io". The ranges differ, and the cross-check is what judges
+// ranges, so a repeated name is not a declaration to pair with, including
+// when both symbols share a line. Callers refuse the anchor instead of guessing.
+func htmlServerNamesCollide(syms []lsp.Symbol) bool {
+	for i := 1; i < len(syms); i++ {
+		for j := 0; j < i; j++ {
+			if syms[i].Name == syms[j].Name {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func qualifyLSPSymbol(s lsp.Symbol, sep string) string {
