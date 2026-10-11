@@ -94,6 +94,19 @@ func TestResolve_HTML(t *testing.T) {
 	qt.Assert(t, qt.DeepEquals(order, []string{"div#app", "section#content", "input#field"}))
 }
 
+func TestResolve_HTMLIDContainingDot(t *testing.T) {
+	t.Parallel()
+	src := []byte(`<a id="toc-mod.io" class="widget">item</a>` + "\n")
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".html", src, "a#toc-mod.io"), `<a id="toc-mod.io" class="widget">item</a>`))
+	qt.Assert(t, qt.Equals(mustResolveExt(t, ".html", src, "toc-mod.io"), `<a id="toc-mod.io" class="widget">item</a>`))
+
+	lang, ok := resolve.ForExtension(".html")
+	qt.Assert(t, qt.IsTrue(ok))
+	order, err := resolve.DeclOrder(lang, src)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.DeepEquals(order, []string{"a#toc-mod.io"}))
+}
+
 // TestResolve_HTMLDuplicateIDIsAmbiguous pins the second HTML decision: an
 // id is unique per document by spec but routinely is not in practice, and
 // index.go's existing byBare/byQualified/ordinal machinery already

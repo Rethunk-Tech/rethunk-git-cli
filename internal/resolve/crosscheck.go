@@ -244,24 +244,30 @@ func formatRange(start, end uint32) string {
 // flat means res.Flat: the resolving language's own Container is not a real
 // ancestor (Language.FlatContainer, lang.go's own doc comment), so a
 // server-reported symbol's genuine containerName must never be joined onto
-// its Name before comparing. HTML's resolver emits "tag#id", while the
-// language server may append ".class" selectors to that same Name; strip
-// those server-only suffixes before comparing. qualifyLSPSymbol's join is for
-// every other language, where Container really is an ancestor a server also
-// reports as one.
+// its Name before comparing. HTML's resolver emits "tag#id". The language
+// server spells the same element as tag, "#"+id, then one ".class" per
+// class token (vscode-html-languageservice nodeToName). An id may contain a
+// dot, so the first "." is not a class separator: "a#toc-mod.io" is the id,
+// and "a#toc-mod.io.widget" is that id plus the class "widget".
+// htmlServerNameMatches keeps the id and accepts only a suffix after it.
+// qualifyLSPSymbol's join is for every other language, where Container
+// really is an ancestor a server also reports as one.
 func matchLSPSymbol(anchor, sep string, flat, slugAnchors, groupedAnchors bool, sameName int, declStart uint32, declStartOK bool, symbols []lsp.Symbol) (lsp.Symbol, bool) {
 	bare, ordinal, hasOrdinal := ParseOrdinal(anchor)
 
 	var byName, byBare, byMember []lsp.Symbol
 	for _, s := range symbols {
-		qualified := s.Name
 		if flat {
-			if classStart := strings.IndexByte(qualified, '.'); classStart >= 0 {
-				qualified = qualified[:classStart]
+			if htmlServerNameMatches(s.Name, anchor) {
+				byName = append(byName, s)
+				continue
 			}
-		} else {
-			qualified = qualifyLSPSymbol(s, sep)
+			if hasOrdinal && htmlServerNameMatches(s.Name, bare) {
+				byBare = append(byBare, s)
+			}
+			continue
 		}
+		qualified := qualifyLSPSymbol(s, sep)
 		if qualified == anchor || (slugAnchors && slugQualified(s, sep) == anchor) {
 			byName = append(byName, s)
 			continue
@@ -368,6 +374,18 @@ func slugQualified(s lsp.Symbol, sep string) string {
 		return slugify(s.Name)
 	}
 	return joinQualified(slugify(s.Container), slugify(s.Name), sep)
+}
+
+// htmlServerNameMatches reports whether a vscode-html-language-server
+// symbol name is anchor. The server appends class selectors after the full
+// tag#id, so a name matches when it is the anchor or the anchor followed by
+// ".class" suffixes. Splitting on the first "." would cut an id that itself
+// contains one ("a#toc-mod.io").
+func htmlServerNameMatches(name, anchor string) bool {
+	if anchor == "" {
+		return false
+	}
+	return name == anchor || strings.HasPrefix(name, anchor+".")
 }
 
 func qualifyLSPSymbol(s lsp.Symbol, sep string) string {

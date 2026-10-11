@@ -206,10 +206,14 @@ permanently in `[ts-only]` mode — a supported result, not a degraded one:
 element exactly the way `rgit` does (`div#app`) once the points below are
 accounted for:
 
-- The server appends `.class…` selectors to the same `tag#id` name when the
-  element carries a class. Flat matching strips those server-only suffixes
-  before comparing, so class-bearing elements cross-check; staged extents
-  stay the grammar's own boundary and never grow to include class text.
+- The server appends `.class…` selectors after the full `tag#id` when the
+  element carries a class (`div#app.widget`). An id may contain a dot
+  (`a#toc-mod.io`); flat matching compares that whole `tag#id` and treats
+  only a further `.class` suffix as the server's class list, so both
+  class-bearing elements and dotted ids cross-check. When one element's id
+  is another's `tag#id` plus a class token, the server emits one name for
+  both and the cross-check leaves them unpaired. Staged extents stay the
+  grammar's own boundary and never grow to include class text.
 - A void element (`<input>`, `<img>`, `<br>`, and similarly self-closing-
   by-tag-name elements) measurably absorbs trailing whitespace or text up
   to its next real sibling boundary into its own node's range when one

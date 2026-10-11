@@ -287,18 +287,24 @@ func TestResolve_CrossCheckLiveHTML(t *testing.T) {
 		qt.Assert(t, qt.IsNil(err), qt.Commentf("anchor %q", anchor))
 	}
 
-	// Class-bearing elements cross-check once the server's ".class…" suffix is
-	// stripped from its Name; staged anchors stay tag#id.
-	classSrc := []byte(`<div id="widget" class="foo bar">x</div>` + "\n")
+	// Class-bearing elements cross-check once a ".class…" suffix after the
+	// full tag#id is accepted; staged anchors stay tag#id. A dot inside the
+	// id is part of the id.
+	classSrc := []byte(`<div id="widget" class="foo bar">x</div>` + "\n" + `<a id="toc-mod.io">y</a>` + "\n")
 	classPath := filepath.Join(dir, "class.html")
 	if err := os.WriteFile(classPath, classSrc, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	classRes, err := resolve.Resolve(lang, classSrc, "div#widget")
 	qt.Assert(t, qt.IsNil(err))
+	dotRes, err := resolve.Resolve(lang, classSrc, "a#toc-mod.io")
+	qt.Assert(t, qt.IsNil(err))
 	sess := lsp.NewSession()
 	defer sess.Close()
 	degraded, cerr := crossCheckOne(ctx, sess, lang, dir, classPath, classSrc, classRes)
+	qt.Assert(t, qt.IsFalse(degraded))
+	qt.Assert(t, qt.IsNil(cerr))
+	degraded, cerr = crossCheckOne(ctx, sess, lang, dir, classPath, classSrc, dotRes)
 	qt.Assert(t, qt.IsFalse(degraded))
 	qt.Assert(t, qt.IsNil(cerr))
 }

@@ -72,8 +72,10 @@ read as the type, which left every impl member unnamed). By group:
 - Shell, 15: expected, variable assignments the server never names (below).
 - TSX, 3: `actual`, `useNavigate` and `skip` in one test file, locals and
   destructured names; not examined.
-- HTML, 2: ids containing a dot (`a#toc-mod.io`), which the anchor syntax reads
-  as a class separator; a resolver gap, not fixed.
+- HTML, 2: ids containing a dot (`a#toc-mod.io`). The corpus left them unnamed
+  because a `.` in the id was read as the language server's class separator.
+  Matching now keeps the full `tag#id` and treats only a further `.class`
+  suffix as that separator, so the same ids cross-check.
 - Go, 1: the blank identifier `_`; expected.
 
 An earlier 220-file run compared 4,920 symbols with 0 disagreements and 158

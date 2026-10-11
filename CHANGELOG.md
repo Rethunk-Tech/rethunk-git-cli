@@ -10,6 +10,10 @@ Notable changes to `rgit`. The format follows
 
 - `rgit commit -i` / `--include` stages named pathspecs and symbol targets into the commit along with work already staged, matching `git commit --include`. See [`docs/USAGE.md`](docs/USAGE.md#flags).
 
+### Fixed
+
+- An HTML id containing a dot (`a#toc-mod.io`) cross-checks against `vscode-html-language-server`. The dot stays part of the id; only a `.class` suffix appended after the full `tag#id` is the server's class list. See [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md#language-server-coverage).
+
 ## [2.2.3] - 2026-10-09
 
 ### Fixed

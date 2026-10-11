@@ -324,7 +324,8 @@ when it is the only one of its tag in the file: this resolver's index has no
 per-parent scoping, so falling back to a bare tag name would make ordinary tags
 like `div` collide across nearly every real document; only an element's own
 written text (tag name and id value, both verbatim) is ever staged, matching
-how a CSS selector already stages. Attribute names, including `id` itself, are
+how a CSS selector already stages. A dot in the id is part of that value:
+`a#toc-mod.io` addresses `<a id="toc-mod.io">`. Attribute names, including `id` itself, are
 matched case-insensitively (`ID`, `Id`, and `id` all recognize the same
 attribute), per the WHATWG HTML spec — the id's own value is not case-folded.
 Two elements sharing one id — the same tag twice, or two different tags —
