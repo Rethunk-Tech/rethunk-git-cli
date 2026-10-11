@@ -22,8 +22,9 @@ import (
 // only one of them is updated for a shared-loop change.
 // singleAnchor says the command takes exactly one anchor, so a second
 // positional is an error. show takes any number and opts out of that one
-// case; every other shape in the matrix still applies to it.
-func assertAnchorUsageRefusals(t *testing.T, cmd string, singleAnchor bool) {
+// case. refuseBarePath says a plain path is not a legal positional; log
+// opts out because a path is its unanchored form.
+func assertAnchorUsageRefusals(t *testing.T, cmd string, singleAnchor, refuseBarePath bool) {
 	t.Helper()
 
 	t.Chdir(t.TempDir())
@@ -43,12 +44,14 @@ func assertAnchorUsageRefusals(t *testing.T, cmd string, singleAnchor bool) {
 		qt.Assert(t, qt.StringContains(stderr, "requires a FILE:SYMBOL anchor"))
 	})
 
-	t.Run("bare pathspec is refused, not silently split", func(t *testing.T) {
-		chdirTempRepo(t)
-		_, stderr, code := runApp(t, cmd, "a.go")
-		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-		qt.Assert(t, qt.StringContains(stderr, "not a plain path"))
-	})
+	if refuseBarePath {
+		t.Run("bare pathspec is refused, not silently split", func(t *testing.T) {
+			chdirTempRepo(t)
+			_, stderr, code := runApp(t, cmd, "a.go")
+			qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+			qt.Assert(t, qt.StringContains(stderr, "not a plain path"))
+		})
+	}
 
 	// "bare -- does not panic" pins the regression: a lone "--" is consumed
 	// whole by cli.ClassifyArgs's rule 1 (everything after "--" is a
@@ -84,7 +87,7 @@ func assertAnchorUsageRefusals(t *testing.T, cmd string, singleAnchor bool) {
 }
 
 func TestRun_BlameHelpAndUsage(t *testing.T) {
-	assertAnchorUsageRefusals(t, "blame", true)
+	assertAnchorUsageRefusals(t, "blame", true, true)
 }
 
 func TestRun_BlameHelpEquality(t *testing.T) {

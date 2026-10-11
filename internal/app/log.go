@@ -7,13 +7,13 @@
 //     implementation already re-derives the touched line range at each
 //     ancestor commit itself, so there is no per-commit tree-sitter
 //     re-parse here and no second attribution path.
-//   - `rgit log --since=DATE [--until=DATE] [PATH...]` -- time- and
-//     path-scoped history with no symbol at all, the shape the operator's
-//     own tooling otherwise has to fall back to plain `git log --since=...
-//     -- <paths>` for. Selected by the presence of --since/--until when no
-//     positional classifies as a FILE:SYMBOL anchor (the six-rule table,
-//     not a colon heuristic: an existing path like src/notes:draft.md is
-//     still a pathspec); every positional is a pathspec.
+//   - `rgit log [PATH...]` -- path-scoped history with no symbol at all,
+//     with or without --since/--until. Selected when every positional
+//     classifies as a pathspec (the six-rule table, not a colon heuristic:
+//     an existing path like src/notes:draft.md is still a pathspec) so a
+//     lockfile, a JSON file, or a directory does not fall through to the
+//     anchor form. Zero positionals and no date stays the anchor form's
+//     exit 129.
 //
 // One guardrail is non-negotiable for both:
 // patches are opt-in (-p/--patch), never default -- the default stream is
@@ -39,7 +39,8 @@ import (
 )
 
 const logHelp = `usage: rgit log FILE:SYMBOL [--since=DATE] [--until=DATE] [-n N|--max-count=N] [--follow-rename] [--porcelain | -p|--patch]
-       rgit log --since=DATE [--until=DATE] [-n N|--max-count=N] [--porcelain | -p|--patch] [PATH...]
+       rgit log [--since=DATE] [--until=DATE] [-n N|--max-count=N] [--porcelain | -p|--patch] PATH...
+       rgit log --since=DATE [--until=DATE] [-n N|--max-count=N] [--porcelain | -p|--patch]
 
 History of one symbol: one record per commit whose own diff touched its
 current extent, newest first. Patch-free by default -- plain
@@ -54,16 +55,18 @@ detects one, but a rename that also reshuffles the symbol can silently stop
 short. --follow-rename re-resolves the anchor's extent at each rename
 boundary and continues under the pre-rename path (docs/LIMITATIONS.md).
 
---since=DATE bounds either form. With a FILE:SYMBOL positional, the
-anchor remains the symbol-scoped form; otherwise this is ordinary,
-non-anchored git history with, optionally, one or more paths. Forwarded to
-git's own --since unparsed, so anything git accepts there ("2024-01-01",
-"2 weeks ago") works here too.
+PATH... with no FILE:SYMBOL positional is ordinary, non-anchored git
+history, with or without a date. Every positional is classified with the
+same six-rule table as commit and diff, so an existing path that contains
+a colon stays a pathspec. With neither a path nor --since/--until, log
+requires a FILE:SYMBOL anchor.
+
+--since=DATE bounds either form. Forwarded to git's own --since unparsed,
+so anything git accepts there ("2024-01-01", "2 weeks ago") works here too.
 
 --until=DATE bounds the selected form's other end, alone or combined with
---since. With no path and only one bound (or neither), the unanchored form
-is the whole repository's history in that window, matching plain
-"git log --since=DATE".
+--since. With no path and a date bound, the unanchored form is the whole
+repository's history in that window, matching plain "git log --since=DATE".
 
 -n, --max-count=N limits either form to at most N commits, forwarded to
 git's own count limit. Under --follow-rename the limit applies per rename
@@ -130,8 +133,11 @@ func logInteriorColonPositionals(args []string) []string {
 }
 
 func runLog(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
-	if hasTimeRangeFlag(args) {
-		anchor, code := logTimeRangeSelectsAnchor(ctx, dir, args, stderr)
+	// No path and no date is still the anchor form, which refuses with
+	// exit 129. A path selects path-scoped history once classification
+	// says every positional is a pathspec, date or not.
+	if hasTimeRangeFlag(args) || logHasPositionals(args) {
+		anchor, code := logSelectsAnchor(ctx, dir, args, stderr)
 		if code != exitcode.Success {
 			return code
 		}
@@ -142,14 +148,39 @@ func runLog(ctx context.Context, dir string, args []string, stdout, stderr io.Wr
 	return runLogAnchor(ctx, dir, args, stdout, stderr)
 }
 
-// logTimeRangeSelectsAnchor reports whether a --since/--until invocation
-// should keep the FILE:SYMBOL form. The cheap colon scan is only a filter:
-// an existing path that itself contains a colon is a pathspec, the same
-// rule 4 commit and diff already apply, and that form is path-scoped
-// history. A token that classifies as KindAnchor, or that fails
-// classification entirely (so runLogAnchor can print its own message),
-// keeps the symbol-scoped form.
-func logTimeRangeSelectsAnchor(ctx context.Context, dir string, args []string, stderr io.Writer) (bool, exitcode.Code) {
+// logHasPositionals reports whether args names a path or anchor, including
+// a token after "--". Flags and their values are not positionals, so
+// "rgit log --porcelain" stays the no-argument refusal.
+func logHasPositionals(args []string) bool {
+	afterSeparator := false
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			afterSeparator = true
+			continue
+		}
+		if afterSeparator {
+			return true
+		}
+		switch {
+		case a == "--since" || a == "--until" || a == "-n" || a == "--max-count":
+			i++
+		case strings.HasPrefix(a, "-"):
+			continue
+		default:
+			return true
+		}
+	}
+	return false
+}
+
+// logSelectsAnchor reports whether the invocation should keep the
+// FILE:SYMBOL form. The cheap colon scan is only a filter: an existing
+// path that itself contains a colon is a pathspec, the same rule 4 commit
+// and diff already apply, and that form is path-scoped history. A token
+// that classifies as KindAnchor, or that fails classification entirely
+// (so runLogAnchor can print its own message), keeps the symbol-scoped form.
+func logSelectsAnchor(ctx context.Context, dir string, args []string, stderr io.Writer) (bool, exitcode.Code) {
 	candidates := logInteriorColonPositionals(args)
 	if len(candidates) == 0 {
 		return false, exitcode.Success
@@ -423,9 +454,9 @@ func runLogFollowRename(ctx context.Context, repo *gitx.Repo, file string, src [
 	}
 }
 
-// runLogPathScoped is rgit log --since/--until's form: ordinary,
-// non-anchored git history bounded by date and, optionally, one or more
-// paths. Flags are parsed with pflag, matching commit.go and diff.go's own
+// runLogPathScoped is rgit log's path form: ordinary, non-anchored git
+// history of one or more paths, optionally bounded by date. Flags are
+// parsed with pflag, matching commit.go and diff.go's own
 // style for a surface with value-taking flags -- this form's arity (zero or
 // more path positionals, none of them a required anchor) does not fit
 // shared.go's parseAnchorCommandArgs, which always requires at least one

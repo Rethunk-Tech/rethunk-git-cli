@@ -16,7 +16,7 @@ import (
 )
 
 func TestShow_UsageRefusals(t *testing.T) {
-	assertAnchorUsageRefusals(t, "show", false)
+	assertAnchorUsageRefusals(t, "show", false, true)
 }
 
 // TestShow_PrintsExtentVerbatim pins the contract the command exists for:

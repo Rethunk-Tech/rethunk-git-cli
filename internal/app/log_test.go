@@ -15,7 +15,7 @@ import (
 )
 
 func TestRun_LogHelpAndUsage(t *testing.T) {
-	assertAnchorUsageRefusals(t, "log", true) // shared with blame_test.go
+	assertAnchorUsageRefusals(t, "log", true, false) // shared with blame_test.go
 
 	t.Run("--porcelain and --patch are mutually exclusive", func(t *testing.T) {
 		chdirTempRepo(t)
@@ -370,6 +370,75 @@ func TestRun_LogPathScopedPaths(t *testing.T) {
 		stdout, _, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "--until=2000-01-02")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stdout, ""))
+	})
+}
+
+// TestRun_LogPathWithoutDate pins that a path positional selects the same
+// patch-free path history without --since/--until. A colon in the path is
+// still a pathspec. Flags alone, with neither a path nor a date, stay exit 129.
+func TestRun_LogPathWithoutDate(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "bun.lock", "lock\n")
+	writeAppFile(t, dir, "other.txt", "other\n")
+	gittest.Commit(t.Context(), t, dir, "chore: add lock and other")
+	writeAppFile(t, dir, "bun.lock", "lock2\n")
+	gittest.Commit(t.Context(), t, dir, "chore: bump lock")
+	writeAppFile(t, dir, "src/notes:draft.md", "draft\n")
+	gittest.Commit(t.Context(), t, dir, "docs: colon-named draft")
+
+	t.Run("bun.lock matches the dated path form and stays patch-free", func(t *testing.T) {
+		t.Parallel()
+		dated, datedErr, datedCode := runApp(t, "-C", dir, "log", "--since=1970-01-01", "--", "bun.lock")
+		plain, plainErr, plainCode := runApp(t, "-C", dir, "log", "bun.lock")
+		qt.Assert(t, qt.Equals(datedCode, exitcode.Success))
+		qt.Assert(t, qt.Equals(plainCode, exitcode.Success))
+		qt.Assert(t, qt.Equals(datedErr, ""))
+		qt.Assert(t, qt.Equals(plainErr, ""))
+		qt.Assert(t, qt.Equals(plain, dated))
+		qt.Assert(t, qt.StringContains(plain, "bump lock"))
+		qt.Assert(t, qt.StringContains(plain, "add lock and other"))
+		qt.Assert(t, qt.Not(qt.StringContains(plain, "colon-named draft")))
+		qt.Assert(t, qt.Not(qt.StringContains(plain, "diff --git")))
+	})
+
+	t.Run("a path that contains a colon is still a pathspec", func(t *testing.T) {
+		t.Parallel()
+		stdout, stderr, code := runApp(t, "-C", dir, "log", "src/notes:draft.md")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "colon-named draft"))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "bump lock")))
+		qt.Assert(t, qt.Not(qt.StringContains(stderr, "FILE:SYMBOL")))
+	})
+
+	t.Run("-n and --porcelain keep their meaning", func(t *testing.T) {
+		t.Parallel()
+		dated, _, datedCode := runApp(t, "-C", dir, "log", "--since=1970-01-01", "-n", "1", "--", "bun.lock")
+		plain, stderr, code := runApp(t, "-C", dir, "log", "-n", "1", "bun.lock")
+		qt.Assert(t, qt.Equals(datedCode, exitcode.Success))
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.Equals(plain, dated))
+		qt.Assert(t, qt.Equals(len(strings.Split(strings.TrimRight(plain, "\n"), "\n")), 1))
+
+		dated, _, datedCode = runApp(t, "-C", dir, "log", "--since=1970-01-01", "--porcelain", "--", "bun.lock")
+		plain, stderr, code = runApp(t, "-C", dir, "log", "--porcelain", "bun.lock")
+		qt.Assert(t, qt.Equals(datedCode, exitcode.Success))
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.Equals(plain, dated))
+		fields := strings.Split(strings.Split(strings.TrimRight(plain, "\n"), "\n")[0], "\t")
+		qt.Assert(t, qt.Equals(len(fields), 2))
+	})
+
+	t.Run("flags without a path or a date still require an anchor", func(t *testing.T) {
+		t.Parallel()
+		for _, args := range [][]string{{"--porcelain"}, {"-n", "1"}} {
+			_, stderr, code := runApp(t, append([]string{"-C", dir, "log"}, args...)...)
+			qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+			qt.Assert(t, qt.StringContains(stderr, "requires a FILE:SYMBOL anchor"))
+		}
 	})
 }
 

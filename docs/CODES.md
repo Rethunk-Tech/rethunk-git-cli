@@ -103,13 +103,16 @@ failure past resolution folds into 128 — except that it resolves against
 `HEAD`'s own blob rather than the worktree, since history is a question about
 what has already been committed.
 
-`rgit log --since`/`--until` with no `FILE:SYMBOL` positional is the second,
-unanchored shape (see [`USAGE.md`](USAGE.md#log-by-date-and-path)); it resolves
-no anchor, so none of 3, 4, or 9 apply to it. When a `FILE:SYMBOL` positional
-is present, the anchor shape remains selected and the date bounds are passed
-to `git log -L`. In either shape, 129 covers bad flags, missing values, and a
-path that escapes the repository root; 128 covers an unwalkable path or bad
-date, folded from `git log`'s own exit.
+`rgit log` with path positionals and no `FILE:SYMBOL` anchor is the second,
+unanchored shape, with or without `--since`/`--until` (see
+[`USAGE.md`](USAGE.md#log-by-date-and-path)); it resolves no anchor, so none
+of 3, 4, or 9 apply to it. A date with no paths is that shape for the whole
+repository. With neither a path nor a date, `log` still requires an anchor
+(exit 129). When a `FILE:SYMBOL` positional is present, the anchor shape
+remains selected and any date bounds are passed to `git log -L`. In either
+shape, 129 covers bad flags, missing values, and a path that escapes the
+repository root; 128 covers an unwalkable path or bad date, folded from
+`git log`'s own exit.
 
 ### `context` has no anchor to resolve at all
 

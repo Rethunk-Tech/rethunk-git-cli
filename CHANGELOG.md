@@ -9,6 +9,7 @@ Notable changes to `rgit`. The format follows
 ### Added
 
 - `rgit commit -i` / `--include` stages named pathspecs and symbol targets into the commit along with work already staged, matching `git commit --include`. See [`docs/USAGE.md`](docs/USAGE.md#flags).
+- `rgit log PATH...` prints patch-free path history without `--since` or `--until`. A path containing a colon stays a pathspec under the same classification as the dated form. With neither a path nor a date, `log` still requires a `FILE:SYMBOL` anchor. See [`docs/USAGE.md`](docs/USAGE.md#log-by-date-and-path).
 
 ### Fixed
 
