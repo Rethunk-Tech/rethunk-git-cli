@@ -95,6 +95,10 @@ language) mean the same thing there. It never stages or commits anything, so
 blame`'s own exit, folded into 128 the same way any other unexpected git
 failure is.
 
+`--source` is the same addition `show` has: an unknown revision is **128**,
+and a path absent at a known revision stays **3**. `--source` together with
+`--follow-rename` is **129**.
+
 ### `log` shares the anchor codes too, resolved against `HEAD`
 
 `rgit log FILE:SYMBOL` behaves as `blame` does — 3, 4, and 9 carry the same

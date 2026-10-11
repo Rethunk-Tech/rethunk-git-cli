@@ -19,14 +19,21 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
-const blameHelp = `usage: rgit blame FILE:SYMBOL [--follow-rename] [-p|--porcelain]
+const blameHelp = `usage: rgit blame FILE:SYMBOL [--source <rev>] [--follow-rename] [-p|--porcelain]
 
 Blame bounded to one symbol's own extent: git blame -L over just the lines
-the anchor resolves to in the current worktree file, never the whole file.
-If the worktree file is gone, the default resolves against its HEAD blob.
+the anchor resolves to, never the whole file. By default that extent is the
+current worktree file. If the worktree file is gone, the default resolves
+against its HEAD blob.
 An anchor that does not resolve is exit 3 (or 4 if ambiguous, 9 if the
 language has no grammar) -- never a silently widened, whole-file blame.
 
+--source <rev>  Blame <rev>:FILE instead: the lines the anchor resolves to
+                in that revision's blob, via the same read show --source
+                uses. FILE is the path's current name; this does not follow
+                renames. Mutually exclusive with --follow-rename (exit 129).
+                An unknown revision is exit 128; a path absent at a known
+                one is exit 3.
 --follow-rename walks the file's rename history, re-resolving the symbol at
 each rename boundary against the HEAD blob, never the dirty worktree.
 Without it, blame stops at the current file name.
@@ -41,53 +48,63 @@ default is git's own human-readable blame output, likewise unmodified.
 Full reference: docs/USAGE.md
 `
 
-// runBlame's flag surface is one FILE:SYMBOL anchor plus -p/--porcelain and
-// --follow-rename, hand-parsed via parseAnchorCommandArgs.
+// runBlame's flag surface is one FILE:SYMBOL anchor plus --source,
+// -p/--porcelain, and --follow-rename, hand-parsed via parseAnchorCommandArgs.
 func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	porcelain := false
 	followRename := false
+	source := ""
 	positionals, code, done := parseAnchorCommandArgs("blame", args,
 		[]anchorCommandFlag{
 			{tokens: []string{"-p", "--porcelain"}, set: &porcelain},
 			{tokens: []string{"--follow-rename"}, set: &followRename},
+			{tokens: []string{"--source"}, val: &source},
 		},
 		1, blameHelp, stdout, stderr)
 	if done {
 		return code
 	}
+	if source != "" && followRename {
+		fmt.Fprintln(stderr, "rgit: --source and --follow-rename are mutually exclusive")
+		fmt.Fprint(stderr, blameHelp)
+		return exitcode.InvalidUsage
+	}
 	positional := positionals[0]
 
 	headOnly := false
-	repo, file, src, res, anchorName, code := resolveAnchorExtent(ctx, dir, stderr, positional, "blame", blameHelp,
-		func(ctx context.Context, repo *gitx.Repo, root, file string) ([]byte, string, bool, error) {
-			if followRename {
+	fetch := func(ctx context.Context, repo *gitx.Repo, root, file string) ([]byte, string, bool, error) {
+		if followRename {
+			src, exists, err := repo.CatFile(ctx, "HEAD", file)
+			if err != nil {
+				return nil, "", false, err
+			}
+			if !exists {
+				return nil, "has no HEAD history", false, nil
+			}
+			headOnly = true
+			return src, "", true, nil
+		}
+		src, err := readWorktreeFile(root, file)
+		if err != nil {
+			if os.IsNotExist(err) {
 				src, exists, err := repo.CatFile(ctx, "HEAD", file)
 				if err != nil {
 					return nil, "", false, err
 				}
-				if !exists {
-					return nil, "has no HEAD history", false, nil
+				if exists {
+					headOnly = true
+					return src, "", true, nil
 				}
-				headOnly = true
-				return src, "", true, nil
+				return nil, "no longer exists in the worktree", false, nil
 			}
-			src, err := readWorktreeFile(root, file)
-			if err != nil {
-				if os.IsNotExist(err) {
-					src, exists, err := repo.CatFile(ctx, "HEAD", file)
-					if err != nil {
-						return nil, "", false, err
-					}
-					if exists {
-						headOnly = true
-						return src, "", true, nil
-					}
-					return nil, "no longer exists in the worktree", false, nil
-				}
-				return nil, "", false, err
-			}
-			return src, "", true, nil
-		})
+			return nil, "", false, err
+		}
+		return src, "", true, nil
+	}
+	if source != "" {
+		fetch = showSource(source)
+	}
+	repo, file, src, res, anchorName, code := resolveAnchorExtent(ctx, dir, stderr, positional, "blame", blameHelp, fetch)
 	if code != exitcode.Success {
 		return code
 	}
@@ -105,8 +122,12 @@ func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.
 
 	var out []byte
 	var err error
-	if headOnly {
-		out, err = repo.BlameRevision(ctx, "HEAD", file, start, end, extra...)
+	if source != "" || headOnly {
+		rev := source
+		if rev == "" {
+			rev = "HEAD"
+		}
+		out, err = repo.BlameRevision(ctx, rev, file, start, end, extra...)
 	} else {
 		out, err = repo.Blame(ctx, file, start, end, extra...)
 	}

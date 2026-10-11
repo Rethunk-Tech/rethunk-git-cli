@@ -269,14 +269,23 @@ $ rgit blame auth.go:ValidateToken
 ^1a2b3c4 (Alice Example 2024-01-15 10:00:00 -0800  9) func ValidateToken(tok string) error {
  5d6e7f8 (Bob Example   2024-03-02 14:22:11 -0800 10)     if tok == "" {
  ...
+
+$ rgit blame --source v1.4.0 auth.go:ValidateToken
 ```
 
 `rgit blame FILE:SYMBOL` resolves the anchor exactly like `commit` and `diff
 --sym` do, then runs `git blame -L start,end -- FILE` bounded to just that
-symbol's own extent in the current worktree file — never the whole file.
-There is no revision argument. When the worktree copy exists, blame reads it,
-the same file a bare `git blame FILE` would; when it has been deleted, rgit
-resolves the extent from `HEAD` and blames `HEAD`'s blob for that line range.
+symbol's own extent — never the whole file. When the worktree copy exists,
+the default reads it, the same file a bare `git blame FILE` would; when it
+has been deleted, rgit resolves the extent from `HEAD` and blames `HEAD`'s
+blob for that line range.
+
+`--source <rev>` blames that revision instead: the anchor is resolved against
+`<rev>:FILE` the same way `show --source` reads it, then `git blame REV -L
+start,end -- FILE` uses that extent. Both spellings (`--source v1.4.0` and
+`--source=v1.4.0`). `FILE` is the path's current name; this does not follow
+renames. An unknown revision is exit 128; a path absent at a known revision
+is exit 3. `--source` and `--follow-rename` together are exit 129.
 
 `--follow-rename` follows the symbol across rename boundaries using the same
 rename-boundary re-resolution as `log --follow-rename`: at each rename git
@@ -677,8 +686,8 @@ everywhere else. Install and PowerShell registration instructions:
 
 `commit` and `diff` document their flags in the table below. The hand-parsed
 meta commands carry smaller surfaces of their own, each covered in its own
-section above: `blame` takes `-p`/`--porcelain`, `--follow-rename`, and
-`--help`; `languages` takes `--porcelain`, `--in-repo`, and `--help`; `log`
+section above: `blame` takes `-p`/`--porcelain`, `--follow-rename`,
+`--source`, and `--help`; `languages` takes `--porcelain`, `--in-repo`, and `--help`; `log`
 takes `--porcelain`, `-p`/`--patch` (mutually exclusive with it),
 `--follow-rename`, `-n`/`--max-count`, `--help`, and — only in its
 `--since`/`--until` shape — `--since`/`--until` themselves; `show` takes
@@ -729,7 +738,7 @@ output shape is the point).
 | `--porcelain` | (`show`) Frame every extent the way several are framed (`FILE:ANCHOR<TAB>NBYTES` + exactly `NBYTES` bytes). Single-anchor and multi-anchor both framed; the machine-readable framing scripts should parse. |
 | `--with-filename` | (`symbols`) Prefix every line with `FILE<TAB>`. Implied by naming more than one file, as `grep` does. |
 | `--porcelain` | (`symbols`) Terminate each record with NUL instead of a newline; fields unchanged. |
-| `--source REV` | (`show`) Read the symbol from `REV:FILE` instead of the worktree. Both spellings (`--source REV`, `--source=REV`). An unparseable revision is exit 128, distinct from a path absent at a real one (exit 3). |
+| `--source REV` | (`show`, `blame`) Read or blame the symbol from `REV:FILE` instead of the worktree. Both spellings (`--source REV`, `--source=REV`). An unparseable revision is exit 128, distinct from a path absent at a real one (exit 3). On `blame`, mutually exclusive with `--follow-rename` (exit 129). |
 | `--since DATE`, `--until DATE` | (`log`) Bound history by date. A `FILE:SYMBOL` positional keeps the anchor form. Path positionals select unanchored path-scoped history with or without these flags. With neither a path nor a date, `log` still requires an anchor. Forwarded to git's own `--since`/`--until` unparsed. |
 | `-n N`, `--max-count=N` | (`log`) Limit either history form to at most `N` commits; under `--follow-rename`, applies independently per rename segment, so the total may exceed `N`. Forwarded to git's own count limit; omitted by default, so history is unbounded. |
 

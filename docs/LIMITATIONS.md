@@ -187,7 +187,9 @@ the worktree, the index, nor `HEAD`.
 
 `rgit blame FILE:SYMBOL` stops at the current file name by default. With
 `--follow-rename`, it reads HEAD history, re-resolves the symbol at each rename
-boundary, and emits git's bounded blame for each path segment.
+boundary, and emits git's bounded blame for each path segment. `--source REV`
+blames one revision's extent under the file's current name and does not
+combine with `--follow-rename`.
 
 ## Language-server coverage
 

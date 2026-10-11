@@ -165,6 +165,72 @@ func TestRun_BlameBoundsToTheSymbolExtent(t *testing.T) {
 	qt.Assert(t, qt.Not(qt.StringContains(stdout, "return 2")))
 }
 
+// TestRun_BlameSourceRevisionBlamesThatExtent pins --source to the revision's
+// own extent: the worktree has moved the symbol onto lines that, at HEAD~1,
+// belong to its sibling. A range taken from the worktree would blame that
+// sibling; the revision's range blames the old body.
+func TestRun_BlameSourceRevisionBlamesThatExtent(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc B() int {\n\treturn 9\n}\n\n// A returns two.\nfunc A() int {\n\treturn 2\n}\n")
+	gittest.Commit(t.Context(), t, dir, "refactor: reorder A")
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc B() int {\n\treturn 9\n}\n\n// dirty\n// A returns two.\nfunc A() int {\n\treturn 2\n}\n")
+
+	for _, args := range [][]string{
+		{"blame", "--source", "HEAD~1", "a.go:A"},
+		{"blame", "--source=HEAD~1", "a.go:A"},
+		{"blame", "a.go:A", "--source", "HEAD~1"},
+	} {
+		stdout, stderr, code := runApp(t, append([]string{"-C", dir}, args...)...)
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "return 1"))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "return 2")))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "return 9")))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "dirty")))
+	}
+
+	stdout, stderr, code := runApp(t, "-C", dir, "blame", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.StringContains(stdout, "return 2"))
+	qt.Assert(t, qt.StringContains(stdout, "dirty"))
+
+	stdout, stderr, code = runApp(t, "-C", dir, "blame", "--source", "HEAD~1", "--porcelain", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.StringContains(stdout, "\nauthor "))
+	qt.Assert(t, qt.StringContains(stdout, "return 1"))
+}
+
+// TestRun_BlameSourceRefusals pins the three exits --source adds: an unknown
+// revision is git's 128, a path absent at a real revision stays 3, and
+// combining it with --follow-rename is 129.
+func TestRun_BlameSourceRefusals(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+
+	_, stderr, code := runApp(t, "-C", dir, "blame", "--source", "nosuchrev", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))
+	qt.Assert(t, qt.StringContains(stderr, "not a valid revision: nosuchrev"))
+
+	writeAppFile(t, dir, "b.go", "package a\n\nfunc C() int {\n\treturn 3\n}\n")
+	gittest.Commit(t.Context(), t, dir, "feat: add b.go")
+
+	_, stderr, code = runApp(t, "-C", dir, "blame", "--source", "HEAD~1", "b.go:C")
+	qt.Assert(t, qt.Equals(code, exitcode.AnchorUnresolvable))
+	qt.Assert(t, qt.StringContains(stderr, "is absent at HEAD~1"))
+
+	_, stderr, code = runApp(t, "-C", dir, "blame", "--source")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "--source requires a value"))
+
+	_, stderr, code = runApp(t, "-C", dir, "blame", "--source", "HEAD", "--follow-rename", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "--source and --follow-rename are mutually exclusive"))
+}
+
 // TestRun_BlameDeletedWorktreeUsesHEAD keeps blame and its line range tied to
 // the same HEAD blob when the worktree copy is absent.
 func TestRun_BlameDeletedWorktreeUsesHEAD(t *testing.T) {
