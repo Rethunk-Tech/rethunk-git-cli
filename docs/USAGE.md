@@ -695,11 +695,12 @@ output shape is the point).
 | `--trailer TOKEN:VALUE` | Append a trailer (`Refs:`, `Co-authored-by:`). Repeatable, forwarded. |
 | `--amend` | Amend the previous commit. Anchors stage into it as they would a new commit. With neither `-m` nor `-F`, reuses HEAD's message unchanged (`--no-edit`) — `rgit` never opens an editor, so that is the only message an unattended `--amend` can have. Give `-m`/`-F` to replace it as usual. With no targets, skips staging and amends the index as it stands. |
 | `--allow-empty` | Permit a commit with no changes. Suppresses exit 11. With no targets, skips staging and commits the index as it stands; still requires `-m`/`-F` unless another auto-message flag is set. |
+| `-i`, `--include` | Stage the named pathspecs and symbol targets into the index, then commit that index, so work staged beforehand comes along. This is the default when targets are named; the flag is git's own spelling of it (`git commit -i` / `--include`: stage the given paths as well, then commit the staged contents so far). Requires at least one target, including with `--amend` or `--allow-empty`. Mutually exclusive with `--only` and `--stage-only`. |
 | `-o`, `--only` | Commit only the named targets, leaving other staged paths in the index. Requires at least one target unless combined with `--amend`; anchors still synthesize their named extents before the commit. The commit is built from HEAD plus the targets in a private index, so the shared index is never staged into and a rejected commit leaves it untouched; afterwards the committed paths match HEAD in it. Concurrent `--only` commits in one worktree wait for each other (an OS lock on `rgit-commit.lock` in the git directory), so each builds on the one before. A writer other than `rgit` moving HEAD mid-commit is reported with exit 128 rather than silently built over. |
 | `--reuse-message=<commit>` | Reuse that commit's log message and authorship (`git commit --reuse-message`). Long form only — global `-C` is directory chdir and stays before the command. Mutually exclusive with `-m` the way git is (`-m` and `-C` cannot be used together). Does not require a separate `-m`. |
 | `--reedit-message` | Refused (exit 129). `rgit` never opens an editor; use `--reuse-message`. |
 | `--push` | Push upstream after a successful commit. No rollback on push failure. If the branch has no upstream configured, the exit-8 message names it and the fix (`git push -u origin <branch>`, or `push.autoSetupRemote`) — `rgit` never adds `-u` itself. |
-| `--stage-only` | Stage the named targets into the real index and stop: no message is needed, no hooks run, nothing is committed. Requires at least one target; mutually exclusive with `--only`, `--push`, `--amend`, `--allow-empty`, `-m`/`-F`, `--fixup`, `--squash` and `--reuse-message`. Staging is atomic like a commit's. There is no unstage: `git restore --staged FILE` works per file, so a symbol staged this way comes back out with its whole file's staged state. Prints `staged, not committed:` and the target listing (`--porcelain`: target records alone; `-q`: nothing). |
+| `--stage-only` | Stage the named targets into the real index and stop: no message is needed, no hooks run, nothing is committed. Requires at least one target; mutually exclusive with `--include`, `--only`, `--push`, `--amend`, `--allow-empty`, `-m`/`-F`, `--fixup`, `--squash` and `--reuse-message`. Staging is atomic like a commit's. There is no unstage: `git restore --staged FILE` works per file, so a symbol staged this way comes back out with its whole file's staged state. Prints `staged, not committed:` and the target listing (`--porcelain`: target records alone; `-q`: nothing). |
 | `--dry-run` | Preview only. Writes no objects, stages nothing, runs no hooks. Lists each target it resolved with that symbol's `+N/-M`, using the same counts as `rgit diff`. |
 | `--no-verify` | Skip git hooks (standard git meaning). Hooks run by default. |
 | `--fixup <commit>` | Autosquash fixup for `<commit>` (also accepts `amend:<commit>`/`reword:<commit>`, forwarded verbatim). Generates its own subject, so `-m`/`-F` are not required; either still appends as an extra body paragraph rather than conflicting. |
@@ -773,7 +774,7 @@ before decode. Closes #42." \
               auth.go:ValidateToken
 ```
 
-**Invalid combinations:** `--stage-only` with any of its exclusions above, `--dry-run` + `--push`, `--staged`/`--unstaged` +
+**Invalid combinations:** `--include` + `--only`, `--stage-only` with any of its exclusions above (including `--include`), `--dry-run` + `--push`, `--staged`/`--unstaged` +
 a revision argument (a range, or one or two bare revisions), `--staged` +
 `--unstaged`, `--range` + a positional `A..B`/`A...B` range, `-m` + `-F`,
 `--porcelain` + `--quiet` (`diff`), `--porcelain` + `-p`/`--patch` (`diff`,
@@ -796,7 +797,7 @@ the commit proceeds.
 
 `rgit` is `git add <pathspec> && git commit` at symbol granularity, so:
 
-- Work you staged before invoking `rgit` **comes along** with the commit, unless `--only` is given.
+- Work you staged before invoking `rgit` **comes along** with the commit, unless `--only` is given. `-i` / `--include` is that default made explicit: named pathspecs and symbol targets are staged into the commit the way `git commit --include` documents, alongside whatever the index already holds.
 - A hook rejecting the commit rolls staging back to its pre-commit state (under `--only` nothing was staged, so there is nothing to roll back): the index is snapshotted before anything is staged, synthesized blobs are staged through a temporary index that replaces the real one only on success, and a failed commit restores the snapshot while naming the paths it touched. Only index entries ever move -- no worktree file is written.
 - Hooks are not policed — a hook may stage paths you did not name, exactly as
   under plain `git commit`. Use `--no-verify` to disable them.

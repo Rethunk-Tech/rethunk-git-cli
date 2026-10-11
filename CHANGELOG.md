@@ -6,6 +6,10 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `rgit commit -i` / `--include` stages named pathspecs and symbol targets into the commit along with work already staged, matching `git commit --include`. See [`docs/USAGE.md`](docs/USAGE.md#flags).
+
 ## [2.2.3] - 2026-10-09
 
 ### Fixed

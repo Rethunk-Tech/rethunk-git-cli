@@ -2,19 +2,12 @@
 
 Future work, and the decisions that closed the door on work not being done.
 Behaviour that ships is documented in [`docs/`](docs/); how the code works is
-the code. What lives here is only what neither of those can hold: a design
-accepted but not built, and a measurement that already settled a question.
+the code. What lives here is only what neither of those can hold: a measurement
+that already settled a question.
 
 Limitations that ship — unsupported languages, excluded cross-build targets,
 constructs no anchor reaches — are in
 [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md), not here.
-
-## Accepted, not built
-
-### Not queued
-
-Include-style pathspec
-flags. Any web surface: this is a CLI.
 
 ## Settled by measurement — do not re-litigate
 

@@ -85,6 +85,57 @@ func TestRun_PreStagedSiblingFileComesAlong(t *testing.T) {
 	qt.Assert(t, qt.StringContains(show, "sibling.txt"))
 }
 
+// TestRun_IncludeCommitsNamedTargetsWithPreStagedWork pins git commit -i:
+// the named path or symbol is staged into the commit, and work already
+// staged comes along with it.
+func TestRun_IncludeCommitsNamedTargetsWithPreStagedWork(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	writeAppFile(t, dir, "sibling.txt", "staged separately\n")
+	gitOut(t, dir, "add", "--", "sibling.txt")
+
+	_, stderr, code := runApp(t, "-C", dir, "commit", "-i", "-m", "feat(a): update A", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
+	show := gitOut(t, dir, "show", "--stat", "HEAD")
+	qt.Assert(t, qt.StringContains(show, "sibling.txt"))
+	qt.Assert(t, qt.StringContains(show, "a.go"))
+	qt.Assert(t, qt.StringContains(gitOut(t, dir, "show", "HEAD:a.go"), "return 111"))
+
+	writeAppFile(t, dir, "path.txt", "named by pathspec\n")
+	writeAppFile(t, dir, "other.txt", "also staged\n")
+	gitOut(t, dir, "add", "--", "other.txt")
+	_, stderr, code = runApp(t, "-C", dir, "commit", "--include", "-m", "feat(a): add path", "path.txt")
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
+	show = gitOut(t, dir, "show", "--stat", "HEAD")
+	qt.Assert(t, qt.StringContains(show, "path.txt"))
+	qt.Assert(t, qt.StringContains(show, "other.txt"))
+}
+
+func TestRun_IncludeRefusesOnlyAndEmptyPathspec(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n")
+	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+
+	_, stderr, code := runApp(t, "-C", dir, "commit", "-i", "--only", "-m", "fix(a): both", "a.go")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "--include and --only are mutually exclusive"))
+
+	_, stderr, code = runApp(t, "-C", dir, "commit", "--include", "--amend")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "--include requires at least one target"))
+
+	_, stderr, code = runApp(t, "-C", dir, "commit", "--include", "--allow-empty", "-m", "chore: empty")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "--include requires at least one target"))
+
+	_, _, code = runApp(t, "-C", dir, "commit", "--stage-only", "--include", "a.go")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+
+	qt.Assert(t, qt.Equals(strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")), before))
+}
+
 func TestRun_OnlyLeavesOtherStagedWorkUncommitted(t *testing.T) {
 	t.Parallel()
 	dir := tempRepo(t)

@@ -1477,6 +1477,7 @@ func TestRun_CommitStageOnlyRefusals(t *testing.T) {
 		"no target": {"commit", "--stage-only"},
 		"a message": {"commit", "--stage-only", "-m", "fix(a): x", "a.go"},
 		"--only":    {"commit", "--stage-only", "--only", "a.go"},
+		"--include": {"commit", "--stage-only", "--include", "a.go"},
 		"--push":    {"commit", "--stage-only", "--push", "a.go"},
 		"--amend":   {"commit", "--stage-only", "--amend", "a.go"},
 	} {

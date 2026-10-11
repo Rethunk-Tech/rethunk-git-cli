@@ -40,6 +40,7 @@ type commitFlags struct {
 	noGPGSign    bool
 	porcelain    bool
 	quiet        bool
+	include      bool
 	only         bool
 	stageOnly    bool
 	pathspecFile string
@@ -122,6 +123,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	fs.BoolVar(&f.resetAuthor, "reset-author", false, "take the author identity from the committer (with --amend)")
 	fs.BoolVar(&f.porcelain, "porcelain", false, "list staged targets as stable tab-separated records")
 	fs.BoolVarP(&f.quiet, "quiet", "q", false, "suppress the commit summary and target listing")
+	fs.BoolVarP(&f.include, "include", "i", false, "stage named targets and commit them with other staged work")
 	fs.BoolVarP(&f.only, "only", "o", false, "commit only named targets")
 	fs.BoolVar(&f.stageOnly, "stage-only", false, "stage the named targets into the index without committing")
 	// -S is not registered as a shorthand here; expandGPGSignShorthand
@@ -162,9 +164,18 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		fmt.Fprintln(stderr, "rgit: --porcelain and --quiet are mutually exclusive")
 		return exitcode.InvalidUsage
 	}
+	// git commit -i and -o are alternate ways to build the commit from
+	// paths (builtin/commit.c die_for_incompatible_opt4). rgit's default
+	// already follows -i; the flag is that spelling made explicit.
+	if f.include && f.only {
+		fmt.Fprintln(stderr, "rgit: --include and --only are mutually exclusive")
+		return exitcode.InvalidUsage
+	}
 	if f.stageOnly {
 		conflict := ""
 		switch {
+		case f.include:
+			conflict = "--include"
 		case f.only:
 			conflict = "--only"
 		case f.push:
@@ -216,6 +227,13 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		positionalsGiven = append(positionalsGiven, pathspecs...)
 	}
 	targetCount := len(positionalsGiven) + len(f.syms) + len(f.files)
+	// git refuses --include with an empty pathspec even alongside --amend
+	// or --allow-empty ("No paths with --include/--only does not make
+	// sense."). --only keeps its amend exception below.
+	if f.include && targetCount == 0 {
+		fmt.Fprintln(stderr, "rgit: --include requires at least one target")
+		return exitcode.InvalidUsage
+	}
 	if f.only && targetCount == 0 && !f.amend {
 		fmt.Fprintln(stderr, "rgit: --only requires at least one target")
 		return exitcode.InvalidUsage
