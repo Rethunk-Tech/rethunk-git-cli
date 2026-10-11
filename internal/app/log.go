@@ -13,7 +13,8 @@
 //     an existing path like src/notes:draft.md is still a pathspec) so a
 //     lockfile, a JSON file, or a directory does not fall through to the
 //     anchor form. Zero positionals and no date stays the anchor form's
-//     exit 129.
+//     exit 129, unless --follow is set: that flag selects this form and
+//     then requires exactly one path.
 //
 // One guardrail is non-negotiable for both:
 // patches are opt-in (-p/--patch), never default -- the default stream is
@@ -39,7 +40,7 @@ import (
 )
 
 const logHelp = `usage: rgit log FILE:SYMBOL [--since=DATE] [--until=DATE] [-n N|--max-count=N] [--follow-rename] [--porcelain | -p|--patch]
-       rgit log [--since=DATE] [--until=DATE] [-n N|--max-count=N] [--porcelain | -p|--patch] PATH...
+       rgit log [--since=DATE] [--until=DATE] [-n N|--max-count=N] [--follow] [--porcelain | -p|--patch] PATH...
        rgit log --since=DATE [--until=DATE] [-n N|--max-count=N] [--porcelain | -p|--patch]
 
 History of one symbol: one record per commit whose own diff touched its
@@ -58,8 +59,13 @@ boundary and continues under the pre-rename path (docs/LIMITATIONS.md).
 PATH... with no FILE:SYMBOL positional is ordinary, non-anchored git
 history, with or without a date. Every positional is classified with the
 same six-rule table as commit and diff, so an existing path that contains
-a colon stays a pathspec. With neither a path nor --since/--until, log
+a colon stays a pathspec. With neither a path, a date, nor --follow, log
 requires a FILE:SYMBOL anchor.
+
+--follow continues one path's history past renames, forwarded to git's
+own --follow. It requires exactly one path; zero paths, or two or more,
+is exit 129. A FILE:SYMBOL anchor does not take --follow; that form's
+rename walk is --follow-rename.
 
 --since=DATE bounds either form. Forwarded to git's own --since unparsed,
 so anything git accepts there ("2024-01-01", "2 weeks ago") works here too.
@@ -94,6 +100,17 @@ Full reference: docs/USAGE.md
 func hasTimeRangeFlag(args []string) bool {
 	for _, a := range args {
 		if a == "--since" || a == "--until" || strings.HasPrefix(a, "--since=") || strings.HasPrefix(a, "--until=") {
+			return true
+		}
+	}
+	return false
+}
+
+// hasFollowFlag reports whether args names the path form's --follow.
+// --follow-rename is a different flag and must not select this form.
+func hasFollowFlag(args []string) bool {
+	for _, a := range args {
+		if a == "--follow" || strings.HasPrefix(a, "--follow=") {
 			return true
 		}
 	}
@@ -135,8 +152,9 @@ func logInteriorColonPositionals(args []string) []string {
 func runLog(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	// No path and no date is still the anchor form, which refuses with
 	// exit 129. A path selects path-scoped history once classification
-	// says every positional is a pathspec, date or not.
-	if hasTimeRangeFlag(args) || logHasPositionals(args) {
+	// says every positional is a pathspec, date or not. --follow selects
+	// the same path form, then requires exactly one path.
+	if hasTimeRangeFlag(args) || hasFollowFlag(args) || logHasPositionals(args) {
 		anchor, code := logSelectsAnchor(ctx, dir, args, stderr)
 		if code != exitcode.Success {
 			return code
@@ -464,7 +482,7 @@ func runLogFollowRename(ctx context.Context, repo *gitx.Repo, file string, src [
 func runLogPathScoped(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	var since, until string
 	var maxCount int
-	var porcelain, patch bool
+	var porcelain, patch, follow bool
 
 	fs := pflag.NewFlagSet("log", pflag.ContinueOnError)
 	fs.SetInterspersed(true)
@@ -474,6 +492,7 @@ func runLogPathScoped(ctx context.Context, dir string, args []string, stdout, st
 	fs.IntVarP(&maxCount, "max-count", "n", 0, "maximum number of commits (forwarded to git)")
 	fs.BoolVar(&porcelain, "porcelain", false, "stable tab-separated HASH<TAB>SUBJECT records")
 	fs.BoolVarP(&patch, "patch", "p", false, "include the real patch body")
+	fs.BoolVar(&follow, "follow", false, "continue one path's history past renames")
 
 	if code, done := parseFlagsOrHelp(fs, args, stdout, stderr, logHelp); done {
 		return code
@@ -499,9 +518,20 @@ func runLogPathScoped(ctx context.Context, dir string, args []string, stdout, st
 		paths = append(paths, resolved)
 	}
 
+	// git log --follow walks rename history for one pathspec. A usage error
+	// is exit 129, so any other count is refused before git runs.
+	if follow && len(paths) != 1 {
+		fmt.Fprintln(stderr, "rgit: log: --follow requires exactly one path")
+		fmt.Fprint(stderr, logHelp)
+		return exitcode.InvalidUsage
+	}
+
 	extra := logFormatArgs(patch, porcelain)
 	if fs.Changed("max-count") {
 		extra = append([]string{"--max-count=" + strconv.Itoa(maxCount)}, extra...)
+	}
+	if follow {
+		extra = append([]string{"--follow"}, extra...)
 	}
 
 	out, err := repo.Log(ctx, since, until, paths, extra...)

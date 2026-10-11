@@ -389,12 +389,17 @@ path that itself contains a colon (`src/notes:draft.md`) stays a pathspec
 and does not need `--` to keep it out of the anchor form. `rgit log bun.lock`
 is that form: the same patch-free records as
 `rgit log --since=1970-01-01 -- bun.lock`. With an anchor, the symbol-scoped
-form above remains selected. With neither a path nor a date, `log` still
-requires a `FILE:SYMBOL` anchor (exit 129). Date values are forwarded to
+form above remains selected. With neither a path, a date, nor `--follow`,
+`log` still requires a `FILE:SYMBOL` anchor (exit 129). Date values are forwarded to
 git's own `--since`/`--until` unparsed, so anything git accepts there
 (`"2024-01-01"`, `"2 weeks ago"`) works here too. With no paths and a date
 bound, the unanchored form is the whole repository's history in that
 window, matching plain `git log --since=DATE`.
+
+`--follow` continues one path's history past renames, forwarded to git's own
+`git log --follow`. It requires exactly one path; zero paths, or two or more,
+is exit 129. A `FILE:SYMBOL` positional stays the anchor form and does not
+accept `--follow`; that form's rename walk is `--follow-rename`.
 
 `-n N`/`--max-count=N` limits either form to at most `N` commits; without it,
 history is unbounded.
@@ -689,8 +694,9 @@ meta commands carry smaller surfaces of their own, each covered in its own
 section above: `blame` takes `-p`/`--porcelain`, `--follow-rename`,
 `--source`, and `--help`; `languages` takes `--porcelain`, `--in-repo`, and `--help`; `log`
 takes `--porcelain`, `-p`/`--patch` (mutually exclusive with it),
-`--follow-rename`, `-n`/`--max-count`, `--help`, and — only in its
-`--since`/`--until` shape — `--since`/`--until` themselves; `show` takes
+`--follow` (path form, exactly one path), `--follow-rename`, `-n`/`--max-count`,
+`--help`, and — only in its path or date shape — `--since`/`--until`
+themselves; `show` takes
 `--source`, `--porcelain`, `--with-header` (deprecated alias for
 `--porcelain`), and `--help`; `symbols` takes
 `--for-commit`, `--with-lines`, and `--help`; `doctor` takes `--porcelain`,
@@ -739,7 +745,8 @@ output shape is the point).
 | `--with-filename` | (`symbols`) Prefix every line with `FILE<TAB>`. Implied by naming more than one file, as `grep` does. |
 | `--porcelain` | (`symbols`) Terminate each record with NUL instead of a newline; fields unchanged. |
 | `--source REV` | (`show`, `blame`) Read or blame the symbol from `REV:FILE` instead of the worktree. Both spellings (`--source REV`, `--source=REV`). An unparseable revision is exit 128, distinct from a path absent at a real one (exit 3). On `blame`, mutually exclusive with `--follow-rename` (exit 129). |
-| `--since DATE`, `--until DATE` | (`log`) Bound history by date. A `FILE:SYMBOL` positional keeps the anchor form. Path positionals select unanchored path-scoped history with or without these flags. With neither a path nor a date, `log` still requires an anchor. Forwarded to git's own `--since`/`--until` unparsed. |
+| `--since DATE`, `--until DATE` | (`log`) Bound history by date. A `FILE:SYMBOL` positional keeps the anchor form. Path positionals select unanchored path-scoped history with or without these flags. With neither a path, a date, nor `--follow`, `log` still requires an anchor. Forwarded to git's own `--since`/`--until` unparsed. |
+| `--follow` | (`log`, path form) Continue one path's history past renames. Forwarded to git's own `--follow`. Requires exactly one path; zero paths, or two or more, is exit 129. A `FILE:SYMBOL` anchor does not accept it; that form uses `--follow-rename`. |
 | `-n N`, `--max-count=N` | (`log`) Limit either history form to at most `N` commits; under `--follow-rename`, applies independently per rename segment, so the total may exceed `N`. Forwarded to git's own count limit; omitted by default, so history is unbounded. |
 
 `commit` requires a message (`-m` or `-F`) unless `--amend`, `--fixup`,

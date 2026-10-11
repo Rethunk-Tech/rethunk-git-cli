@@ -442,6 +442,66 @@ func TestRun_LogPathWithoutDate(t *testing.T) {
 	})
 }
 
+// TestRun_LogPathFollow pins git's own --follow on exactly one path: rename
+// history that plain path log stops at, and exit 129 for any other count.
+// A FILE:SYMBOL positional stays the anchor form, which does not accept the flag.
+func TestRun_LogPathFollow(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "old.txt", "one\n")
+	gittest.Commit(t.Context(), t, dir, "feat: add old")
+	writeAppFile(t, dir, "old.txt", "two\n")
+	gittest.Commit(t.Context(), t, dir, "fix: edit old")
+	gitOut(t, dir, "mv", "old.txt", "new.txt")
+	gittest.Commit(t.Context(), t, dir, "refactor: rename old to new")
+	writeAppFile(t, dir, "new.txt", "three\n")
+	gittest.Commit(t.Context(), t, dir, "fix: edit new")
+	writeAppFile(t, dir, "other.txt", "z\n")
+	gittest.Commit(t.Context(), t, dir, "chore: unrelated")
+
+	t.Run("one path includes the pre-rename history git log --follow reports", func(t *testing.T) {
+		t.Parallel()
+		plain, stderr, code := runApp(t, "-C", dir, "log", "new.txt")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(plain, "fix: edit new"))
+		qt.Assert(t, qt.StringContains(plain, "refactor: rename old to new"))
+		qt.Assert(t, qt.Not(qt.StringContains(plain, "fix: edit old")))
+		qt.Assert(t, qt.Not(qt.StringContains(plain, "feat: add old")))
+
+		stdout, stderr, code := runApp(t, "-C", dir, "log", "--follow", "new.txt")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		want := gitOut(t, dir, "log", "--follow", "--no-patch", "--format=%h %s", "--", "new.txt")
+		qt.Assert(t, qt.Equals(stdout, want))
+		qt.Assert(t, qt.StringContains(stdout, "fix: edit old"))
+		qt.Assert(t, qt.StringContains(stdout, "feat: add old"))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "chore: unrelated")))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "diff --git")))
+	})
+
+	t.Run("two paths are exit 129", func(t *testing.T) {
+		t.Parallel()
+		_, stderr, code := runApp(t, "-C", dir, "log", "--follow", "new.txt", "other.txt")
+		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+		qt.Assert(t, qt.StringContains(stderr, "--follow requires exactly one path"))
+	})
+
+	t.Run("zero paths are exit 129", func(t *testing.T) {
+		t.Parallel()
+		_, stderr, code := runApp(t, "-C", dir, "log", "--follow")
+		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+		qt.Assert(t, qt.StringContains(stderr, "--follow requires exactly one path"))
+	})
+
+	t.Run("a FILE:SYMBOL anchor does not accept --follow", func(t *testing.T) {
+		t.Parallel()
+		_, stderr, code := runApp(t, "-C", dir, "log", "a.go:A", "--follow")
+		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+		qt.Assert(t, qt.StringContains(stderr, `unrecognized argument "--follow"`))
+	})
+}
+
 // TestRun_LogPathScopedMaxCount pins git's own count limit on the
 // path-scoped form, including both spellings and the unbounded default.
 func TestRun_LogPathScopedMaxCount(t *testing.T) {

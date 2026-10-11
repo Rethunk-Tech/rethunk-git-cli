@@ -111,8 +111,9 @@ what has already been committed.
 unanchored shape, with or without `--since`/`--until` (see
 [`USAGE.md`](USAGE.md#log-by-date-and-path)); it resolves no anchor, so none
 of 3, 4, or 9 apply to it. A date with no paths is that shape for the whole
-repository. With neither a path nor a date, `log` still requires an anchor
-(exit 129). When a `FILE:SYMBOL` positional is present, the anchor shape
+repository. With neither a path, a date, nor `--follow`, `log` still requires an anchor
+(exit 129). `--follow` on the path form requires exactly one path; zero paths,
+or two or more, is also 129. When a `FILE:SYMBOL` positional is present, the anchor shape
 remains selected and any date bounds are passed to `git log -L`. In either
 shape, 129 covers bad flags, missing values, and a path that escapes the
 repository root; 128 covers an unwalkable path or bad date, folded from
