@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -414,6 +415,70 @@ func TestSymbols_PorcelainNULRecords(t *testing.T) {
 	stdout, _, code = runApp(t, "-C", dir, "symbols", "a.go")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stdout, "A\nB\n"))
+}
+
+// TestRun_SymbolsJSONAgreesWithPorcelain pins that --json lists the same
+// anchors --porcelain does, including the line range and filename when
+// those flags are set, and that the two output modes refuse to combine.
+func TestRun_SymbolsJSONAgreesWithPorcelain(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+
+	for _, flags := range [][]string{
+		nil,
+		{"--with-lines"},
+		{"--with-filename"},
+		{"--with-lines", "--with-filename"},
+	} {
+		jsonArgs := append([]string{"-C", dir, "symbols", "--json"}, flags...)
+		jsonArgs = append(jsonArgs, "a.go")
+		stdout, stderr, code := runApp(t, jsonArgs...)
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+
+		var top struct {
+			Symbols []map[string]string `json:"symbols"`
+		}
+		qt.Assert(t, qt.IsNil(json.Unmarshal([]byte(stdout), &top)))
+		qt.Assert(t, qt.IsTrue(len(top.Symbols) > 0))
+
+		porcArgs := append([]string{"-C", dir, "symbols", "--porcelain"}, flags...)
+		porcArgs = append(porcArgs, "a.go")
+		porcelain, _, pcode := runApp(t, porcArgs...)
+		qt.Assert(t, qt.Equals(pcode, exitcode.Success))
+		rows := strings.Split(strings.TrimRight(porcelain, "\x00"), "\x00")
+		qt.Assert(t, qt.Equals(len(top.Symbols), len(rows)))
+
+		for i, row := range rows {
+			fields := strings.Split(row, "\t")
+			qt.Assert(t, qt.Equals(top.Symbols[i]["symbol"], fields[len(fields)-1]))
+			switch {
+			case len(flags) == 2:
+				qt.Assert(t, qt.Equals(top.Symbols[i]["file"], fields[0]))
+				qt.Assert(t, qt.Equals(top.Symbols[i]["start"]+","+top.Symbols[i]["end"], fields[1]))
+			case len(flags) == 1 && flags[0] == "--with-lines":
+				qt.Assert(t, qt.Equals(top.Symbols[i]["file"], ""))
+				qt.Assert(t, qt.Equals(top.Symbols[i]["start"]+","+top.Symbols[i]["end"], fields[0]))
+			case len(flags) == 1 && flags[0] == "--with-filename":
+				qt.Assert(t, qt.Equals(top.Symbols[i]["file"], fields[0]))
+				qt.Assert(t, qt.Equals(top.Symbols[i]["start"], ""))
+				qt.Assert(t, qt.Equals(top.Symbols[i]["end"], ""))
+			default:
+				qt.Assert(t, qt.Equals(len(fields), 1))
+				qt.Assert(t, qt.Equals(top.Symbols[i]["file"], ""))
+				qt.Assert(t, qt.Equals(top.Symbols[i]["start"], ""))
+			}
+		}
+	}
+
+	for _, args := range [][]string{
+		{"-C", dir, "symbols", "--json", "--porcelain", "a.go"},
+		{"-C", dir, "symbols", "--porcelain", "--json", "a.go"},
+	} {
+		_, stderr, code := runApp(t, args...)
+		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+		qt.Assert(t, qt.StringContains(stderr, "--porcelain and --json are mutually exclusive"))
+	}
 }
 
 // TestSymbols_HelpSteersParsersToPorcelain pins the machine-contract

@@ -2,17 +2,19 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
-const symbolsHelp = `usage: rgit symbols [--for-commit] [--with-lines] [--with-filename] [--porcelain] <file>... (parsers: use --porcelain for NUL-terminated records)
+const symbolsHelp = `usage: rgit symbols [--for-commit] [--with-lines] [--with-filename] [--porcelain | --json] <file>... (parsers: use --porcelain for NUL-terminated records)
 
 List every declared symbol that can be resolved from each worktree file or its
 HEAD blob.
@@ -30,6 +32,10 @@ HEAD blob.
                  symbol may contain any byte but NUL -- which source text
                  cannot, a file carrying one being binary and refused. Use it
                  wherever the listing is parsed rather than read.
+--json           List each record as one JSON object: see
+                 docs/CODES.md#rgit-symbols---json. The fields are the same
+                 as --porcelain, including --with-lines and --with-filename.
+                 Mutually exclusive with --porcelain.
 
 Every file is resolved before any line is written, so an unreadable or
 unsupported file anywhere in the list leaves stdout untouched rather than half
@@ -43,6 +49,7 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 	withLines := false
 	withFilename := false
 	porcelain := false
+	asJSON := false
 	positionals := make([]string, 0, 1)
 	for _, arg := range args {
 		switch arg {
@@ -57,9 +64,16 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 			withFilename = true
 		case "--porcelain":
 			porcelain = true
+		case "--json":
+			asJSON = true
 		default:
 			positionals = append(positionals, arg)
 		}
+	}
+	if porcelain && asJSON {
+		fmt.Fprintln(stderr, "rgit: --porcelain and --json are mutually exclusive")
+		fmt.Fprint(stderr, symbolsHelp)
+		return exitcode.InvalidUsage
 	}
 	if len(positionals) == 0 {
 		fmt.Fprintln(stderr, "rgit: symbols requires at least one file argument")
@@ -90,6 +104,18 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 	}
 
 	showName := withFilename || len(positionals) > 1
+	records, err := symbolRecords(positionals, listings, showName, withLines)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: symbols: %v\n", err)
+		return exitcode.GitFailure
+	}
+	if asJSON {
+		if err := writeSymbolsJSON(stdout, records); err != nil {
+			fmt.Fprintf(stderr, "rgit: symbols: %v\n", err)
+			return exitcode.GitFailure
+		}
+		return exitcode.Success
+	}
 	// The record separator is the only thing --porcelain moves. Every field
 	// stays where it was, and the symbol stays last, so a parser splits on
 	// NUL for records and on the first tabs for fields.
@@ -97,16 +123,67 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 	if porcelain {
 		end = "\x00"
 	}
-	for i, lines := range listings {
-		for _, line := range lines {
-			if showName {
-				fmt.Fprintf(stdout, "%s\t%s%s", positionals[i], line, end)
-				continue
-			}
-			fmt.Fprintf(stdout, "%s%s", line, end)
+	for _, rec := range records {
+		line := rec.Symbol
+		if withLines {
+			line = rec.Start + "," + rec.End + "\t" + rec.Symbol
 		}
+		if showName {
+			fmt.Fprintf(stdout, "%s\t%s%s", rec.File, line, end)
+			continue
+		}
+		fmt.Fprintf(stdout, "%s%s", line, end)
 	}
 	return exitcode.Success
+}
+
+// symbolRecord is one symbol in the machine-readable forms. Field names are
+// the porcelain columns: file and the line range are present only when the
+// text record would carry them.
+type symbolRecord struct {
+	File   string `json:"file,omitempty"`
+	Start  string `json:"start,omitempty"`
+	End    string `json:"end,omitempty"`
+	Symbol string `json:"symbol"`
+}
+
+type symbolsReport struct {
+	Symbols []symbolRecord `json:"symbols"`
+}
+
+func symbolRecords(positionals []string, listings [][]string, showName, withLines bool) ([]symbolRecord, error) {
+	out := make([]symbolRecord, 0)
+	for i, lines := range listings {
+		for _, line := range lines {
+			rec := symbolRecord{}
+			if showName {
+				rec.File = positionals[i]
+			}
+			if withLines {
+				rangePart, symbol, ok := strings.Cut(line, "\t")
+				if !ok {
+					return nil, fmt.Errorf("line record %q has no symbol", line)
+				}
+				start, end, ok := strings.Cut(rangePart, ",")
+				if !ok || start == "" || end == "" {
+					return nil, fmt.Errorf("line record %q has no range", line)
+				}
+				rec.Start, rec.End, rec.Symbol = start, end, symbol
+				out = append(out, rec)
+				continue
+			}
+			rec.Symbol = line
+			out = append(out, rec)
+		}
+	}
+	return out, nil
+}
+
+func writeSymbolsJSON(w io.Writer, records []symbolRecord) error {
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	return enc.Encode(symbolsReport{Symbols: records})
 }
 
 // symbolLines is one file's worth of runSymbols: resolve the path, pick the

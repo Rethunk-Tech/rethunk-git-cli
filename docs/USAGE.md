@@ -675,6 +675,12 @@ and order unchanged, so a symbol may contain any byte but NUL. Prefer it
 whenever the output is parsed. Format:
 [`CODES.md`](CODES.md#rgit-symbols---with-lines).
 
+`--json` lists those same records as one JSON object — see
+[`CODES.md`](CODES.md#rgit-symbols---json). `file`, `start`, and `end` are
+present when `--with-filename` or `--with-lines` (or several files) would
+put them in the text record. It is mutually exclusive with `--porcelain`
+(exit 129). The newline listing is unchanged.
+
 Every file is resolved before any line is written, so an unreadable or
 unsupported file anywhere in the list leaves stdout untouched rather than half
 a listing — a truncated listing would otherwise read as "that file has no more
@@ -731,7 +737,7 @@ takes `--porcelain`, `-p`/`--patch` (mutually exclusive with it),
 themselves; `show` takes
 `--source`, `--follow-rename`, `--porcelain`, `--with-header` (deprecated alias for
 `--porcelain`), and `--help`; `symbols` takes
-`--for-commit`, `--with-lines`, and `--help`; `doctor` takes `--porcelain`,
+`--for-commit`, `--with-lines`, `--with-filename`, `--porcelain`, `--json` (mutually exclusive with `--porcelain`), and `--help`; `doctor` takes `--porcelain`,
 `--json` (mutually exclusive with `--porcelain`), `--deep`, and `--help`;
 `context` takes `--json` and `--help`/`-h` (the records stay fixed; `--json`
 is that same stream as one object); `completion` takes no flags beyond
@@ -777,6 +783,7 @@ is that same stream as one object); `completion` takes no flags beyond
 | `--porcelain` | (`show`) Frame every extent the way several are framed (`FILE:ANCHOR<TAB>NBYTES` + exactly `NBYTES` bytes). Single-anchor and multi-anchor both framed; the machine-readable framing scripts should parse. |
 | `--with-filename` | (`symbols`) Prefix every line with `FILE<TAB>`. Implied by naming more than one file, as `grep` does. |
 | `--porcelain` | (`symbols`) Terminate each record with NUL instead of a newline; fields unchanged. |
+| `--json` | (`symbols`) The same fields as one JSON object. Mutually exclusive with `--porcelain`. |
 | `--follow-rename` | (`show`, `blame`, `log`) Re-resolve the symbol at each rename boundary. On `show`, print the bytes from the oldest path segment; with no rename, read `HEAD` rather than a dirty worktree. On `blame` and `log`, emit each segment. A plain path does not take it (exit 129). Mutually exclusive with `--source` on `show`, `blame`, and `log` (exit 129). |
 | `--source REV` | (`show`, `blame`, `log`) Read, blame, or walk history of the symbol from `REV:FILE`. `show` and `blame` use it instead of the worktree; `log` uses it instead of `HEAD` and starts `git log -L` at that revision. Both spellings (`--source REV`, `--source=REV`). An unparseable revision is exit 128, distinct from a path absent at a real one (exit 3). Mutually exclusive with `--follow-rename` (exit 129). |
 | `--since DATE`, `--until DATE` | (`log`) Bound history by date. A `FILE:SYMBOL` positional keeps the anchor form. Path positionals select unanchored path-scoped history with or without these flags. With neither a path, a date, nor `--follow`, `log` still requires an anchor. Forwarded to git's own `--since`/`--until` unparsed. |
@@ -834,7 +841,7 @@ before decode. Closes #42." \
 a revision argument (a range, or one or two bare revisions), `--staged` +
 `--unstaged`, `--range` + a positional `A..B`/`A...B` range, `-m` + `-F`,
 `--porcelain` + `--quiet` (`diff`), `--porcelain` + `-p`/`--patch` (`diff`,
-`log`), `--porcelain` + `--json` (`doctor`) → exit 129.
+`log`), `--porcelain` + `--json` (`languages`, `doctor`, `symbols`) → exit 129.
 Naming one path both as a path and as a symbol anchor → exit 5, in whichever
 spelling: `--file` with `--sym`, or the positional forms `greet.go
 greet.go:A`.

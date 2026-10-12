@@ -135,13 +135,13 @@ failure reaching `git log` or `git diff` underneath it folds into 128.
 ## Output records
 
 The record formats defined here are for `--porcelain` output, plus the JSON
-objects `rgit languages --json`, `rgit doctor --json`, and `rgit context --json`
-write (see below). A command's own default
+objects `rgit languages --json`, `rgit doctor --json`, `rgit context --json`,
+and `rgit symbols --json` write (see below). A command's own default
 is git's or `rgit`'s aligned human-readable layout (`diff`, `commit`,
 `blame`, `log`, `languages`, `doctor`). `--porcelain` replaces that with
 stable tab-separated records, no header. `--json` is not a fourth porcelain
 dialect: it is one object, and it is mutually exclusive with `--porcelain`
-on `languages` and `doctor`. `context` has no `--porcelain`;
+on `languages`, `doctor`, and `symbols`. `context` has no `--porcelain`;
 `--json` encodes the same record stream.
 
 This is not a hypothetical contract: shell completion scripts call `rgit
@@ -544,6 +544,30 @@ admits a newline into a name, which CSS grouped selectors once did.
 container qualification, an ordinal (`init#2`), or a gopls-spelled receiver,
 while the range never contains a tab. Splitting on the first tab is therefore
 always correct.
+
+### `rgit symbols --json`
+
+```json
+{
+  "symbols": [
+    {
+      "file": "auth.go",
+      "start": "12",
+      "end": "27",
+      "symbol": "ValidateToken"
+    }
+  ]
+}
+```
+
+One JSON object. `symbols` holds one entry per `--porcelain` record, in the
+same order. `file` is present when the text record is prefixed with the
+path (`--with-filename`, or more than one file). `start` and `end` are
+present with `--with-lines`, the two halves of that record's `START,END`
+column, as strings. `symbol` is always the anchor, the record's last field.
+
+`--json` with `--porcelain` is exit 129. Otherwise the exit code is the
+text listing's.
 
 ### `rgit show --porcelain`
 
