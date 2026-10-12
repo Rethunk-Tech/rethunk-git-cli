@@ -3,6 +3,7 @@
 package app
 
 import (
+	"encoding/json"
 	"net"
 	"os"
 	"path/filepath"
@@ -28,23 +29,64 @@ func TestRun_ContextHelpAndUsage(t *testing.T) {
 	}
 
 	// docs/USAGE.md § Context's own guardrail: "a command with options
-	// becomes git status with extra steps" -- context takes no flags or
-	// targets beyond --help, so any argument at all is refused rather than
-	// quietly growing a flag surface.
-	t.Run("any argument is refused", func(t *testing.T) {
+	// becomes git status with extra steps". --json encodes the same stream;
+	// anything else, including a second output mode, is refused.
+	t.Run("any other argument is refused", func(t *testing.T) {
 		chdirTempRepo(t)
 		for _, args := range [][]string{
 			{"context", "extra"},
 			{"context", "--porcelain"},
+			{"context", "--json", "--porcelain"},
+			{"context", "--porcelain", "--json"},
 			{"context", "a.go"},
 		} {
 			_, stderr, code := runApp(t, args...)
 			qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-			// context and doctor share refuseExtraArgs (shared.go) and its
-			// "unrecognized argument %q" wording.
 			qt.Assert(t, qt.StringContains(stderr, "unrecognized argument"))
 		}
 	})
+}
+
+// TestRun_ContextJSONMatchesTextStream pins that --json is the text stream's
+// records as one object, including the same F-row count, and that a second
+// output mode is still exit 129.
+func TestRun_ContextJSONMatchesTextStream(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+
+	text, _, code := runApp(t, "-C", dir, "context")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	textLines := strings.Split(strings.TrimRight(text, "\n"), "\n")
+
+	stdout, _, code := runApp(t, "-C", dir, "context", "--json")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+
+	var top map[string]json.RawMessage
+	qt.Assert(t, qt.IsNil(json.Unmarshal([]byte(stdout), &top)))
+	qt.Assert(t, qt.DeepEquals(mapKeys(top), []string{"records"}))
+
+	var records []map[string]string
+	qt.Assert(t, qt.IsNil(json.Unmarshal(top["records"], &records)))
+	qt.Assert(t, qt.Equals(len(records), len(textLines)))
+
+	textF, jsonF := 0, 0
+	for i, line := range textLines {
+		fields := strings.Split(line, "\t")
+		qt.Assert(t, qt.Equals(records[i]["type"], fields[0]))
+		if fields[0] != "F" {
+			continue
+		}
+		textF++
+		jsonF++
+		qt.Assert(t, qt.Equals(records[i]["file"], fields[1]))
+		qt.Assert(t, qt.Equals(records[i]["symbol"], fields[2]))
+		qt.Assert(t, qt.Equals(records[i]["status"], fields[3]))
+		qt.Assert(t, qt.Equals(records[i]["added"], fields[4]))
+		qt.Assert(t, qt.Equals(records[i]["deleted"], fields[5]))
+	}
+	qt.Assert(t, qt.IsTrue(textF > 0))
+	qt.Assert(t, qt.Equals(jsonF, textF))
 }
 
 // TestRun_ContextEmptyRepoEmitsNothing pins the empty case: a fresh

@@ -135,12 +135,14 @@ failure reaching `git log` or `git diff` underneath it folds into 128.
 ## Output records
 
 The record formats defined here are for `--porcelain` output, plus the JSON
-objects `rgit languages --json` and `rgit doctor --json` write (see below). A command's own default
+objects `rgit languages --json`, `rgit doctor --json`, and `rgit context --json`
+write (see below). A command's own default
 is git's or `rgit`'s aligned human-readable layout (`diff`, `commit`,
 `blame`, `log`, `languages`, `doctor`). `--porcelain` replaces that with
 stable tab-separated records, no header. `--json` is not a fourth porcelain
 dialect: it is one object, and it is mutually exclusive with `--porcelain`
-on `languages` and `doctor`.
+on `languages` and `doctor`. `context` has no `--porcelain`;
+`--json` encodes the same record stream.
 
 This is not a hypothetical contract: shell completion scripts call `rgit
 symbols` and `rgit symbols --for-commit` (`internal/app/completion.go`), while
@@ -428,6 +430,66 @@ the last line.**
 - See [`USAGE.md`](USAGE.md#context) for the byte budget. 16 KiB is the
   point past which a caller is reading a diff rather than orienting; records
   are dropped whole at the boundary, never truncated mid-record.
+
+### `rgit context --json`
+
+```json
+{
+  "records": [
+    {
+      "ahead": "0",
+      "behind": "2",
+      "branch": "main",
+      "type": "B",
+      "upstream": "origin/main"
+    },
+    {
+      "kind": "warning",
+      "text": "extent disagreement reported on stderr",
+      "type": "W"
+    },
+    {
+      "added": "12",
+      "deleted": "3",
+      "file": "auth.go",
+      "status": "MOD",
+      "symbol": "ValidateToken",
+      "type": "F"
+    },
+    {
+      "file": "auth.go",
+      "type": "T",
+      "where": "both"
+    },
+    {
+      "hash": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+      "subject": "fix(auth): reject expired tokens",
+      "type": "C"
+    }
+  ]
+}
+```
+
+One JSON object. `records` holds one entry per line of the text stream, in
+that same order, after the 16 KiB cap (an `X` record is included when the
+text stream would emit one). Field names are the text columns. An empty
+column is present as `""` — an empty `upstream` or `symbol` is a fact.
+
+| `type` | Fields |
+| --- | --- |
+| `B` | `branch`, `upstream`, `ahead`, `behind` |
+| `H` | `sha` |
+| `S` | `op` |
+| `W` | `kind` (`ts-only`, `stash`, `sparse`, or `warning`). `text` is present only for `warning` |
+| `F` | `file`, `symbol`, `status`, `added`, `deleted` |
+| `T` | `file`, `where` |
+| `C` | `hash`, `subject` |
+| `X` | `count` (the text stream's `TRUNCATED` token is the record's fixed label, not a field) |
+
+`ahead`, `behind`, `added`, `deleted`, and `count` are strings, the same
+bytes the text stream prints. There is no second output mode to combine
+with `--json`; any other argument is exit 129. Otherwise the exit code is
+the text stream's.
 
 ### `rgit log --porcelain`
 

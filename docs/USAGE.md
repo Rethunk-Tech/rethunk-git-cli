@@ -453,10 +453,12 @@ replaces the separate `status`, `diff --stat`, `diff`, and `log` calls an
 agent would otherwise make before editing, each billed as its own subprocess
 call.
 
-**The output shape is fixed and takes no flags beyond `--help`.** A command
-with options becomes `git status` with extra steps — see
-[`AGENTS.md`](../AGENTS.md) for why the shape stays
-fixed rather than growing one. Eight record types, tab-separated, no header:
+**The records are fixed.** A command with options becomes `git status` with
+extra steps — see [`AGENTS.md`](../AGENTS.md) for why the shape stays fixed
+rather than growing a way to select or narrow it. `--json` lists those same
+records as one JSON object — see [`CODES.md`](CODES.md#rgit-context---json).
+The text stream below is unchanged without it, and any other argument is
+exit 129. Eight record types, tab-separated, no header:
 
 | Record | Fields | Meaning |
 | --- | --- | --- |
@@ -476,13 +478,15 @@ The diff half is pure composition, not a second attribution path: `rgit
 diff`'s own default scope, rendered through the same `--porcelain` records and
 re-tagged per line.
 
-**The whole stream is capped at 16 KiB.** `B` or `H`, when present, sorts first
+**The text stream is capped at 16 KiB.** `B` or `H`, when present, sorts first
 — a single record that costs the budget almost nothing — then `S`, `W`
 diagnostics and `F` rows. `F` rows survive truncation before `C` rows do: the
 diff section is the unbounded, actionable half, where commits are already
 bounded up front (the most recent 20, via git's own history limit) and cost
 little to drop. Truncation happens at the byte boundary, with a trailing
-`X` record naming how many rows were withheld. See
+`X` record naming how many rows were withheld. `--json` encodes the records
+that cap kept, so it lists the same facts; the JSON text itself is not
+measured against 16 KiB. See
 [`CODES.md`](CODES.md#output-records) for the exact record grammar.
 
 ## Help
@@ -729,9 +733,9 @@ themselves; `show` takes
 `--porcelain`), and `--help`; `symbols` takes
 `--for-commit`, `--with-lines`, and `--help`; `doctor` takes `--porcelain`,
 `--json` (mutually exclusive with `--porcelain`), `--deep`, and `--help`;
-`completion` and `context` take no flags beyond
-`--help`/`-h` (`completion` also takes its shell argument; `context`'s fixed
-output shape is the point).
+`context` takes `--json` and `--help`/`-h` (the records stay fixed; `--json`
+is that same stream as one object); `completion` takes no flags beyond
+`--help`/`-h` (it also takes its shell argument).
 
 | Flag | Behavior |
 | --- | --- |

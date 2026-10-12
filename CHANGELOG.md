@@ -8,6 +8,7 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit context --json` prints the branch, diagnostic, diff, stage, and commit records as one JSON object, the same facts the text stream lists. Any other argument, including a second output mode, is exit 129. The text stream is unchanged. See [`docs/USAGE.md`](docs/USAGE.md#context).
 - `rgit languages --json` prints the compiled grammars as one JSON object, the same rows `--porcelain` lists. `--json` with `--porcelain` is exit 129. The aligned listing and `--porcelain` are unchanged. See [`docs/USAGE.md`](docs/USAGE.md#languages).
 - `rgit log --source REV FILE:SYMBOL` resolves the anchor at that revision and lists commits that touched its line range there. An unknown revision is exit 128; a path absent there is exit 3; `--source` with `--follow-rename` is exit 129. See [`docs/USAGE.md`](docs/USAGE.md#log).
 - `rgit doctor --json` prints the environment and language-server checks as one JSON object, the same checks `--porcelain` lists. `--json` with `--porcelain` is exit 129. The aligned report and `--porcelain` are unchanged. See [`docs/USAGE.md`](docs/USAGE.md#doctor).

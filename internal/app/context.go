@@ -13,6 +13,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"slices"
@@ -23,7 +24,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 )
 
-const contextHelp = `usage: rgit context
+const contextHelp = `usage: rgit context [--json]
 
 One-call repository orientation for an agent's first turn: the same
 per-file, per-symbol diffstat "rgit diff" itself reports for everything
@@ -32,10 +33,11 @@ subjects -- as a single, fixed-shape record stream. Replaces the separate
 status, diffstat, diff, and log calls an agent would otherwise make before
 editing.
 
-Takes no flags or targets beyond --help: the output shape is fixed and
-byte-budgeted on purpose ("a command with options becomes git status with
-extra steps" -- see docs/USAGE.md § Context), so there is nothing here to
-select or narrow.
+--json lists those same records as one JSON object: see
+docs/CODES.md#rgit-context---json. Without it, the text stream below is
+what is written. There is still nothing here to select or narrow ("a
+command with options becomes git status with extra steps" -- see
+docs/USAGE.md § Context): any other argument is refused.
 
 Records, one per line, tab-separated, no header:
 
@@ -83,11 +85,13 @@ Records, one per line, tab-separated, no header:
       At most one, always last: this many records were withheld because
       the stream reached its byte budget.
 
-The whole stream is capped at 16 KiB. B or H sorts first (a single record, cost
+The text stream is capped at 16 KiB. B or H sorts first (a single record, cost
 next to nothing), then S, W diagnostics, F rows, T rows, and C rows. F rows survive
 truncation before C rows do: the diff section has no natural bound of its own,
 while commits are already bounded up front (the most recent 20, via git's own
 -n) and cost little to drop. The X record names how many rows were withheld.
+--json encodes those same records after that cap, so the two forms list the
+same facts; the JSON text itself is not measured against the cap.
 
 Full reference: docs/USAGE.md
 `
@@ -97,28 +101,33 @@ Full reference: docs/USAGE.md
 // produces more than this many commits to begin with.
 const contextRecentCommitLimit = 20
 
-// contextByteBudget is the hard ceiling on rgit context's entire stdout
-// stream. Chosen so the common case -- a handful of recent commits plus an
+// contextByteBudget is the hard ceiling on rgit context's text stream.
+// --json encodes the records that ceiling kept; it does not re-measure the
+// JSON text. Chosen so the common case -- a handful of recent commits plus an
 // ordinary in-progress change -- never comes close to it, while a worst
 // case (a bulk rename or a vendored dependency bump touching hundreds of
 // files) is bounded to a fixed, predictable cost rather than scaling with
 // repository size.
 const contextByteBudget = 16384
 
-// runContext is hand-parsed and has no runtime flag surface beyond --help.
-//
-// --help wins wherever it appears in args, not only as the sole argument
-// (every hand-parsed command follows the same rule, matching
-// blame.go/log.go's own loop) -- but since context takes nothing else,
-// that reduces to just checking args[0]: any other token has already
-// failed by the time a later --help could be reached.
+// runContext is hand-parsed. --json is an encoding of the same record
+// stream, not a filter. --help wins wherever it appears.
 func runContext(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
-	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h") {
-		fmt.Fprint(stdout, contextHelp)
-		return exitcode.Success
+	asJSON := false
+	var extra []string
+	for _, arg := range args {
+		switch arg {
+		case "--help", "-h":
+			fmt.Fprint(stdout, contextHelp)
+			return exitcode.Success
+		case "--json":
+			asJSON = true
+		default:
+			extra = append(extra, arg)
+		}
 	}
-	if len(args) != 0 {
-		return refuseExtraArgs("context", args, stderr, contextHelp)
+	if len(extra) != 0 {
+		return refuseExtraArgs("context", extra, stderr, contextHelp)
 	}
 
 	root, _, repo, code := openRepo(ctx, dir, stderr)
@@ -243,8 +252,110 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 		records = append(records, fmt.Sprintf("C\t%s\t%s\n", c.Hash, c.Subject))
 	}
 
-	fmt.Fprint(stdout, buildContextStream(records, contextByteBudget))
+	stream := buildContextStream(records, contextByteBudget)
+	if asJSON {
+		if err := writeContextJSON(stdout, stream); err != nil {
+			fmt.Fprintf(stderr, "rgit: context: %v\n", err)
+			return exitcode.GitFailure
+		}
+		return exitcode.Success
+	}
+	fmt.Fprint(stdout, stream)
 	return exitcode.Success
+}
+
+// contextReport is the machine-readable form of the text stream: one object,
+// one entry per record the byte budget kept, in that same order.
+type contextReport struct {
+	Records []map[string]string `json:"records"`
+}
+
+func writeContextJSON(w io.Writer, stream string) error {
+	records := make([]map[string]string, 0)
+	trimmed := strings.TrimRight(stream, "\n")
+	if trimmed != "" {
+		for line := range strings.SplitSeq(trimmed, "\n") {
+			rec, err := contextRecord(line)
+			if err != nil {
+				return err
+			}
+			records = append(records, rec)
+		}
+	}
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	return enc.Encode(contextReport{Records: records})
+}
+
+// contextRecord turns one text-stream line into the JSON object's fields.
+// Empty columns stay present: an empty upstream or symbol is a fact, the
+// same way the text stream prints the tab with nothing between it.
+// The unbounded last field (a warning body, a commit subject) keeps any
+// tabs it contained.
+func contextRecord(line string) (map[string]string, error) {
+	fields := strings.Split(line, "\t")
+	if fields[0] == "" {
+		return nil, fmt.Errorf("empty record")
+	}
+	rec := map[string]string{"type": fields[0]}
+	switch fields[0] {
+	case "B":
+		if len(fields) != 5 {
+			return nil, fmt.Errorf("B record has %d fields", len(fields))
+		}
+		rec["branch"] = fields[1]
+		rec["upstream"] = fields[2]
+		rec["ahead"] = fields[3]
+		rec["behind"] = fields[4]
+	case "H":
+		if len(fields) != 2 {
+			return nil, fmt.Errorf("H record has %d fields", len(fields))
+		}
+		rec["sha"] = fields[1]
+	case "S":
+		if len(fields) != 2 {
+			return nil, fmt.Errorf("S record has %d fields", len(fields))
+		}
+		rec["op"] = fields[1]
+	case "W":
+		if len(fields) < 2 {
+			return nil, fmt.Errorf("W record has %d fields", len(fields))
+		}
+		rec["kind"] = fields[1]
+		if len(fields) > 2 {
+			rec["text"] = strings.Join(fields[2:], "\t")
+		}
+	case "F":
+		if len(fields) != 6 {
+			return nil, fmt.Errorf("F record has %d fields", len(fields))
+		}
+		rec["file"] = fields[1]
+		rec["symbol"] = fields[2]
+		rec["status"] = fields[3]
+		rec["added"] = fields[4]
+		rec["deleted"] = fields[5]
+	case "T":
+		if len(fields) != 3 {
+			return nil, fmt.Errorf("T record has %d fields", len(fields))
+		}
+		rec["file"] = fields[1]
+		rec["where"] = fields[2]
+	case "C":
+		if len(fields) < 3 {
+			return nil, fmt.Errorf("C record has %d fields", len(fields))
+		}
+		rec["hash"] = fields[1]
+		rec["subject"] = strings.Join(fields[2:], "\t")
+	case "X":
+		if len(fields) != 3 || fields[1] != "TRUNCATED" {
+			return nil, fmt.Errorf("X record %q", line)
+		}
+		rec["count"] = fields[2]
+	default:
+		return nil, fmt.Errorf("unrecognized record type %q", fields[0])
+	}
+	return rec, nil
 }
 
 // buildContextStream assembles records (each already newline-terminated,

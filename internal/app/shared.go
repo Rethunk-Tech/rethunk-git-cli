@@ -400,14 +400,8 @@ func unsupportedLanguageHint(ext string) string {
 	return fmt.Sprintf(" (this build was compiled without -tags %s; installing the tree-sitter CLI and rebuilding would enable it -- see docs/INSTALL.md § SQL support, or run rgit doctor)", tag)
 }
 
-// refuseExtraArgs is the shared "this command takes no arguments beyond
-// --help" refusal for context.go and doctor.go -- the two hand-parsed
-// commands with no flag surface at all. One wording covers both, and the
-// offending argument is always named. Called only once len(args) != 0 is
-// already known, so
-// args[0] is always the first (and, for these two commands, only ever
-// reachable) offending token -- see runDoctor/runContext's own help-first
-// check just above each call site.
+// refuseExtraArgs names the first unrecognized argument and prints help.
+// runContext calls it for anything other than --help and --json.
 func refuseExtraArgs(cmdName string, args []string, stderr io.Writer, help string) exitcode.Code {
 	fmt.Fprintf(stderr, "rgit: %s: unrecognized argument %q\n", cmdName, args[0])
 	fmt.Fprint(stderr, help)
