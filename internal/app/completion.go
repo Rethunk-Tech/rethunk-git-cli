@@ -124,7 +124,7 @@ const (
 	rgitLanguagesFlags  = "--porcelain --in-repo -h --help"
 	rgitDoctorFlags     = "--porcelain --deep -h --help"
 	rgitCompletionFlags = "-h --help"
-	rgitShowFlags       = "--source --porcelain --with-header -h --help"
+	rgitShowFlags       = "--source --follow-rename --porcelain --with-header -h --help"
 	rgitBlameFlags      = "-p --porcelain --follow-rename --source -h --help"
 	rgitLogFlags        = "--porcelain -p --patch --follow --follow-rename --since --until -n --max-count -h --help"
 	rgitContextFlags    = "-h --help"

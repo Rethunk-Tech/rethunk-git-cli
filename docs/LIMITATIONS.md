@@ -191,6 +191,10 @@ boundary, and emits git's bounded blame for each path segment. `--source REV`
 blames one revision's extent under the file's current name and does not
 combine with `--follow-rename`.
 
+`rgit show FILE:SYMBOL --follow-rename` uses that same boundary walk and prints
+the symbol's bytes from the oldest path segment. It does not concatenate every
+edit along the way, and it does not combine with `--source`.
+
 ## Language-server coverage
 
 The extent cross-check is live for Go, TypeScript/TSX, Python, Rust, Shell,

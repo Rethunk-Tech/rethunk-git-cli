@@ -406,8 +406,8 @@ func TestRun_BlameHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
 // commands that walk one: the pre-rename name of an extensionless script has
 // no extension to key on, so resolving the old blob's language from the path
 // alone stranded history mid-walk with exit 9 while the current name resolved
-// fine. One fixture covers both because blame and log had the same bug at the
-// same point in the same shape.
+// fine. One fixture covers blame, log, and show because each walk looks up
+// the old name the same way.
 func TestRun_FollowRenameResolvesShebangLanguageBeforeTheRename(t *testing.T) {
 	t.Parallel()
 	dir := tempRepo(t)
@@ -436,5 +436,13 @@ func TestRun_FollowRenameResolvesShebangLanguageBeforeTheRename(t *testing.T) {
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Not(qt.StringContains(stderr, "unsupported language")))
 		qt.Assert(t, qt.StringContains(stdout, "feat: add tool"))
+	})
+
+	t.Run("show", func(t *testing.T) {
+		t.Parallel()
+		stdout, stderr, code := runApp(t, "-C", dir, "show", "newtool:greet", "--follow-rename")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Not(qt.StringContains(stderr, "unsupported language")))
+		qt.Assert(t, qt.StringContains(stdout, "def greet():"))
 	})
 }

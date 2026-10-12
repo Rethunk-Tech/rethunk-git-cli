@@ -247,9 +247,21 @@ to a path genuinely absent at a real one alike, so without that check
 An unknown revision is exit 128 (git's own code for one); a path absent at a
 known revision is exit 3, the ordinary unresolvable-anchor code.
 
-`FILE` is always the path's **current** name. `show` does not follow renames —
-there is no `--follow-rename` here, unlike `blame` and `log`, because a single
-snapshot has no rename boundary to walk.
+`FILE` is always the path's **current** name. Without `--follow-rename`, `show`
+reads that path only — the worktree, or `HEAD` when the worktree copy is gone.
+
+`--follow-rename` follows the symbol across rename boundaries the same way
+`blame` and `log` do: at each rename git identifies, rgit resolves the symbol
+once against the pre-rename blob and continues, never re-parsing per commit.
+The bytes it prints are that oldest segment — the symbol as it stood just
+before the earliest rename — not a concatenation of every historical edit.
+With no rename, the flag reads the `HEAD` blob rather than a dirty worktree.
+`--source` and `--follow-rename` together are exit 129: one revision under the
+current name, and a rename walk, are different reads. Zero anchors is still
+exit 129 (`show` requires a `FILE:SYMBOL`). Several anchors stay length-framed,
+each extent followed on its own. A plain path is not this form:
+`show PATH --follow-rename` is exit 129, the same "not a plain path" refusal
+as a path without the flag.
 
 An anchor that does not resolve is **never** widened to a whole-file dump — it
 is exit 3 (unresolvable), 4 (ambiguous), or 9 (unsupported language), the same
@@ -697,7 +709,7 @@ takes `--porcelain`, `-p`/`--patch` (mutually exclusive with it),
 `--follow` (path form, exactly one path), `--follow-rename`, `-n`/`--max-count`,
 `--help`, and — only in its path or date shape — `--since`/`--until`
 themselves; `show` takes
-`--source`, `--porcelain`, `--with-header` (deprecated alias for
+`--source`, `--follow-rename`, `--porcelain`, `--with-header` (deprecated alias for
 `--porcelain`), and `--help`; `symbols` takes
 `--for-commit`, `--with-lines`, and `--help`; `doctor` takes `--porcelain`,
 `--deep`, and `--help`; `completion` and `context` take no flags beyond
@@ -744,7 +756,8 @@ output shape is the point).
 | `--porcelain` | (`show`) Frame every extent the way several are framed (`FILE:ANCHOR<TAB>NBYTES` + exactly `NBYTES` bytes). Single-anchor and multi-anchor both framed; the machine-readable framing scripts should parse. |
 | `--with-filename` | (`symbols`) Prefix every line with `FILE<TAB>`. Implied by naming more than one file, as `grep` does. |
 | `--porcelain` | (`symbols`) Terminate each record with NUL instead of a newline; fields unchanged. |
-| `--source REV` | (`show`, `blame`) Read or blame the symbol from `REV:FILE` instead of the worktree. Both spellings (`--source REV`, `--source=REV`). An unparseable revision is exit 128, distinct from a path absent at a real one (exit 3). On `blame`, mutually exclusive with `--follow-rename` (exit 129). |
+| `--follow-rename` | (`show`, `blame`, `log`) Re-resolve the symbol at each rename boundary. On `show`, print the bytes from the oldest path segment; with no rename, read `HEAD` rather than a dirty worktree. On `blame` and `log`, emit each segment. A plain path does not take it (exit 129). Mutually exclusive with `--source` on `show` and `blame` (exit 129). |
+| `--source REV` | (`show`, `blame`) Read or blame the symbol from `REV:FILE` instead of the worktree. Both spellings (`--source REV`, `--source=REV`). An unparseable revision is exit 128, distinct from a path absent at a real one (exit 3). Mutually exclusive with `--follow-rename` on `show` and `blame` (exit 129). |
 | `--since DATE`, `--until DATE` | (`log`) Bound history by date. A `FILE:SYMBOL` positional keeps the anchor form. Path positionals select unanchored path-scoped history with or without these flags. With neither a path, a date, nor `--follow`, `log` still requires an anchor. Forwarded to git's own `--since`/`--until` unparsed. |
 | `--follow` | (`log`, path form) Continue one path's history past renames. Forwarded to git's own `--follow`. Requires exactly one path; zero paths, or two or more, is exit 129. A `FILE:SYMBOL` anchor does not accept it; that form uses `--follow-rename`. |
 | `-n N`, `--max-count=N` | (`log`) Limit either history form to at most `N` commits; under `--follow-rename`, applies independently per rename segment, so the total may exceed `N`. Forwarded to git's own count limit; omitted by default, so history is unbounded. |

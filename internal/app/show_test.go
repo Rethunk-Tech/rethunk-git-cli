@@ -204,3 +204,89 @@ func TestShow_WithHeaderIsAPorcelainAlias(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(multiHeader, multiPorcelain))
 }
+
+// TestShow_FollowRenamePrintsPreRenameBytes pins the rename walk: the same
+// anchor on the new path prints the pre-rename extent, and without the flag
+// show still reads the path as it stands.
+func TestShow_FollowRenamePrintsPreRenameBytes(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+
+	const pre = "func Foo() int {\n\treturn 1\n}"
+	const post = "func Foo() int {\n\treturn 2\n}"
+	const bar = "func Bar() int {\n\treturn 100\n}"
+	writeAppFile(t, dir, "old.go", "package p\n\n"+pre+"\n\n"+bar+"\n")
+	gittest.Git(t.Context(), t, dir, "add", "old.go")
+	gittest.Git(t.Context(), t, dir, "commit", "-q", "-m", "feat: add old.go")
+
+	gittest.Git(t.Context(), t, dir, "mv", "old.go", "new.go")
+	writeAppFile(t, dir, "new.go", "package p\n\n"+bar+"\n\n"+post+"\n")
+	gittest.Commit(t.Context(), t, dir, "refactor: rename and reorder")
+
+	t.Run("without the flag, show stays on the current path", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "-C", dir, "show", "new.go:Foo")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.Equals(stdout, post))
+	})
+
+	t.Run("--follow-rename prints the pre-rename symbol bytes", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "-C", dir, "show", "new.go:Foo", "--follow-rename")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.Equals(stdout, pre))
+	})
+
+	t.Run("several anchors stay length-framed", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "-C", dir, "show", "--follow-rename", "new.go:Foo", "new.go:Bar")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		want := "new.go:Foo\t" + strconv.Itoa(len(pre)) + "\n" + pre + "new.go:Bar\t" + strconv.Itoa(len(bar)) + "\n" + bar
+		qt.Assert(t, qt.Equals(stdout, want))
+	})
+}
+
+// TestShow_FollowRenameRefusals pins the flag combinations that stay exit 129:
+// no anchor, a plain path, and --source together with the rename walk.
+func TestShow_FollowRenameRefusals(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+
+	_, stderr, code := runApp(t, "-C", dir, "show", "--follow-rename")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "requires a FILE:SYMBOL anchor"))
+
+	_, stderr, code = runApp(t, "-C", dir, "show", "a.go", "--follow-rename")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "not a plain path"))
+
+	_, stderr, code = runApp(t, "-C", dir, "show", "--source", "HEAD", "--follow-rename", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "--source and --follow-rename are mutually exclusive"))
+}
+
+// TestShow_FollowRenameNoRenameReadsHEAD pins that a file with no rename
+// still resolves, and that the flag ignores a dirty worktree the way the
+// other rename walks do. Without the flag the worktree bytes remain.
+func TestShow_FollowRenameNoRenameReadsHEAD(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+
+	const head = "// A returns one.\nfunc A() int {\n\treturn 1\n}"
+	withFlag, stderr, code := runApp(t, "-C", dir, "show", "a.go:A", "--follow-rename")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.Equals(withFlag, head))
+
+	const dirty = "// A returns nine.\nfunc A() int {\n\treturn 9\n}"
+	writeAppFile(t, dir, "a.go", "package a\n\n"+dirty+"\n\nfunc B() int {\n\treturn 2\n}\n")
+
+	without, _, code := runApp(t, "-C", dir, "show", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(without, dirty))
+
+	stillHead, stderr, code := runApp(t, "-C", dir, "show", "a.go:A", "--follow-rename")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.Equals(stillHead, head))
+}

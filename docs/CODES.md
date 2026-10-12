@@ -84,7 +84,9 @@ whole-file dump. Its one addition is `--source`: an unknown revision is **128**
 path that is simply absent at a revision git does know stays **3**
 (`AnchorUnresolvable`). The two are distinguished deliberately — `cat-file`
 reports both as "no such object", and collapsing them would report a mistyped
-branch as a missing symbol.
+branch as a missing symbol. `--source` together with `--follow-rename` is
+**129**, as is a plain path (with or without that flag) and an invocation
+with no anchor.
 
 ### `blame` shares the anchor codes, not the staging ones
 
