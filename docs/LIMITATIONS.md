@@ -183,7 +183,9 @@ per commit, which is the trade-off that made it worth building.
 Either way, a symbol's history is only reachable starting from the file's
 **current** name: querying it under a prior name directly fails at argument
 classification, the same as naming any other path that exists under neither
-the worktree, the index, nor `HEAD`.
+the worktree, the index, nor `HEAD`. `--source REV` resolves the extent in
+that revision under the current name and starts the walk there; it does not
+follow renames and does not combine with `--follow-rename`.
 
 `rgit blame FILE:SYMBOL` stops at the current file name by default. With
 `--follow-rename`, it reads HEAD history, re-resolves the symbol at each rename

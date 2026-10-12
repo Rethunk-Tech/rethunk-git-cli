@@ -2,8 +2,9 @@
 // code table and one patch-free-by-default rule (docs/USAGE.md § Log):
 //
 //   - `rgit log FILE:SYMBOL` -- patch-free history of one symbol, one
-//     record per commit that touched its current extent, newest first. A
-//     thin caller over anchor resolution and `git log -L`: git's own -L
+//     record per commit that touched the extent resolved at HEAD, or at
+//     --source's revision. A thin caller over anchor resolution and
+//     `git log -L`: git's own -L
 //     implementation already re-derives the touched line range at each
 //     ancestor commit itself, so there is no per-commit tree-sitter
 //     re-parse here and no second attribution path.
@@ -39,7 +40,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
-const logHelp = `usage: rgit log FILE:SYMBOL [--since=DATE] [--until=DATE] [-n N|--max-count=N] [--follow-rename] [--porcelain | -p|--patch]
+const logHelp = `usage: rgit log FILE:SYMBOL [--source <rev>] [--since=DATE] [--until=DATE] [-n N|--max-count=N] [--follow-rename] [--porcelain | -p|--patch]
        rgit log [--since=DATE] [--until=DATE] [-n N|--max-count=N] [--follow] [--porcelain | -p|--patch] PATH...
        rgit log --since=DATE [--until=DATE] [-n N|--max-count=N] [--porcelain | -p|--patch]
 
@@ -51,6 +52,12 @@ which is exactly the flood this command exists to avoid.
 The anchor is resolved once, against HEAD -- never the worktree -- since
 history is a question about what has already been committed, and git log
 -L itself walks HEAD's own history with no notion of the worktree at all.
+--source <rev> resolves against <rev>:FILE instead, the same read show and
+blame --source use, then runs git log -L on that extent starting at <rev>.
+Both spellings (--source REV and --source=REV). FILE is the path's current
+name; this does not follow renames. Mutually exclusive with --follow-rename
+(exit 129). An unknown revision is exit 128; a path absent at a known one
+is exit 3.
 Plain git log -L already follows a rename when git's similarity heuristic
 detects one, but a rename that also reshuffles the symbol can silently stop
 short. --follow-rename re-resolves the anchor's extent at each rename
@@ -135,10 +142,10 @@ func logInteriorColonPositionals(args []string) []string {
 			continue
 		}
 		switch {
-		case a == "--since" || a == "--until" || a == "-n" || a == "--max-count":
+		case a == "--since" || a == "--until" || a == "-n" || a == "--max-count" || a == "--source":
 			i++
 			continue
-		case strings.HasPrefix(a, "--since="), strings.HasPrefix(a, "--until="), strings.HasPrefix(a, "-n"), strings.HasPrefix(a, "--max-count="):
+		case strings.HasPrefix(a, "--since="), strings.HasPrefix(a, "--until="), strings.HasPrefix(a, "-n"), strings.HasPrefix(a, "--max-count="), strings.HasPrefix(a, "--source="):
 			continue
 		case a == "--porcelain", a == "-p", a == "--patch", a == "--follow-rename", a == "--help", a == "-h":
 			continue
@@ -181,7 +188,7 @@ func logHasPositionals(args []string) bool {
 			return true
 		}
 		switch {
-		case a == "--since" || a == "--until" || a == "-n" || a == "--max-count":
+		case a == "--since" || a == "--until" || a == "-n" || a == "--max-count" || a == "--source":
 			i++
 		case strings.HasPrefix(a, "-"):
 			continue
@@ -239,23 +246,32 @@ func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr
 		fmt.Fprint(stderr, logHelp)
 		return exitcode.InvalidUsage
 	}
+	if opts.source != "" && opts.followRename {
+		fmt.Fprintln(stderr, "rgit: --source and --follow-rename are mutually exclusive")
+		fmt.Fprint(stderr, logHelp)
+		return exitcode.InvalidUsage
+	}
 
-	// History is a question about what HEAD (and its ancestors) already
-	// committed, never about an uncommitted worktree edit -- resolving
-	// against HEAD's own blob is what keeps the derived line range
-	// meaningful to `git log -L`, which walks HEAD's own history and knows
-	// nothing about the worktree at all.
-	repo, file, head, res, anchorName, code := resolveAnchorExtent(ctx, dir, stderr, opts.positional, "log", logHelp,
-		func(ctx context.Context, repo *gitx.Repo, _, file string) ([]byte, string, bool, error) {
-			head, exists, err := repo.CatFile(ctx, "HEAD", file)
-			if err != nil {
-				return nil, "", false, err
-			}
-			if !exists {
-				return nil, "has no HEAD history", false, nil
-			}
-			return head, "", true, nil
-		})
+	// History is a question about what has already been committed, never
+	// about an uncommitted worktree edit. The default resolves against
+	// HEAD's own blob so the derived line range matches `git log -L`, which
+	// walks HEAD's history and knows nothing about the worktree. --source
+	// resolves against that revision instead, the same read show and blame
+	// use, and the walk starts there.
+	fetch := func(ctx context.Context, repo *gitx.Repo, _, file string) ([]byte, string, bool, error) {
+		head, exists, err := repo.CatFile(ctx, "HEAD", file)
+		if err != nil {
+			return nil, "", false, err
+		}
+		if !exists {
+			return nil, "has no HEAD history", false, nil
+		}
+		return head, "", true, nil
+	}
+	if opts.source != "" {
+		fetch = showSource(opts.source)
+	}
+	repo, file, blob, res, anchorName, code := resolveAnchorExtent(ctx, dir, stderr, opts.positional, "log", logHelp, fetch)
 	if code != exitcode.Success {
 		return code
 	}
@@ -264,11 +280,18 @@ func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr
 	extra := logDateArgs(opts.since, opts.until, opts.maxCount, opts.maxCountSet, logFormatArgs(opts.patch, opts.porcelain))
 
 	if opts.followRename {
-		return runLogFollowRename(ctx, repo, file, head, res, anchorName, extra, stdout, stderr)
+		return runLogFollowRename(ctx, repo, file, blob, res, anchorName, extra, stdout, stderr)
 	}
 
-	start, end := lineRange(head, res.Extent)
-	out, err := repo.LogLineRange(ctx, file, start, end, extra...)
+	start, end := lineRange(blob, res.Extent)
+	logArgs := extra
+	if opts.source != "" {
+		// The line numbers were taken from this revision's blob, so the
+		// walk has to start there. git log -L without a revision reads
+		// those numbers against HEAD.
+		logArgs = append([]string{opts.source}, extra...)
+	}
+	out, err := repo.LogLineRange(ctx, file, start, end, logArgs...)
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.GitFailure
@@ -285,6 +308,7 @@ type logAnchorOptions struct {
 	porcelain    bool
 	patch        bool
 	followRename bool
+	source       string
 	positional   string
 }
 
@@ -302,6 +326,16 @@ func parseLogAnchorArgs(args []string, stdout, stderr io.Writer) (logAnchorOptio
 			opts.patch = true
 		case a == "--follow-rename":
 			opts.followRename = true
+		case a == "--source":
+			if i+1 >= len(args) {
+				fmt.Fprintf(stderr, "rgit: log: %s requires a value\n", a)
+				fmt.Fprint(stderr, logHelp)
+				return logAnchorOptions{}, exitcode.InvalidUsage, true
+			}
+			i++
+			opts.source = args[i]
+		case strings.HasPrefix(a, "--source="):
+			opts.source = strings.TrimPrefix(a, "--source=")
 		case a == "--since" || a == "--until":
 			if i+1 >= len(args) {
 				fmt.Fprintf(stderr, "rgit: log: option %q requires a value\n", a)

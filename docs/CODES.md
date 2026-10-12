@@ -109,6 +109,11 @@ failure past resolution folds into 128 — except that it resolves against
 `HEAD`'s own blob rather than the worktree, since history is a question about
 what has already been committed.
 
+`--source` is the same addition `show` and `blame` have: the anchor is
+resolved against that revision, an unknown revision is **128**, and a path
+absent at a known revision stays **3**. `--source` together with
+`--follow-rename` is **129**.
+
 `rgit log` with path positionals and no `FILE:SYMBOL` anchor is the second,
 unanchored shape, with or without `--since`/`--until` (see
 [`USAGE.md`](USAGE.md#log-by-date-and-path)); it resolves no anchor, so none

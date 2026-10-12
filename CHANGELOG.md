@@ -8,6 +8,7 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit log --source REV FILE:SYMBOL` resolves the anchor at that revision and lists commits that touched its line range there. An unknown revision is exit 128; a path absent there is exit 3; `--source` with `--follow-rename` is exit 129. See [`docs/USAGE.md`](docs/USAGE.md#log).
 - `rgit doctor --json` prints the environment and language-server checks as one JSON object, the same checks `--porcelain` lists. `--json` with `--porcelain` is exit 129. The aligned report and `--porcelain` are unchanged. See [`docs/USAGE.md`](docs/USAGE.md#doctor).
 - `rgit show FILE:SYMBOL --follow-rename` prints the symbol's bytes from the oldest path segment, re-resolved at each rename boundary. Without the flag, `show` still reads the current path. `--source` with `--follow-rename`, a plain path, or no anchor is exit 129. See [`docs/USAGE.md`](docs/USAGE.md#show).
 - `rgit blame --source REV FILE:SYMBOL` blames the symbol's extent at that revision. An unknown revision is exit 128; a path absent there is exit 3; `--source` with `--follow-rename` is exit 129. See [`docs/USAGE.md`](docs/USAGE.md#blame).

@@ -203,6 +203,37 @@ func TestRun_LogResolvesAgainstHEADNotWorktree(t *testing.T) {
 	qt.Assert(t, qt.StringContains(stdout, "chore: initial"))
 }
 
+// TestRun_LogSourceRevisionListsThatExtent pins --source to the revision's
+// own line range. HEAD moved A onto lines that, at HEAD~1, belong to B, and
+// a commit in between touched only B. History of HEAD~1's extent names the
+// commit that introduced A and neither of those later edits.
+func TestRun_LogSourceRevisionListsThatExtent(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 222\n}\n")
+	gittest.Commit(t.Context(), t, dir, "fix(b): bump B")
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc B() int {\n\treturn 222\n}\n\n// A returns two.\nfunc A() int {\n\treturn 2\n}\n")
+	gittest.Commit(t.Context(), t, dir, "refactor: move A")
+
+	for _, args := range [][]string{
+		{"log", "--source", "HEAD~1", "a.go:A"},
+		{"log", "--source=HEAD~1", "a.go:A"},
+		{"log", "a.go:A", "--source", "HEAD~1"},
+	} {
+		stdout, stderr, code := runApp(t, append([]string{"-C", dir}, args...)...)
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "chore: initial"))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "fix(b): bump B")))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "refactor: move A")))
+	}
+
+	_, stderr, code := runApp(t, "-C", dir, "log", "--source", "HEAD", "--follow-rename", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "--source and --follow-rename are mutually exclusive"))
+}
+
 // TestRun_LogPathScopedSinceAndUntil pins the date-bounded second shape
 // against real commit timestamps -- --since alone, --until alone, and both
 // together -- so the filtering is proven to be git's own, not a string
