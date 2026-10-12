@@ -597,6 +597,10 @@ rather than the aligned human report — see
 [`CODES.md`](CODES.md#rgit-doctor---porcelain). It does not repeat the grammar
 listing; `rgit languages --porcelain` already owns that.
 
+`--json` lists those same checks as one JSON object — see
+[`CODES.md`](CODES.md#rgit-doctor---json). It is mutually exclusive with
+`--porcelain` (exit 129). The aligned human report is unchanged.
+
 **`--deep` dials each on-PATH server for real** — the identical
 initialize/initialized handshake `rgit diff`/`rgit commit` already perform for
 the cross-check — and appends `(reachable)` or `(degraded — handshake timed
@@ -712,7 +716,8 @@ themselves; `show` takes
 `--source`, `--follow-rename`, `--porcelain`, `--with-header` (deprecated alias for
 `--porcelain`), and `--help`; `symbols` takes
 `--for-commit`, `--with-lines`, and `--help`; `doctor` takes `--porcelain`,
-`--deep`, and `--help`; `completion` and `context` take no flags beyond
+`--json` (mutually exclusive with `--porcelain`), `--deep`, and `--help`;
+`completion` and `context` take no flags beyond
 `--help`/`-h` (`completion` also takes its shell argument; `context`'s fixed
 output shape is the point).
 
@@ -813,7 +818,7 @@ before decode. Closes #42." \
 a revision argument (a range, or one or two bare revisions), `--staged` +
 `--unstaged`, `--range` + a positional `A..B`/`A...B` range, `-m` + `-F`,
 `--porcelain` + `--quiet` (`diff`), `--porcelain` + `-p`/`--patch` (`diff`,
-`log`) → exit 129.
+`log`), `--porcelain` + `--json` (`doctor`) → exit 129.
 Naming one path both as a path and as a symbol anchor → exit 5, in whichever
 spelling: `--file` with `--sym`, or the positional forms `greet.go
 greet.go:A`.

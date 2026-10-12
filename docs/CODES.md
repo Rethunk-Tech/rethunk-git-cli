@@ -129,10 +129,12 @@ failure reaching `git log` or `git diff` underneath it folds into 128.
 
 ## Output records
 
-The record formats defined here are for `--porcelain` output only; a
-command's own default is git's or `rgit`'s aligned human-readable layout
-(`diff`, `commit`, `blame`, `log`, `languages`). `--porcelain` replaces
-that with stable tab-separated records, no header.
+The record formats defined here are for `--porcelain` output, plus the one
+JSON object `rgit doctor --json` writes (see below). A command's own default
+is git's or `rgit`'s aligned human-readable layout (`diff`, `commit`,
+`blame`, `log`, `languages`, `doctor`). `--porcelain` replaces that with
+stable tab-separated records, no header. `--json` is not a fourth porcelain
+dialect: it is one object, and it is mutually exclusive with `--porcelain`.
 
 This is not a hypothetical contract: shell completion scripts call `rgit
 symbols` and `rgit symbols --for-commit` (`internal/app/completion.go`), while
@@ -305,6 +307,35 @@ owns that listing, and `rgit doctor` reusing a second copy would be one more
 place for the two to drift. Exit code is unaffected by `--porcelain` — a
 missing git is still fatal (exit 128), a missing language server or the
 tree-sitter CLI is still exit 0 with `MISSING` in its own record.
+
+### `rgit doctor --json`
+
+```json
+{
+  "checks": [
+    {
+      "kind": "env",
+      "name": "git",
+      "status": "ok",
+      "detail": "/usr/bin/git"
+    }
+  ]
+}
+```
+
+One JSON object. `checks` holds one entry per check, in the same order as
+`--porcelain`, with the same four facts under stable names:
+
+| Field | Meaning |
+| --- | --- |
+| `kind` | `env` or `server`, the porcelain `KIND` column |
+| `name` | The check's own name, the porcelain `NAME` column |
+| `status` | `ok` or `MISSING`, the porcelain `STATUS` column |
+| `detail` | The porcelain `DETAIL` column, including `--deep`'s trailing `(reachable)` or `(degraded -- handshake timed out or unanswered)` |
+
+Grammars stay out, for the same reason they stay out of `--porcelain`.
+`--json` with `--porcelain` is exit 129. Otherwise the exit code is the
+human report's: a missing git is still 128, and the object is still written.
 
 ### `rgit blame --porcelain`
 

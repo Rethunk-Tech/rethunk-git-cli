@@ -11,6 +11,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -23,7 +24,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
-const doctorHelp = `usage: rgit doctor [--porcelain] [--deep]
+const doctorHelp = `usage: rgit doctor [--porcelain | --json] [--deep]
 
 Report environment health: git on PATH, the optional tree-sitter CLI (only
 needed to rebuild with SQL support), which language servers this binary can
@@ -44,13 +45,16 @@ should stay instant.
 human report: see docs/CODES.md#output-records. Grammars are not repeated
 here -- "rgit languages --porcelain" already covers them.
 
+--json lists those same checks as one JSON object: see
+docs/CODES.md#rgit-doctor---json. Mutually exclusive with --porcelain.
+
 Full reference: docs/USAGE.md
 `
 
 // runDoctor's flag surface is doctor.go's own precedent for a command this
 // small: hand-parsed rather than pulling in pflag.
 func runDoctor(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
-	porcelain, deep := false, false
+	porcelain, asJSON, deep := false, false, false
 	for _, a := range args {
 		switch a {
 		case "--help", "-h":
@@ -58,6 +62,8 @@ func runDoctor(ctx context.Context, dir string, args []string, stdout, stderr io
 			return exitcode.Success
 		case "--porcelain":
 			porcelain = true
+		case "--json":
+			asJSON = true
 		case "--deep":
 			deep = true
 		default:
@@ -65,6 +71,11 @@ func runDoctor(ctx context.Context, dir string, args []string, stdout, stderr io
 			fmt.Fprint(stderr, doctorHelp)
 			return exitcode.InvalidUsage
 		}
+	}
+	if porcelain && asJSON {
+		fmt.Fprintln(stderr, "rgit: --porcelain and --json are mutually exclusive")
+		fmt.Fprint(stderr, doctorHelp)
+		return exitcode.InvalidUsage
 	}
 
 	essential, fatal := runEnvironmentChecks(ctx)
@@ -85,9 +96,15 @@ func runDoctor(ctx context.Context, dir string, args []string, stdout, stderr io
 		}
 	}
 
-	if porcelain {
+	switch {
+	case porcelain:
 		fmt.Fprint(stdout, renderDoctorPorcelain(essential, servers))
-	} else {
+	case asJSON:
+		if err := writeDoctorJSON(stdout, essential, servers); err != nil {
+			fmt.Fprintf(stderr, "rgit: doctor: %v\n", err)
+			return exitcode.GitFailure
+		}
+	default:
 		// One width across both sections, not one per section: the language
 		// server names are far longer than git's, and measuring separately
 		// would leave the report's two blocks with detail columns that do not
@@ -158,12 +175,48 @@ func deepenServerCheck(ctx context.Context, check *prereq.Check, s lsp.ServerInf
 	check.Detail += " (reachable)"
 }
 
-func writeDoctorRecord(buf *strings.Builder, kind string, c prereq.Check) {
-	status := "ok"
-	if !c.OK {
-		status = "MISSING"
+// doctorReport is the machine-readable form of the checks --porcelain already
+// lists: one object, one entry per check, grammars excluded. Field names are
+// the porcelain columns in lowercase so a consumer of either format reads
+// the same four facts.
+type doctorReport struct {
+	Checks []doctorCheck `json:"checks"`
+}
+
+type doctorCheck struct {
+	Kind   string `json:"kind"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Detail string `json:"detail"`
+}
+
+func writeDoctorJSON(w io.Writer, essential, servers []prereq.Check) error {
+	out := doctorReport{Checks: make([]doctorCheck, 0, len(essential)+len(servers))}
+	for _, c := range essential {
+		out.Checks = append(out.Checks, doctorCheckFrom("env", c))
 	}
-	fmt.Fprintf(buf, "%s\t%s\t%s\t%s\n", kind, c.Name, status, c.Detail)
+	for _, c := range servers {
+		out.Checks = append(out.Checks, doctorCheckFrom("server", c))
+	}
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	return enc.Encode(out)
+}
+
+func doctorCheckFrom(kind string, c prereq.Check) doctorCheck {
+	return doctorCheck{Kind: kind, Name: c.Name, Status: doctorStatus(c), Detail: c.Detail}
+}
+
+func writeDoctorRecord(buf *strings.Builder, kind string, c prereq.Check) {
+	fmt.Fprintf(buf, "%s\t%s\t%s\t%s\n", kind, c.Name, doctorStatus(c), c.Detail)
+}
+
+func doctorStatus(c prereq.Check) string {
+	if c.OK {
+		return "ok"
+	}
+	return "MISSING"
 }
 
 // runEnvironmentChecks probes what rgit needs to run at all, not to build

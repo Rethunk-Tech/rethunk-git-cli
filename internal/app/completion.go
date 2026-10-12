@@ -122,7 +122,7 @@ const rgitCommitFlags = "-m --message -F --message-file -s --signoff --trailer -
 // own --help output the same way.
 const (
 	rgitLanguagesFlags  = "--porcelain --in-repo -h --help"
-	rgitDoctorFlags     = "--porcelain --deep -h --help"
+	rgitDoctorFlags     = "--porcelain --json --deep -h --help"
 	rgitCompletionFlags = "-h --help"
 	rgitShowFlags       = "--source --follow-rename --porcelain --with-header -h --help"
 	rgitBlameFlags      = "-p --porcelain --follow-rename --source -h --help"
