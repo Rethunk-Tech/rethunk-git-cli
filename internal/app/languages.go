@@ -11,6 +11,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -22,7 +23,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
-const languagesHelp = `usage: rgit languages [--porcelain] [--in-repo]
+const languagesHelp = `usage: rgit languages [--porcelain | --json] [--in-repo]
 
 List every grammar compiled into this binary: name, file extensions, and
 whether it is present only because a build tag selected it (currently only
@@ -30,6 +31,9 @@ SQL, behind -tags rgit_sql -- see docs/INSTALL.md § SQL support).
 
 --porcelain lists stable tab-separated records instead: see
 docs/CODES.md#output-records.
+
+--json lists those same grammars as one JSON object: see
+docs/CODES.md#rgit-languages---json. Mutually exclusive with --porcelain.
 
 --in-repo filters that listing to grammars with at least one matching
 file in the current repository -- advisory only, since the binary
@@ -44,8 +48,7 @@ Full reference: docs/USAGE.md
 // surfaces need -- matching doctor.go and completion.go's own minimal style
 // for a subcommand this small.
 func runLanguages(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
-	porcelain := false
-	inRepo := false
+	porcelain, asJSON, inRepo := false, false, false
 	for _, a := range args {
 		switch a {
 		case "--help", "-h":
@@ -53,6 +56,8 @@ func runLanguages(ctx context.Context, dir string, args []string, stdout, stderr
 			return exitcode.Success
 		case "--porcelain":
 			porcelain = true
+		case "--json":
+			asJSON = true
 		case "--in-repo":
 			inRepo = true
 		default:
@@ -60,6 +65,11 @@ func runLanguages(ctx context.Context, dir string, args []string, stdout, stderr
 			fmt.Fprint(stderr, languagesHelp)
 			return exitcode.InvalidUsage
 		}
+	}
+	if porcelain && asJSON {
+		fmt.Fprintln(stderr, "rgit: --porcelain and --json are mutually exclusive")
+		fmt.Fprint(stderr, languagesHelp)
+		return exitcode.InvalidUsage
 	}
 
 	langs := resolve.Languages()
@@ -70,9 +80,15 @@ func runLanguages(ctx context.Context, dir string, args []string, stdout, stderr
 		}
 		langs = filtered
 	}
-	if porcelain {
+	switch {
+	case porcelain:
 		fmt.Fprint(stdout, renderLanguagesPorcelain(langs))
-	} else {
+	case asJSON:
+		if err := writeLanguagesJSON(stdout, langs); err != nil {
+			fmt.Fprintf(stderr, "rgit: languages: %v\n", err)
+			return exitcode.GitFailure
+		}
+	default:
 		fmt.Fprint(stdout, renderLanguages(langs))
 	}
 	return exitcode.Success
@@ -156,6 +172,47 @@ func renderLanguages(langs []resolve.LanguageInfo) string {
 	return diff.TrimLineEnds(buf.String())
 }
 
+// languageRecord is one grammar in the machine-readable forms. Field names
+// are the porcelain columns in lowercase, so --json and --porcelain list
+// the same four facts.
+type languageRecord struct {
+	Name       string `json:"name"`
+	Extensions string `json:"extensions"`
+	Gated      string `json:"gated"`
+	CrossCheck string `json:"cross-check"`
+}
+
+type languagesReport struct {
+	Languages []languageRecord `json:"languages"`
+}
+
+func languageRecords(langs []resolve.LanguageInfo) []languageRecord {
+	wired := map[string]struct{}{}
+	for _, server := range lsp.Servers() {
+		for _, name := range server.Languages {
+			wired[name] = struct{}{}
+		}
+	}
+	out := make([]languageRecord, 0, len(langs))
+	for _, l := range langs {
+		gated := "0"
+		if l.Gated {
+			gated = "1"
+		}
+		crossCheck := "ts-only"
+		if _, ok := wired[l.Name]; ok {
+			crossCheck = "wired"
+		}
+		out = append(out, languageRecord{
+			Name:       l.Name,
+			Extensions: strings.Join(l.Extensions, " "),
+			Gated:      gated,
+			CrossCheck: crossCheck,
+		})
+	}
+	return out
+}
+
 // renderLanguagesPorcelain renders langs as docs/CODES.md's stable
 // tab-separated record: NAME<TAB>EXTENSIONS<TAB>GATED<TAB>CROSS-CHECK, one line
 // per language sorted by NAME (resolve.Languages() already returns them sorted,
@@ -174,24 +231,17 @@ func renderLanguages(langs []resolve.LanguageInfo) string {
 // inferred from a column's absence.
 func renderLanguagesPorcelain(langs []resolve.LanguageInfo) string {
 	var buf strings.Builder
-	wired := map[string]struct{}{}
-	for _, server := range lsp.Servers() {
-		for _, name := range server.Languages {
-			wired[name] = struct{}{}
-		}
-	}
-	for _, l := range langs {
-		gated := "0"
-		if l.Gated {
-			gated = "1"
-		}
-		crossCheck := "ts-only"
-		if _, ok := wired[l.Name]; ok {
-			crossCheck = "wired"
-		}
-		fmt.Fprintf(&buf, "%s\t%s\t%s\t%s\n", l.Name, strings.Join(l.Extensions, " "), gated, crossCheck)
+	for _, rec := range languageRecords(langs) {
+		fmt.Fprintf(&buf, "%s\t%s\t%s\t%s\n", rec.Name, rec.Extensions, rec.Gated, rec.CrossCheck)
 	}
 	return buf.String()
+}
+
+func writeLanguagesJSON(w io.Writer, langs []resolve.LanguageInfo) error {
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	return enc.Encode(languagesReport{Languages: languageRecords(langs)})
 }
 
 // gatedLanguageNames returns the Name of every registered adapter that is

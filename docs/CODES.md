@@ -134,12 +134,13 @@ failure reaching `git log` or `git diff` underneath it folds into 128.
 
 ## Output records
 
-The record formats defined here are for `--porcelain` output, plus the one
-JSON object `rgit doctor --json` writes (see below). A command's own default
+The record formats defined here are for `--porcelain` output, plus the JSON
+objects `rgit languages --json` and `rgit doctor --json` write (see below). A command's own default
 is git's or `rgit`'s aligned human-readable layout (`diff`, `commit`,
 `blame`, `log`, `languages`, `doctor`). `--porcelain` replaces that with
 stable tab-separated records, no header. `--json` is not a fourth porcelain
-dialect: it is one object, and it is mutually exclusive with `--porcelain`.
+dialect: it is one object, and it is mutually exclusive with `--porcelain`
+on `languages` and `doctor`.
 
 This is not a hypothetical contract: shell completion scripts call `rgit
 symbols` and `rgit symbols --for-commit` (`internal/app/completion.go`), while
@@ -287,6 +288,35 @@ the current repository (requires a git repo); only which rows appear changes,
 never the record shape.
 
 See [`USAGE.md`](USAGE.md#languages).
+
+### `rgit languages --json`
+
+```json
+{
+  "languages": [
+    {
+      "name": "go",
+      "extensions": ".go",
+      "gated": "0",
+      "cross-check": "wired"
+    }
+  ]
+}
+```
+
+One JSON object. `languages` holds one entry per grammar, in the same order
+as `--porcelain`, with the same four facts under stable names:
+
+| Field | Meaning |
+| --- | --- |
+| `name` | The grammar's name, the porcelain `NAME` column |
+| `extensions` | The porcelain `EXTENSIONS` column: extensions joined with a single space |
+| `gated` | `1` or `0`, the porcelain `GATED` column |
+| `cross-check` | `wired` or `ts-only`, the porcelain `CROSS-CHECK` column |
+
+`--in-repo` narrows which entries appear, the same as it does for
+`--porcelain`. `--json` with `--porcelain` is exit 129. Otherwise the exit
+code is the human listing's.
 
 ### `rgit doctor --porcelain`
 

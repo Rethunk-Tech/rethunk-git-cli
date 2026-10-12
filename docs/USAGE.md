@@ -564,6 +564,10 @@ omits the `sql` row entirely.
 `NAME<TAB>EXTENSIONS<TAB>GATED<TAB>CROSS-CHECK` records; the first three
 columns retain the meanings above.
 
+`--json` lists those same grammars as one JSON object — see
+[`CODES.md`](CODES.md#rgit-languages---json). It is mutually exclusive with
+`--porcelain` (exit 129). The aligned listing is unchanged.
+
 `CROSS-CHECK` is `wired` for grammars with a language-server catalog entry and
 `ts-only` for TOML, SQL, and JSON5. It reports compile-time design wiring, not whether
 a server is reachable in this invocation; `rgit doctor` reports that
@@ -716,7 +720,7 @@ everywhere else. Install and PowerShell registration instructions:
 `commit` and `diff` document their flags in the table below. The hand-parsed
 meta commands carry smaller surfaces of their own, each covered in its own
 section above: `blame` takes `-p`/`--porcelain`, `--follow-rename`,
-`--source`, and `--help`; `languages` takes `--porcelain`, `--in-repo`, and `--help`; `log`
+`--source`, and `--help`; `languages` takes `--porcelain`, `--json` (mutually exclusive with `--porcelain`), `--in-repo`, and `--help`; `log`
 takes `--porcelain`, `-p`/`--patch` (mutually exclusive with it),
 `--follow` (path form, exactly one path), `--follow-rename`, `--source` (mutually exclusive with `--follow-rename`), `-n`/`--max-count`,
 `--help`, and — only in its path or date shape — `--since`/`--until`
