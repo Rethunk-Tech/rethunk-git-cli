@@ -107,12 +107,12 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.InvalidUsage
 	}
-	// Same wording as internal/diff/scope.go's own check (ResolveScope would
-	// catch this identically further down), surfaced here as soon as both
-	// sides are known instead of after classification and BucketClassified
-	// have already done their own git calls for nothing.
+	// ResolveScope refuses this before any of its own git calls. Surfaced
+	// here, as soon as both sides are known, so classification does not
+	// run first.
 	if f.rangeFlag != "" && rangeToken != "" {
-		fmt.Fprintln(stderr, "rgit: --range and a positional revision range are mutually exclusive")
+		_, err = diffpkg.ResolveScope(ctx, repo, diffpkg.Options{RangeFlag: f.rangeFlag, PositionalRange: rangeToken})
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.InvalidUsage
 	}
 
@@ -127,13 +127,20 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.InvalidUsage
 	}
-	// Same wording as internal/diff/scope.go's own check. --staged and
-	// --range are already caught above with no repo call at all; this is
-	// the rest of that same contradiction -- --unstaged, and either flag
-	// against a bare revision positional -- which cannot be known until
-	// classification has resolved what the positionals are.
+	// Same refusal as ResolveScope, which returns it before its git calls.
+	// --staged and --range are already caught above with no repo call at
+	// all; this is the rest -- --unstaged, and either flag against a bare
+	// revision positional -- which cannot be known until classification
+	// has resolved what the positionals are.
 	if (f.staged || f.unstaged) && (f.rangeFlag != "" || rangeToken != "" || len(revisions) > 0) {
-		fmt.Fprintln(stderr, "rgit: --staged/--unstaged and a revision range are mutually exclusive")
+		_, err = diffpkg.ResolveScope(ctx, repo, diffpkg.Options{
+			Staged:          f.staged,
+			Unstaged:        f.unstaged,
+			RangeFlag:       f.rangeFlag,
+			PositionalRange: rangeToken,
+			Revisions:       revisions,
+		})
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.InvalidUsage
 	}
 
