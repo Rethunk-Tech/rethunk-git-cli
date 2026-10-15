@@ -27,3 +27,4 @@ coverage.html
 /internal/resolve/sqlgrammar/csrc.tmp/
 
 .orchestrate/
+FINDINGS.jsonl
