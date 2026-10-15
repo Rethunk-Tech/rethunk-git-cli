@@ -21,17 +21,35 @@ import (
 )
 
 // splitAnchor splits a FILE:NAME anchor the way cli.ClassifyArgs's rule 5
-// does: at the LAST colon, since a path may itself contain one. ok is
-// false when the value has no colon, nothing before it, or nothing after
-// it -- none of which names a symbol. Both subcommands and the
-// contradiction check share this so a value one accepts is never one
-// another silently drops.
-func splitAnchor(s string) (file, name string, ok bool) {
+// does: walk every colon from the last leftward and keep the first left
+// side paths reports as existing. A name may itself contain a colon
+// ("s.css:a:hover"), and stopping at the last one would name a path that
+// exists nowhere. When no left side exists, the last colon is the split,
+// so a not-yet-tracked file still parses. ok is false when the value has
+// no colon, nothing before it, or nothing after it -- none of which names
+// a symbol. Both subcommands share this so a value one accepts is never
+// one another silently drops. paths nil skips the existence walk.
+func splitAnchor(ctx context.Context, s string, paths *cli.GitPathChecker) (file, name string, ok bool, err error) {
+	if paths != nil {
+		for idx := strings.LastIndexByte(s, ':'); idx > 0; idx = strings.LastIndexByte(s[:idx], ':') {
+			if idx >= len(s)-1 {
+				continue
+			}
+			file, name = s[:idx], s[idx+1:]
+			exists, ferr := paths.ExistsInWorktreeOrHEAD(ctx, file)
+			if ferr != nil {
+				return "", "", false, ferr
+			}
+			if exists {
+				return file, name, true, nil
+			}
+		}
+	}
 	idx := strings.LastIndexByte(s, ':')
 	if idx <= 0 || idx == len(s)-1 {
-		return "", "", false
+		return "", "", false, nil
 	}
-	return s[:idx], s[idx+1:], true
+	return s[:idx], s[idx+1:], true, nil
 }
 
 // checkPathEscape refuses a pathspec or anchor file whose path climbs

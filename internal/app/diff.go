@@ -137,7 +137,7 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 		return exitcode.InvalidUsage
 	}
 
-	symFlags, err := symRefsFromFlag(f.syms)
+	symFlags, err := symRefsFromFlag(ctx, f.syms, &checker)
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.InvalidUsage
@@ -264,10 +264,13 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 // value is rejected rather than skipped: silently dropping it would leave
 // the caller looking at an unfiltered diff believing it was filtered, and
 // rgit commit already refuses the same value with the same message.
-func symRefsFromFlag(syms []string) ([]diffpkg.SymRef, error) {
+func symRefsFromFlag(ctx context.Context, syms []string, paths *cli.GitPathChecker) ([]diffpkg.SymRef, error) {
 	out := make([]diffpkg.SymRef, 0, len(syms))
 	for _, s := range syms {
-		file, name, ok := splitAnchor(s)
+		file, name, ok, err := splitAnchor(ctx, s, paths)
+		if err != nil {
+			return nil, err
+		}
 		if !ok {
 			return nil, fmt.Errorf("malformed --sym value %q", s)
 		}

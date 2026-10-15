@@ -303,7 +303,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 			return exitcode.InvalidUsage
 		}
 
-		targets, err := commitTargets(root, prefix, classified, f.files, f.syms)
+		targets, err := commitTargets(ctx, root, prefix, classified, f.files, f.syms, checker)
 		if err != nil {
 			fmt.Fprintf(stderr, "rgit: %v\n", err)
 			return exitcode.InvalidUsage
@@ -692,7 +692,7 @@ func mapStageError(err error) (exitcode.Code, string) {
 // anchor file that resolves outside root is an invalid-usage error (exit
 // 129) caught before anything runs, not a fatal git failure discovered
 // only after `git add` itself refuses it.
-func commitTargets(root, prefix string, classified []cli.Classification, files, syms []string) ([]synth.Target, error) {
+func commitTargets(ctx context.Context, root, prefix string, classified []cli.Classification, files, syms []string, paths *cli.GitPathChecker) ([]synth.Target, error) {
 	targets := make([]synth.Target, 0, len(classified)+len(files)+len(syms))
 
 	addPathspec := func(p string) error {
@@ -736,7 +736,10 @@ func commitTargets(root, prefix string, classified []cli.Classification, files, 
 		}
 	}
 	for _, sym := range syms {
-		file, name, ok := splitAnchor(sym)
+		file, name, ok, err := splitAnchor(ctx, sym, paths)
+		if err != nil {
+			return nil, err
+		}
 		if !ok {
 			return nil, fmt.Errorf("malformed --sym value %q", sym)
 		}

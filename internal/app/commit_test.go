@@ -174,9 +174,27 @@ func TestRunCommit_CountingWarningsReachStderr(t *testing.T) {
 // reach here -- but a future flip of that flag must fail loudly the
 // moment it does, not stage a partial commit with nothing on stderr to
 // say why.
+// TestSplitAnchor_NameMayContainColon pins --sym's walk against the same
+// case rule 5 already accepts positionally. Cutting only at the last colon
+// would name file "s.css:a" and symbol "hover".
+func TestSplitAnchor_NameMayContainColon(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t.Context(), t)
+	gittest.Write(t, dir, "s.css", "a {}\n")
+	checker := &cli.GitPathChecker{Root: dir, Repo: repo}
+
+	file, name, ok, err := splitAnchor(t.Context(), "s.css:a:hover", checker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || file != "s.css" || name != "a:hover" {
+		t.Fatalf("splitAnchor(%q) = %q, %q, %v; want %q, %q, true", "s.css:a:hover", file, name, ok, "s.css", "a:hover")
+	}
+}
+
 func TestCommitTargets_UnhandledKindErrorsRatherThanSkips(t *testing.T) {
 	t.Parallel()
-	_, err := commitTargets("/repo", "", []cli.Classification{{Kind: cli.KindRevision, Revision: "HEAD"}}, nil, nil)
+	_, err := commitTargets(context.Background(), "/repo", "", []cli.Classification{{Kind: cli.KindRevision, Revision: "HEAD"}}, nil, nil, nil)
 	if err == nil {
 		t.Fatal("commitTargets: want an error for an unhandled classification kind, got nil")
 	}
