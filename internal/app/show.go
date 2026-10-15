@@ -145,7 +145,7 @@ func showHeadSource() anchorSourceFunc {
 // is returned unchanged.
 func followRenameSymbol(ctx context.Context, repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, anchorName string, stderr io.Writer) ([]byte, exitcode.Code) {
 	var oldest []byte
-	code := walkRenameSegments(ctx, repo, "show", file, anchorName, src, res, stderr, func(_ string, _ string, src []byte, res *resolve.Resolution, _ string, found bool) exitcode.Code {
+	code := walkRenameSegments(ctx, repo, "show", file, anchorName, src, res, stderr, func(_, _ string, src []byte, res *resolve.Resolution, _ string, found bool) exitcode.Code {
 		if !found {
 			oldest = src[res.Extent.Start:res.Extent.End]
 		}
