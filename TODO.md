@@ -147,3 +147,6 @@ scoping to resolve against.
 
 Whitespace changed between two unmodified tracked declarations is attributed as
 `(unanchorable)` and must stay that way: no declaration owns it.
+
+2026-10-14: bypass-150327Z-2 left: worktree-then-HEAD reads in show, blame, and symbols stay separate because the errors and headOnly differ.
+2026-10-14: bypass-150327Z-6 left: readInstallerFile stays; a missing installer file must remain an error.
