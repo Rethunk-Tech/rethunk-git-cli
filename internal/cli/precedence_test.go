@@ -13,7 +13,7 @@ import (
 )
 
 // newClassifyRepo builds a real repository for the precedence table to be
-// tested against, rather than a PathChecker/RevisionResolver stand-in. The
+// tested against. The
 // rules are defined in terms of what git itself answers -- "resolves via
 // rev-parse --verify", "exists in the worktree or at HEAD" -- so a double
 // here would be asserting this package's own assumptions about git back at

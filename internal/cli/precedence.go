@@ -55,20 +55,6 @@ type Classification struct {
 	Anchor   Anchor
 }
 
-// PathChecker answers rule 4 and rule 5's "exists in the worktree, index, or
-// at HEAD" test.
-type PathChecker interface {
-	ExistsInWorktreeOrHEAD(ctx context.Context, path string) (bool, error)
-}
-
-// RevisionResolver answers rule 3's "resolves via git rev-parse --verify"
-// test. A single call also covers rev:path blob references and revision
-// ranges (A..B, A...B), since git's own rev-parse syntax accepts all
-// three forms.
-type RevisionResolver interface {
-	ResolvesAsRevision(ctx context.Context, token string) (bool, error)
-}
-
 // UnresolvedArgError is rule 6: none of the applicable rules matched.
 // Tried lists every rule considered, in the order checked, so the caller
 // sees why rather than a bare "invalid argument". "Considered" rather than
@@ -97,7 +83,7 @@ func (e *UnresolvedArgError) Error() string {
 //  5. A token that splits at its last ":" into an existing path and a
 //     name is a symbol anchor.
 //  6. Otherwise, an *UnresolvedArgError listing every rule considered.
-func ClassifyArgs(ctx context.Context, args []string, allowRevisions bool, paths PathChecker, revs RevisionResolver) ([]Classification, error) {
+func ClassifyArgs(ctx context.Context, args []string, allowRevisions bool, paths *GitPathChecker, revs GitRevisionResolver) ([]Classification, error) {
 	out := make([]Classification, 0, len(args))
 	seenDoubleDash := false
 	for _, a := range args {
@@ -118,7 +104,7 @@ func ClassifyArgs(ctx context.Context, args []string, allowRevisions bool, paths
 	return out, nil
 }
 
-func classifyOne(ctx context.Context, a string, allowRevisions bool, paths PathChecker, revs RevisionResolver) (Classification, error) {
+func classifyOne(ctx context.Context, a string, allowRevisions bool, paths *GitPathChecker, revs GitRevisionResolver) (Classification, error) {
 	var tried []string
 
 	// Rule 2. All git pathspec magic is leading-colon, so this alone
@@ -205,10 +191,10 @@ func PrefixPath(prefix, path string) string {
 	return filepath.Join(prefix, path)
 }
 
-// GitPathChecker is the real PathChecker: worktree existence via the
-// filesystem, index existence via gitx, and HEAD existence via gitx. Prefix is
-// the current directory relative to Root (gitx.Repo.ShowPrefix), so rules 4
-// and 5 test the same path git would.
+// GitPathChecker answers rule 4 and rule 5's "exists in the worktree, index, or
+// at HEAD" test: worktree existence via the filesystem, index existence via
+// gitx, and HEAD existence via gitx. Prefix is the current directory relative
+// to Root (gitx.Repo.ShowPrefix), so rules 4 and 5 test the same path git would.
 type GitPathChecker struct {
 	Root            string
 	Prefix          string
@@ -265,7 +251,9 @@ func (c *GitPathChecker) ExistsInWorktreeOrHEAD(ctx context.Context, path string
 	return found, nil
 }
 
-// GitRevisionResolver is the real RevisionResolver, backed by gitx.
+// GitRevisionResolver answers rule 3 via git rev-parse --verify. A single call
+// also covers rev:path blob references, since git's own rev-parse syntax
+// accepts that form.
 type GitRevisionResolver struct {
 	Repo *gitx.Repo
 }

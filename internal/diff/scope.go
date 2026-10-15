@@ -296,7 +296,7 @@ func resolveRangeScope(ctx context.Context, repo *gitx.Repo, rangeToken string) 
 // name is treated as a range: git forbids ".." in ref names, but a legitimate
 // relative pathspec like "../shared/util.go" also contains "..", and path
 // existence must win over the heuristic.
-func ExtractRangeToken(ctx context.Context, args []string, paths cli.PathChecker) (token string, rest []string, err error) {
+func ExtractRangeToken(ctx context.Context, args []string, paths *cli.GitPathChecker) (token string, rest []string, err error) {
 	dashAt := -1
 	for i, a := range args {
 		if a == "--" {
