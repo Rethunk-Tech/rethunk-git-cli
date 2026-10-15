@@ -118,11 +118,7 @@ func crossCheckVerdict(src []byte, list []*Resolution, symbols []lsp.Symbol) (de
 // CrossCheckExtents' doc on the fourth cross-check exemption); err is
 // non-nil only when a match was found and its range disagreed.
 func MatchAndCompare(src []byte, res *Resolution, symbols []lsp.Symbol) (found bool, err error) {
-	// The declaration's own first line, passed so a selector group cannot
-	// pair with a rule that merely shares a member name; lineOf's failure is
-	// handled below, and an unusable value simply skips that check.
-	groupStart, groupStartOK := lineOf(src, res.DeclOnly.Start)
-	match, ok := matchLSPSymbol(res.Anchor, res.Sep, res.Flat, res.SlugAnchors, res.GroupedAnchors, res.SameName, groupStart, groupStartOK, symbols)
+	match, ok := matchLSPSymbol(res.Anchor, res.Sep, res.Flat, res.SlugAnchors, res.SameName, symbols)
 	if !ok {
 		return false, nil
 	}
@@ -255,10 +251,10 @@ func formatRange(start, end uint32) string {
 // other field that splits them. htmlServerNamesCollide refuses the pair.
 // qualifyLSPSymbol's join is for every other language, where Container
 // really is an ancestor a server also reports as one.
-func matchLSPSymbol(anchor, sep string, flat, slugAnchors, groupedAnchors bool, sameName int, declStart uint32, declStartOK bool, symbols []lsp.Symbol) (lsp.Symbol, bool) {
+func matchLSPSymbol(anchor, sep string, flat, slugAnchors bool, sameName int, symbols []lsp.Symbol) (lsp.Symbol, bool) {
 	bare, ordinal, hasOrdinal := ParseOrdinal(anchor)
 
-	var byName, byBare, byMember []lsp.Symbol
+	var byName, byBare []lsp.Symbol
 	for _, s := range symbols {
 		if flat {
 			if htmlServerNameMatches(s.Name, anchor) {
@@ -274,9 +270,6 @@ func matchLSPSymbol(anchor, sep string, flat, slugAnchors, groupedAnchors bool, 
 		if qualified == anchor || (slugAnchors && slugQualified(s, sep) == anchor) {
 			byName = append(byName, s)
 			continue
-		}
-		if groupedAnchors && anchorNamesGroupMember(anchor, qualified) {
-			byMember = append(byMember, s)
 		}
 		if hasOrdinal && (qualified == bare || s.Name == bare) {
 			byBare = append(byBare, s)
@@ -307,21 +300,6 @@ func matchLSPSymbol(anchor, sep string, flat, slugAnchors, groupedAnchors bool, 
 			return byName[0], true
 		}
 		return lsp.Symbol{}, false
-	}
-
-	// A selector group pairs only when every symbol naming one of its members
-	// agrees on a single range, and that range begins where the declaration
-	// does. Agreement alone is not identity: a stylesheet can report a member
-	// name only at rules other than the one the anchor names, and those wrong
-	// occurrences agree with each other. A selector is free to appear in several rules
-	// of one stylesheet, so "some symbol carries this name" does not identify
-	// the rule -- measured, that pairs a group with an unrelated rule hundreds
-	// of lines away. Symbols that genuinely split one rule all carry that
-	// rule's own range, so requiring agreement keeps the split case and drops
-	// the ambiguous one.
-	if len(byMember) > 0 && sameRange(byMember) &&
-		(!declStartOK || byMember[0].StartLine == declStart) {
-		return byMember[0], true
 	}
 
 	// An ordinal names the Nth declaration the resolver found, so indexing
@@ -357,25 +335,6 @@ func sameRange(syms []lsp.Symbol) bool {
 		}
 	}
 	return true
-}
-
-// anchorNamesGroupMember reports whether qualified is one of the
-// comma-separated names anchor carries. A CSS rule is anchored by its whole
-// selector list while the server reports one symbol per selector, each with
-// that same rule's range, so any member identifies the same declaration.
-//
-// The members are compared whole, never by prefix: ".button" must not match
-// ".button-primary" simply because one string contains the other.
-func anchorNamesGroupMember(anchor, qualified string) bool {
-	if !strings.Contains(anchor, ",") {
-		return false
-	}
-	for member := range strings.SplitSeq(anchor, ",") {
-		if strings.TrimSpace(member) == qualified {
-			return true
-		}
-	}
-	return false
 }
 
 // slugQualified is qualifyLSPSymbol for a language whose anchors are slugs

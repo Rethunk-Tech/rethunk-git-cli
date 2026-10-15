@@ -67,11 +67,6 @@ type Resolution struct {
 	// symbol in such a file degrades to [ts-only] despite the two sides
 	// agreeing on the extent.
 	SlugAnchors bool
-
-	// GroupedAnchors mirrors the resolving language's own GroupedAnchors:
-	// Anchor may name several comma-separated selectors at once, and a
-	// server reporting any one of them is describing this same declaration.
-	GroupedAnchors bool
 }
 
 // File is one source parsed once and held open, so a caller with several
@@ -120,7 +115,7 @@ func (f *File) Resolve(anchor string) (*Resolution, error) {
 		return nil, err
 	}
 	flat := f.lang.FlatContainer()
-	return &Resolution{Extent: sym.Full, DeclOnly: sym.DeclOnly, Anchor: sym.Qualified, Container: sym.Decl.Container, Enclosing: sym.Decl.Enclosing, Sep: sym.Decl.Sep, Flat: flat, SameName: sym.SameName, SlugAnchors: f.lang.AllowsRawHeadingFallback(), GroupedAnchors: f.lang.GroupedAnchors()}, nil
+	return &Resolution{Extent: sym.Full, DeclOnly: sym.DeclOnly, Anchor: sym.Qualified, Container: sym.Decl.Container, Enclosing: sym.Decl.Enclosing, Sep: sym.Decl.Sep, Flat: flat, SameName: sym.SameName, SlugAnchors: f.lang.AllowsRawHeadingFallback()}, nil
 }
 
 // DeclOrder returns the anchor rgit emits for each declaration, in source

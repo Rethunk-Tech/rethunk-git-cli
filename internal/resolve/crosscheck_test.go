@@ -353,43 +353,6 @@ func TestMatchAndCompare_ExtentEndIsExclusive(t *testing.T) {
 	}
 }
 
-// TestMatchAndCompare_GroupedAnchorMatchesAnyMember pins the selector-group
-// pairing. One CSS rule is anchored by its whole selector list while the
-// server reports one symbol per selector, each carrying that rule's identical
-// range, so pairing on any member describes the same declaration. Members are
-// compared whole: a prefix must never match.
-func TestMatchAndCompare_GroupedAnchorMatchesAnyMember(t *testing.T) {
-	t.Parallel()
-
-	src := []byte("html, body, h1 {\n  margin: 0;\n}\n")
-	res := &Resolution{
-		Anchor:         "html, body, h1",
-		GroupedAnchors: true,
-		SameName:       1,
-		DeclOnly:       Extent{Start: 0, End: uint(len(src))},
-	}
-
-	// The server names only one member of the group.
-	found, err := MatchAndCompare(src, res, []lsp.Symbol{{Name: "body", StartLine: 0, EndLine: 2}})
-	if !found {
-		t.Fatal("found = false; want true -- any member of the group names the rule")
-	}
-	if err != nil {
-		t.Errorf("err = %v; want nil", err)
-	}
-
-	// A selector that merely shares a prefix with a member is not a member.
-	if found, _ := MatchAndCompare(src, res, []lsp.Symbol{{Name: "bod", StartLine: 0, EndLine: 2}}); found {
-		t.Error("found = true for a prefix of a member; want false")
-	}
-
-	// Without the grouped rule the same pair must not match.
-	plain := &Resolution{Anchor: "html, body, h1", SameName: 1, DeclOnly: res.DeclOnly}
-	if found, _ := MatchAndCompare(src, plain, []lsp.Symbol{{Name: "body", StartLine: 0, EndLine: 2}}); found {
-		t.Error("found = true without GroupedAnchors; want false")
-	}
-}
-
 // TestMatchAndCompare_SlugAnchorDropsTrailingBlankLines pins the other half of
 // the slug-anchor normalization. A prose section runs to the blank line before
 // the next heading while a server reports it ending at its last line of real
@@ -495,41 +458,6 @@ func TestMatchAndCompare_BlankTailTrimmedForEveryLanguage(t *testing.T) {
 	}
 	if err != nil {
 		t.Errorf("err = %v; want nil -- a trailing blank line is not a disagreement", err)
-	}
-}
-
-// TestMatchAndCompare_GroupMustStartWhereTheDeclarationDoes pins the other half
-// of group pairing. Agreement among the server's member-named symbols is not
-// identity: a stylesheet can report a member name only at rules other than the
-// one the anchor names, and those wrong occurrences agree with each other.
-func TestMatchAndCompare_GroupMustStartWhereTheDeclarationDoes(t *testing.T) {
-	t.Parallel()
-
-	src := []byte(".dark, .dark * {\n  color: red;\n}\n\n.other {\n  color: blue;\n}\n")
-	res := &Resolution{
-		Anchor:         ".dark, .dark *",
-		GroupedAnchors: true,
-		SameName:       1,
-		DeclOnly:       Extent{Start: 0, End: uint(len(".dark, .dark * {\n  color: red;\n}\n"))},
-	}
-
-	// Both members reported, agreeing with each other, but at another rule.
-	elsewhere := []lsp.Symbol{
-		{Name: ".dark", StartLine: 4, EndLine: 6},
-		{Name: ".dark *", StartLine: 4, EndLine: 6},
-	}
-	if found, _ := MatchAndCompare(src, res, elsewhere); found {
-		t.Error("found = true for a group agreeing at the wrong rule; want false")
-	}
-
-	// Reported at the declaration's own start, which is the split case.
-	here := []lsp.Symbol{
-		{Name: ".dark", StartLine: 0, EndLine: 2},
-		{Name: ".dark *", StartLine: 0, EndLine: 2},
-	}
-	found, err := MatchAndCompare(src, res, here)
-	if !found || err != nil {
-		t.Errorf("found = %v, err = %v; want a clean pair at the declaration's own range", found, err)
 	}
 }
 

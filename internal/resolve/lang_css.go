@@ -59,13 +59,6 @@ func (c *cssLanguage) OwnsTrailingSeparator() bool { return false }
 // keeping whatever blank line the author would have written by hand.
 func (c *cssLanguage) MembersSitFlush() bool { return false }
 
-// GroupedAnchors is false: a grouped rule is indexed one anchor per selector
-// (ruleSetDeclarations), so an anchor names exactly one selector and pairs
-// with vscode-css-language-server's own symbol directly. The group-member
-// fallback exists for a language whose declaration carries several names in
-// one anchor; CSS is not one.
-func (c *cssLanguage) GroupedAnchors() bool { return false }
-
 // AllowsRawHeadingFallback is inherited from defaultLanguage: CSS has no
 // heading concept for the fallback to apply to.
 
