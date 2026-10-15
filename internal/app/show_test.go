@@ -224,6 +224,7 @@ func TestShow_FollowRenamePrintsPreRenameBytes(t *testing.T) {
 	gittest.Commit(t.Context(), t, dir, "refactor: rename and reorder")
 
 	t.Run("without the flag, show stays on the current path", func(t *testing.T) {
+		t.Parallel()
 		stdout, stderr, code := runApp(t, "-C", dir, "show", "new.go:Foo")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stderr, ""))
@@ -231,6 +232,7 @@ func TestShow_FollowRenamePrintsPreRenameBytes(t *testing.T) {
 	})
 
 	t.Run("--follow-rename prints the pre-rename symbol bytes", func(t *testing.T) {
+		t.Parallel()
 		stdout, stderr, code := runApp(t, "-C", dir, "show", "new.go:Foo", "--follow-rename")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stderr, ""))
@@ -238,6 +240,7 @@ func TestShow_FollowRenamePrintsPreRenameBytes(t *testing.T) {
 	})
 
 	t.Run("several anchors stay length-framed", func(t *testing.T) {
+		t.Parallel()
 		stdout, stderr, code := runApp(t, "-C", dir, "show", "--follow-rename", "new.go:Foo", "new.go:Bar")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stderr, ""))
