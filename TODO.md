@@ -101,8 +101,7 @@ the whole `notNamed` column: 32 of 917 anchors fleet-wide.
 
 **taplo** (TOML) disagrees with tree-sitter on real ranges, measured twice
 independently: a dotted sub-table nests under `[server]` as L1..L7, and the
-last table in a file extends to EOF. `configClient`
-(`internal/lsp/client.go`) exists as protocol reserve for taplo alone.
+last table in a file extends to EOF.
 **`vscode-markdown-language-server`** crashes at startup on an ESM/CJS
 `vscode-uri` interop fault. **SQL** has no language server.
 

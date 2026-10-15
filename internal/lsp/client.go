@@ -14,54 +14,13 @@ import (
 	"go.lsp.dev/uri"
 )
 
-// configClient answers workspace/configuration, the one server-initiated
-// request rgit implements rather than leaving unanswered: taplo (TOML)
-// silently reports zero symbols for a document it has just been told to
-// open -- via a "this document has been excluded" diagnostic, not an error
-// -- whenever that request fails, which is what
-// protocol.UnimplementedClient's own Configuration does by design (returns
-// errNotImplemented, turned into a JSON-RPC error response). gopls, vtsls,
-// pyright, and bash-language-server all cross-check correctly without ever
-// sending this request, so answering it with an empty settings object per
-// requested item is a safe default: nothing changes for a server that
-// never asks, and the one that requires an answer stops treating an opened
-// document as excluded.
+// taplo stays unwired: it silently reports zero symbols for a document it
+// was just told to open when workspace/configuration fails, and its ranges
+// disagree with tree-sitter-toml on nested tables.
 //
-// taplo is not in the servers map -- deliberately, not merely not-yet-wired:
-// taplo's own ranges were measured genuinely disagreeing with
-// tree-sitter-toml on nested tables, a real false-positive risk, not a
-// normalization gap this package could paper over. This has no
-// live caller as a result, but stays: the workspace/configuration behavior
-// documented above is specific to taplo's own measured protocol quirk, not
-// speculative, and answering it safely costs nothing for every server that
-// is wired and never asks.
-//
-// Dead on every wired path today is therefore deliberate, not debt: this is
-// protocol reserve for taplo specifically, worth revisiting only if taplo is
-// wired into the servers map for real. internal/lsptest's mockserver has no
-// equivalent handler -- see its own doc comment for what that gap in the
-// double does and does not cover.
-type configClient struct {
-	protocol.UnimplementedClient
-}
-
-// Configuration returns one empty settings object (JSON "{}") per
-// requested item. rgit has no configuration of its own to report -- this
-// exists only to give a server that insists on an answer one that resolves
-// rather than errors; the specific keys a server's own "section" might ask
-// for are never read.
-func (configClient) Configuration(_ context.Context, params *protocol.ConfigurationParams) ([]protocol.LSPAny, error) {
-	out := make([]protocol.LSPAny, len(params.Items))
-	for i := range out {
-		out[i] = protocol.LSPAny(`{}`)
-	}
-	return out, nil
-}
-
 // Client is a live LSP session sufficient for the one request rgit needs:
 // textDocument/documentSymbol. It is not a general-purpose LSP client — no
-// diagnostics, no completions, nothing an editor would want. configClient
-// above is the one deliberate exception.
+// diagnostics, no completions, nothing an editor would want.
 type Client struct {
 	conn   jsonrpc2.Conn
 	server protocol.Server
@@ -92,7 +51,7 @@ func NewClient(handshakeCtx context.Context, rwc io.ReadWriteCloser, root string
 	// would tear the connection down the moment the handshake's bounded
 	// context expires or its caller cancels it, killing every later
 	// DocumentSymbols call too.
-	_, conn, server := protocol.NewClient(context.Background(), configClient{}, stream)
+	_, conn, server := protocol.NewClient(context.Background(), protocol.UnimplementedClient{}, stream)
 
 	pidValue := os.Getpid()
 	if pidValue > math.MaxInt32 {
