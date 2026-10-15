@@ -28,7 +28,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -358,22 +357,8 @@ func logDateArgs(since, until string, maxCount int, maxCountSet bool, extra []st
 // history, so only a rename crossing to a new path name -- found once per
 // segment, not once per commit -- needs a fresh resolve.
 func runLogFollowRename(ctx context.Context, repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, anchorName string, extra []string, stdout, stderr io.Writer) exitcode.Code {
-	ignoreCase, err := repo.IgnoreCase(ctx)
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: cannot read core.ignorecase: %v\n", err)
-		return exitcode.GitFailure
-	}
-
-	rev := "HEAD"
-	for {
+	return walkRenameSegments(ctx, repo, "log", file, anchorName, src, res, stderr, func(rev, file string, src []byte, res *resolve.Resolution, renameCommit string, found bool) exitcode.Code {
 		start, end := lineRange(src, res.Extent)
-
-		renameCommit, oldPath, found, err := repo.FindRename(ctx, rev, file)
-		if err != nil {
-			fmt.Fprintf(stderr, "rgit: %v\n", err)
-			return exitcode.GitFailure
-		}
-
 		// Bounded to the rename boundary when one was found -- otherwise
 		// this segment's own git log -L would walk straight through it and
 		// duplicate the history the next segment (under the pre-rename path) is
@@ -389,42 +374,8 @@ func runLogFollowRename(ctx context.Context, repo *gitx.Repo, file string, src [
 			return exitcode.GitFailure
 		}
 		_, _ = stdout.Write(out)
-
-		if !found {
-			return exitcode.Success
-		}
-
-		rev = renameCommit + "~1"
-		file = oldPath
-		var exists bool
-		src, exists, err = repo.CatFile(ctx, rev, file)
-		if err != nil {
-			fmt.Fprintf(stderr, "rgit: %v\n", err)
-			return exitcode.GitFailure
-		}
-		if !exists {
-			fmt.Fprintf(stderr, "rgit: log: %q does not exist at %s\n", file, rev)
-			return exitcode.AnchorUnresolvable
-		}
-		// The blob is read before the language lookup so the name a file
-		// carried before the rename gets the shebang match docs/ANCHORS.md
-		// promises. Keying on the extension alone stranded an extensionless
-		// script mid-history: the current name resolved, the old one did not.
-		lang, ok := resolve.ForPathFolding(file, src, ignoreCase)
-		if !ok {
-			fmt.Fprintf(stderr, "rgit: log: %q: unsupported language before the rename to its current name%s\n", file, unsupportedLanguageHint(filepath.Ext(file)))
-			return exitcode.UnsupportedLanguage
-		}
-		res, err = resolve.Resolve(lang, src, anchorName)
-		if err != nil {
-			if rerr, ok := errors.AsType[*resolve.ResolveError](err); ok {
-				fmt.Fprintf(stderr, "rgit: %s\n", rerr.Error())
-				return rerr.Code
-			}
-			fmt.Fprintf(stderr, "rgit: %v\n", err)
-			return exitcode.GitFailure
-		}
-	}
+		return exitcode.Success
+	})
 }
 
 // runLogPathScoped is rgit log's path form: ordinary, non-anchored git

@@ -9,11 +9,9 @@ package app
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
@@ -146,54 +144,14 @@ func showHeadSource() anchorSourceFunc {
 // and log use. With no rename, the HEAD extent the caller already resolved
 // is returned unchanged.
 func followRenameSymbol(ctx context.Context, repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, anchorName string, stderr io.Writer) ([]byte, exitcode.Code) {
-	ignoreCase, err := repo.IgnoreCase(ctx)
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: cannot read core.ignorecase: %v\n", err)
-		return nil, exitcode.GitFailure
-	}
-
-	rev := "HEAD"
-	for {
-		renameCommit, oldPath, found, err := repo.FindRename(ctx, rev, file)
-		if err != nil {
-			fmt.Fprintf(stderr, "rgit: %v\n", err)
-			return nil, exitcode.GitFailure
-		}
+	var oldest []byte
+	code := walkRenameSegments(ctx, repo, "show", file, anchorName, src, res, stderr, func(_ string, _ string, src []byte, res *resolve.Resolution, _ string, found bool) exitcode.Code {
 		if !found {
-			return src[res.Extent.Start:res.Extent.End], exitcode.Success
+			oldest = src[res.Extent.Start:res.Extent.End]
 		}
-
-		rev = renameCommit + "~1"
-		file = oldPath
-		var exists bool
-		src, exists, err = repo.CatFile(ctx, rev, file)
-		if err != nil {
-			fmt.Fprintf(stderr, "rgit: %v\n", err)
-			return nil, exitcode.GitFailure
-		}
-		if !exists {
-			fmt.Fprintf(stderr, "rgit: show: %q does not exist at %s\n", file, rev)
-			return nil, exitcode.AnchorUnresolvable
-		}
-		// The blob is read before the language lookup so the name a file
-		// carried before the rename gets the shebang match docs/ANCHORS.md
-		// promises. Keying on the extension alone stranded an extensionless
-		// script mid-history: the current name resolved, the old one did not.
-		lang, ok := resolve.ForPathFolding(file, src, ignoreCase)
-		if !ok {
-			fmt.Fprintf(stderr, "rgit: show: %q: unsupported language before the rename to its current name%s\n", file, unsupportedLanguageHint(filepath.Ext(file)))
-			return nil, exitcode.UnsupportedLanguage
-		}
-		res, err = resolve.Resolve(lang, src, anchorName)
-		if err != nil {
-			if rerr, ok := errors.AsType[*resolve.ResolveError](err); ok {
-				fmt.Fprintf(stderr, "rgit: %s\n", rerr.Error())
-				return nil, rerr.Code
-			}
-			fmt.Fprintf(stderr, "rgit: %v\n", err)
-			return nil, exitcode.GitFailure
-		}
-	}
+		return exitcode.Success
+	})
+	return oldest, code
 }
 
 // showSource builds the anchorSourceFunc for one --source value: a revision's

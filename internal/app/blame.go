@@ -8,11 +8,9 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
@@ -144,61 +142,14 @@ func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.
 // rename, the next segment starts from the pre-rename path's parent commit and
 // resolves the anchor against that blob.
 func runBlameFollowRename(ctx context.Context, repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, anchorName string, extra []string, stdout, stderr io.Writer) exitcode.Code {
-	ignoreCase, err := repo.IgnoreCase(ctx)
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: cannot read core.ignorecase: %v\n", err)
-		return exitcode.GitFailure
-	}
-
-	rev := "HEAD"
-	for {
+	return walkRenameSegments(ctx, repo, "blame", file, anchorName, src, res, stderr, func(rev, file string, src []byte, res *resolve.Resolution, _ string, _ bool) exitcode.Code {
 		start, end := lineRange(src, res.Extent)
-
-		renameCommit, oldPath, found, err := repo.FindRename(ctx, rev, file)
-		if err != nil {
-			fmt.Fprintf(stderr, "rgit: %v\n", err)
-			return exitcode.GitFailure
-		}
-
 		out, err := repo.BlameRevision(ctx, rev, file, start, end, extra...)
 		if err != nil {
 			fmt.Fprintf(stderr, "rgit: %v\n", err)
 			return exitcode.GitFailure
 		}
 		_, _ = stdout.Write(out)
-
-		if !found {
-			return exitcode.Success
-		}
-
-		rev = renameCommit + "~1"
-		file = oldPath
-		src, exists, err := repo.CatFile(ctx, rev, file)
-		if err != nil {
-			fmt.Fprintf(stderr, "rgit: %v\n", err)
-			return exitcode.GitFailure
-		}
-		if !exists {
-			fmt.Fprintf(stderr, "rgit: blame: %q does not exist at %s\n", file, rev)
-			return exitcode.AnchorUnresolvable
-		}
-		// The blob is read before the language lookup so the name a file
-		// carried before the rename gets the shebang match docs/ANCHORS.md
-		// promises. Keying on the extension alone stranded an extensionless
-		// script mid-history: the current name resolved, the old one did not.
-		lang, ok := resolve.ForPathFolding(file, src, ignoreCase)
-		if !ok {
-			fmt.Fprintf(stderr, "rgit: blame: %q: unsupported language before the rename to its current name%s\n", file, unsupportedLanguageHint(filepath.Ext(file)))
-			return exitcode.UnsupportedLanguage
-		}
-		res, err = resolve.Resolve(lang, src, anchorName)
-		if err != nil {
-			if rerr, ok := errors.AsType[*resolve.ResolveError](err); ok {
-				fmt.Fprintf(stderr, "rgit: %s\n", rerr.Error())
-				return rerr.Code
-			}
-			fmt.Fprintf(stderr, "rgit: %v\n", err)
-			return exitcode.GitFailure
-		}
-	}
+		return exitcode.Success
+	})
 }

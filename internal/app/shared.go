@@ -426,6 +426,65 @@ func refuseExtraArgs(cmdName string, args []string, stderr io.Writer, help strin
 	return exitcode.InvalidUsage
 }
 
+// walkRenameSegments walks file's rename history newest first. visit runs
+// on the current segment; blame and log run git -L there, and show keeps
+// the oldest extent. The re-resolve (cat-file, language, Resolve) is the
+// same for all three. cmdName is only the "blame", "log", or "show" in
+// the missing-blob and unsupported-language sentences.
+func walkRenameSegments(ctx context.Context, repo *gitx.Repo, cmdName, file, anchorName string, src []byte, res *resolve.Resolution, stderr io.Writer, visit func(rev, file string, src []byte, res *resolve.Resolution, renameCommit string, found bool) exitcode.Code) exitcode.Code {
+	ignoreCase, err := repo.IgnoreCase(ctx)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: cannot read core.ignorecase: %v\n", err)
+		return exitcode.GitFailure
+	}
+
+	rev := "HEAD"
+	for {
+		renameCommit, oldPath, found, err := repo.FindRename(ctx, rev, file)
+		if err != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return exitcode.GitFailure
+		}
+		if code := visit(rev, file, src, res, renameCommit, found); code != exitcode.Success {
+			return code
+		}
+		if !found {
+			return exitcode.Success
+		}
+
+		rev = renameCommit + "~1"
+		file = oldPath
+		var exists bool
+		src, exists, err = repo.CatFile(ctx, rev, file)
+		if err != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return exitcode.GitFailure
+		}
+		if !exists {
+			fmt.Fprintf(stderr, "rgit: %s: %q does not exist at %s\n", cmdName, file, rev)
+			return exitcode.AnchorUnresolvable
+		}
+		// The blob is read before the language lookup so the name a file
+		// carried before the rename gets the shebang match docs/ANCHORS.md
+		// promises. Keying on the extension alone stranded an extensionless
+		// script mid-history: the current name resolved, the old one did not.
+		lang, ok := resolve.ForPathFolding(file, src, ignoreCase)
+		if !ok {
+			fmt.Fprintf(stderr, "rgit: %s: %q: unsupported language before the rename to its current name%s\n", cmdName, file, unsupportedLanguageHint(filepath.Ext(file)))
+			return exitcode.UnsupportedLanguage
+		}
+		res, err = resolve.Resolve(lang, src, anchorName)
+		if err != nil {
+			if rerr, ok := errors.AsType[*resolve.ResolveError](err); ok {
+				fmt.Fprintf(stderr, "rgit: %s\n", rerr.Error())
+				return rerr.Code
+			}
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return exitcode.GitFailure
+		}
+	}
+}
+
 // lineRange converts ext's byte offsets in src to the 1-based, inclusive
 // line range git's own `-L start,end` wants. Lives here rather than in
 // blame.go, its original home, because log.go needs it too: ext.End is
