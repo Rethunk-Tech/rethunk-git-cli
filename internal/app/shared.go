@@ -447,34 +447,42 @@ func lineRange(src []byte, ext resolve.Extent) (start, end int) {
 // anchorCommandFlag is one flag parseAnchorCommandArgs recognizes alongside
 // the single FILE:SYMBOL positional -- a token (or, for a short and long
 // spelling, several) and the destination it fills when seen. Exactly one of
-// set and val is non-nil: set marks a boolean flag, val a value-taking one
-// accepted in both git's spellings, "--flag value" and "--flag=value".
+// set, val, and accept is non-nil: set marks a boolean flag, val a
+// value-taking one accepted as "--flag value" and "--flag=value". accept is
+// val's sibling when the caller has to check the value (log's
+// -n/--max-count): it receives the flag spelling and the value, and a false
+// return means it already wrote the refusal.
+//
+// quoteMissing selects `option %q requires a value` for --since/--until/-n.
+// Blame and show leave it false so --source stays `%s requires a value`.
+// glued lets a two-character token carry its value in the same argument
+// (`-nN`), which the long-option "=" spelling does not cover.
 type anchorCommandFlag struct {
-	tokens []string
-	set    *bool
-	val    *string
+	tokens       []string
+	set          *bool
+	val          *string
+	accept       func(flag, value string) bool
+	quoteMissing bool
+	glued        bool
 }
 
-// parseAnchorCommandArgs is the "one FILE:SYMBOL positional plus a handful
-// of boolean flags" arg loop blame.go and log.go's own FILE:SYMBOL form
-// (runLogAnchor) share: a future boolean flag landing on one
-// command's own copy and not the other's was exactly the drift this
-// shares out. log.go's --since/--until form (runLogPathScoped) does not
-// use this loop -- its arity (zero or more path positionals, no required
-// anchor) and its value-taking flags are both outside what this loop
-// exists to parse, so it uses pflag instead, the same way commit.go and
-// diff.go already do for their own larger flag surfaces:
+// parseAnchorCommandArgs is the FILE:SYMBOL arg loop blame, show, and
+// log's anchor form share. log's path form (runLogPathScoped) does not
+// use it: zero or more path positionals and no required anchor still go
+// through pflag, the same way commit and diff do.
 //
 //   - --help/-h always wins, checked first every iteration -- so it is
 //     found "anywhere" in args (the rule for every hand-parsed command),
 //     not only as the sole argument or only before the positional.
-//   - A recognized flag from flags sets its bool and is consumed.
+//   - A recognized flag from flags is consumed. A value flag takes the
+//     next argument whatever it looks like, including one starting with
+//     "-": git accepts `--source -1` for a revision spelled that way.
 //   - A positional beyond maxPositionals, or an unrecognized "-"-prefixed
 //     token, is refused by name. "--" is exempt (never itself a
-//     positional): a bare "--" classifies to nothing and is refused by
-//     resolveAnchorExtent's own classification instead, with a message
-//     that names the anchor requirement rather than an "unrecognized
-//     argument" that would be true of nothing in particular.
+//     positional) unless refuseLoneSeparator is set: blame and show pass
+//     false, so a bare "--" classifies to nothing and is refused by
+//     resolveAnchorExtent. Log passes true, because its own sentence
+//     ("--" cannot be used as a FILE:SYMBOL anchor) is not that refusal.
 //   - Anything else becomes a positional.
 //
 // maxPositionals caps how many anchors the command accepts; 0 means
@@ -485,7 +493,18 @@ type anchorCommandFlag struct {
 // done is true whenever the caller must return code immediately (help
 // printed, or a refusal already written to stderr); positionals is only
 // meaningful when done is false, and is guaranteed non-empty then.
-func parseAnchorCommandArgs(cmdName string, args []string, flags []anchorCommandFlag, maxPositionals int, help string, stdout, stderr io.Writer) (positionals []string, code exitcode.Code, done bool) {
+func parseAnchorCommandArgs(cmdName string, args []string, flags []anchorCommandFlag, maxPositionals int, help string, stdout, stderr io.Writer, refuseLoneSeparator bool) (positionals []string, code exitcode.Code, done bool) {
+	assign := func(f anchorCommandFlag, flag, value string) bool {
+		if f.accept != nil {
+			if !f.accept(flag, value) {
+				fmt.Fprint(stderr, help)
+				return true
+			}
+			return false
+		}
+		*f.val = value
+		return false
+	}
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		if a == "--help" || a == "-h" {
@@ -497,27 +516,38 @@ func parseAnchorCommandArgs(cmdName string, args []string, flags []anchorCommand
 		for _, f := range flags {
 			switch {
 			case slices.Contains(f.tokens, a):
-				if f.val == nil {
+				if f.val == nil && f.accept == nil {
 					*f.set = true
-				} else {
-					// A value-taking flag consumes the next argument
-					// whatever it looks like, including one starting with
-					// "-": git accepts `--source -1` for a revision spelled
-					// that way, and second-guessing the value here would
-					// refuse a legal one.
-					if i+1 >= len(args) {
+				} else if i+1 >= len(args) {
+					if f.quoteMissing {
+						fmt.Fprintf(stderr, "rgit: %s: option %q requires a value\n", cmdName, a)
+					} else {
 						fmt.Fprintf(stderr, "rgit: %s: %s requires a value\n", cmdName, a)
-						fmt.Fprint(stderr, help)
+					}
+					fmt.Fprint(stderr, help)
+					return nil, exitcode.InvalidUsage, true
+				} else {
+					i++
+					if assign(f, a, args[i]) {
 						return nil, exitcode.InvalidUsage, true
 					}
-					i++
-					*f.val = args[i]
 				}
 				matched = true
-			case f.val != nil:
+			case f.val != nil || f.accept != nil:
 				for _, tok := range f.tokens {
-					if v, found := strings.CutPrefix(a, tok+"="); found {
-						*f.val = v
+					if strings.HasPrefix(tok, "--") {
+						if v, found := strings.CutPrefix(a, tok+"="); found {
+							if assign(f, tok, v) {
+								return nil, exitcode.InvalidUsage, true
+							}
+							matched = true
+							break
+						}
+					}
+					if f.glued && len(tok) == 2 && strings.HasPrefix(a, tok) && len(a) > len(tok) {
+						if assign(f, tok, a[len(tok):]) {
+							return nil, exitcode.InvalidUsage, true
+						}
 						matched = true
 						break
 					}
@@ -532,6 +562,10 @@ func parseAnchorCommandArgs(cmdName string, args []string, flags []anchorCommand
 		}
 
 		switch {
+		case a == "--" && refuseLoneSeparator && len(positionals) == 0:
+			fmt.Fprintf(stderr, "rgit: %s: %q cannot be used as a FILE:SYMBOL anchor; %s requires a FILE:SYMBOL anchor\n", cmdName, a, cmdName)
+			fmt.Fprint(stderr, help)
+			return nil, exitcode.InvalidUsage, true
 		case maxPositionals > 0 && len(positionals) >= maxPositionals:
 			fmt.Fprintf(stderr, "rgit: %s: unrecognized argument %q\n", cmdName, a)
 			fmt.Fprint(stderr, help)

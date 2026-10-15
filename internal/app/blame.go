@@ -60,7 +60,7 @@ func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.
 			{tokens: []string{"--follow-rename"}, set: &followRename},
 			{tokens: []string{"--source"}, val: &source},
 		},
-		1, blameHelp, stdout, stderr)
+		1, blameHelp, stdout, stderr, false)
 	if done {
 		return code
 	}

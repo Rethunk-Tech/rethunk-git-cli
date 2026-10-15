@@ -75,7 +75,7 @@ func runShow(ctx context.Context, dir string, args []string, stdout, stderr io.W
 			{tokens: []string{"--with-header"}, set: &withHeader},
 			{tokens: []string{"--follow-rename"}, set: &followRename},
 		},
-		0, showHelp, stdout, stderr)
+		0, showHelp, stdout, stderr, false)
 	if done {
 		return code
 	}

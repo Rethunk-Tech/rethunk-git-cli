@@ -233,14 +233,25 @@ func logSelectsAnchor(ctx context.Context, dir string, args []string, stderr io.
 	return false, exitcode.Success
 }
 
-// runLogAnchor is rgit log's FILE:SYMBOL form. Its small flag surface is
-// hand-parsed here because date and count flags take values while the shared
-// anchor parser only accepts booleans.
+// runLogAnchor is rgit log's FILE:SYMBOL form. Flags go through the shared
+// anchor parser; setLogMaxCount still checks -n/--max-count.
 func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
-	opts, code, done := parseLogAnchorArgs(args, stdout, stderr)
+	var opts logAnchorOptions
+	positionals, code, done := parseAnchorCommandArgs("log", args, []anchorCommandFlag{
+		{tokens: []string{"--porcelain"}, set: &opts.porcelain},
+		{tokens: []string{"-p", "--patch"}, set: &opts.patch},
+		{tokens: []string{"--follow-rename"}, set: &opts.followRename},
+		{tokens: []string{"--source"}, val: &opts.source},
+		{tokens: []string{"--since"}, val: &opts.since, quoteMissing: true},
+		{tokens: []string{"--until"}, val: &opts.until, quoteMissing: true},
+		{tokens: []string{"-n", "--max-count"}, quoteMissing: true, glued: true, accept: func(flag, value string) bool {
+			return setLogMaxCount(&opts, flag, value, stderr)
+		}},
+	}, 1, logHelp, stdout, stderr, true)
 	if done {
 		return code
 	}
+	opts.positional = positionals[0]
 	if opts.porcelain && opts.patch {
 		fmt.Fprintln(stderr, "rgit: --porcelain and --patch are mutually exclusive")
 		fmt.Fprint(stderr, logHelp)
@@ -310,96 +321,6 @@ type logAnchorOptions struct {
 	followRename bool
 	source       string
 	positional   string
-}
-
-func parseLogAnchorArgs(args []string, stdout, stderr io.Writer) (logAnchorOptions, exitcode.Code, bool) {
-	var opts logAnchorOptions
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		switch {
-		case a == "--help" || a == "-h":
-			fmt.Fprint(stdout, logHelp)
-			return logAnchorOptions{}, exitcode.Success, true
-		case a == "--porcelain":
-			opts.porcelain = true
-		case a == "-p" || a == "--patch":
-			opts.patch = true
-		case a == "--follow-rename":
-			opts.followRename = true
-		case a == "--source":
-			if i+1 >= len(args) {
-				fmt.Fprintf(stderr, "rgit: log: %s requires a value\n", a)
-				fmt.Fprint(stderr, logHelp)
-				return logAnchorOptions{}, exitcode.InvalidUsage, true
-			}
-			i++
-			opts.source = args[i]
-		case strings.HasPrefix(a, "--source="):
-			opts.source = strings.TrimPrefix(a, "--source=")
-		case a == "--since" || a == "--until":
-			if i+1 >= len(args) {
-				fmt.Fprintf(stderr, "rgit: log: option %q requires a value\n", a)
-				fmt.Fprint(stderr, logHelp)
-				return logAnchorOptions{}, exitcode.InvalidUsage, true
-			}
-			i++
-			if a == "--since" {
-				opts.since = args[i]
-			} else {
-				opts.until = args[i]
-			}
-		case strings.HasPrefix(a, "--since="):
-			opts.since = strings.TrimPrefix(a, "--since=")
-		case strings.HasPrefix(a, "--until="):
-			opts.until = strings.TrimPrefix(a, "--until=")
-		case a == "-n" || a == "--max-count":
-			if i+1 >= len(args) {
-				fmt.Fprintf(stderr, "rgit: log: option %q requires a value\n", a)
-				fmt.Fprint(stderr, logHelp)
-				return logAnchorOptions{}, exitcode.InvalidUsage, true
-			}
-			i++
-			if !setLogMaxCount(&opts, a, args[i], stderr) {
-				fmt.Fprint(stderr, logHelp)
-				return logAnchorOptions{}, exitcode.InvalidUsage, true
-			}
-		case strings.HasPrefix(a, "-n") && len(a) > 2:
-			if !setLogMaxCount(&opts, "-n", a[2:], stderr) {
-				fmt.Fprint(stderr, logHelp)
-				return logAnchorOptions{}, exitcode.InvalidUsage, true
-			}
-		case strings.HasPrefix(a, "--max-count="):
-			if !setLogMaxCount(&opts, "--max-count", strings.TrimPrefix(a, "--max-count="), stderr) {
-				fmt.Fprint(stderr, logHelp)
-				return logAnchorOptions{}, exitcode.InvalidUsage, true
-			}
-		case a == "--":
-			if opts.positional != "" {
-				fmt.Fprintf(stderr, "rgit: log: unrecognized argument %q\n", a)
-				fmt.Fprint(stderr, logHelp)
-				return logAnchorOptions{}, exitcode.InvalidUsage, true
-			}
-			fmt.Fprintln(stderr, `rgit: log: "--" cannot be used as a FILE:SYMBOL anchor; log requires a FILE:SYMBOL anchor`)
-			fmt.Fprint(stderr, logHelp)
-			return logAnchorOptions{}, exitcode.InvalidUsage, true
-		case strings.HasPrefix(a, "-"):
-			fmt.Fprintf(stderr, "rgit: log: unrecognized argument %q\n", a)
-			fmt.Fprint(stderr, logHelp)
-			return logAnchorOptions{}, exitcode.InvalidUsage, true
-		case opts.positional != "":
-			fmt.Fprintf(stderr, "rgit: log: unrecognized argument %q\n", a)
-			fmt.Fprint(stderr, logHelp)
-			return logAnchorOptions{}, exitcode.InvalidUsage, true
-		default:
-			opts.positional = a
-		}
-	}
-	if opts.positional == "" {
-		fmt.Fprintln(stderr, "rgit: log requires a FILE:SYMBOL anchor")
-		fmt.Fprint(stderr, logHelp)
-		return logAnchorOptions{}, exitcode.InvalidUsage, true
-	}
-	return opts, exitcode.Success, false
 }
 
 func setLogMaxCount(opts *logAnchorOptions, flag, value string, stderr io.Writer) bool {
