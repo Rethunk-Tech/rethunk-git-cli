@@ -67,9 +67,7 @@ func runDoctor(ctx context.Context, dir string, args []string, stdout, stderr io
 		case "--deep":
 			deep = true
 		default:
-			fmt.Fprintf(stderr, "rgit: doctor: unrecognized argument %q\n", a)
-			fmt.Fprint(stderr, doctorHelp)
-			return exitcode.InvalidUsage
+			return refuseExtraArgs("doctor", []string{a}, stderr, doctorHelp)
 		}
 	}
 	if porcelain && asJSON {

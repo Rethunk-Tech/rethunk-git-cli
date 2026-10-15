@@ -419,7 +419,6 @@ func unsupportedLanguageHint(ext string) string {
 }
 
 // refuseExtraArgs names the first unrecognized argument and prints help.
-// runContext calls it for anything other than --help and --json.
 func refuseExtraArgs(cmdName string, args []string, stderr io.Writer, help string) exitcode.Code {
 	fmt.Fprintf(stderr, "rgit: %s: unrecognized argument %q\n", cmdName, args[0])
 	fmt.Fprint(stderr, help)

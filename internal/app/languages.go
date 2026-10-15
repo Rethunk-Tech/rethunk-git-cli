@@ -61,9 +61,7 @@ func runLanguages(ctx context.Context, dir string, args []string, stdout, stderr
 		case "--in-repo":
 			inRepo = true
 		default:
-			fmt.Fprintf(stderr, "rgit: languages: unrecognized argument %q\n", a)
-			fmt.Fprint(stderr, languagesHelp)
-			return exitcode.InvalidUsage
+			return refuseExtraArgs("languages", []string{a}, stderr, languagesHelp)
 		}
 	}
 	if porcelain && asJSON {
