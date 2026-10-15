@@ -29,13 +29,6 @@ func (s *shellLanguage) TSLanguage() *ts.Language { return s.lang }
 
 func (s *shellLanguage) IsComment(kind string) bool { return kind == "comment" }
 
-// ImportKinds is unused: shellLanguage implements ImportMatcher instead,
-// which importsExtent consults first (lang.go). It is defined only to
-// satisfy the Language interface, and returns nil so a hypothetical caller
-// that skipped the type assertion would degrade to "no imports" rather than
-// silently spanning every command in the script.
-func (s *shellLanguage) ImportKinds() []string { return nil }
-
 // IsImport reports whether n is a `source f.sh` or `. f.sh` line. Both
 // forms parse as an ordinary "command" node -- the same kind as any other
 // command invocation -- with a required "name" field of kind "command_name"
@@ -78,8 +71,8 @@ func (s *shellLanguage) OwnsTrailingSeparator() bool { return false }
 // containers at all (Declarations' own doc comment -- function namespace is
 // flat, nothing sets Container), so classify.go's escalateToContainer path
 // that consults this never fires for a shell file. Answered explicitly
-// anyway, the same discipline ImportKinds above already follows for a
-// method that exists only to satisfy the interface.
+// anyway: defaultLanguage leaves MembersSitFlush unimplemented so a
+// forgotten override fails to compile.
 func (s *shellLanguage) MembersSitFlush() bool { return false }
 
 // AllowsRawHeadingFallback is inherited from defaultLanguage: shell has no

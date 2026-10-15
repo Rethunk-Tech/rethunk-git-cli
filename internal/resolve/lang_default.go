@@ -22,10 +22,10 @@ func (defaultLanguage) AllowsRawHeadingFallback() bool { return false }
 
 // ImportKinds is nil: the grammar has no import/include concept at all, not
 // merely no import in one file -- the degraded-but-not-an-error case
-// docs/ANCHORS.md describes. sql, toml, markdown, yaml and json inherit it.
+// docs/ANCHORS.md describes. sql, toml, markdown, yaml, json and shell inherit it.
 // go, python, css and typescript/tsx override with a real import node.
-// Shell overrides too despite also returning nil: its nil records that
-// ImportMatcher takes precedence (lang_shell.go), a different fact.
+// Shell inherits that nil; ImportMatcher still takes precedence
+// (lang_shell.go IsImport).
 func (defaultLanguage) ImportKinds() []string { return nil }
 
 // FlatContainer is false: Declaration.Container names a real, resolvable
