@@ -70,17 +70,14 @@ func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.
 	positional := positionals[0]
 
 	headOnly := false
+	headFetch := showHeadSource()
 	fetch := func(ctx context.Context, repo *gitx.Repo, root, file string) ([]byte, string, bool, error) {
 		if followRename {
-			src, exists, err := repo.CatFile(ctx, "HEAD", file)
-			if err != nil {
-				return nil, "", false, err
+			src, detail, ok, err := headFetch(ctx, repo, root, file)
+			if ok {
+				headOnly = true
 			}
-			if !exists {
-				return nil, "has no HEAD history", false, nil
-			}
-			headOnly = true
-			return src, "", true, nil
+			return src, detail, ok, err
 		}
 		src, err := readWorktreeFile(root, file)
 		if err != nil {

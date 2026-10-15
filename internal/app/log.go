@@ -268,16 +268,7 @@ func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr
 	// walks HEAD's history and knows nothing about the worktree. --source
 	// resolves against that revision instead, the same read show and blame
 	// use, and the walk starts there.
-	fetch := func(ctx context.Context, repo *gitx.Repo, _, file string) ([]byte, string, bool, error) {
-		head, exists, err := repo.CatFile(ctx, "HEAD", file)
-		if err != nil {
-			return nil, "", false, err
-		}
-		if !exists {
-			return nil, "has no HEAD history", false, nil
-		}
-		return head, "", true, nil
-	}
+	fetch := showHeadSource()
 	if opts.source != "" {
 		fetch = showSource(opts.source)
 	}
