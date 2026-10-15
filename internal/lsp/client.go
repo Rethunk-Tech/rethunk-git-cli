@@ -17,7 +17,7 @@ import (
 // taplo stays unwired: it silently reports zero symbols for a document it
 // was just told to open when workspace/configuration fails, and its ranges
 // disagree with tree-sitter-toml on nested tables.
-//
+
 // Client is a live LSP session sufficient for the one request rgit needs:
 // textDocument/documentSymbol. It is not a general-purpose LSP client — no
 // diagnostics, no completions, nothing an editor would want.
