@@ -302,7 +302,7 @@ func contextRecord(line string) (map[string]string, error) {
 	switch fields[0] {
 	case "B":
 		if len(fields) != 5 {
-			return nil, fmt.Errorf("B record has %d fields", len(fields))
+			return nil, fmt.Errorf("b record has %d fields", len(fields))
 		}
 		rec["branch"] = fields[1]
 		rec["upstream"] = fields[2]
@@ -310,17 +310,17 @@ func contextRecord(line string) (map[string]string, error) {
 		rec["behind"] = fields[4]
 	case "H":
 		if len(fields) != 2 {
-			return nil, fmt.Errorf("H record has %d fields", len(fields))
+			return nil, fmt.Errorf("h record has %d fields", len(fields))
 		}
 		rec["sha"] = fields[1]
 	case "S":
 		if len(fields) != 2 {
-			return nil, fmt.Errorf("S record has %d fields", len(fields))
+			return nil, fmt.Errorf("s record has %d fields", len(fields))
 		}
 		rec["op"] = fields[1]
 	case "W":
 		if len(fields) < 2 {
-			return nil, fmt.Errorf("W record has %d fields", len(fields))
+			return nil, fmt.Errorf("w record has %d fields", len(fields))
 		}
 		rec["kind"] = fields[1]
 		if len(fields) > 2 {
@@ -328,7 +328,7 @@ func contextRecord(line string) (map[string]string, error) {
 		}
 	case "F":
 		if len(fields) != 6 {
-			return nil, fmt.Errorf("F record has %d fields", len(fields))
+			return nil, fmt.Errorf("f record has %d fields", len(fields))
 		}
 		rec["file"] = fields[1]
 		rec["symbol"] = fields[2]
@@ -337,19 +337,19 @@ func contextRecord(line string) (map[string]string, error) {
 		rec["deleted"] = fields[5]
 	case "T":
 		if len(fields) != 3 {
-			return nil, fmt.Errorf("T record has %d fields", len(fields))
+			return nil, fmt.Errorf("t record has %d fields", len(fields))
 		}
 		rec["file"] = fields[1]
 		rec["where"] = fields[2]
 	case "C":
 		if len(fields) < 3 {
-			return nil, fmt.Errorf("C record has %d fields", len(fields))
+			return nil, fmt.Errorf("c record has %d fields", len(fields))
 		}
 		rec["hash"] = fields[1]
 		rec["subject"] = strings.Join(fields[2:], "\t")
 	case "X":
 		if len(fields) != 3 || fields[1] != "TRUNCATED" {
-			return nil, fmt.Errorf("X record %q", line)
+			return nil, fmt.Errorf("x record %q", line)
 		}
 		rec["count"] = fields[2]
 	default:
