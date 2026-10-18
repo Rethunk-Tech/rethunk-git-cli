@@ -160,7 +160,7 @@ cross: sql-parser cross-linux-amd64 cross-linux-arm64 cross-windows-amd64 comple
 # generated from this CLI's own --help, not from the cross-compiled
 # artifacts (those need zig and cannot run here for every matrix target).
 completions-man:
-	@set -euo pipefail; \
+	@set -eu; \
 	assets=$(DIST)/completions-man; \
 	bin=$$assets/rgit-gen; \
 	rm -rf "$$assets"; \
