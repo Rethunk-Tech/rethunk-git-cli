@@ -1,241 +1,118 @@
 # Limitations
 
-What `rgit` does not do, and why. Where a workaround exists, it's the same one
-throughout: name the path instead of a symbol anchor.
+Where a workaround exists: name the path instead of a symbol anchor.
 
 ## Worktree bytes are never rewritten or discarded
 
-`rgit` has no command that rewrites or discards a worktree byte — no
-`restore`, no `reset`, nothing that touches a file outside the index and the
-objects git already writes for a commit. This is a permanent design
-property, not a gap waiting to be filled: it is what makes `rgit` safe as a
-fleet-wide commit path with nothing to undo. `rgit show FILE:SYMBOL --source
-REV` reads a symbol's bytes from any revision without this restriction —
-reading a revision is not writing the worktree.
+No command rewrites or discards a worktree byte. Permanent: `rgit` is safe
+as a fleet commit path with nothing to undo. `rgit show FILE:SYMBOL --source
+REV` reads; that is not a write.
 
 ## Unsupported languages
 
-Any language with no tree-sitter grammar in this binary refuses a symbol
-anchor with exit 9. Run `rgit languages` (or `rgit doctor`) for the exact
-list the running binary supports; it drifts as grammars are added, which is
-why this file doesn't restate it. C and C++ are the common examples with
-none, and stay unsupported on the same demand survey that ordered every
-shipped grammar: no repository surveyed contained any; config and data files
-in those ecosystems still stage by path in the meantime.
-
-One exclusion inside an otherwise-supported language is deliberate, not a gap
-waiting to close:
-
-- **`.sass`** — the indented syntax has no tree-sitter grammar this binary
-  ships; `.scss` is supported.
+No grammar in this binary → exit 9. `rgit languages` / `rgit doctor` list
+what the running binary supports. C and C++ have none. **`.sass`** (indented
+syntax) has no grammar here; `.scss` is supported.
 
 ## Constructs no anchor reaches
 
-Even inside a supported language, some shapes have no name of their own to
-address. Stage the containing declaration or the path instead.
+Stage the containing declaration or the path.
 
-- **Go** — a field line naming several identifiers at once (`A, B int`); an
-  embedded/anonymous field.
-- **TypeScript** — an anonymous default export (`export default function ()
-  {}`); a destructuring declarator (`const {a, b} = obj`, `const [x, y] =
-  arr`) — several names bind off one pattern node, so none owns its own
-  extent.
-- **YAML** — a sequence item; anything inside a flow-style `{...}`/`[...]`
-  value, at any nesting depth; a `---`-separated multi-document stream
-  (nothing is addressable by key across documents); a comment sitting
-  between the end of a nested value and the next, more shallowly indented
-  key — tree-sitter-yaml's own scanner attaches it to whichever block was
-  still open when it read the comment token, not to either neighboring key
-  (still reachable via `@toplevel` or the whole file).
-- **Markdown/MDX** — in an `.mdx` file, MDX's own constructs: an ESM
-  `import`/`export` line, a `<Component />` element, and a `{expression}`.
-  None declares a heading, so none is addressable on its own; each parses as
-  ordinary paragraph or `html_block` content inside whatever heading contains
-  it, and a heading extent is byte-identical to the plain-Markdown one. An
-  import above the first heading is reachable via `@toplevel`.
-- **JSON** — an array, at any depth: the containing key addresses the whole
-  array, never one element.
-- **TOML** — an inline table (`{ a = 1 }`) or array: a leaf, never descended
-  into.
-- **CSS** — a rule nested inside an `@media`/`@supports`/`@keyframes` block;
-  the enclosing at-rule is addressable, the rules inside it are not. Native
-  CSS Nesting (`.parent { .child { ... } }`) is unaffected by this and stays
-  addressable — the exclusion is only for at-rule bodies.
-- **SQL** — `DROP`, `ALTER`, `INSERT`, `SELECT`, and `CREATE SCHEMA` declare
-  no persistent named object, so none is addressable; a `CREATE INDEX` with
-  no name (`CREATE INDEX ON t (c)`) has nothing to read one from either.
-- **HTML** — everything a CSS selector can express beyond an element's own
-  id: a class (`.widget`), an attribute selector (`[data-foo]`), `nth-of-type`
-  and every other pseudo-class/pseudo-element (`:hover`, `::before`), and a
-  descendant/child/sibling combinator (`.parent .child`, `>`, `+`, `~`). This
-  is deliberate scope, not an oversight — `rgit` resolves anchors, it is not
-  a CSS selector engine, and each of those is a step toward reimplementing
-  one. An element with **no** id is also
-  unaddressable, even a lone, unambiguous `<button>` with no sibling to
-  confuse it with — HTML's own demand signal is the mount-point/component-root
-  case (`div#app`), where an id already exists; falling back to a bare tag
-  name would make "div" (or any common tag) collide across nearly every real
-  document, since this resolver's index has no per-parent scoping to keep two
-  same-named siblings apart the way a real DOM's `getElementById` uniqueness
-  does. An id shared by two elements — the same tag twice, or two different
-  tags — is exit 4 (ambiguous), the same as any other language's collision;
-  name the qualified `tag#id` form, or the path, instead.
-
-Full anchor and qualification rules: [`ANCHORS.md`](ANCHORS.md).
+- **Go** — multi-name field (`A, B int`); embedded/anonymous field.
+- **TypeScript** — anonymous default export; destructuring (`const {a, b}`,
+  `const [x, y]`) — several names, one extent.
+- **YAML** — sequence item; anything in a flow `{...}`/`[...]`; a
+  `---`-separated multi-document stream; a comment between a nested value
+  and the next shallower key (tree-sitter-yaml attaches it to whichever
+  block was still open). `@toplevel` or the path still reach it.
+- **Markdown/MDX** — MDX `import`/`export`, `<Component />`, `{expression}`
+  are not headings. An import above the first heading is `@toplevel`.
+- **JSON** — an array at any depth; the containing key owns the whole array.
+- **TOML** — inline table or array: a leaf.
+- **CSS** — a rule inside `@media`/`@supports`/`@keyframes` (the at-rule is
+  addressable). Native nesting (`.parent { .child { } }`) stays addressable.
+- **SQL** — `DROP`, `ALTER`, `INSERT`, `SELECT`, `CREATE SCHEMA`; unnamed
+  `CREATE INDEX ON t (c)`.
+- **HTML** — anything beyond an element's own id (class, attribute,
+  pseudo, combinator). An element with no id is unaddressable even when
+  unique: the index has no per-parent scoping, so a bare `div` would
+  collide everywhere. Duplicate ids are exit 4. Qualification:
+  [`ANCHORS.md`](ANCHORS.md).
 
 ## Build and platform limits
 
-- **No darwin binaries.** `rgit` links tree-sitter through cgo, and darwin
-  fails at link time through zig without an actual macOS SDK (`-lresolv`,
-  `-framework CoreFoundation`). Every build and release job runs on Linux,
-  so releases ship linux/amd64, linux/arm64 and windows/amd64 only, and
-  `scripts/install.sh` exits with an error on macOS; build from source
-  there. Detail: [`INSTALL.md`](INSTALL.md#cross-builds).
-- **SQL ships only behind the `rgit_sql` build tag.** A plain build works
-  identically without it; a `.sql` anchor then exits 9 like any other
-  unsupported language. Detail: [`INSTALL.md`](INSTALL.md#sql-support).
-- **`make cross` needs the tree-sitter CLI.** Without it, generation exits
-  non-zero and no `dist/` binary is written. `make install` still falls back
-  to an SQL-less host binary. Detail:
-  [`INSTALL.md`](INSTALL.md#cross-builds).
+- **No darwin binaries.** cgo + zig without a macOS SDK (`-lresolv`,
+  CoreFoundation). Releases: linux/amd64, linux/arm64, windows/amd64.
+  `scripts/install.sh` errors on macOS. [`INSTALL.md`](INSTALL.md#cross-builds).
+- **SQL is `-tags rgit_sql` only.** A plain build works; a `.sql` anchor is
+  exit 9. [`INSTALL.md`](INSTALL.md#sql-support).
+- **`make cross` needs the tree-sitter CLI.** Without it, generation is
+  non-zero and `dist/` is not written. `make install` still falls back to an
+  SQL-less host binary. [`INSTALL.md`](INSTALL.md#cross-builds).
 
 ## Symlinks, submodules, renames, and content filters
 
-In `commit`, a symbol anchor never addresses a symlink or a submodule
-directory — both refuse with exit 10 (`SpecialPathRefused`), the same code,
-rather than being misresolved as an ordinary file or silently producing an
-empty symbol set. Name the path instead: `rgit commit link.txt` and `rgit
-commit vendor/lib` stage them exactly as `git add` would, gitlink SHA and
-symlink target included — a pathspec target is delegated straight to `git add`
-and never touches `rgit`'s own byte synthesis at all
-(`internal/synth/stage.go`'s `Pathspec` targets vs. `Symbol` targets). See
-[`cmd/rgit/index_test.go`](../cmd/rgit/index_test.go)'s
-`TestStage_SubmoduleAndSymlinkPathStaging` for both the pathspec staging and
-the anchor refusal, on each of the two kinds.
+A symbol anchor in `commit` refuses symlink, submodule, binary, unmerged,
+skip-worktree, and assume-unchanged paths with exit 10. Name the path:
+`git add` gets the gitlink SHA or symlink target
+(`internal/synth/stage.go` `Pathspec` vs `Symbol`). See
+`TestStage_SubmoduleAndSymlinkPathStaging`.
 
-An **unmerged path** likewise refuses a symbol anchor with exit 10
-(`SpecialPathRefused`) in `commit`. Name the path instead so Git can stage the
-conflict entries and their conflict-marker content without rgit attempting a
-symbol splice.
+An uninitialized submodule (`git submodule deinit`: directory remains,
+`.git` gone) is the same exit 10 — `classifyPath` (`internal/synth/special.go`)
+checks HEAD's `160000` entry, not local shape. A nested submodule is
+invisible from this index.
 
-**An uninitialized submodule refuses the identical anchor the same way** —
-`git submodule deinit` leaves the directory in place, emptied of its own
-`.git`, and `classifyPath` (`internal/synth/special.go`) cross-checks HEAD's
-own `160000` tree entry rather than trusting local shape (".git present")
-alone, so this is not silently misread as an ordinary directory. A **nested**
-submodule (one submodule's own `.gitmodules` naming another) is invisible to
-this repository's index either way — only the immediate gitlink entry at
-its own path is ever visible from here, nested or not, so it needs no
-different treatment.
+Skip-worktree / assume-unchanged: `git diff --numstat` never reports them
+as changed. An explicit `FILE:SYMBOL` is exit 10; the bit is unchanged. A
+pathspec still reaches `git add`. Absent from the index is ordinary exit 3.
 
-**A sparse-checkout-excluded path** is handled by Git's skip-worktree bit.
-The default diff scope is a real `git diff --numstat`
-(`internal/gitx.DiffNumstat`), and git itself never reports a skip-worktree
-path as changed, so in the ordinary case it never reaches `rgit`'s own
-attribution. An explicit `FILE:SYMBOL` anchor on a path marked
-skip-worktree refuses with exit 10 before blob synthesis; the bit is left
-unchanged. The same refusal applies to an assume-unchanged path, in `commit`.
-A pathspec target still reaches real `git add`, which handles Git's own
-sparse-path advice (`git config advice.updateSparsePath`) without rgit
-special-casing it.
-If a path is absent from the index rather than marked with either bit, anchor
-resolution retains its ordinary exit 3 (unresolvable) behavior.
+A rename staged by symbol is a new file at the new path; git's tree diff
+notices similarity after. Pathspec renames go through `git add`
+(`TestStage_RenameStagedAsTwoPathsYieldsR100`).
 
-A **rename** staged by symbol anchor is not detected as one: `HEAD` simply
-has no blob at the new path, so an anchor into it stages as an ordinary new
-file, and git's own tree diff is what notices the rename after the fact
-(rename at full similarity in `git status`/`git diff`, the same as any rename
-staged by hand). Renames staged by pathspec go through `git add` unmodified,
-proven by `TestStage_RenameStagedAsTwoPathsYieldsR100`.
-
-Every synthesized blob is written via `git hash-object -w --path <path>`
-(`internal/gitx.HashObject`), never with `--path` omitted — the function
-signature requires a path, and its one call site (`internal/synth/stage.go`)
-always has one, so a `.gitattributes` clean filter always runs, whatever it
-is: `TestStage_GitattributesCleanFilterRequiresPath` proves it with a
-synthetic filter rather than requiring a real filter binary (`git-lfs`
-included) in the test environment — Git LFS's own clean filter is invoked
-through the identical mechanism, an ordinary `.gitattributes` `filter=`
-entry, with nothing rgit-specific to special-case for it. A binary file is
-refused for a symbol anchor in `commit` the same way a symlink or submodule
-is (exit 10) — there is no content to attribute a symbol's bytes within.
+Every synthesized blob is `git hash-object -w --path <path>`
+(`internal/gitx.HashObject`) so `.gitattributes` clean filters run
+(`TestStage_GitattributesCleanFilterRequiresPath`).
 
 ## Partial clones without a reachable promisor remote
 
-A blobless or otherwise promisor-backed clone needs Git to obtain an
-unfetched blob before `rgit` can resolve or synthesize an anchor against it.
-When the promisor remote is unreachable, Git reports the missing object with
-exit 128; `rgit` preserves that error rather than treating the tracked path as
-absent or synthesizing a full-file deletion. `rgit` does not fetch blobs itself.
+An unfetched blob is git's problem. Unreachable promisor → git exit 128;
+`rgit` does not treat the path as absent or synthesize a deletion. `rgit`
+does not fetch.
 
 ## History across renames
 
-`rgit log FILE:SYMBOL` runs `git log -L` bounded to the named file. `-L`
-already tracks a line range across a rename on its own, the same content
-similarity detection `git log --follow` uses for a whole file — but it does
-so by following the diff, not by re-parsing the renamed file, so a rename
-that also moves the symbol within the file (reordering, a surrounding
-refactor) can lose the thread partway. `--follow-rename` covers that case by
-re-resolving the anchor with tree-sitter at each rename boundary instead —
-see [`USAGE.md`](USAGE.md#log-across-renames) — one parse per rename, not
-per commit, which is the trade-off that made it worth building.
+`git log -L` follows a rename by line-range diff, so a rename that also
+moves the symbol can lose it. `--follow-rename` re-resolves at each
+rename boundary — [`USAGE.md`](USAGE.md#log-across-renames). Query the
+**current** name. `--source REV` does not follow and does not combine with
+`--follow-rename`.
 
-Either way, a symbol's history is only reachable starting from the file's
-**current** name: querying it under a prior name directly fails at argument
-classification, the same as naming any other path that exists under neither
-the worktree, the index, nor `HEAD`. `--source REV` resolves the extent in
-that revision under the current name and starts the walk there; it does not
-follow renames and does not combine with `--follow-rename`.
-
-`rgit blame FILE:SYMBOL` stops at the current file name by default. With
-`--follow-rename`, it reads HEAD history, re-resolves the symbol at each rename
-boundary, and emits git's bounded blame for each path segment. `--source REV`
-blames one revision's extent under the file's current name and does not
-combine with `--follow-rename`.
-
-`rgit show FILE:SYMBOL --follow-rename` uses that same boundary walk and prints
-the symbol's bytes from the oldest path segment. It does not concatenate every
-edit along the way, and it does not combine with `--source`.
+`blame --follow-rename` and `show --follow-rename` use that walk.
+`--source` does not combine with it.
 
 ## Language-server coverage
 
-The extent cross-check is live for Go, TypeScript/TSX, Python, Rust, Shell,
-YAML, JSON, JSONC, CSS, SCSS, Zsh, Markdown, and HTML. TOML, SQL, and JSON5 resolve with tree-sitter alone,
-permanently in `[ts-only]` mode — a supported result, not a degraded one:
+Cross-check is live for Go, TypeScript/TSX, Python, Rust, Shell, YAML,
+JSON, JSONC, CSS, SCSS, Zsh, Markdown, and HTML. TOML, SQL, and JSON5 are
+permanently `[ts-only]`:
 
-- **TOML** — `taplo` completes the LSP handshake, but its own ranges
-  disagree with the extent `rgit` stages on an ordinary nested table, so
-  installing it does not enable a cross-check.
-- **SQL** — no maintained tool speaks `documentSymbol` for SQL at all.
-- **JSON5** — no JSON5 language server reports document symbols; `vscode-json-language-server` parses strict JSON and JSONC only.
+- **TOML** — `taplo` handshakes, but its ranges disagree on a nested table.
+- **SQL** — no maintained `documentSymbol` server.
+- **JSON5** — no server reports symbols; `vscode-json-language-server` is
+  JSON/JSONC only.
 
-**HTML wires with two narrower, safe carve-outs, not a full unwiring.**
-`vscode-html-language-server` names and ranges an ordinary id-bearing
-element exactly the way `rgit` does (`div#app`) once the points below are
-accounted for:
+**HTML** is wired with two carve-outs (`vscode-html-language-server`):
 
-- The server appends `.class…` selectors after the full `tag#id` when the
-  element carries a class (`div#app.widget`). An id may contain a dot
-  (`a#toc-mod.io`); flat matching compares that whole `tag#id` and treats
-  only a further `.class` suffix as the server's class list, so both
-  class-bearing elements and dotted ids cross-check. The id and the class
-  list are not separate fields: both are that one name, and kind, container,
-  and detail do not differ. `<a id="toc-mod" class="io">` and
-  `<a id="toc-mod.io">` are each reported as `a#toc-mod.io`. The cross-check
-  refuses both anchors. Pairing either would guess, and a shared line is not
-  a reason to guess — the range is what the cross-check is judging. This is
-  permanent for this server: it does not emit a symbol that tells the two
-  elements apart. Staged extents stay the grammar's own boundary and never
-  grow to include class text.
-- A void element (`<input>`, `<img>`, `<br>`, and similarly self-closing-
-  by-tag-name elements) measurably absorbs trailing whitespace or text up
-  to its next real sibling boundary into its own node's range when one
-  isn't immediately adjacent. That absorption is left alone in the extent
-  that actually gets staged — the grammar's own honest boundary, matching
-  TOML's own trailing-blank-line precedent — but trimmed back to the tag's
-  own end in the declaration-only extent the cross-check compares against
-  (`internal/resolve/lang_html.go`'s `trimDeclOnlyEnd`, an optional seam
-  scoped to this one adapter, not a change to every grammar's own extent).
+- The server appends `.class…` after `tag#id`. An id may contain a dot
+  (`a#toc-mod.io`); only a further `.class` suffix is the class list.
+  `<a id="toc-mod" class="io">` and `<a id="toc-mod.io">` are both reported
+  as `a#toc-mod.io`. The cross-check refuses both — pairing would guess.
+  Staged extents stay the grammar's boundary.
+- A void element (`<input>`, `<img>`, `<br>`) can absorb trailing
+  whitespace into its node. The staged extent keeps that boundary; the
+  compared extent trims to the tag (`trimDeclOnlyEnd` in
+  `internal/resolve/lang_html.go`).
 
-Install instructions and the full server table:
-[`INSTALL.md`](INSTALL.md#language-servers).
+Servers: [`INSTALL.md`](INSTALL.md#language-servers).
