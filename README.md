@@ -37,6 +37,22 @@ scoop install rgit
 
 Build and runbook: [HUMANS.md](HUMANS.md).
 
+```bash
+source <(rgit completion bash)
+```
+
+```zsh
+source <(rgit completion zsh)    # after compinit
+```
+
+```fish
+rgit completion fish | source
+```
+
+```powershell
+rgit completion pwsh | Invoke-Expression
+```
+
 ## Highlights
 
 - **Symbol anchors** — `FILE:NAME` addresses a function, method, type, or const; `@imports`, `@header`, `@toplevel` reach regions no symbol owns.

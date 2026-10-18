@@ -13,6 +13,35 @@ rgit -C /some/other/repo diff                    # ...without standing in it
 
 Install, env vars, verify, uninstall: [docs/INSTALL.md](docs/INSTALL.md).
 
+```bash
+source <(rgit completion bash)
+```
+
+```zsh
+source <(rgit completion zsh)    # after compinit
+```
+
+```fish
+rgit completion fish | source
+```
+
+```powershell
+rgit completion pwsh | Invoke-Expression
+```
+
+Every `v*` release also ships `rgit-completions-man.tar.gz` (listed in `SHA256SUMS`):
+
+```sh
+curl -fsSLO https://github.com/Rethunk-Tech/rethunk-git-cli/releases/latest/download/rgit-completions-man.tar.gz
+mkdir -p /tmp/rgit-assets
+tar -xzf rgit-completions-man.tar.gz -C /tmp/rgit-assets
+install -Dm644 /tmp/rgit-assets/rgit.bash ~/.local/share/bash-completion/completions/rgit
+install -Dm644 /tmp/rgit-assets/_rgit     ~/.local/share/zsh/site-functions/_rgit
+install -Dm644 /tmp/rgit-assets/rgit.fish ~/.config/fish/completions/rgit.fish
+install -Dm644 /tmp/rgit-assets/rgit.1    ~/.local/share/man/man1/rgit.1
+# pwsh: Add-Content -Path $PROFILE -Value '. /tmp/rgit-assets/rgit.ps1'
+```
+
 ## What it does
 
 `rgit commit` stages **one symbol at a time** instead of one file. Name `auth.go:ValidateToken` to commit that function — doc comment, attributes, body — leaving other edits in the file uncommitted.

@@ -72,7 +72,9 @@ from source.
 `-tags rgit_sql` on every target. Without the tree-sitter CLI,
 `-generate-only` is non-zero and no `dist/` binary is written. `make
 install` still falls back to an SQL-less host binary. It overwrites
-`dist/SHA256SUMS` for that run.
+`dist/SHA256SUMS` for that run and includes `rgit-completions-man.tar.gz`
+(bash, zsh, fish, PowerShell completions and `rgit.1`, generated from
+`rgit completion` / `rgit man`).
 
 ## SQL support
 
@@ -139,6 +141,9 @@ Add-Content -Path $PROFILE -Value 'Invoke-Expression (rgit completion pwsh | Out
 ```
 
 zsh needs `compinit` first.
+
+Releases also attach `rgit-completions-man.tar.gz` (in `SHA256SUMS`).
+Install paths: [HUMANS.md](../HUMANS.md).
 
 ## Install script
 
