@@ -63,6 +63,18 @@ jobs:
 
       - run: make cross
 
+      # Completions and the man page are arch-independent text generated
+      # from this CLI (make completions-man). Fail here rather than
+      # publishing binaries without the tarball SHA256SUMS promises.
+      - name: verify completions and man page tarball
+        run: |
+          tar -tzf dist/rgit-completions-man.tar.gz | grep -qx rgit.bash
+          tar -tzf dist/rgit-completions-man.tar.gz | grep -qx _rgit
+          tar -tzf dist/rgit-completions-man.tar.gz | grep -qx rgit.fish
+          tar -tzf dist/rgit-completions-man.tar.gz | grep -qx rgit.ps1
+          tar -tzf dist/rgit-completions-man.tar.gz | grep -qx rgit.1
+          grep -q ' rgit-completions-man.tar.gz$' dist/SHA256SUMS
+
       # Fail loudly rather than publishing a release whose binaries quietly
       # lack the grammar this workflow installed a toolchain for.
       - name: verify the linux/amd64 artifact carries SQL

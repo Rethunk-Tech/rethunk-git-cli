@@ -29,7 +29,7 @@ SQL_TAGS = $(if $(wildcard $(SQL_CSRC)/parser.c),-tags rgit_sql,)
 
 .PHONY: help build install test test-short test-race cover cover-short \
         xcheck fix-diff fix lint clean sql-parser cross cross-linux-amd64 \
-        cross-linux-arm64 cross-windows-amd64
+        cross-linux-arm64 cross-windows-amd64 completions-man
 
 help:
 	@echo "rgit build targets:"
@@ -44,7 +44,8 @@ help:
 	@echo "  fix-diff           go fix -diff ./...        (preview; read before applying)"
 	@echo "  fix                go fix ./... twice        (fixes can unlock fixes)"
 	@echo "  lint               golangci-lint run ./...   (.golangci.yml)"
-	@echo "  cross              cross-compile linux/amd64, linux/arm64, windows/amd64 into dist/, versioned, with SQL when generatable, plus SHA256SUMS"
+	@echo "  cross              cross-compile linux/amd64, linux/arm64, windows/amd64 into dist/, versioned, with SQL when generatable, plus SHA256SUMS and rgit-completions-man.tar.gz"
+	@echo "  completions-man    generate dist/rgit-completions-man.tar.gz from this binary's completion and man commands"
 	@echo "  clean              remove build outputs, including a generated SQL parser tree"
 
 build:
@@ -145,14 +146,38 @@ clean:
 sql-parser:
 	go run ./cmd/rgit-install -generate-only
 
-cross: sql-parser cross-linux-amd64 cross-linux-arm64 cross-windows-amd64
+cross: sql-parser cross-linux-amd64 cross-linux-arm64 cross-windows-amd64 completions-man
 	$(need-sha256sum)
 	cd $(DIST) && sha256sum \
 		rgit-$(CROSS_VERSION)-linux-amd64 \
 		rgit-$(CROSS_VERSION)-linux-arm64 \
 		rgit-$(CROSS_VERSION)-windows-amd64.exe \
+		rgit-completions-man.tar.gz \
 		> SHA256SUMS
 	@echo "wrote $(DIST)/SHA256SUMS"
+
+# Host binary: completions and the man page are arch-independent text
+# generated from this CLI's own --help, not from the cross-compiled
+# artifacts (those need zig and cannot run here for every matrix target).
+completions-man:
+	@set -euo pipefail; \
+	assets=$(DIST)/completions-man; \
+	bin=$$assets/rgit-gen; \
+	rm -rf "$$assets"; \
+	mkdir -p "$$assets"; \
+	go build -ldflags "$(LDFLAGS)" -o "$$bin" ./cmd/rgit; \
+	"$$bin" completion bash > "$$assets/rgit.bash"; \
+	"$$bin" completion zsh > "$$assets/_rgit"; \
+	"$$bin" completion fish > "$$assets/rgit.fish"; \
+	"$$bin" completion pwsh > "$$assets/rgit.ps1"; \
+	"$$bin" man > "$$assets/rgit.1"; \
+	rm -f "$$bin"; \
+	for f in rgit.bash _rgit rgit.fish rgit.ps1 rgit.1; do \
+		test -s "$$assets/$$f" || { echo "completions-man: empty $$f"; exit 1; }; \
+	done; \
+	tar -czf $(DIST)/rgit-completions-man.tar.gz -C "$$assets" rgit.bash _rgit rgit.fish rgit.ps1 rgit.1; \
+	rm -rf "$$assets"; \
+	echo "wrote $(DIST)/rgit-completions-man.tar.gz"
 
 define need-zig
 	@command -v $(ZIG) >/dev/null 2>&1 || { \

@@ -9,6 +9,7 @@ Notable changes to `rgit`. The format follows
 ### Added
 
 - Hidden `rgit man` prints a groff man page generated from live `--help` text. See [`docs/INSTALL.md`](docs/INSTALL.md#shell-completion).
+- Releases attach `rgit-completions-man.tar.gz` (bash, zsh, fish, and PowerShell completions plus `rgit.1`) and list it in `SHA256SUMS`. See [HUMANS.md](HUMANS.md).
 - `rgit commit --json` prints the commit sha and the same target rows `--porcelain` lists, as one JSON object. `--dry-run` omits `sha`. Combined with `--porcelain` or `-q`/`--quiet` is exit 129. The human summary and `--porcelain` are unchanged. See [`docs/CODES.md`](docs/CODES.md#rgit-commit---json).
 - `rgit diff --json` prints the same file, symbol, status, and count fields `--porcelain` lists, as one JSON object. Combined with `--porcelain`, `-p`/`--patch`, or `--quiet` is exit 129. The default listing and `--porcelain` are unchanged. See [`docs/CODES.md`](docs/CODES.md#rgit-diff---json).
 - `rgit help <command>` prints that command's `--help` text. Bare `rgit help` and `rgit help --help` stay the top-level listing. See [`docs/USAGE.md`](docs/USAGE.md#help).
