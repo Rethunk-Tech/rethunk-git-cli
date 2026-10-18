@@ -522,16 +522,14 @@ func shebangInterpreter(content []byte) (string, bool) {
 	return interp, true
 }
 
-// shebangPeekBytes bounds how much of a candidate file peekShebangLine will
-// ever read: a real interpreter line is always short, so this is generous
-// headroom for one, not an attempt to capture more.
-const shebangPeekBytes = 256
+// ShebangPeekBytes bounds how much of a candidate file peekShebangLine will
+// ever read, and is the bound callers use when sampling a HEAD blob for an
+// extensionless path whose worktree copy is absent. A real interpreter line
+// is always short, so this is generous headroom for one, not an attempt to
+// capture more.
+const ShebangPeekBytes = 256
 
-// ShebangPeekBytes is the bound callers use when sampling a HEAD blob for an
-// extensionless path whose worktree copy is absent.
-const ShebangPeekBytes = shebangPeekBytes
-
-// peekShebangLine reads at most shebangPeekBytes from the worktree file at
+// peekShebangLine reads at most ShebangPeekBytes from the worktree file at
 // relPath and returns its first line, for ForPath's shebang fallback. exists
 // is false when no worktree copy exists; peeked is false when the copy exists
 // but cannot provide a non-empty opening line. Callers degrade to whatever
@@ -542,7 +540,7 @@ const ShebangPeekBytes = shebangPeekBytes
 // or one with no newline in its opening bytes, must never be read in full
 // just to learn it has no shebang. This is the one place that logic lives;
 // internal/synth and internal/diff both reach it through
-// LanguageForWorktreePathFolding below rather than each reading their own prefix.
+// LanguageForPathFolding rather than each reading their own prefix.
 func peekShebangLine(rootDir, relPath string) (line []byte, exists, peeked bool) {
 	root, err := os.OpenRoot(rootDir)
 	if err != nil {
@@ -571,10 +569,10 @@ func peekShebangLine(rootDir, relPath string) (line []byte, exists, peeked bool)
 		}
 	}()
 
-	raw, err := bufio.NewReader(io.LimitReader(f, shebangPeekBytes)).ReadString('\n')
+	raw, err := bufio.NewReader(io.LimitReader(f, ShebangPeekBytes)).ReadString('\n')
 	if err != nil && !errors.Is(err, io.EOF) {
 		// Running out of bytes within the peek window (or the whole file,
-		// for one shorter than shebangPeekBytes) is expected and not an
+		// for one shorter than ShebangPeekBytes) is expected and not an
 		// error worth reporting -- io.EOF is exactly what ReadString
 		// returns for both. Anything else (relPath naming a directory,
 		// whose Open succeeds but whose Read does not, and other genuine
@@ -607,7 +605,7 @@ type HeadShebangSample func() (sample []byte, exists bool, err error)
 // peeked reports whether a source was actually found and inspected,
 // independent of ok: a source with no shebang or an unmapped interpreter
 // still has peeked=true. headSample may be nil when HEAD fallback is not
-// available -- LanguageForWorktreePathFolding is that case named.
+// available.
 func LanguageForPathFolding(root, relPath string, fold bool, headSample HeadShebangSample) (lang Language, ok, peeked bool, err error) { //nolint:ireturn // selects one of a dozen registered grammar adapters at runtime by extension or content sniff
 	if lang, ok := ForExtensionFolding(filepath.Ext(relPath), fold); ok {
 		return lang, true, false, nil
@@ -632,13 +630,4 @@ func LanguageForPathFolding(root, relPath string, fold bool, headSample HeadSheb
 	}
 	lang, ok = ForPathFolding(relPath, line, fold)
 	return lang, ok, true, nil
-}
-
-// LanguageForWorktreePathFolding resolves relPath from its extension or a
-// bounded shebang peek of the worktree copy, optionally folding its
-// extension. Callers that can fall back to a HEAD blob use
-// LanguageForPathFolding directly.
-func LanguageForWorktreePathFolding(root, relPath string, fold bool) (lang Language, ok, peeked bool) { //nolint:ireturn // selects one of a dozen registered grammar adapters at runtime by extension or content sniff
-	lang, ok, peeked, _ = LanguageForPathFolding(root, relPath, fold, nil)
-	return lang, ok, peeked
 }

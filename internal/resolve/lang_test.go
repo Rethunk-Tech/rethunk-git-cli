@@ -29,7 +29,7 @@ func TestPeekShebangLine(t *testing.T) {
 		}
 	})
 
-	// No newline within shebangPeekBytes (or the whole file, for one
+	// No newline within ShebangPeekBytes (or the whole file, for one
 	// shorter than that): ReadString reports io.EOF, which must still be
 	// treated as a legitimate partial read, not an error.
 	t.Run("no newline in the peeked window", func(t *testing.T) {

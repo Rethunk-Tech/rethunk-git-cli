@@ -1161,7 +1161,7 @@ func withEnv(env []string, key, value string) []string {
 // upstream at all, so guessing `-u` here would fail a push for some
 // callers that plain `git push` would have completed -- exactly the
 // silent divergence AGENTS.md's one invariant forbids. A caller wanting a
-// clearer message on the specific "no upstream" failure uses HasUpstream
+// clearer message on the specific "no upstream" failure uses Upstream
 // and CurrentBranch to add one after Push has already failed, never
 // before.
 func (r *Repo) Push(ctx context.Context) error {
@@ -1178,31 +1178,18 @@ func (r *Repo) CurrentBranch(ctx context.Context) (string, error) {
 	return r.checkedLine(ctx, "rev-parse", "--abbrev-ref", "HEAD")
 }
 
-// HasUpstream reports whether the current branch has an upstream tracking
-// ref configured, via whether `@{u}` resolves. Like MergeBase and
-// CheckIgnore, "no upstream configured" is a normal negative answer -- the
-// default state of a newly created branch -- not a failure, so this goes
-// through optionalLine rather than turning it into a *GitError.
-func (r *Repo) HasUpstream(ctx context.Context) (bool, error) {
-	_, ok, err := r.optionalLine(ctx, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
-	return ok, err
-}
-
 // Upstream reports the current branch's upstream tracking ref's own name
-// (e.g. "origin/main"), or ok=false when none is configured -- the same
-// "no upstream" is a normal negative answer, not a failure, HasUpstream
-// already established. Kept separate from HasUpstream rather than having
-// it report the name too: HasUpstream's one caller (commit.go's push hint)
-// only ever needed the bool, and changing its signature to thread a name
-// through that call site for no reason risks a behavior no test would
-// catch.
+// (e.g. "origin/main"), or ok=false when none is configured. Like MergeBase
+// and CheckIgnore, "no upstream configured" is a normal negative answer --
+// the default state of a newly created branch -- not a failure, so this
+// goes through optionalLine rather than turning it into a *GitError.
 func (r *Repo) Upstream(ctx context.Context) (name string, ok bool, err error) {
 	return r.optionalLine(ctx, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
 }
 
 // AheadBehind reports how many commits the current branch is ahead of and
 // behind its upstream, via `git rev-list --left-right --count HEAD...@{u}`.
-// Callers check HasUpstream first -- with no upstream configured, `@{u}`
+// Callers check Upstream first -- with no upstream configured, `@{u}`
 // fails to resolve and this returns a *GitError like any other bad
 // revision, the same as every other rev-parse-backed query in this file.
 func (r *Repo) AheadBehind(ctx context.Context) (ahead, behind int, err error) {

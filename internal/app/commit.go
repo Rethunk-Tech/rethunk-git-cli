@@ -529,8 +529,8 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 			// -u here could fail a push plain `git push` would have
 			// completed. This only adds a concrete, named fix once the
 			// push has already failed for its own reason, and only when
-			// HasUpstream independently confirms there genuinely is none.
-			if hasUpstream, uerr := repo.HasUpstream(ctx); uerr == nil && !hasUpstream {
+			// Upstream independently confirms there genuinely is none.
+			if _, hasUpstream, uerr := repo.Upstream(ctx); uerr == nil && !hasUpstream {
 				if branch, berr := repo.CurrentBranch(ctx); berr == nil && branch != "" && branch != "HEAD" {
 					fmt.Fprintf(stderr, "rgit: %s has no upstream tracking branch -- try `git push -u origin %s`, or set push.autoSetupRemote to do this for every push\n", branch, branch)
 				}
@@ -588,7 +588,7 @@ func refuseStructuredDataAnchors(ctx context.Context, repo *gitx.Repo, root stri
 		if t.Pathspec != "" {
 			continue
 		}
-		lang, ok, _ := resolve.LanguageForWorktreePathFolding(root, t.Symbol.Path, fold)
+		lang, ok, _, _ := resolve.LanguageForPathFolding(root, t.Symbol.Path, fold, nil)
 		if !ok || !resolve.IsStructuredData(lang) {
 			continue
 		}

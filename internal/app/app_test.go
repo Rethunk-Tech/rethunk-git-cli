@@ -812,19 +812,19 @@ func TestRun_GPGSignShorthandReachesGit(t *testing.T) {
 // TestRun_PushFailureReportsUpstreamHint covers the --push branch the
 // --dry-run cases above never reach: --dry-run returns before repo.Push is
 // ever called, so it is the only shape of --push this file's other tests
-// exercise, leaving repo.Push, repo.HasUpstream, repo.CurrentBranch, and
+// exercise, leaving repo.Push, repo.Upstream, repo.CurrentBranch, and
 // exitcode.PushFailed's own message at 0% under -short even though the
 // full lane covers all four -- a regression in any of them would pass
 // `go test -short ./...` clean. A repo gittest builds has no remote
 // configured at all, so `git push` fails for the plainest possible
-// reason and HasUpstream's negative answer is real, not assumed.
+// reason and Upstream's negative answer is real, not assumed.
 //
 // This is deliberately pinned again in
 // cmd/rgit/rgit_e2e_test.go's TestCommit_PushWithNoUpstreamNamesTheFix, the
 // same dual-pin CONTRIBUTING.md sanctions for hook rejection
 // (lanes_test.go's own TestRun_HookRejectionRestoresStaging) -- but for
 // a different reason than duplication would suggest. The two cases trigger
-// genuinely different git failures that both leave HasUpstream negative:
+// genuinely different git failures that both leave Upstream negative:
 // no remote configured at all here, versus a real remote with no upstream
 // tracking there (git's own literal "no upstream branch" refusal). Losing
 // this lane would still catch a regression in the message-construction

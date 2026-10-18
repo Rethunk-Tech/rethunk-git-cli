@@ -136,7 +136,7 @@ func filterLanguagesInRepo(ctx context.Context, dir string, langs []resolve.Lang
 		}
 	}
 	for _, path := range others {
-		if lang, ok, _ := resolve.LanguageForWorktreePathFolding(root, path, ignoreCase); ok {
+		if lang, ok, _, _ := resolve.LanguageForPathFolding(root, path, ignoreCase, nil); ok {
 			present[lang.Name()] = true
 		}
 	}
