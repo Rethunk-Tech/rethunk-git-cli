@@ -6,6 +6,10 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `rgit help <command>` prints that command's `--help` text. Bare `rgit help` and `rgit help --help` stay the top-level listing. See [`docs/USAGE.md`](docs/USAGE.md#help).
+
 ## [2.2.4] - 2026-10-18
 
 ### Added

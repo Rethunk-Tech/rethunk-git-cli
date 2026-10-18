@@ -205,6 +205,13 @@ _rgit_completion() {
                 return 0
             fi
             ;;
+        help)
+            if [[ $COMP_CWORD -eq $((i+1)) ]]; then
+                COMPREPLY=( $(compgen -W "` + rgitSubcommands + `" -- "$cur") )
+                return 0
+            fi
+            return 0
+            ;;
         *) return 0 ;;
     esac
 
@@ -296,6 +303,12 @@ _rgit() {
                 compadd -- bash zsh fish pwsh
                 return
             fi
+            ;;
+        help)
+            if (( CURRENT == i+1 )); then
+                compadd -- ` + rgitSubcommands + `
+            fi
+            return
             ;;
         *) return ;;
     esac
@@ -422,6 +435,11 @@ function __rgit_complete
                 printf '%s\n' bash zsh fish pwsh
                 return
             end
+        case help
+            if test (count $tokens) -eq $i
+                printf '%s\n' ` + rgitSubcommands + `
+            end
+            return
         case '*'
             return
     end
@@ -570,6 +588,14 @@ Register-ArgumentCompleter -Native -CommandName rgit -ScriptBlock {
                 }
                 return
             }
+        }
+        help {
+            if ($currentIndex -eq ($commandIndex + 1)) {
+                foreach ($subcommand in $rgitSubcommands) {
+                    Emit-Completion -Text $subcommand
+                }
+            }
+            return
         }
         default { return }
     }

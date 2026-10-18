@@ -95,6 +95,12 @@ func TestRun_TopLevelDispatch(t *testing.T) {
 		{name: "--help", args: []string{"--help"}, wantStdout: "usage: rgit"},
 		{name: "-h", args: []string{"-h"}, wantStdout: "usage: rgit"},
 		{name: "help", args: []string{"help"}, wantStdout: "usage: rgit"},
+		{name: "help --help", args: []string{"help", "--help"}, wantStdout: "usage: rgit"},
+		{name: "help -h", args: []string{"help", "-h"}, wantStdout: "usage: rgit"},
+		{
+			name: "help unknown command", args: []string{"help", "frobnicate"},
+			wantCode: exitcode.InvalidUsage, wantStderr: `unknown command "frobnicate"`,
+		},
 		{name: "--version", args: []string{"--version"}, wantStdout: "rgit v0.0.0-test"},
 		{name: "version", args: []string{"version"}, wantStdout: "rgit v0.0.0-test"},
 		{
@@ -132,13 +138,38 @@ func TestRun_SubcommandHelp(t *testing.T) {
 		{"diff", "-h"},
 		{"commit", "--help"},
 		{"commit", "-h"},
+		{"help", "diff"},
+		{"help", "commit"},
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			t.Parallel()
 			stdout, _, code := runApp(t, append([]string{"-C", cwd}, args...)...)
 			qt.Assert(t, qt.Equals(code, exitcode.Success))
-			qt.Assert(t, qt.StringContains(stdout, "usage: rgit "+args[0]))
+			cmd := args[0]
+			if cmd == "help" {
+				cmd = args[1]
+			}
+			qt.Assert(t, qt.StringContains(stdout, "usage: rgit "+cmd))
 			qt.Assert(t, qt.StringContains(stdout, "--sym"))
+		})
+	}
+}
+
+func TestRun_HelpCommandMatchesFlagHelp(t *testing.T) {
+	t.Parallel()
+	cwd := t.TempDir()
+	for _, cmd := range []string{
+		"diff", "commit", "show", "blame", "log",
+		"context", "languages", "doctor", "completion", "symbols",
+	} {
+		t.Run(cmd, func(t *testing.T) {
+			t.Parallel()
+			wantOut, wantErr, wantCode := runApp(t, "-C", cwd, cmd, "--help")
+			gotOut, gotErr, gotCode := runApp(t, "-C", cwd, "help", cmd)
+			qt.Assert(t, qt.Equals(gotCode, wantCode))
+			qt.Assert(t, qt.Equals(gotOut, wantOut))
+			qt.Assert(t, qt.Equals(gotErr, wantErr))
+			qt.Assert(t, qt.Equals(gotCode, exitcode.Success))
 		})
 	}
 }
@@ -973,11 +1004,11 @@ func TestRun_Completion(t *testing.T) {
 		qt.Assert(t, qt.StringContains(stdout, "complete -F _rgit_completion rgit"))
 		qt.Assert(t, qt.StringContains(stdout, "rgit symbols"))
 		// docs/USAGE.md § Help: -h is --help's equivalent at the top level
-		// and on every subcommand -- eleven word lists (rgitSubcommands, and
-		// each of diff/commit/show/blame/log/context/languages/doctor/
-		// completion/symbols' own flags), so eleven occurrences of the pair
-		// in the order completion offers them.
-		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 11))
+		// and on every subcommand -- twelve word lists (rgitSubcommands at
+		// the first word and again after help, plus each of
+		// diff/commit/show/blame/log/context/languages/doctor/
+		// completion/symbols' own flags).
+		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 12))
 		assertShellParses(t, "bash", stdout)
 	})
 
@@ -988,7 +1019,7 @@ func TestRun_Completion(t *testing.T) {
 		qt.Assert(t, qt.Equals(stderr, ""))
 		qt.Assert(t, qt.StringContains(stdout, "compdef _rgit rgit"))
 		qt.Assert(t, qt.StringContains(stdout, "rgit symbols"))
-		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 11))
+		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 12))
 		assertShellParses(t, "zsh", stdout)
 	})
 
@@ -999,7 +1030,7 @@ func TestRun_Completion(t *testing.T) {
 		qt.Assert(t, qt.Equals(stderr, ""))
 		qt.Assert(t, qt.StringContains(stdout, "complete -c rgit -f -a '(__rgit_complete)'"))
 		qt.Assert(t, qt.StringContains(stdout, "rgit symbols"))
-		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 11))
+		qt.Assert(t, qt.Equals(strings.Count(stdout, "-h --help"), 12))
 		assertShellParses(t, "fish", stdout)
 	})
 

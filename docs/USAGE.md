@@ -252,6 +252,9 @@ encodes what the cap kept; the JSON text is not measured against 16 KiB.
 ## Help
 
 `rgit --help` / `-h` / `help` print the command list on stdout and exit 0.
+`rgit help <command>` prints that command's `--help` text and exits 0.
+`rgit help --help` and `rgit help -h` stay the top-level listing. An
+unknown `rgit help frobnicate` is 129 and names the command.
 `diff` and `commit` `--help`/`-h` are generated from the flag set. Other
 commands print hand-written usage. A bare `rgit` is 129, not help.
 

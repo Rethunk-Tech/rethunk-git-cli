@@ -100,9 +100,11 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 	}
 
 	switch args[0] {
-	case "--help", "-h", "help":
+	case "--help", "-h":
 		fmt.Fprint(stdout, topLevelHelp)
 		return exitcode.Success
+	case "help":
+		return runHelp(ctx, dir, args[1:], stdout, stderr)
 	case "--version", "version":
 		// The first line stays byte-identical to what scripts and
 		// cmd/rgit-install already parse (docs/USAGE.md) -- everything a
@@ -149,6 +151,44 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 		return runSymbols(ctx, dir, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "rgit: unknown command %q\n", args[0])
+		fmt.Fprintln(stderr, usageLine)
+		return exitcode.InvalidUsage
+	}
+}
+
+// runHelp is `rgit help` and `rgit help <command>`. Bare help, and help
+// with an extra --help/-h, stay the top-level listing. A known command
+// name reprints that command's --help text without opening a repository.
+func runHelp(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
+	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
+		fmt.Fprint(stdout, topLevelHelp)
+		return exitcode.Success
+	}
+	cmd := args[0]
+	helpArgs := []string{"--help"}
+	switch cmd {
+	case "diff":
+		return runDiff(ctx, dir, helpArgs, stdout, stderr)
+	case "commit":
+		return runCommit(ctx, dir, helpArgs, stdout, stderr)
+	case "show":
+		return runShow(ctx, dir, helpArgs, stdout, stderr)
+	case "blame":
+		return runBlame(ctx, dir, helpArgs, stdout, stderr)
+	case "log":
+		return runLog(ctx, dir, helpArgs, stdout, stderr)
+	case "context":
+		return runContext(ctx, dir, helpArgs, stdout, stderr)
+	case "languages":
+		return runLanguages(ctx, dir, helpArgs, stdout, stderr)
+	case "doctor":
+		return runDoctor(ctx, dir, helpArgs, stdout, stderr)
+	case "completion":
+		return runCompletion(helpArgs, stdout, stderr)
+	case "symbols":
+		return runSymbols(ctx, dir, helpArgs, stdout, stderr)
+	default:
+		fmt.Fprintf(stderr, "rgit: unknown command %q\n", cmd)
 		fmt.Fprintln(stderr, usageLine)
 		return exitcode.InvalidUsage
 	}

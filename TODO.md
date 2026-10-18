@@ -112,66 +112,6 @@ restored no `parser.c` does the same, rather than compiling SQL-less
 artifacts. `make install` without the CLI still succeeds and installs an
 SQL-less `rgit`.
 
-## `rgit help <command>` still prints top-level help
-
-`rgit help` is a top-level alias of `--help`/`-h`: `Run` matches `help` as
-`args[0]` and writes `topLevelHelp` (`internal/app/app.go:97–99`). Any
-further words are ignored, so `rgit help diff` exits 0 with the command
-list, not `diff`'s own help. Git's `git help <command>` shows that
-command. `docs/USAGE.md` § Help (`:494`) names only the three top-level
-spellings and `rgit <command> --help`.
-
-Dispatch `rgit help <command>` to the same help that `rgit <command>
---help` already prints, exit 0. Bare `rgit help` stays top-level.
-Unknown `rgit help frobnicate` is exit 129 with the existing unknown-
-command sentence. Do not open a pager or man page. `rgit version` stays
-the version report, not help.
-
-This changes a currently successful `rgit help diff` (top-level text,
-exit 0). Tests that only pin `[]string{"help"}` (`internal/app/app_test.go:97`)
-do not cover the extra word; adding coverage is part of the work.
-
-Rejected: treating `help` as unknown unless it is the sole argument.
-Rejected: `git help`'s man-page/pager path.
-
-### Read
-
-1. `internal/app/app.go:97` `case "--help", "-h", "help"` — prints
-   `topLevelHelp` and returns. Extra args are never inspected.
-2. `internal/app/app.go:109` onward — the command switch `diff`,
-   `commit`, `show`, `blame`, `log`, `context`, `languages`, `doctor`,
-   `completion`, `symbols`. Each already accepts `--help`/`-h`.
-3. `docs/USAGE.md:494` — documents the three top-level spellings and
-   per-command `--help`/`-h`, not `help <command>`.
-4. `internal/app/app_test.go:81` `TestRun_TopLevelDispatch` — `help` with
-   no extra args. `cmd/rgit/rgit_e2e_test.go` loops `"--help", "-h",
-   "help"` the same way.
-
-### Traps
-
-- **`rgit help` with no argument must stay top-level.** Routing through
-  a missing-command error would change the documented exit 0.
-- **`rgit help --help` is still top-level help**, not a nested usage
-  error: `--help` as the second word is the command whose help was
-  requested only if we treat it as a command name. Keep the first-word
-  `help` alias: extra `--help`/`-h` still print `topLevelHelp`.
-- **Do not send `help diff` through `runDiff` with rewritten args** if
-  that would open a repository. Help must stay a no-repo path, matching
-  `rgit diff --help` today (`parseFlagsOrHelp` / each command's `-h`
-  branch).
-- **Completion lists `help` as an alias**, not a command that takes a
-  subcommand (`internal/app/completion.go` `rgitSubcommands`). Offering
-  command names after `help` is in scope; do not invent a second
-  completion word list.
-
-### Acceptance
-
-`rgit help` and `rgit help --help` still print `topLevelHelp` and exit 0.
-`rgit help diff` (and each other dispatched command) prints that
-command's `--help` text, byte-identical, exit 0, with no repository.
-`rgit help frobnicate` is exit 129 and names the unknown command.
-`rgit diff --help` is unchanged.
-
 ## `rgit diff --json` is missing beside `--porcelain`
 
 `languages`, `doctor`, `symbols`, and `log` each pair `--porcelain` with
