@@ -172,7 +172,7 @@ type Language interface {
 // must refuse a FILE:SYMBOL anchor against: JSON, YAML and TOML grammars do
 // not always agree with where a spliced extent belongs, and no compiler
 // downstream catches the malformed blob -- it lands in HEAD looking like a
-// normal commit (the refusal lives in internal/synth's openFilePlan).
+// normal commit (the refusal lives in refuseStructuredDataAnchors).
 // Naming the path instead is unaffected.
 //
 // Absence means no, the same default ImportMatcher uses.
@@ -182,7 +182,7 @@ type StructuredDataLanguage interface {
 }
 
 // IsStructuredData reports whether lang implements StructuredDataLanguage
-// and answers true -- the one test internal/synth's openFilePlan applies to
+// and answers true -- the one test refuseStructuredDataAnchors applies to
 // every FILE:SYMBOL anchor before staging it.
 func IsStructuredData(lang Language) bool {
 	sd, ok := lang.(StructuredDataLanguage)

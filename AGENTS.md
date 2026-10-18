@@ -41,13 +41,13 @@ Breaking one is silent. Mechanism: `internal/synth` (splice order, EOF newline) 
 
 | Invariant | Why |
 | --- | --- |
-| `hash-object` **must** carry `--path` | Skips `.gitattributes`/LFS filters |
+| `hash-object` **must** carry `--path` | Without `--path`, filters are bypassed |
 | EOF newline inherited, never normalized | Git tracks a missing EOF newline |
 | Multiple extents apply in **reverse byte-offset order** | Earlier replacements invalidate later offsets |
 | Resolve every target before staging any | Failure must leave index untouched |
 | Resolver indexes bare **and** qualified names | Bare absence → "did you mean" not "qualify it" |
 | `@imports` spans N nodes | Go: one `import_declaration`; TS/Python: one `import_statement` per import |
-| `commit` refuses `FILE:SYMBOL` on JSON/YAML/TOML | Spliced extent may disagree with grammar |
+| `commit` refuses `FILE:SYMBOL` on JSON/JSONC/JSON5/YAML/TOML | Spliced extent may disagree with grammar |
 
 ## Resolution model
 

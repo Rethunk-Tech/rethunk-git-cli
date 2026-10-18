@@ -221,10 +221,11 @@ collapsing by hand.
 make lint   # golangci-lint run ./...
 ```
 
-[`.golangci.yml`](.golangci.yml) keeps the default linter set (errcheck,
-govet, ineffassign, staticcheck, unused) with one deliberate tuning: an
-errcheck exemption for the `fmt.Fprint*` calls that report an outcome to the
-caller's own stdout/stderr, where a second failure has nowhere to go.
+[`.golangci.yml`](.golangci.yml) uses `default: standard` plus the fleet
+canon enable list (`gosec`, `errorlint`, `godox`, and the rest named under
+`linters.enable`) with one deliberate errcheck exemption: the `fmt.Fprint*`
+calls that report an outcome to the caller's own stdout/stderr, where a
+second failure has nowhere to go.
 
 ## Dependencies
 

@@ -4,7 +4,7 @@
 
 - **Go 1.27+** with cgo enabled — the tree-sitter grammars are C.
 - **git 2.32+** on `PATH` — the newest behaviour any code path relies on
-  (`git commit --trailer`, `internal/gitx.go`). `rgit doctor` checks the
+  (`git commit --trailer`, `internal/gitx/gitx.go`). `rgit doctor` checks the
   resolved version, not just presence, and reports it as informational
   rather than refusing to run below the floor.
 - Optionally, a **language server** per language you want cross-checked
