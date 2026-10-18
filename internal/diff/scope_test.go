@@ -3,6 +3,8 @@ package diff
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -341,5 +343,22 @@ func TestPrefetchBlobs_UnmergedPathReadsWorktree(t *testing.T) {
 	content, exists, err := indexSide().read(t.Context(), repo, dir, "conflict.txt", cache)
 	if err != nil || !exists || string(content) != "<<<<<<<\n" {
 		t.Fatalf("indexSide.read = %q, %v, %v; want worktree content", content, exists, err)
+	}
+}
+
+func TestWorktreeMode_RefusesSymlinkEscape(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	outside := t.TempDir()
+	secret := filepath.Join(outside, "secret")
+	if err := os.WriteFile(secret, []byte("not in root\n"), 0o755); err != nil { //nolint:gosec // executable mode is the outside file Stat would have reported
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secret, filepath.Join(dir, "link.go")); err != nil {
+		t.Fatal(err)
+	}
+	mode, found, err := worktreeSide().mode(t.Context(), nil, dir, "link.go")
+	if err == nil || found || mode != "" {
+		t.Fatalf("worktreeMode(symlink escape) = %q, %v, %v; want empty, false, an error", mode, found, err)
 	}
 }

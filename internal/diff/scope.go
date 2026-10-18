@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
@@ -84,14 +83,7 @@ func (s contentSide) read(ctx context.Context, repo *gitx.Repo, root, path strin
 func (s contentSide) mode(ctx context.Context, repo *gitx.Repo, root, path string) (mode string, found bool, err error) {
 	switch s.kind {
 	case sideWorktree:
-		info, err := os.Stat(filepath.Join(root, path))
-		if err != nil {
-			if os.IsNotExist(err) {
-				return "", false, nil
-			}
-			return "", false, err
-		}
-		return util.GitFileMode(info), true, nil
+		return worktreeMode(root, path)
 	case sideIndex:
 		return repo.LsFilesStage(ctx, path)
 	case sideRev:
@@ -102,6 +94,30 @@ func (s contentSide) mode(ctx context.Context, repo *gitx.Repo, root, path strin
 		return entry.Mode, true, nil
 	}
 	return "", false, fmt.Errorf("diff: unknown content side kind %d", s.kind)
+}
+
+// worktreeMode is contentSide.mode's worktree branch: OpenRoot so a symlink
+// that climbs out of root is refused the same way ReadFileIfExists already
+// refuses it, instead of os.Stat following the escape and reporting an
+// outside file's mode.
+func worktreeMode(rootDir, path string) (mode string, found bool, err error) {
+	root, err := os.OpenRoot(rootDir)
+	if err != nil {
+		return "", false, err
+	}
+	defer func() {
+		if closeErr := root.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+	info, err := root.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	return util.GitFileMode(info), true, nil
 }
 
 // blobCache holds every git-backed blob buildFileReport's own per-file loop
