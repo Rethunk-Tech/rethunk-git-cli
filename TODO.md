@@ -68,68 +68,49 @@ still resolves under the current name and does not follow the rename.
 The same split holds for `blame` and `show`; `show` still prints the
 oldest segment’s bytes.
 
-## make cross can ship SQL-less binaries without failing
+## CI cross can still skip SQL generation
 
-[`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) “Build and platform limits”
-(lines 86–100) is the contract that ships today. SQL ships only behind
-the `rgit_sql` build tag (94–96). `make cross` carries SQL only when the
-build host can generate the parser, which needs the tree-sitter CLI;
-without it every `dist/` binary is SQL-less, the same fallback `make
-install` makes (97–100).
-
-`make cross` fails when the host cannot generate the SQL parser, so it
-does not publish `dist/` binaries that lack SQL. A host with the CLI
-keeps shipping SQL. Keep the `rgit_sql` build tag. Add no languages.
-`make install`’s local fallback stays: a machine without the CLI still
-gets a working `rgit` without SQL.
+`make cross` now fails when `-generate-only` does not produce the parser
+(`cmd/rgit-install`). `make install` still falls back to an SQL-less host
+binary. Keep the `rgit_sql` build tag. Add no languages.
 
 ### Read
 
 `SQL_TAGS` (`Makefile:26`) is `-tags rgit_sql` only when
 `internal/resolve/sqlgrammar/csrc/parser.c` exists (`Makefile:22–26`).
 `sql-parser` (`Makefile:144–145`) runs
-`go run ./cmd/rgit-install -generate-only`. `cross` depends on it
-(`Makefile:147`), then builds linux/amd64, linux/arm64, and
-windows/amd64 with `$(SQL_TAGS)` (`Makefile:170–186`). The comment at
-`Makefile:129–135` records the current choice: without the CLI,
-`SQL_TAGS` is empty and every target builds SQL-less.
+`go run ./cmd/rgit-install -generate-only`. `cross` and each
+`cross-linux-*` / `cross-windows-*` target depend on it
+(`Makefile:147`, `Makefile:170–186`).
 
-`-generate-only` returns after generation and exits 0 when the CLI is
-absent (`cmd/rgit-install/main.go:98–107`). `generateSQLParser` reports
-the miss and continues without SQL (`cmd/rgit-install/main.go:319–335`).
+`-generate-only` exits non-zero when `sql` is false
+(`cmd/rgit-install/main.go`). `generateSQLParser` still reports the miss
+and continues without SQL on the `make install` path
+(`cmd/rgit-install/main.go`).
 
 ### Traps
 
-A CI runner without the tree-sitter CLI must fail the job, not skip SQL
-quietly. `.github/workflows/ci.yml` records the opposite at 103–104, and
-the cross job installs the CLI only on a parser-cache miss
-(`ci.yml:132–135`) before `make -j3 -o sql-parser cross` (`ci.yml:143`).
-`release.yml` installs the CLI and then runs `make cross`
-(`release.yml:54–60`). The later `languages | grep sql` check
-(`release.yml:64–69`) is a publish-time net, not a substitute for failing
-before any `dist/` binary is written.
+The remaining fail-open is CI, not Make’s parallel graph. The cross job
+installs the tree-sitter CLI only on a parser-cache miss, then runs
+`make -j3 -o sql-parser cross`, which never re-runs generation. A cache
+hit with no `parser.c` still compiles SQL-less `dist/` binaries. The
+cross-job comment records that skip. `release.yml` installs the CLI and
+then runs `make cross`; its `languages | grep sql` check is a
+publish-time net, not a substitute for failing before any `dist/` binary
+is written.
 
-`cross-linux-amd64`, `cross-linux-arm64`, and `cross-windows-amd64` do
-not depend on `sql-parser` themselves (`Makefile:170–186`); only `cross`
-lists it (`Makefile:147`). A parallel `make -j cross` can start those
-recipes before `sql-parser` finishes, and each recipe `mkdir`s `dist/`
-and writes its binary as soon as it runs. The failure has to land before
-any of those recipes writes a `dist/` binary.
-
-`make install`’s local fallback can stay. The installer retries without
-SQL when the SQL build fails (`cmd/rgit-install/main.go:131–139`), and
-`docs/INSTALL.md` promises that fallback at 119–122 and 144–146. Leave
-that promise. Do not drop the `rgit_sql` tag, and add no languages.
-`docs/LIMITATIONS.md` 97–100 and `docs/INSTALL.md` 111–122 describe the
-silent cross fallback and change in the same commit as the code, later.
+`make install`’s local fallback stays. The installer retries without SQL
+when the SQL build fails (`cmd/rgit-install/main.go`), and
+`docs/INSTALL.md` promises that fallback. Do not drop the `rgit_sql`
+tag, and add no languages.
 
 ### Acceptance
 
-`make cross` on a host without the tree-sitter CLI exits non-zero and
-writes no `dist/` binary. `make cross` on a host with the CLI still
-produces an SQL-capable binary (`languages` includes `sql`, built with
-`-tags rgit_sql`). `make install` without the CLI still succeeds and
-installs an SQL-less `rgit`.
+A CI cross run whose SQL parser cache is cold without the tree-sitter
+CLI exits non-zero and writes no `dist/` binary. A cache hit that
+restored no `parser.c` does the same, rather than compiling SQL-less
+artifacts. `make install` without the CLI still succeeds and installs an
+SQL-less `rgit`.
 
 ## Settled by measurement — do not re-litigate
 

@@ -20,9 +20,9 @@ endif
 ZIG ?= zig
 
 # Lazily evaluated, so it re-checks after the sql-parser target below has
-# had its chance to generate. A host without the tree-sitter CLI simply
-# leaves csrc/ absent and every cross target builds without SQL, the same
-# fallback `make install` already promises.
+# had its chance to generate. sql-parser itself fails when generation
+# cannot run; this still lets a caller who already has parser.c skip a
+# second generate.
 SQL_TAGS = $(if $(wildcard $(SQL_CSRC)/parser.c),-tags rgit_sql,)
 
 .DEFAULT_GOAL := help
@@ -131,8 +131,9 @@ clean:
 # the per-target cost is only compiling that C, measured at ~6-7s per target
 # with zig cc. The sql-parser prerequisite below delegates generation to
 # cmd/rgit-install, keeping -tags rgit_sql and generation in one place
-# (AGENTS.md § Delegation boundary). Without the tree-sitter CLI, SQL_TAGS
-# is empty and every target builds SQL-less rather than failing.
+# (AGENTS.md § Delegation boundary). Without the tree-sitter CLI,
+# -generate-only exits non-zero, so `make cross` writes no dist/ binary.
+# `make install` still falls back to an SQL-less host build.
 #
 # Filenames carry CROSS_VERSION so a second `make cross` at a different tag
 # cannot silently overwrite the previous run's artifacts, and SHA256SUMS

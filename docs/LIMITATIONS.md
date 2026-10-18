@@ -94,9 +94,9 @@ Full anchor and qualification rules: [`ANCHORS.md`](ANCHORS.md).
 - **SQL ships only behind the `rgit_sql` build tag.** A plain build works
   identically without it; a `.sql` anchor then exits 9 like any other
   unsupported language. Detail: [`INSTALL.md`](INSTALL.md#sql-support).
-- **`make cross` carries SQL only when the build host can generate the
-  parser** — that needs the tree-sitter CLI. Without it, every `dist/` binary
-  is SQL-less, the same fallback `make install` makes. Detail:
+- **`make cross` needs the tree-sitter CLI.** Without it, generation exits
+  non-zero and no `dist/` binary is written. `make install` still falls back
+  to an SQL-less host binary. Detail:
   [`INSTALL.md`](INSTALL.md#cross-builds).
 
 ## Symlinks, submodules, renames, and content filters

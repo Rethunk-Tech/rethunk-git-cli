@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -254,6 +255,29 @@ func TestGenerateSQLParserWith(t *testing.T) {
 		func(string) (string, error) { return "", os.ErrNotExist })
 	qt.Assert(t, qt.IsFalse(ok))
 	qt.Assert(t, qt.StringContains(msg, "tree-sitter CLI not found on PATH"))
+}
+
+func TestGenerateOnlyExitsNonZeroWhenSQLSkipped(t *testing.T) {
+	t.Parallel()
+	// Process-level contract `make cross` relies on: hiding the CLI must
+	// not look like generate-only success. PATH is a temp dir of required
+	// tools only, so a host that does have tree-sitter still hits this
+	// branch.
+	binDir := t.TempDir()
+	for _, name := range []string{"go", "git", "gcc", "cc", "clang"} {
+		src, err := exec.LookPath(name)
+		if err != nil {
+			continue
+		}
+		qt.Assert(t, qt.IsNil(os.Symlink(src, filepath.Join(binDir, name))))
+	}
+	cmd := exec.CommandContext(t.Context(), "go", "run", ".", "-generate-only")
+	cmd.Env = append(os.Environ(), "PATH="+binDir)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("generate-only exited 0 without SQL:\n%s", out)
+	}
+	qt.Assert(t, qt.StringContains(string(out), "SQL parser was not generated"))
 }
 
 func TestInstallArgs(t *testing.T) {

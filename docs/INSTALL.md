@@ -116,10 +116,11 @@ per-target cost is compiling that C, measured at ~6–7s each with `zig cc`
 (a full three-target `make cross` from a clean tree, generation included,
 measures ~28s).
 
-Without the tree-sitter CLI on the build host, nothing is generated and
-every target builds SQL-less instead of failing — the same fallback
-`make install` makes, with `.sql` anchors resolving as any other
-unsupported language does (exit 9, `docs/ANCHORS.md`).
+Without the tree-sitter CLI on the build host, `cmd/rgit-install
+-generate-only` exits non-zero, so `make cross` writes no `dist/` binary.
+`make install` still falls back to an SQL-less host binary, with `.sql`
+anchors resolving as any other unsupported language does (exit 9,
+`docs/ANCHORS.md`).
 
 `make cross` also regenerates `dist/SHA256SUMS` from that run's own
 artifacts, overwriting rather than appending, so the checksums on disk

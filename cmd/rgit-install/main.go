@@ -100,10 +100,13 @@ func main() {
 	// also building or installing a host binary it has no use for. Placed
 	// after generation and before everything else rgit's own build/install
 	// needs, so the flag does exactly what it says: the parser, then
-	// nothing else. A caller without the tree-sitter CLI still exits 0
-	// here -- generateSQLParser already reported why, and cross builds
-	// fall back to no SQL the same way `make install` does.
+	// nothing else. `make install` still falls back to an SQL-less binary
+	// when generation fails; this flag does not -- a skipped parser must
+	// not look like success, or `make cross` writes SQL-less dist/ artifacts.
 	if *generateOnly {
+		if !sql {
+			fatalf("SQL parser was not generated")
+		}
 		return
 	}
 
