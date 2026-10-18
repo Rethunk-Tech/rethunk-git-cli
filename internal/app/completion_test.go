@@ -20,7 +20,7 @@ import (
 // own Commands section (app.go) rather than a second hand-picked list:
 // every documented subcommand must appear, and every word in
 // rgitSubcommands must be either a documented subcommand or one of Run's
-// own top-level aliases/flags ("help", "-h", "--help", "--version" --
+// own top-level aliases/flags ("help", "version", "-h", "--help", "--version" --
 // none of which is a row in Commands:, since they are not dispatched the
 // same way a subcommand is).
 func TestCompletionSubcommands(t *testing.T) {
@@ -38,7 +38,7 @@ func TestCompletionSubcommands(t *testing.T) {
 		}
 	}
 
-	aliases := map[string]bool{"help": true, "-h": true, "--help": true, "--version": true, "-C": true}
+	aliases := map[string]bool{"help": true, "version": true, "-h": true, "--help": true, "--version": true, "-C": true}
 	for tok := range got {
 		if aliases[tok] {
 			continue

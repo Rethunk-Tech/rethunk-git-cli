@@ -8,6 +8,7 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit version` prints the same three-line version report as `rgit --version`. See [`docs/USAGE.md`](docs/USAGE.md#help).
 - `rgit context --json` prints the branch, diagnostic, diff, stage, and commit records as one JSON object, the same facts the text stream lists. Any other argument, including a second output mode, is exit 129. The text stream is unchanged. See [`docs/USAGE.md`](docs/USAGE.md#context).
 - `rgit symbols --json` prints each symbol as one JSON object, the same fields `--porcelain` lists, including `--with-lines` and `--with-filename`. `--json` with `--porcelain` is exit 129. The newline listing and `--porcelain` are unchanged. See [`docs/USAGE.md`](docs/USAGE.md#symbols).
 - `rgit languages --json` prints the compiled grammars as one JSON object, the same rows `--porcelain` lists. `--json` with `--porcelain` is exit 129. The aligned listing and `--porcelain` are unchanged. See [`docs/USAGE.md`](docs/USAGE.md#languages).

@@ -97,11 +97,11 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 	case "--help", "-h", "help":
 		fmt.Fprint(stdout, topLevelHelp)
 		return exitcode.Success
-	case "--version":
+	case "--version", "version":
 		// The first line stays byte-identical to what scripts and
 		// cmd/rgit-install already parse (docs/USAGE.md) -- everything a
 		// caller might want beyond the bare version goes on lines after it,
-		// never on it.
+		// never on it. `version` is git's own command spelling of --version.
 		fmt.Fprintf(stdout, "rgit %s\n", version)
 		fmt.Fprintln(stdout, versionGrammarsLine())
 		fmt.Fprintln(stdout, versionBuildLine())

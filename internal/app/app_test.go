@@ -96,6 +96,7 @@ func TestRun_TopLevelDispatch(t *testing.T) {
 		{name: "-h", args: []string{"-h"}, wantStdout: "usage: rgit"},
 		{name: "help", args: []string{"help"}, wantStdout: "usage: rgit"},
 		{name: "--version", args: []string{"--version"}, wantStdout: "rgit v0.0.0-test"},
+		{name: "version", args: []string{"version"}, wantStdout: "rgit v0.0.0-test"},
 		{
 			name: "unknown command", args: []string{"frobnicate"},
 			wantCode: exitcode.InvalidUsage, wantStderr: `unknown command "frobnicate"`,
