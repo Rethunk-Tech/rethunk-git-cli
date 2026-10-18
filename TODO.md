@@ -68,50 +68,6 @@ still resolves under the current name and does not follow the rename.
 The same split holds for `blame` and `show`; `show` still prints the
 oldest segment’s bytes.
 
-## CI cross can still skip SQL generation
-
-`make cross` now fails when `-generate-only` does not produce the parser
-(`cmd/rgit-install`). `make install` still falls back to an SQL-less host
-binary. Keep the `rgit_sql` build tag. Add no languages.
-
-### Read
-
-`SQL_TAGS` (`Makefile:26`) is `-tags rgit_sql` only when
-`internal/resolve/sqlgrammar/csrc/parser.c` exists (`Makefile:22–26`).
-`sql-parser` (`Makefile:144–145`) runs
-`go run ./cmd/rgit-install -generate-only`. `cross` and each
-`cross-linux-*` / `cross-windows-*` target depend on it
-(`Makefile:147`, `Makefile:170–186`).
-
-`-generate-only` exits non-zero when `sql` is false
-(`cmd/rgit-install/main.go`). `generateSQLParser` still reports the miss
-and continues without SQL on the `make install` path
-(`cmd/rgit-install/main.go`).
-
-### Traps
-
-The remaining fail-open is CI, not Make’s parallel graph. The cross job
-installs the tree-sitter CLI only on a parser-cache miss, then runs
-`make -j3 -o sql-parser cross`, which never re-runs generation. A cache
-hit with no `parser.c` still compiles SQL-less `dist/` binaries. The
-cross-job comment records that skip. `release.yml` installs the CLI and
-then runs `make cross`; its `languages | grep sql` check is a
-publish-time net, not a substitute for failing before any `dist/` binary
-is written.
-
-`make install`’s local fallback stays. The installer retries without SQL
-when the SQL build fails (`cmd/rgit-install/main.go`), and
-`docs/INSTALL.md` promises that fallback. Do not drop the `rgit_sql`
-tag, and add no languages.
-
-### Acceptance
-
-A CI cross run whose SQL parser cache is cold without the tree-sitter
-CLI exits non-zero and writes no `dist/` binary. A cache hit that
-restored no `parser.c` does the same, rather than compiling SQL-less
-artifacts. `make install` without the CLI still succeeds and installs an
-SQL-less `rgit`.
-
 ## `rgit diff --json` is missing beside `--porcelain`
 
 `languages`, `doctor`, `symbols`, and `log` each pair `--porcelain` with

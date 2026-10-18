@@ -168,20 +168,32 @@ define need-sha256sum
 	}
 endef
 
+# -o sql-parser (CI's cache-hit path) skips generation. Without this
+# check a restored empty csrc/ would compile SQL-less dist/ binaries.
+define need-sql-parser
+	@test -f $(SQL_CSRC)/parser.c || { \
+		echo "$@ needs $(SQL_CSRC)/parser.c -- run make sql-parser (tree-sitter CLI); not writing a SQL-less dist/ binary"; \
+		exit 1; \
+	}
+endef
+
 cross-linux-amd64: sql-parser
 	$(need-zig)
+	$(need-sql-parser)
 	mkdir -p $(DIST)
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 CC="$(ZIG) cc -target x86_64-linux-gnu" \
 		go build $(SQL_TAGS) -ldflags "$(LDFLAGS)" -o $(DIST)/rgit-$(CROSS_VERSION)-linux-amd64 ./cmd/rgit
 
 cross-linux-arm64: sql-parser
 	$(need-zig)
+	$(need-sql-parser)
 	mkdir -p $(DIST)
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC="$(ZIG) cc -target aarch64-linux-gnu" \
 		go build $(SQL_TAGS) -ldflags "$(LDFLAGS)" -o $(DIST)/rgit-$(CROSS_VERSION)-linux-arm64 ./cmd/rgit
 
 cross-windows-amd64: sql-parser
 	$(need-zig)
+	$(need-sql-parser)
 	mkdir -p $(DIST)
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC="$(ZIG) cc -target x86_64-windows-gnu" \
 		go build $(SQL_TAGS) -ldflags "$(LDFLAGS)" -o $(DIST)/rgit-$(CROSS_VERSION)-windows-amd64.exe ./cmd/rgit

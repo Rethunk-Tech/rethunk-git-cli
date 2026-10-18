@@ -110,7 +110,8 @@ jobs:
   #   it is cached on exactly those and regenerated (~60s) only when either
   #   changes. The CLI version is resolved rather than pinned so it stays
   #   latest. Without the CLI, `make sql-parser` fails rather than compiling
-  #   SQL-less binaries. A cache hit still skips generation (`-o sql-parser`).
+  #   SQL-less binaries. A cache hit still skips generation (`-o sql-parser`);
+  #   the job then requires parser.c so an empty restore cannot compile.
   # - GOCACHE gets a cache of its own, outside the one setup-go shares across
   #   every job under a single key: the cgo grammars (the SQL parser alone is
   #   17 MB of C) compile once per target and are reused until go.sum or the
@@ -144,6 +145,8 @@ jobs:
         env:
           TSCLI_VERSION: ${{ steps.tscli.outputs.version }}
         run: npm install -g "tree-sitter-cli@$TSCLI_VERSION" && make sql-parser
+      - name: require generated SQL parser
+        run: test -f internal/resolve/sqlgrammar/csrc/parser.c
       - run: go test -tags rgit_sql -short ./...
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

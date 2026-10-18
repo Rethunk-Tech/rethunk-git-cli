@@ -10,6 +10,10 @@ Notable changes to `rgit`. The format follows
 
 - `rgit help <command>` prints that command's `--help` text. Bare `rgit help` and `rgit help --help` stay the top-level listing. See [`docs/USAGE.md`](docs/USAGE.md#help).
 
+### Fixed
+
+- CI cross-compile and `make cross-*` refuse to write `dist/` binaries when the SQL parser was not generated, including a cache hit that restored no `parser.c`. `make install` still falls back to an SQL-less host binary. See [`docs/INSTALL.md`](docs/INSTALL.md#cross-builds).
+
 ## [2.2.4] - 2026-10-18
 
 ### Added
