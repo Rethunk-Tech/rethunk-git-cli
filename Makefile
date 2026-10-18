@@ -38,7 +38,7 @@ help:
 	@echo "  test               go test ./...            (full suite, builds and execs the binary)"
 	@echo "  test-short         go test -short ./...      (unit lane -- the one a regression must fail)"
 	@echo "  xcheck             measure every grammar against its language server (needs all servers)"
-	@echo "  test-race          go test -race ./...       (full tree -- CI's own race job scopes to internal/lsp: jsonrpc2, the LSP spawn lock)"
+	@echo "  test-race          go test -race ./...       (full tree -- CI's own race job is go test -race -coverpkg=./... ./...)"
 	@echo "  cover              coverage for the full suite, -coverpkg=./... as CONTRIBUTING.md requires"
 	@echo "  cover-short        coverage for the -short lane"
 	@echo "  fix-diff           go fix -diff ./...        (preview; read before applying)"
@@ -167,19 +167,19 @@ define need-sha256sum
 	}
 endef
 
-cross-linux-amd64:
+cross-linux-amd64: sql-parser
 	$(need-zig)
 	mkdir -p $(DIST)
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 CC="$(ZIG) cc -target x86_64-linux-gnu" \
 		go build $(SQL_TAGS) -ldflags "$(LDFLAGS)" -o $(DIST)/rgit-$(CROSS_VERSION)-linux-amd64 ./cmd/rgit
 
-cross-linux-arm64:
+cross-linux-arm64: sql-parser
 	$(need-zig)
 	mkdir -p $(DIST)
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC="$(ZIG) cc -target aarch64-linux-gnu" \
 		go build $(SQL_TAGS) -ldflags "$(LDFLAGS)" -o $(DIST)/rgit-$(CROSS_VERSION)-linux-arm64 ./cmd/rgit
 
-cross-windows-amd64:
+cross-windows-amd64: sql-parser
 	$(need-zig)
 	mkdir -p $(DIST)
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC="$(ZIG) cc -target x86_64-windows-gnu" \
