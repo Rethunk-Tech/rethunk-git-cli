@@ -6,10 +6,13 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+## [2.2.4] - 2026-10-18
+
 ### Added
 
 - `rgit version` prints the same three-line version report as `rgit --version`. See [`docs/USAGE.md`](docs/USAGE.md#help).
-- `rgit log --json` prints the same hash and subject fields `--porcelain` lists, as one JSON object. `--json` with `--porcelain` or with `-p`/`--patch` is exit 129. The aligned listing and `--porcelain` are unchanged. See [`docs/USAGE.md`](docs/USAGE.md#log).
+- Commands that take `--json` wrap stdout in a schema envelope (`schema` plus the payload). `--json` with `--porcelain` or with `-p`/`--patch` is exit 129.
+- `rgit log --json` prints the same hash and subject fields `--porcelain` lists, as one JSON object. The aligned listing and `--porcelain` are unchanged. See [`docs/USAGE.md`](docs/USAGE.md#log).
 - `rgit context --json` prints the branch, diagnostic, diff, stage, and commit records as one JSON object, the same facts the text stream lists. Any other argument, including a second output mode, is exit 129. The text stream is unchanged. See [`docs/USAGE.md`](docs/USAGE.md#context).
 - `rgit symbols --json` prints each symbol as one JSON object, the same fields `--porcelain` lists, including `--with-lines` and `--with-filename`. `--json` with `--porcelain` is exit 129. The newline listing and `--porcelain` are unchanged. See [`docs/USAGE.md`](docs/USAGE.md#symbols).
 - `rgit languages --json` prints the compiled grammars as one JSON object, the same rows `--porcelain` lists. `--json` with `--porcelain` is exit 129. The aligned listing and `--porcelain` are unchanged. See [`docs/USAGE.md`](docs/USAGE.md#languages).
@@ -24,7 +27,11 @@ Notable changes to `rgit`. The format follows
 ### Fixed
 
 - `rgit-install -generate-only` exits non-zero when the SQL parser is not generated, so `make cross` no longer writes SQL-less `dist/` binaries. `make install` still falls back to an SQL-less host binary. See [`docs/INSTALL.md`](docs/INSTALL.md#cross-builds).
+- `rgit-install` drops a `git describe` value that would split `-ldflags` instead of stamping it into the binary.
 - `rgit context` exits 128 when the current branch has an upstream but `git rev-list HEAD...@{u}` fails, instead of printing a `B` record with `0/0`. See [`docs/CODES.md`](docs/CODES.md#rgit-context).
+- `rgit diff --worktree` refuses a mode file reached through a symlink that escapes the repository root.
+- Batch `cat-file` and `log -L` refuse a path that contains a newline or a NUL.
+- `rgit --sym FILE:NAME` splits the existing path instead of treating the combined token as a new pathspec.
 - An HTML id containing a dot (`a#toc-mod.io`) cross-checks against `vscode-html-language-server`. The dot stays part of the id; only a `.class` suffix appended after the full `tag#id` is the server's class list. See [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md#language-server-coverage).
 - An HTML cross-check refuses both anchors when one element's id is another's `tag#id` plus a class token (`<a id="toc-mod" class="io">` and `<a id="toc-mod.io">`). The language server emits one name for both, so neither is paired. See [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md#language-server-coverage).
 
