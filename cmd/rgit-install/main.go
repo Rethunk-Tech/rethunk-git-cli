@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -601,7 +602,19 @@ func gitVersion(repoRoot string) string {
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(string(out))
+	return parseGitVersion(strings.TrimSpace(string(out)))
+}
+
+// gitVersionOK is the subset of git-describe spellings safe to splice into
+// `go install -ldflags`. The go tool splits that string on spaces, so a tag
+// like "v1.0 -X main.version=pwned" would inject extra linker flags.
+var gitVersionOK = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/+-]*$`)
+
+func parseGitVersion(v string) string {
+	if gitVersionOK.MatchString(v) {
+		return v
+	}
+	return ""
 }
 
 func versionOrDev(v string) string {

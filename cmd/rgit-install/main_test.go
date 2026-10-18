@@ -30,6 +30,16 @@ func TestLdflags(t *testing.T) {
 	qt.Assert(t, qt.Equals(ldflags("v1.2.3"), "-s -w -X main.version=v1.2.3"))
 }
 
+func TestParseGitVersion(t *testing.T) {
+	t.Parallel()
+	qt.Assert(t, qt.Equals(parseGitVersion("v1.2.3"), "v1.2.3"))
+	qt.Assert(t, qt.Equals(parseGitVersion("v1.2.3-14-gabcdef0-dirty"), "v1.2.3-14-gabcdef0-dirty"))
+	qt.Assert(t, qt.Equals(parseGitVersion("v1.3.0+a7ece5f"), "v1.3.0+a7ece5f"))
+	// A tag containing spaces would become extra -ldflags tokens.
+	qt.Assert(t, qt.Equals(parseGitVersion("v1.0 -X main.version=pwned"), ""))
+	qt.Assert(t, qt.Equals(parseGitVersion(""), ""))
+}
+
 func TestVersionOrDev(t *testing.T) {
 	t.Parallel()
 	qt.Assert(t, qt.Equals(versionOrDev(""), "dev"))
