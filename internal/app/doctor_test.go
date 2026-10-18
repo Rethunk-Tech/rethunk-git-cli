@@ -48,7 +48,9 @@ func TestRun_DoctorJSON(t *testing.T) {
 
 	var top map[string]json.RawMessage
 	qt.Assert(t, qt.IsNil(json.Unmarshal([]byte(stdout), &top)))
-	qt.Assert(t, qt.DeepEquals(mapKeys(top), []string{"checks"}))
+	qt.Assert(t, qt.DeepEquals(mapKeys(top), []string{"checks", "schema"}))
+	qt.Assert(t, qt.Equals(strings.TrimSpace(string(top["schema"])), "1"))
+	qt.Assert(t, qt.StringContains(stdout, "{\n  \"schema\": 1"))
 
 	var checks []map[string]string
 	qt.Assert(t, qt.IsNil(json.Unmarshal(top["checks"], &checks)))

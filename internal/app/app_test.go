@@ -103,7 +103,7 @@ func TestRun_TopLevelDispatch(t *testing.T) {
 		},
 		{
 			name: "no command at all", args: nil,
-			wantCode: exitcode.InvalidUsage, wantStderr: "usage: rgit",
+			wantCode: exitcode.InvalidUsage, wantStderr: "rgit: no command given",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

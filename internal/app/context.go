@@ -13,7 +13,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"slices"
@@ -113,15 +112,13 @@ const contextByteBudget = 16384
 // runContext is hand-parsed. --json is an encoding of the same record
 // stream, not a filter. --help wins wherever it appears.
 func runContext(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
-	asJSON := false
+	asJSON := jsonFlag(ctx)
 	var extra []string
 	for _, arg := range args {
 		switch arg {
 		case "--help", "-h":
 			fmt.Fprint(stdout, contextHelp)
 			return exitcode.Success
-		case "--json":
-			asJSON = true
 		default:
 			extra = append(extra, arg)
 		}
@@ -275,6 +272,7 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 // contextReport is the machine-readable form of the text stream: one object,
 // one entry per record the byte budget kept, in that same order.
 type contextReport struct {
+	Schema  int                 `json:"schema"`
 	Records []map[string]string `json:"records"`
 }
 
@@ -290,10 +288,7 @@ func writeContextJSON(w io.Writer, stream string) error {
 			records = append(records, rec)
 		}
 	}
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	return enc.Encode(contextReport{Records: records})
+	return encodeJSON(w, contextReport{Schema: jsonSchema, Records: records})
 }
 
 // contextRecord turns one text-stream line into the JSON object's fields.

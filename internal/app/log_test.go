@@ -194,9 +194,12 @@ func TestRun_LogJSONAgreesWithPorcelain(t *testing.T) {
 	qt.Assert(t, qt.Equals(stderr, ""))
 
 	var top struct {
+		Schema  int                 `json:"schema"`
 		Commits []map[string]string `json:"commits"`
 	}
 	qt.Assert(t, qt.IsNil(json.Unmarshal([]byte(stdout), &top)))
+	qt.Assert(t, qt.Equals(top.Schema, 1))
+	qt.Assert(t, qt.StringContains(stdout, "{\n  \"schema\": 1"))
 	lines := strings.Split(strings.TrimRight(porcelain, "\n"), "\n")
 	qt.Assert(t, qt.Equals(len(top.Commits), len(lines)))
 	for i, line := range lines {
@@ -666,9 +669,12 @@ func TestRun_LogPathScopedOutputModes(t *testing.T) {
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stderr, ""))
 		var top struct {
+			Schema  int                 `json:"schema"`
 			Commits []map[string]string `json:"commits"`
 		}
 		qt.Assert(t, qt.IsNil(json.Unmarshal([]byte(stdout), &top)))
+		qt.Assert(t, qt.Equals(top.Schema, 1))
+		qt.Assert(t, qt.StringContains(stdout, "{\n  \"schema\": 1"))
 		lines := strings.Split(strings.TrimRight(porcelain, "\n"), "\n")
 		qt.Assert(t, qt.Equals(len(top.Commits), len(lines)))
 		for i, line := range lines {

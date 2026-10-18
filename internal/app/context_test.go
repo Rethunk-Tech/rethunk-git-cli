@@ -65,7 +65,9 @@ func TestRun_ContextJSONMatchesTextStream(t *testing.T) {
 
 	var top map[string]json.RawMessage
 	qt.Assert(t, qt.IsNil(json.Unmarshal([]byte(stdout), &top)))
-	qt.Assert(t, qt.DeepEquals(mapKeys(top), []string{"records"}))
+	qt.Assert(t, qt.DeepEquals(mapKeys(top), []string{"records", "schema"}))
+	qt.Assert(t, qt.Equals(strings.TrimSpace(string(top["schema"])), "1"))
+	qt.Assert(t, qt.StringContains(stdout, "{\n  \"schema\": 1"))
 
 	var records []map[string]string
 	qt.Assert(t, qt.IsNil(json.Unmarshal(top["records"], &records)))

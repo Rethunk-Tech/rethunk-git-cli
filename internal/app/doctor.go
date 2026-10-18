@@ -11,7 +11,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -54,7 +53,8 @@ Full reference: docs/USAGE.md
 // runDoctor's flag surface is doctor.go's own precedent for a command this
 // small: hand-parsed rather than pulling in pflag.
 func runDoctor(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
-	porcelain, asJSON, deep := false, false, false
+	porcelain, deep := false, false
+	asJSON := jsonFlag(ctx)
 	for _, a := range args {
 		switch a {
 		case "--help", "-h":
@@ -62,8 +62,6 @@ func runDoctor(ctx context.Context, dir string, args []string, stdout, stderr io
 			return exitcode.Success
 		case "--porcelain":
 			porcelain = true
-		case "--json":
-			asJSON = true
 		case "--deep":
 			deep = true
 		default:
@@ -178,6 +176,7 @@ func deepenServerCheck(ctx context.Context, check *prereq.Check, s lsp.ServerInf
 // the porcelain columns in lowercase so a consumer of either format reads
 // the same four facts.
 type doctorReport struct {
+	Schema int           `json:"schema"`
 	Checks []doctorCheck `json:"checks"`
 }
 
@@ -189,17 +188,14 @@ type doctorCheck struct {
 }
 
 func writeDoctorJSON(w io.Writer, essential, servers []prereq.Check) error {
-	out := doctorReport{Checks: make([]doctorCheck, 0, len(essential)+len(servers))}
+	out := doctorReport{Schema: jsonSchema, Checks: make([]doctorCheck, 0, len(essential)+len(servers))}
 	for _, c := range essential {
 		out.Checks = append(out.Checks, doctorCheckFrom("env", c))
 	}
 	for _, c := range servers {
 		out.Checks = append(out.Checks, doctorCheckFrom("server", c))
 	}
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	return enc.Encode(out)
+	return encodeJSON(w, out)
 }
 
 func doctorCheckFrom(kind string, c prereq.Check) doctorCheck {

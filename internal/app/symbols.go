@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -49,7 +48,7 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 	withLines := false
 	withFilename := false
 	porcelain := false
-	asJSON := false
+	asJSON := jsonFlag(ctx)
 	positionals := make([]string, 0, 1)
 	for _, arg := range args {
 		switch arg {
@@ -64,8 +63,6 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 			withFilename = true
 		case "--porcelain":
 			porcelain = true
-		case "--json":
-			asJSON = true
 		default:
 			positionals = append(positionals, arg)
 		}
@@ -148,6 +145,7 @@ type symbolRecord struct {
 }
 
 type symbolsReport struct {
+	Schema  int            `json:"schema"`
 	Symbols []symbolRecord `json:"symbols"`
 }
 
@@ -180,10 +178,7 @@ func symbolRecords(positionals []string, listings [][]string, showName, withLine
 }
 
 func writeSymbolsJSON(w io.Writer, records []symbolRecord) error {
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	return enc.Encode(symbolsReport{Symbols: records})
+	return encodeJSON(w, symbolsReport{Schema: jsonSchema, Symbols: records})
 }
 
 // symbolLines is one file's worth of runSymbols: resolve the path, pick the

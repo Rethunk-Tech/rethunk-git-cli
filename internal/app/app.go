@@ -17,7 +17,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 )
 
-const usageLine = "usage: rgit [--version] [-C <path>] <diff|commit|show|blame|log|context|languages|doctor|completion|symbols> [flags] [target...]"
+const usageLine = "usage: rgit [--version] [--json] [-C <path>] <diff|commit|show|blame|log|context|languages|doctor|completion|symbols> [flags] [target...]"
 
 // tsOnlyNotice is what any command that runs the diff cross-check --
 // currently rgit diff, rgit commit, and rgit context -- prints when no live
@@ -48,8 +48,9 @@ Commands:
   completion  Print a shell completion script (bash, zsh, fish, pwsh)
   symbols     List declared symbols in a worktree file
 
-Global flags (before the command):
-  -C <path>    run as if rgit was started in <path>
+Global flags:
+  -C <path>    run as if rgit was started in <path> (before the command)
+  --json       one JSON object on stdout (log, context, languages, doctor, symbols)
   --version    print the version and exit
   -h, --help   show this help and exit
 
@@ -76,10 +77,14 @@ func versionBuildLine() string {
 // supplied by the caller so the build-time -ldflags value stays attached to
 // package main.
 func Run(ctx context.Context, version string, args []string, stdout, stderr io.Writer) exitcode.Code {
+	// --json is stripped here so it can sit before or after the command,
+	// then handed to the subcommand through ctx rather than parsed again.
+	args, asJSON := takeJSON(args)
 	dir, args, code, ok := parseChdir(args, stderr)
 	if !ok {
 		return code
 	}
+	ctx = withJSONFlag(ctx, asJSON)
 
 	if len(args) == 0 {
 		// Bare `git` prints its own full help to stdout at exit 1 -- but
@@ -89,6 +94,7 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 		// of usage error: there is nothing to dispatch, so it keeps rgit's
 		// own uniform convention rather than adopting git's
 		// top-level-dispatcher-only quirk.
+		fmt.Fprintln(stderr, "rgit: no command given")
 		fmt.Fprintln(stderr, usageLine)
 		return exitcode.InvalidUsage
 	}
@@ -107,12 +113,24 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 		fmt.Fprintln(stdout, versionBuildLine())
 		return exitcode.Success
 	case "diff":
+		if code := refuseUnsupportedJSON(asJSON, "diff", stderr); code != exitcode.Success {
+			return code
+		}
 		return runDiff(ctx, dir, args[1:], stdout, stderr)
 	case "commit":
+		if code := refuseUnsupportedJSON(asJSON, "commit", stderr); code != exitcode.Success {
+			return code
+		}
 		return runCommit(ctx, dir, args[1:], stdout, stderr)
 	case "show":
+		if code := refuseUnsupportedJSON(asJSON, "show", stderr); code != exitcode.Success {
+			return code
+		}
 		return runShow(ctx, dir, args[1:], stdout, stderr)
 	case "blame":
+		if code := refuseUnsupportedJSON(asJSON, "blame", stderr); code != exitcode.Success {
+			return code
+		}
 		return runBlame(ctx, dir, args[1:], stdout, stderr)
 	case "log":
 		return runLog(ctx, dir, args[1:], stdout, stderr)
@@ -123,6 +141,9 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 	case "doctor":
 		return runDoctor(ctx, dir, args[1:], stdout, stderr)
 	case "completion":
+		if code := refuseUnsupportedJSON(asJSON, "completion", stderr); code != exitcode.Success {
+			return code
+		}
 		return runCompletion(args[1:], stdout, stderr)
 	case "symbols":
 		return runSymbols(ctx, dir, args[1:], stdout, stderr)

@@ -76,10 +76,13 @@ folds into 128.
 
 ## Output records
 
-`--porcelain` is tab-separated records, no header. `--json` is one object,
-mutually exclusive with `--porcelain` on `languages`, `doctor`, `symbols`,
-and `log`. `context` has no `--porcelain`; `--json` encodes the same stream.
-Reordering or adding a column is a breaking change.
+`--porcelain` is tab-separated records, no header. `--json` is one object
+with `"schema": 1` first, then the payload (`languages`, `checks`,
+`records`, `commits`, or `symbols`). Mutually exclusive with `--porcelain`
+on `languages`, `doctor`, `symbols`, and `log`. `context` has no
+`--porcelain`; `--json` encodes the same stream. Errors under `--json` stay
+text on stderr; the exit code is the verdict. Reordering or adding a
+column is a breaking change.
 
 ### The three `--porcelain` dialects
 
@@ -172,6 +175,7 @@ wiring, not reachability. `--in-repo` narrows rows, not shape.
 
 ```json
 {
+  "schema": 1,
   "languages": [
     {
       "name": "go",
@@ -216,6 +220,7 @@ a missing server or CLI is still 0.
 
 ```json
 {
+  "schema": 1,
   "checks": [
     {
       "kind": "env",
@@ -281,6 +286,7 @@ Order: `B` or `H`, then `S`, then `W`, then `F`, then `T`, then `C`, then
 
 ```json
 {
+  "schema": 1,
   "records": [
     {
       "ahead": "0",
@@ -348,6 +354,7 @@ Full object id. Newest first. Mutually exclusive with `-p`/`--patch`.
 
 ```json
 {
+  "schema": 1,
   "commits": [
     {
       "hash": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
@@ -376,6 +383,7 @@ unchanged. `SYMBOL` is last (unbounded); split on the first tab.
 
 ```json
 {
+  "schema": 1,
   "symbols": [
     {
       "file": "auth.go",

@@ -11,7 +11,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -48,7 +47,8 @@ Full reference: docs/USAGE.md
 // surfaces need -- matching doctor.go and completion.go's own minimal style
 // for a subcommand this small.
 func runLanguages(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
-	porcelain, asJSON, inRepo := false, false, false
+	porcelain, inRepo := false, false
+	asJSON := jsonFlag(ctx)
 	for _, a := range args {
 		switch a {
 		case "--help", "-h":
@@ -56,8 +56,6 @@ func runLanguages(ctx context.Context, dir string, args []string, stdout, stderr
 			return exitcode.Success
 		case "--porcelain":
 			porcelain = true
-		case "--json":
-			asJSON = true
 		case "--in-repo":
 			inRepo = true
 		default:
@@ -181,6 +179,7 @@ type languageRecord struct {
 }
 
 type languagesReport struct {
+	Schema    int              `json:"schema"`
 	Languages []languageRecord `json:"languages"`
 }
 
@@ -236,10 +235,7 @@ func renderLanguagesPorcelain(langs []resolve.LanguageInfo) string {
 }
 
 func writeLanguagesJSON(w io.Writer, langs []resolve.LanguageInfo) error {
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	return enc.Encode(languagesReport{Languages: languageRecords(langs)})
+	return encodeJSON(w, languagesReport{Schema: jsonSchema, Languages: languageRecords(langs)})
 }
 
 // gatedLanguageNames returns the Name of every registered adapter that is

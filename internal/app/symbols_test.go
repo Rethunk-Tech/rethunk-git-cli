@@ -437,9 +437,12 @@ func TestRun_SymbolsJSONAgreesWithPorcelain(t *testing.T) {
 		qt.Assert(t, qt.Equals(stderr, ""))
 
 		var top struct {
+			Schema  int                 `json:"schema"`
 			Symbols []map[string]string `json:"symbols"`
 		}
 		qt.Assert(t, qt.IsNil(json.Unmarshal([]byte(stdout), &top)))
+		qt.Assert(t, qt.Equals(top.Schema, 1))
+		qt.Assert(t, qt.StringContains(stdout, "{\n  \"schema\": 1"))
 		qt.Assert(t, qt.IsTrue(len(top.Symbols) > 0))
 
 		porcArgs := append([]string{"-C", dir, "symbols", "--porcelain"}, flags...)

@@ -38,7 +38,7 @@ func TestCompletionSubcommands(t *testing.T) {
 		}
 	}
 
-	aliases := map[string]bool{"help": true, "version": true, "-h": true, "--help": true, "--version": true, "-C": true}
+	aliases := map[string]bool{"help": true, "version": true, "-h": true, "--help": true, "--version": true, "--json": true, "-C": true}
 	for tok := range got {
 		if aliases[tok] {
 			continue

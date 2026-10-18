@@ -88,7 +88,9 @@ func TestRun_LanguagesJSON(t *testing.T) {
 
 	var top map[string]json.RawMessage
 	qt.Assert(t, qt.IsNil(json.Unmarshal([]byte(stdout), &top)))
-	qt.Assert(t, qt.DeepEquals(mapKeys(top), []string{"languages"}))
+	qt.Assert(t, qt.DeepEquals(mapKeys(top), []string{"languages", "schema"}))
+	qt.Assert(t, qt.Equals(strings.TrimSpace(string(top["schema"])), "1"))
+	qt.Assert(t, qt.StringContains(stdout, "{\n  \"schema\": 1"))
 
 	var rows []map[string]string
 	qt.Assert(t, qt.IsNil(json.Unmarshal(top["languages"], &rows)))

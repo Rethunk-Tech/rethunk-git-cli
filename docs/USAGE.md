@@ -27,7 +27,12 @@ binaries collapse to one `(untracked)` row.
 
 ## Global flags
 
-`-C <path>`, `--version`, and `-h`/`--help`, all **before** the command.
+`-C <path>` **before** the command. `--version`, `--json`, and `-h`/`--help`
+before or after it.
+
+`--json` prints one object on stdout (`log`, `context`, `languages`,
+`doctor`, `symbols`) and nothing else there. Human narration stays on
+stderr. Other commands: 129. Envelope: [`CODES.md`](CODES.md#output-records).
 
 `-C <path>` is `git -C`: discover the repo from there; relative pathspecs
 and anchors resolve against it. Must precede the command — `git commit -C`
@@ -412,6 +417,7 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 | `--porcelain` | (`show`) Length-framed extents. |
 | `--with-filename` | (`symbols`) `FILE<TAB>` prefix. |
 | `--porcelain` | (`symbols`) NUL records. |
+| `--json` | Global. One object on stdout for `log`, `context`, `languages`, `doctor`, `symbols`. Before or after the command. Other commands: 129. |
 | `--json` | (`symbols`) One object. Exclusive with `--porcelain`. |
 | `--follow-rename` | (`show`, `blame`, `log`) Re-resolve at each rename. Exclusive with `--source` (129). Plain path: 129. |
 | `--source REV` | (`show`, `blame`, `log`) Read/blame/walk `REV:FILE`. Unknown rev: 128. Absent path: 3. |
