@@ -16,7 +16,7 @@ import (
 
 // TestRunCommit_RefusesSymbolAnchorOnStructuredData pins the end-to-end
 // behaviour of the structured-data guard: a FILE:SYMBOL anchor into a
-// JSON, YAML, or TOML file is refused at exit 12 naming the file, and the
+// JSON, JSONC, JSON5, YAML, or TOML file is refused at exit 12 naming the file, and the
 // identical change committed by path still works -- the guard must never make
 // a structured-data file uncommittable, only unaddressable by symbol.
 func TestRunCommit_RefusesSymbolAnchorOnStructuredData(t *testing.T) {
@@ -54,6 +54,20 @@ func TestRunCommit_RefusesSymbolAnchorOnStructuredData(t *testing.T) {
 			before:     "title = \"before\"\n",
 			after:      "title = \"after\"\n",
 			anchorName: "title",
+		},
+		{
+			name:       "JSONC",
+			path:       "config.jsonc",
+			before:     `{"name": "before"}` + "\n",
+			after:      `{"name": "after"}` + "\n",
+			anchorName: "name",
+		},
+		{
+			name:       "JSON5",
+			path:       "config.json5",
+			before:     `{name: "before"}` + "\n",
+			after:      `{name: "after"}` + "\n",
+			anchorName: "name",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
