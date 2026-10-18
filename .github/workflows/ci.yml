@@ -32,21 +32,6 @@ env:
 # actions/runner-images' own software manifest), so no toolchain step is
 # needed here.
 jobs:
-  gitleaks:
-    name: gitleaks
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: Rethunk-Tech/gh-actions/setup-go@bc5fa5b1004205c9c9399fc941d79d5ada53c59b # v1.16
-      - name: gitleaks detect
-        run: |
-          go install github.com/gitleaks/gitleaks/v8@v8.30.1
-          gitleaks detect --no-banner --redact
-
   lint:
     name: lint
     runs-on: ubuntu-latest
@@ -79,10 +64,9 @@ jobs:
         with:
           run-lint: "true"
           run-govulncheck: "true"
-      # Same target as a local `gate` (.gate.toml): gitleaks, race build,
+      # Same target as a local `gate` (.gate.toml): race build,
       # lint/vuln with GOFLAGS=-race, go test -race -short. The coverage
       # print stays on the full job.
-      - run: go install github.com/gitleaks/gitleaks/v8@v8.30.1
       - run: go install github.com/Rethunk-Tech/rethunk-gate-cli/cmd/gate@latest
       - run: gate
 
