@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -223,6 +224,29 @@ func TestRun_ContextBranchRecordSortsFirstAndReportsNoUpstream(t *testing.T) {
 
 	branch := strings.TrimSpace(gitOut(t, dir, "rev-parse", "--abbrev-ref", "HEAD"))
 	qt.Assert(t, qt.StringContains(lines[0], "B\t"+branch+"\t"))
+}
+
+// TestRun_ContextFailsWhenRevListCannotCountUpstream pins that a configured
+// upstream whose rev-list walk fails is exit 128, not a silent B record of
+// 0/0. A PATH git that refuses rev-list after push -u keeps @{u} resolvable
+// and HEAD...@{u} uncountable.
+func TestRun_ContextFailsWhenRevListCannotCountUpstream(t *testing.T) {
+	dir := tempRepo(t)
+	remote := t.TempDir()
+	gitOut(t, remote, "init", "-q", "--bare")
+	gitOut(t, dir, "remote", "add", "origin", remote)
+	gitOut(t, dir, "push", "-q", "-u", "origin", "main")
+
+	realGit, err := exec.LookPath("git")
+	qt.Assert(t, qt.IsNil(err))
+	shimDir := t.TempDir()
+	shim := "#!/bin/sh\ncase \" $* \" in *\" rev-list \"*) echo 'shim: rev-list refused' >&2; exit 128;; esac\nexec '" + realGit + "' \"$@\"\n"
+	qt.Assert(t, qt.IsNil(os.WriteFile(filepath.Join(shimDir, "git"), []byte(shim), 0o755))) //nolint:gosec // executable git shim is the behavior under test
+	t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	_, stderr, code := runApp(t, "-C", dir, "context")
+	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))
+	qt.Assert(t, qt.StringContains(stderr, "rgit: "))
 }
 
 func TestRun_ContextDetachedHeadEmitsHashRecord(t *testing.T) {

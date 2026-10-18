@@ -154,10 +154,18 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 				detachedRecord = fmt.Sprintf("H\t%s\n", sha)
 			}
 		} else {
-			upstream, hasUpstream, _ := repo.Upstream(ctx)
+			upstream, hasUpstream, err := repo.Upstream(ctx)
+			if err != nil {
+				fmt.Fprintf(stderr, "rgit: %v\n", err)
+				return exitcode.GitFailure
+			}
 			ahead, behind := 0, 0
 			if hasUpstream {
-				ahead, behind, _ = repo.AheadBehind(ctx)
+				ahead, behind, err = repo.AheadBehind(ctx)
+				if err != nil {
+					fmt.Fprintf(stderr, "rgit: %v\n", err)
+					return exitcode.GitFailure
+				}
 			}
 			branchRecord = fmt.Sprintf("B\t%s\t%s\t%d\t%d\n", branch, upstream, ahead, behind)
 		}
