@@ -28,12 +28,13 @@ language has no grammar) -- never a silently widened, whole-file blame.
 
 --source <rev>  Blame <rev>:FILE instead: the lines the anchor resolves to
                 in that revision's blob, via the same read show --source
-                uses. FILE is the path's current name; this does not follow
-                renames. Mutually exclusive with --follow-rename (exit 129).
+                uses. FILE is the path's current name. Combined with
+                --follow-rename, the walk starts at <rev> and still
+                re-resolves at each later rename boundary.
                 An unknown revision is exit 128; a path absent at a known
                 one is exit 3.
 --follow-rename walks the file's rename history, re-resolving the symbol at
-each rename boundary against the HEAD blob, never the dirty worktree.
+each rename boundary against committed blobs, never the dirty worktree.
 Without it, blame stops at the current file name.
 
 -p, --porcelain passes straight through to git's own "git blame --porcelain"
@@ -61,11 +62,6 @@ func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.
 		1, blameHelp, stdout, stderr, false)
 	if done {
 		return code
-	}
-	if source != "" && followRename {
-		fmt.Fprintln(stderr, "rgit: --source and --follow-rename are mutually exclusive")
-		fmt.Fprint(stderr, blameHelp)
-		return exitcode.InvalidUsage
 	}
 	positional := positionals[0]
 
@@ -112,7 +108,11 @@ func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.
 		extra = append(extra, "--porcelain")
 	}
 	if followRename {
-		return runBlameFollowRename(ctx, repo, file, src, res, anchorName, extra, stdout, stderr)
+		startRev := "HEAD"
+		if source != "" {
+			startRev = source
+		}
+		return runBlameFollowRename(ctx, repo, startRev, file, src, res, anchorName, extra, stdout, stderr)
 	}
 
 	var out []byte
@@ -138,8 +138,8 @@ func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.
 // segment's blame is bounded by git's normal path history; after the nearest
 // rename, the next segment starts from the pre-rename path's parent commit and
 // resolves the anchor against that blob.
-func runBlameFollowRename(ctx context.Context, repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, anchorName string, extra []string, stdout, stderr io.Writer) exitcode.Code {
-	return walkRenameSegments(ctx, repo, "blame", file, anchorName, src, res, stderr, func(rev, file string, src []byte, res *resolve.Resolution, _ string, _ bool) exitcode.Code {
+func runBlameFollowRename(ctx context.Context, repo *gitx.Repo, startRev, file string, src []byte, res *resolve.Resolution, anchorName string, extra []string, stdout, stderr io.Writer) exitcode.Code {
+	return walkRenameSegments(ctx, repo, "blame", startRev, file, anchorName, src, res, stderr, func(rev, file string, src []byte, res *resolve.Resolution, _ string, _ bool) exitcode.Code {
 		start, end := lineRange(src, res.Extent)
 		out, err := repo.BlameRevision(ctx, rev, file, start, end, extra...)
 		if err != nil {

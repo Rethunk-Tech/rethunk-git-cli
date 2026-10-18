@@ -9,6 +9,7 @@ Notable changes to `rgit`. The format follows
 ### Added
 
 - `rgit help <command>` prints that command's `--help` text. Bare `rgit help` and `rgit help --help` stay the top-level listing. See [`docs/USAGE.md`](docs/USAGE.md#help).
+- `rgit log`, `blame`, and `show` accept `--source` together with `--follow-rename`: the rename walk starts at that revision. Each flag alone is unchanged. See [`docs/USAGE.md`](docs/USAGE.md#log).
 
 ### Fixed
 

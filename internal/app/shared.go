@@ -425,19 +425,23 @@ func refuseExtraArgs(cmdName string, args []string, stderr io.Writer, help strin
 	return exitcode.InvalidUsage
 }
 
-// walkRenameSegments walks file's rename history newest first. visit runs
-// on the current segment; blame and log run git -L there, and show keeps
-// the oldest extent. The re-resolve (cat-file, language, Resolve) is the
-// same for all three. cmdName is only the "blame", "log", or "show" in
-// the missing-blob and unsupported-language sentences.
-func walkRenameSegments(ctx context.Context, repo *gitx.Repo, cmdName, file, anchorName string, src []byte, res *resolve.Resolution, stderr io.Writer, visit func(rev, file string, src []byte, res *resolve.Resolution, renameCommit string, found bool) exitcode.Code) exitcode.Code {
+// walkRenameSegments walks file's rename history newest first, starting
+// at startRev (HEAD when empty). visit runs on the current segment; blame
+// and log run git -L there, and show keeps the oldest extent. The
+// re-resolve (cat-file, language, Resolve) is the same for all three.
+// cmdName is only the "blame", "log", or "show" in the missing-blob and
+// unsupported-language sentences.
+func walkRenameSegments(ctx context.Context, repo *gitx.Repo, cmdName, startRev, file, anchorName string, src []byte, res *resolve.Resolution, stderr io.Writer, visit func(rev, file string, src []byte, res *resolve.Resolution, renameCommit string, found bool) exitcode.Code) exitcode.Code {
 	ignoreCase, err := repo.IgnoreCase(ctx)
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: cannot read core.ignorecase: %v\n", err)
 		return exitcode.GitFailure
 	}
 
-	rev := "HEAD"
+	rev := startRev
+	if rev == "" {
+		rev = "HEAD"
+	}
 	for {
 		renameCommit, oldPath, found, err := repo.FindRename(ctx, rev, file)
 		if err != nil {

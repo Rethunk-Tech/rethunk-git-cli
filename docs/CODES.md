@@ -54,13 +54,13 @@ anchors are whole declarations.
 
 3, 4, 9 as usual. `--source`: unknown revision is **128**; path absent at
 a known revision is **3**. `cat-file` reports both as "no such object".
-`--source` + `--follow-rename`, a plain path, or no anchor: **129**.
+A plain path or no anchor: **129**.
 
 ### `blame` shares the anchor codes, not the staging ones
 
 3, 4, 9. Staging codes (1, 5–8, 10–12) do not apply. Past resolution,
-`git blame`'s exit folds into 128. `--source` as `show`. `--source` +
-`--follow-rename`: **129**.
+`git blame`'s exit folds into 128. `--source` as `show`. Combined with
+`--follow-rename`, the walk starts at that revision.
 
 ### `log` shares the anchor codes too, resolved against `HEAD`
 

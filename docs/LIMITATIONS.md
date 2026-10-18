@@ -86,11 +86,12 @@ does not fetch.
 `git log -L` follows a rename by line-range diff, so a rename that also
 moves the symbol can lose it. `--follow-rename` re-resolves at each
 rename boundary — [`USAGE.md`](USAGE.md#log-across-renames). Query the
-**current** name. `--source REV` does not follow and does not combine with
-`--follow-rename`.
+**current** name. `--source REV` without `--follow-rename` does not
+follow; with both flags the walk starts at `REV` and still re-resolves
+at each later rename.
 
-`blame --follow-rename` and `show --follow-rename` use that walk.
-`--source` does not combine with it.
+`blame --follow-rename` and `show --follow-rename` use that walk. Combined
+with `--source`, they start at that revision too.
 
 ## Language-server coverage
 

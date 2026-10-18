@@ -55,9 +55,9 @@ history is a question about what has already been committed, and git log
 --source <rev> resolves against <rev>:FILE instead, the same read show and
 blame --source use, then runs git log -L on that extent starting at <rev>.
 Both spellings (--source REV and --source=REV). FILE is the path's current
-name; this does not follow renames. Mutually exclusive with --follow-rename
-(exit 129). An unknown revision is exit 128; a path absent at a known one
-is exit 3.
+name. Combined with --follow-rename, the walk starts at <rev> and still
+re-resolves at each later rename boundary. An unknown revision is exit 128;
+a path absent at a known one is exit 3.
 Plain git log -L already follows a rename when git's similarity heuristic
 detects one, but a rename that also reshuffles the symbol can silently stop
 short. --follow-rename re-resolves the anchor's extent at each rename
@@ -260,12 +260,6 @@ func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr
 	if code := refuseLogFormatConflict(opts.porcelain, opts.asJSON, opts.patch, stderr); code != exitcode.Success {
 		return code
 	}
-	if opts.source != "" && opts.followRename {
-		fmt.Fprintln(stderr, "rgit: --source and --follow-rename are mutually exclusive")
-		fmt.Fprint(stderr, logHelp)
-		return exitcode.InvalidUsage
-	}
-
 	// History is a question about what has already been committed, never
 	// about an uncommitted worktree edit. The default resolves against
 	// HEAD's own blob so the derived line range matches `git log -L`, which
@@ -290,7 +284,11 @@ func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr
 		if opts.asJSON {
 			out = &buf
 		}
-		code := runLogFollowRename(ctx, repo, file, blob, res, anchorName, extra, out, stderr)
+		startRev := "HEAD"
+		if opts.source != "" {
+			startRev = opts.source
+		}
+		code := runLogFollowRename(ctx, repo, startRev, file, blob, res, anchorName, extra, out, stderr)
 		if code != exitcode.Success {
 			return code
 		}
@@ -363,8 +361,8 @@ func logDateArgs(since, until string, maxCount int, maxCountSet bool, extra []st
 // already re-derives how a fixed line range moves within one file's own
 // history, so only a rename crossing to a new path name -- found once per
 // segment, not once per commit -- needs a fresh resolve.
-func runLogFollowRename(ctx context.Context, repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, anchorName string, extra []string, stdout, stderr io.Writer) exitcode.Code {
-	return walkRenameSegments(ctx, repo, "log", file, anchorName, src, res, stderr, func(rev, file string, src []byte, res *resolve.Resolution, renameCommit string, found bool) exitcode.Code {
+func runLogFollowRename(ctx context.Context, repo *gitx.Repo, startRev, file string, src []byte, res *resolve.Resolution, anchorName string, extra []string, stdout, stderr io.Writer) exitcode.Code {
+	return walkRenameSegments(ctx, repo, "log", startRev, file, anchorName, src, res, stderr, func(rev, file string, src []byte, res *resolve.Resolution, renameCommit string, found bool) exitcode.Code {
 		start, end := lineRange(src, res.Extent)
 		// Bounded to the rename boundary when one was found -- otherwise
 		// this segment's own git log -L would walk straight through it and

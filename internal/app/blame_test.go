@@ -204,9 +204,8 @@ func TestRun_BlameSourceRevisionBlamesThatExtent(t *testing.T) {
 	qt.Assert(t, qt.StringContains(stdout, "return 1"))
 }
 
-// TestRun_BlameSourceRefusals pins the three exits --source adds: an unknown
-// revision is git's 128, a path absent at a real revision stays 3, and
-// combining it with --follow-rename is 129.
+// TestRun_BlameSourceRefusals pins the exits --source adds: an unknown
+// revision is git's 128, and a path absent at a real revision stays 3.
 func TestRun_BlameSourceRefusals(t *testing.T) {
 	t.Parallel()
 	dir := tempRepo(t)
@@ -225,10 +224,6 @@ func TestRun_BlameSourceRefusals(t *testing.T) {
 	_, stderr, code = runApp(t, "-C", dir, "blame", "--source")
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.StringContains(stderr, "--source requires a value"))
-
-	_, stderr, code = runApp(t, "-C", dir, "blame", "--source", "HEAD", "--follow-rename", "a.go:A")
-	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-	qt.Assert(t, qt.StringContains(stderr, "--source and --follow-rename are mutually exclusive"))
 }
 
 // TestRun_BlameDeletedWorktreeUsesHEAD keeps blame and its line range tied to
@@ -335,6 +330,31 @@ func TestRun_BlameFollowRenameCrossesARenameThatReordersTheSymbol(t *testing.T) 
 		qt.Assert(t, qt.Equals(stderr, ""))
 		qt.Assert(t, qt.StringContains(stdout, "return 3"))
 		qt.Assert(t, qt.StringContains(stdout, "return 1"))
+	})
+
+	t.Run("--source at HEAD with --follow-rename reaches the pre-rename path", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "blame", "--source", "HEAD", "--follow-rename", "new.go:Foo")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "return 3"))
+		qt.Assert(t, qt.StringContains(stdout, "return 1"))
+	})
+
+	t.Run("--source at the rename with --follow-rename still crosses it", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "blame", "--source", "HEAD~1", "--follow-rename", "new.go:Foo")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "return 2"))
+		qt.Assert(t, qt.StringContains(stdout, "return 1"))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "return 3")))
+	})
+
+	t.Run("--source without --follow-rename stays on the current name", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "blame", "--source", "HEAD", "new.go:Foo")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "return 3"))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "return 1")))
 	})
 
 	t.Run("--follow-rename preserves porcelain across segments", func(t *testing.T) {

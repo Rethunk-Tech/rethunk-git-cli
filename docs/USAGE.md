@@ -148,10 +148,10 @@ deprecated alias. All anchors resolve before any write.
 Default source: worktree, else `HEAD`. `--source <rev>` reads `<rev>:FILE`
 (both spellings). Unknown revision: 128. Path absent at a known
 revision: 3. Current name only unless `--follow-rename`, which prints the
-oldest segment (same walk as `blame`/`log`). `--source` +
-`--follow-rename`, a plain path, or zero anchors: 129. Unresolvable
-anchor: 3/4/9, never a whole-file dump. Nothing is written. One
-`--source` per invocation.
+oldest segment (same walk as `blame`/`log`). Combined with `--source`,
+the walk starts at that revision. A plain path or zero anchors: 129.
+Unresolvable anchor: 3/4/9, never a whole-file dump. Nothing is written.
+One `--source` per invocation.
 
 ## Blame
 
@@ -166,8 +166,9 @@ $ rgit blame --source v1.4.0 auth.go:ValidateToken
 
 `git blame -L start,end -- FILE` on the resolved extent. Worktree when
 present, else `HEAD`. `--source` as `show`. `--follow-rename` uses the
-rename-boundary walk and always reads `HEAD`. `--source` +
-`--follow-rename`: 129. Unresolvable: 3/4/9, never a whole-file blame.
+rename-boundary walk and reads committed blobs. Combined with `--source`,
+the walk starts at that revision. Unresolvable: 3/4/9, never a
+whole-file blame.
 
 `-p` is `--porcelain` (git blame's meaning, not patch). `--porcelain`
 passes through to `git blame --porcelain`.
@@ -186,10 +187,11 @@ first. **Patch-free by default**; `-p`/`--patch` is git's own `-L` output.
 each rename segment gets the same filters.
 
 Resolved against **`HEAD`**, not the worktree. `--source <rev>` resolves
-at that revision and starts `git log -L` there. `--source` +
-`--follow-rename`: 129. `git log -L` can lose a rename that also moves
-the symbol; `--follow-rename` re-resolves at each boundary. Query the
-current name. [`LIMITATIONS.md`](LIMITATIONS.md#history-across-renames).
+at that revision and starts `git log -L` there. Combined with
+`--follow-rename`, the walk starts at that revision and still
+re-resolves at each later rename. `git log -L` can lose a rename that
+also moves the symbol; `--follow-rename` re-resolves at each boundary.
+Query the current name. [`LIMITATIONS.md`](LIMITATIONS.md#history-across-renames).
 
 `--porcelain`: `HASH<TAB>SUBJECT`. `--json`: one object. Each exclusive
 with the other and with `-p`. [`CODES.md`](CODES.md#output-records).
@@ -422,7 +424,7 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 | `--porcelain` | (`symbols`) NUL records. |
 | `--json` | Global. One object on stdout for `log`, `context`, `languages`, `doctor`, `symbols`. Before or after the command. Other commands: 129. |
 | `--json` | (`symbols`) One object. Exclusive with `--porcelain`. |
-| `--follow-rename` | (`show`, `blame`, `log`) Re-resolve at each rename. Exclusive with `--source` (129). Plain path: 129. |
+| `--follow-rename` | (`show`, `blame`, `log`) Re-resolve at each rename. Combined with `--source`, starts at that revision. Plain path: 129. |
 | `--source REV` | (`show`, `blame`, `log`) Read/blame/walk `REV:FILE`. Unknown rev: 128. Absent path: 3. |
 | `--since DATE`, `--until DATE` | (`log`) Date bounds. Forwarded unparsed. |
 | `--follow` | (`log`, path form) Exactly one path (else 129). Not on `FILE:SYMBOL`. |
@@ -455,9 +457,8 @@ of its exclusions (including `--include`); `--dry-run` + `--push`;
 
 + a positional range; `-m` + `-F`; `--porcelain` + `--quiet` (`diff`);
 `--porcelain` + `-p` (`diff`, `log`); `--json` + `-p` (`log`);
-`--porcelain` + `--json` (`languages`, `doctor`, `symbols`, `log`);
-`--source` + `--follow-rename` (`show`, `blame`, `log`) → 129. One path
-as both path and symbol → 5 (`greet.go greet.go:A`).
+`--porcelain` + `--json` (`languages`, `doctor`, `symbols`, `log`) → 129.
+One path as both path and symbol → 5 (`greet.go greet.go:A`).
 
 `FILE:SYMBOL` on JSON/JSONC/JSON5/YAML/TOML → 12. Name the path.
 [`CODES.md`](CODES.md#exit-12-is-commits-alone).

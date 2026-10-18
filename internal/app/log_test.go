@@ -277,9 +277,12 @@ func TestRun_LogSourceRevisionListsThatExtent(t *testing.T) {
 		qt.Assert(t, qt.Not(qt.StringContains(stdout, "refactor: move A")))
 	}
 
-	_, stderr, code := runApp(t, "-C", dir, "log", "--source", "HEAD", "--follow-rename", "a.go:A")
-	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-	qt.Assert(t, qt.StringContains(stderr, "--source and --follow-rename are mutually exclusive"))
+	stdout, stderr, code := runApp(t, "-C", dir, "log", "--source", "HEAD~1", "--follow-rename", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	qt.Assert(t, qt.StringContains(stdout, "chore: initial"))
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "fix(b): bump B")))
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "refactor: move A")))
 }
 
 // TestRun_LogPathScopedSinceAndUntil pins the date-bounded second shape
@@ -782,6 +785,33 @@ func TestRun_LogFollowRenameCrossesARenameThatReordersTheSymbol(t *testing.T) {
 
 	t.Run("--follow-rename forwards date bounds across segments", func(t *testing.T) {
 		stdout, stderr, code := runApp(t, "log", "new.go:Foo", "--follow-rename", "--since=2021-01-01")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "fix: bump Foo"))
+		qt.Assert(t, qt.StringContains(stdout, "refactor: rename and reorder"))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "feat: add old.go")))
+	})
+
+	t.Run("--source at HEAD with --follow-rename reaches the pre-rename commit", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "log", "--source", "HEAD", "--follow-rename", "new.go:Foo")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.StringContains(stdout, "fix: bump Foo"))
+		qt.Assert(t, qt.StringContains(stdout, "refactor: rename and reorder"))
+		qt.Assert(t, qt.StringContains(stdout, "feat: add old.go"))
+	})
+
+	t.Run("--source at the rename with --follow-rename still crosses it", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "log", "--source", "HEAD~1", "--follow-rename", "new.go:Foo")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.Not(qt.StringContains(stdout, "fix: bump Foo")))
+		qt.Assert(t, qt.StringContains(stdout, "refactor: rename and reorder"))
+		qt.Assert(t, qt.StringContains(stdout, "feat: add old.go"))
+	})
+
+	t.Run("--source without --follow-rename stays on the current name", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "log", "--source", "HEAD", "new.go:Foo")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 		qt.Assert(t, qt.Equals(stderr, ""))
 		qt.Assert(t, qt.StringContains(stdout, "fix: bump Foo"))

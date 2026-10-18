@@ -25,11 +25,12 @@ to, with no trailing newline the file did not already carry.
 
 --source <rev>  Read <rev>:FILE instead of the worktree, the only way to read
                 a symbol as of a tag, branch, or commit. FILE is the path's
-                current name. Mutually exclusive with --follow-rename (exit 129).
+                current name. Combined with --follow-rename, the walk starts
+                at <rev> and still re-resolves at each later rename boundary.
 --follow-rename Re-resolves the symbol at each rename boundary and prints its
                 bytes from the oldest path segment. With no rename, reads the
-                HEAD blob rather than a dirty worktree. A plain path is refused
-                (exit 129).
+                committed blob rather than a dirty worktree. A plain path is
+                refused (exit 129).
 --porcelain     Frame every extent the way several are framed, so a script
                 need not special-case an argument list that happens to hold
                 one. Single-anchor and multi-anchor output are both framed;
@@ -77,18 +78,12 @@ func runShow(ctx context.Context, dir string, args []string, stdout, stderr io.W
 	if done {
 		return code
 	}
-	if source != "" && followRename {
-		fmt.Fprintln(stderr, "rgit: --source and --follow-rename are mutually exclusive")
-		fmt.Fprint(stderr, showHelp)
-		return exitcode.InvalidUsage
-	}
-
 	// Resolved in full before anything is written, the same "resolve every
 	// target before staging any" rule commit's own staging follows: a
 	// half-written stream is worse than none, because a caller reading it
 	// cannot tell a truncated extent from a complete one.
 	fetch := showSource(source)
-	if followRename {
+	if followRename && source == "" {
 		fetch = showHeadSource()
 	}
 	extents := make([][]byte, 0, len(positionals))
@@ -100,7 +95,11 @@ func runShow(ctx context.Context, dir string, args []string, stdout, stderr io.W
 		warnIfOrdinalAnchor(stderr, file, anchorName)
 		ext := src[res.Extent.Start:res.Extent.End]
 		if followRename {
-			ext, code = followRenameSymbol(ctx, repo, file, src, res, anchorName, stderr)
+			startRev := "HEAD"
+			if source != "" {
+				startRev = source
+			}
+			ext, code = followRenameSymbol(ctx, repo, startRev, file, src, res, anchorName, stderr)
 			if code != exitcode.Success {
 				return code
 			}
@@ -143,9 +142,9 @@ func showHeadSource() anchorSourceFunc {
 // one re-resolve against the pre-rename blob, the same segment walk blame
 // and log use. With no rename, the HEAD extent the caller already resolved
 // is returned unchanged.
-func followRenameSymbol(ctx context.Context, repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, anchorName string, stderr io.Writer) ([]byte, exitcode.Code) {
+func followRenameSymbol(ctx context.Context, repo *gitx.Repo, startRev, file string, src []byte, res *resolve.Resolution, anchorName string, stderr io.Writer) ([]byte, exitcode.Code) {
 	var oldest []byte
-	code := walkRenameSegments(ctx, repo, "show", file, anchorName, src, res, stderr, func(_, _ string, src []byte, res *resolve.Resolution, _ string, found bool) exitcode.Code {
+	code := walkRenameSegments(ctx, repo, "show", startRev, file, anchorName, src, res, stderr, func(_, _ string, src []byte, res *resolve.Resolution, _ string, found bool) exitcode.Code {
 		if !found {
 			oldest = src[res.Extent.Start:res.Extent.End]
 		}

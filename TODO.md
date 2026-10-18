@@ -10,64 +10,6 @@ Limitations that ship — unsupported languages, excluded cross-build targets,
 constructs no anchor reaches — are in
 [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md), not here.
 
-## --source and --follow-rename cannot combine
-
-[`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) “History across renames”
-(lines 171–198) is the contract. `--follow-rename` re-resolves the anchor
-with tree-sitter at each rename boundary, one parse per rename, not per
-commit (178–181). `--source REV` resolves the extent in that revision under
-the file’s current name and does not combine with `--follow-rename`, for
-`log` (186–188), `blame` (192–194), and `show` (196–198).
-
-The combination is allowed. A walk can start at an older revision and still
-re-resolve across later renames. Argument classification must accept both
-flags together. The worktree-bytes rule stays: a `--follow-rename` walk
-reads committed blobs (`showHeadSource`, `internal/app/show.go:126`;
-`blame` help at `internal/app/blame.go:35`). No new languages.
-
-### Read
-
-`parseAnchorCommandArgs` (`internal/app/shared.go:554`) already records
-`--source` and `--follow-rename` as independent flags for `log`, `blame`,
-and `show`. The pair is refused after that parse: `runLogAnchor`
-(`internal/app/log.go:259`), `runBlame` (`internal/app/blame.go:65`),
-`runShow` (`internal/app/show.go:80`).
-
-`walkRenameSegments` (`internal/app/shared.go:433`) is the follow-rename
-walk. It sets `rev := "HEAD"` (`shared.go:440`), then re-resolves the
-pre-rename blob at each `FindRename` boundary (`shared.go:454`). Callers
-are `runLogFollowRename` (`internal/app/log.go:340`),
-`runBlameFollowRename` (`internal/app/blame.go:137`), and
-`followRenameSymbol` (`internal/app/show.go:141`). `--source` changes the
-starting blob only when follow-rename is off (`log.go:271`, `show.go:90`,
-`blame.go:99`); with the flag, show and blame force the HEAD blob
-(`show.go:91`, `blame.go:75`). The combined walk starts at the `--source`
-revision instead of `HEAD` and keeps that same boundary re-resolve.
-
-### Traps
-
-The refusal is documented behaviour. `docs/USAGE.md` states the exit 129
-pair at lines 259, 300, and 358, and in the flag table at 787–788.
-`docs/LIMITATIONS.md` states it at 186–188, 192–194, and 196–198. Help
-text repeats it (`show.go:28`, `blame.go:32`, `log.go:57`), and tests pin
-the sentence (`show_test.go:266`, `log_test.go:232`, `blame_test.go:229`).
-`USAGE.md` and `LIMITATIONS.md` must change in the same commit as the
-code, later. Leave the worktree-bytes rule as it is, and add no languages.
-
-### Acceptance
-
-A rename-plus-reorder fixture of the shape in
-`TestRun_LogFollowRenameCrossesARenameThatReordersTheSymbol`
-(`internal/app/log_test.go:661`): `old.go` becomes `new.go` in the same
-commit that moves `Foo`. `--source REV --follow-rename` on the current
-name follows that boundary and reaches the pre-rename commit when `REV`
-is at or after the rename. Each flag alone stays as documented.
-`--follow-rename` without `--source` still starts at `HEAD` and
-re-resolves at the boundary. `--source REV` without `--follow-rename`
-still resolves under the current name and does not follow the rename.
-The same split holds for `blame` and `show`; `show` still prints the
-oldest segment’s bytes.
-
 ## `rgit diff --json` is missing beside `--porcelain`
 
 `languages`, `doctor`, `symbols`, and `log` each pair `--porcelain` with

@@ -239,6 +239,22 @@ func TestShow_FollowRenamePrintsPreRenameBytes(t *testing.T) {
 		qt.Assert(t, qt.Equals(stdout, pre))
 	})
 
+	t.Run("--source at the rename with --follow-rename still prints the oldest bytes", func(t *testing.T) {
+		t.Parallel()
+		stdout, stderr, code := runApp(t, "-C", dir, "show", "--source", "HEAD", "--follow-rename", "new.go:Foo")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.Equals(stdout, pre))
+	})
+
+	t.Run("--source without --follow-rename stays on the current path", func(t *testing.T) {
+		t.Parallel()
+		stdout, stderr, code := runApp(t, "-C", dir, "show", "--source", "HEAD", "new.go:Foo")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		qt.Assert(t, qt.Equals(stdout, post))
+	})
+
 	t.Run("several anchors stay length-framed", func(t *testing.T) {
 		t.Parallel()
 		stdout, stderr, code := runApp(t, "-C", dir, "show", "--follow-rename", "new.go:Foo", "new.go:Bar")
@@ -250,7 +266,7 @@ func TestShow_FollowRenamePrintsPreRenameBytes(t *testing.T) {
 }
 
 // TestShow_FollowRenameRefusals pins the flag combinations that stay exit 129:
-// no anchor, a plain path, and --source together with the rename walk.
+// no anchor, and a plain path.
 func TestShow_FollowRenameRefusals(t *testing.T) {
 	t.Parallel()
 	dir := tempRepo(t)
@@ -262,10 +278,6 @@ func TestShow_FollowRenameRefusals(t *testing.T) {
 	_, stderr, code = runApp(t, "-C", dir, "show", "a.go", "--follow-rename")
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.StringContains(stderr, "not a plain path"))
-
-	_, stderr, code = runApp(t, "-C", dir, "show", "--source", "HEAD", "--follow-rename", "a.go:A")
-	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-	qt.Assert(t, qt.StringContains(stderr, "--source and --follow-rename are mutually exclusive"))
 }
 
 // TestShow_FollowRenameNoRenameReadsHEAD pins that a file with no rename
