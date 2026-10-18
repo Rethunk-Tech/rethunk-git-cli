@@ -1,23 +1,20 @@
-# The cgo tree-sitter grammars cost about 115 CPU-s to compile cold, and gates that run together each compile
-# them again before any of them has filled the build cache. Chained, build fills the cache and the rest read it.
-# Race-instrumented, so the -race test below reuses these compiled grammars instead of compiling them a second time.
+# One race compile of the cgo grammars, then lint / test / vuln in parallel.
+# They wait on a stamp in GOCACHE so they do not start a second compile beside
+# build. Gitleaks, actionlint, and shellcheck need no Go cache and overlap
+# the build.
 [gates.gitleaks]
 run = "gitleaks detect --no-banner --redact"
-serial = true
 
 [gates.build]
-run = "go build -race ./..."
-serial = true
+run = "cache=$(go env GOCACHE); rm -f \"$cache/rgit-gate-ready\" \"$cache/rgit-gate-fail\"; go build -race ./...; e=$?; if [ \"$e\" -eq 0 ]; then touch \"$cache/rgit-gate-ready\"; else touch \"$cache/rgit-gate-fail\"; fi; exit \"$e\""
 
-# GOFLAGS=-race makes lint and govulncheck load packages from the race build above, not compile a plain one.
 [gates.lint]
-serial = true
+run = "cache=$(go env GOCACHE); while [ ! -f \"$cache/rgit-gate-ready\" ] && [ ! -f \"$cache/rgit-gate-fail\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready\" ] && make lint"
 env = { GOFLAGS = "-race" }
 
 [gates.test]
-run = "go test -race -short ./..."
-serial = true
+run = "cache=$(go env GOCACHE); while [ ! -f \"$cache/rgit-gate-ready\" ] && [ ! -f \"$cache/rgit-gate-fail\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready\" ] && go test -race -short ./..."
 
 [gates.vuln]
-serial = true
+run = "cache=$(go env GOCACHE); while [ ! -f \"$cache/rgit-gate-ready\" ] && [ ! -f \"$cache/rgit-gate-fail\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready\" ] && govulncheck ./..."
 env = { GOFLAGS = "-race" }
