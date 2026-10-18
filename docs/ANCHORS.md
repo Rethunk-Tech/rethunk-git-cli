@@ -183,15 +183,15 @@ paths. Name the path instead. Behaviour per kind:
 | Skip-worktree / assume-unchanged | `FILE:SYMBOL` refused with exit 10; bits left unchanged. Name the path instead |
 
 A `FILE:SYMBOL` anchor into JSON, JSONC, JSON5, YAML, or TOML resolves fine for the read-only
-`diff`, `blame`, and `log`, but `rgit commit` refuses it (exit 12): the format
+`diff`, `show`, `blame`, and `log`, but `rgit commit` refuses it (exit 12): the format
 itself has no error `rgit` could rely on to catch a splice that disagrees with
 the file's own grammar, so the write it would produce is never trustworthy.
 Name the path instead. See [`CODES.md`](CODES.md#exit-12-is-commits-alone).
 
 ## Language support
 
-Twelve grammars ship unconditionally; a thirteenth, SQL, ships only behind
-the `rgit_sql` build tag (see its own row). All thirteen claim these
+Sixteen grammars ship unconditionally; a seventeenth, SQL, ships only behind
+the `rgit_sql` build tag (see its own row). All seventeen claim these
 extensions:
 
 | Grammar | Extensions | Addresses |
@@ -359,10 +359,10 @@ through `git cat-file` instead, so a deleted script or a revision comparison
 can still use its grammar and symbol extents. The extension still wins, and an
 unmapped shebang remains exit 9.
 
-The language-server cross-check covers Go, TypeScript/TSX, Python, Shell,
-YAML, JSON, CSS, Markdown, and HTML
-([`docs/INSTALL.md#language-servers`](INSTALL.md#language-servers)). TOML
-and SQL stay `[ts-only]` permanently instead, which is a supported result,
+The language-server cross-check covers Go, TypeScript/TSX, Python, Rust, Shell,
+Zsh, YAML, JSON, JSONC, CSS, SCSS, Markdown, and HTML
+([`docs/INSTALL.md#language-servers`](INSTALL.md#language-servers)). TOML,
+SQL, and JSON5 stay `[ts-only]` permanently instead, which is a supported result,
 not a degraded one — see
 [`LIMITATIONS.md`](LIMITATIONS.md#language-server-coverage) for why. Exit 9
 is reserved for a language with no grammar at all — see

@@ -276,8 +276,8 @@ row rather than only the gated ones, so a reader always gets a definite
 answer instead of inferring "not gated" from an absent column.
 
 `CROSS-CHECK` is `wired` when the language has a compile-time entry in the
-language-server catalog and `ts-only` when it does not (currently TOML and
-SQL). This is design-time wiring, not reachability: a `wired` language still
+language-server catalog and `ts-only` when it does not (currently TOML, SQL,
+and JSON5). This is design-time wiring, not reachability: a `wired` language still
 degrades to `[ts-only]` when its server is missing, cold, or unreachable; see
 `rgit doctor` for environment and server status.
 

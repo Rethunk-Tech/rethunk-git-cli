@@ -733,8 +733,8 @@ section above: `blame` takes `-p`/`--porcelain`, `--follow-rename`,
 `--source`, and `--help`; `languages` takes `--porcelain`, `--json` (mutually exclusive with `--porcelain`), `--in-repo`, and `--help`; `log`
 takes `--porcelain`, `-p`/`--patch` (mutually exclusive with it),
 `--follow` (path form, exactly one path), `--follow-rename`, `--source` (mutually exclusive with `--follow-rename`), `-n`/`--max-count`,
-`--help`, and — only in its path or date shape — `--since`/`--until`
-themselves; `show` takes
+`--since`/`--until` (either history form), and
+`--help`; `show` takes
 `--source`, `--follow-rename`, `--porcelain`, `--with-header` (deprecated alias for
 `--porcelain`), and `--help`; `symbols` takes
 `--for-commit`, `--with-lines`, `--with-filename`, `--porcelain`, `--json` (mutually exclusive with `--porcelain`), and `--help`; `doctor` takes `--porcelain`,
@@ -841,7 +841,7 @@ before decode. Closes #42." \
 a revision argument (a range, or one or two bare revisions), `--staged` +
 `--unstaged`, `--range` + a positional `A..B`/`A...B` range, `-m` + `-F`,
 `--porcelain` + `--quiet` (`diff`), `--porcelain` + `-p`/`--patch` (`diff`,
-`log`), `--porcelain` + `--json` (`languages`, `doctor`, `symbols`) → exit 129.
+`log`), `--porcelain` + `--json` (`languages`, `doctor`, `symbols`), `--source` + `--follow-rename` (`show`, `blame`, `log`) → exit 129.
 Naming one path both as a path and as a symbol anchor → exit 5, in whichever
 spelling: `--file` with `--sym`, or the positional forms `greet.go
 greet.go:A`.
@@ -850,7 +850,7 @@ A `FILE:SYMBOL` anchor into a structured-data file (JSON, JSONC, JSON5, YAML, TO
 12: a spliced extent is not guaranteed to agree with the file's own grammar,
 and nothing would fail at commit time to say so. Name the path instead —
 `rgit commit package.json` stages the whole file, unaffected; `rgit diff`,
-`rgit blame`, and `rgit log` still resolve the identical anchor, since none
+`rgit show`, `rgit blame`, and `rgit log` still resolve the identical anchor, since none
 of them writes a blob (see [`CODES.md`](CODES.md#exit-12-is-commits-alone)).
 
 A missing conventional-commit shape (`type(scope): subject`) warns on stderr;
@@ -886,7 +886,7 @@ Resolving one prints an advisory on stderr, never fails the command:
 [warning] anchor 'dup.go:init#2' is positional; inserting a symbol above it repoints it -- qualify it where the language allows
 ```
 
-`rgit commit`, `rgit diff --sym`, `rgit blame`, and `rgit log` all print it
+`rgit commit`, `rgit diff --sym`, `rgit show`, `rgit blame`, and `rgit log` all print it
 for the identical anchor — the same advisory everywhere an ordinal
 resolves, not only at commit time. A bare or container-qualified anchor
 that merely happens to match the same symbol never warns.

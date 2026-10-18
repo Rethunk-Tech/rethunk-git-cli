@@ -178,9 +178,9 @@ persists, and the cross-check is live on the first invocation. The split is
 the servers' own: `vtsls` and `pyright` dial out on `--socket=<port>`, while
 `bash-language-server` has no transport flag at all.
 
-**TOML and SQL stay `[ts-only]` permanently** — see
+**TOML, SQL, and JSON5 stay `[ts-only]` permanently** — see
 [`LIMITATIONS.md`](LIMITATIONS.md#language-server-coverage) for why. `rgit`
-never dials a server for either, so neither has a row in the table above.
+never dials a server for any of them, so none has a row in the table above.
 HTML is wired; void elements still need a
 `declOnlyEndTrimmer` seam (same section), not a class-suffix mismatch.
 
