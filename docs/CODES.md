@@ -136,12 +136,12 @@ failure reaching `git log` or `git diff` underneath it folds into 128.
 
 The record formats defined here are for `--porcelain` output, plus the JSON
 objects `rgit languages --json`, `rgit doctor --json`, `rgit context --json`,
-and `rgit symbols --json` write (see below). A command's own default
+`rgit symbols --json`, and `rgit log --json` write (see below). A command's own default
 is git's or `rgit`'s aligned human-readable layout (`diff`, `commit`,
 `blame`, `log`, `languages`, `doctor`). `--porcelain` replaces that with
 stable tab-separated records, no header. `--json` is not a fourth porcelain
 dialect: it is one object, and it is mutually exclusive with `--porcelain`
-on `languages`, `doctor`, and `symbols`. `context` has no `--porcelain`;
+on `languages`, `doctor`, `symbols`, and `log`. `context` has no `--porcelain`;
 `--json` encodes the same record stream.
 
 This is not a hypothetical contract: shell completion scripts call `rgit
@@ -513,6 +513,24 @@ alongside `-p`/`--patch`, since asking for both would mean asking for a record
 format and a patch dump at once. `rgit log -p` instead prints git's own
 `git log -L` output unmodified, the same "pass through git's own format rather
 than inventing a second one" choice `rgit blame --porcelain` already makes.
+
+### `rgit log --json`
+
+```json
+{
+  "commits": [
+    {
+      "hash": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+      "subject": "fix(auth): reject expired tokens"
+    }
+  ]
+}
+```
+
+One JSON object. `commits` holds one entry per `--porcelain` row, in that
+same order, field names the porcelain columns in lowercase. An empty history
+is `"commits": []`, never `null`. `--json` with `--porcelain` or with
+`-p`/`--patch` is exit 129. Otherwise the exit code is the text form's.
 
 ### `rgit symbols --with-lines`
 

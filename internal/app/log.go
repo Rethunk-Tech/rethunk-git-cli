@@ -24,7 +24,9 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -39,9 +41,9 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
 )
 
-const logHelp = `usage: rgit log FILE:SYMBOL [--source <rev>] [--since=DATE] [--until=DATE] [-n N|--max-count=N] [--follow-rename] [--porcelain | -p|--patch]
-       rgit log [--since=DATE] [--until=DATE] [-n N|--max-count=N] [--follow] [--porcelain | -p|--patch] PATH...
-       rgit log --since=DATE [--until=DATE] [-n N|--max-count=N] [--porcelain | -p|--patch]
+const logHelp = `usage: rgit log FILE:SYMBOL [--source <rev>] [--since=DATE] [--until=DATE] [-n N|--max-count=N] [--follow-rename] [--porcelain | --json | -p|--patch]
+       rgit log [--since=DATE] [--until=DATE] [-n N|--max-count=N] [--follow] [--porcelain | --json | -p|--patch] PATH...
+       rgit log --since=DATE [--until=DATE] [-n N|--max-count=N] [--porcelain | --json | -p|--patch]
 
 History of one symbol: one record per commit whose own diff touched its
 current extent, newest first. Patch-free by default -- plain
@@ -93,9 +95,13 @@ the rename, but reordering across the boundary can still lose the thread.
 --porcelain lists stable tab-separated HASH<TAB>SUBJECT records instead of
 the aligned "<abbrev-hash> <subject>" default.
 
+--json lists those same commits as one JSON object: see
+docs/CODES.md#rgit-log---json. Mutually exclusive with --porcelain and
+with -p/--patch.
+
 -p, --patch opts into the real patch body for each commit -- git's own
 log output, unmodified, not a second record shape rgit invents.
-Mutually exclusive with --porcelain.
+Mutually exclusive with --porcelain and with --json.
 
 Full reference: docs/USAGE.md
 `
@@ -146,7 +152,7 @@ func logInteriorColonPositionals(args []string) []string {
 			continue
 		case strings.HasPrefix(a, "--since="), strings.HasPrefix(a, "--until="), strings.HasPrefix(a, "-n"), strings.HasPrefix(a, "--max-count="), strings.HasPrefix(a, "--source="):
 			continue
-		case a == "--porcelain", a == "-p", a == "--patch", a == "--follow-rename", a == "--help", a == "-h":
+		case a == "--porcelain", a == "--json", a == "-p", a == "--patch", a == "--follow-rename", a == "--help", a == "-h":
 			continue
 		case strings.Contains(a, ":") && !strings.HasPrefix(a, ":"):
 			out = append(out, a)
@@ -238,6 +244,7 @@ func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr
 	var opts logAnchorOptions
 	positionals, code, done := parseAnchorCommandArgs("log", args, []anchorCommandFlag{
 		{tokens: []string{"--porcelain"}, set: &opts.porcelain},
+		{tokens: []string{"--json"}, set: &opts.asJSON},
 		{tokens: []string{"-p", "--patch"}, set: &opts.patch},
 		{tokens: []string{"--follow-rename"}, set: &opts.followRename},
 		{tokens: []string{"--source"}, val: &opts.source},
@@ -251,10 +258,8 @@ func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr
 		return code
 	}
 	opts.positional = positionals[0]
-	if opts.porcelain && opts.patch {
-		fmt.Fprintln(stderr, "rgit: --porcelain and --patch are mutually exclusive")
-		fmt.Fprint(stderr, logHelp)
-		return exitcode.InvalidUsage
+	if code := refuseLogFormatConflict(opts.porcelain, opts.asJSON, opts.patch, stderr); code != exitcode.Success {
+		return code
 	}
 	if opts.source != "" && opts.followRename {
 		fmt.Fprintln(stderr, "rgit: --source and --follow-rename are mutually exclusive")
@@ -278,10 +283,22 @@ func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr
 	}
 	warnIfOrdinalAnchor(stderr, file, anchorName)
 
-	extra := logDateArgs(opts.since, opts.until, opts.maxCount, opts.maxCountSet, logFormatArgs(opts.patch, opts.porcelain))
+	extra := logDateArgs(opts.since, opts.until, opts.maxCount, opts.maxCountSet, logFormatArgs(opts.patch, opts.porcelain || opts.asJSON))
 
 	if opts.followRename {
-		return runLogFollowRename(ctx, repo, file, blob, res, anchorName, extra, stdout, stderr)
+		out := stdout
+		var buf bytes.Buffer
+		if opts.asJSON {
+			out = &buf
+		}
+		code := runLogFollowRename(ctx, repo, file, blob, res, anchorName, extra, out, stderr)
+		if code != exitcode.Success {
+			return code
+		}
+		if opts.asJSON {
+			return writeLogOutput(stdout, stderr, buf.Bytes(), true)
+		}
+		return exitcode.Success
 	}
 
 	start, end := lineRange(blob, res.Extent)
@@ -297,8 +314,7 @@ func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.GitFailure
 	}
-	_, _ = stdout.Write(out)
-	return exitcode.Success
+	return writeLogOutput(stdout, stderr, out, opts.asJSON)
 }
 
 type logAnchorOptions struct {
@@ -307,6 +323,7 @@ type logAnchorOptions struct {
 	maxCount     int
 	maxCountSet  bool
 	porcelain    bool
+	asJSON       bool
 	patch        bool
 	followRename bool
 	source       string
@@ -379,7 +396,7 @@ func runLogFollowRename(ctx context.Context, repo *gitx.Repo, file string, src [
 func runLogPathScoped(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	var since, until string
 	var maxCount int
-	var porcelain, patch, follow bool
+	var porcelain, asJSON, patch, follow bool
 
 	fs := pflag.NewFlagSet("log", pflag.ContinueOnError)
 	fs.SetInterspersed(true)
@@ -388,16 +405,15 @@ func runLogPathScoped(ctx context.Context, dir string, args []string, stdout, st
 	fs.StringVar(&until, "until", "", "only commits at or before this date (forwarded to git)")
 	fs.IntVarP(&maxCount, "max-count", "n", 0, "maximum number of commits (forwarded to git)")
 	fs.BoolVar(&porcelain, "porcelain", false, "stable tab-separated HASH<TAB>SUBJECT records")
+	fs.BoolVar(&asJSON, "json", false, "the same commits as one JSON object")
 	fs.BoolVarP(&patch, "patch", "p", false, "include the real patch body")
 	fs.BoolVar(&follow, "follow", false, "continue one path's history past renames")
 
 	if code, done := parseFlagsOrHelp(fs, args, stdout, stderr, logHelp); done {
 		return code
 	}
-	if porcelain && patch {
-		fmt.Fprintln(stderr, "rgit: --porcelain and --patch are mutually exclusive")
-		fmt.Fprint(stderr, logHelp)
-		return exitcode.InvalidUsage
+	if code := refuseLogFormatConflict(porcelain, asJSON, patch, stderr); code != exitcode.Success {
+		return code
 	}
 
 	root, prefix, repo, code := openRepo(ctx, dir, stderr)
@@ -423,7 +439,7 @@ func runLogPathScoped(ctx context.Context, dir string, args []string, stdout, st
 		return exitcode.InvalidUsage
 	}
 
-	extra := logFormatArgs(patch, porcelain)
+	extra := logFormatArgs(patch, porcelain || asJSON)
 	if fs.Changed("max-count") {
 		extra = append([]string{"--max-count=" + strconv.Itoa(maxCount)}, extra...)
 	}
@@ -436,14 +452,66 @@ func runLogPathScoped(ctx context.Context, dir string, args []string, stdout, st
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.GitFailure
 	}
-	_, _ = stdout.Write(out)
+	return writeLogOutput(stdout, stderr, out, asJSON)
+}
+
+func refuseLogFormatConflict(porcelain, asJSON, patch bool, stderr io.Writer) exitcode.Code {
+	switch {
+	case porcelain && patch:
+		fmt.Fprintln(stderr, "rgit: --porcelain and --patch are mutually exclusive")
+	case porcelain && asJSON:
+		fmt.Fprintln(stderr, "rgit: --porcelain and --json are mutually exclusive")
+	case asJSON && patch:
+		fmt.Fprintln(stderr, "rgit: --json and --patch are mutually exclusive")
+	default:
+		return exitcode.Success
+	}
+	fmt.Fprint(stderr, logHelp)
+	return exitcode.InvalidUsage
+}
+
+func writeLogOutput(stdout, stderr io.Writer, out []byte, asJSON bool) exitcode.Code {
+	if !asJSON {
+		_, _ = stdout.Write(out)
+		return exitcode.Success
+	}
+	if err := writeLogJSON(stdout, out); err != nil {
+		fmt.Fprintf(stderr, "rgit: log: %v\n", err)
+		return exitcode.GitFailure
+	}
 	return exitcode.Success
 }
 
+type logCommitRecord struct {
+	Hash    string `json:"hash"`
+	Subject string `json:"subject"`
+}
+
+type logReport struct {
+	Commits []logCommitRecord `json:"commits"`
+}
+
+func writeLogJSON(w io.Writer, out []byte) error {
+	records := make([]logCommitRecord, 0)
+	body := strings.TrimRight(string(out), "\n")
+	if body != "" {
+		for line := range strings.SplitSeq(body, "\n") {
+			hash, subject, ok := strings.Cut(line, "\t")
+			if !ok {
+				return fmt.Errorf("malformed log record %q", line)
+			}
+			records = append(records, logCommitRecord{Hash: hash, Subject: subject})
+		}
+	}
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	return enc.Encode(logReport{Commits: records})
+}
+
 // logFormatArgs is the extra git-log arguments both of rgit log's forms
-// derive identically from patch/porcelain: real patch when opted in
-// (unmodified git output, not a second format rgit invents), stable
-// tab-separated records for scripting, or the aligned human default.
+// derive identically from patch versus record output: real patch when opted
+// in, or the HASH<TAB>SUBJECT shape --porcelain and --json both consume.
 func logFormatArgs(patch, porcelain bool) []string {
 	switch {
 	case patch:

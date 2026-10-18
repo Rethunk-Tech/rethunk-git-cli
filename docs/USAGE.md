@@ -374,7 +374,8 @@ An anchor that does not resolve is exit 3 (unresolvable), 4 (ambiguous), or 9
 (unsupported language). See [`CODES.md`](CODES.md#exit-codes).
 
 `--porcelain` lists stable tab-separated `HASH<TAB>SUBJECT` records instead of
-the aligned `<abbrev-hash> <subject>` default, no header. Mutually exclusive
+the aligned `<abbrev-hash> <subject>` default, no header. `--json` lists those
+same commits as one JSON object. Each is mutually exclusive with the other and
 with `-p`/`--patch`. See [`CODES.md`](CODES.md#output-records).
 
 ### Log across renames
@@ -501,7 +502,7 @@ print their own hand-written usage text instead — surfaces small enough that a
 generated rendering was not worth building. A bare `rgit` (no command at all)
 is a usage error, not a help request — see § Exit codes.
 
-`rgit --version` prints `rgit <version>` on its first line and exits 0:
+`rgit --version` and `rgit version` print `rgit <version>` on the first line and exit 0:
 
 ```console
 $ rgit --version
@@ -731,7 +732,7 @@ everywhere else. Install and PowerShell registration instructions:
 meta commands carry smaller surfaces of their own, each covered in its own
 section above: `blame` takes `-p`/`--porcelain`, `--follow-rename`,
 `--source`, and `--help`; `languages` takes `--porcelain`, `--json` (mutually exclusive with `--porcelain`), `--in-repo`, and `--help`; `log`
-takes `--porcelain`, `-p`/`--patch` (mutually exclusive with it),
+takes `--porcelain`, `--json` (mutually exclusive with `--porcelain` and with `-p`/`--patch`), `-p`/`--patch` (mutually exclusive with `--porcelain` and with `--json`),
 `--follow` (path form, exactly one path), `--follow-rename`, `--source` (mutually exclusive with `--follow-rename`), `-n`/`--max-count`,
 `--since`/`--until` (either history form), and
 `--help`; `show` takes
@@ -789,6 +790,7 @@ is that same stream as one object); `completion` takes no flags beyond
 | `--since DATE`, `--until DATE` | (`log`) Bound history by date. A `FILE:SYMBOL` positional keeps the anchor form. Path positionals select unanchored path-scoped history with or without these flags. With neither a path, a date, nor `--follow`, `log` still requires an anchor. Forwarded to git's own `--since`/`--until` unparsed. |
 | `--follow` | (`log`, path form) Continue one path's history past renames. Forwarded to git's own `--follow`. Requires exactly one path; zero paths, or two or more, is exit 129. A `FILE:SYMBOL` anchor does not accept it; that form uses `--follow-rename`. |
 | `-n N`, `--max-count=N` | (`log`) Limit either history form to at most `N` commits; under `--follow-rename`, applies independently per rename segment, so the total may exceed `N`. Forwarded to git's own count limit; omitted by default, so history is unbounded. |
+| `--json` | (`log`) The same `hash`/`subject` fields as `--porcelain`, as one JSON object. Mutually exclusive with `--porcelain` and with `-p`/`--patch`. |
 
 `commit` requires a message (`-m` or `-F`) unless `--amend`, `--fixup`,
 `--squash`, or `--reuse-message` is given — each supplies its own message
@@ -841,7 +843,7 @@ before decode. Closes #42." \
 a revision argument (a range, or one or two bare revisions), `--staged` +
 `--unstaged`, `--range` + a positional `A..B`/`A...B` range, `-m` + `-F`,
 `--porcelain` + `--quiet` (`diff`), `--porcelain` + `-p`/`--patch` (`diff`,
-`log`), `--porcelain` + `--json` (`languages`, `doctor`, `symbols`), `--source` + `--follow-rename` (`show`, `blame`, `log`) → exit 129.
+`log`), `--json` + `-p`/`--patch` (`log`), `--porcelain` + `--json` (`languages`, `doctor`, `symbols`, `log`), `--source` + `--follow-rename` (`show`, `blame`, `log`) → exit 129.
 Naming one path both as a path and as a symbol anchor → exit 5, in whichever
 spelling: `--file` with `--sym`, or the positional forms `greet.go
 greet.go:A`.

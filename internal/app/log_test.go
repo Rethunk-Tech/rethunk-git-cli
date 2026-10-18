@@ -3,6 +3,7 @@
 package app
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +23,20 @@ func TestRun_LogHelpAndUsage(t *testing.T) {
 		_, stderr, code := runApp(t, "log", "--porcelain", "-p", "a.go:A")
 		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 		qt.Assert(t, qt.StringContains(stderr, "mutually exclusive"))
+	})
+
+	t.Run("--porcelain and --json are mutually exclusive", func(t *testing.T) {
+		chdirTempRepo(t)
+		_, stderr, code := runApp(t, "log", "--porcelain", "--json", "a.go:A")
+		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+		qt.Assert(t, qt.StringContains(stderr, "--porcelain and --json are mutually exclusive"))
+	})
+
+	t.Run("--json and --patch are mutually exclusive", func(t *testing.T) {
+		chdirTempRepo(t)
+		_, stderr, code := runApp(t, "log", "--json", "-p", "a.go:A")
+		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+		qt.Assert(t, qt.StringContains(stderr, "--json and --patch are mutually exclusive"))
 	})
 }
 
@@ -159,6 +174,36 @@ func TestRun_LogPorcelainEmitsTabSeparatedRecords(t *testing.T) {
 		fields := strings.Split(line, "\t")
 		qt.Assert(t, qt.Equals(len(fields), 2))
 		qt.Assert(t, qt.IsTrue(len(fields[0]) >= 7)) // a real commit hash, not truncated to nothing
+	}
+}
+
+// TestRun_LogJSONAgreesWithPorcelain pins that --json lists the same
+// HASH/SUBJECT pairs --porcelain prints, as one object.
+func TestRun_LogJSONAgreesWithPorcelain(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	gittest.Commit(t.Context(), t, dir, "fix(a): bump A")
+
+	porcelain, stderr, code := runApp(t, "-C", dir, "log", "--porcelain", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+
+	stdout, stderr, code := runApp(t, "-C", dir, "log", "--json", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+
+	var top struct {
+		Commits []map[string]string `json:"commits"`
+	}
+	qt.Assert(t, qt.IsNil(json.Unmarshal([]byte(stdout), &top)))
+	lines := strings.Split(strings.TrimRight(porcelain, "\n"), "\n")
+	qt.Assert(t, qt.Equals(len(top.Commits), len(lines)))
+	for i, line := range lines {
+		hash, subject, ok := strings.Cut(line, "\t")
+		qt.Assert(t, qt.IsTrue(ok))
+		qt.Assert(t, qt.Equals(top.Commits[i]["hash"], hash))
+		qt.Assert(t, qt.Equals(top.Commits[i]["subject"], subject))
 	}
 }
 
@@ -611,6 +656,27 @@ func TestRun_LogPathScopedOutputModes(t *testing.T) {
 		_, stderr, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "--porcelain", "--patch")
 		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 		qt.Assert(t, qt.StringContains(stderr, "mutually exclusive"))
+	})
+
+	t.Run("--json agrees with --porcelain", func(t *testing.T) {
+		t.Parallel()
+		porcelain, _, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "--porcelain")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		stdout, stderr, code := runApp(t, "-C", dir, "log", "--since=2000-01-01", "--json")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		var top struct {
+			Commits []map[string]string `json:"commits"`
+		}
+		qt.Assert(t, qt.IsNil(json.Unmarshal([]byte(stdout), &top)))
+		lines := strings.Split(strings.TrimRight(porcelain, "\n"), "\n")
+		qt.Assert(t, qt.Equals(len(top.Commits), len(lines)))
+		for i, line := range lines {
+			hash, subject, ok := strings.Cut(line, "\t")
+			qt.Assert(t, qt.IsTrue(ok))
+			qt.Assert(t, qt.Equals(top.Commits[i]["hash"], hash))
+			qt.Assert(t, qt.Equals(top.Commits[i]["subject"], subject))
+		}
 	})
 }
 
