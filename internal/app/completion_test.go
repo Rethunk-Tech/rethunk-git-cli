@@ -14,6 +14,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
 )
 
 // TestCompletionSubcommands checks rgitSubcommands against topLevelHelp's
@@ -25,7 +27,7 @@ import (
 // same way a subcommand is).
 func TestCompletionSubcommands(t *testing.T) {
 	t.Parallel()
-	documented := subcommandNamesFromHelp(t, topLevelHelp)
+	documented := commandNamesFromHelp(topLevelHelp)
 	if len(documented) == 0 {
 		t.Fatal("could not parse any subcommand names out of topLevelHelp -- did its Commands: section move or change shape?")
 	}
@@ -50,27 +52,64 @@ func TestCompletionSubcommands(t *testing.T) {
 	}
 }
 
-// subcommandNamesFromHelp extracts the first word of each line in help's
-// "Commands:" section, up to the following blank line.
-func subcommandNamesFromHelp(t *testing.T, help string) []string {
-	t.Helper()
-	const marker = "Commands:\n"
-	_, after, ok := strings.Cut(help, marker)
-	if !ok {
-		return nil
+// TestGeneratedAssets_MentionEveryTopLevelCommand is the drift lock for
+// generated shell completions and the man page: each generator must succeed
+// and name every documented top-level command.
+func TestGeneratedAssets_MentionEveryTopLevelCommand(t *testing.T) {
+	t.Parallel()
+	commands := commandNamesFromHelp(topLevelHelp)
+	if len(commands) == 0 {
+		t.Fatal("could not parse any subcommand names out of topLevelHelp")
 	}
-	rest := after
-	if end := strings.Index(rest, "\n\n"); end >= 0 {
-		rest = rest[:end]
+
+	tests := []struct {
+		name string
+		run  func() (string, exitcode.Code)
+	}{
+		{"bash", func() (string, exitcode.Code) {
+			var stdout, stderr strings.Builder
+			code := runCompletion([]string{"bash"}, &stdout, &stderr)
+			return stdout.String(), code
+		}},
+		{"zsh", func() (string, exitcode.Code) {
+			var stdout, stderr strings.Builder
+			code := runCompletion([]string{"zsh"}, &stdout, &stderr)
+			return stdout.String(), code
+		}},
+		{"fish", func() (string, exitcode.Code) {
+			var stdout, stderr strings.Builder
+			code := runCompletion([]string{"fish"}, &stdout, &stderr)
+			return stdout.String(), code
+		}},
+		{"pwsh", func() (string, exitcode.Code) {
+			var stdout, stderr strings.Builder
+			code := runCompletion([]string{"pwsh"}, &stdout, &stderr)
+			return stdout.String(), code
+		}},
+		{"man", func() (string, exitcode.Code) {
+			var stdout, stderr strings.Builder
+			code := runMan(context.Background(), "test", nil, &stdout, &stderr)
+			return stdout.String(), code
+		}},
 	}
-	var names []string
-	for line := range strings.SplitSeq(rest, "\n") {
-		fields := strings.Fields(line)
-		if len(fields) > 0 {
-			names = append(names, fields[0])
-		}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			out, code := tt.run()
+			if code != exitcode.Success {
+				t.Fatalf("generation for %s exited %d", tt.name, code)
+			}
+			if out == "" {
+				t.Fatalf("generation for %s produced no output", tt.name)
+			}
+			for _, cmd := range commands {
+				if !strings.Contains(out, cmd) {
+					t.Errorf("%s output does not mention top-level command %q", tt.name, cmd)
+				}
+			}
+		})
 	}
-	return names
 }
 
 // flagTokenRe matches a usage line's own flag declaration -- the fixed

@@ -141,6 +141,11 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 			return code
 		}
 		return runCompletion(args[1:], stdout, stderr)
+	case "man":
+		if code := refuseUnsupportedJSON(asJSON, "man", stderr); code != exitcode.Success {
+			return code
+		}
+		return runMan(ctx, version, args[1:], stdout, stderr)
 	case "symbols":
 		return runSymbols(ctx, dir, args[1:], stdout, stderr)
 	default:
