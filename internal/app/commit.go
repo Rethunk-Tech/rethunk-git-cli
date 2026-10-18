@@ -566,7 +566,7 @@ func targetPaths(targets []synth.Target) (paths, anchorFiles []string) {
 }
 
 // refuseStructuredDataAnchors implements docs/CODES.md's exit 12: a
-// FILE:SYMBOL anchor into JSON, YAML, or TOML is refused before synth ever
+// FILE:SYMBOL anchor into JSON, JSONC, JSON5, YAML, or TOML is refused before synth ever
 // reads the file, because a spliced extent is not guaranteed to agree with
 // one of these formats' own grammar and nothing downstream would catch the
 // resulting malformed blob before it reached HEAD (AGENTS.md's invariant

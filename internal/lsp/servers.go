@@ -185,10 +185,8 @@ type ServerInfo struct {
 // stable order without sorting it itself.
 func Servers() []ServerInfo {
 	byBin := map[string][]string{}
-	specByBin := map[string]serverSpec{}
 	for lang, spec := range servers {
 		byBin[spec.bin] = append(byBin[spec.bin], lang)
-		specByBin[spec.bin] = spec
 	}
 	out := make([]ServerInfo, 0, len(byBin))
 	for bin, langs := range byBin {
