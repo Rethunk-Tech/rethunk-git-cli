@@ -12,6 +12,9 @@ constructs no anchor reaches — are in
 
 ## `rgit show --json` needs a byte-safe encoding, not a TSV wrap
 
+Decided (2026-10-18): no `show --json` until a named consumer needs the extent
+as JSON; `--porcelain` stays the only machine form. Reopen with that consumer.
+
 `show --porcelain` length-frames extents (`FILE:ANCHOR<TAB>NBYTES` plus
 exactly `NBYTES` bytes, `internal/app/show.go:33–36`) because a symbol
 body can contain any byte, including a header-shaped line. `--json` as
