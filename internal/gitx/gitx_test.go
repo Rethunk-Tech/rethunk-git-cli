@@ -409,6 +409,13 @@ func TestLogLineRange_RejectsColonInPath(t *testing.T) {
 	if perr.Path != "weird:file.txt" {
 		t.Errorf("LineRangePathError.Path = %q; want %q", perr.Path, "weird:file.txt")
 	}
+
+	for _, path := range []string{"file\nname.txt", "file\x00name.txt"} {
+		_, err := repo.LogLineRange(ctx, path, 1, 1)
+		if !errors.As(err, &perr) {
+			t.Errorf("LogLineRange(%q) error = %v (%T); want *gitx.LineRangePathError", path, err, err)
+		}
+	}
 }
 
 // TestDiffPatch pins that DiffPatch returns git's own real patch body
@@ -667,6 +674,21 @@ func TestBatchCatFile_EmptyRequestIsANoop(t *testing.T) {
 	results, err := repo.BatchCatFile(context.Background(), nil)
 	if err != nil || results != nil {
 		t.Errorf("BatchCatFile(nil) = (%v, %v); want (nil, nil)", results, err)
+	}
+}
+
+func TestBatchCatFile_RejectsNewlineOrNULSelector(t *testing.T) {
+	t.Parallel()
+	_, repo := gittest.New(t.Context(), t)
+	for _, req := range []gitx.BatchCatFileRequest{
+		{Rev: "HEAD", Path: "a.go\nHEAD:secret.go"},
+		{Rev: "HEAD\nHEAD", Path: "a.go"},
+		{Rev: "HEAD", Path: "a.go\x00b.go"},
+	} {
+		_, err := repo.BatchCatFile(context.Background(), []gitx.BatchCatFileRequest{req})
+		if err == nil {
+			t.Errorf("BatchCatFile(%q:%q) error = nil; want newline/NUL refusal", req.Rev, req.Path)
+		}
 	}
 }
 

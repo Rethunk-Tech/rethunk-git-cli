@@ -362,6 +362,11 @@ func (r *Repo) BatchCatFile(ctx context.Context, requests []BatchCatFileRequest)
 	if len(requests) == 0 {
 		return nil, nil
 	}
+	for _, req := range requests {
+		if err := rejectBatchSelector(req.Rev, req.Path); err != nil {
+			return nil, err
+		}
+	}
 
 	args := []string{"cat-file", "--batch"}
 	full := append([]string{"-C", r.root}, args...)
@@ -459,6 +464,18 @@ func (r *Repo) BatchCatFile(ctx context.Context, requests []BatchCatFileRequest)
 // let prefetchBlobs' cache and contentSide.read's live CatFile fallback
 // disagree about the same (rev, path) -- see blobCache's own doc comment
 // in internal/diff/scope.go.
+// rejectBatchSelector refuses a rev or path that would break cat-file
+// --batch's line-oriented stdin protocol: each request is "rev:path\n", so
+// a newline (or a NUL that C-string APIs would truncate) in either field
+// would inject or drop a selector rather than name the object the caller
+// asked for.
+func rejectBatchSelector(rev, path string) error {
+	if strings.ContainsAny(rev, "\n\x00") || strings.ContainsAny(path, "\n\x00") {
+		return fmt.Errorf("gitx: cat-file --batch: revision or path contains a newline or NUL")
+	}
+	return nil
+}
+
 func readCatFileBatchResponses(r io.Reader, count int) ([]BatchCatFileResult, error) {
 	br := bufio.NewReader(r)
 	results := make([]BatchCatFileResult, count)
@@ -1308,9 +1325,12 @@ func (r *Repo) blame(ctx context.Context, rev, path string, start, end int, extr
 // to differ across git versions or reimplementations, and a caller has no
 // way to escape a path that sits on the wrong side of a future change to
 // it. Rather than trust that undocumented behaviour indefinitely, a path
-// containing ':' is refused up front, before it is ever embedded.
+// containing ':' is refused up front, before it is ever embedded. A newline
+// or NUL is refused for the same reason: both would sit inside the single
+// -L argument with no escape, and a NUL would truncate the path at the
+// syscall boundary.
 func (r *Repo) LogLineRange(ctx context.Context, path string, start, end int, extra ...string) ([]byte, error) {
-	if strings.Contains(path, ":") {
+	if strings.ContainsAny(path, ":\n\x00") {
 		return nil, &LineRangePathError{Path: path}
 	}
 	args := append([]string{"log", fmt.Sprintf("-L%d,%d:%s", start, end, path)}, extra...)
