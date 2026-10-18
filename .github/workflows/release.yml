@@ -27,12 +27,15 @@ jobs:
   # No darwin job: fleet workflows run no macOS runners, and zig cannot
   # link darwin without a macOS SDK (docs/INSTALL.md § Cross builds), so
   # releases ship only what this Linux job can cross-compile.
-  release:
-    name: build and publish
+  #
+  # Build/sign holds id-token for keyless cosign and never contents: write.
+  # Publish is a later job so the token that can create a release is not
+  # in scope while npm, zig, wine, and docker run.
+  build:
+    name: build and sign
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write
       id-token: write # keyless cosign signing (Sigstore OIDC)
     steps:
       # fetch-depth: 0 because the Makefile stamps the binary from
@@ -138,9 +141,27 @@ jobs:
       - name: sign checksums
         run: cosign sign-blob --yes --bundle dist/SHA256SUMS.sigstore.json dist/SHA256SUMS
 
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: publish
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
       - name: publish
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           gh release create "$GITHUB_REF_NAME" dist/* \
             --title "$GITHUB_REF_NAME" \
