@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +13,21 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/prereq"
 )
+
+const generateOnlyChildEnv = "RGIT_INSTALL_TEST_AS_GENERATE_ONLY"
+
+// Re-execs this test binary as `rgit-install -generate-only` so
+// TestGenerateOnlyExitsNonZeroWhenSQLSkipped does not `go run` (a second
+// compile of this package on every `go test -race`).
+func TestMain(m *testing.M) {
+	if os.Getenv(generateOnlyChildEnv) == "1" {
+		flag.CommandLine = flag.NewFlagSet("rgit-install", flag.ContinueOnError)
+		os.Args = []string{"rgit-install", "-generate-only"}
+		main()
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
 
 // Most subprocess-driving functions here are pure past their one shell-out,
 // with that shell-out either injected (a lookPath func) or pulled out into
@@ -271,8 +287,8 @@ func TestGenerateOnlyExitsNonZeroWhenSQLSkipped(t *testing.T) {
 		}
 		qt.Assert(t, qt.IsNil(os.Symlink(src, filepath.Join(binDir, name))))
 	}
-	cmd := exec.CommandContext(t.Context(), "go", "run", ".", "-generate-only")
-	cmd.Env = append(os.Environ(), "PATH="+binDir)
+	cmd := exec.CommandContext(t.Context(), os.Args[0]) //nolint:gosec // re-execs this test binary, never an untrusted path
+	cmd.Env = append(os.Environ(), "PATH="+binDir, generateOnlyChildEnv+"=1")
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("generate-only exited 0 without SQL:\n%s", out)
