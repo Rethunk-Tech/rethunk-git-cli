@@ -22,10 +22,10 @@ env:
   # 16th whether the action works under node24.
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
-# No SQL lane here on purpose: any target that builds or tests SQL must
-# delegate to cmd/rgit-install, so -tags rgit_sql and parser generation stay
-# in exactly one place (AGENTS.md § Delegation boundary). Plain `go build`/
-# `go test` never touch it.
+# No SQL lane on the default `go test` jobs on purpose: parser generation
+# stays in cmd/rgit-install (`make sql-parser`). Plain `go build` /
+# `go test` never set -tags rgit_sql. The cross-compile job generates
+# then runs `go test -tags rgit_sql -short`.
 #
 # cgo is mandatory -- rgit links tree-sitter through cgo, so CGO_ENABLED=0
 # is not an option. ubuntu-latest ships gcc (verified against
@@ -40,17 +40,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
+      - uses: Rethunk-Tech/gh-actions/setup-go@bc5fa5b1004205c9c9399fc941d79d5ada53c59b # v1.16
       - name: gitleaks detect
         run: |
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz" | tar -xz
-          ./gitleaks detect --no-banner --redact
+          go install github.com/gitleaks/gitleaks/v8@v8.30.1
+          gitleaks detect --no-banner --redact
 
   lint:
     name: lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      GOFLAGS: -race
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: Rethunk-Tech/gh-actions/setup-go@bc5fa5b1004205c9c9399fc941d79d5ada53c59b # v1.16
         with:
           run-lint: "true"
@@ -62,19 +68,23 @@ jobs:
   # code from another package, so per-package numbers report 0.0% where heavy
   # coverage exists.
   unit:
-    name: test (unit lane, -short, coverage)
+    name: gate (unit lane)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: Rethunk-Tech/gh-actions/setup-go@bc5fa5b1004205c9c9399fc941d79d5ada53c59b # v1.16
-      # The unit lane is where the guarantee lives (CONTRIBUTING.md § Tests):
-      # a regression must fail here. -short skips only the built-binary
-      # end-to-end file and the live-server cross-checks, so this job
-      # enforces that every other test passes without them. Its coverage is
-      # the number that matters for the same reason.
-      - run: go test -short -coverpkg=./... -coverprofile=short.out ./...
-      - run: go tool cover -func=short.out | tail -1
+        with:
+          run-lint: "true"
+          run-govulncheck: "true"
+      # Same target as a local `gate` (.gate.toml): gitleaks, race build,
+      # lint/vuln with GOFLAGS=-race, go test -race -short. The coverage
+      # print stays on the full job.
+      - run: go install github.com/gitleaks/gitleaks/v8@v8.30.1
+      - run: go install github.com/Rethunk-Tech/rethunk-gate-cli/cmd/gate@latest
+      - run: gate
 
   full:
     name: test (full suite, -race, coverage)
@@ -82,6 +92,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: Rethunk-Tech/gh-actions/setup-go@bc5fa5b1004205c9c9399fc941d79d5ada53c59b # v1.16
       # cmd/rgit-install's own tests (TestRunPrereqChecks, TestFindSQLAdapter)
       # assert tree-sitter's PATH presence for the prereq check itself -- not
@@ -113,8 +125,8 @@ jobs:
   #   (which pins the grammar version) and the tree-sitter CLI release, so
   #   it is cached on exactly those and regenerated (~60s) only when either
   #   changes. The CLI version is resolved rather than pinned so it stays
-  #   latest. Without the CLI the build still succeeds, just SQL-less, and
-  #   this job would never compile the SQL grammar the release ships.
+  #   latest. Without the CLI, `make sql-parser` fails rather than compiling
+  #   SQL-less binaries. A cache hit still skips generation (`-o sql-parser`).
   # - GOCACHE gets a cache of its own, outside the one setup-go shares across
   #   every job under a single key: the cgo grammars (the SQL parser alone is
   #   17 MB of C) compile once per target and are reused until go.sum or the
@@ -129,6 +141,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: Rethunk-Tech/gh-actions/setup-go@bc5fa5b1004205c9c9399fc941d79d5ada53c59b # v1.16
       # Same toolchain release.yml drives: rgit links tree-sitter through
       # cgo, so every target needs a real C compiler (docs/INSTALL.md § Cross
@@ -146,6 +160,7 @@ jobs:
         env:
           TSCLI_VERSION: ${{ steps.tscli.outputs.version }}
         run: npm install -g "tree-sitter-cli@$TSCLI_VERSION" && make sql-parser
+      - run: go test -tags rgit_sql -short ./...
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/go-build
@@ -175,6 +190,8 @@ jobs:
       GOPLS_VERSION: v0.23.0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: Rethunk-Tech/gh-actions/setup-go@bc5fa5b1004205c9c9399fc941d79d5ada53c59b # v1.16
         id: go
 
@@ -242,6 +259,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       # shellcheck ships preinstalled on ubuntu-latest (actions/runner-images'
       # own software manifest) -- no extra Action or install step needed, the
       # same reasoning this file's own top comment gives for skipping a gcc
@@ -372,6 +391,8 @@ jobs:
       VERSION: v1.2.0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Verify Windows dry-run output
         shell: pwsh
         run: |

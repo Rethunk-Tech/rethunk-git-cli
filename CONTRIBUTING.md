@@ -72,10 +72,11 @@ before tagging.
 bitten — no permutation laundry lists.
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs each lane once:
-the `-short` unit lane, and the full suite (which includes every `-short`
-test) under `-race`, plus `golangci-lint` on every push and pull request.
-Both test jobs print their `-coverpkg=./...` totals but gate on no
-threshold, so the ≤30s suite-time budget and the coverage numbers in
+the unit lane is `gate` (`.gate.toml`: gitleaks, race build, lint and
+govulncheck with `GOFLAGS=-race`, `go test -race -short ./...`), and the
+full suite (which includes every `-short` test) under `-race`. The full
+job prints its `-coverpkg=./...` total but gates on no threshold, so the
+≤30s suite-time budget and the coverage numbers in
 [§ Coverage](#coverage) are a review discipline rather than a CI gate.
 
 Which of the two lanes a case belongs in is the first decision:
