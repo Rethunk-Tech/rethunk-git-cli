@@ -77,12 +77,12 @@ folds into 128.
 ## Output records
 
 `--porcelain` is tab-separated records, no header. `--json` is one object
-with `"schema": 1` first, then the payload (`diffs`, `languages`, `checks`,
-`records`, `commits`, or `symbols`). Mutually exclusive with `--porcelain`
-on `diff`, `languages`, `doctor`, `symbols`, and `log`. `context` has no
-`--porcelain`; `--json` encodes the same stream. Errors under `--json` stay
-text on stderr; the exit code is the verdict. Reordering or adding a
-column is a breaking change.
+with `"schema": 1` first, then the payload (`diffs`, `sha`/`targets`,
+`languages`, `checks`, `records`, `commits`, or `symbols`). Mutually
+exclusive with `--porcelain` on `diff`, `commit`, `languages`, `doctor`,
+`symbols`, and `log`. `context` has no `--porcelain`; `--json` encodes the
+same stream. Errors under `--json` stay text on stderr; the exit code is
+the verdict. Reordering or adding a column is a breaking change.
 
 ### The three `--porcelain` dialects
 
@@ -169,6 +169,34 @@ new path; a binary has zero counts; a pathspec that matches nothing keeps
 one record naming the pathspec. No `STATUS` column — unchanged targets
 are omitted (stderr warning). `--porcelain` replaces `git commit`'s
 summary.
+
+### `rgit commit --json`
+
+```json
+{
+  "schema": 1,
+  "sha": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+  "targets": [
+    {
+      "file": "auth.go",
+      "symbol": "ValidateToken",
+      "added": "12",
+      "deleted": "3"
+    },
+    {
+      "file": "package.json",
+      "symbol": "",
+      "added": "4",
+      "deleted": "1"
+    }
+  ]
+}
+```
+
+`sha` is the full commit object id porcelain would print as `H`. It is
+omitted when porcelain would print no `H` (`--dry-run`, `--stage-only`).
+`--allow-empty` still names `sha` with `"targets": []`. No `status`
+field. `--json` with `--porcelain` or `-q`/`--quiet` is 129.
 
 ### `rgit languages --porcelain`
 

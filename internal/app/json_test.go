@@ -50,7 +50,7 @@ func TestRun_JSONUnsupportedCommand(t *testing.T) {
 	t.Parallel()
 	cwd := t.TempDir()
 
-	for _, cmd := range []string{"commit", "show", "blame", "completion"} {
+	for _, cmd := range []string{"show", "blame", "completion"} {
 		_, stderr, code := runApp(t, "-C", cwd, "--json", cmd)
 		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage), qt.Commentf("%s", cmd))
 		qt.Assert(t, qt.StringContains(stderr, "rgit: "+cmd+" does not support --json"))
@@ -117,5 +117,78 @@ func TestRun_DiffJSONAgreesWithPorcelain(t *testing.T) {
 		_, stderr, code = runApp(t, append([]string{"-C", dir}, args...)...)
 		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage), qt.Commentf("%v\n%s", args, stderr))
 		qt.Assert(t, qt.StringContains(stderr, "mutually exclusive"))
+	}
+}
+
+// TestRun_CommitJSONAgreesWithPorcelain pins that --json names the HEAD
+// sha porcelain would print as H, lists the same target rows, omits sha
+// on --dry-run, and still names it with empty targets on --allow-empty.
+func TestRun_CommitJSONAgreesWithPorcelain(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+
+	dryPorcelain, stderr, code := runApp(t, "-C", dir, "commit", "--dry-run", "--porcelain", "-m", "fix(a): bump A", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("%s", stderr))
+	qt.Assert(t, qt.Not(qt.StringContains(dryPorcelain, "H\t")))
+
+	dryJSON, stderr, code := runApp(t, "-C", dir, "commit", "--dry-run", "--json", "-m", "fix(a): bump A", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("%s", stderr))
+
+	var dryTop map[string]json.RawMessage
+	qt.Assert(t, qt.IsNil(json.Unmarshal([]byte(dryJSON), &dryTop)))
+	qt.Assert(t, qt.DeepEquals(mapKeys(dryTop), []string{"schema", "targets"}))
+	assertCommitJSONTargets(t, dryTop["targets"], dryPorcelain)
+
+	stdout, stderr, code := runApp(t, "-C", dir, "commit", "--json", "-m", "fix(a): bump A", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("%s", stderr))
+	sha := strings.TrimSpace(gittest.Git(t.Context(), t, dir, "rev-parse", "HEAD"))
+
+	var top map[string]json.RawMessage
+	qt.Assert(t, qt.IsNil(json.Unmarshal([]byte(stdout), &top)))
+	qt.Assert(t, qt.DeepEquals(mapKeys(top), []string{"schema", "sha", "targets"}))
+	qt.Assert(t, qt.Equals(strings.Trim(string(top["sha"]), "\"\n"), sha))
+	assertCommitJSONTargets(t, top["targets"], dryPorcelain)
+
+	emptyJSON, stderr, code := runApp(t, "-C", dir, "commit", "--allow-empty", "--json", "-m", "chore: empty", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("%s", stderr))
+	emptySHA := strings.TrimSpace(gittest.Git(t.Context(), t, dir, "rev-parse", "HEAD"))
+	var emptyTop map[string]json.RawMessage
+	qt.Assert(t, qt.IsNil(json.Unmarshal([]byte(emptyJSON), &emptyTop)))
+	qt.Assert(t, qt.DeepEquals(mapKeys(emptyTop), []string{"schema", "sha", "targets"}))
+	qt.Assert(t, qt.Equals(strings.Trim(string(emptyTop["sha"]), "\"\n"), emptySHA))
+	var emptyTargets []map[string]string
+	qt.Assert(t, qt.IsNil(json.Unmarshal(emptyTop["targets"], &emptyTargets)))
+	qt.Assert(t, qt.Equals(len(emptyTargets), 0))
+
+	for _, args := range [][]string{
+		{"commit", "--json", "--porcelain", "-m", "fix(a): x", "a.go:A"},
+		{"commit", "--json", "--quiet", "-m", "fix(a): x", "a.go:A"},
+	} {
+		_, stderr, code = runApp(t, append([]string{"-C", dir}, args...)...)
+		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage), qt.Commentf("%v\n%s", args, stderr))
+		qt.Assert(t, qt.StringContains(stderr, "mutually exclusive"))
+	}
+}
+
+func assertCommitJSONTargets(t *testing.T, raw json.RawMessage, porcelain string) {
+	t.Helper()
+	var rows []map[string]string
+	qt.Assert(t, qt.IsNil(json.Unmarshal(raw, &rows)))
+	body := strings.TrimRight(porcelain, "\n")
+	if body == "" {
+		qt.Assert(t, qt.Equals(len(rows), 0))
+		return
+	}
+	lines := strings.Split(body, "\n")
+	qt.Assert(t, qt.Equals(len(rows), len(lines)))
+	for i, line := range lines {
+		fields := strings.Split(line, "\t")
+		qt.Assert(t, qt.Equals(len(fields), 4))
+		qt.Assert(t, qt.DeepEquals(mapKeys(rows[i]), []string{"added", "deleted", "file", "symbol"}))
+		qt.Assert(t, qt.Equals(rows[i]["file"], fields[0]))
+		qt.Assert(t, qt.Equals(rows[i]["symbol"], fields[1]))
+		qt.Assert(t, qt.Equals(rows[i]["added"], fields[2]))
+		qt.Assert(t, qt.Equals(rows[i]["deleted"], fields[3]))
 	}
 }

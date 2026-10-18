@@ -30,7 +30,7 @@ binaries collapse to one `(untracked)` row.
 `-C <path>` **before** the command. `--version`, `--json`, and `-h`/`--help`
 before or after it.
 
-`--json` prints one object on stdout (`diff`, `log`, `context`,
+`--json` prints one object on stdout (`diff`, `commit`, `log`, `context`,
 `languages`, `doctor`, `symbols`) and nothing else there. Human narration
 stays on stderr. Other commands: 129. Envelope:
 [`CODES.md`](CODES.md#output-records).
@@ -409,6 +409,7 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 | `--date <date>` | Forwarded. |
 | `--reset-author` | Forwarded; git accepts it only with `--amend` or `--fixup=amend:`. |
 | `--porcelain` | (`commit`) `H<TAB>SHA` then target records. `--dry-run`: targets only. |
+| `--json` | (`commit`) Same facts as `--porcelain` as one object. Omits `sha` when porcelain would omit `H`. Exclusive with `--porcelain` and `-q`. |
 | `-q`, `--quiet` | (`commit`) Empty stdout; stderr still carries warnings and hooks. |
 | `-S`, `-S<key-id>`, `--gpg-sign`, `--gpg-sign=<key-id>` | GPG-sign. See `-S` parsing below. |
 | `--no-gpg-sign` | Override `commit.gpgsign=true`. |
@@ -424,7 +425,7 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 | `--porcelain` | (`show`) Length-framed extents. |
 | `--with-filename` | (`symbols`) `FILE<TAB>` prefix. |
 | `--porcelain` | (`symbols`) NUL records. |
-| `--json` | Global. One object on stdout for `diff`, `log`, `context`, `languages`, `doctor`, `symbols`. Before or after the command. Other commands: 129. |
+| `--json` | Global. One object on stdout for `diff`, `commit`, `log`, `context`, `languages`, `doctor`, `symbols`. Before or after the command. Other commands: 129. |
 | `--json` | (`symbols`) One object. Exclusive with `--porcelain`. |
 | `--follow-rename` | (`show`, `blame`, `log`) Re-resolve at each rename. Combined with `--source`, starts at that revision. Plain path: 129. |
 | `--source REV` | (`show`, `blame`, `log`) Read/blame/walk `REV:FILE`. Unknown rev: 128. Absent path: 3. |
@@ -459,8 +460,8 @@ of its exclusions (including `--include`); `--dry-run` + `--push`;
 
 + a positional range; `-m` + `-F`; `--porcelain` + `--quiet` (`diff`);
 `--porcelain` + `-p` (`diff`, `log`); `--json` + `-p` (`diff`, `log`);
-`--porcelain` + `--json` (`diff`, `languages`, `doctor`, `symbols`, `log`);
-`--json` + `--quiet` (`diff`) → 129.
+`--porcelain` + `--json` (`diff`, `commit`, `languages`, `doctor`, `symbols`, `log`);
+`--json` + `--quiet` (`diff`, `commit`) → 129.
 One path as both path and symbol → 5 (`greet.go greet.go:A`).
 
 `FILE:SYMBOL` on JSON/JSONC/JSON5/YAML/TOML → 12. Name the path.

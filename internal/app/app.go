@@ -50,7 +50,7 @@ Commands:
 
 Global flags:
   -C <path>    run as if rgit was started in <path> (before the command)
-  --json       one JSON object on stdout (diff, log, context, languages, doctor, symbols)
+  --json       one JSON object on stdout (diff, commit, log, context, languages, doctor, symbols)
   --version    print the version and exit
   -h, --help   show this help and exit
 
@@ -117,9 +117,6 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 	case "diff":
 		return runDiff(ctx, dir, args[1:], stdout, stderr)
 	case "commit":
-		if code := refuseUnsupportedJSON(asJSON, "commit", stderr); code != exitcode.Success {
-			return code
-		}
 		return runCommit(ctx, dir, args[1:], stdout, stderr)
 	case "show":
 		if code := refuseUnsupportedJSON(asJSON, "show", stderr); code != exitcode.Success {

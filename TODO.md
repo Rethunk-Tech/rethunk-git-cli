@@ -10,52 +10,6 @@ Limitations that ship — unsupported languages, excluded cross-build targets,
 constructs no anchor reaches — are in
 [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md), not here.
 
-## `rgit commit --json` is missing beside `--porcelain`
-
-`rgit commit --porcelain` writes `H<TAB>SHA` then
-`FILE<TAB>SYMBOL<TAB>ADDED<TAB>DELETED` (`internal/app/commit.go:489–504`,
-`docs/CODES.md` `rgit commit --porcelain`). `languages`/`doctor`/`log`
-already expose the same facts as `--json`. Commit does not.
-
-Add `--json` as one object: the leading `H` as `sha` (absent on
-`--dry-run`, present on `--allow-empty` even with no targets), then
-`targets` with porcelain columns in lowercase. Mutually exclusive with
-`--porcelain` and with `-q`/`--quiet` (those two already refuse each
-other at `commit.go:163`). Human summary and `--porcelain` stay.
-
-Larger than log JSON: dry-run has no `H`, allow-empty has `H` and no
-targets, pathspecs expand to one record per staged file
-(`writeTargetRecords`). The H/no-H rule must not drift from porcelain.
-
-### Read
-
-1. `internal/app/commit.go:124` `--porcelain`, `:163` porcelain/quiet,
-   `:489` the `H` record, `writeTargetRecords`.
-2. `docs/CODES.md` `rgit commit --porcelain` — `H` on real commits, none
-   on `--dry-run`, `H` with no targets on `--allow-empty`.
-3. `internal/app/log.go` `writeLogJSON` — encoder flags
-   (`SetEscapeHTML(false)`, indent two spaces).
-4. `internal/app/completion.go` `rgitCommitFlags`.
-
-### Traps
-
-- **`--dry-run --json` must not invent a sha.** Porcelain emits target
-  rows only. JSON omits `sha` or uses `""` only if porcelain would have
-  printed `H`; it does not, so omit `sha` with `json:",omitempty"` or
-  emit `"sha": ""` — pick the one that still round-trips "no H record"
-  and document it in `CODES.md` in the same commit.
-- **`--porcelain --quiet` is already 129.** `--json --quiet` is the
-  same, not empty stdout.
-- **Do not add a STATUS column.** Porcelain has none; JSON must not.
-
-### Acceptance
-
-A real commit's `--json` object names the full HEAD sha and one target
-per porcelain target row. `--dry-run --json` has those target rows and
-no sha fact porcelain would not have printed. `--allow-empty --json`
-still names the sha with `"targets": []`. `--json` with `--porcelain` or
-`-q` is exit 129. The human summary and `--porcelain` are unchanged.
-
 ## `rgit show --json` needs a byte-safe encoding, not a TSV wrap
 
 `show --porcelain` length-frames extents (`FILE:ANCHOR<TAB>NBYTES` plus

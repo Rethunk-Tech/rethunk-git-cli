@@ -39,6 +39,7 @@ type commitFlags struct {
 	gpgSignKey   string // "" = not given; gpgSignBare = bare --gpg-sign; else the key id
 	noGPGSign    bool
 	porcelain    bool
+	asJSON       bool
 	quiet        bool
 	include      bool
 	only         bool
@@ -122,6 +123,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	fs.StringVar(&f.date, "date", "", "override the commit date")
 	fs.BoolVar(&f.resetAuthor, "reset-author", false, "take the author identity from the committer (with --amend)")
 	fs.BoolVar(&f.porcelain, "porcelain", false, "list staged targets as stable tab-separated records")
+	fs.BoolVar(&f.asJSON, "json", false, "one JSON object of the porcelain records")
 	fs.BoolVarP(&f.quiet, "quiet", "q", false, "suppress the commit summary and target listing")
 	fs.BoolVarP(&f.include, "include", "i", false, "stage named targets and commit them with other staged work")
 	fs.BoolVarP(&f.only, "only", "o", false, "commit only named targets")
@@ -157,11 +159,19 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		fmt.Fprintln(stderr, "rgit: --dry-run and --push are mutually exclusive")
 		return exitcode.InvalidUsage
 	}
+	asJSON := jsonFlag(ctx) || f.asJSON
 	// Asking for machine-readable output and for no output is a
 	// contradiction, and silently letting one win would leave a script
 	// parsing an empty stream that it cannot tell from "nothing staged".
-	if f.porcelain && f.quiet {
+	switch {
+	case f.porcelain && f.quiet:
 		fmt.Fprintln(stderr, "rgit: --porcelain and --quiet are mutually exclusive")
+		return exitcode.InvalidUsage
+	case asJSON && f.quiet:
+		fmt.Fprintln(stderr, "rgit: --json and --quiet are mutually exclusive")
+		return exitcode.InvalidUsage
+	case f.porcelain && asJSON:
+		fmt.Fprintln(stderr, "rgit: --porcelain and --json are mutually exclusive")
 		return exitcode.InvalidUsage
 	}
 	// git commit -i and -o are alternate ways to build the commit from
@@ -376,6 +386,13 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 				writeTargetRecords(stdout, targetResults)
 				return exitcode.Success
 			}
+			if asJSON {
+				if err := writeCommitJSON(stdout, "", targetResults); err != nil {
+					fmt.Fprintf(stderr, "rgit: commit: %v\n", err)
+					return exitcode.GitFailure
+				}
+				return exitcode.Success
+			}
 			if !f.quiet {
 				fmt.Fprintln(stdout, "dry run: nothing written, nothing staged. Would commit:")
 				writeTargetListing(stdout, targetResults)
@@ -395,6 +412,11 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 			switch {
 			case f.porcelain:
 				writeTargetRecords(stdout, targetResults)
+			case asJSON:
+				if err := writeCommitJSON(stdout, "", targetResults); err != nil {
+					fmt.Fprintf(stderr, "rgit: commit: %v\n", err)
+					return exitcode.GitFailure
+				}
 			case !f.quiet:
 				fmt.Fprintln(stdout, "staged, not committed:")
 				writeTargetListing(stdout, targetResults)
@@ -427,6 +449,13 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		}
 	} else if f.dryRun {
 		if f.porcelain {
+			return exitcode.Success
+		}
+		if asJSON {
+			if err := writeCommitJSON(stdout, "", nil); err != nil {
+				fmt.Fprintf(stderr, "rgit: commit: %v\n", err)
+				return exitcode.GitFailure
+			}
 			return exitcode.Success
 		}
 		if !f.quiet {
@@ -486,11 +515,11 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		return exitcode.GitFailure
 	}
 	switch {
-	case f.porcelain:
+	case f.porcelain, asJSON:
 		// git's own --porcelain replaces its human summary rather than
 		// adding to it, and the same rule applies here: relaying the
 		// summary would leave a caller parsing records interleaved with
-		// prose.
+		// prose. --json is that same H + target list as one object.
 		sha, ok, revErr := repo.RevParseVerify(ctx, "HEAD")
 		if revErr != nil {
 			fmt.Fprintf(stderr, "rgit: resolving committed SHA: %v\n", revErr)
@@ -499,6 +528,13 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		if !ok {
 			fmt.Fprintln(stderr, "rgit: resolving committed SHA: HEAD is unavailable")
 			return exitcode.GitFailure
+		}
+		if asJSON {
+			if err := writeCommitJSON(stdout, sha, targetResults); err != nil {
+				fmt.Fprintf(stderr, "rgit: commit: %v\n", err)
+				return exitcode.GitFailure
+			}
+			break
 		}
 		fmt.Fprintf(stdout, "H\t%s\n", sha)
 		writeTargetRecords(stdout, targetResults)
@@ -759,6 +795,39 @@ func commitTargets(ctx context.Context, root, prefix string, classified []cli.Cl
 // There is no STATUS column, unlike diff's records: an unchanged target is
 // already omitted here (it got its own stderr warning and nothing was
 // staged for it), so every record this writes would carry the same value.
+type commitJSONTarget struct {
+	File    string `json:"file"`
+	Symbol  string `json:"symbol"`
+	Added   string `json:"added"`
+	Deleted string `json:"deleted"`
+}
+
+type commitJSONReport struct {
+	Schema  int                `json:"schema"`
+	SHA     string             `json:"sha,omitempty"`
+	Targets []commitJSONTarget `json:"targets"`
+}
+
+func writeCommitJSON(w io.Writer, sha string, results []synth.TargetResult) error {
+	targets := make([]commitJSONTarget, 0)
+	for _, r := range results {
+		if r.Outcome == synth.Unchanged {
+			continue
+		}
+		symbol := ""
+		if r.Target.Pathspec == "" {
+			symbol = r.Target.Symbol.Anchor
+		}
+		targets = append(targets, commitJSONTarget{
+			File:    r.Path,
+			Symbol:  symbol,
+			Added:   fmt.Sprintf("%d", r.Added),
+			Deleted: fmt.Sprintf("%d", r.Deleted),
+		})
+	}
+	return encodeJSON(w, commitJSONReport{Schema: jsonSchema, SHA: sha, Targets: targets})
+}
+
 func writeTargetRecords(stdout io.Writer, results []synth.TargetResult) {
 	for _, r := range results {
 		if r.Outcome == synth.Unchanged {
