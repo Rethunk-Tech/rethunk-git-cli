@@ -42,7 +42,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: Rethunk-Tech/gh-actions/setup-go@bc5fa5b1004205c9c9399fc941d79d5ada53c59b # v1.16
+      - uses: Rethunk-Tech/gh-actions/setup-go@043d9f8fb8b04b983fa8f7012b28241fd20f17b4 # v1.18
         with:
           run-lint: "true"
           run-govulncheck: "true"
@@ -60,7 +60,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: Rethunk-Tech/gh-actions/setup-go@bc5fa5b1004205c9c9399fc941d79d5ada53c59b # v1.16
+      - uses: Rethunk-Tech/gh-actions/setup-go@043d9f8fb8b04b983fa8f7012b28241fd20f17b4 # v1.18
       # Same target as a local `gate` (.gate.toml): race build,
       # lint/vuln with GOFLAGS=-race, go test -race -short. gate runs lint and
       # govulncheck itself, so both are installed here rather than run twice.
@@ -79,7 +79,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: Rethunk-Tech/gh-actions/setup-go@bc5fa5b1004205c9c9399fc941d79d5ada53c59b # v1.16
+      - uses: Rethunk-Tech/gh-actions/setup-go@043d9f8fb8b04b983fa8f7012b28241fd20f17b4 # v1.18
       # cmd/rgit-install's own tests (TestRunPrereqChecks, TestFindSQLAdapter)
       # assert tree-sitter's PATH presence for the prereq check itself -- not
       # a build-time SQL lane (this file's own top comment).
@@ -129,7 +129,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: Rethunk-Tech/gh-actions/setup-go@bc5fa5b1004205c9c9399fc941d79d5ada53c59b # v1.16
+      - uses: Rethunk-Tech/gh-actions/setup-go@043d9f8fb8b04b983fa8f7012b28241fd20f17b4 # v1.18
       # Same toolchain release.yml drives: rgit links tree-sitter through
       # cgo, so every target needs a real C compiler (docs/INSTALL.md § Cross
       # builds). setup-zig caches zig's global cache itself.
@@ -180,7 +180,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: Rethunk-Tech/gh-actions/setup-go@bc5fa5b1004205c9c9399fc941d79d5ada53c59b # v1.16
+      - uses: Rethunk-Tech/gh-actions/setup-go@043d9f8fb8b04b983fa8f7012b28241fd20f17b4 # v1.18
         id: go
 
       # Compiling gopls is ~40s; the binary depends only on its own version
