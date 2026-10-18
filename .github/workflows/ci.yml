@@ -67,6 +67,7 @@ jobs:
       # Same target as a local `gate` (.gate.toml): race build,
       # lint/vuln with GOFLAGS=-race, go test -race -short. The coverage
       # print stays on the full job.
+      - run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
       - run: go install github.com/Rethunk-Tech/rethunk-gate-cli/cmd/gate@latest
       - run: gate
 
