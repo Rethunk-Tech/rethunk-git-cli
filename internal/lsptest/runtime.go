@@ -14,7 +14,7 @@ import (
 // outlives the run. A test that wants a daemon sets its own
 // XDG_RUNTIME_DIR or RGIT_LSP_SOCKET with t.Setenv.
 func RunWithoutManagedDaemon(m *testing.M) int {
-	dir, err := os.MkdirTemp("", "rgit-test-runtime-*")
+	dir, err := os.MkdirTemp(os.TempDir(), "rgit-test-runtime-*")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "lsptest:", err)
 		return 1

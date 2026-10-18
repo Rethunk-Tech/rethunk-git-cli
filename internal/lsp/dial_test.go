@@ -19,19 +19,16 @@ import (
 // test's own name -- needed wherever a path built from it is bound as a
 // unix socket, which is capped at ~108 bytes (sun_path) on Linux and can
 // overflow once a long test name and privateSocketDir's own "rgit-<uid>"
-// subdirectory are both appended to it. It roots at /tmp where one exists
-// rather than $TMPDIR: macOS runners and scratch harnesses set a TMPDIR long
-// enough to overflow sun_path on its own.
+// subdirectory are both appended to it. The short name lives under
+// os.TempDir() ($TMPDIR, else the platform default), not a hardcoded /tmp,
+// so a RAM-backed default tmpfs is not the only place a killed test can
+// leave a symlink.
 var shortTempDirSeq atomic.Uint64
 
 func shortTempDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	base := filepath.Dir(dir)
-	if info, err := os.Stat("/tmp"); err == nil && info.IsDir() {
-		base = "/tmp"
-	}
-	link := filepath.Join(base, fmt.Sprintf("rgit-lsp-test-%d-%d", os.Getpid(), shortTempDirSeq.Add(1)))
+	link := filepath.Join(os.TempDir(), fmt.Sprintf("rgit-lsp-test-%d-%d", os.Getpid(), shortTempDirSeq.Add(1)))
 	if err := os.Symlink(dir, link); err != nil {
 		t.Fatalf("create short temp symlink: %v", err)
 	}
@@ -41,6 +38,27 @@ func shortTempDir(t *testing.T) string {
 		}
 	})
 	return link
+}
+
+func TestShortTempDirHonoursTMPDIRAndCleansUp(t *testing.T) {
+	// cannot Parallel because t.Setenv("TMPDIR", ...) below
+	root := t.TempDir()
+	t.Setenv("TMPDIR", root)
+
+	var link string
+	t.Run("create", func(t *testing.T) {
+		t.Setenv("TMPDIR", root)
+		link = shortTempDir(t)
+		if filepath.Dir(link) != root {
+			t.Errorf("shortTempDir() parent = %q; want TMPDIR %q", filepath.Dir(link), root)
+		}
+	})
+	if link == "" {
+		return
+	}
+	if _, err := os.Lstat(link); !os.IsNotExist(err) {
+		t.Errorf("shortTempDir() leftover %q after the creating test ended: %v", link, err)
+	}
 }
 
 // noopDaemonArgs is a serverSpec.daemonArgs for a test spec whose "daemon"

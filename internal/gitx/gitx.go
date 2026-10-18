@@ -924,7 +924,7 @@ func (r *Repo) NewOnlyIndex(ctx context.Context) (*OnlyIndex, error) {
 	if err != nil {
 		return nil, err
 	}
-	dir, err := os.MkdirTemp("", "rgit-only-*")
+	dir, err := os.MkdirTemp(os.TempDir(), "rgit-only-*")
 	if err != nil {
 		return nil, err
 	}

@@ -96,7 +96,7 @@ func requireBinary(t *testing.T) {
 }
 
 func buildRgit() (bin string, cleanup func(), err error) {
-	dir, err := os.MkdirTemp("", "rgit-e2e-bin-*")
+	dir, err := os.MkdirTemp(os.TempDir(), "rgit-e2e-bin-*")
 	if err != nil {
 		return "", func() {}, err
 	}
@@ -111,6 +111,10 @@ func buildRgit() (bin string, cleanup func(), err error) {
 	// checking is the jsonrpc2 read goroutine and the daemon spawn lock,
 	// both in-process: `go test -race ./...` reaches them and this does not.
 	cmd := exec.CommandContext(context.Background(), "go", "build", "-cover", "-o", bin, ".") //nolint:gosec // e2e builds this checkout with fixed arguments and a test-temp output
+	// Compile scratch (GOTMPDIR) dies with cleanup. GOCACHE is left as
+	// the process environment so this build reuses the user's grammar
+	// cache instead of copying ~300MB into TMPDIR on every run.
+	cmd.Env = append(os.Environ(), "GOTMPDIR="+dir)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {

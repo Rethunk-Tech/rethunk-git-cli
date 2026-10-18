@@ -422,7 +422,7 @@ func downloadSQLGrammarModule(repoRoot string) (string, error) {
 // "generated the SQL parser into .../csrc (ABI 15)" prints, then `go build
 // -tags rgit_sql ./cmd/rgit` to prove the result actually compiles.
 func runSQLGeneration(modDir, pkgDir string) error {
-	scratch, err := os.MkdirTemp("", "rgit-sql-gen-*")
+	scratch, err := os.MkdirTemp(os.TempDir(), "rgit-sql-gen-*")
 	if err != nil {
 		return fmt.Errorf("scratch dir: %w", err)
 	}

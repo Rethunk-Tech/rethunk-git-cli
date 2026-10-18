@@ -67,7 +67,7 @@ if [ "$dry_run" = 1 ]; then
   exit 0
 fi
 
-tmp=$(mktemp -d)
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/rgit.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 
 curl -fsSL -o "$tmp/$asset" "$base_url/$asset"
