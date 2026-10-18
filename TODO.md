@@ -112,6 +112,246 @@ restored no `parser.c` does the same, rather than compiling SQL-less
 artifacts. `make install` without the CLI still succeeds and installs an
 SQL-less `rgit`.
 
+## `rgit help <command>` still prints top-level help
+
+`rgit help` is a top-level alias of `--help`/`-h`: `Run` matches `help` as
+`args[0]` and writes `topLevelHelp` (`internal/app/app.go:97–99`). Any
+further words are ignored, so `rgit help diff` exits 0 with the command
+list, not `diff`'s own help. Git's `git help <command>` shows that
+command. `docs/USAGE.md` § Help (`:494`) names only the three top-level
+spellings and `rgit <command> --help`.
+
+Dispatch `rgit help <command>` to the same help that `rgit <command>
+--help` already prints, exit 0. Bare `rgit help` stays top-level.
+Unknown `rgit help frobnicate` is exit 129 with the existing unknown-
+command sentence. Do not open a pager or man page. `rgit version` stays
+the version report, not help.
+
+This changes a currently successful `rgit help diff` (top-level text,
+exit 0). Tests that only pin `[]string{"help"}` (`internal/app/app_test.go:97`)
+do not cover the extra word; adding coverage is part of the work.
+
+Rejected: treating `help` as unknown unless it is the sole argument.
+Rejected: `git help`'s man-page/pager path.
+
+### Read
+
+1. `internal/app/app.go:97` `case "--help", "-h", "help"` — prints
+   `topLevelHelp` and returns. Extra args are never inspected.
+2. `internal/app/app.go:109` onward — the command switch `diff`,
+   `commit`, `show`, `blame`, `log`, `context`, `languages`, `doctor`,
+   `completion`, `symbols`. Each already accepts `--help`/`-h`.
+3. `docs/USAGE.md:494` — documents the three top-level spellings and
+   per-command `--help`/`-h`, not `help <command>`.
+4. `internal/app/app_test.go:81` `TestRun_TopLevelDispatch` — `help` with
+   no extra args. `cmd/rgit/rgit_e2e_test.go` loops `"--help", "-h",
+   "help"` the same way.
+
+### Traps
+
+- **`rgit help` with no argument must stay top-level.** Routing through
+  a missing-command error would change the documented exit 0.
+- **`rgit help --help` is still top-level help**, not a nested usage
+  error: `--help` as the second word is the command whose help was
+  requested only if we treat it as a command name. Keep the first-word
+  `help` alias: extra `--help`/`-h` still print `topLevelHelp`.
+- **Do not send `help diff` through `runDiff` with rewritten args** if
+  that would open a repository. Help must stay a no-repo path, matching
+  `rgit diff --help` today (`parseFlagsOrHelp` / each command's `-h`
+  branch).
+- **Completion lists `help` as an alias**, not a command that takes a
+  subcommand (`internal/app/completion.go` `rgitSubcommands`). Offering
+  command names after `help` is in scope; do not invent a second
+  completion word list.
+
+### Acceptance
+
+`rgit help` and `rgit help --help` still print `topLevelHelp` and exit 0.
+`rgit help diff` (and each other dispatched command) prints that
+command's `--help` text, byte-identical, exit 0, with no repository.
+`rgit help frobnicate` is exit 129 and names the unknown command.
+`rgit diff --help` is unchanged.
+
+## `rgit diff --json` is missing beside `--porcelain`
+
+`languages`, `doctor`, `symbols`, and `log` each pair `--porcelain` with
+`--json` as one object whose fields are the porcelain columns in
+lowercase. `rgit diff` has `--porcelain` (`internal/app/diff.go:48`) and
+renders through `internal/diff/porcelain.go:11` `RenderPorcelain`, but
+no `--json`. `--quiet` and `-p`/`--patch` already refuse `--porcelain`
+(`diff.go:75–80`).
+
+Add `--json` as that same object for the porcelain rows. Mutually
+exclusive with `--porcelain` and with `-p`/`--patch`. `--quiet` stays
+exclusive with `--porcelain`; decide `--json`+`--quiet` the same way
+(`--porcelain`+`--quiet` is already exit 129). Default text and
+`--porcelain` bytes stay. Field names follow
+`docs/CODES.md` `rgit diff --porcelain` (`FILE`, `SYMBOL`, `STATUS`,
+`ADDED`, `DELETED`) in lowercase. Empty `symbol` is `""`. STATUS tokens
+stay the existing strings (`MOD`, `DELETED`, …), not a new vocabulary.
+
+This is larger than log's two-field wrap: five columns, empty-symbol
+rows, and the quiet/patch/exit-code matrix. Do not change `RenderPorcelain`.
+
+### Read
+
+1. `internal/app/diff.go:48` `--porcelain`, `:51` `-p`/`--patch`, `:75`
+   porcelain/quiet, `:79` porcelain/patch, `:254` `RenderPorcelain`.
+2. `internal/diff/porcelain.go:11` — TSV `FILE<TAB>SYMBOL<TAB>STATUS<TAB>ADDED<TAB>DELETED`.
+3. `internal/app/log.go` `writeLogJSON` / `refuseLogFormatConflict` —
+   the JSON-from-porcelain pattern to copy, not a second row walk.
+4. `docs/CODES.md` `rgit diff --porcelain` and `rgit log --json` — the
+   schema to extend and the exclusivity sentence.
+5. `internal/app/completion.go` `rgitDiffFlags` — must gain `--json` in
+   the same commit as help text, or `TestCompletionFlags_MatchLiveFlagSets`
+   fails.
+
+### Traps
+
+- **Do not invent a "files" tree.** One object with a row array matching
+  porcelain order. Nesting by path would disagree with `--porcelain`.
+- **`--quiet` still implies `--exit-code` and suppresses stdout.** JSON
+  is an encoding of the report, so `--json --quiet` is 129 like
+  `--porcelain --quiet`, not silent JSON.
+- **`--patch` after JSON is the same refusal as `--porcelain --patch`.**
+  A JSON object plus a git patch body is two formats.
+- **Unanchorable / empty symbol rows must keep `"symbol": ""`.** Omitting
+  the key would break the "same fields as porcelain" rule `languages`
+  already uses.
+
+### Acceptance
+
+`rgit diff --json` lists every `--porcelain` row as one JSON object,
+same order, lowercase column names, empty symbol as `""`. Combined with
+`--porcelain` or `-p`/`--patch` or `--quiet` is exit 129. Default text
+and `--porcelain` are unchanged. `--exit-code` still exits 1 when
+committable. Completion and `docs/CODES.md` name the flag in the same
+commit.
+
+## `rgit commit --json` is missing beside `--porcelain`
+
+`rgit commit --porcelain` writes `H<TAB>SHA` then
+`FILE<TAB>SYMBOL<TAB>ADDED<TAB>DELETED` (`internal/app/commit.go:489–504`,
+`docs/CODES.md` `rgit commit --porcelain`). `languages`/`doctor`/`log`
+already expose the same facts as `--json`. Commit does not.
+
+Add `--json` as one object: the leading `H` as `sha` (absent on
+`--dry-run`, present on `--allow-empty` even with no targets), then
+`targets` with porcelain columns in lowercase. Mutually exclusive with
+`--porcelain` and with `-q`/`--quiet` (those two already refuse each
+other at `commit.go:163`). Human summary and `--porcelain` stay.
+
+Larger than log JSON: dry-run has no `H`, allow-empty has `H` and no
+targets, pathspecs expand to one record per staged file
+(`writeTargetRecords`). The H/no-H rule must not drift from porcelain.
+
+### Read
+
+1. `internal/app/commit.go:124` `--porcelain`, `:163` porcelain/quiet,
+   `:489` the `H` record, `writeTargetRecords`.
+2. `docs/CODES.md` `rgit commit --porcelain` — `H` on real commits, none
+   on `--dry-run`, `H` with no targets on `--allow-empty`.
+3. `internal/app/log.go` `writeLogJSON` — encoder flags
+   (`SetEscapeHTML(false)`, indent two spaces).
+4. `internal/app/completion.go` `rgitCommitFlags`.
+
+### Traps
+
+- **`--dry-run --json` must not invent a sha.** Porcelain emits target
+  rows only. JSON omits `sha` or uses `""` only if porcelain would have
+  printed `H`; it does not, so omit `sha` with `json:",omitempty"` or
+  emit `"sha": ""` — pick the one that still round-trips "no H record"
+  and document it in `CODES.md` in the same commit.
+- **`--porcelain --quiet` is already 129.** `--json --quiet` is the
+  same, not empty stdout.
+- **Do not add a STATUS column.** Porcelain has none; JSON must not.
+
+### Acceptance
+
+A real commit's `--json` object names the full HEAD sha and one target
+per porcelain target row. `--dry-run --json` has those target rows and
+no sha fact porcelain would not have printed. `--allow-empty --json`
+still names the sha with `"targets": []`. `--json` with `--porcelain` or
+`-q` is exit 129. The human summary and `--porcelain` are unchanged.
+
+## `rgit show --json` needs a byte-safe encoding, not a TSV wrap
+
+`show --porcelain` length-frames extents (`FILE:ANCHOR<TAB>NBYTES` plus
+exactly `NBYTES` bytes, `internal/app/show.go:33–36`) because a symbol
+body can contain any byte, including a header-shaped line. `--json` as
+used on `log`/`symbols` is UTF-8 text fields. Putting the extent in a
+JSON string would require an encoding choice (UTF-8 with replacement,
+base64, or `\u` escapes) that `--porcelain` does not need.
+
+Do not add `--json` until that encoding is decided in `docs/CODES.md`
+and a consumer exists. `--porcelain` / `--with-header` stay the
+machine-readable path. Default one-anchor output stays raw bytes.
+
+Rejected: JSON that assumes the extent is valid UTF-8. Rejected: wrapping
+only the header and leaving the body on stdout after the object.
+
+### Read
+
+1. `internal/app/show.go:21` help, `:33` `--porcelain`, `:111` `framed`.
+2. `docs/CODES.md` `rgit show --porcelain` — length-framed dialect, not
+   TSV+newline.
+3. `docs/CODES.md:137` — `--json` is defined as one object for
+   languages/doctor/context/symbols/log, none of which carry arbitrary
+   file bytes.
+
+### Traps
+
+- **A Go `json.Encoder` will `\u`escape `<` if `SetEscapeHTML` stays
+  default-true.** Even with it off, invalid UTF-8 becomes U+FFFD.
+  Base64 avoids that and is a new dialect, not "the porcelain fields."
+- **Single-anchor default is unframed bytes for piping.** JSON would
+  always frame, like `--porcelain`, and must not change the no-flag
+  path.
+
+### Acceptance
+
+No `--json` on `show` until `CODES.md` names the byte encoding and a
+test pins that a fixture with non-UTF-8 bytes round-trips. `--porcelain`
+remains the scripting form.
+
+## `rgit context --porcelain` would alias the default stream
+
+`docs/CODES.md:144` states `context` has no `--porcelain`; `--json`
+encodes the same record stream. The default output is already TSV with a
+leading type tag (`internal/app/context.go:42`). `--porcelain` as an
+unknown flag is exit 129 (`context.go:125–130`,
+`internal/app/context_test.go` `--json --porcelain`). Adding
+`--porcelain` as a no-op alias of the default, or as a second encoding
+beside `--json`, either changes that 129 or invents a dialect the
+default already is.
+
+Leave the refusal. If a caller wants TSV, they omit `--json`. If a
+caller wants an explicit flag name, that is a contract change to document
+in `CODES.md` (the three `--porcelain` dialects table) and in completion
+(`rgitContextFlags`), not a silent alias.
+
+### Read
+
+1. `docs/CODES.md:144` — "`context` has no `--porcelain`".
+2. `internal/app/context.go:27` help (`[--json]` only), `:125` any other
+   argument is extra.
+3. `internal/app/context_test.go` the `--json --porcelain` 129 case.
+4. `internal/app/completion.go` `rgitContextFlags = "--json -h --help"`.
+
+### Traps
+
+- **Making `--porcelain` succeed as a synonym of the default changes
+  exit 129 tests and the "records are fixed; any other argument is
+  refused" rule in `docs/USAGE.md` § Context.**
+- **Do not emit a headerless copy that drops the type tags.** `F` rows
+  would then collide with `rgit diff --porcelain`, which is a different
+  dialect on purpose.
+
+### Acceptance
+
+`rgit context --porcelain` remains exit 129. `--json` and the text
+stream stay as documented. No new flag.
+
 ## Settled by measurement — do not re-litigate
 
 ### Grammars
