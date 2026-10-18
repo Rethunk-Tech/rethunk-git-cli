@@ -9,6 +9,7 @@ import (
 	"io"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
 	diffpkg "github.com/Rethunk-Tech/rethunk-git-cli/internal/diff"
@@ -29,6 +30,7 @@ type diffFlags struct {
 	staged       bool
 	rangeFlag    string
 	porcelain    bool
+	asJSON       bool
 	exitCode     bool
 	quiet        bool
 	patch        bool
@@ -46,6 +48,7 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 	fs.BoolVar(&f.staged, "cached", false, "alias for --staged")
 	fs.StringVar(&f.rangeFlag, "range", "", "explicit form of a positional revision range")
 	fs.BoolVar(&f.porcelain, "porcelain", false, "stable tab-separated records")
+	fs.BoolVar(&f.asJSON, "json", false, "one JSON object of the porcelain rows")
 	fs.BoolVar(&f.exitCode, "exit-code", false, "exit 1 when anything is committable")
 	fs.BoolVar(&f.quiet, "quiet", false, "implies --exit-code and suppresses output")
 	fs.BoolVarP(&f.patch, "patch", "p", false, "include the real patch body")
@@ -69,16 +72,9 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 		fmt.Fprintln(stderr, "rgit: --staged and --unstaged are mutually exclusive")
 		return exitcode.InvalidUsage
 	}
-	// Same contradiction commit.go already refuses: machine-readable
-	// output and no output at all, together, would leave a script parsing
-	// an empty stream it cannot tell apart from "nothing to commit".
-	if f.porcelain && f.quiet {
-		fmt.Fprintln(stderr, "rgit: --porcelain and --quiet are mutually exclusive")
-		return exitcode.InvalidUsage
-	}
-	if f.porcelain && f.patch {
-		fmt.Fprintln(stderr, "rgit: --porcelain and --patch are mutually exclusive")
-		return exitcode.InvalidUsage
+	asJSON := jsonFlag(ctx) || f.asJSON
+	if code := refuseDiffFormatConflict(f.porcelain, asJSON, f.patch, f.quiet, stderr); code != exitcode.Success {
+		return code
 	}
 	if f.pathspecNUL && f.pathspecFile == "" {
 		fmt.Fprintln(stderr, "rgit: --pathspec-file-nul requires --pathspec-from-file")
@@ -251,13 +247,19 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 
 	dirty := report.Dirty()
 	if !f.quiet {
-		if f.porcelain {
+		switch {
+		case asJSON:
+			if err := writeDiffJSON(stdout, diffpkg.RenderPorcelain(report)); err != nil {
+				fmt.Fprintf(stderr, "rgit: diff: %v\n", err)
+				return exitcode.GitFailure
+			}
+		case f.porcelain:
 			fmt.Fprint(stdout, diffpkg.RenderPorcelain(report))
-		} else {
+		default:
 			fmt.Fprint(stdout, diffpkg.RenderText(report))
-		}
-		if f.patch {
-			_, _ = stdout.Write(report.Patch)
+			if f.patch {
+				_, _ = stdout.Write(report.Patch)
+			}
 		}
 	}
 
@@ -265,6 +267,58 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 		return diffCommittable
 	}
 	return exitcode.Success
+}
+
+func refuseDiffFormatConflict(porcelain, asJSON, patch, quiet bool, stderr io.Writer) exitcode.Code {
+	switch {
+	case porcelain && quiet:
+		fmt.Fprintln(stderr, "rgit: --porcelain and --quiet are mutually exclusive")
+	case asJSON && quiet:
+		fmt.Fprintln(stderr, "rgit: --json and --quiet are mutually exclusive")
+	case porcelain && patch:
+		fmt.Fprintln(stderr, "rgit: --porcelain and --patch are mutually exclusive")
+	case asJSON && patch:
+		fmt.Fprintln(stderr, "rgit: --json and --patch are mutually exclusive")
+	case porcelain && asJSON:
+		fmt.Fprintln(stderr, "rgit: --porcelain and --json are mutually exclusive")
+	default:
+		return exitcode.Success
+	}
+	return exitcode.InvalidUsage
+}
+
+type diffJSONRow struct {
+	File    string `json:"file"`
+	Symbol  string `json:"symbol"`
+	Status  string `json:"status"`
+	Added   string `json:"added"`
+	Deleted string `json:"deleted"`
+}
+
+type diffJSONReport struct {
+	Schema int           `json:"schema"`
+	Diffs  []diffJSONRow `json:"diffs"`
+}
+
+func writeDiffJSON(w io.Writer, porcelain string) error {
+	rows := make([]diffJSONRow, 0)
+	body := strings.TrimRight(porcelain, "\n")
+	if body != "" {
+		for line := range strings.SplitSeq(body, "\n") {
+			fields := strings.Split(line, "\t")
+			if len(fields) != 5 {
+				return fmt.Errorf("malformed diff record %q", line)
+			}
+			rows = append(rows, diffJSONRow{
+				File:    fields[0],
+				Symbol:  fields[1],
+				Status:  fields[2],
+				Added:   fields[3],
+				Deleted: fields[4],
+			})
+		}
+	}
+	return encodeJSON(w, diffJSONReport{Schema: jsonSchema, Diffs: rows})
 }
 
 // symRefsFromFlag parses --sym's repeatable FILE:NAME values. A malformed

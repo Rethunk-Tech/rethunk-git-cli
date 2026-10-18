@@ -30,9 +30,10 @@ binaries collapse to one `(untracked)` row.
 `-C <path>` **before** the command. `--version`, `--json`, and `-h`/`--help`
 before or after it.
 
-`--json` prints one object on stdout (`log`, `context`, `languages`,
-`doctor`, `symbols`) and nothing else there. Human narration stays on
-stderr. Other commands: 129. Envelope: [`CODES.md`](CODES.md#output-records).
+`--json` prints one object on stdout (`diff`, `log`, `context`,
+`languages`, `doctor`, `symbols`) and nothing else there. Human narration
+stays on stderr. Other commands: 129. Envelope:
+[`CODES.md`](CODES.md#output-records).
 
 `-C <path>` is `git -C`: discover the repo from there; relative pathspecs
 and anchors resolve against it. Must precede the command — `git commit -C`
@@ -415,14 +416,15 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 | `--staged`, `--cached` | (`diff`) Index vs `HEAD`. |
 | `--range REVS` | (`diff`) Explicit range. |
 | `--porcelain` | (`diff`) TSV records. |
+| `--json` | (`diff`) Porcelain rows as one object. Exclusive with `--porcelain`, `-p`, and `--quiet`. |
 | `--exit-code` | (`diff`) 1 if committable, 0 if clean. |
 | `--quiet` | (`diff`) Implies `--exit-code`, suppresses output. |
-| `-p`, `--patch` | (`diff`) Git's patch after the report. Exclusive with `--porcelain`. |
+| `-p`, `--patch` | (`diff`) Git's patch after the report. Exclusive with `--porcelain` and `--json`. |
 | `--with-header` | (`show`) Deprecated `--porcelain` alias. |
 | `--porcelain` | (`show`) Length-framed extents. |
 | `--with-filename` | (`symbols`) `FILE<TAB>` prefix. |
 | `--porcelain` | (`symbols`) NUL records. |
-| `--json` | Global. One object on stdout for `log`, `context`, `languages`, `doctor`, `symbols`. Before or after the command. Other commands: 129. |
+| `--json` | Global. One object on stdout for `diff`, `log`, `context`, `languages`, `doctor`, `symbols`. Before or after the command. Other commands: 129. |
 | `--json` | (`symbols`) One object. Exclusive with `--porcelain`. |
 | `--follow-rename` | (`show`, `blame`, `log`) Re-resolve at each rename. Combined with `--source`, starts at that revision. Plain path: 129. |
 | `--source REV` | (`show`, `blame`, `log`) Read/blame/walk `REV:FILE`. Unknown rev: 128. Absent path: 3. |
@@ -456,8 +458,9 @@ of its exclusions (including `--include`); `--dry-run` + `--push`;
 `--staged`/`--unstaged` + a revision; `--staged` + `--unstaged`; `--range`
 
 + a positional range; `-m` + `-F`; `--porcelain` + `--quiet` (`diff`);
-`--porcelain` + `-p` (`diff`, `log`); `--json` + `-p` (`log`);
-`--porcelain` + `--json` (`languages`, `doctor`, `symbols`, `log`) → 129.
+`--porcelain` + `-p` (`diff`, `log`); `--json` + `-p` (`diff`, `log`);
+`--porcelain` + `--json` (`diff`, `languages`, `doctor`, `symbols`, `log`);
+`--json` + `--quiet` (`diff`) → 129.
 One path as both path and symbol → 5 (`greet.go greet.go:A`).
 
 `FILE:SYMBOL` on JSON/JSONC/JSON5/YAML/TOML → 12. Name the path.

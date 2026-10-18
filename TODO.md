@@ -10,62 +10,6 @@ Limitations that ship — unsupported languages, excluded cross-build targets,
 constructs no anchor reaches — are in
 [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md), not here.
 
-## `rgit diff --json` is missing beside `--porcelain`
-
-`languages`, `doctor`, `symbols`, and `log` each pair `--porcelain` with
-`--json` as one object whose fields are the porcelain columns in
-lowercase. `rgit diff` has `--porcelain` (`internal/app/diff.go:48`) and
-renders through `internal/diff/porcelain.go:11` `RenderPorcelain`, but
-no `--json`. `--quiet` and `-p`/`--patch` already refuse `--porcelain`
-(`diff.go:75–80`).
-
-Add `--json` as that same object for the porcelain rows. Mutually
-exclusive with `--porcelain` and with `-p`/`--patch`. `--quiet` stays
-exclusive with `--porcelain`; decide `--json`+`--quiet` the same way
-(`--porcelain`+`--quiet` is already exit 129). Default text and
-`--porcelain` bytes stay. Field names follow
-`docs/CODES.md` `rgit diff --porcelain` (`FILE`, `SYMBOL`, `STATUS`,
-`ADDED`, `DELETED`) in lowercase. Empty `symbol` is `""`. STATUS tokens
-stay the existing strings (`MOD`, `DELETED`, …), not a new vocabulary.
-
-This is larger than log's two-field wrap: five columns, empty-symbol
-rows, and the quiet/patch/exit-code matrix. Do not change `RenderPorcelain`.
-
-### Read
-
-1. `internal/app/diff.go:48` `--porcelain`, `:51` `-p`/`--patch`, `:75`
-   porcelain/quiet, `:79` porcelain/patch, `:254` `RenderPorcelain`.
-2. `internal/diff/porcelain.go:11` — TSV `FILE<TAB>SYMBOL<TAB>STATUS<TAB>ADDED<TAB>DELETED`.
-3. `internal/app/log.go` `writeLogJSON` / `refuseLogFormatConflict` —
-   the JSON-from-porcelain pattern to copy, not a second row walk.
-4. `docs/CODES.md` `rgit diff --porcelain` and `rgit log --json` — the
-   schema to extend and the exclusivity sentence.
-5. `internal/app/completion.go` `rgitDiffFlags` — must gain `--json` in
-   the same commit as help text, or `TestCompletionFlags_MatchLiveFlagSets`
-   fails.
-
-### Traps
-
-- **Do not invent a "files" tree.** One object with a row array matching
-  porcelain order. Nesting by path would disagree with `--porcelain`.
-- **`--quiet` still implies `--exit-code` and suppresses stdout.** JSON
-  is an encoding of the report, so `--json --quiet` is 129 like
-  `--porcelain --quiet`, not silent JSON.
-- **`--patch` after JSON is the same refusal as `--porcelain --patch`.**
-  A JSON object plus a git patch body is two formats.
-- **Unanchorable / empty symbol rows must keep `"symbol": ""`.** Omitting
-  the key would break the "same fields as porcelain" rule `languages`
-  already uses.
-
-### Acceptance
-
-`rgit diff --json` lists every `--porcelain` row as one JSON object,
-same order, lowercase column names, empty symbol as `""`. Combined with
-`--porcelain` or `-p`/`--patch` or `--quiet` is exit 129. Default text
-and `--porcelain` are unchanged. `--exit-code` still exits 1 when
-committable. Completion and `docs/CODES.md` name the flag in the same
-commit.
-
 ## `rgit commit --json` is missing beside `--porcelain`
 
 `rgit commit --porcelain` writes `H<TAB>SHA` then

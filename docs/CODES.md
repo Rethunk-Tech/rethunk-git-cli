@@ -77,9 +77,9 @@ folds into 128.
 ## Output records
 
 `--porcelain` is tab-separated records, no header. `--json` is one object
-with `"schema": 1` first, then the payload (`languages`, `checks`,
+with `"schema": 1` first, then the payload (`diffs`, `languages`, `checks`,
 `records`, `commits`, or `symbols`). Mutually exclusive with `--porcelain`
-on `languages`, `doctor`, `symbols`, and `log`. `context` has no
+on `diff`, `languages`, `doctor`, `symbols`, and `log`. `context` has no
 `--porcelain`; `--json` encodes the same stream. Errors under `--json` stay
 text on stderr; the exit code is the verdict. Reordering or adding a
 column is a breaking change.
@@ -119,6 +119,35 @@ logo.png<TAB><TAB>BINARY<TAB>-<TAB>-
 
 An untracked file with a grammar attributes per symbol as `MOD`.
 `UNTRACKED` is the collapsed fallback.
+
+### `rgit diff --json`
+
+```json
+{
+  "schema": 1,
+  "diffs": [
+    {
+      "file": "auth.go",
+      "symbol": "ValidateToken",
+      "status": "MOD",
+      "added": "12",
+      "deleted": "3"
+    },
+    {
+      "file": "auth.go",
+      "symbol": "",
+      "status": "UNANCHORABLE",
+      "added": "2",
+      "deleted": "0"
+    }
+  ]
+}
+```
+
+Same rows as `--porcelain`, same order. Empty `SYMBOL` is `""`. STATUS
+tokens are unchanged. Empty report is `"diffs": []`. `--json` with
+`--porcelain`, `-p`/`--patch`, or `--quiet` is 129. `--exit-code` still
+exits 1 when committable.
 
 ### `rgit commit --porcelain`
 
