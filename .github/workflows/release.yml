@@ -22,21 +22,29 @@ env:
   # forces the post-cutover runtime now, on ordinary CI runs, rather than discovering on the
   # 16th whether the action works under node24.
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # npm 0.27.1 tarball (registry.npmjs.org/tree-sitter-cli/-/tree-sitter-cli-0.27.1.tgz).
+  TREE_SITTER_CLI_VERSION: "0.27.1"
+  TREE_SITTER_CLI_INTEGRITY: "sha512-WFPEjxwscCjZP9uYj0rxT2TyGBkDcXUkGTthrMpxZFGvzXEYsbC3J0633Ps8dd2mMsdsbU8oVwmQ148lLHI7Xw=="
+  # debian:bookworm-slim OCI index (linux/amd64 + linux/arm64), docker-library/repo-info
+  # repos/debian/remote/bookworm-slim.md (bookworm-20261005-slim).
+  DEBIAN_BOOKWORM_SLIM: debian@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587
 
 jobs:
   # No darwin job: fleet workflows run no macOS runners, and zig cannot
   # link darwin without a macOS SDK (docs/INSTALL.md § Cross builds), so
   # releases ship only what this Linux job can cross-compile.
   #
-  # Build/sign holds id-token for keyless cosign and never contents: write.
-  # Publish is a later job so the token that can create a release is not
-  # in scope while npm, zig, wine, and docker run.
+  # Build never holds id-token: npm install of tree-sitter-cli (postinstall)
+  # and docker run must not sit next to OIDC that can mint a Sigstore identity.
+  # Sign is a later job with id-token only, after artifacts are already in
+  # Actions storage. Publish is later still so contents: write is not in
+  # scope while npm, zig, wine, docker, or cosign run.
   build:
-    name: build and sign
+    name: build
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      id-token: write # keyless cosign signing (Sigstore OIDC)
+      contents: read
     steps:
       # fetch-depth: 0 because the Makefile stamps the binary from
       # `git describe --tags`, which reports a bare vX.Y.Z only when the tag
@@ -59,7 +67,16 @@ jobs:
       # grammar module ships no usable parser.c, so `make cross` generates
       # one via cmd/rgit-install. Without this step every artifact would
       # still build, just SQL-less (docs/INSTALL.md § SQL support).
-      - run: npm install -g tree-sitter-cli
+      # Version + npm integrity of the tarball, then install from the local
+      # file so a registry swap cannot change what postinstall runs.
+      - name: Install pinned tree-sitter CLI
+        run: |
+          tgz="$RUNNER_TEMP/tree-sitter-cli-${TREE_SITTER_CLI_VERSION}.tgz"
+          curl -fsSL -o "$tgz" \
+            "https://registry.npmjs.org/tree-sitter-cli/-/tree-sitter-cli-${TREE_SITTER_CLI_VERSION}.tgz"
+          got="sha512-$(openssl dgst -sha512 -binary "$tgz" | openssl base64 -A)"
+          test "$got" = "$TREE_SITTER_CLI_INTEGRITY"
+          npm install -g "$tgz"
 
       - run: make cross
 
@@ -105,13 +122,20 @@ jobs:
         with:
           platforms: arm64
 
+      # Copy the one binary into a throwaway dir and mount it read-only so
+      # a compromised image cannot rewrite dist/ (or SHA256SUMS) before
+      # the later sign job Cosign-signs the checksums.
       - name: verify the linux/arm64 artifact carries SQL
         run: |
           bin=$(find dist -name '*-linux-arm64' -type f)
-          docker run --rm --platform=linux/arm64 -v "$PWD/dist:/dist" debian:bookworm-slim \
-            /dist/"$(basename "$bin")" --version
-          docker run --rm --platform=linux/arm64 -v "$PWD/dist:/dist" debian:bookworm-slim \
-            /dist/"$(basename "$bin")" languages | grep -q '^sql' || {
+          work=$(mktemp -d)
+          trap 'rm -rf "$work"' EXIT
+          cp "$bin" "$work/rgit"
+          chmod +x "$work/rgit"
+          docker run --rm --platform=linux/arm64 -v "$work:/artifact:ro" "$DEBIAN_BOOKWORM_SLIM" \
+            /artifact/rgit --version
+          docker run --rm --platform=linux/arm64 -v "$work:/artifact:ro" "$DEBIAN_BOOKWORM_SLIM" \
+            /artifact/rgit languages | grep -q '^sql' || {
             echo "::error::release artifact has no sql grammar"; exit 1;
           }
 
@@ -145,6 +169,25 @@ jobs:
             echo "::error::release artifact has no sql grammar"; exit 1;
           }
 
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+
+  sign:
+    name: sign checksums
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      id-token: write # keyless cosign signing (Sigstore OIDC)
+      contents: read
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       # Keyless: signs with a short-lived OIDC-issued cert instead of a
@@ -154,14 +197,15 @@ jobs:
       - name: sign checksums
         run: cosign sign-blob --yes --bundle dist/SHA256SUMS.sigstore.json dist/SHA256SUMS
 
+      # Distinct artifact name: upload-artifact names must be unique in a run.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: dist
+          name: dist-signed
           path: dist/
 
   publish:
     name: publish
-    needs: build
+    needs: sign
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -169,7 +213,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: dist
+          name: dist-signed
           path: dist
       - name: publish
         env:
