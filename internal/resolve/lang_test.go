@@ -207,6 +207,8 @@ func TestShebangInterpreter_NodeJSEcosystem(t *testing.T) {
 		{"bunx unwraps to its target", "#!/usr/bin/env bunx ts-node\n", "ts-node", true},
 		{"bun run stays bun, trailing subcommand ignored", "#!/usr/bin/env bun run\n", "bun", true},
 		{"bare npx with nothing after it stays unmapped by shebangExtension, but shebangInterpreter still reports it", "#!/usr/bin/env npx\n", "npx", true},
+		{"bare env names itself", "#!/usr/bin/env\n", "env", true},
+		{"env -S with nothing after it", "#!/usr/bin/env -S\n", "-S", true},
 		{"unrecognized interpreter still reports its name", "#!/usr/bin/perl\n", "perl", true},
 		{"windows executable suffix is stripped from unknown interpreter", "#!/usr/bin/perl.exe\n", "perl", true},
 		{"not a shebang at all", "# just a comment\n", "", false},
@@ -265,6 +267,8 @@ func TestForPath_VersionedPythonShebangsRouteToPython(t *testing.T) {
 		"#!/usr/bin/python3.12\nprint(1)\n",
 		"#!/usr/bin/python3.12.exe\nprint(1)\n",
 		"#!/usr/bin/env -S python3.13 -u\nprint(1)\n",
+		"#!/usr/bin/python3.10\nprint(1)\n",
+		"#!/usr/bin/python3.9\nprint(1)\n",
 	}
 	for _, content := range fixtures {
 		lang, ok := ForPathFolding("script", []byte(content), false)
