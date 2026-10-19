@@ -31,6 +31,8 @@ Stage the containing declaration or the path.
 - **TOML** — inline table or array: a leaf.
 - **CSS** — a rule inside `@media`/`@supports`/`@keyframes` (the at-rule is
   addressable). Native nesting (`.parent { .child { } }`) stays addressable.
+  An at-rule spelled literally `@header` is unreachable: the resolver tests for
+  that pseudo-anchor first.
 - **SQL** — `DROP`, `ALTER`, `INSERT`, `SELECT`, `CREATE SCHEMA`; unnamed
   `CREATE INDEX ON t (c)`.
 - **HTML** — anything beyond an element's own id (class, attribute,
@@ -38,6 +40,8 @@ Stage the containing declaration or the path.
   unique: the index has no per-parent scoping, so a bare `div` would
   collide everywhere. Duplicate ids are exit 4. Qualification:
   [`ANCHORS.md`](ANCHORS.md).
+- **Whitespace** changed between two unmodified tracked declarations is
+  attributed as `(unanchorable)`: no declaration owns it.
 
 ## Build and platform limits
 

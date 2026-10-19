@@ -6,7 +6,7 @@ Internals for changing this repo. Usage: [HUMANS.md](HUMANS.md). Process: [CONTR
 
 **`rgit` is `git add <pathspec> && git commit` at symbol granularity.** Match git wherever git has an opinion. Divergence needs an explicit PR argument.
 
-Inherited behaviour: [docs/USAGE.md § Behaviour inherited from git](docs/USAGE.md#behaviour-inherited-from-git). Decisions not built, and the measurements that closed them: [TODO.md](TODO.md).
+Inherited behaviour: [docs/USAGE.md § Behaviour inherited from git](docs/USAGE.md#behaviour-inherited-from-git). Decided, unbuilt work: [TODO.md](TODO.md).
 
 ## File map
 
