@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![version](https://img.shields.io/badge/version-v2.2.4-brightgreen)](CHANGELOG.md)
+[![release](https://img.shields.io/github/v/release/Rethunk-Tech/rethunk-git-cli)](CHANGELOG.md)
 [![go](https://img.shields.io/badge/go-1.27%2B-00ADD8)](https://go.dev)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -35,23 +35,7 @@ scoop bucket add rethunk https://github.com/Rethunk-Tech/scoop-bucket
 scoop install rgit
 ```
 
-Build and runbook: [HUMANS.md](HUMANS.md).
-
-```bash
-source <(rgit completion bash)
-```
-
-```zsh
-source <(rgit completion zsh)    # after compinit
-```
-
-```fish
-rgit completion fish | source
-```
-
-```powershell
-rgit completion pwsh | Invoke-Expression
-```
+Build, completions and runbook: [HUMANS.md](HUMANS.md).
 
 ## Highlights
 

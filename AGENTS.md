@@ -61,6 +61,6 @@ No persistent state. Creates only `rgit-commit.lock` in the git directory (`comm
 
 ## Gate budget
 
-`.gate.toml` runs `go build -race ./...` first, then lint, `go test -race -short ./...`, and govulncheck (`GOFLAGS=-race`) in parallel once a stamp in `GOCACHE` says that race compile finished. Concurrent gates that each compile the cgo grammars cost about 115 CPU-s apiece; the stamp keeps that to one compile. Gitleaks, actionlint, and shellcheck overlap the build. Measured 2026-10-18 with `gate --profile` and throwaway Go and lint caches: cold 29.6 s wall (build 20.7 s, then test/lint/vuln overlapping; original all-serial chain was 33.9 s); warm 1.6 s wall. Gate's own default warn budget stays 10 s — do not raise it. The 30 s cold / 10 s warm bars are for this measurement, not a `.gate.toml` `budget` key.
+`.gate.toml` runs `go build -race ./...` first, then lint, `go test -race -short ./...`, and govulncheck (`GOFLAGS=-race`) in parallel once a stamp in `GOCACHE` says that race compile finished. Concurrent gates that each compile the cgo grammars cost about 115 CPU-s apiece; the stamp keeps that to one compile. Gitleaks, actionlint, and shellcheck overlap the build. Under 10 s warm and 30 s cold (throwaway Go and lint caches); gate's default 10 s warn budget is not raised.
 
 The race detector covers the unit lane locally (CI's full race run needs gopls, rust-analyzer and tree-sitter-cli, which `-short` skips). Plain lint or vuln beside a `-race` test compiles the grammars a second time.
