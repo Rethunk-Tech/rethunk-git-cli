@@ -27,7 +27,7 @@ func TestApplyEdits_IdentitySpliceIsByteIdentical(t *testing.T) {
 		name := filepath.Base(path)
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			src, err := os.ReadFile(path) //nolint:gosec // identity corpus paths are explicit test inputs
+			src, err := os.ReadFile(filepath.Clean(path))
 			if err != nil {
 				t.Fatalf("read %s: %v", name, err)
 			}

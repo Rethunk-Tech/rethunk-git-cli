@@ -241,7 +241,7 @@ func TestCommit_HookFailureRestoresPrestagedState(t *testing.T) {
 	gittest.Git(t.Context(), t, dir, "add", "--", "sibling.txt")
 	// The named edit to stage.
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	workA, err := os.ReadFile(filepath.Join(dir, "a.go")) //nolint:gosec // path is inside the test temp directory
+	workA, err := os.ReadFile(filepath.Clean(filepath.Join(dir, "a.go")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +269,7 @@ func TestCommit_HookFailureRestoresPrestagedState(t *testing.T) {
 			t.Errorf("stderr = %q; want it to mention %q", stderr.String(), want)
 		}
 	}
-	if after, err := os.ReadFile(filepath.Join(dir, "a.go")); err != nil { //nolint:gosec // path is inside the test temp directory
+	if after, err := os.ReadFile(filepath.Clean(filepath.Join(dir, "a.go"))); err != nil {
 		t.Fatal(err)
 	} else if string(after) != string(workA) {
 		t.Errorf("worktree a.go changed by the failed commit: before %q, after %q", workA, after)

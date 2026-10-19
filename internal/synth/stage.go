@@ -636,7 +636,7 @@ func newTempStaging(ctx context.Context, root string) (*tempStaging, error) {
 		return nil, err
 	}
 	tmp := tmpFile.Name()
-	seed, err := os.ReadFile(final) //nolint:gosec // final is the caller's Git index path returned by callerIndexPath
+	seed, err := os.ReadFile(filepath.Clean(final))
 	switch {
 	case err == nil:
 		if _, err := tmpFile.Write(seed); err != nil {
@@ -767,7 +767,7 @@ func SnapshotIndex(ctx context.Context, root string) (*IndexSnapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := os.ReadFile(path) //nolint:gosec // path is the caller's Git index path returned by callerIndexPath
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &IndexSnapshot{path: path}, nil

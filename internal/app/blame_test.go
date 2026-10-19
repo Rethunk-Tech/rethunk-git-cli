@@ -392,7 +392,7 @@ func TestRun_BlameFollowRenameResolvesAgainstHEADNotWorktree(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Equals(stderr, ""))
 
-	src, err := os.ReadFile(filepath.Join(dir, "a.go")) //nolint:gosec // path is inside the test temp directory
+	src, err := os.ReadFile(filepath.Clean(filepath.Join(dir, "a.go")))
 	qt.Assert(t, qt.IsNil(err))
 	writeAppFile(t, dir, "a.go", "// dirty leading edit\n\n"+string(src))
 

@@ -472,7 +472,7 @@ func TestRun_BatchesGitCatFileAcrossManyChangedFiles(t *testing.T) {
 		t.Fatalf("len(report.Files) = %d; want %d", len(report.Files), fileCount)
 	}
 
-	countBytes, err := os.ReadFile(countFile) //nolint:gosec // path is inside the test temp directory
+	countBytes, err := os.ReadFile(filepath.Clean(countFile))
 	if err != nil && !os.IsNotExist(err) {
 		t.Fatal(err)
 	}

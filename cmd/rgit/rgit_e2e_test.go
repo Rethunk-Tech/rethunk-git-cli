@@ -617,7 +617,7 @@ func TestDiff_AnchorRoundTrip(t *testing.T) {
 			src = []byte(authGoV1)
 		} else {
 			var err error
-			src, err = os.ReadFile(filepath.Join(repo, r.File)) //nolint:gosec // rgit reports fixture paths from the test temp repository
+			src, err = os.ReadFile(filepath.Clean(filepath.Join(repo, r.File)))
 			if err != nil {
 				t.Fatalf("reading worktree %s: %v", r.File, err)
 			}
@@ -785,7 +785,7 @@ func TestCommit_HappyPath(t *testing.T) {
 	qt.Assert(t, qt.StringContains(gittest.Git(t.Context(), t, repo, "diff", "--numstat"), "auth.go"))
 
 	// The worktree file itself is never touched by staging.
-	onDisk, err := os.ReadFile(filepath.Join(repo, "auth.go")) //nolint:gosec // path is inside the test temp directory
+	onDisk, err := os.ReadFile(filepath.Clean(filepath.Join(repo, "auth.go")))
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(string(onDisk), commitHappyV2))
 
@@ -813,7 +813,7 @@ func TestCommit_HookRejectionRestoresStaging(t *testing.T) {
 	qt.Assert(t, qt.Equals(status, " M auth.go\n"))
 
 	// The worktree file itself is never touched by the rollback.
-	onDisk, err := os.ReadFile(filepath.Join(repo, "auth.go")) //nolint:gosec // path is inside the test temp directory
+	onDisk, err := os.ReadFile(filepath.Clean(filepath.Join(repo, "auth.go")))
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(string(onDisk), commitHappyV2))
 }

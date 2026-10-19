@@ -42,7 +42,7 @@ func TestStage_RoundTripsWorktreeForEveryDeclaration(t *testing.T) {
 			continue
 		}
 		name := entry.Name()
-		src, err := os.ReadFile(filepath.Join(dir, name)) //nolint:gosec // corpus entries come from the fixed in-repo testdata directory
+		src, err := os.ReadFile(filepath.Clean(filepath.Join(dir, name)))
 		if err != nil {
 			t.Fatalf("read %s: %v", name, err)
 		}
