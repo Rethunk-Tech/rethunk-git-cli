@@ -14,10 +14,10 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/cli"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
 )
 
 // splitAnchor splits a FILE:NAME anchor the way cli.ClassifyArgs's rule 5

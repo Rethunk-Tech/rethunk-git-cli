@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
 )
 
 // TestApplyEdits_IdentitySpliceIsByteIdentical is the write-side counterpart

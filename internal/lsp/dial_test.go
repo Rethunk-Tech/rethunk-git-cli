@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsptest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/lsptest"
 )
 
 // shortTempDir returns a fresh, short-named temp directory, cleaned up when

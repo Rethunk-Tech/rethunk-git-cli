@@ -13,9 +13,9 @@ import (
 
 	"github.com/go-quicktest/qt"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsptest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/lsptest"
 )
 
 func TestRun_ContextHelpAndUsage(t *testing.T) {

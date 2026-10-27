@@ -9,9 +9,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/cli"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gittest"
 )
 
 // TestRunCommit_RefusesSymbolAnchorOnStructuredData pins the end-to-end

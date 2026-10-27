@@ -6,6 +6,10 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The module path is `github.com/Rethunk-Tech/rethunk-git-cli/v2`, so `go install github.com/Rethunk-Tech/rethunk-git-cli/v2/cmd/rgit@latest` installs the newest v2 release; without the `/v2` suffix the Go proxy ignored every v2 tag and `@latest` stayed on v1.4.0.
+
 ### Added
 
 - Hidden `rgit man` prints a groff man page generated from live `--help` text. See [`docs/INSTALL.md`](docs/INSTALL.md#shell-completion).

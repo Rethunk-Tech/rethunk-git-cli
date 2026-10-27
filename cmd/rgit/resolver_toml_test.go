@@ -5,8 +5,8 @@ import (
 
 	"github.com/go-quicktest/qt"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
 )
 
 // TestResolve_TOML covers the grammar's own shapes in one pass: a realistic

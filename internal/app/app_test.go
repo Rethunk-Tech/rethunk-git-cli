@@ -24,12 +24,12 @@ import (
 
 	"github.com/go-quicktest/qt"
 
-	diffpkg "github.com/Rethunk-Tech/rethunk-git-cli/internal/diff"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsptest"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
+	diffpkg "github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/diff"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/lsptest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
 )
 
 // runApp invokes the command surface exactly as main does and returns what

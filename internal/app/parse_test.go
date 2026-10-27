@@ -4,9 +4,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/cli"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
 )
 
 func TestHasConventionalShape(t *testing.T) {

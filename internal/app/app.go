@@ -14,7 +14,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
 )
 
 const usageLine = "usage: rgit [--version] [--json] [-C <path>] <diff|commit|show|blame|log|context|languages|doctor|completion|symbols> [flags] [target...]"

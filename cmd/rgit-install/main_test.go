@@ -10,8 +10,8 @@ import (
 
 	qt "github.com/go-quicktest/qt"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/prereq"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/prereq"
 )
 
 const generateOnlyChildEnv = "RGIT_INSTALL_TEST_AS_GENERATE_ONLY"

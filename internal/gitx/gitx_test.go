@@ -14,8 +14,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
 )
 
 func TestLsFilesStageAndMergeBase(t *testing.T) {

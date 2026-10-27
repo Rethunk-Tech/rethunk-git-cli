@@ -16,10 +16,10 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/diff"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/diff"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/lsp"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
 )
 
 const languagesHelp = `usage: rgit languages [--porcelain | --json] [--in-repo]

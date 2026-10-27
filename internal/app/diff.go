@@ -11,10 +11,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
-	diffpkg "github.com/Rethunk-Tech/rethunk-git-cli/internal/diff"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/cli"
+	diffpkg "github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/diff"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
 )
 
 // diffCommittable is docs/USAGE.md § Flags' --exit-code/--quiet value:

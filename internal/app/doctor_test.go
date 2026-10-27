@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-quicktest/qt"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
 )
 
 func TestRun_DoctorHelpAndUsage(t *testing.T) {

@@ -3,8 +3,8 @@ package lsp_test
 import (
 	"testing"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/lsp"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
 )
 
 // neverWired names every resolve.Languages() entry that is deliberately

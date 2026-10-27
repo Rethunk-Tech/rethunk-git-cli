@@ -24,7 +24,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
 )
 
 // These package-level assignments cut every test process that imports this

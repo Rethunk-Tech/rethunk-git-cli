@@ -1,4 +1,4 @@
-module github.com/Rethunk-Tech/rethunk-git-cli
+module github.com/Rethunk-Tech/rethunk-git-cli/v2
 
 go 1.27.3
 

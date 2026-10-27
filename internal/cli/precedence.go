@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
 )
 
 // Kind is the classification a positional argument resolved to.

@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/util"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/util"
 )
 
 // PathError is a target refused before any resolution was attempted on it:

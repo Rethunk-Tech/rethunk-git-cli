@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
 )
 
 // TestOpenFilePlan_UnsupportedLanguageReason pins the exit-9 message

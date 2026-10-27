@@ -12,7 +12,7 @@ import (
 	"go.lsp.dev/protocol"
 	"go.lsp.dev/uri"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsptest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/lsptest"
 )
 
 // countingRWC wraps a net.Conn to count Close calls, so a test can assert

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gittest"
 )
 
 func TestRun_LanguagesInRepoUntrackedGo(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
 )
 
 // runMan is hidden: not listed in topLevelHelp. It prints a groff man page

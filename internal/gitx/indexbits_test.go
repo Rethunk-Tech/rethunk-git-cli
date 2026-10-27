@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gittest"
 )
 
 func TestIndexWorktreeBits(t *testing.T) {

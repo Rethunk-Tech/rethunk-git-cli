@@ -5,7 +5,7 @@ import (
 
 	"github.com/go-quicktest/qt"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
 )
 
 // TestResolve_Rust covers the shapes the grammar actually has to get right:

@@ -9,7 +9,7 @@
 // back — rgit diff and rgit commit must agree on what a symbol is called.
 package diff
 
-import "github.com/Rethunk-Tech/rethunk-git-cli/internal/cli"
+import "github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/cli"
 
 // Status is one row's classification. The six porcelain spellings it maps to
 // are specified in docs/CODES.md § Output records; StatusNoSymbols is

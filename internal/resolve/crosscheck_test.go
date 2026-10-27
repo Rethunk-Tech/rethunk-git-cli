@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/lsp"
 )
 
 // TestCrossCheckVerdict_SingleAgreesWithBatch guards the invariant a batch

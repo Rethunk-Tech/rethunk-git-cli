@@ -7,8 +7,8 @@ import (
 	tsrust "github.com/tree-sitter/tree-sitter-rust/bindings/go"
 	tsts "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve/json5grammar"
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve/scssgrammar"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve/json5grammar"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve/scssgrammar"
 	tszsh "github.com/georgeharker/tree-sitter-zsh/bindings/go"
 	tsmd "github.com/tree-sitter-grammars/tree-sitter-markdown/bindings/go"
 	tstoml "github.com/tree-sitter-grammars/tree-sitter-toml/bindings/go"

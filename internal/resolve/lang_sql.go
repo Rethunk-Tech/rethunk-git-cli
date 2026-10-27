@@ -12,7 +12,7 @@ package resolve
 import (
 	ts "github.com/tree-sitter/go-tree-sitter"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/resolve/sqlgrammar"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve/sqlgrammar"
 )
 
 // sqlGrammar constructs the compiled SQL grammar. Kept here rather than in

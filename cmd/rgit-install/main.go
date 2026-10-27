@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/prereq"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/prereq"
 )
 
 // sqlGrammarModule is the Go module that publishes the SQL grammar's

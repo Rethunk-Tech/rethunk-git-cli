@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-quicktest/qt"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gittest"
 )
 
 // newClassifyRepo builds a real repository for the precedence table to be

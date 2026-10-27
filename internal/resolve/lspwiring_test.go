@@ -3,7 +3,7 @@ package resolve
 import (
 	"testing"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/internal/lsp"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/lsp"
 )
 
 // TestServerLanguages_HaveLanguageKindMapping guards the seam between two of
