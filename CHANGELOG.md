@@ -8,7 +8,7 @@ Notable changes to `rgit`. The format follows
 
 ### Fixed
 
-- The module path is `github.com/Rethunk-Tech/rethunk-git-cli/v2`, so `go install github.com/Rethunk-Tech/rethunk-git-cli/v2/cmd/rgit@latest` installs the newest v2 release; without the `/v2` suffix the Go proxy ignored every v2 tag and `@latest` stayed on v1.4.0.
+- The module path is `github.com/Rethunk-Tech/rethunk-git-cli/v2`, matching the v2 tags; without the `/v2` suffix the Go proxy listed only v1 versions. `go install` cannot build rgit (its zsh grammar is a local `replace`), so install the release binary with `scripts/install.sh` ([`docs/INSTALL.md`](docs/INSTALL.md)).
 
 ### Added
 
