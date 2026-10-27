@@ -1527,3 +1527,26 @@ func TestCompletion_FishOffersSubcommandsAndFlags(t *testing.T) {
 	qt.Assert(t, qt.IsTrue(sawSubdir))
 	qt.Assert(t, qt.Not(qt.SliceContains(got, "diff")))
 }
+
+func TestCommitOnly_WorktreeDeleteRenameAndModify(t *testing.T) {
+	t.Parallel()
+	repo := initRepoWithFile(t, "keep.txt", "keep\n")
+	for _, f := range []string{"gone.txt", "old.txt", "mod.txt"} {
+		gittest.Write(t, repo, f, f+"\n")
+		gittest.Git(t.Context(), t, repo, "add", f)
+	}
+	gittest.Git(t.Context(), t, repo, "commit", "-q", "-m", "chore: add files")
+
+	gittest.Git(t.Context(), t, repo, "rm", "-q", "--cached", "gone.txt")
+	gittest.Git(t.Context(), t, repo, "reset", "-q", "gone.txt")
+	qt.Assert(t, qt.IsNil(os.Remove(filepath.Join(repo, "gone.txt"))))
+	gittest.Git(t.Context(), t, repo, "mv", "old.txt", "new.txt")
+	gittest.Write(t, repo, "mod.txt", "changed\n")
+	gittest.Write(t, repo, "keep.txt", "dirty\n")
+
+	got := runRgit(t, repo, "commit", "--only", "-m", "chore: drop, move, edit", "gone.txt", "old.txt", "new.txt", "mod.txt")
+	qt.Assert(t, qt.Equals(got.ExitCode, 0), qt.Commentf("%s", got.Stderr))
+
+	qt.Assert(t, qt.Equals(gittest.Git(t.Context(), t, repo, "ls-files"), "keep.txt\nmod.txt\nnew.txt\n"))
+	qt.Assert(t, qt.Equals(gittest.Git(t.Context(), t, repo, "status", "--porcelain"), " M keep.txt\n"))
+}
