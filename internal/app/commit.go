@@ -387,7 +387,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 				return exitcode.Success
 			}
 			if asJSON {
-				if err := writeCommitJSON(stdout, "", targetResults); err != nil {
+				if err := writeCommitJSON(stdout, "", targetResults, nil); err != nil {
 					fmt.Fprintf(stderr, "rgit: commit: %v\n", err)
 					return exitcode.GitFailure
 				}
@@ -413,7 +413,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 			case f.porcelain:
 				writeTargetRecords(stdout, targetResults)
 			case asJSON:
-				if err := writeCommitJSON(stdout, "", targetResults); err != nil {
+				if err := writeCommitJSON(stdout, "", targetResults, nil); err != nil {
 					fmt.Fprintf(stderr, "rgit: commit: %v\n", err)
 					return exitcode.GitFailure
 				}
@@ -452,7 +452,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 			return exitcode.Success
 		}
 		if asJSON {
-			if err := writeCommitJSON(stdout, "", nil); err != nil {
+			if err := writeCommitJSON(stdout, "", nil, nil); err != nil {
 				fmt.Fprintf(stderr, "rgit: commit: %v\n", err)
 				return exitcode.GitFailure
 			}
@@ -514,6 +514,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		rollbackIndex(stderr, indexSnap, targetResults)
 		return exitcode.GitFailure
 	}
+	jsonSHA := ""
 	switch {
 	case f.porcelain, asJSON:
 		// git's own --porcelain replaces its human summary rather than
@@ -530,10 +531,8 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 			return exitcode.GitFailure
 		}
 		if asJSON {
-			if err := writeCommitJSON(stdout, sha, targetResults); err != nil {
-				fmt.Fprintf(stderr, "rgit: commit: %v\n", err)
-				return exitcode.GitFailure
-			}
+			// Written after the optional push so "left" is the final state.
+			jsonSHA = sha
 			break
 		}
 		fmt.Fprintf(stdout, "H\t%s\n", sha)
@@ -571,10 +570,74 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 					fmt.Fprintf(stderr, "rgit: %s has no upstream tracking branch -- try `git push -u origin %s`, or set push.autoSetupRemote to do this for every push\n", branch, branch)
 				}
 			}
+			emitLeft(ctx, repo, stdout, stderr, asJSON, jsonSHA, targetResults)
 			return exitcode.PushFailed
 		}
 	}
 
+	if !f.porcelain && !f.quiet {
+		if code := emitLeft(ctx, repo, stdout, stderr, asJSON, jsonSHA, targetResults); code != exitcode.Success {
+			return code
+		}
+	}
+	return exitcode.Success
+}
+
+// leftState is what remains after a commit, so the caller needs no
+// follow-up `git status` / `git log`.
+type leftState struct {
+	Dirty    []string
+	Upstream string
+	Ahead    int
+}
+
+func (l leftState) String() string {
+	s := "left: clean"
+	if n := len(l.Dirty); n > 0 {
+		names := l.Dirty
+		if n > 3 {
+			names = append(append([]string{}, names[:3]...), "…")
+		}
+		s = fmt.Sprintf("left: %d dirty (%s)", n, strings.Join(names, ", "))
+	}
+	if l.Upstream != "" {
+		s += fmt.Sprintf(" · %d ahead of %s", l.Ahead, l.Upstream)
+	}
+	return s
+}
+
+func readLeft(ctx context.Context, repo *gitx.Repo) (leftState, error) {
+	var l leftState
+	var err error
+	if l.Dirty, err = repo.DirtyPaths(ctx); err != nil {
+		return l, err
+	}
+	up, ok, err := repo.Upstream(ctx)
+	if err != nil || !ok {
+		return l, err
+	}
+	l.Upstream = up
+	l.Ahead, _, err = repo.AheadBehind(ctx)
+	return l, err
+}
+
+// emitLeft prints the final "left:" line (or, in JSON mode, the whole
+// report carrying it). A failed lookup never fails an already-landed commit.
+func emitLeft(ctx context.Context, repo *gitx.Repo, stdout, stderr io.Writer, asJSON bool, sha string, results []synth.TargetResult) exitcode.Code {
+	l, err := readLeft(ctx, repo)
+	if err != nil {
+		fmt.Fprintf(stderr, "[warning] reading remaining state: %v\n", err)
+	}
+	if asJSON {
+		if err := writeCommitJSON(stdout, sha, results, &l); err != nil {
+			fmt.Fprintf(stderr, "rgit: commit: %v\n", err)
+			return exitcode.GitFailure
+		}
+		return exitcode.Success
+	}
+	if err == nil {
+		fmt.Fprintln(stdout, l)
+	}
 	return exitcode.Success
 }
 
@@ -806,9 +869,16 @@ type commitJSONReport struct {
 	Schema  int                `json:"schema"`
 	SHA     string             `json:"sha,omitempty"`
 	Targets []commitJSONTarget `json:"targets"`
+	Left    *commitJSONLeft    `json:"left,omitempty"`
 }
 
-func writeCommitJSON(w io.Writer, sha string, results []synth.TargetResult) error {
+type commitJSONLeft struct {
+	Dirty    []string `json:"dirty"`
+	Upstream string   `json:"upstream,omitempty"`
+	Ahead    int      `json:"ahead"`
+}
+
+func writeCommitJSON(w io.Writer, sha string, results []synth.TargetResult, l *leftState) error {
 	targets := make([]commitJSONTarget, 0)
 	for _, r := range results {
 		if r.Outcome == synth.Unchanged {
@@ -825,7 +895,11 @@ func writeCommitJSON(w io.Writer, sha string, results []synth.TargetResult) erro
 			Deleted: fmt.Sprintf("%d", r.Deleted),
 		})
 	}
-	return encodeJSON(w, commitJSONReport{Schema: jsonSchema, SHA: sha, Targets: targets})
+	rep := commitJSONReport{Schema: jsonSchema, SHA: sha, Targets: targets}
+	if l != nil {
+		rep.Left = &commitJSONLeft{Dirty: append([]string{}, l.Dirty...), Upstream: l.Upstream, Ahead: l.Ahead}
+	}
+	return encodeJSON(w, rep)
 }
 
 func writeTargetRecords(stdout io.Writer, results []synth.TargetResult) {

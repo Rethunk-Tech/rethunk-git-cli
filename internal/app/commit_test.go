@@ -342,3 +342,37 @@ func TestRunCommit_OnlyConcurrentCommitsAllLand(t *testing.T) {
 		t.Errorf("status = %q; want only foreign staged, every committed path clean", got)
 	}
 }
+
+// TestRunCommit_LeftLine pins the final "left:" line that spares callers a
+// follow-up git status/log: clean with no upstream, then dirty and ahead.
+func TestRunCommit_LeftLine(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	dir, _ := gittest.New(ctx, t)
+	gittest.Write(t, dir, "a.txt", "1\n")
+
+	stdout, stderr, code := runApp(t, "-C", dir, "commit", "-m", "feat(p): add a", "a.txt")
+	if code != exitcode.Success {
+		t.Fatalf("commit = %v; stderr: %s", code, stderr)
+	}
+	if !strings.HasSuffix(stdout, "left: clean\n") {
+		t.Errorf("stdout = %q; want trailing %q", stdout, "left: clean")
+	}
+
+	remote := t.TempDir()
+	gittest.Git(ctx, t, remote, "init", "-q", "--bare")
+	gittest.Git(ctx, t, dir, "remote", "add", "origin", remote)
+	gittest.Git(ctx, t, dir, "push", "-q", "-u", "origin", "main")
+	for _, n := range []string{"b.txt", "c.txt", "d.txt", "e.txt"} {
+		gittest.Write(t, dir, n, "x\n")
+	}
+	gittest.Write(t, dir, "a.txt", "2\n")
+	stdout, stderr, code = runApp(t, "-C", dir, "commit", "-m", "feat(p): change a", "a.txt")
+	if code != exitcode.Success {
+		t.Fatalf("commit = %v; stderr: %s", code, stderr)
+	}
+	const want = "left: 4 dirty (b.txt, c.txt, d.txt, …) · 1 ahead of origin/main\n"
+	if !strings.HasSuffix(stdout, want) {
+		t.Errorf("stdout = %q; want trailing %q", stdout, want)
+	}
+}

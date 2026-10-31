@@ -1209,6 +1209,30 @@ func (r *Repo) AheadBehind(ctx context.Context) (ahead, behind int, err error) {
 	return ahead, behind, nil
 }
 
+// DirtyPaths lists every path with staged, unstaged or untracked
+// (non-ignored) changes via `git status --porcelain=v1 -z`. Untracked
+// directories are expanded to files so callers see names, not folders.
+func (r *Repo) DirtyPaths(ctx context.Context) ([]string, error) {
+	out, err := r.checked(ctx, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+	if err != nil {
+		return nil, err
+	}
+	var paths []string
+	fields := strings.Split(string(out), "\x00")
+	for i := 0; i < len(fields); i++ {
+		f := fields[i]
+		if len(f) < 4 {
+			continue
+		}
+		paths = append(paths, f[3:])
+		// A rename or copy entry is followed by its source path as its own field.
+		if f[0] == 'R' || f[0] == 'C' || f[1] == 'R' || f[1] == 'C' {
+			i++
+		}
+	}
+	return paths, nil
+}
+
 // LsFilesOthers lists untracked files via `git ls-files --others
 // --exclude-standard -z`, NUL-terminated so no path-quoting rules apply.
 // extra is appended after the flags, for pathspec scoping (`-- <pathspec>`).

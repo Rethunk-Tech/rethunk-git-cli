@@ -146,7 +146,7 @@ func TestRun_CommitJSONAgreesWithPorcelain(t *testing.T) {
 
 	var top map[string]json.RawMessage
 	qt.Assert(t, qt.IsNil(json.Unmarshal([]byte(stdout), &top)))
-	qt.Assert(t, qt.DeepEquals(mapKeys(top), []string{"schema", "sha", "targets"}))
+	qt.Assert(t, qt.DeepEquals(mapKeys(top), []string{"left", "schema", "sha", "targets"}))
 	qt.Assert(t, qt.Equals(strings.Trim(string(top["sha"]), "\"\n"), sha))
 	assertCommitJSONTargets(t, top["targets"], dryPorcelain)
 
@@ -155,7 +155,7 @@ func TestRun_CommitJSONAgreesWithPorcelain(t *testing.T) {
 	emptySHA := strings.TrimSpace(gittest.Git(t.Context(), t, dir, "rev-parse", "HEAD"))
 	var emptyTop map[string]json.RawMessage
 	qt.Assert(t, qt.IsNil(json.Unmarshal([]byte(emptyJSON), &emptyTop)))
-	qt.Assert(t, qt.DeepEquals(mapKeys(emptyTop), []string{"schema", "sha", "targets"}))
+	qt.Assert(t, qt.DeepEquals(mapKeys(emptyTop), []string{"left", "schema", "sha", "targets"}))
 	qt.Assert(t, qt.Equals(strings.Trim(string(emptyTop["sha"]), "\"\n"), emptySHA))
 	var emptyTargets []map[string]string
 	qt.Assert(t, qt.IsNil(json.Unmarshal(emptyTop["targets"], &emptyTargets)))
