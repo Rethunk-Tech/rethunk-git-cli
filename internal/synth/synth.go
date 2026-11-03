@@ -297,8 +297,12 @@ func spliceExcise(out []byte, start, end uint) []byte {
 // start lands at true end-of-file (out[start:] is empty), the result's own
 // trailing newline mirrors out's, not a forced default.
 func spliceInsert(out []byte, op editOp) []byte {
-	before := out[:op.start]
-	after := out[op.start:]
+	// A deleted last symbol sharing this start has already taken the blank lines
+	// before it (spliceExcise's end-of-file branch), which can leave start past
+	// the end of out.
+	start := min(op.start, uint(len(out)))
+	before := out[:start]
+	after := out[start:]
 
 	mid := joinWithSeparator(before, op.text, widerGap(op.member, op.leadGap))
 	// Both empty and newlines-only mean end-of-file: nothing follows the

@@ -1,6 +1,9 @@
 package synth
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestSpliceExcise_CollapsesToEOF covers spliceExcise's cold branch,
 // measured at 53.8% under -short -coverpkg=./...: when the excised symbol
@@ -88,5 +91,22 @@ func TestSwallowedBy(t *testing.T) {
 				t.Errorf("swallowedBy() = %v; want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// A renamed last symbol is a delete and an insert at one offset. The delete runs
+// first and trims the blank lines before it, so the insert's offset can pass the
+// end of the shrunken buffer.
+func TestApplyEdits_RenamedLastSymbol(t *testing.T) {
+	t.Parallel()
+
+	head := "# T\n\n### Keep\n\nk\n\n### Old\n\nbody\n"
+	start := uint(strings.Index(head, "### Old"))
+	got := applyEdits([]byte(head), []editOp{
+		{kind: editDelete, start: start, end: uint(len(head))},
+		{kind: editInsert, start: start, end: start, text: []byte("### New\n\nbody2"), seq: 1},
+	})
+	if want := "# T\n\n### Keep\n\nk\n\n### New\n\nbody2\n"; string(got) != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
