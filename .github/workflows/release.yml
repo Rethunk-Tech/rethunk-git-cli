@@ -55,7 +55,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: Rethunk-Tech/gh-actions/setup-go@67ec8bd68343d915462729ad119c355740cf6205 # v1.22
+      - uses: Rethunk-Tech/gh-actions/setup-go@0fd53b2e66ac157aab89e4dc0ebbf4627969acef # v1.23
 
       # zig is the single cross-compilation toolchain `make cross` drives;
       # rgit links tree-sitter through cgo, so CGO_ENABLED=0 is not an
