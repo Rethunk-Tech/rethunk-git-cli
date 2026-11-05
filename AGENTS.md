@@ -59,6 +59,10 @@ Tree-sitter resolves; LSP **verifies** declaration-only extent (doc comment stri
 
 No persistent state. Creates only `rgit-commit.lock` in the git directory (`commit --only`'s OS lock), a `rgit-only-*` system-temp directory holding `commit --only`'s private index, a short-lived `rgit-index-*` copy beside the index while staging, and, for LSP, the socket, its spawn lock, and the spawned daemon's pidfile under UID-scoped `rgit-<uid>` in `$XDG_RUNTIME_DIR` (or system temp), `0700`, owner-verified before dial (`internal/lsp/dial.go`). Repository state is git's alone.
 
+## Self-hosting
+
+`rgit` commits its own changes, so a fix under `internal/synth` or `internal/resolve` is inert until `make install` replaces the binary: a fixed defect that still reproduces means comparing `rgit --version` with HEAD. Keep one install at the default prefix; a second copy earlier on `PATH` shadows it.
+
 ## Gate budget
 
 `.gate.toml` runs `go build -race ./...` first, then lint, `go test -race -short ./...`, and govulncheck (`GOFLAGS=-race`) in parallel once a stamp in `GOCACHE` says that race compile finished. Concurrent gates that each compile the cgo grammars cost about 115 CPU-s apiece; the stamp keeps that to one compile. Gitleaks, actionlint, and shellcheck overlap the build. Under 10 s warm and 30 s cold (throwaway Go and lint caches); gate's default 10 s warn budget is not raised.
