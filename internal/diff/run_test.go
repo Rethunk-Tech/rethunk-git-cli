@@ -1,7 +1,6 @@
 package diff
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -57,7 +56,7 @@ func TestRun_UnresolvableSymReturnsResolveError(t *testing.T) {
 	// easy to mistake for success.
 	gittest.Write(t, dir, "b.py", "def existing():\n    return 2\n")
 
-	_, err := Run(context.Background(), repo, dir, Options{
+	_, err := Run(t.Context(), repo, dir, Options{
 		Syms: []SymRef{{File: "b.py", Name: "doesNotExist"}},
 	})
 
@@ -76,7 +75,7 @@ func TestRun_SymOnNonexistentFileReturnsResolveError(t *testing.T) {
 	t.Parallel()
 	dir, repo := newDiffTestRepo(t)
 
-	_, err := Run(context.Background(), repo, dir, Options{
+	_, err := Run(t.Context(), repo, dir, Options{
 		Syms: []SymRef{{File: "nosuch.py", Name: "foo"}},
 	})
 
@@ -102,7 +101,7 @@ func TestRun_SymResolvesButUnchangedIsNotAnError(t *testing.T) {
 	// No worktree edits at all: "existing" resolves against HEAD, and there
 	// is nothing uncommitted anywhere in the repo.
 
-	report, err := Run(context.Background(), repo, dir, Options{
+	report, err := Run(t.Context(), repo, dir, Options{
 		Syms: []SymRef{{File: "b.py", Name: "existing"}},
 	})
 	if err != nil {
@@ -127,7 +126,7 @@ func TestRun_PatchPopulatesReportPatch(t *testing.T) {
 	dir, repo := newDiffTestRepo(t)
 	gittest.Write(t, dir, "b.py", "def existing():\n    return 2\n")
 
-	withPatch, err := Run(context.Background(), repo, dir, Options{Patch: true})
+	withPatch, err := Run(t.Context(), repo, dir, Options{Patch: true})
 	if err != nil {
 		t.Fatalf("Run error = %v; want nil", err)
 	}
@@ -138,7 +137,7 @@ func TestRun_PatchPopulatesReportPatch(t *testing.T) {
 		t.Errorf("Report.Patch = %q; want the actual changed content", withPatch.Patch)
 	}
 
-	withoutPatch, err := Run(context.Background(), repo, dir, Options{})
+	withoutPatch, err := Run(t.Context(), repo, dir, Options{})
 	if err != nil {
 		t.Fatalf("Run error = %v; want nil", err)
 	}
@@ -155,7 +154,7 @@ func TestRun_UnmergedPathUsesWorktreeConflictContent(t *testing.T) {
 	blob := strings.TrimSpace(gittest.Git(t.Context(), t, dir, "rev-parse", "HEAD:conflict.txt"))
 	gittest.Unmerged(t.Context(), t, dir, blob, "conflict.txt")
 
-	report, err := Run(context.Background(), repo, dir, Options{
+	report, err := Run(t.Context(), repo, dir, Options{
 		Files: []string{"conflict.txt"},
 		Patch: true,
 	})
@@ -179,7 +178,7 @@ func TestRun_UnmergedPathUsesWorktreeConflictContent(t *testing.T) {
 func TestValidateSym_PrefersNewSideThenFallsBackToOld(t *testing.T) {
 	t.Parallel()
 	dir, repo := newDiffTestRepo(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	scope, err := ResolveScope(ctx, repo, Options{})
 	if err != nil {
 		t.Fatalf("ResolveScope: %v", err)
@@ -225,7 +224,7 @@ func TestRun_ExtensionlessShebangEnumeratesSymbols(t *testing.T) {
 	// Edit foo only; bar stays clean and must not appear as a row.
 	gittest.Write(t, dir, "pre-commit", "#!/usr/bin/env bash\n\nfoo() {\n  echo v2\n}\n\nbar() {\n  echo bar\n}\n")
 
-	report, err := Run(context.Background(), repo, dir, Options{})
+	report, err := Run(t.Context(), repo, dir, Options{})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -244,11 +243,11 @@ func TestRun_ExtensionlessShebangEnumeratesSymbols(t *testing.T) {
 
 	// The anchor Run just printed must be exactly what validateSym (and so
 	// rgit commit) accepts back -- the property the whole loop rests on.
-	scope, err := ResolveScope(context.Background(), repo, Options{})
+	scope, err := ResolveScope(t.Context(), repo, Options{})
 	if err != nil {
 		t.Fatalf("ResolveScope: %v", err)
 	}
-	canonical, err := validateSym(context.Background(), repo, dir, scope, SymRef{File: "pre-commit", Name: got.Rows[0].Symbol})
+	canonical, err := validateSym(t.Context(), repo, dir, scope, SymRef{File: "pre-commit", Name: got.Rows[0].Symbol})
 	if err != nil {
 		t.Fatalf("validateSym(%q): %v", got.Rows[0].Symbol, err)
 	}
@@ -261,7 +260,7 @@ func TestRun_ExtensionlessShebangEnumeratesSymbols(t *testing.T) {
 	if err := os.Remove(filepath.Join(dir, "pre-commit")); err != nil {
 		t.Fatal(err)
 	}
-	report, err = Run(context.Background(), repo, dir, Options{})
+	report, err = Run(t.Context(), repo, dir, Options{})
 	if err != nil {
 		t.Fatalf("Run after deletion: %v", err)
 	}
@@ -322,7 +321,7 @@ func TestRun_SymFilterMatchesAnyAcceptedAliasSpelling(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			report, err := Run(context.Background(), repo, dir, Options{Syms: []SymRef{tt.sym}})
+			report, err := Run(t.Context(), repo, dir, Options{Syms: []SymRef{tt.sym}})
 			if err != nil {
 				t.Fatalf("Run(%+v): %v", tt.sym, err)
 			}
@@ -464,7 +463,7 @@ func TestRun_BatchesGitCatFileAcrossManyChangedFiles(t *testing.T) {
 	// A rev-to-rev comparison: both sides are git-backed (sideRev), so
 	// every file's read would have gone through cat-file under the old,
 	// unbatched path -- the case the batching exists for.
-	report, err := Run(context.Background(), repo, dir, Options{Revisions: []string{"HEAD~1", "HEAD"}})
+	report, err := Run(t.Context(), repo, dir, Options{Revisions: []string{"HEAD~1", "HEAD"}})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -494,7 +493,7 @@ func TestRun_DegradedCrossCheckSetsTSOnly(t *testing.T) {
 	gittest.Write(t, dir, "b.py", "def existing():\n    return 2\n")
 	t.Setenv("PATH", pathWithGitOnly(t))
 
-	report, err := Run(context.Background(), repo, dir, Options{})
+	report, err := Run(t.Context(), repo, dir, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -512,7 +511,7 @@ func TestRun_RevisionRangeIsNotDegraded(t *testing.T) {
 	dir, repo := newDiffTestRepo(t)
 	t.Setenv("PATH", pathWithGitOnly(t))
 
-	report, err := Run(context.Background(), repo, dir, Options{RangeFlag: "HEAD..HEAD"})
+	report, err := Run(t.Context(), repo, dir, Options{RangeFlag: "HEAD..HEAD"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -537,7 +536,7 @@ func TestRun_NoResolvableDeclarationsIsNotDegraded(t *testing.T) {
 	gittest.Write(t, dir, "empty.py", "# no declarations here\n")
 	gittest.Git(t.Context(), t, dir, "add", "empty.py")
 
-	report, err := Run(context.Background(), repo, dir, Options{Files: []string{"empty.py"}})
+	report, err := Run(t.Context(), repo, dir, Options{Files: []string{"empty.py"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -550,7 +549,7 @@ func TestRun_NoResolvableDeclarationsIsNotDegraded(t *testing.T) {
 // case can assert the exact row set a reader would see.
 func rowsFor(t *testing.T, dir string, repo *gitx.Repo, path string) []Row {
 	t.Helper()
-	report, err := Run(context.Background(), repo, dir, Options{})
+	report, err := Run(t.Context(), repo, dir, Options{})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -699,7 +698,7 @@ func TestRun_ScopeUsageErrorsAreTyped(t *testing.T) {
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := Run(context.Background(), repo, dir, tc.opts)
+			_, err := Run(t.Context(), repo, dir, tc.opts)
 
 			var uerr *UsageError
 			if !errors.As(err, &uerr) {
@@ -728,7 +727,7 @@ func TestRun_RevPathTwoBlobScope(t *testing.T) {
 	gittest.Write(t, dir, "b.go", "package p\n\nfunc Unrelated() {}\n")
 	gittest.Commit(t.Context(), t, dir, "chore: unrelated change")
 
-	report, err := Run(context.Background(), repo, dir, Options{
+	report, err := Run(t.Context(), repo, dir, Options{
 		RevPaths: []cli.RevPath{{Rev: "HEAD~2", Path: "a.go"}, {Rev: "HEAD~1", Path: "a.go"}},
 	})
 	if err != nil {
@@ -749,7 +748,7 @@ func TestRun_RevPathTwoBlobScope(t *testing.T) {
 		t.Errorf("Files = %+v; want only a.go -- b.go belongs to a later commit than either endpoint", report.Files)
 	}
 
-	filtered, err := Run(context.Background(), repo, dir, Options{
+	filtered, err := Run(t.Context(), repo, dir, Options{
 		RevPaths: []cli.RevPath{{Rev: "HEAD~2", Path: "a.go"}, {Rev: "HEAD~1", Path: "a.go"}},
 		Syms:     []SymRef{{File: "a.go", Name: "Foo"}},
 	})
@@ -813,7 +812,7 @@ func TestRun_FileAndRowOrderIsPathThenPosition(t *testing.T) {
 	gittest.Write(t, dir, "a.go", edited)
 	gittest.Write(t, dir, "b.go", edited)
 
-	report, err := Run(context.Background(), repo, dir, Options{})
+	report, err := Run(t.Context(), repo, dir, Options{})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -837,7 +836,7 @@ func TestRun_UntrackedFileAttributesPerSymbol(t *testing.T) {
 	gittest.Write(t, dir, "new.go", "package p\n\nfunc First() int { return 1 }\n\nfunc Second() int { return 2 }\n")
 	// Deliberately never `git add`ed -- LsFilesOthers is what surfaces it.
 
-	report, err := Run(context.Background(), repo, dir, Options{})
+	report, err := Run(t.Context(), repo, dir, Options{})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -858,7 +857,7 @@ func TestRun_UntrackedFileAttributesPerSymbol(t *testing.T) {
 		t.Errorf("symbols = %v; want both First and Second", symbols)
 	}
 
-	filtered, err := Run(context.Background(), repo, dir, Options{Syms: []SymRef{{File: "new.go", Name: "Second"}}})
+	filtered, err := Run(t.Context(), repo, dir, Options{Syms: []SymRef{{File: "new.go", Name: "Second"}}})
 	if err != nil {
 		t.Fatalf("Run with --sym: %v", err)
 	}
@@ -881,7 +880,7 @@ func TestRun_ContainerEscalationNoticeOnlyUnderSymFilter(t *testing.T) {
 	t.Setenv("PATH", pathWithGitOnly(t))
 	gittest.Write(t, dir, "new.ts", "class Widget {\n  foo(): number { return 1 }\n\n  bar(): number { return 2 }\n}\n")
 
-	unfiltered, err := Run(context.Background(), repo, dir, Options{})
+	unfiltered, err := Run(t.Context(), repo, dir, Options{})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -891,7 +890,7 @@ func TestRun_ContainerEscalationNoticeOnlyUnderSymFilter(t *testing.T) {
 		}
 	}
 
-	filtered, err := Run(context.Background(), repo, dir, Options{Syms: []SymRef{{File: "new.ts", Name: "foo"}}})
+	filtered, err := Run(t.Context(), repo, dir, Options{Syms: []SymRef{{File: "new.ts", Name: "foo"}}})
 	if err != nil {
 		t.Fatalf("Run with --sym: %v", err)
 	}
@@ -932,7 +931,7 @@ func TestRun_BinaryChangeReportsDashCounts(t *testing.T) {
 	changed := append(append([]byte(nil), binary...), 'X')
 	gittest.Write(t, dir, "logo.bin", string(changed))
 
-	report, err := Run(context.Background(), repo, dir, Options{})
+	report, err := Run(t.Context(), repo, dir, Options{})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -1021,7 +1020,7 @@ func TestRun_UntrackedFileThatVanishesIsWarnedNotFatal(t *testing.T) {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
 
-	report, err := Run(context.Background(), repo, dir, Options{})
+	report, err := Run(t.Context(), repo, dir, Options{})
 	if err != nil {
 		t.Fatalf("Run: %v; want the unreadable path skipped, not a failed report", err)
 	}
@@ -1060,7 +1059,7 @@ func TestRun_StagedRenameAcrossDirectoryDepth(t *testing.T) {
 			}
 			gittest.Git(t.Context(), t, dir, "mv", tc.from, tc.to)
 
-			report, err := Run(context.Background(), repo, dir, Options{Staged: true})
+			report, err := Run(t.Context(), repo, dir, Options{Staged: true})
 			if err != nil {
 				t.Fatalf("Run --staged after %s -> %s: %v", tc.from, tc.to, err)
 			}

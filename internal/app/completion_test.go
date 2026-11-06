@@ -88,7 +88,7 @@ func TestGeneratedAssets_MentionEveryTopLevelCommand(t *testing.T) {
 		}},
 		{"man", func() (string, exitcode.Code) {
 			var stdout, stderr strings.Builder
-			code := runMan(context.Background(), "test", nil, &stdout, &stderr)
+			code := runMan(t.Context(), "test", nil, &stdout, &stderr)
 			return stdout.String(), code
 		}},
 	}

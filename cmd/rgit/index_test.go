@@ -40,7 +40,7 @@ func assertPathError(t *testing.T, err error, want exitcode.Code) {
 // empty.
 func indexBlob(t *testing.T, repo *gitx.Repo, path string) string {
 	t.Helper()
-	content, exists, err := repo.CatFile(context.Background(), "", path)
+	content, exists, err := repo.CatFile(t.Context(), "", path)
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.IsTrue(exists))
 	return string(content)
@@ -48,7 +48,7 @@ func indexBlob(t *testing.T, repo *gitx.Repo, path string) string {
 
 func mustStage(t *testing.T, repo *gitx.Repo, dir string, targets ...synth.Target) {
 	t.Helper()
-	err := stageTargets(context.Background(), repo, dir, targets)
+	err := stageTargets(t.Context(), repo, dir, targets)
 	qt.Assert(t, qt.IsNil(err))
 }
 
@@ -327,7 +327,7 @@ func TestStage_PythonModuleLevelAssignment(t *testing.T) {
 	qt.Assert(t, qt.StringContains(got, "RETRIES = 3")) // sibling untouched
 
 	// CONFIG["k"] names no symbol, so it cannot be staged by anchor.
-	err := stageTargets(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("conf.py", "CONFIG[\"k\"]")})
+	err := stageTargets(t.Context(), repo, dir, []synth.Target{synth.AnchorTarget("conf.py", "CONFIG[\"k\"]")})
 	qt.Assert(t, qt.IsNotNil(err))
 }
 
@@ -466,7 +466,7 @@ func TestStage_UnbornBranchGitignoredPathRefused(t *testing.T) {
 	gittest.Write(t, dir, ".gitignore", "*.log\n")
 	gittest.Write(t, dir, "debug.log", "noise\n")
 
-	err := stageTargets(context.Background(), repo, dir, []synth.Target{synth.PathTarget("debug.log")})
+	err := stageTargets(t.Context(), repo, dir, []synth.Target{synth.PathTarget("debug.log")})
 	assertPathError(t, err, exitcode.PathRefused)
 }
 
@@ -571,7 +571,7 @@ func TestStage_SubmoduleAndSymlinkPathStaging(t *testing.T) {
 
 	// A symbol anchor on the same symlink is refused rather than
 	// misresolved (docs/ANCHORS.md § Paths that anchors cannot address).
-	err := stageTargets(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("link.txt", "Foo")})
+	err := stageTargets(t.Context(), repo, dir, []synth.Target{synth.AnchorTarget("link.txt", "Foo")})
 	assertPathError(t, err, exitcode.SpecialPathRefused)
 
 	// A symbol anchor into the submodule directory is refused the same
@@ -579,7 +579,7 @@ func TestStage_SubmoduleAndSymlinkPathStaging(t *testing.T) {
 	// TestClassifyPath already proves classifyPath answers pathGitlink for
 	// it; this proves the refusal actually reaches a caller through the
 	// real staging path, not just the classifier in isolation.
-	err = stageTargets(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("sub", "Foo")})
+	err = stageTargets(t.Context(), repo, dir, []synth.Target{synth.AnchorTarget("sub", "Foo")})
 	assertPathError(t, err, exitcode.SpecialPathRefused)
 }
 
@@ -609,7 +609,7 @@ func TestStage_GitignoredUntrackedRefused(t *testing.T) {
 	dir, repo := gittest.RepoWithFile(t.Context(), t, ".gitignore", "*.log\n", "chore: add gitignore")
 	gittest.Write(t, dir, "debug.log", "noise\n")
 
-	err := stageTargets(context.Background(), repo, dir, []synth.Target{synth.PathTarget("debug.log")})
+	err := stageTargets(t.Context(), repo, dir, []synth.Target{synth.PathTarget("debug.log")})
 	assertPathError(t, err, exitcode.PathRefused)
 }
 
@@ -617,7 +617,7 @@ func TestStage_UnsupportedLanguageAnchorRefused(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.RepoWithFile(t.Context(), t, "notes.rb", "def main; end\n", "chore: add notes.rb")
 
-	err := stageTargets(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("notes.rb", "main")})
+	err := stageTargets(t.Context(), repo, dir, []synth.Target{synth.AnchorTarget("notes.rb", "main")})
 	assertPathError(t, err, exitcode.UnsupportedLanguage)
 }
 
@@ -628,7 +628,7 @@ func TestStage_ResolveAllBeforeStagingAnyLeavesIndexUntouched(t *testing.T) {
 
 	// Foo does not exist anywhere -- the whole batch must fail before A
 	// (which resolves cleanly) is ever staged.
-	err := stageTargets(context.Background(), repo, dir, []synth.Target{
+	err := stageTargets(t.Context(), repo, dir, []synth.Target{
 		synth.AnchorTarget("a.go", "A"),
 		synth.AnchorTarget("a.go", "Foo"),
 	})
@@ -1130,7 +1130,7 @@ func TestPlanStage_PreambleRowsAppearInResults(t *testing.T) {
 	dir, repo := gittest.RepoWithFile(t.Context(), t, "seed.go", "package main\n\nfunc Seed() {}\n", "chore: seed")
 	gittest.Write(t, dir, "new.go", "package main\n\nimport \"fmt\"\n\nfunc Hello() {\n\tfmt.Println(\"hi\")\n}\n")
 
-	plan, err := synth.PlanStage(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("new.go", "Hello")})
+	plan, err := synth.PlanStage(t.Context(), repo, dir, []synth.Target{synth.AnchorTarget("new.go", "Hello")})
 	qt.Assert(t, qt.IsNil(err))
 
 	results := plan.Results
@@ -1156,7 +1156,7 @@ func TestPlanStage_PreambleRowsAppearInResults(t *testing.T) {
 	qt.Assert(t, qt.Equals(results[1].Added, 2)) // `import "fmt"` + its absorbed blank line
 	qt.Assert(t, qt.Equals(results[2].Added, 3)) // Hello's own 3-line body
 
-	qt.Assert(t, qt.IsNil(plan.Apply(context.Background(), repo, dir)))
+	qt.Assert(t, qt.IsNil(plan.Apply(t.Context(), repo, dir)))
 	got := indexBlob(t, repo, "new.go")
 	mustParseGo(t, "preamble rows reflect what was actually staged", got)
 	qt.Assert(t, qt.Equals(got, "package main\n\nimport \"fmt\"\n\nfunc Hello() {\n\tfmt.Println(\"hi\")\n}\n"))
@@ -1182,7 +1182,7 @@ func TestPlanStage_PreambleDoesNotAbsorbSeparatorForLanguagesThatDontOwnOne(t *t
 	dir, repo := gittest.RepoWithFile(t.Context(), t, "seed.ts", "export const seed = 1;\n", "chore: seed")
 	gittest.Write(t, dir, "new.ts", "import { z } from \"./z\";\n\nexport function hello() {}\n")
 
-	plan, err := synth.PlanStage(context.Background(), repo, dir, []synth.Target{synth.AnchorTarget("new.ts", "hello")})
+	plan, err := synth.PlanStage(t.Context(), repo, dir, []synth.Target{synth.AnchorTarget("new.ts", "hello")})
 	qt.Assert(t, qt.IsNil(err))
 
 	results := plan.Results

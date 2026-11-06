@@ -1,7 +1,6 @@
 package gitx_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,7 +12,7 @@ import (
 
 func TestHasStash(t *testing.T) {
 	dir, repo := gittest.New(t.Context(), t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	hasStash, err := repo.HasStash(ctx)
 	qt.Assert(t, qt.IsNil(err))
@@ -42,7 +41,7 @@ func TestHasStash(t *testing.T) {
 
 func TestSparseCheckout(t *testing.T) {
 	dir, repo := gittest.New(t.Context(), t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sparse, err := repo.SparseCheckout(ctx)
 	qt.Assert(t, qt.IsNil(err))

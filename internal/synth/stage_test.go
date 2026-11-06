@@ -26,7 +26,7 @@ func TestOpenFilePlan_UnsupportedLanguageReason(t *testing.T) {
 		dir, repo := gittest.New(t.Context(), t)
 		gittest.Write(t, dir, "main.rb", "def main; end\n")
 
-		_, err := openFilePlan(context.Background(), repo, dir, "main.rb")
+		_, err := openFilePlan(t.Context(), repo, dir, "main.rb")
 
 		var perr *PathError
 		if !errors.As(err, &perr) {
@@ -43,7 +43,7 @@ func TestOpenFilePlan_UnsupportedLanguageReason(t *testing.T) {
 		dir, repo := gittest.New(t.Context(), t)
 		gittest.Write(t, dir, "bin/hook", "echo hi\n")
 
-		_, err := openFilePlan(context.Background(), repo, dir, "bin/hook")
+		_, err := openFilePlan(t.Context(), repo, dir, "bin/hook")
 
 		var perr *PathError
 		if !errors.As(err, &perr) {
@@ -62,7 +62,7 @@ func TestOpenFilePlan_UnsupportedLanguageReason(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		_, err := openFilePlan(context.Background(), repo, dir, "bin/hook")
+		_, err := openFilePlan(t.Context(), repo, dir, "bin/hook")
 
 		var perr *PathError
 		if !errors.As(err, &perr) {
@@ -85,7 +85,7 @@ func TestOpenFilePlan_UsesNonEmptyIndexBlobWhenWorktreeGone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fp, err := openFilePlan(context.Background(), repo, dir, "new.go")
+	fp, err := openFilePlan(t.Context(), repo, dir, "new.go")
 	if err != nil {
 		t.Fatalf("openFilePlan: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestOpenFilePlan_RefusesEmptyIntentToAddWithoutWorktree(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := openFilePlan(context.Background(), repo, dir, "new.go")
+	_, err := openFilePlan(t.Context(), repo, dir, "new.go")
 	var perr *PathError
 	if !errors.As(err, &perr) {
 		t.Fatalf("openFilePlan error = %v; want *PathError", err)
@@ -128,7 +128,7 @@ func TestOpenFilePlan_RefusesEmptyIntentToAddWithoutWorktree(t *testing.T) {
 func TestPathspecFileCounts_UnreadableUntrackedFileWarns(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t.Context(), t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	full := filepath.Join(dir, "secret.txt")
 	if err := os.WriteFile(full, []byte("shh\n"), 0o600); err != nil {
@@ -166,7 +166,7 @@ func TestStage_PromisorMissingBlobIsAnError(t *testing.T) {
 	dir, repo := gittest.BloblessClone(t.Context(), t)
 
 	// CatFile fails before symbol classification can inspect the missing blob.
-	err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("tracked.go", "@header")})
+	err := stageTargets(t.Context(), repo, dir, []Target{AnchorTarget("tracked.go", "@header")})
 
 	var gerr *gitx.GitError
 	if !errors.As(err, &gerr) {
@@ -194,7 +194,7 @@ func TestStage_PromisorMissingBlobIsAnError(t *testing.T) {
 func TestStage_MidLoopFailureLeavesIndexUntouched(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t.Context(), t)
-	ctx := context.Background()
+	ctx := t.Context()
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n")
 	gittest.Write(t, dir, "b.go", "package b\n\nfunc B() int {\n\treturn 2\n}\n")
 	gittest.Write(t, dir, "other.txt", "staged\n")
@@ -240,7 +240,7 @@ func TestStage_MidLoopFailureLeavesIndexUntouched(t *testing.T) {
 func TestStage_SuccessStagesExactlyPlannedBlobs(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t.Context(), t)
-	ctx := context.Background()
+	ctx := t.Context()
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
 	gittest.Commit(t.Context(), t, dir, "chore: initial")
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")

@@ -36,7 +36,7 @@ func newClassifyRepo(t *testing.T) (checker *GitPathChecker, revs GitRevisionRes
 		t.Fatal(err)
 	}
 
-	return &GitPathChecker{Root: root, Repo: repo}, GitRevisionResolver{Repo: repo}, context.Background()
+	return &GitPathChecker{Root: root, Repo: repo}, GitRevisionResolver{Repo: repo}, t.Context()
 }
 
 // TestClassifyArgs_PrecedenceTable walks docs/USAGE.md § Argument shape's
@@ -192,7 +192,7 @@ func TestGitPathChecker_IndexOnlyPathExists(t *testing.T) {
 	}
 
 	checker := &GitPathChecker{Root: root, Repo: repo}
-	exists, err := checker.ExistsInWorktreeOrHEAD(context.Background(), "new.go")
+	exists, err := checker.ExistsInWorktreeOrHEAD(t.Context(), "new.go")
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.IsTrue(exists))
 }
@@ -209,7 +209,7 @@ func TestClassifyArgs_IndexOnlyPathIsAnAnchor(t *testing.T) {
 	checker := &GitPathChecker{Root: root, Repo: repo}
 	revs := GitRevisionResolver{Repo: repo}
 	got, err := ClassifyArgs(
-		context.Background(),
+		t.Context(),
 		[]string{"new.go:New"},
 		false,
 		checker,
@@ -231,7 +231,7 @@ func TestGitPathChecker_IntentToAddIgnoredPathExists(t *testing.T) {
 	gittest.Git(t.Context(), t, root, "add", "-f", "-N", "skip-me.go")
 
 	checker := &GitPathChecker{Root: root, Repo: repo}
-	exists, err := checker.ExistsInWorktreeOrHEAD(context.Background(), "skip-me.go")
+	exists, err := checker.ExistsInWorktreeOrHEAD(t.Context(), "skip-me.go")
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.IsTrue(exists))
 }
@@ -247,7 +247,7 @@ func TestGitPathChecker_IgnoreCaseIndexOnlyPathExists(t *testing.T) {
 	}
 
 	checker := &GitPathChecker{Root: root, Repo: repo}
-	exists, err := checker.ExistsInWorktreeOrHEAD(context.Background(), "foo.go")
+	exists, err := checker.ExistsInWorktreeOrHEAD(t.Context(), "foo.go")
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.IsTrue(exists))
 }

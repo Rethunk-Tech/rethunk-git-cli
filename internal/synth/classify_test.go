@@ -1,7 +1,6 @@
 package synth
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -20,7 +19,7 @@ import (
 // than reaching across the module for it.
 func stagedBlob(t *testing.T, repo *gitx.Repo, path string) string {
 	t.Helper()
-	content, exists, err := repo.CatFile(context.Background(), "", path)
+	content, exists, err := repo.CatFile(t.Context(), "", path)
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.IsTrue(exists))
 	return string(content)
@@ -42,7 +41,7 @@ func TestClassify_DefersCrossCheckToOneBatchPerFile(t *testing.T) {
 	dir, repo := gittest.RepoWithFile(t.Context(), t, "a.go", "package p\n\nfunc A() int { return 1 }\n\nfunc B() int { return 2 }\n", "chore: fixture")
 	gittest.Write(t, dir, "a.go", "package p\n\nfunc A() int { return 11 }\n\nfunc B() int { return 22 }\n")
 
-	fp, err := openFilePlan(context.Background(), repo, dir, "a.go")
+	fp, err := openFilePlan(t.Context(), repo, dir, "a.go")
 	qt.Assert(t, qt.IsNil(err))
 	defer fp.close()
 
@@ -83,7 +82,7 @@ func TestEscalateToContainer_AmbiguousContainerPropagates(t *testing.T) {
 	work := "[[servers]]\nhost = \"a\"\nport = 1\n\n[[servers]]\nhost = \"b\"\n"
 	gittest.Write(t, dir, "conf.toml", work)
 
-	err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("conf.toml", "servers.port")})
+	err := stageTargets(t.Context(), repo, dir, []Target{AnchorTarget("conf.toml", "servers.port")})
 
 	var rerr *resolve.ResolveError
 	qt.Assert(t, qt.ErrorAs(err, &rerr))
@@ -113,7 +112,7 @@ func TestEscalateToContainer_HTMLNestedInsertIgnoresTagCoincidence(t *testing.T)
 	work := "<div id=\"em\">\n<div id=\"app\">\n  <section id=\"content\">v1</section>\n  <em id=\"tagline\">Hi</em>\n</div>\n</div>\n"
 	gittest.Write(t, dir, "index.html", work)
 
-	err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("index.html", "em#tagline")})
+	err := stageTargets(t.Context(), repo, dir, []Target{AnchorTarget("index.html", "em#tagline")})
 	qt.Assert(t, qt.IsNil(err))
 
 	want := "<div id=\"app\">\n  <section id=\"content\">v1</section>\n\n  <em id=\"tagline\">Hi</em>\n\n</div>\n"
@@ -140,7 +139,7 @@ func TestPlanStage_StagesNewSiblingsTheAnchorReferences(t *testing.T) {
 		"export interface Clip {\n  id: string;\n  seconds: number;\n}\n"
 	gittest.Write(t, dir, "types.ts", work)
 
-	err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("types.ts", "VideoPromptOverride")})
+	err := stageTargets(t.Context(), repo, dir, []Target{AnchorTarget("types.ts", "VideoPromptOverride")})
 	qt.Assert(t, qt.IsNil(err))
 
 	staged := stagedBlob(t, repo, "types.ts")
@@ -161,7 +160,7 @@ func TestStage_RustFieldSitsFlush(t *testing.T) {
 	work := "pub struct Config {\n    pub name: String,\n    pub size: usize,\n}\n"
 	gittest.Write(t, dir, "lib.rs", work)
 
-	err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("lib.rs", "Config::size")})
+	err := stageTargets(t.Context(), repo, dir, []Target{AnchorTarget("lib.rs", "Config::size")})
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(stagedBlob(t, repo, "lib.rs"), work))
 }
@@ -176,7 +175,7 @@ func TestStage_RustImplMemberSitsFlush(t *testing.T) {
 	work := "pub struct Config;\n\nimpl Config {\n    pub fn new() -> Self {\n        Self\n    }\n    pub fn len(&self) -> usize {\n        0\n    }\n}\n"
 	gittest.Write(t, dir, "lib.rs", work)
 
-	err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("lib.rs", "Config::len")})
+	err := stageTargets(t.Context(), repo, dir, []Target{AnchorTarget("lib.rs", "Config::len")})
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(stagedBlob(t, repo, "lib.rs"), work))
 }
@@ -189,7 +188,7 @@ func TestStage_RustMemberOfANewImplBringsTheBlock(t *testing.T) {
 	work := "pub struct Config;\n\nimpl Config {\n    pub fn len(&self) -> usize {\n        0\n    }\n}\n"
 	gittest.Write(t, dir, "lib.rs", work)
 
-	err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("lib.rs", "Config::len")})
+	err := stageTargets(t.Context(), repo, dir, []Target{AnchorTarget("lib.rs", "Config::len")})
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(stagedBlob(t, repo, "lib.rs"), work))
 }

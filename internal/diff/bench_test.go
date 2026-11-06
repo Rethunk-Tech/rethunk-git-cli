@@ -1,7 +1,6 @@
 package diff
 
 import (
-	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -102,7 +101,7 @@ func BenchmarkRun_CrossCheckManyFiles(b *testing.B) {
 	}
 
 	dir, repo := buildCrossCheckFixture(b, 12)
-	ctx := context.Background()
+	ctx := b.Context()
 
 	for b.Loop() {
 		if _, err := Run(ctx, repo, dir, Options{}); err != nil {

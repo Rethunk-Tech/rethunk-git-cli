@@ -63,7 +63,7 @@ func TestDial_NewServers(t *testing.T) {
 			// lived context created just to bound the retry below would
 			// kill a successfully dialled server out from under the query
 			// that follows it.
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 
 			// Retry once on a degraded Dial before failing. Degrading
@@ -119,7 +119,7 @@ func TestDial_NewServers_Degraded(t *testing.T) {
 	// cannot Parallel because t.Setenv("PATH", ...) below
 	t.Setenv("PATH", t.TempDir())
 
-	_, degraded := Dial(context.Background(), "yaml", t.TempDir())
+	_, degraded := Dial(t.Context(), "yaml", t.TempDir())
 	if !degraded {
 		t.Error("Dial(\"yaml\") with no yaml-language-server on PATH = not degraded; want degraded")
 	}

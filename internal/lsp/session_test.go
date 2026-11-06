@@ -1,7 +1,6 @@
 package lsp
 
 import (
-	"context"
 	"net"
 	"testing"
 )
@@ -21,7 +20,7 @@ func TestSession_NilDialDegradesWithoutDialing(t *testing.T) {
 	t.Parallel()
 	var sess *Session
 
-	client, degraded := sess.Dial(context.Background(), "go", t.TempDir())
+	client, degraded := sess.Dial(t.Context(), "go", t.TempDir())
 	if client != nil {
 		t.Errorf("nil Session.Dial client = %v; want nil", client)
 	}
@@ -40,7 +39,7 @@ func TestSession_CachesClientAndDegradedState(t *testing.T) {
 	t.Parallel()
 	sess := NewSession()
 
-	client1, degraded1 := sess.Dial(context.Background(), "no-such-language", t.TempDir())
+	client1, degraded1 := sess.Dial(t.Context(), "no-such-language", t.TempDir())
 	if client1 != nil || !degraded1 {
 		t.Fatalf("first Dial = (%v, %v); want (nil, true)", client1, degraded1)
 	}
@@ -48,7 +47,7 @@ func TestSession_CachesClientAndDegradedState(t *testing.T) {
 		t.Error("Session did not remember the degraded language")
 	}
 
-	client2, degraded2 := sess.Dial(context.Background(), "no-such-language", t.TempDir())
+	client2, degraded2 := sess.Dial(t.Context(), "no-such-language", t.TempDir())
 	if client2 != nil || !degraded2 {
 		t.Fatalf("second Dial = (%v, %v); want (nil, true)", client2, degraded2)
 	}
@@ -87,7 +86,7 @@ func TestSession_ReusesCachedClientAndClosesIt(t *testing.T) {
 	go func() { errCh <- observer.serve(`[]`) }()
 
 	rwc := &countingRWC{Conn: clientConn}
-	client, err := NewClient(context.Background(), rwc, t.TempDir())
+	client, err := NewClient(t.Context(), rwc, t.TempDir())
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -95,7 +94,7 @@ func TestSession_ReusesCachedClientAndClosesIt(t *testing.T) {
 	sess := NewSession()
 	sess.clients["go"] = client
 
-	got, degraded := sess.Dial(context.Background(), "go", t.TempDir())
+	got, degraded := sess.Dial(t.Context(), "go", t.TempDir())
 	if degraded {
 		t.Fatal("Dial() degraded = true for a cached language; want false")
 	}

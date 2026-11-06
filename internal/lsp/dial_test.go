@@ -252,7 +252,7 @@ func TestDialStdio_CloseTearsDownConnectionThenProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
 	client, degraded := Dial(ctx, "shell", dir)
@@ -431,7 +431,7 @@ func TestDialSocket_HandshakeFailureUnlinksManagedSocketAndDegrades(t *testing.T
 
 	lsptest.Listen(t, sockPath, lsptest.HangUp)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 
 	client, degraded := dialSocket(ctx, spec, t.TempDir())
@@ -461,7 +461,7 @@ func TestDialSocket_HandshakeFailureLeavesUserSuppliedSocketAlone(t *testing.T) 
 	t.Setenv("RGIT_LSP_SOCKET", sockPath)
 
 	spec := serverSpec{name: "test-user-socket", bin: "rgit-lsp-test-binary-does-not-exist", daemonArgs: noopDaemonArgs}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 
 	if _, degraded := dialSocket(ctx, spec, t.TempDir()); !degraded {
@@ -491,7 +491,7 @@ func TestUnlinkDeadSocket_RemovesDeadSocketFile(t *testing.T) {
 	// dial attempt enough for a stray connect to land inside it. Running
 	// serially keeps that window narrow and the assertion deterministic.
 	sockPath := filepath.Join(shortTempDir(t), "rgit-test.sock")
-	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "unix", sockPath)
+	ln, err := (&net.ListenConfig{}).Listen(t.Context(), "unix", sockPath)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"encoding/json"
 	"slices"
 	"strings"
@@ -69,7 +68,7 @@ func TestRun_DoctorJSON(t *testing.T) {
 		qt.Assert(t, qt.Equals(checks[i]["detail"], fields[3]))
 	}
 
-	envChecks, _ := runEnvironmentChecks(context.Background())
+	envChecks, _ := runEnvironmentChecks(t.Context())
 	for _, want := range envChecks {
 		status := "ok"
 		if !want.OK {

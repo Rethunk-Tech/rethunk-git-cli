@@ -2,7 +2,6 @@ package app
 
 import (
 	"bytes"
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,6 +58,6 @@ func TestRun_LanguagesInRepoMarkdownOmitsGo(t *testing.T) {
 func runLanguagesInRepoTest(t *testing.T, dir string) (stdout, stderr string, code exitcode.Code) {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	code = runLanguages(context.Background(), dir, []string{"--in-repo"}, &out, &errOut)
+	code = runLanguages(t.Context(), dir, []string{"--in-repo"}, &out, &errOut)
 	return out.String(), errOut.String(), code
 }

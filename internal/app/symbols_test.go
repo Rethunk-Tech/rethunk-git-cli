@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -64,7 +63,7 @@ func TestRunSymbolsListsCleanWorktreeDeclarations(t *testing.T) {
 	gittest.Git(t.Context(), t, root, "-c", "user.name=rgit test", "-c", "user.email=rgit@example.invalid", "commit", "--quiet", "-m", "initial")
 
 	var stdout, stderr strings.Builder
-	code := runSymbols(context.Background(), root, []string{"main.go"}, &stdout, &stderr)
+	code := runSymbols(t.Context(), root, []string{"main.go"}, &stdout, &stderr)
 	if code != exitcode.Success {
 		t.Fatalf("runSymbols() = %d, stderr = %q", code, stderr.String())
 	}
@@ -87,7 +86,7 @@ func TestRunSymbolsHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
 	}
 
 	var stdout, stderr strings.Builder
-	code := runSymbols(context.Background(), root, []string{"Foo.GO"}, &stdout, &stderr)
+	code := runSymbols(t.Context(), root, []string{"Foo.GO"}, &stdout, &stderr)
 	if code != exitcode.Success {
 		t.Fatalf("runSymbols(Foo.GO) with core.ignorecase=true = %d, stderr = %q", code, stderr.String())
 	}
@@ -98,7 +97,7 @@ func TestRunSymbolsHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
 	gittest.Git(t.Context(), t, root, "config", "core.ignorecase", "false")
 	stdout.Reset()
 	stderr.Reset()
-	code = runSymbols(context.Background(), root, []string{"Foo.GO"}, &stdout, &stderr)
+	code = runSymbols(t.Context(), root, []string{"Foo.GO"}, &stdout, &stderr)
 	if code != exitcode.UnsupportedLanguage {
 		t.Fatalf("runSymbols(Foo.GO) with core.ignorecase=false = %d, want %d", code, exitcode.UnsupportedLanguage)
 	}
@@ -119,7 +118,7 @@ func TestRun_SymbolsListsHeadDeclarationsWhenWorktreeFileIsGone(t *testing.T) {
 	}
 
 	var stdout, stderr strings.Builder
-	code := runSymbols(context.Background(), root, []string{"a.go"}, &stdout, &stderr)
+	code := runSymbols(t.Context(), root, []string{"a.go"}, &stdout, &stderr)
 	if code != exitcode.Success {
 		t.Fatalf("runSymbols() = %d, stderr = %q", code, stderr.String())
 	}
@@ -134,7 +133,7 @@ func TestRun_SymbolsMissingUntrackedFileStillErrors(t *testing.T) {
 	gittest.Git(t.Context(), t, root, "init", "--quiet")
 
 	var stdout, stderr strings.Builder
-	code := runSymbols(context.Background(), root, []string{"missing.go"}, &stdout, &stderr)
+	code := runSymbols(t.Context(), root, []string{"missing.go"}, &stdout, &stderr)
 	if code != exitcode.GitFailure {
 		t.Fatalf("runSymbols() = %d, want %d", code, exitcode.GitFailure)
 	}
@@ -155,7 +154,7 @@ func TestRunSymbolsStructuredDataCommitMode(t *testing.T) {
 	gittest.Git(t.Context(), t, root, "-c", "user.name=rgit test", "-c", "user.email=rgit@example.invalid", "commit", "--quiet", "-m", "initial")
 
 	var stdout, stderr strings.Builder
-	code := runSymbols(context.Background(), root, []string{"config.json"}, &stdout, &stderr)
+	code := runSymbols(t.Context(), root, []string{"config.json"}, &stdout, &stderr)
 	if code != exitcode.Success {
 		t.Fatalf("runSymbols() = %d, stderr = %q", code, stderr.String())
 	}
@@ -165,7 +164,7 @@ func TestRunSymbolsStructuredDataCommitMode(t *testing.T) {
 
 	stdout.Reset()
 	stderr.Reset()
-	code = runSymbols(context.Background(), root, []string{"--for-commit", "config.json"}, &stdout, &stderr)
+	code = runSymbols(t.Context(), root, []string{"--for-commit", "config.json"}, &stdout, &stderr)
 	if code != exitcode.Success {
 		t.Fatalf("runSymbols(--for-commit) = %d, stderr = %q", code, stderr.String())
 	}
@@ -222,7 +221,7 @@ func TestRunSymbolsWithLinesEmitsLineRanges(t *testing.T) {
 	root := symbolsFixture(t, "main.go", withLinesSource)
 
 	var stdout, stderr strings.Builder
-	code := runSymbols(context.Background(), root, []string{"--with-lines", "main.go"}, &stdout, &stderr)
+	code := runSymbols(t.Context(), root, []string{"--with-lines", "main.go"}, &stdout, &stderr)
 	if code != exitcode.Success {
 		t.Fatalf("runSymbols(--with-lines) = %d, stderr = %q", code, stderr.String())
 	}
@@ -239,7 +238,7 @@ func TestRunSymbolsBareOutputUnchangedByWithLines(t *testing.T) {
 	root := symbolsFixture(t, "main.go", withLinesSource)
 
 	var stdout, stderr strings.Builder
-	code := runSymbols(context.Background(), root, []string{"main.go"}, &stdout, &stderr)
+	code := runSymbols(t.Context(), root, []string{"main.go"}, &stdout, &stderr)
 	if code != exitcode.Success {
 		t.Fatalf("runSymbols() = %d, stderr = %q", code, stderr.String())
 	}
@@ -253,7 +252,7 @@ func TestRunSymbolsWithLinesForCommitStillOmitsStructuredData(t *testing.T) {
 	root := symbolsFixture(t, "config.json", "{\n  \"name\": \"demo\"\n}\n")
 
 	var stdout, stderr strings.Builder
-	code := runSymbols(context.Background(), root, []string{"--with-lines", "--for-commit", "config.json"}, &stdout, &stderr)
+	code := runSymbols(t.Context(), root, []string{"--with-lines", "--for-commit", "config.json"}, &stdout, &stderr)
 	if code != exitcode.Success {
 		t.Fatalf("runSymbols(--with-lines --for-commit) = %d, stderr = %q", code, stderr.String())
 	}
@@ -279,7 +278,7 @@ func TestRunSymbolsWithLinesAgreesWithResolvedExtent(t *testing.T) {
 	}
 
 	var stdout, stderr strings.Builder
-	code := runSymbols(context.Background(), root, []string{"--with-lines", "main.go"}, &stdout, &stderr)
+	code := runSymbols(t.Context(), root, []string{"--with-lines", "main.go"}, &stdout, &stderr)
 	if code != exitcode.Success {
 		t.Fatalf("runSymbols(--with-lines) = %d, stderr = %q", code, stderr.String())
 	}

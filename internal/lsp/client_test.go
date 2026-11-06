@@ -54,7 +54,7 @@ func TestNewClient_ClosesConnExactlyOnceOnHandshakeFailure(t *testing.T) {
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
 
 	if _, err := NewClient(ctx, rwc, t.TempDir()); err == nil {
@@ -244,14 +244,14 @@ func TestDocumentSymbols_SendsDidClose(t *testing.T) {
 	errCh := make(chan error, 1)
 	go func() { errCh <- observer.serve(`[]`) }()
 
-	client, err := NewClient(context.Background(), clientConn, t.TempDir())
+	client, err := NewClient(t.Context(), clientConn, t.TempDir())
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
 	defer func() { _ = client.Close() }()
 
 	const path = "/tmp/a.go"
-	if _, err := client.DocumentSymbols(context.Background(), path, []byte("package p\n")); err != nil {
+	if _, err := client.DocumentSymbols(t.Context(), path, []byte("package p\n")); err != nil {
 		t.Fatalf("DocumentSymbols: %v", err)
 	}
 

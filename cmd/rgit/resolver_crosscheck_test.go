@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"net"
 	"os"
 	"os/exec"
@@ -69,13 +68,13 @@ func TestLSP_DocumentSymbolsDecodesBothUnionShapes(t *testing.T) {
 			errCh := make(chan error, 1)
 			go func() { errCh <- lsptest.ServeMockLSP(serverConn, tc.resultJSON, lsptest.MockServerHooks{}) }()
 
-			client, err := lsp.NewClient(context.Background(), clientConn, t.TempDir())
+			client, err := lsp.NewClient(t.Context(), clientConn, t.TempDir())
 			if err != nil {
 				t.Fatalf("NewClient: %v", err)
 			}
 			defer func() { _ = client.Close() }()
 
-			got, err := client.DocumentSymbols(context.Background(), "/tmp/a.go", []byte("package p\n"))
+			got, err := client.DocumentSymbols(t.Context(), "/tmp/a.go", []byte("package p\n"))
 			if err != nil {
 				t.Fatalf("DocumentSymbols: %v", err)
 			}
@@ -192,7 +191,7 @@ func ValidateToken(t string) error {
 
 	res := mustResolve(t, src, "ValidateToken")
 	lang := resolverGoLang(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// A fresh session per attempt, deliberately: a session remembers a
 	// language that degraded and will not redial it, so reusing one here
@@ -268,7 +267,7 @@ func TestResolve_CrossCheckLiveHTML(t *testing.T) {
 
 	lang, ok := resolve.ForExtension(".html")
 	qt.Assert(t, qt.IsTrue(ok))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	attempt := func(anchor string) (degraded bool, err error) {
 		res, rerr := resolve.Resolve(lang, src, anchor)

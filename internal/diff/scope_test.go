@@ -141,7 +141,7 @@ func TestResolveRangeScope_MergeBaseExecFailureIsNotAUsageError(t *testing.T) {
 	// started (gitx's own contract: "binary missing, context canceled" is
 	// an *ExecError, not a negative answer) -- deterministic, and it needs
 	// no PATH surgery that t.Parallel siblings could race on.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	_, err := resolveRangeScope(ctx, repo, "main...feature")
@@ -162,7 +162,7 @@ func TestResolveRangeScope_ExplicitFormFallsBackToSingleRevision(t *testing.T) {
 	t.Parallel()
 	_, repo := gittest.RepoWithFile(t.Context(), t, "f.txt", "one\n", "chore: fixture")
 
-	scope, err := resolveRangeScope(context.Background(), repo, "HEAD")
+	scope, err := resolveRangeScope(t.Context(), repo, "HEAD")
 	if err != nil {
 		t.Fatalf("resolveRangeScope(HEAD): %v", err)
 	}
@@ -185,7 +185,7 @@ func TestCommittableBase_UnbornBranchFallsBackToEmptyTree(t *testing.T) {
 	t.Parallel()
 	_, repo := gittest.New(t.Context(), t)
 
-	base, err := repo.CommittableBase(context.Background())
+	base, err := repo.CommittableBase(t.Context())
 	if err != nil {
 		t.Fatalf("CommittableBase: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestContentSideRead_UnmergedFallsBackToWorktree(t *testing.T) {
 	blob := strings.TrimSpace(gittest.Git(t.Context(), t, dir, "rev-parse", "HEAD:conflict.txt"))
 	gittest.Unmerged(t.Context(), t, dir, blob, "conflict.txt")
 
-	content, exists, err := indexSide().read(context.Background(), repo, dir, "conflict.txt", nil)
+	content, exists, err := indexSide().read(t.Context(), repo, dir, "conflict.txt", nil)
 	if err != nil {
 		t.Fatalf("indexSide.read: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestExtractRangeToken_DetectsRangeNotAPath(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t.Context(), t)
 	checker := &cli.GitPathChecker{Root: dir, Repo: repo}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("range token pulled out, non-range args left in rest", func(t *testing.T) {
 		t.Parallel()

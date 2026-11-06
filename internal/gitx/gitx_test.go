@@ -21,7 +21,7 @@ import (
 func TestLsFilesStageAndMergeBase(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t.Context(), t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	gittest.Write(t, dir, "file.txt", "content")
 
@@ -83,7 +83,7 @@ func TestLsFilesStageAndMergeBase(t *testing.T) {
 func TestSequencerOpAndIgnoreCase(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t.Context(), t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	gittest.Write(t, dir, "file.txt", "content\n")
 	gittest.Commit(t.Context(), t, dir, "initial")
@@ -136,7 +136,7 @@ func hashObject(t *testing.T, dir, content string) string {
 func TestAdd_AlreadyStagedDeletionSucceeds(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t.Context(), t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	gittest.Write(t, dir, "gone.md", "bye\n")
 	gittest.Commit(t.Context(), t, dir, "chore: add gone.md")
@@ -200,7 +200,7 @@ func TestAdd_MixedAlreadyStagedDeletionStagesTheRest(t *testing.T) {
 func TestCatFileSample(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t.Context(), t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	gittest.Write(t, dir, "small.txt", "hi\n")
 	gittest.Write(t, dir, "large.txt", strings.Repeat("a", 100))
@@ -266,7 +266,7 @@ func TestCatFileSample(t *testing.T) {
 func TestCatFilePromisorMissingIsAnError(t *testing.T) {
 	t.Parallel()
 	_, repo := newBloblessClone(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	if _, exists, err := repo.CatFile(ctx, "HEAD", "absent.go"); err != nil || exists {
 		t.Fatalf("CatFile(absent.go) = (_, %v, %v); want (nil, false)", exists, err)
@@ -345,7 +345,7 @@ func runGitInput(t *testing.T, dir, input string, args ...string) string {
 func TestBlame(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t.Context(), t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	gittest.Write(t, dir, "f.txt", "one\ntwo\nthree\n")
 	gittest.Commit(t.Context(), t, dir, "chore: three lines")
@@ -369,7 +369,7 @@ func TestBlame(t *testing.T) {
 func TestBlame_Porcelain(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t.Context(), t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	gittest.Write(t, dir, "f.txt", "one\n")
 	gittest.Commit(t.Context(), t, dir, "chore: one line")
@@ -395,7 +395,7 @@ func TestBlame_Porcelain(t *testing.T) {
 func TestLogLineRange_RejectsColonInPath(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t.Context(), t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	gittest.Write(t, dir, "weird:file.txt", "one\ntwo\n")
 	gittest.Commit(t.Context(), t, dir, "chore: add weird:file.txt")
@@ -425,7 +425,7 @@ func TestLogLineRange_RejectsColonInPath(t *testing.T) {
 func TestDiffPatch(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t.Context(), t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	gittest.Write(t, dir, "a.txt", "one\n")
 	gittest.Write(t, dir, "b.txt", "one\n")
@@ -458,7 +458,7 @@ func TestDiffPatch(t *testing.T) {
 func TestLog_FiltersByPath(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t.Context(), t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	gittest.Write(t, dir, "a.txt", "a\n")
 	gittest.Write(t, dir, "b.txt", "b\n")
@@ -491,7 +491,7 @@ func TestLog_FiltersByPath(t *testing.T) {
 // No t.Parallel: t.Setenv forbids it (CONTRIBUTING.md § Tests).
 func TestLog_SinceExcludesEarlierCommits(t *testing.T) {
 	dir, repo := gittest.New(t.Context(), t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Setenv("GIT_AUTHOR_DATE", "2020-01-01T00:00:00")
 	t.Setenv("GIT_COMMITTER_DATE", "2020-01-01T00:00:00")
@@ -521,7 +521,7 @@ func TestLog_SinceExcludesEarlierCommits(t *testing.T) {
 func TestLog_MaxCount(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t.Context(), t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	gittest.Write(t, dir, "f.txt", "one\n")
 	gittest.Commit(t.Context(), t, dir, "chore: first commit")
@@ -548,10 +548,10 @@ func TestUpstreamAndAheadBehind(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.RepoWithFile(t.Context(), t, "a.go", "package a\n", "chore: initial")
 
-	if _, ok, err := repo.Upstream(context.Background()); err != nil || ok {
+	if _, ok, err := repo.Upstream(t.Context()); err != nil || ok {
 		t.Fatalf("Upstream() = (_, %v, %v); want ok=false with no upstream configured", ok, err)
 	}
-	if _, _, err := repo.AheadBehind(context.Background()); err == nil {
+	if _, _, err := repo.AheadBehind(t.Context()); err == nil {
 		t.Error("AheadBehind() with no upstream configured; want an error, not a silent 0/0")
 	}
 
@@ -560,18 +560,18 @@ func TestUpstreamAndAheadBehind(t *testing.T) {
 	gittest.Git(t.Context(), t, dir, "remote", "add", "origin", remote)
 	gittest.Git(t.Context(), t, dir, "push", "-q", "-u", "origin", "main")
 
-	name, ok, err := repo.Upstream(context.Background())
+	name, ok, err := repo.Upstream(t.Context())
 	if err != nil || !ok || name != "origin/main" {
 		t.Fatalf("Upstream() = (%q, %v, %v); want (\"origin/main\", true, nil)", name, ok, err)
 	}
-	if ahead, behind, err := repo.AheadBehind(context.Background()); err != nil || ahead != 0 || behind != 0 {
+	if ahead, behind, err := repo.AheadBehind(t.Context()); err != nil || ahead != 0 || behind != 0 {
 		t.Fatalf("AheadBehind() = (%d, %d, %v); want (0, 0, nil) right after push", ahead, behind, err)
 	}
 
 	gittest.Write(t, dir, "b.go", "package a\n")
 	gittest.Commit(t.Context(), t, dir, "chore: local-only commit")
 
-	if ahead, behind, err := repo.AheadBehind(context.Background()); err != nil || ahead != 1 || behind != 0 {
+	if ahead, behind, err := repo.AheadBehind(t.Context()); err != nil || ahead != 1 || behind != 0 {
 		t.Fatalf("AheadBehind() = (%d, %d, %v); want (1, 0, nil) one commit ahead", ahead, behind, err)
 	}
 }
@@ -591,7 +591,7 @@ func TestBatchCatFile(t *testing.T) {
 	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() {}\n")
 	gittest.Commit(t.Context(), t, dir, "chore: second")
 
-	results, err := repo.BatchCatFile(context.Background(), []gitx.BatchCatFileRequest{
+	results, err := repo.BatchCatFile(t.Context(), []gitx.BatchCatFileRequest{
 		{Rev: "HEAD", Path: "a.go"},
 		{Rev: "HEAD~1", Path: "a.go"},
 		{Rev: "HEAD", Path: "path with spaces.go"},
@@ -644,7 +644,7 @@ func TestBatchCatFile_SubmodulePathIsExistsFalse(t *testing.T) {
 		"160000,0123456789abcdef0123456789abcdef01234567,mysub")
 	gittest.Git(t.Context(), t, dir, "commit", "-q", "-m", "chore: add gitlink")
 
-	results, err := repo.BatchCatFile(context.Background(), []gitx.BatchCatFileRequest{
+	results, err := repo.BatchCatFile(t.Context(), []gitx.BatchCatFileRequest{
 		{Rev: "HEAD", Path: "mysub"},
 		{Rev: "HEAD", Path: "a.go"},
 	})
@@ -671,7 +671,7 @@ func TestBatchCatFile_EmptyRequestIsANoop(t *testing.T) {
 	t.Parallel()
 	_, repo := gittest.New(t.Context(), t)
 
-	results, err := repo.BatchCatFile(context.Background(), nil)
+	results, err := repo.BatchCatFile(t.Context(), nil)
 	if err != nil || results != nil {
 		t.Errorf("BatchCatFile(nil) = (%v, %v); want (nil, nil)", results, err)
 	}
@@ -685,7 +685,7 @@ func TestBatchCatFile_RejectsNewlineOrNULSelector(t *testing.T) {
 		{Rev: "HEAD\nHEAD", Path: "a.go"},
 		{Rev: "HEAD", Path: "a.go\x00b.go"},
 	} {
-		_, err := repo.BatchCatFile(context.Background(), []gitx.BatchCatFileRequest{req})
+		_, err := repo.BatchCatFile(t.Context(), []gitx.BatchCatFileRequest{req})
 		if err == nil {
 			t.Errorf("BatchCatFile(%q:%q) error = nil; want newline/NUL refusal", req.Rev, req.Path)
 		}
@@ -738,7 +738,7 @@ func TestCommit_ReuseMessageForwarded(t *testing.T) {
 	gittest.Write(t, dir, "a.txt", "staged content\n")
 	gittest.Git(t.Context(), t, dir, "add", "a.txt")
 
-	if _, err := repo.Commit(context.Background(), gitx.CommitOptions{
+	if _, err := repo.Commit(t.Context(), gitx.CommitOptions{
 		ReuseMessage: "HEAD",
 	}); err != nil {
 		t.Fatalf("Commit(--reuse-message=HEAD): %v", err)
@@ -757,7 +757,7 @@ func TestCommit_SignoffAppendsSignedOffBy(t *testing.T) {
 	gittest.Write(t, dir, "a.txt", "updated content\n")
 	gittest.Git(t.Context(), t, dir, "add", "a.txt")
 
-	if _, err := repo.Commit(context.Background(), gitx.CommitOptions{
+	if _, err := repo.Commit(t.Context(), gitx.CommitOptions{
 		Messages: []string{"feat: signoff"},
 		Signoff:  true,
 	}); err != nil {
@@ -774,7 +774,7 @@ func TestCommit_TrailerForwarded(t *testing.T) {
 	gittest.Write(t, dir, "a.txt", "updated content\n")
 	gittest.Git(t.Context(), t, dir, "add", "a.txt")
 
-	if _, err := repo.Commit(context.Background(), gitx.CommitOptions{
+	if _, err := repo.Commit(t.Context(), gitx.CommitOptions{
 		Messages: []string{"feat: trailer"},
 		Trailers: []string{"Refs: #1"},
 	}); err != nil {

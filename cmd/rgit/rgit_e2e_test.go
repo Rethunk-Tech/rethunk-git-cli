@@ -308,7 +308,7 @@ func TestDocumentedPathsWithoutOtherCoverage(t *testing.T) {
 		repo, _ := gittest.New(t.Context(), t)
 		gittest.Write(t, repo, "a.go", "package main\n\nfunc A() int { return 1 }\n")
 
-		cmd := exec.CommandContext(context.Background(), rgitBin, "commit", "-m", "feat(x): a", "a.go:A")
+		cmd := exec.CommandContext(t.Context(), rgitBin, "commit", "-m", "feat(x): a", "a.go:A")
 		cmd.Dir = repo
 		cmd.Env = append(os.Environ(),
 			"PATH=/usr/bin:/bin",

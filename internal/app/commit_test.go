@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -77,7 +76,7 @@ func TestRunCommit_RefusesSymbolAnchorOnStructuredData(t *testing.T) {
 
 			var stdout, stderr strings.Builder
 			anchor := tc.path + ":" + tc.anchorName
-			code := runCommit(context.Background(), "", []string{"-m", "chore: bump", anchor}, &stdout, &stderr)
+			code := runCommit(t.Context(), "", []string{"-m", "chore: bump", anchor}, &stdout, &stderr)
 			if code != exitcode.StructuredDataAnchorRefused {
 				t.Fatalf("runCommit FILE:SYMBOL = %v; want exitcode.StructuredDataAnchorRefused; stderr: %s", code, stderr.String())
 			}
@@ -91,7 +90,7 @@ func TestRunCommit_RefusesSymbolAnchorOnStructuredData(t *testing.T) {
 
 			stdout.Reset()
 			stderr.Reset()
-			code = runCommit(context.Background(), "", []string{"-m", "chore: bump", tc.path}, &stdout, &stderr)
+			code = runCommit(t.Context(), "", []string{"-m", "chore: bump", tc.path}, &stdout, &stderr)
 			if code != exitcode.Success {
 				t.Fatalf("runCommit by path = %v; want exitcode.Success; stderr: %s", code, stderr.String())
 			}
@@ -169,7 +168,7 @@ func TestRunCommit_CountingWarningsReachStderr(t *testing.T) {
 	})
 
 	var stdout, stderr strings.Builder
-	code := runCommit(context.Background(), dir, []string{"-m", "chore: add new.txt", "--dry-run", "new.txt"}, &stdout, &stderr)
+	code := runCommit(t.Context(), dir, []string{"-m", "chore: add new.txt", "--dry-run", "new.txt"}, &stdout, &stderr)
 	if code != exitcode.Success {
 		t.Fatalf("runCommit --dry-run = %v; stdout: %s; stderr: %s", code, stdout.String(), stderr.String())
 	}
@@ -190,7 +189,7 @@ func TestRunCommit_CountingWarningsReachStderr(t *testing.T) {
 // say why.
 func TestCommitTargets_UnhandledKindErrorsRatherThanSkips(t *testing.T) {
 	t.Parallel()
-	_, err := commitTargets(context.Background(), "/repo", "", []cli.Classification{{Kind: cli.KindRevision, Revision: "HEAD"}}, nil, nil, nil)
+	_, err := commitTargets(t.Context(), "/repo", "", []cli.Classification{{Kind: cli.KindRevision, Revision: "HEAD"}}, nil, nil, nil)
 	if err == nil {
 		t.Fatal("commitTargets: want an error for an unhandled classification kind, got nil")
 	}
@@ -248,7 +247,7 @@ func TestCommit_HookFailureRestoresPrestagedState(t *testing.T) {
 	gittest.InstallHook(t.Context(), t, dir, "pre-commit", "#!/bin/sh\nexit 1\n")
 
 	var stdout, stderr strings.Builder
-	code := runCommit(context.Background(), dir, []string{"-m", "fix(a): update A", "a.go:A"}, &stdout, &stderr)
+	code := runCommit(t.Context(), dir, []string{"-m", "fix(a): update A", "a.go:A"}, &stdout, &stderr)
 	if code != exitcode.GitFailure {
 		t.Fatalf("runCommit = %v; want exitcode.GitFailure; stderr: %s", code, stderr.String())
 	}
@@ -304,7 +303,7 @@ func TestRunCommit_OnlyConcurrentCommitsAllLand(t *testing.T) {
 				}
 				var stdout, stderr strings.Builder
 				msg := fmt.Sprintf("chore(%s): round %d", name, r)
-				if code := runCommit(context.Background(), dir, []string{"--only", "-q", "-m", msg, name}, &stdout, &stderr); code != exitcode.Success {
+				if code := runCommit(t.Context(), dir, []string{"--only", "-q", "-m", msg, name}, &stdout, &stderr); code != exitcode.Success {
 					errs <- fmt.Sprintf("%s: %v: %s", msg, code, stderr.String())
 				}
 			}

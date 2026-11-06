@@ -247,7 +247,7 @@ func TestStage_RefusesUnmergedSymbol(t *testing.T) {
 	blob := strings.TrimSpace(gittest.Git(t.Context(), t, dir, "rev-parse", "HEAD:conflict.go"))
 	gittest.Unmerged(t.Context(), t, dir, blob, "conflict.go")
 
-	err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("conflict.go", "Keep")})
+	err := stageTargets(t.Context(), repo, dir, []Target{AnchorTarget("conflict.go", "Keep")})
 	var pathErr *PathError
 	if !errors.As(err, &pathErr) {
 		t.Fatalf("Stage error = %v (%T); want *PathError", err, err)
@@ -258,7 +258,7 @@ func TestStage_RefusesUnmergedSymbol(t *testing.T) {
 	if pathErr.Reason != "unmerged; name the path instead of a symbol" {
 		t.Errorf("Reason = %q; want unmerged refusal", pathErr.Reason)
 	}
-	if unmerged, err := repo.IsUnmerged(context.Background(), "conflict.go"); err != nil {
+	if unmerged, err := repo.IsUnmerged(t.Context(), "conflict.go"); err != nil {
 		t.Fatalf("IsUnmerged after refusal: %v", err)
 	} else if !unmerged {
 		t.Error("IsUnmerged after refusal = false; want true")
@@ -296,7 +296,7 @@ func TestStage_RefusesIndexWorktreeBits(t *testing.T) {
 			commitSpecial(t.Context(), t, dir, "tracked.go")
 			gittest.Git(t.Context(), t, dir, "update-index", test.mark, "tracked.go")
 
-			err := stageTargets(context.Background(), repo, dir, []Target{AnchorTarget("tracked.go", "Keep")})
+			err := stageTargets(t.Context(), repo, dir, []Target{AnchorTarget("tracked.go", "Keep")})
 			var pathErr *PathError
 			if !errors.As(err, &pathErr) {
 				t.Fatalf("Stage error = %v (%T); want *PathError", err, err)
@@ -308,7 +308,7 @@ func TestStage_RefusesIndexWorktreeBits(t *testing.T) {
 				t.Errorf("Reason = %q; want %q", pathErr.Reason, test.reason)
 			}
 
-			skip, assume, found, err := repo.IndexWorktreeBits(context.Background(), "tracked.go")
+			skip, assume, found, err := repo.IndexWorktreeBits(t.Context(), "tracked.go")
 			if err != nil {
 				t.Fatalf("IndexWorktreeBits after refusal: %v", err)
 			}
@@ -330,7 +330,7 @@ func TestCheckGitignoreRefusal_IndexEntryCountsAsTracked(t *testing.T) {
 		commitSpecial(t.Context(), t, dir, ".gitignore")
 		gittest.Git(t.Context(), t, dir, "add", "-f", "-N", "skip-me.go")
 
-		if err := checkGitignoreRefusal(context.Background(), repo, "skip-me.go"); err != nil {
+		if err := checkGitignoreRefusal(t.Context(), repo, "skip-me.go"); err != nil {
 			t.Fatalf("checkGitignoreRefusal: %v; want nil", err)
 		}
 	})
@@ -344,7 +344,7 @@ func TestCheckGitignoreRefusal_IndexEntryCountsAsTracked(t *testing.T) {
 		commitSpecial(t.Context(), t, dir, ".gitignore")
 		gittest.Git(t.Context(), t, dir, "add", "-f", "-N", "Skip-Me.go")
 
-		if err := checkGitignoreRefusal(context.Background(), repo, "skip-me.go"); err != nil {
+		if err := checkGitignoreRefusal(t.Context(), repo, "skip-me.go"); err != nil {
 			t.Fatalf("checkGitignoreRefusal: %v; want nil", err)
 		}
 	})
@@ -356,7 +356,7 @@ func TestCheckGitignoreRefusal_IndexEntryCountsAsTracked(t *testing.T) {
 		gittest.Write(t, dir, "skip-me.go", "package p\n")
 		commitSpecial(t.Context(), t, dir, ".gitignore")
 
-		err := checkGitignoreRefusal(context.Background(), repo, "skip-me.go")
+		err := checkGitignoreRefusal(t.Context(), repo, "skip-me.go")
 		var pathErr *PathError
 		if !errors.As(err, &pathErr) {
 			t.Fatalf("checkGitignoreRefusal error = %v (%T); want *PathError", err, err)

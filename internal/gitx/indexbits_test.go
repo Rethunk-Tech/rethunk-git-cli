@@ -1,7 +1,6 @@
 package gitx_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gittest"
@@ -35,7 +34,7 @@ func TestIndexWorktreeBits(t *testing.T) {
 			if !test.found {
 				path = "absent.txt"
 			}
-			skip, assume, found, err := repo.IndexWorktreeBits(context.Background(), path)
+			skip, assume, found, err := repo.IndexWorktreeBits(t.Context(), path)
 			if err != nil {
 				t.Fatalf("IndexWorktreeBits: %v", err)
 			}

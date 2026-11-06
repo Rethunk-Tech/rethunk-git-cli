@@ -13,7 +13,6 @@ package app
 
 import (
 	"bytes"
-	"context"
 	"net"
 	"os"
 	"os/exec"
@@ -37,7 +36,7 @@ import (
 func runApp(t *testing.T, args ...string) (stdout, stderr string, code exitcode.Code) {
 	t.Helper()
 	var out, errBuf bytes.Buffer
-	code = Run(context.Background(), "v0.0.0-test", args, &out, &errBuf)
+	code = Run(t.Context(), "v0.0.0-test", args, &out, &errBuf)
 	return out.String(), errBuf.String(), code
 }
 
@@ -661,7 +660,7 @@ func TestRun_DiffPatchFlag(t *testing.T) {
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
 
 		repo := gitx.New(dir)
-		report, err := diffpkg.Run(context.Background(), repo, dir, diffpkg.Options{})
+		report, err := diffpkg.Run(t.Context(), repo, dir, diffpkg.Options{})
 		if err != nil {
 			t.Fatalf("diffpkg.Run: %v", err)
 		}
@@ -702,7 +701,7 @@ func TestRun_DiffPatchFlag(t *testing.T) {
 func TestRun_DiffFromSubdirectory(t *testing.T) {
 	dir := chdirTempRepo(t)
 	writeAppFile(t, dir, "pkg/deep/c.go", "package deep\n\nfunc C() int {\n\treturn 1\n}\n")
-	cmd := exec.CommandContext(context.Background(), "git", "add", "-A")
+	cmd := exec.CommandContext(t.Context(), "git", "add", "-A")
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git add: %v: %s", err, out)

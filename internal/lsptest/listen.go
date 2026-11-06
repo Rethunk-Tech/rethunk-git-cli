@@ -1,7 +1,6 @@
 package lsptest
 
 import (
-	"context"
 	"net"
 	"testing"
 )
@@ -19,7 +18,7 @@ import (
 // reuse.
 func Listen(t testing.TB, path string, handle func(conn net.Conn)) {
 	t.Helper()
-	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "unix", path)
+	ln, err := (&net.ListenConfig{}).Listen(t.Context(), "unix", path)
 	if err != nil {
 		t.Fatal(err)
 	}
