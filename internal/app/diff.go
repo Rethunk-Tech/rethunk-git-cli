@@ -11,9 +11,12 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/spf13/pflag"
+
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/cli"
 	diffpkg "github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/diff"
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
 )
 
@@ -43,17 +46,7 @@ type diffFlags struct {
 func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	var f diffFlags
 	fs := newTargetFlagSet("diff", &f.syms, &f.files)
-	fs.BoolVar(&f.unstaged, "unstaged", false, "worktree vs index (git's bare diff)")
-	fs.BoolVar(&f.staged, "staged", false, "index vs HEAD")
-	fs.BoolVar(&f.staged, "cached", false, "alias for --staged")
-	fs.StringVar(&f.rangeFlag, "range", "", "explicit form of a positional revision range")
-	fs.BoolVar(&f.porcelain, "porcelain", false, "stable tab-separated records")
-	fs.BoolVar(&f.asJSON, "json", false, "one JSON object of the porcelain rows")
-	fs.BoolVar(&f.exitCode, "exit-code", false, "exit 1 when anything is committable")
-	fs.BoolVar(&f.quiet, "quiet", false, "implies --exit-code and suppresses output")
-	fs.BoolVarP(&f.patch, "patch", "p", false, "include the real patch body")
-	fs.StringVar(&f.pathspecFile, "pathspec-from-file", "", "read targets from a file, or - for stdin")
-	fs.BoolVar(&f.pathspecNUL, "pathspec-file-nul", false, "separate pathspec-file targets with NUL")
+	registerDiffFlags(fs, &f)
 
 	help := "usage: rgit diff [flags] [target...]\n\n" +
 		"Show what is committable -- staged, unstaged, and untracked -- broken\n" +
@@ -96,131 +89,14 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 		return code
 	}
 
-	checker := cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}
-
-	rangeToken, rest, err := diffpkg.ExtractRangeToken(ctx, positionals, &checker)
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return exitcode.InvalidUsage
-	}
-	// ResolveScope refuses this before any of its own git calls. Surfaced
-	// here, as soon as both sides are known, so classification does not
-	// run first.
-	if f.rangeFlag != "" && rangeToken != "" {
-		_, err = diffpkg.ResolveScope(ctx, repo, diffpkg.Options{RangeFlag: f.rangeFlag, PositionalRange: rangeToken})
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return exitcode.InvalidUsage
-	}
-
-	classified, err := cli.ClassifyArgs(ctx, rest, true, &checker, cli.GitRevisionResolver{Repo: repo})
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return exitcode.InvalidUsage
-	}
-
-	revisions, files, syms, revPaths, err := diffpkg.BucketClassified(classified)
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return exitcode.InvalidUsage
-	}
-	// Same refusal as ResolveScope, which returns it before its git calls.
-	// --staged and --range are already caught above with no repo call at
-	// all; this is the rest -- --unstaged, and either flag against a bare
-	// revision positional -- which cannot be known until classification
-	// has resolved what the positionals are.
-	if (f.staged || f.unstaged) && (f.rangeFlag != "" || rangeToken != "" || len(revisions) > 0) {
-		_, err = diffpkg.ResolveScope(ctx, repo, diffpkg.Options{
-			Staged:          f.staged,
-			Unstaged:        f.unstaged,
-			RangeFlag:       f.rangeFlag,
-			PositionalRange: rangeToken,
-			Revisions:       revisions,
-		})
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return exitcode.InvalidUsage
-	}
-
-	symFlags, err := symRefsFromFlag(ctx, f.syms, &checker)
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return exitcode.InvalidUsage
-	}
-
-	allFiles := slices.Concat(files, f.files)
-	allSyms := slices.Concat(syms, symFlags)
-	for i, p := range allFiles {
-		resolved, err := repoPath(root, prefix, p)
-		if err != nil {
-			fmt.Fprintf(stderr, "rgit: %v\n", err)
-			return exitcode.InvalidUsage
-		}
-		allFiles[i] = resolved
-	}
-	for i, s := range allSyms {
-		resolved, err := repoPath(root, prefix, s.File)
-		if err != nil {
-			fmt.Fprintf(stderr, "rgit: %v\n", err)
-			return exitcode.InvalidUsage
-		}
-		s.File = resolved
-		allSyms[i] = s
-	}
-
-	// Same rule and same point in the flow as rgit commit: positionals and
-	// flags have merged and every path carries the invocation prefix, so the
-	// two spellings of the same contradiction are caught identically.
-	anchorFiles := make([]string, 0, len(allSyms))
-	for _, s := range allSyms {
-		anchorFiles = append(anchorFiles, s.File)
-	}
-	if code := pathAnchorContradiction(allFiles, anchorFiles, stderr); code != exitcode.Success {
+	opts, code := buildDiffOptions(ctx, &f, positionals, root, prefix, repo, stderr)
+	if code != exitcode.Success {
 		return code
-	}
-
-	opts := diffpkg.Options{
-		Staged:          f.staged,
-		Unstaged:        f.unstaged,
-		RangeFlag:       f.rangeFlag,
-		PositionalRange: rangeToken,
-		Revisions:       revisions,
-		Files:           allFiles,
-		Syms:            allSyms,
-		RevPaths:        revPaths,
-		// Skip fetching the patch entirely when output is suppressed by
-		// --quiet: nothing would ever read it, so there is no reason to pay
-		// for the extra `git diff` invocation.
-		Patch: f.patch && !f.quiet,
 	}
 
 	report, err := diffpkg.Run(ctx, repo, root, opts)
 	if err != nil {
-		if uerr, ok := errors.AsType[*diffpkg.UsageError](err); ok {
-			fmt.Fprintf(stderr, "rgit: %v\n", uerr)
-			return exitcode.InvalidUsage
-		}
-		// A --sym/bare-anchor value that does not resolve (internal/diff's
-		// validateSyms): the same *resolve.ResolveError rgit commit produces
-		// for the identical anchor, mapped through its own Code field rather
-		// than a second table of what each code means (mapStageError in
-		// internal/app/commit.go does the equivalent dispatch for commit).
-		if rerr, ok := errors.AsType[*resolve.ResolveError](err); ok {
-			msg := rerr.Error()
-			if rerr.Code == exitcode.UnsupportedLanguage {
-				// Unlike synth.PathError (commit.go's mapStageError),
-				// ResolveError does not always carry the file the anchor
-				// resolved against -- but validateSym (internal/diff/run.go)
-				// attaches it via Path for this exact failure, so it is read
-				// straight off the error rather than recovered by matching
-				// the failed anchor's bare name back against allSyms.
-				if ext, ok := extForFailedSym(rerr); ok {
-					msg += unsupportedLanguageHint(ext)
-				}
-			}
-			fmt.Fprintf(stderr, "rgit: %s\n", msg)
-			return rerr.Code
-		}
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return exitcode.GitFailure
+		return diffRunFailure(err, stderr)
 	}
 
 	// tsOnlyNotice (app.go) is shared with rgit commit's own identical
@@ -241,11 +117,168 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 	// diffpkg.Run above already resolved every entry in allSyms successfully
 	// (a failure returned above instead), so any that is ordinal-shaped is
 	// commit's own advisory, surfaced here too rather than only at stage time.
-	for _, s := range allSyms {
+	for _, s := range opts.Syms {
 		warnIfOrdinalAnchor(stderr, s.File, s.Name)
 	}
 
 	dirty := report.Dirty()
+	if code := writeDiffReport(&f, asJSON, report, stdout, stderr); code != exitcode.Success {
+		return code
+	}
+
+	if (f.quiet || f.exitCode) && dirty {
+		return diffCommittable
+	}
+	return exitcode.Success
+}
+
+func registerDiffFlags(fs *pflag.FlagSet, f *diffFlags) {
+	fs.BoolVar(&f.unstaged, "unstaged", false, "worktree vs index (git's bare diff)")
+	fs.BoolVar(&f.staged, "staged", false, "index vs HEAD")
+	fs.BoolVar(&f.staged, "cached", false, "alias for --staged")
+	fs.StringVar(&f.rangeFlag, "range", "", "explicit form of a positional revision range")
+	fs.BoolVar(&f.porcelain, "porcelain", false, "stable tab-separated records")
+	fs.BoolVar(&f.asJSON, "json", false, "one JSON object of the porcelain rows")
+	fs.BoolVar(&f.exitCode, "exit-code", false, "exit 1 when anything is committable")
+	fs.BoolVar(&f.quiet, "quiet", false, "implies --exit-code and suppresses output")
+	fs.BoolVarP(&f.patch, "patch", "p", false, "include the real patch body")
+	fs.StringVar(&f.pathspecFile, "pathspec-from-file", "", "read targets from a file, or - for stdin")
+	fs.BoolVar(&f.pathspecNUL, "pathspec-file-nul", false, "separate pathspec-file targets with NUL")
+}
+
+// buildDiffOptions classifies the positionals and flags into diff options,
+// resolving every path against the invocation prefix.
+func buildDiffOptions(ctx context.Context, f *diffFlags, positionals []string, root, prefix string, repo *gitx.Repo, stderr io.Writer) (diffpkg.Options, exitcode.Code) {
+	checker := cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}
+
+	rangeToken, rest, err := diffpkg.ExtractRangeToken(ctx, positionals, &checker)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return diffpkg.Options{}, exitcode.InvalidUsage
+	}
+	// ResolveScope refuses this before any of its own git calls. Surfaced
+	// here, as soon as both sides are known, so classification does not
+	// run first.
+	if f.rangeFlag != "" && rangeToken != "" {
+		_, err = diffpkg.ResolveScope(ctx, repo, diffpkg.Options{RangeFlag: f.rangeFlag, PositionalRange: rangeToken})
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return diffpkg.Options{}, exitcode.InvalidUsage
+	}
+
+	classified, err := cli.ClassifyArgs(ctx, rest, true, &checker, cli.GitRevisionResolver{Repo: repo})
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return diffpkg.Options{}, exitcode.InvalidUsage
+	}
+
+	revisions, files, syms, revPaths, err := diffpkg.BucketClassified(classified)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return diffpkg.Options{}, exitcode.InvalidUsage
+	}
+	// Same refusal as ResolveScope, which returns it before its git calls.
+	// --staged and --range are already caught above with no repo call at
+	// all; this is the rest -- --unstaged, and either flag against a bare
+	// revision positional -- which cannot be known until classification
+	// has resolved what the positionals are.
+	if (f.staged || f.unstaged) && (f.rangeFlag != "" || rangeToken != "" || len(revisions) > 0) {
+		_, err = diffpkg.ResolveScope(ctx, repo, diffpkg.Options{
+			Staged:          f.staged,
+			Unstaged:        f.unstaged,
+			RangeFlag:       f.rangeFlag,
+			PositionalRange: rangeToken,
+			Revisions:       revisions,
+		})
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return diffpkg.Options{}, exitcode.InvalidUsage
+	}
+
+	symFlags, err := symRefsFromFlag(ctx, f.syms, &checker)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return diffpkg.Options{}, exitcode.InvalidUsage
+	}
+
+	allFiles := slices.Concat(files, f.files)
+	allSyms := slices.Concat(syms, symFlags)
+	for i, p := range allFiles {
+		resolved, err := repoPath(root, prefix, p)
+		if err != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return diffpkg.Options{}, exitcode.InvalidUsage
+		}
+		allFiles[i] = resolved
+	}
+	for i, s := range allSyms {
+		resolved, err := repoPath(root, prefix, s.File)
+		if err != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return diffpkg.Options{}, exitcode.InvalidUsage
+		}
+		s.File = resolved
+		allSyms[i] = s
+	}
+
+	// Same rule and same point in the flow as rgit commit: positionals and
+	// flags have merged and every path carries the invocation prefix, so the
+	// two spellings of the same contradiction are caught identically.
+	anchorFiles := make([]string, 0, len(allSyms))
+	for _, s := range allSyms {
+		anchorFiles = append(anchorFiles, s.File)
+	}
+	if code := pathAnchorContradiction(allFiles, anchorFiles, stderr); code != exitcode.Success {
+		return diffpkg.Options{}, code
+	}
+
+	opts := diffpkg.Options{
+		Staged:          f.staged,
+		Unstaged:        f.unstaged,
+		RangeFlag:       f.rangeFlag,
+		PositionalRange: rangeToken,
+		Revisions:       revisions,
+		Files:           allFiles,
+		Syms:            allSyms,
+		RevPaths:        revPaths,
+		// Skip fetching the patch entirely when output is suppressed by
+		// --quiet: nothing would ever read it, so there is no reason to pay
+		// for the extra `git diff` invocation.
+		Patch: f.patch && !f.quiet,
+	}
+	return opts, exitcode.Success
+}
+
+// diffRunFailure maps an error from diffpkg.Run to its exit code.
+func diffRunFailure(err error, stderr io.Writer) exitcode.Code {
+	if uerr, ok := errors.AsType[*diffpkg.UsageError](err); ok {
+		fmt.Fprintf(stderr, "rgit: %v\n", uerr)
+		return exitcode.InvalidUsage
+	}
+	// A --sym/bare-anchor value that does not resolve (internal/diff's
+	// validateSyms): the same *resolve.ResolveError rgit commit produces
+	// for the identical anchor, mapped through its own Code field rather
+	// than a second table of what each code means (mapStageError in
+	// internal/app/commit.go does the equivalent dispatch for commit).
+	if rerr, ok := errors.AsType[*resolve.ResolveError](err); ok {
+		msg := rerr.Error()
+		if rerr.Code == exitcode.UnsupportedLanguage {
+			// Unlike synth.PathError (commit.go's mapStageError),
+			// ResolveError does not always carry the file the anchor
+			// resolved against -- but validateSym (internal/diff/run.go)
+			// attaches it via Path for this exact failure, so it is read
+			// straight off the error rather than recovered by matching
+			// the failed anchor's bare name back against allSyms.
+			if ext, ok := extForFailedSym(rerr); ok {
+				msg += unsupportedLanguageHint(ext)
+			}
+		}
+		fmt.Fprintf(stderr, "rgit: %s\n", msg)
+		return rerr.Code
+	}
+	fmt.Fprintf(stderr, "rgit: %v\n", err)
+	return exitcode.GitFailure
+}
+
+func writeDiffReport(f *diffFlags, asJSON bool, report *diffpkg.Report, stdout, stderr io.Writer) exitcode.Code {
 	if !f.quiet {
 		switch {
 		case asJSON:
@@ -261,10 +294,6 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 				_, _ = stdout.Write(report.Patch)
 			}
 		}
-	}
-
-	if (f.quiet || f.exitCode) && dirty {
-		return diffCommittable
 	}
 	return exitcode.Success
 }

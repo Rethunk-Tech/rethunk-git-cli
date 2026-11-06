@@ -194,131 +194,161 @@ func PlanStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 
 	for _, t := range targets {
 		if t.Pathspec != "" {
-			// Pathspec magic (leading ":") is a pattern, not a path --
-			// check-ignore does not accept the same magic forms `git add`
-			// does (e.g. ":(glob)**/*.txt" is not a valid check-ignore
-			// argument), and git add itself does not refuse a glob or
-			// magic pathspec up front the way it refuses a literal
-			// gitignored path. The refusal in docs/ANCHORS.md is about a
-			// caller naming one concrete path, so it only applies there.
-			if !strings.HasPrefix(t.Pathspec, ":") {
-				if err := checkGitignoreRefusal(ctx, repo, t.Pathspec); err != nil {
-					return nil, err
-				}
-			}
-			plan.pathspecs = append(plan.pathspecs, t.Pathspec)
-
-			// Pathspec targets are always reported Staged, never Unchanged:
-			// `git status` scoped to a pathspec cannot distinguish "already
-			// clean" from "matches nothing at all", and folding a
-			// nonexistent path into a silent "nothing to commit" warning
-			// would swallow git add's own fatal "did not match any files"
-			// error -- exactly the kind of divergence AGENTS.md's governing
-			// principle forbids. `git add` is left to answer both cases
-			// itself, at apply time, the way plain git would.
-			// One row per file, not one per pathspec: naming a directory
-			// stages every file under it, and a single summed total says
-			// nothing about which. `rgit diff` already breaks the same
-			// change down this way, and the two are supposed to agree.
-			files, warnings := pathspecFileCounts(ctx, repo, root, t.Pathspec)
-			plan.CountingWarnings = append(plan.CountingWarnings, warnings...)
-			if len(files) == 0 {
-				// Nothing matched, or nothing changed. Keep one row naming
-				// the pathspec as given: it is still being staged, and the
-				// "did not match any files" answer is git add's to give.
-				plan.Results = append(plan.Results, TargetResult{
-					Target:  t,
-					Outcome: Staged,
-					Path:    t.Pathspec,
-				})
-				continue
-			}
-			for _, pf := range files {
-				plan.Results = append(plan.Results, TargetResult{
-					Target:  t,
-					Outcome: Staged,
-					Added:   pf.added,
-					Deleted: pf.deleted,
-					Path:    pf.path,
-				})
+			if err := plan.planPathspec(ctx, repo, root, t); err != nil {
+				return nil, err
 			}
 			continue
 		}
 
-		fp, ok := byPath[t.Symbol.Path]
-		if !ok {
-			var err error
-			fp, err = openFilePlan(ctx, repo, root, t.Symbol.Path)
-			if err != nil {
-				return nil, err
-			}
-			byPath[t.Symbol.Path] = fp
-			plan.files = append(plan.files, fp)
+		fp, err := plan.symbolFile(ctx, repo, root, t.Symbol.Path, byPath)
+		if err != nil {
+			return nil, err
 		}
-
 		if sess == nil {
 			sess = lsp.NewSession()
 		}
-		op, unchanged, err := fp.classify(t.Symbol.Anchor)
-		if err != nil {
+		if err := plan.planSymbol(fp, t, named); err != nil {
 			return nil, err
 		}
-		fp.ops = append(fp.ops, op)
-		if named[fp.path] == nil {
-			named[fp.path] = map[string]bool{}
-		}
-		named[fp.path][t.Symbol.Anchor] = true
-		if isOrdinalAnchor(t.Symbol.Anchor) {
-			plan.Ordinals = append(plan.Ordinals, fp.path+":"+t.Symbol.Anchor)
-		}
-		outcome := Staged
-		if unchanged {
-			outcome = Unchanged
-		}
-		added, deleted := opLineCounts(fp, op)
-		plan.Results = append(plan.Results, TargetResult{
-			Target:  t,
-			Outcome: outcome,
-			Added:   added,
-			Deleted: deleted,
-			Path:    t.Symbol.Path,
-			start:   op.start,
-		})
 	}
 
 	for _, fp := range plan.files {
-		// Ahead of the cross-check, so a sibling pulled in here is verified
-		// against the language server in the same batched query its anchor is.
-		siblings, err := fp.addReferencedSiblings(named[fp.path])
-		if err != nil {
+		if err := plan.finishFile(ctx, fp, named[fp.path], sess, root); err != nil {
 			return nil, err
-		}
-		plan.addAutoResults(fp, siblings)
-
-		// One batched language-server query per file, not one per anchor --
-		// every anchor named in this file has already been
-		// resolved and its op built above, so a mismatch here still aborts
-		// the whole plan before Apply ever runs.
-		tsOnly, err := fp.crossCheckPending(ctx, sess, root)
-		if err != nil {
-			return nil, err
-		}
-		if tsOnly {
-			plan.TSOnly = true
-		}
-
-		pseudos := fp.addPreamble(named[fp.path])
-		plan.addAutoResults(fp, pseudos)
-		if len(pseudos) > 0 {
-			plan.Preamble = append(plan.Preamble, fp.path)
-		}
-		for _, e := range fp.escalated {
-			plan.Escalated = append(plan.Escalated, fp.path+":"+e)
 		}
 	}
 
 	sortResults(plan.Results)
 	return plan, nil
+}
+
+func (p *Plan) planPathspec(ctx context.Context, repo *gitx.Repo, root string, t Target) error {
+	// Pathspec magic (leading ":") is a pattern, not a path --
+	// check-ignore does not accept the same magic forms `git add`
+	// does (e.g. ":(glob)**/*.txt" is not a valid check-ignore
+	// argument), and git add itself does not refuse a glob or
+	// magic pathspec up front the way it refuses a literal
+	// gitignored path. The refusal in docs/ANCHORS.md is about a
+	// caller naming one concrete path, so it only applies there.
+	if !strings.HasPrefix(t.Pathspec, ":") {
+		if err := checkGitignoreRefusal(ctx, repo, t.Pathspec); err != nil {
+			return err
+		}
+	}
+	p.pathspecs = append(p.pathspecs, t.Pathspec)
+
+	// Pathspec targets are always reported Staged, never Unchanged:
+	// `git status` scoped to a pathspec cannot distinguish "already
+	// clean" from "matches nothing at all", and folding a
+	// nonexistent path into a silent "nothing to commit" warning
+	// would swallow git add's own fatal "did not match any files"
+	// error -- exactly the kind of divergence AGENTS.md's governing
+	// principle forbids. `git add` is left to answer both cases
+	// itself, at apply time, the way plain git would.
+	// One row per file, not one per pathspec: naming a directory
+	// stages every file under it, and a single summed total says
+	// nothing about which. `rgit diff` already breaks the same
+	// change down this way, and the two are supposed to agree.
+	files, warnings := pathspecFileCounts(ctx, repo, root, t.Pathspec)
+	p.CountingWarnings = append(p.CountingWarnings, warnings...)
+	if len(files) == 0 {
+		// Nothing matched, or nothing changed. Keep one row naming
+		// the pathspec as given: it is still being staged, and the
+		// "did not match any files" answer is git add's to give.
+		p.Results = append(p.Results, TargetResult{
+			Target:  t,
+			Outcome: Staged,
+			Path:    t.Pathspec,
+		})
+		return nil
+	}
+	for _, pf := range files {
+		p.Results = append(p.Results, TargetResult{
+			Target:  t,
+			Outcome: Staged,
+			Added:   pf.added,
+			Deleted: pf.deleted,
+			Path:    pf.path,
+		})
+	}
+	return nil
+}
+
+// symbolFile returns the shared filePlan for path, opening it on first use.
+func (p *Plan) symbolFile(ctx context.Context, repo *gitx.Repo, root, path string, byPath map[string]*filePlan) (*filePlan, error) {
+	if fp, ok := byPath[path]; ok {
+		return fp, nil
+	}
+	fp, err := openFilePlan(ctx, repo, root, path)
+	if err != nil {
+		return nil, err
+	}
+	byPath[path] = fp
+	p.files = append(p.files, fp)
+	return fp, nil
+}
+
+func (p *Plan) planSymbol(fp *filePlan, t Target, named map[string]map[string]bool) error {
+	op, unchanged, err := fp.classify(t.Symbol.Anchor)
+	if err != nil {
+		return err
+	}
+	fp.ops = append(fp.ops, op)
+	if named[fp.path] == nil {
+		named[fp.path] = map[string]bool{}
+	}
+	named[fp.path][t.Symbol.Anchor] = true
+	if isOrdinalAnchor(t.Symbol.Anchor) {
+		p.Ordinals = append(p.Ordinals, fp.path+":"+t.Symbol.Anchor)
+	}
+	outcome := Staged
+	if unchanged {
+		outcome = Unchanged
+	}
+	added, deleted := opLineCounts(fp, op)
+	p.Results = append(p.Results, TargetResult{
+		Target:  t,
+		Outcome: outcome,
+		Added:   added,
+		Deleted: deleted,
+		Path:    t.Symbol.Path,
+		start:   op.start,
+	})
+	return nil
+}
+
+// finishFile adds the siblings and preamble for one file and runs its
+// language-server cross-check. named is the anchors the caller named in it.
+func (p *Plan) finishFile(ctx context.Context, fp *filePlan, named map[string]bool, sess *lsp.Session, root string) error {
+	// Ahead of the cross-check, so a sibling pulled in here is verified
+	// against the language server in the same batched query its anchor is.
+	siblings, err := fp.addReferencedSiblings(named)
+	if err != nil {
+		return err
+	}
+	p.addAutoResults(fp, siblings)
+
+	// One batched language-server query per file, not one per anchor --
+	// every anchor named in this file has already been
+	// resolved and its op built above, so a mismatch here still aborts
+	// the whole plan before Apply ever runs.
+	tsOnly, err := fp.crossCheckPending(ctx, sess, root)
+	if err != nil {
+		return err
+	}
+	if tsOnly {
+		p.TSOnly = true
+	}
+
+	pseudos := fp.addPreamble(named)
+	p.addAutoResults(fp, pseudos)
+	if len(pseudos) > 0 {
+		p.Preamble = append(p.Preamble, fp.path)
+	}
+	for _, e := range fp.escalated {
+		p.Escalated = append(p.Escalated, fp.path+":"+e)
+	}
+	return nil
 }
 
 // autoOp pairs one anchor staged without the caller naming it -- a new

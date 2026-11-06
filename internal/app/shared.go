@@ -556,17 +556,7 @@ type anchorCommandFlag struct {
 // printed, or a refusal already written to stderr); positionals is only
 // meaningful when done is false, and is guaranteed non-empty then.
 func parseAnchorCommandArgs(cmdName string, args []string, flags []anchorCommandFlag, maxPositionals int, help string, stdout, stderr io.Writer, refuseLoneSeparator bool) (positionals []string, code exitcode.Code, done bool) {
-	assign := func(f anchorCommandFlag, flag, value string) bool {
-		if f.accept != nil {
-			if !f.accept(flag, value) {
-				fmt.Fprint(stderr, help)
-				return true
-			}
-			return false
-		}
-		*f.val = value
-		return false
-	}
+	p := anchorParser{cmdName: cmdName, help: help, stderr: stderr}
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		if a == "--help" || a == "-h" {
@@ -576,44 +566,9 @@ func parseAnchorCommandArgs(cmdName string, args []string, flags []anchorCommand
 
 		matched := false
 		for _, f := range flags {
-			switch {
-			case slices.Contains(f.tokens, a):
-				if f.val == nil && f.accept == nil {
-					*f.set = true
-				} else if i+1 >= len(args) {
-					if f.quoteMissing {
-						fmt.Fprintf(stderr, "rgit: %s: option %q requires a value\n", cmdName, a)
-					} else {
-						fmt.Fprintf(stderr, "rgit: %s: %s requires a value\n", cmdName, a)
-					}
-					fmt.Fprint(stderr, help)
-					return nil, exitcode.InvalidUsage, true
-				} else {
-					i++
-					if assign(f, a, args[i]) {
-						return nil, exitcode.InvalidUsage, true
-					}
-				}
-				matched = true
-			case f.val != nil || f.accept != nil:
-				for _, tok := range f.tokens {
-					if strings.HasPrefix(tok, "--") {
-						if v, found := strings.CutPrefix(a, tok+"="); found {
-							if assign(f, tok, v) {
-								return nil, exitcode.InvalidUsage, true
-							}
-							matched = true
-							break
-						}
-					}
-					if f.glued && len(tok) == 2 && strings.HasPrefix(a, tok) && len(a) > len(tok) {
-						if assign(f, tok, a[len(tok):]) {
-							return nil, exitcode.InvalidUsage, true
-						}
-						matched = true
-						break
-					}
-				}
+			var failed bool
+			if i, matched, failed = p.tryFlag(f, args, i); failed {
+				return nil, exitcode.InvalidUsage, true
 			}
 			if matched {
 				break
@@ -623,22 +578,10 @@ func parseAnchorCommandArgs(cmdName string, args []string, flags []anchorCommand
 			continue
 		}
 
-		switch {
-		case a == "--" && refuseLoneSeparator && len(positionals) == 0:
-			fmt.Fprintf(stderr, "rgit: %s: %q cannot be used as a FILE:SYMBOL anchor; %s requires a FILE:SYMBOL anchor\n", cmdName, a, cmdName)
-			fmt.Fprint(stderr, help)
+		if p.refusePositional(a, len(positionals), maxPositionals, refuseLoneSeparator) {
 			return nil, exitcode.InvalidUsage, true
-		case maxPositionals > 0 && len(positionals) >= maxPositionals:
-			fmt.Fprintf(stderr, "rgit: %s: unrecognized argument %q\n", cmdName, a)
-			fmt.Fprint(stderr, help)
-			return nil, exitcode.InvalidUsage, true
-		case a != "--" && strings.HasPrefix(a, "-"):
-			fmt.Fprintf(stderr, "rgit: %s: unrecognized argument %q\n", cmdName, a)
-			fmt.Fprint(stderr, help)
-			return nil, exitcode.InvalidUsage, true
-		default:
-			positionals = append(positionals, a)
 		}
+		positionals = append(positionals, a)
 	}
 	if len(positionals) == 0 {
 		fmt.Fprintf(stderr, "rgit: %s requires a FILE:SYMBOL anchor\n", cmdName)
@@ -646,4 +589,83 @@ func parseAnchorCommandArgs(cmdName string, args []string, flags []anchorCommand
 		return nil, exitcode.InvalidUsage, true
 	}
 	return positionals, exitcode.Success, false
+}
+
+type anchorParser struct {
+	cmdName string
+	help    string
+	stderr  io.Writer
+}
+
+// assign stores a value-flag's value; true means accept refused it and the
+// usage text is already written.
+func (p anchorParser) assign(f anchorCommandFlag, flag, value string) (failed bool) {
+	if f.accept == nil {
+		*f.val = value
+		return false
+	}
+	if f.accept(flag, value) {
+		return false
+	}
+	fmt.Fprint(p.stderr, p.help)
+	return true
+}
+
+// tryFlag consumes args[i] when it is f, returning the index of the last
+// argument used. failed means a refusal is already written.
+func (p anchorParser) tryFlag(f anchorCommandFlag, args []string, i int) (next int, matched, failed bool) {
+	a := args[i]
+	if !slices.Contains(f.tokens, a) {
+		matched, failed = p.tryInlineValue(f, a)
+		return i, matched, failed
+	}
+	if f.val == nil && f.accept == nil {
+		*f.set = true
+		return i, true, false
+	}
+	if i+1 >= len(args) {
+		if f.quoteMissing {
+			fmt.Fprintf(p.stderr, "rgit: %s: option %q requires a value\n", p.cmdName, a)
+		} else {
+			fmt.Fprintf(p.stderr, "rgit: %s: %s requires a value\n", p.cmdName, a)
+		}
+		fmt.Fprint(p.stderr, p.help)
+		return i, true, true
+	}
+	return i + 1, true, p.assign(f, a, args[i+1])
+}
+
+// tryInlineValue matches the "--flag=value" and glued "-nN" spellings of a
+// value flag.
+func (p anchorParser) tryInlineValue(f anchorCommandFlag, a string) (matched, failed bool) {
+	if f.val == nil && f.accept == nil {
+		return false, false
+	}
+	for _, tok := range f.tokens {
+		if strings.HasPrefix(tok, "--") {
+			if v, found := strings.CutPrefix(a, tok+"="); found {
+				return true, p.assign(f, tok, v)
+			}
+		}
+		if f.glued && len(tok) == 2 && strings.HasPrefix(a, tok) && len(a) > len(tok) {
+			return true, p.assign(f, tok, a[len(tok):])
+		}
+	}
+	return false, false
+}
+
+// refusePositional reports whether a is not acceptable as the next
+// positional, having written the refusal.
+func (p anchorParser) refusePositional(a string, have, maxPositionals int, refuseLoneSeparator bool) bool {
+	switch {
+	case a == "--" && refuseLoneSeparator && have == 0:
+		fmt.Fprintf(p.stderr, "rgit: %s: %q cannot be used as a FILE:SYMBOL anchor; %s requires a FILE:SYMBOL anchor\n", p.cmdName, a, p.cmdName)
+	case maxPositionals > 0 && have >= maxPositionals,
+		a != "--" && strings.HasPrefix(a, "-"):
+		fmt.Fprintf(p.stderr, "rgit: %s: unrecognized argument %q\n", p.cmdName, a)
+	default:
+		return false
+	}
+	fmt.Fprint(p.stderr, p.help)
+	return true
 }

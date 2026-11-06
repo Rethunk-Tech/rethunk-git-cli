@@ -21,6 +21,7 @@ import (
 
 	diffpkg "github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/diff"
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
 )
 
 const contextHelp = `usage: rgit context [--json]
@@ -138,34 +139,9 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 		return exitcode.GitFailure
 	}
 
-	// Branch identity is best-effort: an unborn branch has no commit to
-	// identify, while detached HEAD is represented by its full object id
-	// rather than the literal branch name "HEAD".
-	branchRecord, detachedRecord := "", ""
-	if branch, berr := repo.CurrentBranch(ctx); berr == nil && branch != "" {
-		if branch == "HEAD" {
-			if sha, ok, rerr := repo.RevParseVerify(ctx, "HEAD"); rerr != nil {
-				fmt.Fprintf(stderr, "rgit: %v\n", rerr)
-				return exitcode.GitFailure
-			} else if ok {
-				detachedRecord = fmt.Sprintf("H\t%s\n", sha)
-			}
-		} else {
-			upstream, hasUpstream, err := repo.Upstream(ctx)
-			if err != nil {
-				fmt.Fprintf(stderr, "rgit: %v\n", err)
-				return exitcode.GitFailure
-			}
-			ahead, behind := 0, 0
-			if hasUpstream {
-				ahead, behind, err = repo.AheadBehind(ctx)
-				if err != nil {
-					fmt.Fprintf(stderr, "rgit: %v\n", err)
-					return exitcode.GitFailure
-				}
-			}
-			branchRecord = fmt.Sprintf("B\t%s\t%s\t%d\t%d\n", branch, upstream, ahead, behind)
-		}
+	branchRecord, detachedRecord, code := contextBranchRecords(ctx, repo, stderr)
+	if code != exitcode.Success {
+		return code
 	}
 
 	sequencerOp, sequencerActive, err := repo.SequencerOp(ctx)
@@ -213,6 +189,22 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 		fmt.Fprintf(stderr, "[warning] %s\n", w)
 	}
 
+	records := assembleContextRecords(report, commits, staged, unstaged, branchRecord, detachedRecord, sequencerOp, sequencerActive, hasStash, sparseCheckout)
+
+	stream := buildContextStream(records, contextByteBudget)
+	if asJSON {
+		if err := writeContextJSON(stdout, stream); err != nil {
+			fmt.Fprintf(stderr, "rgit: context: %v\n", err)
+			return exitcode.GitFailure
+		}
+		return exitcode.Success
+	}
+	fmt.Fprint(stdout, stream)
+	return exitcode.Success
+}
+
+// assembleContextRecords orders the stream.
+func assembleContextRecords(report *diffpkg.Report, commits []gitx.CommitSummary, staged, unstaged []string, branchRecord, detachedRecord, sequencerOp string, sequencerActive, hasStash, sparseCheckout bool) []string {
 	// B or H, if present, sorts first: a single, tiny, always-useful record
 	// that costs the budget almost nothing. S follows it, then W diagnostics
 	// and F rows:
@@ -256,17 +248,43 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 	for _, c := range commits {
 		records = append(records, fmt.Sprintf("C\t%s\t%s\n", c.Hash, c.Subject))
 	}
+	return records
+}
 
-	stream := buildContextStream(records, contextByteBudget)
-	if asJSON {
-		if err := writeContextJSON(stdout, stream); err != nil {
-			fmt.Fprintf(stderr, "rgit: context: %v\n", err)
-			return exitcode.GitFailure
-		}
-		return exitcode.Success
+// contextBranchRecords builds the B or H record. Branch identity is
+// best-effort: an unborn branch has no commit to identify, while detached
+// HEAD is represented by its full object id rather than the literal branch
+// name "HEAD".
+func contextBranchRecords(ctx context.Context, repo *gitx.Repo, stderr io.Writer) (branchRecord, detachedRecord string, code exitcode.Code) {
+	branch, berr := repo.CurrentBranch(ctx)
+	if berr != nil || branch == "" {
+		return "", "", exitcode.Success
 	}
-	fmt.Fprint(stdout, stream)
-	return exitcode.Success
+	if branch == "HEAD" {
+		sha, ok, rerr := repo.RevParseVerify(ctx, "HEAD")
+		if rerr != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", rerr)
+			return "", "", exitcode.GitFailure
+		}
+		if ok {
+			detachedRecord = fmt.Sprintf("H\t%s\n", sha)
+		}
+		return "", detachedRecord, exitcode.Success
+	}
+	upstream, hasUpstream, err := repo.Upstream(ctx)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		return "", "", exitcode.GitFailure
+	}
+	ahead, behind := 0, 0
+	if hasUpstream {
+		ahead, behind, err = repo.AheadBehind(ctx)
+		if err != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return "", "", exitcode.GitFailure
+		}
+	}
+	return fmt.Sprintf("B\t%s\t%s\t%d\t%d\n", branch, upstream, ahead, behind), "", exitcode.Success
 }
 
 // contextReport is the machine-readable form of the text stream: one object,

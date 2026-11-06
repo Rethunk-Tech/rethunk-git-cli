@@ -978,6 +978,31 @@ func (r *Repo) LockCommits(ctx context.Context) (unlock func(), err error) {
 // the index to its pre-commit snapshot on failure (see SnapshotIndex/Restore
 // in internal/synth/stage.go and the hook bullet in docs/USAGE.md).
 func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
+	args := opts.args()
+	var stdin io.Reader
+	if opts.MessageFile == "-" {
+		stdin = bytes.NewReader(opts.StdinMessage)
+	}
+
+	commitRepo := r
+	if opts.Only != nil {
+		commitRepo = opts.Only.Repo
+	}
+	res, err := commitRepo.run(ctx, stdin, args...)
+	if err != nil {
+		return Result{}, err
+	}
+	if res.ExitCode != 0 {
+		return res, gitError(args, res)
+	}
+	if opts.Only == nil {
+		return res, nil
+	}
+	return res, r.finishOnlyCommit(ctx, commitRepo, opts)
+}
+
+// args translates o into `git commit` arguments.
+func (opts CommitOptions) args() []string {
 	args := []string{"commit"}
 	for _, m := range opts.Messages {
 		args = append(args, "-m", m)
@@ -1031,42 +1056,28 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 	if opts.NoVerify {
 		args = append(args, "--no-verify")
 	}
+	return args
+}
 
-	var stdin io.Reader
-	if opts.MessageFile == "-" {
-		stdin = bytes.NewReader(opts.StdinMessage)
-	}
-
-	commitRepo := r
-	if opts.Only != nil {
-		commitRepo = opts.Only.Repo
-	}
-	res, err := commitRepo.run(ctx, stdin, args...)
-	if err != nil {
-		return Result{}, err
-	}
-	if res.ExitCode != 0 {
-		return res, gitError(args, res)
-	}
-	if opts.Only == nil {
-		return res, nil
-	}
+// finishOnlyCommit checks that HEAD did not move under a --only commit and
+// brings the real index in line with what the private index committed.
+func (r *Repo) finishOnlyCommit(ctx context.Context, commitRepo *Repo, opts CommitOptions) error {
 	if !opts.Amend && opts.Only.BaseCommit != "" {
 		// git takes the parent from HEAD when it starts, not from the base
 		// the private index was built on. A writer outside rgit landing in
 		// between leaves a commit whose tree undoes that writer's change.
 		parent, err := r.checkedLine(ctx, "rev-parse", "--verify", "HEAD^1")
 		if err != nil {
-			return res, err
+			return err
 		}
 		if parent != opts.Only.BaseCommit {
-			return res, fmt.Errorf("gitx: HEAD moved from %s to %s while committing; HEAD's tree was built on %s and may undo %s's changes", opts.Only.BaseCommit, parent, opts.Only.BaseCommit, parent)
+			return fmt.Errorf("gitx: HEAD moved from %s to %s while committing; HEAD's tree was built on %s and may undo %s's changes", opts.Only.BaseCommit, parent, opts.Only.BaseCommit, parent)
 		}
 	}
 	if err := r.syncCommittedEntries(ctx, commitRepo, opts.Only.BaseTree); err != nil {
-		return res, fmt.Errorf("gitx: commit landed, but updating the index for its paths failed: %w", err)
+		return fmt.Errorf("gitx: commit landed, but updating the index for its paths failed: %w", err)
 	}
-	return res, nil
+	return nil
 }
 
 // syncCommittedEntries copies into the real index each path the --only

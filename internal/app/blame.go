@@ -47,6 +47,37 @@ default is git's own human-readable blame output, likewise unmodified.
 Full reference: docs/USAGE.md
 `
 
+// blameSource reads the file from the worktree, falling back to HEAD when
+// it was deleted; headOnly reports that the HEAD copy was used.
+func blameSource(followRename bool, headOnly *bool) anchorSourceFunc {
+	headFetch := showHeadSource()
+	return func(ctx context.Context, repo *gitx.Repo, root, file string) ([]byte, string, bool, error) {
+		if followRename {
+			src, detail, ok, err := headFetch(ctx, repo, root, file)
+			if ok {
+				*headOnly = true
+			}
+			return src, detail, ok, err
+		}
+		src, err := readWorktreeFile(root, file)
+		if err == nil {
+			return src, "", true, nil
+		}
+		if !os.IsNotExist(err) {
+			return nil, "", false, err
+		}
+		src, exists, err := repo.CatFile(ctx, "HEAD", file)
+		if err != nil {
+			return nil, "", false, err
+		}
+		if !exists {
+			return nil, "no longer exists in the worktree", false, nil
+		}
+		*headOnly = true
+		return src, "", true, nil
+	}
+}
+
 // runBlame's flag surface is one FILE:SYMBOL anchor plus --source,
 // -p/--porcelain, and --follow-rename, hand-parsed via parseAnchorCommandArgs.
 func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
@@ -66,32 +97,7 @@ func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.
 	positional := positionals[0]
 
 	headOnly := false
-	headFetch := showHeadSource()
-	fetch := func(ctx context.Context, repo *gitx.Repo, root, file string) ([]byte, string, bool, error) {
-		if followRename {
-			src, detail, ok, err := headFetch(ctx, repo, root, file)
-			if ok {
-				headOnly = true
-			}
-			return src, detail, ok, err
-		}
-		src, err := readWorktreeFile(root, file)
-		if err != nil {
-			if os.IsNotExist(err) {
-				src, exists, err := repo.CatFile(ctx, "HEAD", file)
-				if err != nil {
-					return nil, "", false, err
-				}
-				if exists {
-					headOnly = true
-					return src, "", true, nil
-				}
-				return nil, "no longer exists in the worktree", false, nil
-			}
-			return nil, "", false, err
-		}
-		return src, "", true, nil
-	}
+	fetch := blameSource(followRename, &headOnly)
 	if source != "" {
 		fetch = showSource(source)
 	}

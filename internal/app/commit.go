@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/spf13/pflag"
+
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/cli"
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
@@ -103,38 +105,7 @@ const gpgSignBare = "<default-key>"
 func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	var f commitFlags
 	fs := newTargetFlagSet("commit", &f.syms, &f.files)
-	// -m's long spelling matches git commit's own --message, and -F's long
-	// spelling is --message-file (to avoid collision with rgit's --file
-	// pathspec flag).
-	fs.StringArrayVarP(&f.messages, "message", "m", nil, "commit message (repeatable)")
-	fs.StringVarP(&f.msgFile, "message-file", "F", "", "read the message from a file, or - for stdin")
-	fs.BoolVarP(&f.signoff, "signoff", "s", false, "append Signed-off-by")
-	fs.StringArrayVar(&f.trailers, "trailer", nil, "append a trailer TOKEN:VALUE (repeatable)")
-	fs.BoolVar(&f.amend, "amend", false, "amend the previous commit")
-	fs.BoolVar(&f.allowEmpty, "allow-empty", false, "permit a commit with no changes")
-	fs.BoolVar(&f.push, "push", false, "push upstream after a successful commit")
-	fs.BoolVar(&f.dryRun, "dry-run", false, "preview only; writes and stages nothing")
-	fs.BoolVar(&f.noVerify, "no-verify", false, "skip git hooks")
-	fs.StringVar(&f.fixup, "fixup", "", "autosquash fixup for <commit> (or amend:<commit>/reword:<commit>)")
-	fs.StringVar(&f.squash, "squash", "", "autosquash squash for <commit>")
-	fs.StringVar(&f.reuseMessage, "reuse-message", "", "reuse the message and authorship from <commit>")
-	reeditMessage := fs.Bool("reedit-message", false, "unsupported; use --reuse-message")
-	fs.StringVar(&f.author, "author", "", "override the commit author")
-	fs.StringVar(&f.date, "date", "", "override the commit date")
-	fs.BoolVar(&f.resetAuthor, "reset-author", false, "take the author identity from the committer (with --amend)")
-	fs.BoolVar(&f.porcelain, "porcelain", false, "list staged targets as stable tab-separated records")
-	fs.BoolVar(&f.asJSON, "json", false, "one JSON object of the porcelain records")
-	fs.BoolVarP(&f.quiet, "quiet", "q", false, "suppress the commit summary and target listing")
-	fs.BoolVarP(&f.include, "include", "i", false, "stage named targets and commit them with other staged work")
-	fs.BoolVarP(&f.only, "only", "o", false, "commit only named targets")
-	fs.BoolVar(&f.stageOnly, "stage-only", false, "stage the named targets into the index without committing")
-	// -S is not registered as a shorthand here; expandGPGSignShorthand
-	// rewrites it before Parse, for the pflag reason documented there.
-	fs.StringVar(&f.gpgSignKey, "gpg-sign", "", "GPG-sign the commit; -S/-S<key-id>/--gpg-sign=<key-id>")
-	fs.Lookup("gpg-sign").NoOptDefVal = gpgSignBare
-	fs.BoolVar(&f.noGPGSign, "no-gpg-sign", false, "do not GPG-sign, overriding commit.gpgsign")
-	fs.StringVar(&f.pathspecFile, "pathspec-from-file", "", "read targets from a file, or - for stdin")
-	fs.BoolVar(&f.pathspecNUL, "pathspec-file-nul", false, "separate pathspec-file targets with NUL")
+	reeditMessage := registerCommitFlags(fs, &f)
 
 	help := "usage: rgit commit [flags] [target...]\n\n" +
 		"Stage named targets -- pathspecs and/or FILE:NAME symbol anchors\n" +
@@ -151,66 +122,9 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		return exitcode.InvalidUsage
 	}
 
-	if len(f.messages) > 0 && f.msgFile != "" {
-		fmt.Fprintln(stderr, "rgit: -m and -F are mutually exclusive")
-		return exitcode.InvalidUsage
-	}
-	if f.dryRun && f.push {
-		fmt.Fprintln(stderr, "rgit: --dry-run and --push are mutually exclusive")
-		return exitcode.InvalidUsage
-	}
-	asJSON := jsonFlag(ctx) || f.asJSON
-	// Asking for machine-readable output and for no output is a
-	// contradiction, and silently letting one win would leave a script
-	// parsing an empty stream that it cannot tell from "nothing staged".
-	switch {
-	case f.porcelain && f.quiet:
-		fmt.Fprintln(stderr, "rgit: --porcelain and --quiet are mutually exclusive")
-		return exitcode.InvalidUsage
-	case asJSON && f.quiet:
-		fmt.Fprintln(stderr, "rgit: --json and --quiet are mutually exclusive")
-		return exitcode.InvalidUsage
-	case f.porcelain && asJSON:
-		fmt.Fprintln(stderr, "rgit: --porcelain and --json are mutually exclusive")
-		return exitcode.InvalidUsage
-	}
-	// git commit -i and -o are alternate ways to build the commit from
-	// paths (builtin/commit.c die_for_incompatible_opt4). rgit's default
-	// already follows -i; the flag is that spelling made explicit.
-	if f.include && f.only {
-		fmt.Fprintln(stderr, "rgit: --include and --only are mutually exclusive")
-		return exitcode.InvalidUsage
-	}
-	if f.stageOnly {
-		conflict := ""
-		switch {
-		case f.include:
-			conflict = "--include"
-		case f.only:
-			conflict = "--only"
-		case f.push:
-			conflict = "--push"
-		case f.amend:
-			conflict = "--amend"
-		case len(f.messages) > 0 || f.msgFile != "":
-			conflict = "-m/-F"
-		case f.fixup != "" || f.squash != "" || f.reuseMessage != "":
-			conflict = "--fixup/--squash/--reuse-message"
-		case f.allowEmpty:
-			conflict = "--allow-empty"
-		}
-		if conflict != "" {
-			fmt.Fprintf(stderr, "rgit: --stage-only and %s are mutually exclusive\n", conflict)
-			return exitcode.InvalidUsage
-		}
-	}
-	if f.pathspecNUL && f.pathspecFile == "" {
-		fmt.Fprintln(stderr, "rgit: --pathspec-file-nul requires --pathspec-from-file")
-		return exitcode.InvalidUsage
-	}
-	if f.msgFile == "-" && f.pathspecFile == "-" {
-		fmt.Fprintln(stderr, "rgit: -F - and --pathspec-from-file=- are mutually exclusive")
-		return exitcode.InvalidUsage
+	r := &commitRun{f: &f, asJSON: jsonFlag(ctx) || f.asJSON, stdout: stdout, stderr: stderr}
+	if code := r.validateFlags(); code != exitcode.Success {
+		return code
 	}
 	// --amend, --fixup, and --squash each generate their own message when
 	// neither -m nor -F is given, and all three need --no-edit forwarded to
@@ -227,34 +141,13 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	autoMessage := f.amend || f.fixup != "" || f.squash != "" || f.reuseMessage != ""
 	noEdit := (f.amend || f.fixup != "" || f.squash != "") && len(f.messages) == 0 && f.msgFile == ""
 
-	positionalsGiven := restoreDoubleDash(fs)
-	if f.pathspecFile != "" {
-		pathspecs, err := readPathspecFile(f.pathspecFile, f.pathspecNUL)
-		if err != nil {
-			fmt.Fprintf(stderr, "rgit: reading pathspec file: %v\n", err)
-			return exitcode.GitFailure
-		}
-		positionalsGiven = append(positionalsGiven, pathspecs...)
+	positionalsGiven, code := r.positionals(fs)
+	if code != exitcode.Success {
+		return code
 	}
 	targetCount := len(positionalsGiven) + len(f.syms) + len(f.files)
-	// git refuses --include with an empty pathspec even alongside --amend
-	// or --allow-empty ("No paths with --include/--only does not make
-	// sense."). --only keeps its amend exception below.
-	if f.include && targetCount == 0 {
-		fmt.Fprintln(stderr, "rgit: --include requires at least one target")
-		return exitcode.InvalidUsage
-	}
-	if f.only && targetCount == 0 && !f.amend {
-		fmt.Fprintln(stderr, "rgit: --only requires at least one target")
-		return exitcode.InvalidUsage
-	}
-	if f.stageOnly && targetCount == 0 {
-		fmt.Fprintln(stderr, "rgit: --stage-only requires at least one target")
-		return exitcode.InvalidUsage
-	}
-	if targetCount == 0 && !f.amend && !f.allowEmpty && f.fixup == "" && f.squash == "" && f.reuseMessage == "" {
-		fmt.Fprintln(stderr, "rgit: commit requires at least one target")
-		return exitcode.InvalidUsage
+	if code := r.validateTargetCount(targetCount); code != exitcode.Success {
+		return code
 	}
 
 	if !f.stageOnly && f.reuseMessage == "" && !hasConventionalShape(f.messages) {
@@ -270,16 +163,9 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	}
 
 	if !f.stageOnly && len(f.messages) == 0 && f.msgFile == "" && !autoMessage {
-		op, ok, err := repo.SequencerOp(ctx)
-		if err != nil {
-			fmt.Fprintf(stderr, "rgit: %v\n", err)
-			return exitcode.GitFailure
-		}
-		if ok && (op == "merge" || op == "cherry-pick" || op == "revert") {
-			noEdit = true
-		} else {
-			fmt.Fprintln(stderr, "rgit: commit requires a message (-m or -F)")
-			return exitcode.InvalidUsage
+		var code exitcode.Code
+		if noEdit, code = r.requireSequencerMessage(ctx, repo); code != exitcode.Success {
+			return code
 		}
 	}
 
@@ -288,182 +174,195 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	// checkout cannot undo this one's staging. The lock comes before
 	// planning because anchors are synthesized against HEAD, which must not
 	// move until the commit lands.
-	var only *gitx.OnlyIndex
-	if f.only && !f.dryRun {
-		unlock, err := repo.LockCommits(ctx)
-		if err != nil {
-			fmt.Fprintf(stderr, "rgit: %v\n", err)
-			return exitcode.GitFailure
-		}
-		defer unlock()
-		if only, err = repo.NewOnlyIndex(ctx); err != nil {
-			fmt.Fprintf(stderr, "rgit: %v\n", err)
-			return exitcode.GitFailure
-		}
-		defer only.Close()
+	only, release, code := r.acquireOnlyIndex(ctx, repo)
+	defer release()
+	if code != exitcode.Success {
+		return code
 	}
 
 	var targetResults []synth.TargetResult
 	var indexSnap *synth.IndexSnapshot
 	if targetCount > 0 {
-		checker := &cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}
-		classified, err := cli.ClassifyArgs(ctx, positionalsGiven, false, checker, cli.GitRevisionResolver{Repo: repo})
-		if err != nil {
-			fmt.Fprintf(stderr, "rgit: %v\n", err)
-			return exitcode.InvalidUsage
-		}
-
-		targets, err := commitTargets(ctx, root, prefix, classified, f.files, f.syms, checker)
-		if err != nil {
-			fmt.Fprintf(stderr, "rgit: %v\n", err)
-			return exitcode.InvalidUsage
-		}
-
-		// Checked on the built targets, not the raw arguments: by this point
-		// positionals and flags have collapsed into one list and every path has
-		// been resolved against the invocation prefix, so "src/a.go" named from
-		// a subdirectory and "a.go" named from the root compare equal.
-		paths, anchorFiles := targetPaths(targets)
-		if code := pathAnchorContradiction(paths, anchorFiles, stderr); code != exitcode.Success {
-			return code
-		}
-		if code := refuseStructuredDataAnchors(ctx, repo, root, targets, stderr); code != exitcode.Success {
-			return code
-		}
-
-		plan, err := synth.PlanStage(ctx, repo, root, targets)
-		if err != nil {
-			code, msg := mapStageError(err)
-			fmt.Fprintf(stderr, "rgit: %s\n", msg)
-			return code
-		}
-
-		if plan.TSOnly {
-			fmt.Fprintln(stderr, tsOnlyNotice)
-		}
-		for _, path := range plan.Preamble {
-			fmt.Fprintf(stderr, "[notice] %s is new; staging its @header and @imports so the file compiles\n", path)
-		}
-		for _, e := range plan.Escalated {
-			fmt.Fprintf(stderr, "[notice] %s: container is new, so the whole container is staged\n", e)
-		}
-		for _, anchor := range plan.Ordinals {
-			fmt.Fprintf(stderr, "[warning] anchor '%s' is positional; inserting a symbol above it repoints it -- qualify it where the language allows\n", anchor)
-		}
-		for _, w := range plan.CountingWarnings {
-			fmt.Fprintf(stderr, "[warning] %s\n", w)
-		}
-
-		targetResults = plan.Results
-		allUnchanged := len(targetResults) > 0
-		for _, r := range targetResults {
-			if r.Outcome != synth.Unchanged {
-				allUnchanged = false
-				continue
-			}
-			fmt.Fprintf(stderr, "[warning] target '%s' has no uncommitted changes; skipping\n", targetLabel(r.Target))
-		}
-
-		// docs/USAGE.md § Targets with nothing to commit: exit 11 only when
-		// EVERY named target turned out unchanged, and only then -- a mix of
-		// changed and unchanged targets is a warning plus a commit of the rest,
-		// not a failure. --allow-empty suppresses it.
-		if allUnchanged && !f.allowEmpty {
-			return exitcode.NothingToCommit
-		}
-
-		if f.dryRun {
-			// docs/USAGE.md: dry-run "writes no objects, stages nothing, runs
-			// no hooks" -- resolution (including the cross-check above) already
-			// happened as a pure read; nothing past this point may execute.
-			//
-			// It still has to say what it resolved. A preview that prints
-			// nothing and exits 0 is indistinguishable from one that found
-			// nothing, which is the opposite of what a preview is for.
-			if f.porcelain {
-				// No preamble: the records are the whole output, so a caller
-				// can read them without stripping a human sentence first.
-				writeTargetRecords(stdout, targetResults)
-				return exitcode.Success
-			}
-			if asJSON {
-				if err := writeCommitJSON(stdout, "", targetResults, nil); err != nil {
-					fmt.Fprintf(stderr, "rgit: commit: %v\n", err)
-					return exitcode.GitFailure
-				}
-				return exitcode.Success
-			}
-			if !f.quiet {
-				fmt.Fprintln(stdout, "dry run: nothing written, nothing staged. Would commit:")
-				writeTargetListing(stdout, targetResults)
-			}
-			return exitcode.Success
-		}
-
-		if f.stageOnly {
-			// Staging without committing: no hooks run and nothing is
-			// committed, so there is no failure left to roll back. Apply is
-			// already atomic through its temp index.
-			if err := plan.Apply(ctx, repo, root); err != nil {
-				code, msg := mapStageError(err)
-				fmt.Fprintf(stderr, "rgit: %s\n", msg)
-				return code
-			}
-			switch {
-			case f.porcelain:
-				writeTargetRecords(stdout, targetResults)
-			case asJSON:
-				if err := writeCommitJSON(stdout, "", targetResults, nil); err != nil {
-					fmt.Fprintf(stderr, "rgit: commit: %v\n", err)
-					return exitcode.GitFailure
-				}
-			case !f.quiet:
-				fmt.Fprintln(stdout, "staged, not committed:")
-				writeTargetListing(stdout, targetResults)
-			}
-			return exitcode.Success
-		}
-
-		var stageErr error
-		if only != nil {
-			stageErr = plan.StageInto(ctx, repo, root, only.Repo)
-		} else {
-			// Snapshot the index before staging anything: Apply stages
-			// atomically through a temp index, but the commit itself -- hooks
-			// included -- still runs against the real one, so a failure there
-			// needs this snapshot to roll the index back to. Refusing to
-			// proceed when the snapshot itself fails is the non-destructive
-			// answer: staging nothing beats staging what cannot be restored.
-			snap, serr := synth.SnapshotIndex(ctx, root)
-			if serr != nil {
-				fmt.Fprintf(stderr, "rgit: %v\n", serr)
-				return exitcode.GitFailure
-			}
-			indexSnap = snap
-			stageErr = plan.Apply(ctx, repo, root)
-		}
-		if stageErr != nil {
-			code, msg := mapStageError(stageErr)
-			fmt.Fprintf(stderr, "rgit: %s\n", msg)
+		var done bool
+		targetResults, indexSnap, code, done = r.stageTargets(ctx, root, prefix, repo, positionalsGiven, only)
+		if done {
 			return code
 		}
 	} else if f.dryRun {
-		if f.porcelain {
-			return exitcode.Success
-		}
-		if asJSON {
-			if err := writeCommitJSON(stdout, "", nil, nil); err != nil {
-				fmt.Fprintf(stderr, "rgit: commit: %v\n", err)
-				return exitcode.GitFailure
-			}
-			return exitcode.Success
-		}
-		if !f.quiet {
-			fmt.Fprintln(stdout, "dry run: nothing written, nothing staged. Would commit:")
-		}
-		return exitcode.Success
+		return r.dryRunOutput(nil, false)
 	}
 
+	opts, code := r.commitOptions(noEdit, only)
+	if code != exitcode.Success {
+		return code
+	}
+
+	// A hook rejecting the commit rolls staging back to the pre-staging
+	// snapshot: Apply stages atomically, but the commit (and any hook it
+	// runs) still sees the real index, so without this a rejection would
+	// strand the just-staged blobs there. Restore covers every commit
+	// failure, not just hook rejections -- git reports both the same way,
+	// and the snapshot already holds any pre-existing staged work, so
+	// restoring it destroys nothing either way. Exit code is unchanged.
+	res, err := repo.Commit(ctx, opts)
+	// Hook output goes to the user either way: on success it is the
+	// formatter or codegen telling them what it did, and on failure it is
+	// usually the reason.
+	if len(res.Stderr) > 0 {
+		_, _ = stderr.Write(res.Stderr)
+	}
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: %v\n", err)
+		rollbackIndex(stderr, indexSnap, targetResults)
+		return exitcode.GitFailure
+	}
+	jsonSHA, code := r.summarize(ctx, repo, res.Stdout, targetResults)
+	if code != exitcode.Success {
+		return code
+	}
+
+	if f.push {
+		if err := repo.Push(ctx); err != nil {
+			r.reportPushFailure(ctx, repo, err)
+			emitLeft(ctx, repo, stdout, stderr, r.asJSON, jsonSHA, targetResults)
+			return exitcode.PushFailed
+		}
+	}
+
+	if !f.porcelain && !f.quiet {
+		return emitLeft(ctx, repo, stdout, stderr, r.asJSON, jsonSHA, targetResults)
+	}
+	return exitcode.Success
+}
+
+// commitRun carries the parsed flags and output streams shared by the
+// phases of runCommit.
+type commitRun struct {
+	f              *commitFlags
+	asJSON         bool
+	stdout, stderr io.Writer
+}
+
+func (r *commitRun) usage(format string, a ...any) exitcode.Code {
+	fmt.Fprintf(r.stderr, "rgit: "+format+"\n", a...)
+	return exitcode.InvalidUsage
+}
+
+func registerCommitFlags(fs *pflag.FlagSet, f *commitFlags) (reeditMessage *bool) {
+	// -m's long spelling matches git commit's own --message, and -F's long
+	// spelling is --message-file (to avoid collision with rgit's --file
+	// pathspec flag).
+	fs.StringArrayVarP(&f.messages, "message", "m", nil, "commit message (repeatable)")
+	fs.StringVarP(&f.msgFile, "message-file", "F", "", "read the message from a file, or - for stdin")
+	fs.BoolVarP(&f.signoff, "signoff", "s", false, "append Signed-off-by")
+	fs.StringArrayVar(&f.trailers, "trailer", nil, "append a trailer TOKEN:VALUE (repeatable)")
+	fs.BoolVar(&f.amend, "amend", false, "amend the previous commit")
+	fs.BoolVar(&f.allowEmpty, "allow-empty", false, "permit a commit with no changes")
+	fs.BoolVar(&f.push, "push", false, "push upstream after a successful commit")
+	fs.BoolVar(&f.dryRun, "dry-run", false, "preview only; writes and stages nothing")
+	fs.BoolVar(&f.noVerify, "no-verify", false, "skip git hooks")
+	fs.StringVar(&f.fixup, "fixup", "", "autosquash fixup for <commit> (or amend:<commit>/reword:<commit>)")
+	fs.StringVar(&f.squash, "squash", "", "autosquash squash for <commit>")
+	fs.StringVar(&f.reuseMessage, "reuse-message", "", "reuse the message and authorship from <commit>")
+	reeditMessage = fs.Bool("reedit-message", false, "unsupported; use --reuse-message")
+	fs.StringVar(&f.author, "author", "", "override the commit author")
+	fs.StringVar(&f.date, "date", "", "override the commit date")
+	fs.BoolVar(&f.resetAuthor, "reset-author", false, "take the author identity from the committer (with --amend)")
+	fs.BoolVar(&f.porcelain, "porcelain", false, "list staged targets as stable tab-separated records")
+	fs.BoolVar(&f.asJSON, "json", false, "one JSON object of the porcelain records")
+	fs.BoolVarP(&f.quiet, "quiet", "q", false, "suppress the commit summary and target listing")
+	fs.BoolVarP(&f.include, "include", "i", false, "stage named targets and commit them with other staged work")
+	fs.BoolVarP(&f.only, "only", "o", false, "commit only named targets")
+	fs.BoolVar(&f.stageOnly, "stage-only", false, "stage the named targets into the index without committing")
+	// -S is not registered as a shorthand here; expandGPGSignShorthand
+	// rewrites it before Parse, for the pflag reason documented there.
+	fs.StringVar(&f.gpgSignKey, "gpg-sign", "", "GPG-sign the commit; -S/-S<key-id>/--gpg-sign=<key-id>")
+	fs.Lookup("gpg-sign").NoOptDefVal = gpgSignBare
+	fs.BoolVar(&f.noGPGSign, "no-gpg-sign", false, "do not GPG-sign, overriding commit.gpgsign")
+	fs.StringVar(&f.pathspecFile, "pathspec-from-file", "", "read targets from a file, or - for stdin")
+	fs.BoolVar(&f.pathspecNUL, "pathspec-file-nul", false, "separate pathspec-file targets with NUL")
+	return reeditMessage
+}
+
+// stageOnlyConflict names the first flag that cannot combine with
+// --stage-only, or "" when none does.
+func (f *commitFlags) stageOnlyConflict() string {
+	switch {
+	case f.include:
+		return "--include"
+	case f.only:
+		return "--only"
+	case f.push:
+		return "--push"
+	case f.amend:
+		return "--amend"
+	case len(f.messages) > 0 || f.msgFile != "":
+		return "-m/-F"
+	case f.fixup != "" || f.squash != "" || f.reuseMessage != "":
+		return "--fixup/--squash/--reuse-message"
+	case f.allowEmpty:
+		return "--allow-empty"
+	}
+	return ""
+}
+
+// positionals gathers the command-line targets plus any from
+// --pathspec-from-file.
+func (r *commitRun) positionals(fs *pflag.FlagSet) ([]string, exitcode.Code) {
+	given := restoreDoubleDash(fs)
+	if r.f.pathspecFile == "" {
+		return given, exitcode.Success
+	}
+	pathspecs, err := readPathspecFile(r.f.pathspecFile, r.f.pathspecNUL)
+	if err != nil {
+		fmt.Fprintf(r.stderr, "rgit: reading pathspec file: %v\n", err)
+		return nil, exitcode.GitFailure
+	}
+	return append(given, pathspecs...), exitcode.Success
+}
+
+// requireSequencerMessage covers a commit with no message of its own: an
+// in-progress merge, cherry-pick, or revert supplies git's generated one
+// (noEdit true); anything else is a usage error.
+func (r *commitRun) requireSequencerMessage(ctx context.Context, repo *gitx.Repo) (noEdit bool, code exitcode.Code) {
+	op, ok, err := repo.SequencerOp(ctx)
+	if err != nil {
+		fmt.Fprintf(r.stderr, "rgit: %v\n", err)
+		return false, exitcode.GitFailure
+	}
+	if ok && (op == "merge" || op == "cherry-pick" || op == "revert") {
+		return true, exitcode.Success
+	}
+	return false, r.usage("commit requires a message (-m or -F)")
+}
+
+// acquireOnlyIndex takes the commit lock and a private index for --only.
+// release is always safe to call, including after a failure.
+func (r *commitRun) acquireOnlyIndex(ctx context.Context, repo *gitx.Repo) (only *gitx.OnlyIndex, release func(), code exitcode.Code) {
+	release = func() {}
+	if !r.f.only || r.f.dryRun {
+		return nil, release, exitcode.Success
+	}
+	unlock, err := repo.LockCommits(ctx)
+	if err != nil {
+		fmt.Fprintf(r.stderr, "rgit: %v\n", err)
+		return nil, release, exitcode.GitFailure
+	}
+	release = unlock
+	only, err = repo.NewOnlyIndex(ctx)
+	if err != nil {
+		fmt.Fprintf(r.stderr, "rgit: %v\n", err)
+		return nil, release, exitcode.GitFailure
+	}
+	release = func() {
+		only.Close()
+		unlock()
+	}
+	return only, release, exitcode.Success
+}
+
+func (r *commitRun) commitOptions(noEdit bool, only *gitx.OnlyIndex) (gitx.CommitOptions, exitcode.Code) {
+	f := r.f
 	opts := gitx.CommitOptions{
 		Messages:     f.messages,
 		Signoff:      f.signoff,
@@ -486,58 +385,273 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	if f.msgFile == "-" {
 		data, rerr := io.ReadAll(os.Stdin)
 		if rerr != nil {
-			fmt.Fprintf(stderr, "rgit: reading commit message from stdin: %v\n", rerr)
-			return exitcode.GitFailure
+			fmt.Fprintf(r.stderr, "rgit: reading commit message from stdin: %v\n", rerr)
+			return opts, exitcode.GitFailure
 		}
 		opts.MessageFile = "-"
 		opts.StdinMessage = data
 	} else if f.msgFile != "" {
 		opts.MessageFile = f.msgFile
 	}
+	return opts, exitcode.Success
+}
 
-	// A hook rejecting the commit rolls staging back to the pre-staging
-	// snapshot: Apply stages atomically, but the commit (and any hook it
-	// runs) still sees the real index, so without this a rejection would
-	// strand the just-staged blobs there. Restore covers every commit
-	// failure, not just hook rejections -- git reports both the same way,
-	// and the snapshot already holds any pre-existing staged work, so
-	// restoring it destroys nothing either way. Exit code is unchanged.
-	res, err := repo.Commit(ctx, opts)
-	// Hook output goes to the user either way: on success it is the
-	// formatter or codegen telling them what it did, and on failure it is
-	// usually the reason.
-	if len(res.Stderr) > 0 {
-		_, _ = stderr.Write(res.Stderr)
+func (r *commitRun) validateFlags() exitcode.Code {
+	f := r.f
+	if len(f.messages) > 0 && f.msgFile != "" {
+		return r.usage("-m and -F are mutually exclusive")
 	}
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		rollbackIndex(stderr, indexSnap, targetResults)
+	if f.dryRun && f.push {
+		return r.usage("--dry-run and --push are mutually exclusive")
+	}
+	// Asking for machine-readable output and for no output is a
+	// contradiction, and silently letting one win would leave a script
+	// parsing an empty stream that it cannot tell from "nothing staged".
+	switch {
+	case f.porcelain && f.quiet:
+		return r.usage("--porcelain and --quiet are mutually exclusive")
+	case r.asJSON && f.quiet:
+		return r.usage("--json and --quiet are mutually exclusive")
+	case f.porcelain && r.asJSON:
+		return r.usage("--porcelain and --json are mutually exclusive")
+	}
+	// git commit -i and -o are alternate ways to build the commit from
+	// paths (builtin/commit.c die_for_incompatible_opt4). rgit's default
+	// already follows -i; the flag is that spelling made explicit.
+	if f.include && f.only {
+		return r.usage("--include and --only are mutually exclusive")
+	}
+	if f.stageOnly {
+		if conflict := f.stageOnlyConflict(); conflict != "" {
+			return r.usage("--stage-only and %s are mutually exclusive", conflict)
+		}
+	}
+	if f.pathspecNUL && f.pathspecFile == "" {
+		return r.usage("--pathspec-file-nul requires --pathspec-from-file")
+	}
+	if f.msgFile == "-" && f.pathspecFile == "-" {
+		return r.usage("-F - and --pathspec-from-file=- are mutually exclusive")
+	}
+	return exitcode.Success
+}
+
+func (r *commitRun) validateTargetCount(targetCount int) exitcode.Code {
+	f := r.f
+	if targetCount > 0 {
+		return exitcode.Success
+	}
+	// git refuses --include with an empty pathspec even alongside --amend
+	// or --allow-empty ("No paths with --include/--only does not make
+	// sense."). --only keeps its amend exception.
+	switch {
+	case f.include:
+		return r.usage("--include requires at least one target")
+	case f.only && !f.amend:
+		return r.usage("--only requires at least one target")
+	case f.stageOnly:
+		return r.usage("--stage-only requires at least one target")
+	case !f.amend && !f.allowEmpty && f.fixup == "" && f.squash == "" && f.reuseMessage == "":
+		return r.usage("commit requires at least one target")
+	}
+	return exitcode.Success
+}
+
+func (r *commitRun) writeJSON(results []synth.TargetResult) exitcode.Code {
+	if err := writeCommitJSON(r.stdout, "", results, nil); err != nil {
+		fmt.Fprintf(r.stderr, "rgit: commit: %v\n", err)
 		return exitcode.GitFailure
 	}
-	jsonSHA := ""
+	return exitcode.Success
+}
+
+// dryRunOutput says what a preview resolved: a preview that prints nothing
+// and exits 0 is indistinguishable from one that found nothing.
+func (r *commitRun) dryRunOutput(results []synth.TargetResult, withTargets bool) exitcode.Code {
 	switch {
-	case f.porcelain, asJSON:
+	case r.f.porcelain:
+		// No preamble: the records are the whole output, so a caller can
+		// read them without stripping a human sentence first.
+		if withTargets {
+			writeTargetRecords(r.stdout, results)
+		}
+	case r.asJSON:
+		return r.writeJSON(results)
+	case !r.f.quiet:
+		fmt.Fprintln(r.stdout, "dry run: nothing written, nothing staged. Would commit:")
+		if withTargets {
+			writeTargetListing(r.stdout, results)
+		}
+	}
+	return exitcode.Success
+}
+
+func (r *commitRun) stageOnlyOutput(results []synth.TargetResult) exitcode.Code {
+	switch {
+	case r.f.porcelain:
+		writeTargetRecords(r.stdout, results)
+	case r.asJSON:
+		return r.writeJSON(results)
+	case !r.f.quiet:
+		fmt.Fprintln(r.stdout, "staged, not committed:")
+		writeTargetListing(r.stdout, results)
+	}
+	return exitcode.Success
+}
+
+// planTargets resolves the named targets into a stage plan and prints its
+// notices; a non-Success code means the command must exit with it.
+func (r *commitRun) planTargets(ctx context.Context, root, prefix string, repo *gitx.Repo, positionals []string) (*synth.Plan, exitcode.Code) {
+	checker := &cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}
+	classified, err := cli.ClassifyArgs(ctx, positionals, false, checker, cli.GitRevisionResolver{Repo: repo})
+	if err != nil {
+		fmt.Fprintf(r.stderr, "rgit: %v\n", err)
+		return nil, exitcode.InvalidUsage
+	}
+
+	targets, err := commitTargets(ctx, root, prefix, classified, r.f.files, r.f.syms, checker)
+	if err != nil {
+		fmt.Fprintf(r.stderr, "rgit: %v\n", err)
+		return nil, exitcode.InvalidUsage
+	}
+
+	// Checked on the built targets, not the raw arguments: by this point
+	// positionals and flags have collapsed into one list and every path has
+	// been resolved against the invocation prefix, so "src/a.go" named from
+	// a subdirectory and "a.go" named from the root compare equal.
+	paths, anchorFiles := targetPaths(targets)
+	if code := pathAnchorContradiction(paths, anchorFiles, r.stderr); code != exitcode.Success {
+		return nil, code
+	}
+	if code := refuseStructuredDataAnchors(ctx, repo, root, targets, r.stderr); code != exitcode.Success {
+		return nil, code
+	}
+
+	plan, err := synth.PlanStage(ctx, repo, root, targets)
+	if err != nil {
+		code, msg := mapStageError(err)
+		fmt.Fprintf(r.stderr, "rgit: %s\n", msg)
+		return nil, code
+	}
+	r.printPlanNotices(plan)
+	return plan, exitcode.Success
+}
+
+func (r *commitRun) printPlanNotices(plan *synth.Plan) {
+	if plan.TSOnly {
+		fmt.Fprintln(r.stderr, tsOnlyNotice)
+	}
+	for _, path := range plan.Preamble {
+		fmt.Fprintf(r.stderr, "[notice] %s is new; staging its @header and @imports so the file compiles\n", path)
+	}
+	for _, e := range plan.Escalated {
+		fmt.Fprintf(r.stderr, "[notice] %s: container is new, so the whole container is staged\n", e)
+	}
+	for _, anchor := range plan.Ordinals {
+		fmt.Fprintf(r.stderr, "[warning] anchor '%s' is positional; inserting a symbol above it repoints it -- qualify it where the language allows\n", anchor)
+	}
+	for _, w := range plan.CountingWarnings {
+		fmt.Fprintf(r.stderr, "[warning] %s\n", w)
+	}
+}
+
+// stageTargets plans and stages the named targets. done reports that the
+// command is finished with exit code code (dry run, stage-only, or a
+// failure); otherwise the commit proceeds with the returned results and
+// pre-staging index snapshot.
+func (r *commitRun) stageTargets(ctx context.Context, root, prefix string, repo *gitx.Repo, positionals []string, only *gitx.OnlyIndex) (results []synth.TargetResult, snap *synth.IndexSnapshot, code exitcode.Code, done bool) {
+	f := r.f
+	plan, code := r.planTargets(ctx, root, prefix, repo, positionals)
+	if code != exitcode.Success {
+		return nil, nil, code, true
+	}
+
+	results = plan.Results
+	allUnchanged := len(results) > 0
+	for _, res := range results {
+		if res.Outcome != synth.Unchanged {
+			allUnchanged = false
+			continue
+		}
+		fmt.Fprintf(r.stderr, "[warning] target '%s' has no uncommitted changes; skipping\n", targetLabel(res.Target))
+	}
+
+	// docs/USAGE.md § Targets with nothing to commit: exit 11 only when
+	// EVERY named target turned out unchanged, and only then -- a mix of
+	// changed and unchanged targets is a warning plus a commit of the rest,
+	// not a failure. --allow-empty suppresses it.
+	if allUnchanged && !f.allowEmpty {
+		return results, nil, exitcode.NothingToCommit, true
+	}
+
+	// docs/USAGE.md: dry-run "writes no objects, stages nothing, runs no
+	// hooks" -- resolution already happened as a pure read.
+	if f.dryRun {
+		return results, nil, r.dryRunOutput(results, true), true
+	}
+
+	// Staging without committing: no hooks run and nothing is committed, so
+	// there is no failure left to roll back. Apply is already atomic through
+	// its temp index.
+	if f.stageOnly {
+		if err := plan.Apply(ctx, repo, root); err != nil {
+			code, msg := mapStageError(err)
+			fmt.Fprintf(r.stderr, "rgit: %s\n", msg)
+			return results, nil, code, true
+		}
+		return results, nil, r.stageOnlyOutput(results), true
+	}
+
+	var stageErr error
+	if only != nil {
+		stageErr = plan.StageInto(ctx, repo, root, only.Repo)
+	} else {
+		// Snapshot the index before staging anything: Apply stages
+		// atomically through a temp index, but the commit itself -- hooks
+		// included -- still runs against the real one, so a failure there
+		// needs this snapshot to roll the index back to. Refusing to
+		// proceed when the snapshot itself fails is the non-destructive
+		// answer: staging nothing beats staging what cannot be restored.
+		var serr error
+		snap, serr = synth.SnapshotIndex(ctx, root)
+		if serr != nil {
+			fmt.Fprintf(r.stderr, "rgit: %v\n", serr)
+			return results, nil, exitcode.GitFailure, true
+		}
+		stageErr = plan.Apply(ctx, repo, root)
+	}
+	if stageErr != nil {
+		code, msg := mapStageError(stageErr)
+		fmt.Fprintf(r.stderr, "rgit: %s\n", msg)
+		return results, snap, code, true
+	}
+	return results, snap, exitcode.Success, false
+}
+
+// summarize prints the post-commit report and returns the committed SHA
+// when --json defers it to the final "left" object.
+func (r *commitRun) summarize(ctx context.Context, repo *gitx.Repo, gitStdout []byte, results []synth.TargetResult) (jsonSHA string, code exitcode.Code) {
+	switch {
+	case r.f.porcelain, r.asJSON:
 		// git's own --porcelain replaces its human summary rather than
 		// adding to it, and the same rule applies here: relaying the
 		// summary would leave a caller parsing records interleaved with
 		// prose. --json is that same H + target list as one object.
 		sha, ok, revErr := repo.RevParseVerify(ctx, "HEAD")
 		if revErr != nil {
-			fmt.Fprintf(stderr, "rgit: resolving committed SHA: %v\n", revErr)
-			return exitcode.GitFailure
+			fmt.Fprintf(r.stderr, "rgit: resolving committed SHA: %v\n", revErr)
+			return "", exitcode.GitFailure
 		}
 		if !ok {
-			fmt.Fprintln(stderr, "rgit: resolving committed SHA: HEAD is unavailable")
-			return exitcode.GitFailure
+			fmt.Fprintln(r.stderr, "rgit: resolving committed SHA: HEAD is unavailable")
+			return "", exitcode.GitFailure
 		}
-		if asJSON {
+		if r.asJSON {
 			// Written after the optional push so "left" is the final state.
-			jsonSHA = sha
-			break
+			return sha, exitcode.Success
 		}
-		fmt.Fprintf(stdout, "H\t%s\n", sha)
-		writeTargetRecords(stdout, targetResults)
-	case f.quiet:
+		fmt.Fprintf(r.stdout, "H\t%s\n", sha)
+		writeTargetRecords(r.stdout, results)
+	case r.f.quiet:
 		// Nothing on stdout. Hook output and every warning above still
 		// went to stderr -- git's own -q suppresses the summary, not
 		// diagnostics.
@@ -545,42 +659,34 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		// git's own summary -- branch, new SHA, and the changed/insertion/
 		// deletion counts. Relaying it verbatim is what stops a caller
 		// having to run `git show` afterwards just to find out what landed.
-		_, _ = stdout.Write(res.Stdout)
+		_, _ = r.stdout.Write(gitStdout)
 
 		// Then the part git cannot report: which symbols went in, and by
 		// how much. Same listing and same order as --dry-run, so a preview
 		// and the commit it previews are comparable line for line.
-		writeTargetListing(stdout, targetResults)
+		writeTargetListing(r.stdout, results)
 	}
+	return "", exitcode.Success
+}
 
-	if f.push {
-		// A push failure does not roll back the commit that preceded it
-		// (docs/USAGE.md § Flags, AGENTS.md's delegation boundary).
-		if err := repo.Push(ctx); err != nil {
-			fmt.Fprintf(stderr, "rgit: %v\n", err)
-			// gitx.Push's own doc comment explains why this never becomes
-			// an implicit --set-upstream: some push.default settings push
-			// a branch with no upstream configured just fine, so guessing
-			// -u here could fail a push plain `git push` would have
-			// completed. This only adds a concrete, named fix once the
-			// push has already failed for its own reason, and only when
-			// Upstream independently confirms there genuinely is none.
-			if _, hasUpstream, uerr := repo.Upstream(ctx); uerr == nil && !hasUpstream {
-				if branch, berr := repo.CurrentBranch(ctx); berr == nil && branch != "" && branch != "HEAD" {
-					fmt.Fprintf(stderr, "rgit: %s has no upstream tracking branch -- try `git push -u origin %s`, or set push.autoSetupRemote to do this for every push\n", branch, branch)
-				}
-			}
-			emitLeft(ctx, repo, stdout, stderr, asJSON, jsonSHA, targetResults)
-			return exitcode.PushFailed
-		}
+// reportPushFailure prints a failed push. A push failure does not roll back
+// the commit that preceded it (docs/USAGE.md § Flags, AGENTS.md's
+// delegation boundary).
+func (r *commitRun) reportPushFailure(ctx context.Context, repo *gitx.Repo, pushErr error) {
+	fmt.Fprintf(r.stderr, "rgit: %v\n", pushErr)
+	// gitx.Push's own doc comment explains why this never becomes an
+	// implicit --set-upstream: some push.default settings push a branch
+	// with no upstream configured just fine, so guessing -u here could fail
+	// a push plain `git push` would have completed. This only adds a
+	// concrete, named fix once the push has already failed for its own
+	// reason, and only when Upstream independently confirms there genuinely
+	// is none.
+	if _, hasUpstream, uerr := repo.Upstream(ctx); uerr != nil || hasUpstream {
+		return
 	}
-
-	if !f.porcelain && !f.quiet {
-		if code := emitLeft(ctx, repo, stdout, stderr, asJSON, jsonSHA, targetResults); code != exitcode.Success {
-			return code
-		}
+	if branch, berr := repo.CurrentBranch(ctx); berr == nil && branch != "" && branch != "HEAD" {
+		fmt.Fprintf(r.stderr, "rgit: %s has no upstream tracking branch -- try `git push -u origin %s`, or set push.autoSetupRemote to do this for every push\n", branch, branch)
 	}
-	return exitcode.Success
 }
 
 // leftState is what remains after a commit, so the caller needs no
