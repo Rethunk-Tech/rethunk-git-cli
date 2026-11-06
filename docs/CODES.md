@@ -93,7 +93,7 @@ the verdict. Reordering or adding a column is a breaking change.
 | Passthrough git format | `blame` | git's own | `git blame --porcelain`, unmodified |
 
 `show --porcelain` is length-framed `FILE:ANCHOR<TAB>NBYTES` + `NBYTES`
-bytes.
+bytes. `show` has no `--json`; `--porcelain` is its machine form.
 
 ### `rgit diff --porcelain`
 
