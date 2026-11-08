@@ -4,6 +4,16 @@ Notable changes to `rgit`. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-11-08
+
+### Added
+
+- `rgit commit` ends its output with what is left: dirty paths and commits ahead of upstream.
+
+### Fixed
+
+- Renaming the last symbol in a file no longer panics.
+
 ## [2.3.0] - 2026-10-27
 
 ### Fixed
