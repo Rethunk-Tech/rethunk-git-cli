@@ -72,7 +72,7 @@ jobs:
       - name: Install pinned tree-sitter CLI
         run: |
           tgz="$RUNNER_TEMP/tree-sitter-cli-${TREE_SITTER_CLI_VERSION}.tgz"
-          curl -fsSL -o "$tgz" \
+          curl -fsSL --retry 18 --retry-delay 10 -o "$tgz" \
             "https://registry.npmjs.org/tree-sitter-cli/-/tree-sitter-cli-${TREE_SITTER_CLI_VERSION}.tgz"
           got="sha512-$(openssl dgst -sha512 -binary "$tgz" | openssl base64 -A)"
           test "$got" = "$TREE_SITTER_CLI_INTEGRITY"

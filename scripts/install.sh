@@ -44,7 +44,7 @@ case "$arch" in
 esac
 
 if [ "$version" = "latest" ]; then
-  tag=$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest" |
+  tag=$(curl -fsSL --retry 18 --retry-delay 10 "https://api.github.com/repos/$repo/releases/latest" |
     grep -o '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4)
   if [ -z "$tag" ]; then
     echo "install.sh: could not determine the latest release tag" >&2
@@ -70,11 +70,13 @@ fi
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/rgit.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 
-curl -fsSL -o "$tmp/$asset" "$base_url/$asset"
-curl -fsSL -o "$tmp/SHA256SUMS" "$base_url/SHA256SUMS"
+# curl's --retry covers only transient failures (502/504, dropped connections):
+# 18 tries 10s apart rides out a GitHub blip without hanging forever.
+curl -fsSL --retry 18 --retry-delay 10 -o "$tmp/$asset" "$base_url/$asset"
+curl -fsSL --retry 18 --retry-delay 10 -o "$tmp/SHA256SUMS" "$base_url/SHA256SUMS"
 
 if command -v cosign >/dev/null 2>&1; then
-  curl -fsSL -o "$tmp/SHA256SUMS.sigstore.json" "$base_url/SHA256SUMS.sigstore.json"
+  curl -fsSL --retry 18 --retry-delay 10 -o "$tmp/SHA256SUMS.sigstore.json" "$base_url/SHA256SUMS.sigstore.json"
   (
     cd "$tmp"
     cosign verify-blob \

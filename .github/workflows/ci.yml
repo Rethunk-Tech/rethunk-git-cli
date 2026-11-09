@@ -233,7 +233,7 @@ jobs:
         env:
           MARKSMAN_VERSION: "2026-02-08"
         run: |
-          curl -fsSL --retry 5 --retry-all-errors --retry-max-time 120 \
+          curl -fsSL --retry 18 --retry-delay 10 --retry-all-errors --retry-max-time 120 \
             -o /usr/local/bin/marksman \
             "https://github.com/artempyanykh/marksman/releases/download/${MARKSMAN_VERSION}/marksman-linux-x64"
           chmod +x /usr/local/bin/marksman
