@@ -4,6 +4,13 @@ Notable changes to `rgit`. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.1] - 2026-11-09
+
+### Fixed
+
+- `rgit commit` given both `-m` and `-F`, or a multi-line `-m`, refuses with the supported form: `-F -` and a quoted heredoc.
+- The install script retries its downloads through transient GitHub errors.
+
 ## [2.4.0] - 2026-11-08
 
 ### Added
