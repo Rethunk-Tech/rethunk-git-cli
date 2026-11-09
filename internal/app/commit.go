@@ -396,10 +396,23 @@ func (r *commitRun) commitOptions(noEdit bool, only *gitx.OnlyIndex) (gitx.Commi
 	return opts, exitcode.Success
 }
 
+// stdinMessageHint names the one spelling that carries a subject and body
+// without the shell ever parsing the text. -m is still supported for a
+// single line; the refusals below point at the form that always works.
+const stdinMessageHint = "use rgit commit --only -F - PATHS <<'EOF' with a subject line, a blank line, then the body"
+
 func (r *commitRun) validateFlags() exitcode.Code {
 	f := r.f
 	if len(f.messages) > 0 && f.msgFile != "" {
-		return r.usage("-m and -F are mutually exclusive")
+		return r.usage("-m and -F are mutually exclusive; %s", stdinMessageHint)
+	}
+	// git accepts newlines inside -m, but reaching rgit that way means the
+	// caller quoted a multi-line message at the shell, where quoting is
+	// what breaks; --only -F - has no quoting to get wrong.
+	for _, m := range f.messages {
+		if strings.Contains(m, "\n") {
+			return r.usage("-m cannot carry a multi-line message; %s", stdinMessageHint)
+		}
 	}
 	if f.dryRun && f.push {
 		return r.usage("--dry-run and --push are mutually exclusive")
