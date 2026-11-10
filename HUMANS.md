@@ -11,7 +11,18 @@ rgit commit -m "fix(auth): reject expired" auth.go:ValidateToken
 rgit -C /some/other/repo diff                    # ...without standing in it
 ```
 
-Install, env vars, verify, uninstall: [docs/INSTALL.md](docs/INSTALL.md).
+```bash
+brew install rethunk-tech/tap/rgit
+```
+
+Windows:
+
+```powershell
+scoop bucket add rethunk https://github.com/Rethunk-Tech/scoop-bucket
+scoop install rgit
+```
+
+Build, env vars, verify, uninstall: [docs/INSTALL.md](docs/INSTALL.md).
 
 ```bash
 source <(rgit completion bash)

@@ -22,20 +22,7 @@ rgit diff
 rgit commit -m "fix(auth): reject expired" auth.go:ValidateToken
 ```
 
-## Installation
-
-```bash
-brew install rethunk-tech/tap/rgit
-```
-
-Windows:
-
-```powershell
-scoop bucket add rethunk https://github.com/Rethunk-Tech/scoop-bucket
-scoop install rgit
-```
-
-Build, completions and runbook: [HUMANS.md](HUMANS.md).
+Install and runbook: [HUMANS.md](HUMANS.md).
 
 ## Highlights
 
