@@ -65,6 +65,8 @@ jobs:
       # option and every target needs a real C compiler
       # (docs/INSTALL.md § Cross builds).
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          use-cache: false
 
       # The tree-sitter CLI is what lets the release carry SQL support: the
       # grammar module ships no usable parser.c, so `make cross` generates
