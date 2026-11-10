@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
@@ -39,20 +40,59 @@ var (
 	_ = os.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 )
 
+// fixtureTemplate is a git template directory carrying the two things every
+// fixture repository needs, which used to cost four `git config`
+// subprocesses per repository:
+//
+//   - user.name/user.email, so a repository created off it can commit
+//     without inheriting the developer's identity or needing one set.
+//   - gc.auto=0 and maintenance.auto=false, which turn off the one thing
+//     that touches .git after the command that triggered it has exited: git
+//     forks auto-maintenance detached, so no caller waits on it, and it can
+//     still be writing under .git/objects when t.TempDir()'s RemoveAll runs
+//     -- surfacing as a "directory not empty" cleanup failure in whichever
+//     test happened to trip it. No fixture here is remotely large enough to
+//     need either pass.
+//
+// `git init` copies a template's config into the new repository, so one
+// process replaces five. The file is written once per test binary and shared
+// read-only from then on; the hooks directory is created empty because a
+// template replaces the ones git would otherwise copy in, and
+// InstallHook writes real hooks into .git/hooks.
+var fixtureTemplate = sync.OnceValues(func() (string, error) {
+	dir, err := os.MkdirTemp("", "rgit-git-template-*")
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "hooks"), 0o750); err != nil {
+		return "", err
+	}
+	config := "[user]\n" +
+		"\temail = rgit-test@example.com\n" +
+		"\tname = rgit Test\n" +
+		"[gc]\n" +
+		"\tauto = 0\n" +
+		"[maintenance]\n" +
+		"\tauto = false\n"
+	if err := os.WriteFile(filepath.Join(dir, "config"), []byte(config), 0o600); err != nil {
+		return "", err
+	}
+	return dir, nil
+})
+
 // New initialises an empty repository in a temp directory and returns it
 // alongside a gitx.Repo rooted there.
 //
-// The branch is forced to "main" and the identity is set locally rather
-// than inherited: a developer's own init.defaultBranch or global
-// user.email would otherwise decide what these tests assert against, and
-// a repository with no identity cannot commit at all.
+// The branch is forced to "main" and the identity comes from
+// fixtureTemplate rather than the environment: a developer's own
+// init.defaultBranch or global user.email would otherwise decide what these
+// tests assert against, and a repository with no identity cannot commit at
+// all.
 func New(ctx context.Context, t testing.TB) (dir string, repo *gitx.Repo) {
 	t.Helper()
 	dir = t.TempDir()
 
 	Git(ctx, t, dir, "init", "-q", "-b", "main")
-	Git(ctx, t, dir, "config", "user.email", "rgit-test@example.com")
-	Git(ctx, t, dir, "config", "user.name", "rgit Test")
 
 	return dir, gitx.New(dir)
 }
@@ -75,37 +115,39 @@ func RepoWithFile(ctx context.Context, t testing.TB, rel, content, message strin
 // Git runs one git command in dir and returns its combined output, failing
 // the test if git does. The output is returned rather than discarded so a
 // caller can assert on it without a second spelling of this function.
+//
+// `git init` is routed through fixtureTemplate, so every repository this
+// package creates -- bare remotes included, since they go through git's own
+// init too -- starts with an identity and auto-maintenance off.
 func Git(ctx context.Context, t testing.TB, dir string, args ...string) string {
 	t.Helper()
+	if len(args) > 0 && args[0] == "init" {
+		args = withFixtureTemplate(t, args)
+	}
 	cmd := exec.CommandContext(ctx, "git", args...) //nolint:gosec // fixture arguments go directly to the real git binary, never through a shell
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %v: %v: %s", args, err, out)
 	}
-	if len(args) > 0 && args[0] == "init" {
-		disableAutoMaintenance(t, ctx, dir)
-	}
 	return string(out)
 }
 
-// disableAutoMaintenance turns off the one thing that touches .git after the
-// command that triggered it has already exited: git forks auto-maintenance
-// detached, so no caller waits on it, and it can still be writing under
-// .git/objects when t.TempDir()'s RemoveAll runs -- surfacing as a
-// "directory not empty" cleanup failure in whichever test happened to trip
-// it. Applied to every repository this package creates, bare ones included,
-// since all of them go through Git's own "init". None is remotely large
-// enough to need either pass.
-func disableAutoMaintenance(t testing.TB, ctx context.Context, dir string) {
+// withFixtureTemplate returns args with --template=<fixtureTemplate> inserted
+// directly after "init". A caller that set its own --template keeps it: the
+// template under test is then the point of that call.
+func withFixtureTemplate(t testing.TB, args []string) []string {
 	t.Helper()
-	for _, kv := range [][2]string{{"gc.auto", "0"}, {"maintenance.auto", "false"}} {
-		cmd := exec.CommandContext(ctx, "git", "config", kv[0], kv[1]) //nolint:gosec // fixed test config values go directly to git, never through a shell
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git config %s %s: %v: %s", kv[0], kv[1], err, out)
+	for _, arg := range args[1:] {
+		if strings.HasPrefix(arg, "--template") {
+			return args
 		}
 	}
+	template, err := fixtureTemplate()
+	if err != nil {
+		t.Fatalf("create git template: %v", err)
+	}
+	return append([]string{"init", "--template=" + template}, args[1:]...)
 }
 
 // GitInput runs one git command with input on stdin and returns its output,
@@ -166,7 +208,6 @@ func Commit(ctx context.Context, t testing.TB, dir, message string) {
 // at all three merge stages. A real merge is not needed to produce one, and
 // the index is the only thing rgit reads to tell a conflicted path apart.
 func Unmerged(ctx context.Context, t testing.TB, dir, blob, path string) {
-	t.Helper()
 	GitInput(ctx, t, dir, fmt.Sprintf(
 		"100644 %s 1\t%s\n100644 %s 2\t%s\n100644 %s 3\t%s\n",
 		blob, path, blob, path, blob, path,
