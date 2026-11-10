@@ -266,15 +266,7 @@ func openRepo(ctx context.Context, dir string, stderr io.Writer) (root, prefix s
 	}
 
 	probe := gitx.New(dir)
-	top, err := probe.Toplevel(ctx)
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		return "", "", nil, exitcode.GitFailure
-	}
-
-	// Read the prefix from the invocation directory, not the toplevel --
-	// it is precisely the difference between the two.
-	pfx, err := probe.ShowPrefix(ctx)
+	top, pfx, err := probe.RootAndPrefix(ctx)
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return "", "", nil, exitcode.GitFailure

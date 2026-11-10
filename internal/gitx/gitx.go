@@ -1564,17 +1564,28 @@ func (r *Repo) MergeBase(ctx context.Context, a, b string) (sha string, ok bool,
 	return r.optionalLine(ctx, "merge-base", a, b)
 }
 
-// Toplevel returns the working tree's root directory, via `git rev-parse
-// --show-toplevel`.
-func (r *Repo) Toplevel(ctx context.Context) (string, error) {
-	return r.checkedLine(ctx, "rev-parse", "--show-toplevel")
-}
-
-// ShowPrefix returns the current directory's path relative to the
-// repository root, slash-terminated, or "" at the root itself. git
-// resolves pathspecs relative to the current directory, so this is what
-// turns a caller's `a.go` into the root-relative `pkg/deep/a.go` that
-// rgit works in internally.
-func (r *Repo) ShowPrefix(ctx context.Context) (string, error) {
-	return r.checkedLine(ctx, "rev-parse", "--show-prefix")
+// RootAndPrefix answers both of openRepo's questions about where rgit was
+// started -- the working tree's root, and the invocation directory's path
+// relative to it, slash-terminated, or "" at the root itself -- in one git
+// process. `git rev-parse` prints one line per requested rev, in the order
+// asked, so --show-toplevel and --show-prefix together cost one exec per
+// invocation instead of two.
+//
+// Both come from the same invocation: the prefix is the difference between
+// the root and where rgit was started, so it cannot be recovered from the
+// root afterwards, and it is what turns a caller's `a.go` into the
+// root-relative `pkg/deep/a.go` rgit works in internally.
+func (r *Repo) RootAndPrefix(ctx context.Context) (root, prefix string, err error) {
+	out, err := r.checked(ctx, "rev-parse", "--show-toplevel", "--show-prefix")
+	if err != nil {
+		return "", "", err
+	}
+	// One line per rev. The prefix line is empty at the root, so exactly
+	// one trailing newline comes off -- trimming every trailing newline
+	// would collapse that empty field and leave a single line.
+	lines := strings.Split(strings.TrimSuffix(string(out), "\n"), "\n")
+	if len(lines) != 2 {
+		return "", "", fmt.Errorf("gitx: rev-parse --show-toplevel --show-prefix: %q; want two lines", out)
+	}
+	return strings.TrimSuffix(lines[0], "\r"), strings.TrimSuffix(lines[1], "\r"), nil
 }
