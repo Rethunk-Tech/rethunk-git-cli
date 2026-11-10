@@ -158,34 +158,6 @@ func TestExtendThroughOwnedSeparator(t *testing.T) {
 	}
 }
 
-// TestResolvePseudo_HeaderStopsBeforeImports pins the bound @header takes
-// from @imports: the header run ends where the import statement begins, so
-// the import line itself is never staged as part of @header even though a
-// comment directly above it still is (comments are header kinds, and the run
-// is continuous to its bound).
-func TestResolvePseudo_HeaderStopsBeforeImports(t *testing.T) {
-	t.Parallel()
-
-	const src = "package sample\n\n// stdlib\nimport \"fmt\"\n\nfunc A() {}\n"
-	lang := goLang(t)
-
-	header, err := Resolve(lang, []byte(src), "@header")
-	if err != nil {
-		t.Fatalf("Resolve(@header) = %v", err)
-	}
-	if got, want := string(srcAt([]byte(src), header.Extent)), "package sample\n\n// stdlib"; got != want {
-		t.Errorf("Resolve(@header) = %q; want %q", got, want)
-	}
-
-	imports, err := Resolve(lang, []byte(src), "@imports")
-	if err != nil {
-		t.Fatalf("Resolve(@imports) = %v", err)
-	}
-	if got, want := string(srcAt([]byte(src), imports.Extent)), "import \"fmt\""; got != want {
-		t.Errorf("Resolve(@imports) = %q; want %q", got, want)
-	}
-}
-
 // TestEnclosingName pins the preference order synth's insertion path reads:
 // a declaration's real enclosing block wins over its container, and a
 // container stands in when there is no separate enclosing block.

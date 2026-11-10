@@ -180,6 +180,10 @@ func TestStage_RustImplMemberSitsFlush(t *testing.T) {
 	qt.Assert(t, qt.Equals(stagedBlob(t, repo, "lib.rs"), work))
 }
 
+// TestStage_RustMemberOfANewImplBringsTheBlock pins the escalation itself:
+// a method of an impl block HEAD lacks cannot be staged as a method, so the
+// block comes with it -- and the caller is told which anchor it widened, so
+// the widened blob is never reported as the anchor the caller named.
 func TestStage_RustMemberOfANewImplBringsTheBlock(t *testing.T) {
 	t.Parallel()
 	head := "pub struct Config;\n"
@@ -188,7 +192,11 @@ func TestStage_RustMemberOfANewImplBringsTheBlock(t *testing.T) {
 	work := "pub struct Config;\n\nimpl Config {\n    pub fn len(&self) -> usize {\n        0\n    }\n}\n"
 	gittest.Write(t, dir, "lib.rs", work)
 
-	err := stageTargets(t.Context(), repo, dir, []Target{AnchorTarget("lib.rs", "Config::len")})
+	plan, err := PlanStage(t.Context(), repo, dir, []Target{AnchorTarget("lib.rs", "Config::len")})
 	qt.Assert(t, qt.IsNil(err))
+	if len(plan.Escalated) != 1 || !strings.Contains(plan.Escalated[0], "Config") {
+		t.Errorf("Escalated = %v; want the method widened to its container", plan.Escalated)
+	}
+	qt.Assert(t, qt.IsNil(plan.Apply(t.Context(), repo, dir)))
 	qt.Assert(t, qt.Equals(stagedBlob(t, repo, "lib.rs"), work))
 }

@@ -61,26 +61,15 @@ func TestResolve_BareNameMatchingSeveralContainersIsAmbiguous(t *testing.T) {
 			t.Errorf("Resolve(%q) extent = %q; want it to start at %q", anchor, srcAt([]byte(goTwoGetters), res.Extent), want)
 		}
 	}
-}
 
-// TestResolve_SuggestsTheContainerQualifiedSpelling pins suggest's own reason
-// for measuring distance against the bare name rather than the qualified one:
-// a typo in a name that exists only inside a container must still produce a
-// candidate, and that candidate has to be the qualified spelling -- the bare
-// one would not resolve.
-func TestResolve_SuggestsTheContainerQualifiedSpelling(t *testing.T) {
-	t.Parallel()
-
-	const src = `package sample
-
-type Box struct {
-	sizeX int
-}
-`
-	lang := goLang(t)
-	_, err := Resolve(lang, []byte(src), "sizY")
-
-	rerr, ok := AsResolveError(err)
+	// A typo rather than a collision: suggest measures edit distance against
+	// each symbol's bare name, so a misspelled name that exists only inside a
+	// container still produces a candidate -- and the candidate it returns is
+	// the container-qualified spelling, because the bare one would not
+	// resolve.
+	const boxSrc = "package sample\n\ntype Box struct {\n\tsizeX int\n}\n"
+	_, err = Resolve(lang, []byte(boxSrc), "sizY")
+	rerr, ok = AsResolveError(err)
 	if !ok {
 		t.Fatalf("Resolve(sizY) error = %v; want *ResolveError", err)
 	}
@@ -92,6 +81,9 @@ type Box struct {
 	}
 	if !strings.Contains(rerr.Error(), "did you mean: Box.sizeX?") {
 		t.Errorf("Resolve(sizY) message = %q; want the did-you-mean suffix", rerr.Error())
+	}
+	if _, err := Resolve(lang, []byte(boxSrc), "Box.sizeX"); err != nil {
+		t.Errorf("Resolve(Box.sizeX) (the suggested candidate) = %v; want success", err)
 	}
 }
 
@@ -238,6 +230,18 @@ func TestResolve_PseudoAnchors(t *testing.T) {
 		if !ok || rerr.Code != exitcode.AnchorUnresolvable {
 			t.Errorf("Resolve(%s) of a bare package clause = %v; want an unresolvable *ResolveError", anchor, err)
 		}
+	}
+
+	// @header's run stops at @imports' own start rather than at the first
+	// non-comment node: a comment directly above the import block still
+	// belongs to the header, while the import statement itself never does.
+	bounded := []byte("package sample\n\n// stdlib\nimport \"fmt\"\n\nfunc A() {}\n")
+	header, err := Resolve(lang, bounded, "@header")
+	if err != nil {
+		t.Fatalf("Resolve(@header) = %v", err)
+	}
+	if got, want := string(srcAt(bounded, header.Extent)), "package sample\n\n// stdlib"; got != want {
+		t.Errorf("Resolve(@header) = %q; want %q (bounded by @imports, comment included)", got, want)
 	}
 }
 

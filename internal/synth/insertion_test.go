@@ -58,33 +58,3 @@ func TestStage_MemberKeepsItsPositionBesideAKnownSibling(t *testing.T) {
 		t.Errorf("staged a.go = %q; want first ahead of sizeX, its worktree position", blob)
 	}
 }
-
-// TestStage_NewMethodEscalatesToItsWholeNewContainer pins escalateToContainer's
-// escalation: naming a method of a class HEAD does not have yet cannot be
-// staged as a method, so the whole class is staged instead and the caller is
-// told which anchor it widened.
-func TestStage_NewMethodEscalatesToItsWholeNewContainer(t *testing.T) {
-	t.Parallel()
-	dir, repo := gittest.New(t.Context(), t)
-	ctx := t.Context()
-
-	gittest.Write(t, dir, "a.ts", "export function existing(): void {}\n")
-	gittest.Commit(ctx, t, dir, "chore: initial")
-	gittest.Write(t, dir, "a.ts", "export function existing(): void {}\n\nexport class Box {\n  sizeX(): number {\n    return 1;\n  }\n}\n")
-
-	plan, err := PlanStage(ctx, repo, dir, []Target{AnchorTarget("a.ts", "Box.sizeX")})
-	if err != nil {
-		t.Fatalf("PlanStage: %v", err)
-	}
-	if len(plan.Escalated) != 1 || !strings.Contains(plan.Escalated[0], "Box") {
-		t.Errorf("Escalated = %v; want the method widened to its container", plan.Escalated)
-	}
-
-	if err := plan.Apply(ctx, repo, dir); err != nil {
-		t.Fatalf("Apply: %v", err)
-	}
-	blob := gittest.Git(ctx, t, dir, "show", ":a.ts")
-	if !strings.Contains(blob, "export class Box {") || !strings.Contains(blob, "sizeX(): number") {
-		t.Errorf("staged a.ts = %q; want the whole new class, not a bare method", blob)
-	}
-}
