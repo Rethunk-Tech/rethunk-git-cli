@@ -37,6 +37,30 @@ func newDivergentRepo(t *testing.T) (repo *gitx.Repo, baseSHA string) {
 	return repo, baseSHA
 }
 
+// TestResolveScope_RefusesRangeBeginningWithDash pins the refusal that keeps
+// a caller-supplied revision out of git's option parser. `git diff` accepts
+// options such as --output=<path> (writes the diff there) and --ext-diff
+// (runs a configured command), so `rgit diff --range=--output=.git/index`
+// truncated the index of a repository it was only asked to read, and
+// --range=--ext-diff ran an external differ. A revision never begins with
+// "-", so any such value is refused before git sees it.
+func TestResolveScope_RefusesRangeBeginningWithDash(t *testing.T) {
+	t.Parallel()
+	_, repo := gittest.RepoWithFile(t.Context(), t, "f.txt", "one\n", "chore: fixture")
+
+	for _, opts := range []Options{
+		{RangeFlag: "--output=index"},
+		{RangeFlag: "--ext-diff"},
+		{PositionalRange: "--output=index"},
+	} {
+		_, err := ResolveScope(t.Context(), repo, opts)
+		var uerr *UsageError
+		if !errors.As(err, &uerr) {
+			t.Fatalf("ResolveScope(%+v) error = %v (%T); want *UsageError", opts, err, err)
+		}
+	}
+}
+
 // TestResolveRangeScope_ThreeDotUsesMergeBaseTwoDotUsesLiteralA is
 // resolveRangeScope's own doc comment turned into an assertion: the
 // three-dot form's old side has to be the merge base, and the two-dot

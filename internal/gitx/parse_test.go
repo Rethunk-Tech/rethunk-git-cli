@@ -164,6 +164,7 @@ func TestReadCatFileBatchResponses(t *testing.T) {
 		name    string
 		in      string
 		count   int
+		maxBlob int
 		want    []BatchCatFileResult
 		wantErr bool
 	}{
@@ -206,11 +207,34 @@ func TestReadCatFileBatchResponses(t *testing.T) {
 			count:   1,
 			wantErr: true,
 		},
+		{
+			// Past the cap the content is drained and dropped, so a huge blob
+			// costs no memory while the responses after it still parse.
+			name:    "blob over the cap is drained, not buffered",
+			in:      "abc blob 8\n12345678\nHEAD:gone.go missing\n",
+			count:   2,
+			maxBlob: 4,
+			want: []BatchCatFileResult{
+				{Exists: true, TooLarge: true},
+				{Exists: false},
+			},
+		},
+		{
+			name:    "the cap is inclusive",
+			in:      "abc blob 4\nhey\n\n",
+			count:   1,
+			maxBlob: 4,
+			want:    []BatchCatFileResult{{Content: []byte("hey\n"), Exists: true}},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := readCatFileBatchResponses(strings.NewReader(tt.in), tt.count)
+			maxBlob := tt.maxBlob
+			if maxBlob == 0 {
+				maxBlob = BatchCatFileMaxBlob
+			}
+			got, err := readCatFileBatchResponses(strings.NewReader(tt.in), tt.count, maxBlob)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("readCatFileBatchResponses(%q) = %+v, nil; want an error", tt.in, got)
@@ -224,9 +248,9 @@ func TestReadCatFileBatchResponses(t *testing.T) {
 				t.Fatalf("len = %d; want %d", len(got), len(tt.want))
 			}
 			for i := range tt.want {
-				if got[i].Exists != tt.want[i].Exists || string(got[i].Content) != string(tt.want[i].Content) {
-					t.Errorf("[%d] = {Exists:%v Content:%q}; want {Exists:%v Content:%q}",
-						i, got[i].Exists, got[i].Content, tt.want[i].Exists, tt.want[i].Content)
+				if got[i].Exists != tt.want[i].Exists || got[i].TooLarge != tt.want[i].TooLarge || string(got[i].Content) != string(tt.want[i].Content) {
+					t.Errorf("[%d] = {Exists:%v TooLarge:%v Content:%q}; want {Exists:%v TooLarge:%v Content:%q}",
+						i, got[i].Exists, got[i].TooLarge, got[i].Content, tt.want[i].Exists, tt.want[i].TooLarge, tt.want[i].Content)
 				}
 			}
 		})

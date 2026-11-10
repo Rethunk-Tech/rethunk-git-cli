@@ -346,7 +346,20 @@ type BatchCatFileRequest struct {
 type BatchCatFileResult struct {
 	Content []byte
 	Exists  bool
+
+	// TooLarge reports that the blob is larger than BatchCatFileMaxBlob, so
+	// Content was discarded rather than materialized. A caller that can only
+	// work with whole content must fall back to a file-level answer instead of
+	// reading an empty slice as the file's real content.
+	TooLarge bool
 }
+
+// BatchCatFileMaxBlob bounds one blob's materialized size in a batched read.
+// A diff over a whole tree must not hold every side of every changed file in
+// memory at once; a generated file or a checked-in artifact can be hundreds
+// of megabytes, and git's own numstat reports that file's size without reading
+// it. The bound is generous enough that ordinary sources are never affected.
+const BatchCatFileMaxBlob = 16 << 20
 
 // BatchCatFile reads every rev:path in requests through one `git cat-file
 // --batch` process instead of one `git cat-file -p` subprocess per blob --
@@ -403,7 +416,7 @@ func (r *Repo) BatchCatFile(ctx context.Context, requests []BatchCatFileRequest)
 		writeErrCh <- err
 	}()
 
-	results, readErr := readCatFileBatchResponses(stdout, len(requests))
+	results, readErr := readCatFileBatchResponses(stdout, len(requests), BatchCatFileMaxBlob)
 
 	// The writer goroutine's own error only matters when reading did not
 	// already fail: a write failure past the point every response was
@@ -476,7 +489,7 @@ func rejectBatchSelector(rev, path string) error {
 	return nil
 }
 
-func readCatFileBatchResponses(r io.Reader, count int) ([]BatchCatFileResult, error) {
+func readCatFileBatchResponses(r io.Reader, count, maxBlob int) ([]BatchCatFileResult, error) {
 	br := bufio.NewReader(r)
 	results := make([]BatchCatFileResult, count)
 	for i := range count {
@@ -500,6 +513,19 @@ func readCatFileBatchResponses(r io.Reader, count int) ([]BatchCatFileResult, er
 		size, serr := strconv.Atoi(fields[2])
 		if serr != nil || size < 0 {
 			return nil, fmt.Errorf("gitx: cat-file --batch: malformed size in header %q", header)
+		}
+		if size > maxBlob {
+			// Drained rather than buffered: the response still has to be
+			// consumed for the next header to be readable, but its bytes are
+			// discarded as they stream past, so a huge blob costs no memory.
+			if _, err := io.CopyN(io.Discard, br, int64(size)); err != nil {
+				return nil, fmt.Errorf("gitx: cat-file --batch: discarding %d content bytes for response %d of %d: %w", size, i+1, count, err)
+			}
+			if _, err := br.Discard(1); err != nil {
+				return nil, fmt.Errorf("gitx: cat-file --batch: reading trailing newline for response %d of %d: %w", i+1, count, err)
+			}
+			results[i] = BatchCatFileResult{Exists: true, TooLarge: true}
+			continue
 		}
 		content := make([]byte, size)
 		if _, err := io.ReadFull(br, content); err != nil {
@@ -778,11 +804,21 @@ type NumstatEntry struct {
 // file's counts; Path is passed through verbatim, including git's own
 // "old => new" rename shorthand, for the diff-rendering layer to interpret.
 func (r *Repo) DiffNumstat(ctx context.Context, extra ...string) ([]NumstatEntry, error) {
-	out, err := r.checked(ctx, append([]string{"diff", "--numstat"}, extra...)...)
+	out, err := r.checked(ctx, append(diffArgs("--numstat"), extra...)...)
 	if err != nil {
 		return nil, err
 	}
 	return parseNumstat(out)
+}
+
+// diffArgs is the fixed prefix both diff readers share. core.quotePath=false
+// is what keeps a reported path usable: git's default C-quotes every non-ASCII
+// byte ("caf\303\251.go"), and neither a caller pasting that back as an anchor
+// nor this package's own path lookups can do anything with the quoted form --
+// while the same repository's `git diff --name-only -z` (ChangedPaths) is
+// unquoted, leaving the two disagreeing about one file's own name.
+func diffArgs(extra ...string) []string {
+	return append([]string{"-c", "core.quotePath=false", "diff"}, extra...)
 }
 
 // DiffPatch runs `git diff` (no `--numstat`) with the given extra arguments
@@ -793,7 +829,7 @@ func (r *Repo) DiffNumstat(ctx context.Context, extra ...string) ([]NumstatEntry
 // extra arguments to each, guaranteeing the same scope (default/staged/
 // unstaged/range) and the same pathspec filter underlies both.
 func (r *Repo) DiffPatch(ctx context.Context, extra ...string) ([]byte, error) {
-	return r.checked(ctx, append([]string{"diff"}, extra...)...)
+	return r.checked(ctx, append(diffArgs(), extra...)...)
 }
 
 // parseNumstat fails loudly on a line that does not split into exactly
@@ -1062,10 +1098,32 @@ func (opts CommitOptions) args() []string {
 // finishOnlyCommit checks that HEAD did not move under a --only commit and
 // brings the real index in line with what the private index committed.
 func (r *Repo) finishOnlyCommit(ctx context.Context, commitRepo *Repo, opts CommitOptions) error {
-	if !opts.Amend && opts.Only.BaseCommit != "" {
-		// git takes the parent from HEAD when it starts, not from the base
-		// the private index was built on. A writer outside rgit landing in
-		// between leaves a commit whose tree undoes that writer's change.
+	if opts.Only.BaseCommit != "" {
+		if err := r.checkOnlyBase(ctx, opts); err != nil {
+			return err
+		}
+	}
+	if err := r.syncCommittedEntries(ctx, commitRepo, opts.Only.BaseTree); err != nil {
+		return fmt.Errorf("gitx: commit landed, but updating the index for its paths failed: %w", err)
+	}
+	return nil
+}
+
+// checkOnlyBase verifies the private index was built on the commit git
+// actually acted on. git takes that commit from HEAD when it starts, never
+// from the tree the private index was seeded with, so a writer landing in
+// between leaves a commit whose tree undoes that writer's work. Under
+// --amend the foreign commit is the one replaced: the branch ends up carrying
+// the private index's tree, the writer's content is reverted, and its commit
+// is unreachable.
+//
+// The base's parent identifies the commit in both shapes: a plain commit
+// lands on top of the base (HEAD^1 must be the base itself), and an amend
+// replaces the base (the replacement's HEAD^1 must still be the base's own
+// parent). A root base has no parent, so the only matching answer is a HEAD
+// that has none either.
+func (r *Repo) checkOnlyBase(ctx context.Context, opts CommitOptions) error {
+	if !opts.Amend {
 		parent, err := r.checkedLine(ctx, "rev-parse", "--verify", "HEAD^1")
 		if err != nil {
 			return err
@@ -1073,11 +1131,21 @@ func (r *Repo) finishOnlyCommit(ctx context.Context, commitRepo *Repo, opts Comm
 		if parent != opts.Only.BaseCommit {
 			return fmt.Errorf("gitx: HEAD moved from %s to %s while committing; HEAD's tree was built on %s and may undo %s's changes", opts.Only.BaseCommit, parent, opts.Only.BaseCommit, parent)
 		}
+		return nil
 	}
-	if err := r.syncCommittedEntries(ctx, commitRepo, opts.Only.BaseTree); err != nil {
-		return fmt.Errorf("gitx: commit landed, but updating the index for its paths failed: %w", err)
+
+	baseParent, baseHasParent, err := r.optionalLine(ctx, "rev-parse", "--verify", "--quiet", opts.Only.BaseCommit+"^1")
+	if err != nil {
+		return err
 	}
-	return nil
+	parent, hasParent, err := r.optionalLine(ctx, "rev-parse", "--verify", "--quiet", "HEAD^1")
+	if err != nil {
+		return err
+	}
+	if hasParent == baseHasParent && parent == baseParent {
+		return nil
+	}
+	return fmt.Errorf("gitx: HEAD moved while amending %s: the amended commit's parent is %q, but %s's parent is %q, so its tree may undo another commit's changes", opts.Only.BaseCommit, parent, opts.Only.BaseCommit, baseParent)
 }
 
 // syncCommittedEntries copies into the real index each path the --only

@@ -83,51 +83,131 @@ func resolveRegions(lang resolve.Language, src []byte, f declResolver) ([]region
 	return regions, nil
 }
 
-// exclusiveText returns src[ext.Start:ext.End] with every other region in
-// siblings that lies inside it removed, so a change entirely inside a
-// nested named region (a struct's field, a class's method, a Markdown
-// section's subsection or setext heading) is attributed to that region
-// alone rather than counted again under whichever container encloses it --
-// the same principle @toplevel's own exclusion from the region set already
-// applies once (region's doc comment), generalized here to every
-// container/member pair a language's grammar can nest.
+// regionTree is one side's region set with its nesting resolved once.
 //
-// A container that contributes nothing beyond its members -- a Go struct
-// whose body is only fields, a class whose body is only methods -- ends up
-// with an empty or whitespace-only exclusive text, so its own row is
-// naturally absent (isolatedDiff/countLines report zero, and the caller
-// skips a zero row): the same (unanchorable)-for-the-container-line answer
-// this replaces, but reached because there is genuinely nothing left to
-// diff, not because the region was deleted outright before it got a
-// chance. A Markdown section is the case that outright deletion got wrong:
-// its body is ordinary prose around its subsections, not merely its
-// subsections, so removing the section from the region set the moment it
-// had any nested heading left that prose with no region owning it at all.
-func exclusiveText(src []byte, self region, siblings []region) []byte {
-	ext := self.ext
-	type hole struct{ start, end uint }
-	var holes []hole
-	for _, r := range siblings {
-		if r.name == self.name {
+// exclusiveText and isNested both ask the same containment question, and
+// asking it per region against every other region made attribution quadratic
+// in the number of declarations: a 16 000-declaration generated file spent
+// seconds here where git's own diff takes none. The containment relation never
+// changes during one attribution, so it is computed once -- one sorted walk
+// with a stack, O(n log n) -- and every per-region question is then a map
+// lookup.
+type regionTree struct {
+	// holes maps a region name to the extents exclusiveText must cut out of
+	// it: its direct children, plus the extent of any sibling occupying the
+	// identical range (two names sharing one declaration, a Go multi-name
+	// spec), which contain each other just as fully.
+	holes map[string][]resolve.Extent
+
+	// nested marks a region that sits inside another one -- a struct's field,
+	// a class's method, a Markdown subsection, or one of those identical-range
+	// siblings.
+	nested map[string]bool
+}
+
+// buildRegionTree resolves containment for regions in one pass. A region's
+// parent is the innermost region that strictly contains it, which a walk in
+// ascending start (descending end, so a container precedes its members)
+// maintains on a stack: everything popped has ended, so whatever remains on
+// top is the deepest open container.
+func buildRegionTree(regions []region) *regionTree {
+	ordered := slices.Clone(regions)
+	slices.SortFunc(ordered, func(a, b region) int {
+		if c := cmp.Compare(a.ext.Start, b.ext.Start); c != 0 {
+			return c
+		}
+		return cmp.Compare(b.ext.End, a.ext.End)
+	})
+
+	t := &regionTree{
+		holes:  make(map[string][]resolve.Extent, len(regions)),
+		nested: make(map[string]bool, len(regions)),
+	}
+	// byRange groups the names sharing one extent, for the identical-range
+	// case below.
+	byRange := make(map[resolve.Extent][]string, len(regions))
+
+	var stack []region
+	for _, r := range ordered {
+		for len(stack) > 0 && !containsExtent(stack[len(stack)-1].ext, r.ext) {
+			stack = stack[:len(stack)-1]
+		}
+		if len(stack) > 0 {
+			parent := stack[len(stack)-1]
+			if parent.ext == r.ext {
+				// Identical ranges contain each other equally, so neither is
+				// the other's child; both are nested, and each cuts the other
+				// out. Leaving the first on the stack keeps a following
+				// strictly-inner region parented to the same container.
+				t.nested[r.name] = true
+				t.nested[parent.name] = true
+			} else {
+				t.nested[r.name] = true
+				t.holes[parent.name] = append(t.holes[parent.name], r.ext)
+			}
+		}
+		byRange[r.ext] = append(byRange[r.ext], r.name)
+		stack = append(stack, r)
+	}
+
+	for ext, names := range byRange {
+		if len(names) < 2 {
 			continue
 		}
-		if r.ext.Start >= ext.Start && r.ext.End <= ext.End {
-			holes = append(holes, hole{r.ext.Start, r.ext.End})
+		for _, name := range names {
+			for _, other := range names {
+				if other != name {
+					t.holes[name] = append(t.holes[name], ext)
+				}
+			}
 		}
 	}
+	for name := range t.holes {
+		slices.SortFunc(t.holes[name], func(a, b resolve.Extent) int { return cmp.Compare(a.Start, b.Start) })
+	}
+	return t
+}
+
+// containsExtent reports whether outer spans inner, endpoints included: a
+// declaration's own extent and its container's touch but do not overlap.
+func containsExtent(outer, inner resolve.Extent) bool {
+	return inner.Start >= outer.Start && inner.End <= outer.End
+}
+
+// exclusiveText returns src[ext.Start:ext.End] with every region the tree
+// records as lying inside it removed, so a change entirely inside a nested
+// named region (a struct's field, a class's method, a Markdown section's
+// subsection or setext heading) is attributed to that region alone rather
+// than counted again under whichever container encloses it -- the same
+// principle @toplevel's own exclusion from the region set already applies
+// once (region's doc comment), generalized here to every container/member
+// pair a language's grammar can nest.
+//
+// A container that contributes nothing beyond its members -- a Go struct whose
+// body is only fields, a class whose body is only methods -- ends up with an
+// empty or whitespace-only exclusive text, so its own row is naturally absent
+// (isolatedDiff/countLines report zero, and the caller skips a zero row): the
+// same (unanchorable)-for-the-container-line answer this replaces, but reached
+// because there is genuinely nothing left to diff, not because the region was
+// deleted outright before it got a chance. A Markdown section is the case that
+// outright deletion got wrong: its body is ordinary prose around its
+// subsections, not merely its subsections, so removing the section from the
+// region set the moment it had any nested heading left that prose with no
+// region owning it at all.
+func (t *regionTree) exclusiveText(src []byte, name string, ext resolve.Extent) []byte {
+	holes := t.holes[name]
 	if len(holes) == 0 {
 		return src[ext.Start:ext.End]
 	}
-	slices.SortFunc(holes, func(a, b hole) int { return cmp.Compare(a.start, b.start) })
 
 	out := make([]byte, 0, ext.End-ext.Start)
 	pos := ext.Start
 	for _, h := range holes {
-		if h.start > pos {
-			out = append(out, src[pos:h.start]...)
+		if h.Start > pos {
+			out = append(out, src[pos:h.Start]...)
 		}
-		if h.end > pos {
-			pos = h.end
+		if h.End > pos {
+			pos = h.End
 		}
 	}
 	if ext.End > pos {
@@ -205,22 +285,6 @@ func topLevelComma(text []byte) int {
 	return -1
 }
 
-// isNested reports whether r sits inside another region -- a struct's
-// field, a class's method, a Markdown subsection. It is the same
-// containment test exclusiveText uses to hole a container out, asked the
-// other way round.
-func isNested(r region, siblings []region) bool {
-	for _, s := range siblings {
-		if s.name == r.name {
-			continue
-		}
-		if r.ext.Start >= s.ext.Start && r.ext.End <= s.ext.End {
-			return true
-		}
-	}
-	return false
-}
-
 // separatorLines reports how many blank lines a region that exists on only
 // one side takes with it, so attribution counts what internal/synth will
 // actually move rather than the declaration's extent alone.
@@ -241,8 +305,8 @@ func isNested(r region, siblings []region) bool {
 // end-of-file, mirroring spliceExcise: it trims the following gap when
 // anything follows, and falls back to the preceding one when the region was
 // last in the file.
-func separatorLines(src []byte, self region, siblings []region) int {
-	return SeparatorLines(src, self.ext.Start, self.ext.End, isNested(self, siblings))
+func separatorLines(src []byte, ext resolve.Extent, nested bool) int {
+	return SeparatorLines(src, ext.Start, ext.End, nested)
 }
 
 // SeparatorLines is separatorLines' own rule, taking a plain byte range so
@@ -313,6 +377,8 @@ func attributeSymbolsOpen(lang resolve.Language, oldSrc, newSrc []byte, oldFile,
 	}
 	oldByName := indexRegions(oldRegions)
 	newByName := indexRegions(newRegions)
+	oldTree := buildRegionTree(oldRegions)
+	newTree := buildRegionTree(newRegions)
 
 	var rows []Row
 	var notices []string
@@ -329,8 +395,8 @@ func attributeSymbolsOpen(lang resolve.Language, oldSrc, newSrc []byte, oldFile,
 		newExt, inNew := newByName[name]
 		switch {
 		case inOld && inNew:
-			oldText := exclusiveText(oldSrc, region{name: name, ext: oldExt}, oldRegions)
-			newText := exclusiveText(newSrc, region{name: name, ext: newExt}, newRegions)
+			oldText := oldTree.exclusiveText(oldSrc, name, oldExt)
+			newText := newTree.exclusiveText(newSrc, name, newExt)
 			added, deleted := LineCounts(oldText, newText)
 			if added == 0 && deleted == 0 {
 				return
@@ -339,24 +405,22 @@ func attributeSymbolsOpen(lang resolve.Language, oldSrc, newSrc []byte, oldFile,
 			accDeleted += deleted
 			rows = append(rows, Row{Symbol: name, Status: StatusMod, Added: strconv.Itoa(added), Deleted: strconv.Itoa(deleted), pos: newExt.Start})
 		case inOld && !inNew:
-			self := region{name: name, ext: oldExt}
-			deleted := countLines(exclusiveText(oldSrc, self, oldRegions))
+			deleted := countLines(oldTree.exclusiveText(oldSrc, name, oldExt))
 			if deleted == 0 {
 				return
 			}
-			deleted += separatorLines(oldSrc, self, oldRegions)
+			deleted += separatorLines(oldSrc, oldExt, oldTree.nested[name])
 			accDeleted += deleted
 			// A deleted symbol has no position in the new file, so it sorts
 			// by its prior line position in the old file — stable, and close to where a reader
 			// expects to find it.
 			rows = append(rows, Row{Symbol: name, Status: StatusDeleted, Added: "0", Deleted: strconv.Itoa(deleted), pos: oldExt.Start})
 		case !inOld && inNew:
-			self := region{name: name, ext: newExt}
-			added := countLines(exclusiveText(newSrc, self, newRegions))
+			added := countLines(newTree.exclusiveText(newSrc, name, newExt))
 			if added == 0 {
 				return
 			}
-			added += separatorLines(newSrc, self, newRegions)
+			added += separatorLines(newSrc, newExt, newTree.nested[name])
 			accAdded += added
 			rows = append(rows, Row{Symbol: name, Status: StatusMod, Added: strconv.Itoa(added), Deleted: "0", pos: newExt.Start})
 			if container, isNew := newlyEscalatedContainer(lang, oldFile, newFile, name); isNew {

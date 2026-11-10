@@ -418,6 +418,44 @@ func TestLogLineRange_RejectsColonInPath(t *testing.T) {
 	}
 }
 
+// TestDiffNumstat_KeepsNonASCIIPathUnquoted pins the quoting rule: with
+// git's default core.quotePath=true every non-ASCII byte in a path is
+// C-quoted, so `rgit diff` reported "caf\303\251.go" -- a name no anchor or
+// filesystem lookup can use, and one that no longer matched the same file's
+// unquoted name from ChangedPaths' own -z output. Both readers now set
+// core.quotePath=false.
+func TestDiffNumstat_KeepsNonASCIIPathUnquoted(t *testing.T) {
+	// Not parallel: t.Setenv, and the ambient GIT_CONFIG_* pair cleared below
+	// is exactly what hides git's default quoting.
+	const name = "caf\u00e9.go"
+	// git's default core.quotePath=true, with any command-line override the
+	// surrounding environment may carry cleared out of the way.
+	t.Setenv("GIT_CONFIG_COUNT", "0")
+	t.Setenv("GIT_CONFIG_KEY_0", "")
+	t.Setenv("GIT_CONFIG_VALUE_0", "")
+	dir, repo := gittest.New(t.Context(), t)
+	gittest.Write(t, dir, name, "package p\n")
+	gittest.Commit(t.Context(), t, dir, "chore: initial")
+	gittest.Write(t, dir, name, "package p\n\nfunc A() int { return 1 }\n")
+	gittest.Git(t.Context(), t, dir, "add", "-A")
+
+	entries, err := repo.DiffNumstat(t.Context(), "--staged")
+	if err != nil {
+		t.Fatalf("DiffNumstat: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Path != name {
+		t.Errorf("DiffNumstat paths = %+v; want exactly %q, unquoted", entries, name)
+	}
+
+	patch, err := repo.DiffPatch(t.Context(), "--staged")
+	if err != nil {
+		t.Fatalf("DiffPatch: %v", err)
+	}
+	if !strings.Contains(string(patch), "b/"+name) {
+		t.Errorf("DiffPatch header = %q; want the unquoted path %q", patch, "b/"+name)
+	}
+}
+
 // TestDiffPatch pins that DiffPatch returns git's own real patch body
 // unmodified, and that it respects the same extra args (--staged, a
 // pathspec after --) DiffNumstat already does -- the two are supposed to
@@ -881,6 +919,48 @@ func TestCommitOnlyWithNoPathsLeavesOtherStagedWork(t *testing.T) {
 	}
 	if got := gittest.Git(t.Context(), t, dir, "diff", "--cached", "--name-only"); got != "extra.txt\n" {
 		t.Errorf("cached paths after --only amend = %q; want extra.txt only", got)
+	}
+}
+
+// TestCommitOnlyAmendDetectsAForeignCommit pins the check that keeps
+// `rgit commit --only --amend` from silently discarding a commit another tool
+// landed in between. The private index is seeded from HEAD, so the amend's
+// tree is that tree plus the staged targets; git picks the commit to replace
+// from HEAD when it starts, so the foreign commit is the one replaced -- its
+// content reverts and its commit becomes unreachable. The base's own parent is
+// the only thing that distinguishes the two cases, since the replacement's
+// parent is the base itself exactly when HEAD had already moved.
+func TestCommitOnlyAmendDetectsAForeignCommit(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "a.txt", "a\n", "chore: initial")
+	gittest.Write(t, dir, "b.txt", "b\n")
+	gittest.Commit(t.Context(), t, dir, "chore: add b")
+
+	only, err := repo.NewOnlyIndex(t.Context())
+	if err != nil {
+		t.Fatalf("NewOnlyIndex: %v", err)
+	}
+	defer only.Close()
+	gittest.Write(t, dir, "a.txt", "a amended\n")
+	if err := only.Repo.Add(t.Context(), "a.txt"); err != nil {
+		t.Fatalf("Add(a.txt): %v", err)
+	}
+
+	// Another writer lands a commit on the base after the private index was
+	// seeded -- the window LockCommits cannot close for a non-rgit writer.
+	gittest.Write(t, dir, "foreign.txt", "foreign\n")
+	gittest.Commit(t.Context(), t, dir, "chore: foreign")
+
+	_, err = repo.Commit(t.Context(), gitx.CommitOptions{
+		Amend:  true,
+		NoEdit: true,
+		Only:   only,
+	})
+	if err == nil {
+		t.Fatal("Commit(--only --amend) = nil; want the moved HEAD reported")
+	}
+	if !strings.Contains(err.Error(), "HEAD moved while amending") {
+		t.Errorf("Commit(--only --amend) error = %q; want it to name the moved HEAD", err)
 	}
 }
 

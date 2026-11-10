@@ -484,6 +484,78 @@ func TestRun_BatchesGitCatFileAcrossManyChangedFiles(t *testing.T) {
 	}
 }
 
+// TestRun_DoesNotPrefetchBinarySides pins the cost side of the binary path:
+// git's numstat already reports a binary file as "-"/"-", and
+// buildFileReport throws the content away on seeing that, so prefetching the
+// blob was pure work. Measured on a repository whose only change is a 300 MB
+// binary, that read peaked RSS at 318 MB against 11 MB for a text-only
+// change. No cat-file call at all is the observable form of "the blob was
+// never materialized".
+func TestRun_DoesNotPrefetchBinarySides(t *testing.T) {
+	// cannot Parallel because t.Setenv below
+	dir, repo := gittest.New(t.Context(), t)
+	gittest.Write(t, dir, "blob.bin", "text before\n")
+	gittest.Commit(t.Context(), t, dir, "chore: initial")
+	// A NUL byte in the leading sample is what makes git call it binary.
+	gittest.Write(t, dir, "blob.bin", "text after\x00\n")
+
+	bin, countFile := countingGitWrapper(t)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	report, err := Run(t.Context(), repo, dir, Options{Revisions: []string{"HEAD"}})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	fr, ok := findFile(report.Files, "blob.bin")
+	if !ok || len(fr.Rows) != 1 || fr.Rows[0].Status != StatusBinary {
+		t.Fatalf("rows = %+v; want one BINARY row", fr.Rows)
+	}
+	if count, rerr := os.ReadFile(filepath.Clean(countFile)); rerr == nil {
+		t.Errorf("cat-file ran %d time(s) for a binary-only change; want none", len(count))
+	} else if !os.IsNotExist(rerr) {
+		t.Fatal(rerr)
+	}
+}
+
+// TestRun_OversizedBlobReportsFileLevelRow pins the cap on a batched read:
+// a text file past gitx.BatchCatFileMaxBlob has no per-symbol answer without
+// materializing the whole blob, so the file reports at file level with git's
+// own counts rather than being read anyway or reported as empty.
+func TestRun_OversizedBlobReportsFileLevelRow(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t.Context(), t)
+	gittest.Write(t, dir, "huge.go", "package p\n")
+	gittest.Commit(t.Context(), t, dir, "chore: initial")
+
+	// One declaration past the cap, so a per-symbol answer would have to read
+	// the whole blob.
+	var buf strings.Builder
+	buf.WriteString("package p\n\nfunc Huge() int {\n")
+	for buf.Len() <= gitx.BatchCatFileMaxBlob {
+		buf.WriteString("\t_ = 0\n")
+	}
+	buf.WriteString("\treturn 1\n}\n")
+	gittest.Write(t, dir, "huge.go", buf.String())
+	gittest.Commit(t.Context(), t, dir, "chore: grow huge.go")
+
+	// A rev-to-rev scope, so both sides come from the batched git read rather
+	// than the worktree.
+	report, err := Run(t.Context(), repo, dir, Options{Revisions: []string{"HEAD~1", "HEAD"}})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	fr, ok := findFile(report.Files, "huge.go")
+	if !ok || len(fr.Rows) != 1 {
+		t.Fatalf("rows = %+v; want one file-level row", fr.Rows)
+	}
+	if fr.Rows[0].Status != StatusNoSymbols {
+		t.Errorf("row = %+v; want a no-symbols file-level row for a blob past the batch cap", fr.Rows[0])
+	}
+	if fr.Rows[0].Added == "0" || fr.Rows[0].Added == "" {
+		t.Errorf("row = %+v; want git's own added count", fr.Rows[0])
+	}
+}
+
 // TestRun_DegradedCrossCheckSetsTSOnly asserts the signal docs/INSTALL.md §
 // Verify's recipe greps for: crossCheckFile must propagate the degraded
 // bool CrossCheckExtents returns, so `rgit diff` reports [ts-only]
@@ -1065,6 +1137,111 @@ func TestRun_StagedRenameAcrossDirectoryDepth(t *testing.T) {
 			}
 			if _, ok := findFile(report.Files, tc.to); !ok {
 				t.Errorf("report.Files = %+v; want an entry for %s", report.Files, tc.to)
+			}
+		})
+	}
+}
+
+// TestRun_ZeroCountChangeIsNotAModeRow pins the classification of a change
+// git reports with 0 added / 0 deleted that is not a mode edit: a staged pure
+// rename and an added empty file both used to render as "mode 644->644" (and
+// "?->644" for the empty addition), with no row naming the move at all. Only
+// a genuine mode disagreement is a MODE row; everything else keeps a row of
+// its own at the path git lists it under.
+func TestRun_ZeroCountChangeIsNotAModeRow(t *testing.T) {
+	t.Parallel()
+
+	t.Run("pure rename", func(t *testing.T) {
+		t.Parallel()
+		dir, repo := gittest.RepoWithFile(t.Context(), t, "a.go", "package p\n\nfunc A() int { return 1 }\n", "chore: initial")
+		gittest.Git(t.Context(), t, dir, "mv", "a.go", "b.go")
+
+		report, err := Run(t.Context(), repo, dir, Options{Staged: true})
+		if err != nil {
+			t.Fatalf("Run --staged: %v", err)
+		}
+		for _, f := range report.Files {
+			for _, r := range f.Rows {
+				if r.Status == StatusMode {
+					t.Errorf("%s row = %+v; want no MODE row for a pure rename", f.Path, r)
+				}
+			}
+		}
+		fr, ok := findFile(report.Files, "b.go")
+		if !ok {
+			t.Fatalf("report.Files = %+v; want the rename listed at b.go", report.Files)
+		}
+		if len(fr.Rows) != 1 || fr.Rows[0].Status != StatusMod || fr.Rows[0].Added != "0" || fr.Rows[0].Deleted != "0" {
+			t.Errorf("b.go rows = %+v; want one MOD 0/0 row", fr.Rows)
+		}
+	})
+
+	t.Run("added empty file", func(t *testing.T) {
+		t.Parallel()
+		dir, repo := gittest.RepoWithFile(t.Context(), t, "keep.go", "package p\n", "chore: initial")
+		gittest.Write(t, dir, "empty.go", "")
+		gittest.Git(t.Context(), t, dir, "add", "empty.go")
+
+		report, err := Run(t.Context(), repo, dir, Options{Staged: true})
+		if err != nil {
+			t.Fatalf("Run --staged: %v", err)
+		}
+		fr, ok := findFile(report.Files, "empty.go")
+		if !ok {
+			t.Fatalf("report.Files = %+v; want empty.go present", report.Files)
+		}
+		if len(fr.Rows) != 1 || fr.Rows[0].Status == StatusMode {
+			t.Errorf("empty.go rows = %+v; want no MODE row for an added empty file", fr.Rows)
+		}
+	})
+
+	t.Run("a real mode change keeps its MODE row", func(t *testing.T) {
+		t.Parallel()
+		dir, repo := gittest.RepoWithFile(t.Context(), t, "script.sh", "#!/bin/sh\n", "chore: initial")
+		if err := os.Chmod(filepath.Join(dir, "script.sh"), 0o755); err != nil { //nolint:gosec // executable mode is the behavior under test
+			t.Fatal(err)
+		}
+		gittest.Git(t.Context(), t, dir, "add", "script.sh")
+
+		report, err := Run(t.Context(), repo, dir, Options{Staged: true})
+		if err != nil {
+			t.Fatalf("Run --staged: %v", err)
+		}
+		fr, ok := findFile(report.Files, "script.sh")
+		if !ok || len(fr.Rows) != 1 || fr.Rows[0].Status != StatusMode {
+			t.Fatalf("script.sh rows = %+v; want one MODE row", fr.Rows)
+		}
+	})
+}
+
+// TestWithPathspecs_ClosesOptionsBeforeRevisions pins the argument shape
+// both diff readers receive: the scope's own options, then
+// --end-of-options, then its revisions, then the pathspecs after "--". The
+// separator is the second half of the --range guard -- it is what makes a
+// revision beginning with "-" a bad revision rather than another git option
+// -- and it must sit before the revision, never before the pathspec
+// separator (two "--" in a row is itself an error).
+func TestWithPathspecs_ClosesOptionsBeforeRevisions(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name     string
+		args     []string
+		pathspec []string
+		want     []string
+	}{
+		{"no args", nil, nil, []string{"--end-of-options"}},
+		{"staged stays an option", []string{"--staged"}, nil, []string{"--staged", "--end-of-options"}},
+		{"revision after the separator", []string{"HEAD"}, []string{"a.go"}, []string{"--end-of-options", "HEAD", "--", "a.go"}},
+		{"range after the separator", []string{"HEAD~1..HEAD"}, nil, []string{"--end-of-options", "HEAD~1..HEAD"}},
+		{"two revisions", []string{"HEAD~1", "HEAD"}, nil, []string{"--end-of-options", "HEAD~1", "HEAD"}},
+		{"two blob refs", []string{"HEAD:a.go", ":a.go"}, nil, []string{"--end-of-options", "HEAD:a.go", ":a.go"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := withPathspecs(tc.args, tc.pathspec)
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("withPathspecs(%v, %v) = %v; want %v", tc.args, tc.pathspec, got, tc.want)
 			}
 		})
 	}

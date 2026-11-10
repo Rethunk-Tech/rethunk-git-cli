@@ -2,8 +2,11 @@ package diff
 
 import (
 	"errors"
+	"fmt"
+	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
 )
@@ -118,6 +121,55 @@ func TestNarrowMultiDeclarator(t *testing.T) {
 	got := narrowMultiDeclarator(src, ext)
 	if got.Start != 0 || got.End != 11 {
 		t.Errorf("narrowMultiDeclarator got range [%d, %d]; want [0, 11]", got.Start, got.End)
+	}
+}
+
+// TestAttributeSymbols_ScalesLinearlyInDeclarations guards the shape of the
+// containment work, not an absolute duration: exclusiveText and the
+// nested-region test both used to rescan every sibling region for every
+// region, which is quadratic in declaration count. A generated file of
+// 16 000 declarations took seconds where `git diff --numstat` takes none.
+// Region nesting is now resolved once (buildRegionTree), so 16x the
+// declarations costs about 16x the time rather than 256x.
+//
+// The bound is deliberately loose -- a ratio, with the minimum of several
+// runs, so a loaded machine inflating both measurements cancels out. The old
+// quadratic code measured well above 30x here; the linear walk comfortably
+// below it.
+func TestAttributeSymbols_ScalesLinearlyInDeclarations(t *testing.T) {
+	t.Parallel()
+	lang, ok := resolve.ForExtension(".go")
+	if !ok {
+		t.Fatal("resolve: no adapter registered for .go")
+	}
+
+	generated := func(n int) (oldSrc, newSrc []byte) {
+		var oldBuf, newBuf strings.Builder
+		oldBuf.WriteString("package p\n\n")
+		newBuf.WriteString("package p\n\n")
+		for i := range n {
+			fmt.Fprintf(&oldBuf, "func F%d() int { return %d }\n\n", i, i)
+			fmt.Fprintf(&newBuf, "func F%d() int { return %d }\n\n", i, i+1)
+		}
+		return []byte(oldBuf.String()), []byte(newBuf.String())
+	}
+	best := func(n int) time.Duration {
+		oldSrc, newSrc := generated(n)
+		shortest := time.Duration(math.MaxInt64)
+		for range 3 {
+			start := time.Now()
+			if _, err := attributeSymbols(lang, oldSrc, newSrc, n, n); err != nil {
+				t.Fatalf("attributeSymbols(%d declarations): %v", n, err)
+			}
+			shortest = min(shortest, time.Since(start))
+		}
+		return shortest
+	}
+
+	small := best(1000)
+	large := best(16000)
+	if ratio := float64(large) / float64(small); ratio > 30 {
+		t.Errorf("16x the declarations took %.1fx the time (%s -> %s); want the per-region work to stay near linear", ratio, small, large)
 	}
 }
 

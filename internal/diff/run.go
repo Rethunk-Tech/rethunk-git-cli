@@ -77,15 +77,22 @@ func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Repo
 
 	oldPaths := make([]string, len(entries))
 	newPaths := make([]string, len(entries))
+	readable := make([]bool, len(entries))
 	for i, e := range entries {
 		oldPaths[i], newPaths[i] = NumstatPath(e.Path)
+		// git's own "-"/"-" numstat counts are its answer that the file is
+		// binary. buildFileReport discards the content of exactly those
+		// entries, so reading their blobs first was pure cost: a repo whose
+		// only change is a 300 MB binary pulled that whole file into memory
+		// to throw it away.
+		readable[i] = e.Added != "-" || e.Deleted != "-"
 	}
 	// One batched git-backed blob read for every changed file's Old and New
 	// side, instead of buildFileReport's own loop paying for a `git
 	// cat-file` subprocess per file per side -- internal/gitx.Repo.
 	// BatchCatFile's own doc comment has the batching itself; prefetchBlobs
 	// is just this call site's own (side, path) list.
-	cache, err := prefetchBlobs(ctx, repo, scope, oldPaths, newPaths)
+	cache, err := prefetchBlobs(ctx, repo, scope, filterPaths(oldPaths, readable), filterPaths(newPaths, readable))
 	if err != nil {
 		return nil, err
 	}
@@ -229,8 +236,22 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 		if merr != nil {
 			return nil, nil, false, merr
 		}
-		note := formatModeNote(oldMode, oldFound, newMode, newFound)
-		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusMode, Added: "0", Deleted: "0", ModeNote: note}}}, nil, false, nil
+		if oldFound && newFound && oldMode != newMode {
+			note := formatModeNote(oldMode, oldFound, newMode, newFound)
+			return &FileReport{Path: newPath, Rows: []Row{{Status: StatusMode, Added: "0", Deleted: "0", ModeNote: note}}}, nil, false, nil
+		}
+		// Zero counts with nothing about the mode changed is a whole-file move
+		// (git's numstat names both sides, a pure rename carries no line
+		// change) or an empty file appearing or disappearing. Neither has
+		// content to attribute by symbol, and neither is a mode change --
+		// calling it one printed "644->644" and dropped the entry's real
+		// shape. It is still a change, so it keeps a row of its own at its new
+		// path, which is the path git's own listing reports it under.
+		status := StatusMod
+		if !newFound {
+			status = StatusDeleted
+		}
+		return &FileReport{Path: newPath, Rows: []Row{{Status: status, Added: "0", Deleted: "0"}}}, nil, false, nil
 	}
 
 	ignoreCase, err := repo.IgnoreCase(ctx)
@@ -252,13 +273,21 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusNoSymbols, Added: addedStr, Deleted: deletedStr}}}, nil, false, nil
 	}
 
-	oldSrc, _, err := scope.Old.read(ctx, repo, root, oldPath, cache)
+	oldSrc, _, oldTooLarge, err := scope.Old.readBounded(ctx, repo, root, oldPath, cache)
 	if err != nil {
 		return nil, nil, false, err
 	}
-	newSrc, _, err := scope.New.read(ctx, repo, root, newPath, cache)
+	newSrc, _, newTooLarge, err := scope.New.readBounded(ctx, repo, root, newPath, cache)
 	if err != nil {
 		return nil, nil, false, err
+	}
+	if oldTooLarge || newTooLarge {
+		// Too big for the batched read: there is no per-symbol answer to give
+		// without holding the whole blob, and git already reported the change
+		// at file level. Reading it anyway was the whole cost this cap exists
+		// to avoid, so the file reports as one unsymbolic row with git's own
+		// counts.
+		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusNoSymbols, Added: addedStr, Deleted: deletedStr}}}, nil, false, nil
 	}
 
 	oldFile, err := resolve.Open(lang, oldSrc)
@@ -366,8 +395,8 @@ func buildUntrackedReport(ctx context.Context, repo *gitx.Repo, root, path strin
 		}
 	}
 	if len(rows) == 0 {
-		// No declarations at all (e.g. a comment-only or empty file): fall
-		// back to the collapsed row rather than an empty Rows slice.
+		// No declarations to attribute (an empty file): fall back to the
+		// collapsed row rather than an empty Rows slice.
 		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: strconv.Itoa(countLines(content)), Deleted: "0"}}}, warnings, tsOnly, nil
 	}
 	return &FileReport{Path: path, Rows: rows, lang: lang.Name()}, warnings, tsOnly, nil
@@ -431,6 +460,18 @@ func braceSide(prefix, side, suffix string) string {
 	return prefix + side + suffix
 }
 
+// filterPaths keeps only the paths whose parallel keep entry is true, for a
+// caller that has already decided those are the only sides worth reading.
+func filterPaths(paths []string, keep []bool) []string {
+	out := make([]string, 0, len(paths))
+	for i, p := range paths {
+		if keep[i] {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // effectivePathspecs unions --file/bare-pathspec targets with --sym/bare-
 // anchor targets' own files, so the git-level query only ever has to look
 // at files that could possibly appear in the filtered output.
@@ -453,12 +494,30 @@ func effectivePathspecs(opts Options) []string {
 	return out
 }
 
+// withPathspecs builds the final argument list both diff readers are given:
+// the scope's own git options first, then --end-of-options, then its
+// revisions, then -- and the pathspecs.
+//
+// --end-of-options is what stops a revision from being read as another of
+// git diff's own options: several of those write files (--output=<path>) or
+// run a configured external command (--ext-diff), and a read-only report
+// must never reach either through a value the caller supplied. ResolveScope
+// refuses a dash-leading range before this point; the separator is the same
+// guarantee for every other revision spelling. Only --staged is ever an
+// option in args (the staged scope), so everything else is left behind the
+// separator, including a revision that happens to begin with "-".
 func withPathspecs(args, pathspecs []string) []string {
-	if len(pathspecs) == 0 {
-		return args
+	options := 0
+	for options < len(args) && args[options] == "--staged" {
+		options++
 	}
-	out := make([]string, 0, len(args)+1+len(pathspecs))
-	out = append(out, args...)
+	out := make([]string, 0, len(args)+2+len(pathspecs))
+	out = append(out, args[:options]...)
+	out = append(out, "--end-of-options")
+	out = append(out, args[options:]...)
+	if len(pathspecs) == 0 {
+		return out
+	}
 	out = append(out, "--")
 	out = append(out, pathspecs...)
 	return out

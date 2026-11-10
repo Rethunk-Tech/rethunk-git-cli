@@ -45,9 +45,21 @@ func revSide(rev string) contentSide { return contentSide{kind: sideRev, rev: re
 // caller is about to read misses only when that invariant does not hold,
 // which is a caller bug to surface as a wrong answer, not a panic.
 func (s contentSide) read(ctx context.Context, repo *gitx.Repo, root, path string, cache *blobCache) (content []byte, exists bool, err error) {
+	content, exists, _, err = s.readBounded(ctx, repo, root, path, cache)
+	return content, exists, err
+}
+
+// readBounded is read with gitx.BatchCatFileMaxBlob's cap reported rather
+// than hidden: tooLarge means the side exists but is bigger than a batched
+// read materializes, so the caller must fall back to a file-level answer
+// instead of treating the empty content as the file's real bytes. The
+// uncapped sides (a worktree read, a promisor retry through CatFile) are never
+// too large, so a caller that only ever sees those can ignore the flag.
+func (s contentSide) readBounded(ctx context.Context, repo *gitx.Repo, root, path string, cache *blobCache) (content []byte, exists, tooLarge bool, err error) {
 	switch s.kind {
 	case sideWorktree:
-		return util.ReadFileIfExists(root, path)
+		content, exists, err = util.ReadFileIfExists(root, path)
+		return content, exists, false, err
 	case sideIndex:
 		// CatFile builds rev+":"+path; an empty rev yields ":path", which
 		// git reads as the index's stage-0 entry.
@@ -57,25 +69,28 @@ func (s contentSide) read(ctx context.Context, repo *gitx.Repo, root, path strin
 		} else {
 			var err error
 			if unmerged, err = repo.IsUnmerged(ctx, path); err != nil {
-				return nil, false, err
+				return nil, false, false, err
 			}
 		}
 		if unmerged {
-			return util.ReadFileIfExists(root, path)
+			content, exists, err = util.ReadFileIfExists(root, path)
+			return content, exists, false, err
 		}
 		if res, ok := cache.lookup("", path); ok {
-			return res.Content, res.Exists, nil
+			return res.Content, res.Exists, res.TooLarge, nil
 		}
-		return repo.CatFile(ctx, "", path)
+		content, exists, err = repo.CatFile(ctx, "", path)
+		return content, exists, false, err
 	case sideRev:
 		if cache != nil {
 			if res, ok := cache.lookup(s.rev, path); ok {
-				return res.Content, res.Exists, nil
+				return res.Content, res.Exists, res.TooLarge, nil
 			}
 		}
-		return repo.CatFile(ctx, s.rev, path)
+		content, exists, err = repo.CatFile(ctx, s.rev, path)
+		return content, exists, false, err
 	}
-	return nil, false, fmt.Errorf("diff: unknown content side kind %d", s.kind)
+	return nil, false, false, fmt.Errorf("diff: unknown content side kind %d", s.kind)
 }
 
 // mode returns the git file mode recorded for path on this side, for
@@ -218,6 +233,14 @@ func ResolveScope(ctx context.Context, repo *gitx.Repo, opts Options) (Scope, er
 			return Scope{}, &UsageError{Msg: "--range and a positional revision range are mutually exclusive"}
 		}
 		rangeToken = opts.PositionalRange
+	}
+	if strings.HasPrefix(rangeToken, "-") {
+		// A revision never begins with "-"; git would read one as an option
+		// instead, and `git diff`'s own options include --output (writes the
+		// diff over any file named) and --ext-diff (runs a configured
+		// command). A read-only report must refuse the value rather than
+		// hand it to git's parser.
+		return Scope{}, &UsageError{Msg: fmt.Sprintf("revision range %q must not begin with \"-\"", rangeToken)}
 	}
 
 	hasRevArgs := rangeToken != "" || len(opts.Revisions) > 0
