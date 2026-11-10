@@ -25,9 +25,9 @@ env:
   # npm 0.27.1 tarball (registry.npmjs.org/tree-sitter-cli/-/tree-sitter-cli-0.27.1.tgz).
   TREE_SITTER_CLI_VERSION: "0.27.1"
   TREE_SITTER_CLI_INTEGRITY: "sha512-WFPEjxwscCjZP9uYj0rxT2TyGBkDcXUkGTthrMpxZFGvzXEYsbC3J0633Ps8dd2mMsdsbU8oVwmQ148lLHI7Xw=="
-  # debian:bookworm-slim OCI index (linux/amd64 + linux/arm64), docker-library/repo-info
-  # repos/debian/remote/bookworm-slim.md (bookworm-20261005-slim).
-  DEBIAN_BOOKWORM_SLIM: debian@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587
+  # debian:bookworm-slim OCI index (linux/amd64 + linux/arm64): docker run
+  # --platform=linux/arm64 needs the index, not a single-arch manifest.
+  DEBIAN_BOOKWORM_SLIM: debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc
 
 jobs:
   # No darwin job: fleet workflows run no macOS runners, and zig cannot
