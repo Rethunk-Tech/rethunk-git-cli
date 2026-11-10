@@ -115,11 +115,24 @@ const contextByteBudget = 16384
 func runContext(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	asJSON := jsonFlag(ctx)
 	var extra []string
+	afterSeparator := false
 	for _, arg := range args {
+		if arg == "--" && !afterSeparator {
+			// Consumed rather than refused: it is the separator every rgit
+			// command honours, not an argument of its own.
+			afterSeparator = true
+			continue
+		}
+		if afterSeparator {
+			extra = append(extra, arg)
+			continue
+		}
 		switch arg {
 		case "--help", "-h":
 			fmt.Fprint(stdout, contextHelp)
 			return exitcode.Success
+		case "--json":
+			asJSON = true
 		default:
 			extra = append(extra, arg)
 		}

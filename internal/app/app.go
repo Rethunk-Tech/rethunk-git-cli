@@ -119,12 +119,12 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 	case "commit":
 		return runCommit(ctx, dir, args[1:], stdout, stderr)
 	case "show":
-		if code := refuseUnsupportedJSON(asJSON, "show", stderr); code != exitcode.Success {
+		if code := refuseUnsupportedJSON(asJSON || hasJSONFlag(args[1:]), "show", stderr); code != exitcode.Success {
 			return code
 		}
 		return runShow(ctx, dir, args[1:], stdout, stderr)
 	case "blame":
-		if code := refuseUnsupportedJSON(asJSON, "blame", stderr); code != exitcode.Success {
+		if code := refuseUnsupportedJSON(asJSON || hasJSONFlag(args[1:]), "blame", stderr); code != exitcode.Success {
 			return code
 		}
 		return runBlame(ctx, dir, args[1:], stdout, stderr)
@@ -137,12 +137,12 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 	case "doctor":
 		return runDoctor(ctx, dir, args[1:], stdout, stderr)
 	case "completion":
-		if code := refuseUnsupportedJSON(asJSON, "completion", stderr); code != exitcode.Success {
+		if code := refuseUnsupportedJSON(asJSON || hasJSONFlag(args[1:]), "completion", stderr); code != exitcode.Success {
 			return code
 		}
 		return runCompletion(args[1:], stdout, stderr)
 	case "man":
-		if code := refuseUnsupportedJSON(asJSON, "man", stderr); code != exitcode.Success {
+		if code := refuseUnsupportedJSON(asJSON || hasJSONFlag(args[1:]), "man", stderr); code != exitcode.Success {
 			return code
 		}
 		return runMan(ctx, version, args[1:], stdout, stderr)

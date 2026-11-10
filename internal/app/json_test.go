@@ -11,20 +11,35 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gittest"
 )
 
+// TestTakeJSON pins the split of ownership: takeJSON claims --json only in
+// the global region, in front of the command. Everything from the command on
+// belongs to that command's own parser, which is the only thing that can
+// tell a flag from a flag's value -- `rgit commit -m --json` commits the
+// subject "--json", where a global strip made it "commit requires at least
+// one target".
 func TestTakeJSON(t *testing.T) {
 	t.Parallel()
 
-	rest, on := takeJSON([]string{"--json", "languages"})
-	qt.Assert(t, qt.IsTrue(on))
-	qt.Assert(t, qt.DeepEquals(rest, []string{"languages"}))
-
-	rest, on = takeJSON([]string{"languages", "--json"})
-	qt.Assert(t, qt.IsTrue(on))
-	qt.Assert(t, qt.DeepEquals(rest, []string{"languages"}))
-
-	rest, on = takeJSON([]string{"symbols", "--", "--json"})
-	qt.Assert(t, qt.IsFalse(on))
-	qt.Assert(t, qt.DeepEquals(rest, []string{"symbols", "--", "--json"}))
+	for _, tc := range []struct {
+		name string
+		args []string
+		rest []string
+		on   bool
+	}{
+		{"before the command", []string{"--json", "languages"}, []string{"languages"}, true},
+		{"after the command belongs to it", []string{"languages", "--json"}, []string{"languages", "--json"}, false},
+		{"as a flag's value", []string{"commit", "-m", "--json", "a.go"}, []string{"commit", "-m", "--json", "a.go"}, false},
+		{"after --", []string{"symbols", "--", "--json"}, []string{"symbols", "--", "--json"}, false},
+		{"-C's own argument is a directory", []string{"-C", "--json", "languages"}, []string{"-C", "--json", "languages"}, false},
+		{"global flag before -C", []string{"--json", "-C", "dir", "languages"}, []string{"-C", "dir", "languages"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			rest, on := takeJSON(tc.args)
+			qt.Assert(t, qt.Equals(on, tc.on))
+			qt.Assert(t, qt.DeepEquals(rest, tc.rest))
+		})
+	}
 }
 
 // TestRun_JSONBeforeOrAfterCommand is the case that fails when --json is

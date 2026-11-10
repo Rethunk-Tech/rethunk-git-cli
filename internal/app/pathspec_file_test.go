@@ -23,6 +23,25 @@ func TestReadPathspecFileSkipsEmptyLines(t *testing.T) {
 	qt.Assert(t, qt.DeepEquals(got, []string{"a.go", "b.go"}))
 }
 
+// TestReadPathspecFileStripsCR pins the CRLF form: a list written on Windows
+// ends each record with "\r\n", and keeping the CR made every target a path
+// no filesystem has -- `rgit commit` then exited 129 with
+// `cannot classify "a.go\r"` where git's own pathspec file reader accepts the
+// same bytes. --pathspec-file-nul is untouched: a NUL-terminated record is
+// bytes chosen by the caller, CR included.
+func TestReadPathspecFileStripsCR(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "targets")
+	if err := os.WriteFile(path, []byte("a.go\r\nb.go:A\r\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := readPathspecFile(path, false)
+
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.DeepEquals(got, []string{"a.go", "b.go:A"}))
+}
+
 func TestReadPathspecFileNulPreservesNewline(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "targets")

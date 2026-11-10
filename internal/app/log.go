@@ -244,6 +244,7 @@ func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr
 	opts.asJSON = jsonFlag(ctx)
 	positionals, code, done := parseAnchorCommandArgs("log", args, []anchorCommandFlag{
 		{tokens: []string{"--porcelain"}, set: &opts.porcelain},
+		{tokens: []string{"--json"}, set: &opts.asJSON},
 		{tokens: []string{"-p", "--patch"}, set: &opts.patch},
 		{tokens: []string{"--follow-rename"}, set: &opts.followRename},
 		{tokens: []string{"--source"}, val: &opts.source},
@@ -403,6 +404,7 @@ func runLogPathScoped(ctx context.Context, dir string, args []string, stdout, st
 	fs.StringVar(&until, "until", "", "only commits at or before this date (forwarded to git)")
 	fs.IntVarP(&maxCount, "max-count", "n", 0, "maximum number of commits (forwarded to git)")
 	fs.BoolVar(&porcelain, "porcelain", false, "stable tab-separated HASH<TAB>SUBJECT records")
+	fs.BoolVar(&asJSON, "json", false, "one JSON object of the porcelain records")
 	fs.BoolVarP(&patch, "patch", "p", false, "include the real patch body")
 	fs.BoolVar(&follow, "follow", false, "continue one path's history past renames")
 

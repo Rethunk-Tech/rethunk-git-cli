@@ -56,6 +56,8 @@ func runLanguages(ctx context.Context, dir string, args []string, stdout, stderr
 			return exitcode.Success
 		case "--porcelain":
 			porcelain = true
+		case "--json":
+			asJSON = true
 		case "--in-repo":
 			inRepo = true
 		default:

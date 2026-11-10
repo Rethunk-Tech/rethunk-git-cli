@@ -50,7 +50,18 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 	porcelain := false
 	asJSON := jsonFlag(ctx)
 	positionals := make([]string, 0, 1)
+	afterSeparator := false
 	for _, arg := range args {
+		if arg == "--" && !afterSeparator {
+			// Consumed, not kept: everything after it is a file, including a
+			// name that looks like a flag (docs/USAGE.md § Argument shape).
+			afterSeparator = true
+			continue
+		}
+		if afterSeparator {
+			positionals = append(positionals, arg)
+			continue
+		}
 		switch arg {
 		case "--help", "-h":
 			fmt.Fprint(stdout, symbolsHelp)
@@ -63,6 +74,8 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 			withFilename = true
 		case "--porcelain":
 			porcelain = true
+		case "--json":
+			asJSON = true
 		default:
 			positionals = append(positionals, arg)
 		}

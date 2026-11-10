@@ -136,6 +136,13 @@ func readPathspecFile(path string, nul bool) ([]string, error) {
 	}
 	targets := make([]string, 0)
 	for target := range strings.SplitSeq(string(data), separator) {
+		if separator == "\n" {
+			// A list written on Windows ends every record with "\r\n". git's
+			// own pathspec file reader drops the CR, and a target keeping it
+			// names a path no filesystem has: here it reached classification
+			// as "a.go\r" and was refused outright.
+			target = strings.TrimSuffix(target, "\r")
+		}
 		if target != "" {
 			targets = append(targets, target)
 		}

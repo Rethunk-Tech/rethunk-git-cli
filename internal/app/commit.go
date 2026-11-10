@@ -69,24 +69,54 @@ type commitFlags struct {
 // S in behind other shorthands (-sS) is left alone and pflag rejects it by
 // name, which is an honest refusal rather than a silent misread.
 //
+// A token that is already some flag's value is copied verbatim: `-m -S`
+// commits the subject "-S", exactly as plain git does, rather than turning
+// the message into a signing request. fs is consulted for which flags take a
+// separate value, so the decision is pflag's own flag table rather than a
+// second list that could drift from it.
+//
 // Everything after "--" is a pathspec (docs/USAGE.md § Argument shape) and
 // is never rewritten.
-func expandGPGSignShorthand(args []string) []string {
+func expandGPGSignShorthand(fs *pflag.FlagSet, args []string) []string {
 	out := make([]string, 0, len(args))
-	for i, a := range args {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
 		if a == "--" {
 			return append(out, args[i:]...)
 		}
 		switch {
 		case a == "-S":
 			out = append(out, "--gpg-sign")
-		case strings.HasPrefix(a, "-S") && len(a) > 2:
+		case strings.HasPrefix(a, "-S"):
 			out = append(out, "--gpg-sign="+a[2:])
 		default:
 			out = append(out, a)
+			if takesSeparateValue(fs, a) && i+1 < len(args) {
+				i++
+				out = append(out, args[i])
+			}
 		}
 	}
 	return out
+}
+
+// takesSeparateValue reports whether pflag will read the following argument
+// as arg's value: a known flag (long, or a lone short one) that carries no
+// NoOptDefVal, and no "=" supplying the value inline.
+func takesSeparateValue(fs *pflag.FlagSet, arg string) bool {
+	name, hasValue := strings.CutPrefix(arg, "--")
+	if hasValue {
+		if name == "" || strings.ContainsRune(name, '=') {
+			return false
+		}
+		f := fs.Lookup(name)
+		return f != nil && f.NoOptDefVal == ""
+	}
+	if len(arg) == 2 && arg[0] == '-' {
+		f := fs.ShorthandLookup(arg[1:])
+		return f != nil && f.NoOptDefVal == ""
+	}
+	return false
 }
 
 // gpgSignBare is commitFlags.gpgSignKey's NoOptDefVal sentinel for a bare
@@ -114,7 +144,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		"is per file, so a half-staged symbol comes out with its whole file.\n\n" +
 		fs.FlagUsages() +
 		"\nFull reference: docs/USAGE.md\n"
-	if code, done := parseFlagsOrHelp(fs, expandGPGSignShorthand(args), stdout, stderr, help); done {
+	if code, done := parseFlagsOrHelp(fs, expandGPGSignShorthand(fs, args), stdout, stderr, help); done {
 		return code
 	}
 	if *reeditMessage {
@@ -122,7 +152,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		return exitcode.InvalidUsage
 	}
 
-	r := &commitRun{f: &f, asJSON: jsonFlag(ctx) || f.asJSON, stdout: stdout, stderr: stderr}
+	r := &commitRun{f: &f, asJSON: jsonFlag(ctx) || f.asJSON, stdout: stdout, stderr: stderr, invocationDir: dir}
 	if code := r.validateFlags(); code != exitcode.Success {
 		return code
 	}
@@ -224,22 +254,49 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	if f.push {
 		if err := repo.Push(ctx); err != nil {
 			r.reportPushFailure(ctx, repo, err)
-			emitLeft(ctx, repo, stdout, stderr, r.asJSON, jsonSHA, targetResults)
+			if code := emitLeft(ctx, repo, stdout, stderr, r.leftMode(), jsonSHA, targetResults); code != exitcode.Success {
+				return code
+			}
 			return exitcode.PushFailed
 		}
 	}
 
-	if !f.porcelain && !f.quiet {
-		return emitLeft(ctx, repo, stdout, stderr, r.asJSON, jsonSHA, targetResults)
+	return emitLeft(ctx, repo, stdout, stderr, r.leftMode(), jsonSHA, targetResults)
+}
+
+// leftMode is which of emitLeft's three renderings this invocation's own
+// output flags ask for. -q promises an empty stdout and --porcelain promises
+// records a parser can classify, so neither may receive the human "left:"
+// line merely because a --push failed: which flags were given decides the
+// framing, and a failure is not a licence to change it.
+type leftMode int
+
+const (
+	leftText leftMode = iota
+	leftPorcelain
+	leftJSON
+)
+
+func (r *commitRun) leftMode() leftMode {
+	switch {
+	case r.asJSON:
+		return leftJSON
+	case r.f.porcelain, r.f.quiet:
+		return leftPorcelain
 	}
-	return exitcode.Success
+	return leftText
 }
 
 // commitRun carries the parsed flags and output streams shared by the
 // phases of runCommit.
 type commitRun struct {
-	f              *commitFlags
-	asJSON         bool
+	f      *commitFlags
+	asJSON bool
+
+	// invocationDir is the global -C directory, or "" for the process working
+	// directory. -F's path resolves against it, because that is the directory
+	// the caller named the file from -- see messageFile.
+	invocationDir  string
 	stdout, stderr io.Writer
 }
 
@@ -391,9 +448,34 @@ func (r *commitRun) commitOptions(noEdit bool, only *gitx.OnlyIndex) (gitx.Commi
 		opts.MessageFile = "-"
 		opts.StdinMessage = data
 	} else if f.msgFile != "" {
-		opts.MessageFile = f.msgFile
+		path, err := r.messageFile(f.msgFile)
+		if err != nil {
+			fmt.Fprintf(r.stderr, "rgit: reading commit message file: %v\n", err)
+			return opts, exitcode.GitFailure
+		}
+		opts.MessageFile = path
 	}
 	return opts, exitcode.Success
+}
+
+// messageFile resolves -F's path the way git does: relative to the directory
+// rgit was invoked from, not to the repository root. git itself runs every
+// commit from the toplevel (-C root), so a bare relative name would otherwise
+// read a different file than `git commit -F` in the same directory -- and
+// silently commit the wrong message when a same-named file exists at the root.
+func (r *commitRun) messageFile(path string) (string, error) {
+	if filepath.IsAbs(path) {
+		return path, nil
+	}
+	dir := r.invocationDir
+	if dir == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", err
+		}
+		dir = cwd
+	}
+	return filepath.Join(dir, path), nil
 }
 
 // stdinMessageHint names the one spelling that carries a subject and body
@@ -740,22 +822,25 @@ func readLeft(ctx context.Context, repo *gitx.Repo) (leftState, error) {
 	return l, err
 }
 
-// emitLeft prints the final "left:" line (or, in JSON mode, the whole
-// report carrying it). A failed lookup never fails an already-landed commit.
-func emitLeft(ctx context.Context, repo *gitx.Repo, stdout, stderr io.Writer, asJSON bool, sha string, results []synth.TargetResult) exitcode.Code {
+// emitLeft prints the invocation's own final records: the whole JSON object,
+// nothing at all under --porcelain (whose H and target rows summarize wrote
+// before any push), or the human "left:" line. A failed lookup never fails
+// an already-landed commit.
+func emitLeft(ctx context.Context, repo *gitx.Repo, stdout, stderr io.Writer, mode leftMode, sha string, results []synth.TargetResult) exitcode.Code {
 	l, err := readLeft(ctx, repo)
 	if err != nil {
 		fmt.Fprintf(stderr, "[warning] reading remaining state: %v\n", err)
 	}
-	if asJSON {
+	switch mode {
+	case leftJSON:
 		if err := writeCommitJSON(stdout, sha, results, &l); err != nil {
 			fmt.Fprintf(stderr, "rgit: commit: %v\n", err)
 			return exitcode.GitFailure
 		}
-		return exitcode.Success
-	}
-	if err == nil {
-		fmt.Fprintln(stdout, l)
+	case leftText:
+		if err == nil {
+			fmt.Fprintln(stdout, l)
+		}
 	}
 	return exitcode.Success
 }

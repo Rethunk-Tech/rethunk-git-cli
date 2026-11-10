@@ -62,6 +62,8 @@ func runDoctor(ctx context.Context, dir string, args []string, stdout, stderr io
 			return exitcode.Success
 		case "--porcelain":
 			porcelain = true
+		case "--json":
+			asJSON = true
 		case "--deep":
 			deep = true
 		default:

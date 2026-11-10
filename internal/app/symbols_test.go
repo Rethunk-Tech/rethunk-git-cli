@@ -483,6 +483,43 @@ func TestRun_SymbolsJSONAgreesWithPorcelain(t *testing.T) {
 	}
 }
 
+// TestSymbols_HonoursDoubleDashAndJSONFlag pins the hand-parsed argument
+// loop against the two things every other rgit command already guarantees:
+// a bare "--" separates flags from file names instead of being read as a file,
+// and --json is a flag of this command rather than only a global one. Without
+// both, `rgit symbols -- a.go` failed with `cannot read "--"` and a file
+// literally named --json could not be named at all.
+func TestSymbols_HonoursDoubleDashAndJSONFlag(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "--dash.go", "package a\n\nfunc Dash() int {\n\treturn 4\n}\n")
+
+	stdout, stderr, code := runApp(t, "-C", dir, "symbols", "--", "a.go")
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("%s", stderr))
+	qt.Assert(t, qt.Equals(stdout, "A\nB\n"))
+
+	// A name that looks like a flag is reachable only past "--", which is
+	// why the separator cannot itself be read as a file.
+	stdout, stderr, code = runApp(t, "-C", dir, "symbols", "--", "--dash.go")
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("%s", stderr))
+	qt.Assert(t, qt.Equals(stdout, "Dash\n"))
+
+	stdout, stderr, code = runApp(t, "-C", dir, "symbols", "a.go", "--json")
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("%s", stderr))
+	qt.Assert(t, qt.StringContains(stdout, "{\n  \"schema\": 1"))
+
+	// context takes no positional at all, so the separator is the one
+	// argument it accepts: consuming it keeps "--" from being refused as an
+	// unrecognized argument, and anything genuinely after it still is.
+	stdout, stderr, code = runApp(t, "-C", dir, "context", "--")
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("%s", stderr))
+	qt.Assert(t, qt.StringContains(stdout, "B\t"))
+
+	_, stderr, code = runApp(t, "-C", dir, "context", "--", "a.go")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, `unrecognized argument "a.go"`))
+}
+
 // TestSymbols_HelpSteersParsersToPorcelain pins the machine-contract
 // steering: the first help line names --porcelain as the NUL-terminated
 // parsing form, so a script reading usage knows which flag to reach for.

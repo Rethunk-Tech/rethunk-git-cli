@@ -786,10 +786,18 @@ func TestExpandGPGSignShorthand(t *testing.T) {
 		{"other shorthands untouched", []string{"-s", "-m", "x"}, []string{"-s", "-m", "x"}},
 		{"nothing after -- is rewritten", []string{"--", "-Sfile"}, []string{"--", "-Sfile"}},
 		{"a lone dash is not a flag", []string{"-"}, []string{"-"}},
+		// -m takes a separate value, so the token after it is a message and
+		// not a flag: git commits the subject "-S" here, and so must rgit.
+		{"-S as -m's value is a message", []string{"-m", "-S", "a.go"}, []string{"-m", "-S", "a.go"}},
+		{"-Sfoo as -m's value is a message", []string{"-m", "-Sfoo", "a.go"}, []string{"-m", "-Sfoo", "a.go"}},
+		{"-S after an inline -m value", []string{"--message=x", "-S"}, []string{"--message=x", "--gpg-sign"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got := expandGPGSignShorthand(tc.in)
+			var f commitFlags
+			fs := newTargetFlagSet("commit", &f.syms, &f.files)
+			registerCommitFlags(fs, &f)
+			got := expandGPGSignShorthand(fs, tc.in)
 			qt.Assert(t, qt.DeepEquals(got, tc.want))
 		})
 	}
