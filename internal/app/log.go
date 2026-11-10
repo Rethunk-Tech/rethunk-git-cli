@@ -357,7 +357,7 @@ func logDateArgs(since, until string, maxCount int, maxCountSet bool, extra []st
 // (or, absent one, the file's whole history); each further segment
 // re-resolves the anchor against the pre-rename blob one commit before
 // that boundary and repeats, via gitx.FindRename. This is deliberately not
-// a per-commit tree-sitter re-parse (TODO.md's own tradeoff): git log -L
+// a per-commit tree-sitter re-parse: git log -L
 // already re-derives how a fixed line range moves within one file's own
 // history, so only a rename crossing to a new path name -- found once per
 // segment, not once per commit -- needs a fresh resolve.

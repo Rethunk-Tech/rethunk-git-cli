@@ -6,7 +6,7 @@ Read [`AGENTS.md`](AGENTS.md) first.
 
 A change that makes `rgit` diverge from `git add <pathspec> && git commit`
 must say so in the PR. Deliberate divergence lives next to the implementation;
-rejected alternatives live in [`TODO.md`](TODO.md). Contradicting either
+rejected alternatives live in `TODO.md`. Contradicting either
 needs a new measurement, not a reword.
 
 ## Commits
@@ -137,7 +137,7 @@ list. One errcheck exemption: `fmt.Fprint*` to the caller's stdout/stderr.
 ## Dependencies
 
 Every dependency needs a measured justification, recorded with it or in
-[`TODO.md`](TODO.md#dependencies). Reimplementing git is rejected
+`TODO.md`. Reimplementing git is rejected
 ([`AGENTS.md`](AGENTS.md#delegation-boundary)).
 
 ## Documentation
