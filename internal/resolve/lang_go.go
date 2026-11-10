@@ -272,13 +272,17 @@ func goInterfaceMethods(interfaceType *ts.Node, container string, src []byte) []
 // kinds: const and type hold their specs directly, while a grouped var wraps
 // them in a var_spec_list, so the walk has to descend through any *_spec_list
 // rather than assuming one shape.
+//
+// type_alias is a kind of its own, not a type_spec: `type A = B` (and every
+// alias inside a `type (...)` group) parses as type_alias, so a plain
+// "_spec" suffix test drops the alias and leaves it unaddressable.
 func goSpecs(node *ts.Node) []*ts.Node {
 	var out []*ts.Node
 	for _, child := range namedChildren(node) {
 		switch {
 		case strings.HasSuffix(child.Kind(), "_spec_list"):
 			out = append(out, goSpecs(&child)...)
-		case strings.HasSuffix(child.Kind(), "_spec"):
+		case strings.HasSuffix(child.Kind(), "_spec"), child.Kind() == "type_alias":
 			out = append(out, &child)
 		}
 	}
