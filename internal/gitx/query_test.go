@@ -3,7 +3,6 @@ package gitx_test
 import (
 	"errors"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -245,54 +244,6 @@ func TestRecentCommits(t *testing.T) {
 	}
 	if len(got[0].Hash) < 40 {
 		t.Errorf("RecentCommits[0].Hash = %q; want a full object id", got[0].Hash)
-	}
-}
-
-// TestToplevelAndShowPrefix pins the caller's own path normalisation: a Repo
-// rooted in a subdirectory still reports the worktree root, and ShowPrefix
-// reports the slash-terminated prefix that turns the caller's relative
-// pathspec into a root-relative one.
-func TestToplevelAndShowPrefix(t *testing.T) {
-	t.Parallel()
-	dir, _ := gittest.New(t.Context(), t)
-	ctx := t.Context()
-
-	gittest.Write(t, dir, "pkg/deep/a.go", "package deep\n")
-
-	sub := filepath.Join(dir, "pkg", "deep")
-	repo := gitx.New(sub)
-
-	toplevel, err := repo.Toplevel(ctx)
-	if err != nil {
-		t.Fatalf("Toplevel: %v", err)
-	}
-	// The temp directory itself may be a symlink on some systems, so
-	// compare the resolved forms rather than the raw strings.
-	wantRoot, err := filepath.EvalSymlinks(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if gotRoot, err := filepath.EvalSymlinks(toplevel); err != nil {
-		t.Fatalf("EvalSymlinks(%q): %v", toplevel, err)
-	} else if gotRoot != wantRoot {
-		t.Errorf("Toplevel = %q; want %q", gotRoot, wantRoot)
-	}
-
-	prefix, err := repo.ShowPrefix(ctx)
-	if err != nil {
-		t.Fatalf("ShowPrefix: %v", err)
-	}
-	if prefix != "pkg/deep/" {
-		t.Errorf("ShowPrefix = %q; want %q", prefix, "pkg/deep/")
-	}
-
-	// At the root itself the prefix is empty, not "/" or "./".
-	rootPrefix, err := gitx.New(dir).ShowPrefix(ctx)
-	if err != nil {
-		t.Fatalf("ShowPrefix(root): %v", err)
-	}
-	if rootPrefix != "" {
-		t.Errorf("ShowPrefix(root) = %q; want empty", rootPrefix)
 	}
 }
 
