@@ -359,8 +359,7 @@ func TestExecErrorWhenGitIsMissing(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	_, _, err := repo.RevParseVerify(t.Context(), "HEAD")
 
-	var eerr *gitx.ExecError
-	if !errors.As(err, &eerr) {
+	if _, ok := errors.AsType[*gitx.ExecError](err); !ok {
 		t.Fatalf("RevParseVerify with no git on PATH = %v (%T); want *gitx.ExecError", err, err)
 	}
 	if !errors.Is(err, exec.ErrNotFound) {

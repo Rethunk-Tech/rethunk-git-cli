@@ -28,7 +28,7 @@ func (b *B) Get() int { return 2 }
 func TestResolve_BareNameMatchingSeveralContainersIsAmbiguous(t *testing.T) {
 	t.Parallel()
 
-	lang := langForExt(t, ".go")
+	lang := goLang(t)
 	_, err := Resolve(lang, []byte(goTwoGetters), "Get")
 
 	rerr, ok := AsResolveError(err)
@@ -77,7 +77,7 @@ type Box struct {
 	sizeX int
 }
 `
-	lang := langForExt(t, ".go")
+	lang := goLang(t)
 	_, err := Resolve(lang, []byte(src), "sizY")
 
 	rerr, ok := AsResolveError(err)
@@ -103,7 +103,7 @@ func TestResolve_RawHeadingTextResolvesOnlyForMarkdown(t *testing.T) {
 	t.Parallel()
 
 	const md = "Intro text.\n\n# Diff Scope\n\nBody.\n"
-	markdown := langForExt(t, ".md")
+	markdown := mdLang(t)
 
 	slug, err := Resolve(markdown, []byte(md), "diff-scope")
 	if err != nil {
@@ -118,7 +118,7 @@ func TestResolve_RawHeadingTextResolvesOnlyForMarkdown(t *testing.T) {
 	}
 
 	const goSrc = "package sample\n\nfunc install() {}\n"
-	goLang := langForExt(t, ".go")
+	goLang := goLang(t)
 	_, err = Resolve(goLang, []byte(goSrc), "Install")
 	rerr, ok := AsResolveError(err)
 	if !ok || rerr.Code != exitcode.AnchorUnresolvable {
@@ -135,7 +135,7 @@ func TestResolve_RawHeadingTextResolvesOnlyForMarkdown(t *testing.T) {
 func TestResolve_GoplsReceiverSpelling(t *testing.T) {
 	t.Parallel()
 
-	lang := langForExt(t, ".go")
+	lang := goLang(t)
 	want, err := Resolve(lang, []byte(goTwoGetters), "A.Get")
 	if err != nil {
 		t.Fatalf("Resolve(A.Get) = %v", err)
@@ -168,7 +168,7 @@ func TestResolve_OrdinalsSelectOneOfRepeatedNames(t *testing.T) {
 	t.Parallel()
 
 	const src = "package sample\n\nfunc init() {}\n\nfunc init() {}\n"
-	lang := langForExt(t, ".go")
+	lang := goLang(t)
 
 	order, err := DeclOrder(lang, []byte(src))
 	if err != nil {
@@ -205,7 +205,7 @@ func TestResolve_PseudoAnchors(t *testing.T) {
 	t.Parallel()
 
 	const src = "// Package sample documents it.\npackage sample\n\nimport \"fmt\"\n\nfunc A() { fmt.Println() }\n"
-	lang := langForExt(t, ".go")
+	lang := goLang(t)
 
 	tests := []struct {
 		anchor string
@@ -248,7 +248,7 @@ func TestResolve_MarkdownToplevelIsTheLede(t *testing.T) {
 	t.Parallel()
 
 	const src = "Intro text.\n\n# Install\n\nBody.\n"
-	markdown := langForExt(t, ".md")
+	markdown := mdLang(t)
 
 	res, err := Resolve(markdown, []byte(src), "@toplevel")
 	if err != nil {
@@ -266,7 +266,7 @@ func TestResolve_MarkdownToplevelIsTheLede(t *testing.T) {
 func TestDeclExtents_AgreesWithResolve(t *testing.T) {
 	t.Parallel()
 
-	lang := langForExt(t, ".go")
+	lang := goLang(t)
 	declared, err := DeclExtents(lang, []byte(goTwoGetters))
 	if err != nil {
 		t.Fatalf("DeclExtents: %v", err)
@@ -359,15 +359,27 @@ type wrapped struct{ err error }
 func (w wrapped) Error() string { return "wrapped: " + w.err.Error() }
 func (w wrapped) Unwrap() error { return w.err }
 
-// langForExt is the adapter lookup these tests share; a missing
-// registration is a wiring failure, not a resolution outcome.
-func langForExt(t *testing.T, ext string) Language {
+// goLang and mdLang are the adapter lookups these tests share; a missing
+// registration is a wiring failure, not a resolution outcome. Both return the
+// concrete adapter so callers keep the whole method set the interface elides.
+func goLang(t *testing.T) *goLanguage {
 	t.Helper()
-	lang, ok := ForExtension(ext)
-	if !ok {
-		t.Fatalf("ForExtension(%q) is not registered", ext)
+	lang, ok := ForExtension(".go")
+	g, isGo := lang.(*goLanguage)
+	if !ok || !isGo {
+		t.Fatalf("ForExtension(\".go\") = %T, %v; want the Go adapter", lang, ok)
 	}
-	return lang
+	return g
+}
+
+func mdLang(t *testing.T) *mdLanguage {
+	t.Helper()
+	lang, ok := ForExtension(".md")
+	m, isMD := lang.(*mdLanguage)
+	if !ok || !isMD {
+		t.Fatalf("ForExtension(\".md\") = %T, %v; want the Markdown adapter", lang, ok)
+	}
+	return m
 }
 
 func srcAt(src []byte, ext Extent) []byte {

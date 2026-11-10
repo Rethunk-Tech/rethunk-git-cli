@@ -25,7 +25,7 @@ type (
 
 type Box struct{}
 `
-	lang := langForExt(t, ".go")
+	lang := goLang(t)
 
 	order, err := DeclOrder(lang, []byte(src))
 	if err != nil {

@@ -61,7 +61,7 @@ type Named []int
 		{"", "", false},
 	}
 
-	lang := langForExt(t, ".go")
+	lang := goLang(t)
 	for _, tt := range tests {
 		if tt.anchor == "" {
 			continue
@@ -103,8 +103,8 @@ func TestExtendThroughOwnedSeparator(t *testing.T) {
 	t.Parallel()
 
 	const src = "package sample\n\nimport \"fmt\"\n\nfunc A() {}\n"
-	goLang := langForExt(t, ".go")
-	markdown := langForExt(t, ".md")
+	goLang := goLang(t)
+	markdown := mdLang(t)
 
 	header, err := Resolve(goLang, []byte(src), "@header")
 	if err != nil {
@@ -151,7 +151,7 @@ func TestExtendThroughOwnedSeparator(t *testing.T) {
 			if got.Start != tt.ext.Start {
 				t.Errorf("Start = %d; want the original %d", got.Start, tt.ext.Start)
 			}
-			if gotText := string(src[got.Start:got.End]); gotText != tt.want {
+			if gotText := src[got.Start:got.End]; gotText != tt.want {
 				t.Errorf("extent = %q; want %q", gotText, tt.want)
 			}
 		})
@@ -167,7 +167,7 @@ func TestResolvePseudo_HeaderStopsBeforeImports(t *testing.T) {
 	t.Parallel()
 
 	const src = "package sample\n\n// stdlib\nimport \"fmt\"\n\nfunc A() {}\n"
-	lang := langForExt(t, ".go")
+	lang := goLang(t)
 
 	header, err := Resolve(lang, []byte(src), "@header")
 	if err != nil {
