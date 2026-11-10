@@ -54,8 +54,7 @@ func TestResolveScope_RefusesRangeBeginningWithDash(t *testing.T) {
 		{PositionalRange: "--output=index"},
 	} {
 		_, err := ResolveScope(t.Context(), repo, opts)
-		var uerr *UsageError
-		if !errors.As(err, &uerr) {
+		if _, ok := errors.AsType[*UsageError](err); !ok {
 			t.Fatalf("ResolveScope(%+v) error = %v (%T); want *UsageError", opts, err, err)
 		}
 	}

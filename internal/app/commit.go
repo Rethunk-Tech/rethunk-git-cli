@@ -180,12 +180,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		return code
 	}
 
-	if !f.stageOnly && f.reuseMessage == "" && !hasConventionalShape(f.messages) {
-		// [warning], not "rgit: warning:" -- every other advisory in this
-		// command (below) and in diff.go already uses the bracketed form;
-		// one spelling for "advisory, not a refusal" across the surface.
-		fmt.Fprintln(stderr, `[warning] message does not look like "type(scope): subject"`)
-	}
+	r.warnUnconventionalMessage()
 
 	root, prefix, repo, code := openRepo(ctx, dir, stderr)
 	if code != exitcode.Success {
@@ -841,8 +836,20 @@ func emitLeft(ctx context.Context, repo *gitx.Repo, stdout, stderr io.Writer, mo
 		if err == nil {
 			fmt.Fprintln(stdout, l)
 		}
+	case leftPorcelain:
+		// The H and target rows already carried the result.
 	}
 	return exitcode.Success
+}
+
+// warnUnconventionalMessage flags a -m subject that is not "type(scope):
+// subject". [warning], not "rgit: warning:" -- every other advisory in this
+// command and in diff.go already uses the bracketed form; one spelling for
+// "advisory, not a refusal" across the surface.
+func (r *commitRun) warnUnconventionalMessage() {
+	if !r.f.stageOnly && r.f.reuseMessage == "" && !hasConventionalShape(r.f.messages) {
+		fmt.Fprintln(r.stderr, `[warning] message does not look like "type(scope): subject"`)
+	}
 }
 
 // gpgSignKeyID strips commitFlags.gpgSignKey's NoOptDefVal sentinel,
