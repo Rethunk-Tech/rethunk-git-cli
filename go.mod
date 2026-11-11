@@ -1,6 +1,6 @@
 module github.com/Rethunk-Tech/rethunk-git-cli/v2
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/aymanbagabas/go-udiff v0.4.1
@@ -22,8 +22,8 @@ require (
 	go.lsp.dev/jsonrpc2 v1.0.1
 	go.lsp.dev/protocol v1.0.1
 	go.lsp.dev/uri v1.0.1
-	golang.org/x/sys v0.49.0
-	golang.org/x/term v0.47.0
+	golang.org/x/sys v0.50.0
+	golang.org/x/term v0.48.0
 )
 
 require (
