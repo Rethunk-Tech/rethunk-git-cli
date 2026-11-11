@@ -163,3 +163,11 @@ func TestServers(t *testing.T) {
 		}
 	}
 }
+
+func TestGoplsDaemonIdleTimeoutOutlastsASession(t *testing.T) {
+	args := servers["go"].daemonArgs("/run/x/rgit-gopls.sock")
+	want := []string{"-listen=unix;/run/x/rgit-gopls.sock", "-listen.timeout=2h"}
+	if !slices.Equal(args, want) {
+		t.Errorf("gopls daemon args = %v, want %v", args, want)
+	}
+}
