@@ -37,7 +37,7 @@ func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Repo
 	// Only the worktree side can be cross-checked -- a language server has no
 	// view of an arbitrary revision -- so a revision-to-revision diff skips it.
 	var sess *lsp.Session
-	if scope.New.kind == sideWorktree {
+	if scope.New.kind == sideWorktree && !opts.SkipCrossCheck {
 		sess = lsp.NewSession()
 		defer sess.Close()
 	}

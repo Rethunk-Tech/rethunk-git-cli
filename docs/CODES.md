@@ -311,8 +311,8 @@ Always this stream — no aligned default, no `--porcelain`. Why:
 ```text
 B<TAB>main<TAB>origin/main<TAB>0<TAB>2
 S<TAB>merge
-W<TAB>ts-only
-W<TAB>warning<TAB>extent disagreement reported on stderr
+W<TAB>stash
+W<TAB>warning<TAB>non-fatal diff diagnostic
 F<TAB>auth.go<TAB>ValidateToken<TAB>MOD<TAB>12<TAB>3
 F<TAB>config.ini<TAB><TAB>UNTRACKED<TAB>4<TAB>0
 T<TAB>auth.go<TAB>both
@@ -327,7 +327,6 @@ X<TAB>TRUNCATED<TAB>3
 | `B` | `BRANCH`, `UPSTREAM`, `AHEAD`, `BEHIND` | Current branch. Empty `UPSTREAM` and `0`/`0` with no upstream. Absent on unborn; replaced by `H` when detached |
 | `H` | `SHA` | Detached HEAD; absent on unborn |
 | `S` | `OP` | `merge`, `cherry-pick`, `revert`, `rebase`, or `bisect` |
-| `W` | `ts-only` | Cross-check wanted, no live server. `[ts-only]` also on stderr |
 | `W` | `stash` | `refs/stash` exists |
 | `W` | `sparse` | `core.sparseCheckout` is true |
 | `W` | `warning`, `TEXT` | Non-fatal diff warning without the `[warning]` prefix |
@@ -387,7 +386,7 @@ Same order as the text stream, after the 16 KiB cap. Empty columns are
 | `B` | `branch`, `upstream`, `ahead`, `behind` |
 | `H` | `sha` |
 | `S` | `op` |
-| `W` | `kind` (`ts-only`, `stash`, `sparse`, or `warning`). `text` only for `warning` |
+| `W` | `kind` (`stash`, `sparse`, or `warning`). `text` only for `warning` |
 | `F` | `file`, `symbol`, `status`, `added`, `deleted` |
 | `T` | `file`, `where` |
 | `C` | `hash`, `subject` |

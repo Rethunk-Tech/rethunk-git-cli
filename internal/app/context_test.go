@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/go-quicktest/qt"
@@ -123,8 +124,8 @@ func TestRun_ContextEmitsDiffRowsBeforeCommits(t *testing.T) {
 	stdout, stderr, code := runApp(t, "context")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 
-	qt.Assert(t, qt.StringContains(stdout, "W\tts-only\n"))
-	qt.Assert(t, qt.StringContains(stderr, tsOnlyNotice))
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "ts-only")))
+	qt.Assert(t, qt.Not(qt.StringContains(stderr, tsOnlyNotice)))
 	qt.Assert(t, qt.StringContains(stdout, "chore: initial"))
 	qt.Assert(t, qt.StringContains(stdout, "F\ta.go\tA\tMOD\t"))
 	qt.Assert(t, qt.StringContains(stdout, "new.txt"))
@@ -137,10 +138,11 @@ func TestRun_ContextEmitsDiffRowsBeforeCommits(t *testing.T) {
 	qt.Assert(t, qt.IsTrue(diffIdx < commitIdx))
 }
 
-// TestRun_ContextEmitsWarningRecords pins report.Warnings' machine form:
-// the warning body follows the W tag without the human [warning] prefix, and
-// the same body remains mirrored on stderr.
-func TestRun_ContextEmitsWarningRecords(t *testing.T) {
+// TestRun_ContextNeverDialsALanguageServer pins that context skips the
+// cross-check: a live server that would report an extent disagreement for
+// this edit is never connected to, so no ts-only or warning record appears.
+// The same edit through rgit diff does reach it.
+func TestRun_ContextNeverDialsALanguageServer(t *testing.T) {
 	dir := chdirTempRepo(t)
 	t.Setenv("PATH", isolatedPATHWithGopls(t))
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
@@ -150,7 +152,9 @@ func TestRun_ContextEmitsWarningRecords(t *testing.T) {
 		{"name":"A","kind":12,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}},
 		{"name":"B","kind":12,"range":{"start":{"line":7,"character":0},"end":{"line":9,"character":1}},"selectionRange":{"start":{"line":7,"character":0},"end":{"line":7,"character":5}}}
 	]`
+	var dials atomic.Int32
 	lsptest.Listen(t, sockPath, func(conn net.Conn) {
+		dials.Add(1)
 		_ = lsptest.ServeMockLSP(conn, resultJSON, lsptest.MockServerHooks{})
 	})
 	t.Setenv("RGIT_LSP_SOCKET", sockPath)
@@ -159,15 +163,15 @@ func TestRun_ContextEmitsWarningRecords(t *testing.T) {
 
 	stdout, stderr, code := runApp(t, "context")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Check(t, qt.Equals(dials.Load(), int32(0)))
+	qt.Check(t, qt.Not(qt.StringContains(stdout, "W\t")))
+	qt.Check(t, qt.Not(qt.StringContains(stderr, "[warning]")))
+	qt.Check(t, qt.StringContains(stdout, "F\ta.go\tA\tMOD\t"))
 
-	warning := `a.go: resolve: "A":`
-	qt.Assert(t, qt.StringContains(stdout, "W\twarning\t"+warning))
-	qt.Assert(t, qt.StringContains(stderr, "[warning] "+warning))
-	warningIdx := strings.Index(stdout, "W\twarning\t")
-	diffIdx := strings.Index(stdout, "F\t")
-	qt.Assert(t, qt.IsTrue(warningIdx >= 0))
-	qt.Assert(t, qt.IsTrue(diffIdx >= 0))
-	qt.Assert(t, qt.IsTrue(warningIdx < diffIdx))
+	_, diffErr, code := runApp(t, "diff")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Check(t, qt.StringContains(diffErr, `a.go: resolve: "A":`))
+	qt.Check(t, qt.IsTrue(dials.Load() > 0))
 }
 
 // TestRun_ContextRecordsAreTabSeparatedWithExpectedFieldCounts pins the
@@ -371,7 +375,7 @@ func TestBuildContextStream(t *testing.T) {
 		t.Parallel()
 		records := []string{
 			"B\tmain\t\t0\t0\n",
-			"W\tts-only\n",
+			"W\tstash\n",
 			"F\ta.go\tA\tMOD\t1\t0\n",
 			"F\ta.go\tB\tMOD\t1\t0\n",
 			"F\ta.go\tC\tMOD\t1\t0\n",
