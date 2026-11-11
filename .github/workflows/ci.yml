@@ -21,6 +21,9 @@ env:
   # forces the post-cutover runtime now, on ordinary CI runs, rather than discovering on the
   # 16th whether the action works under node24.
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # npm 0.27.1 tarball (registry.npmjs.org/tree-sitter-cli/-/tree-sitter-cli-0.27.1.tgz).
+  TREE_SITTER_CLI_VERSION: "0.27.1"
+  TREE_SITTER_CLI_INTEGRITY: "sha512-WFPEjxwscCjZP9uYj0rxT2TyGBkDcXUkGTthrMpxZFGvzXEYsbC3J0633Ps8dd2mMsdsbU8oVwmQ148lLHI7Xw=="
 
 # No SQL lane on the default `go test` jobs on purpose: parser generation
 # stays in cmd/rgit-install (`make sql-parser`). Plain `go build` /
@@ -84,7 +87,15 @@ jobs:
       # cmd/rgit-install's own tests (TestRunPrereqChecks, TestFindSQLAdapter)
       # assert tree-sitter's PATH presence for the prereq check itself -- not
       # a build-time SQL lane (this file's own top comment).
-      - run: npm install -g tree-sitter-cli
+      # npm ci: Scorecard treats `npm install` as unpinned even with a
+      # version; the lockfile integrity is the digest pin.
+      - run: |
+          d="$RUNNER_TEMP/tscli"
+          mkdir -p "$d"
+          printf '{"private":true,"dependencies":{"tree-sitter-cli":"%s"}}\n' "$TREE_SITTER_CLI_VERSION" >"$d/package.json"
+          printf '%s\n' "{\"name\":\"tscli\",\"lockfileVersion\":3,\"requires\":true,\"packages\":{\"\":{\"dependencies\":{\"tree-sitter-cli\":\"$TREE_SITTER_CLI_VERSION\"}},\"node_modules/tree-sitter-cli\":{\"version\":\"$TREE_SITTER_CLI_VERSION\",\"resolved\":\"https://registry.npmjs.org/tree-sitter-cli/-/tree-sitter-cli-${TREE_SITTER_CLI_VERSION}.tgz\",\"integrity\":\"$TREE_SITTER_CLI_INTEGRITY\",\"hasInstallScript\":true,\"bin\":{\"tree-sitter\":\"cli.js\"}}}}" >"$d/package-lock.json"
+          npm ci --prefix "$d" # tree-sitter-cli v0.27.1
+          echo "$d/node_modules/.bin" >> "$GITHUB_PATH"
       # Everything, plus the end-to-end cases that build and exec the binary,
       # raced over the full tree: jsonrpc2 and the spawn lock live in
       # internal/lsp, but internal/diff and internal/gitx hold concurrent
@@ -135,25 +146,26 @@ jobs:
       # cgo, so every target needs a real C compiler (docs/INSTALL.md § Cross
       # builds). setup-zig caches zig's global cache itself.
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
-      - name: resolve tree-sitter CLI version
-        id: tscli
-        run: echo "version=$(npm view tree-sitter-cli version)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: sql-csrc
         with:
           path: internal/resolve/sqlgrammar/csrc
-          key: sql-csrc-${{ runner.os }}-${{ steps.tscli.outputs.version }}-${{ hashFiles('cmd/rgit-install/**', '!cmd/rgit-install/*_test.go') }}
+          key: sql-csrc-${{ runner.os }}-${{ env.TREE_SITTER_CLI_VERSION }}-${{ hashFiles('cmd/rgit-install/**', '!cmd/rgit-install/*_test.go') }}
       - if: steps.sql-csrc.outputs.cache-hit != 'true'
-        env:
-          TSCLI_VERSION: ${{ steps.tscli.outputs.version }}
-        run: npm install -g "tree-sitter-cli@$TSCLI_VERSION" && make sql-parser
+        run: |
+          d="$RUNNER_TEMP/tscli"
+          mkdir -p "$d"
+          printf '{"private":true,"dependencies":{"tree-sitter-cli":"%s"}}\n' "$TREE_SITTER_CLI_VERSION" >"$d/package.json"
+          printf '%s\n' "{\"name\":\"tscli\",\"lockfileVersion\":3,\"requires\":true,\"packages\":{\"\":{\"dependencies\":{\"tree-sitter-cli\":\"$TREE_SITTER_CLI_VERSION\"}},\"node_modules/tree-sitter-cli\":{\"version\":\"$TREE_SITTER_CLI_VERSION\",\"resolved\":\"https://registry.npmjs.org/tree-sitter-cli/-/tree-sitter-cli-${TREE_SITTER_CLI_VERSION}.tgz\",\"integrity\":\"$TREE_SITTER_CLI_INTEGRITY\",\"hasInstallScript\":true,\"bin\":{\"tree-sitter\":\"cli.js\"}}}}" >"$d/package-lock.json"
+          npm ci --prefix "$d" # tree-sitter-cli v0.27.1
+          PATH="$d/node_modules/.bin:$PATH" make sql-parser
       - name: require generated SQL parser
         run: test -f internal/resolve/sqlgrammar/csrc/parser.c
       - run: go test -tags rgit_sql -short ./...
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/go-build
-          key: go-build-cross-${{ runner.os }}-${{ steps.tscli.outputs.version }}-${{ hashFiles('go.sum') }}
+          key: go-build-cross-${{ runner.os }}-${{ env.TREE_SITTER_CLI_VERSION }}-${{ hashFiles('go.sum') }}
           restore-keys: go-build-cross-${{ runner.os }}-
       - env:
           GOCACHE: ${{ runner.temp }}/go-build

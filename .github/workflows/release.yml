@@ -72,16 +72,17 @@ jobs:
       # grammar module ships no usable parser.c, so `make cross` generates
       # one via cmd/rgit-install. Without this step every artifact would
       # still build, just SQL-less (docs/INSTALL.md § SQL support).
-      # Version + npm integrity of the tarball, then install from the local
-      # file so a registry swap cannot change what postinstall runs.
+      # npm ci verifies the lockfile sha512 before postinstall, so a
+      # registry swap cannot change what install.js runs. Scorecard treats
+      # `npm install` as unpinned even from a hashed local tarball.
       - name: Install pinned tree-sitter CLI
         run: |
-          tgz="$RUNNER_TEMP/tree-sitter-cli-${TREE_SITTER_CLI_VERSION}.tgz"
-          curl -fsSL --retry 18 --retry-delay 10 -o "$tgz" \
-            "https://registry.npmjs.org/tree-sitter-cli/-/tree-sitter-cli-${TREE_SITTER_CLI_VERSION}.tgz"
-          got="sha512-$(openssl dgst -sha512 -binary "$tgz" | openssl base64 -A)"
-          test "$got" = "$TREE_SITTER_CLI_INTEGRITY"
-          npm install -g "$tgz"
+          d="$RUNNER_TEMP/tscli"
+          mkdir -p "$d"
+          printf '{"private":true,"dependencies":{"tree-sitter-cli":"%s"}}\n' "$TREE_SITTER_CLI_VERSION" >"$d/package.json"
+          printf '%s\n' "{\"name\":\"tscli\",\"lockfileVersion\":3,\"requires\":true,\"packages\":{\"\":{\"dependencies\":{\"tree-sitter-cli\":\"$TREE_SITTER_CLI_VERSION\"}},\"node_modules/tree-sitter-cli\":{\"version\":\"$TREE_SITTER_CLI_VERSION\",\"resolved\":\"https://registry.npmjs.org/tree-sitter-cli/-/tree-sitter-cli-${TREE_SITTER_CLI_VERSION}.tgz\",\"integrity\":\"$TREE_SITTER_CLI_INTEGRITY\",\"hasInstallScript\":true,\"bin\":{\"tree-sitter\":\"cli.js\"}}}}" >"$d/package-lock.json"
+          npm ci --prefix "$d" # tree-sitter-cli v0.27.1
+          echo "$d/node_modules/.bin" >> "$GITHUB_PATH"
 
       - run: make cross
 
