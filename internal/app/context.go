@@ -55,10 +55,6 @@ Records, one per line, tab-separated, no header:
       One active sequencer operation: merge, cherry-pick, revert, rebase, or
       bisect.
 
-  W<TAB>ts-only
-      One when at least one file had symbols to cross-check but no live
-      language server was reached.
-
   W<TAB>stash
       One when the repository has a stash ref.
 
@@ -68,6 +64,10 @@ Records, one per line, tab-separated, no header:
   W<TAB>warning<TAB>TEXT
       One per non-fatal diff diagnostic. TEXT omits the human [warning]
       prefix that remains on stderr.
+
+context never dials a language server, so it has no W<TAB>ts-only record
+and no extent-disagreement warnings; rgit diff and rgit commit still
+cross-check.
 
   F<TAB>FILE<TAB>SYMBOL<TAB>STATUS<TAB>ADDED<TAB>DELETED
       One per "rgit diff --porcelain" row -- identical fields, with this
@@ -176,9 +176,11 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 
 	// The default "everything committable" scope -- staged + unstaged vs
 	// HEAD, plus untracked -- is exactly what a bare `rgit diff` already
-	// reports; no Options fields are set here, guarding against a flag
+	// reports; no scope fields are set here, guarding against a flag
 	// surface that would let this grow into a second `git status`.
-	report, err := diffpkg.Run(ctx, repo, root, diffpkg.Options{})
+	// SkipCrossCheck keeps the first-turn call off the language servers,
+	// which cost 1-2s per dirty tree (stdio servers spawn per call).
+	report, err := diffpkg.Run(ctx, repo, root, diffpkg.Options{SkipCrossCheck: true})
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.GitFailure
@@ -195,9 +197,6 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 
 	// Same diagnostics rgit diff itself prints for the identical report,
 	// on stderr rather than folded into the record stream.
-	if report.TSOnly {
-		fmt.Fprintln(stderr, tsOnlyNotice)
-	}
 	for _, w := range report.Warnings {
 		fmt.Fprintf(stderr, "[warning] %s\n", w)
 	}
@@ -241,9 +240,6 @@ func assembleContextRecords(report *diffpkg.Report, commits []gitx.CommitSummary
 	}
 	if sparseCheckout {
 		records = append(records, "W\tsparse\n")
-	}
-	if report.TSOnly {
-		records = append(records, "W\tts-only\n")
 	}
 	for _, w := range report.Warnings {
 		records = append(records, fmt.Sprintf("W\twarning\t%s\n", w))

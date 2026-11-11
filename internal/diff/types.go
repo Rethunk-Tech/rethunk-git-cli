@@ -170,6 +170,12 @@ type Options struct {
 	// false changes nothing about the rest of Run's behavior.
 	Patch bool
 
+	// SkipCrossCheck leaves the language-server cross-check out: no server
+	// is dialled, so the report carries no TSOnly flag and no cross-check
+	// mismatch warnings. Rows are unchanged, since they come from the
+	// tree-sitter walk alone.
+	SkipCrossCheck bool
+
 	// RevPaths is the two-blob "A:f.go B:f.go" scope: exactly two
 	// cli.RevPath values naming the identical path at two revisions
 	// (BucketClassified's own pairing rule, classify.go), or empty for

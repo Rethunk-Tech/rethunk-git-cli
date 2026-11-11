@@ -4,6 +4,12 @@ Notable changes to `rgit`. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- `rgit context` no longer cross-checks extents against a language server, so it never dials or spawns one: 552 ms to 234 ms on a 10-file dirty tree in a 3.6k-file repo, and 1-2 s saved where a stdio server (vtsls, marksman) would have started. It no longer emits `W ts-only` or extent-disagreement warnings; `rgit diff` and `rgit commit` still verify.
+
 ## [2.4.1] - 2026-11-09
 
 ### Fixed

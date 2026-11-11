@@ -234,8 +234,7 @@ Neither path, date, nor `--follow`: 129.
 ```text
 B<TAB>main<TAB>origin/main<TAB>0<TAB>2
 S<TAB>merge
-W<TAB>ts-only
-W<TAB>warning<TAB>extent disagreement reported on stderr
+W<TAB>stash
 F<TAB>auth.go<TAB>ValidateToken<TAB>MOD<TAB>12<TAB>3
 F<TAB>config.ini<TAB><TAB>UNTRACKED<TAB>4<TAB>0
 T<TAB>auth.go<TAB>both
@@ -243,7 +242,10 @@ T<TAB>config.ini<TAB>untracked
 C<TAB>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2<TAB>fix(auth): reject expired tokens
 ```
 
-One-call orientation. **The records are fixed** — a command with options
+One-call orientation. It never dials a language server, so it emits no
+`W ts-only` record and no extent-disagreement warnings (`rgit diff` and
+`rgit commit` still cross-check); it costs milliseconds on a dirty tree
+instead of 1-2s. **The records are fixed** — a command with options
 becomes `git status` with extra steps. `--json` is that stream as one
 object ([`CODES.md`](CODES.md#rgit-context---json)). Any other argument
 is 129. Grammar: [`CODES.md`](CODES.md#rgit-context).
