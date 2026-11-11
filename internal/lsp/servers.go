@@ -54,6 +54,9 @@ var vtslsSpec = serverSpec{
 // servers maps a resolve.Language's Name() to the server that cross-checks
 // it. "tsx" shares vtsls with "typescript" — one TypeScript server handles
 // both grammars; only the didOpen languageId differs (client.go).
+// goplsIdleTimeout is how long an unused gopls daemon lives.
+const goplsIdleTimeout = "2h"
+
 var servers = map[string]serverSpec{
 	"go": {
 		name:      "gopls",
@@ -62,8 +65,10 @@ var servers = map[string]serverSpec{
 		daemonArgs: func(sockPath string) []string {
 			// listen.timeout shuts the daemon down after it sits idle with
 			// no connected client, so a spawned-and-forgotten gopls does
-			// not outlive every rgit invocation that will ever ask for it.
-			return []string{"-listen=unix;" + sockPath, "-listen.timeout=10m"}
+			// not outlive a working session. Loading a large module costs
+			// a minute of CPU, so the window must outlast the gaps between
+			// rgit calls in a session or every call after one pays it again.
+			return []string{"-listen=unix;" + sockPath, "-listen.timeout=" + goplsIdleTimeout}
 		},
 	},
 	// "typescript" and "tsx" both dial vtsls -- one server, two grammars
