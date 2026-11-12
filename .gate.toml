@@ -18,3 +18,6 @@ run = "cache=$(go env GOCACHE); while [ ! -f \"$cache/rgit-gate-ready\" ] && [ !
 [gates.vuln]
 run = "cache=$(go env GOCACHE); while [ ! -f \"$cache/rgit-gate-ready\" ] && [ ! -f \"$cache/rgit-gate-fail\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready\" ] && govulncheck ./..."
 env = { GOFLAGS = "-race" }
+
+[gates.xcheck]
+run = "cache=$(go env GOCACHE); while [ ! -f \"$cache/rgit-gate-ready\" ] && [ ! -f \"$cache/rgit-gate-fail\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready\" ] && go vet -tags rgit_xcheck ./cmd/xcheck/..."
