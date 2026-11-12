@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/term"
 )
@@ -982,6 +983,13 @@ func (o *OnlyIndex) Close() { _ = os.RemoveAll(filepath.Dir(o.Path)) }
 // crashed holder releases it. Writers other than rgit are not held off;
 // Commit detects one that moved HEAD in between.
 func (r *Repo) LockCommits(ctx context.Context) (unlock func(), err error) {
+	return r.lockCommits(ctx, os.Stderr, 2*time.Second)
+}
+
+// lockCommits waits without a timeout, but says so on notice once the wait
+// passes after, naming the holder's pid, so a hung hook in one session does
+// not stall the others in silence.
+func (r *Repo) lockCommits(ctx context.Context, notice io.Writer, after time.Duration) (unlock func(), err error) {
 	gitDir, err := r.checkedLine(ctx, "rev-parse", "--absolute-git-dir")
 	if err != nil {
 		return nil, err
@@ -995,9 +1003,26 @@ func (r *Repo) LockCommits(ctx context.Context) (unlock func(), err error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := lockFile(f); err != nil {
+	acquired := make(chan error, 1)
+	go func() { acquired <- lockFile(f) }()
+	select {
+	case err = <-acquired:
+	case <-time.After(after):
+		holder, _ := os.ReadFile(filepath.Join(gitDir, "rgit-commit.lock"))
+		msg := "rgit: waiting for the commit lock held by another rgit commit"
+		if pid := strings.TrimSpace(string(holder)); pid != "" {
+			msg += " (pid " + pid + ")"
+		}
+		_, _ = fmt.Fprintln(notice, msg)
+		err = <-acquired
+	}
+	if err != nil {
 		_ = f.Close()
 		return nil, err
+	}
+	// Advisory only: lets a waiter name the holder.
+	if f.Truncate(0) == nil {
+		_, _ = f.WriteAt([]byte(strconv.Itoa(os.Getpid())), 0)
 	}
 	return func() { _ = f.Close() }, nil
 }
