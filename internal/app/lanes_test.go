@@ -401,6 +401,51 @@ func TestRun_RevertWithNoMessageUsesRevertMessage(t *testing.T) {
 	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), "Revert \"feat: revert target\"\n"))
 }
 
+func TestRun_OnlyRefusedDuringMerge(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "f.txt", "f\n")
+	writeAppFile(t, dir, "g.txt", "g\n")
+	gitOut(t, dir, "add", "--", "f.txt", "g.txt")
+	gitOut(t, dir, "commit", "-q", "-m", "chore: f g")
+	gitOut(t, dir, "checkout", "-q", "-b", "side")
+	writeAppFile(t, dir, "g.txt", "side\n")
+	gitOut(t, dir, "commit", "-qam", "feat: side g")
+	gitOut(t, dir, "checkout", "-q", "main")
+	writeAppFile(t, dir, "f.txt", "main\n")
+	gitOut(t, dir, "commit", "-qam", "feat: main f")
+	gitOut(t, dir, "merge", "--no-ff", "--no-commit", "side")
+	head := gitOut(t, dir, "rev-parse", "HEAD")
+	writeAppFile(t, dir, "f.txt", "more\n")
+
+	_, stderr, code := runApp(t, "-C", dir, "commit", "--only", "-m", "fix: f", "f.txt")
+
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "cannot do a partial commit during a merge"))
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "rev-parse", "HEAD"), head))
+	gitOut(t, dir, "rev-parse", "-q", "--verify", "MERGE_HEAD")
+}
+
+func TestRun_OnlyRefusedDuringConflictedCherryPick(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	gitOut(t, dir, "checkout", "-q", "-b", "src")
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 2 }\n")
+	gitOut(t, dir, "commit", "-qam", "feat: src")
+	source := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	gitOut(t, dir, "checkout", "-q", "main")
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 3 }\n")
+	gitOut(t, dir, "commit", "-qam", "feat: main")
+	expectGitFailure(t, dir, "cherry-pick", source)
+	head := gitOut(t, dir, "rev-parse", "HEAD")
+
+	_, stderr, code := runApp(t, "-C", dir, "commit", "--only", "-m", "fix: a", "a.go")
+
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "cannot do a partial commit during a cherry-pick"))
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "rev-parse", "HEAD"), head))
+}
+
 func expectGitFailure(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	cmd := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir}, args...)...) //nolint:gosec // test arguments go directly to the real git binary, never through a shell

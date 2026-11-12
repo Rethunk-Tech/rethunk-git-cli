@@ -194,6 +194,17 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		}
 	}
 
+	// The private index holds HEAD's tree, so committing it mid-merge would
+	// record the merge without the merged content; git refuses the same way.
+	if f.only {
+		if op, ok, err := repo.SequencerOp(ctx); err != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return exitcode.GitFailure
+		} else if ok && (op == "merge" || op == "cherry-pick" || op == "revert") {
+			return r.usage("cannot do a partial commit during a " + op + ".")
+		}
+	}
+
 	// --only commits HEAD plus the targets from a private index, so the
 	// shared index is never staged into and a concurrent rgit in the same
 	// checkout cannot undo this one's staging. The lock comes before
