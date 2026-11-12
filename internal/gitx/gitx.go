@@ -1008,7 +1008,7 @@ func (r *Repo) lockCommits(ctx context.Context, notice io.Writer, after time.Dur
 	select {
 	case err = <-acquired:
 	case <-time.After(after):
-		holder, _ := os.ReadFile(filepath.Join(gitDir, "rgit-commit.lock"))
+		holder, _ := os.ReadFile(filepath.Clean(filepath.Join(gitDir, "rgit-commit.lock")))
 		msg := "rgit: waiting for the commit lock held by another rgit commit"
 		if pid := strings.TrimSpace(string(holder)); pid != "" {
 			msg += " (pid " + pid + ")"

@@ -13,7 +13,8 @@ import (
 func TestLockCommitsNamesTheHolderWhileWaiting(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	if out, err := exec.CommandContext(t.Context(), "git", "init", "-q", dir).CombinedOutput(); err != nil {
+	initCmd := exec.CommandContext(t.Context(), "git", "init", "-q", dir) //nolint:gosec // dir is a test temp path passed as argv, never through a shell
+	if out, err := initCmd.CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v: %s", err, out)
 	}
 	repo := New(dir)

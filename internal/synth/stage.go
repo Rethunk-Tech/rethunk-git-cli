@@ -944,7 +944,7 @@ func indexEntries(ctx context.Context, root string, data []byte) (map[string]ind
 		return nil, fmt.Errorf("listing index entries: %w", err)
 	}
 	entries := map[string]indexEntry{}
-	for _, rec := range bytes.Split(out, []byte{0}) {
+	for rec := range bytes.SplitSeq(out, []byte{0}) {
 		meta, path, ok := strings.Cut(string(rec), "\t")
 		if !ok {
 			continue

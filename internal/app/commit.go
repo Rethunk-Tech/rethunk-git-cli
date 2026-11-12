@@ -194,15 +194,8 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		}
 	}
 
-	// The private index holds HEAD's tree, so committing it mid-merge would
-	// record the merge without the merged content; git refuses the same way.
-	if f.only {
-		if op, ok, err := repo.SequencerOp(ctx); err != nil {
-			fmt.Fprintf(stderr, "rgit: %v\n", err)
-			return exitcode.GitFailure
-		} else if ok && (op == "merge" || op == "cherry-pick" || op == "revert") {
-			return r.usage("cannot do a partial commit during a " + op + ".")
-		}
+	if code := r.refuseOnlyDuringSequencer(ctx, repo); code != exitcode.Success {
+		return code
 	}
 
 	// --only commits HEAD plus the targets from a private index, so the
@@ -397,6 +390,24 @@ func (r *commitRun) requireSequencerMessage(ctx context.Context, repo *gitx.Repo
 		return true, exitcode.Success
 	}
 	return false, r.usage("commit requires a message (-m or -F)")
+}
+
+// refuseOnlyDuringSequencer: the private index holds HEAD's tree, so
+// committing it mid-merge would record the merge without the merged content;
+// git refuses the same way.
+func (r *commitRun) refuseOnlyDuringSequencer(ctx context.Context, repo *gitx.Repo) exitcode.Code {
+	if !r.f.only {
+		return exitcode.Success
+	}
+	op, ok, err := repo.SequencerOp(ctx)
+	if err != nil {
+		fmt.Fprintf(r.stderr, "rgit: %v\n", err)
+		return exitcode.GitFailure
+	}
+	if ok && (op == "merge" || op == "cherry-pick" || op == "revert") {
+		return r.usage("cannot do a partial commit during a " + op + ".")
+	}
+	return exitcode.Success
 }
 
 // acquireOnlyIndex takes the commit lock and a private index for --only.
