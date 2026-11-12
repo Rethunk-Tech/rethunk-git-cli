@@ -249,7 +249,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	}
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
-		rollbackIndex(stderr, indexSnap, targetResults)
+		rollbackIndex(ctx, stderr, indexSnap, targetResults)
 		return exitcode.GitFailure
 	}
 	jsonSHA, code := r.summarize(ctx, repo, res.Stdout, targetResults)
@@ -718,7 +718,7 @@ func (r *commitRun) stageTargets(ctx context.Context, root, prefix string, repo 
 			fmt.Fprintf(r.stderr, "rgit: %v\n", serr)
 			return results, nil, exitcode.GitFailure, true
 		}
-		stageErr = plan.Apply(ctx, repo, root)
+		stageErr = plan.ApplyWithSnapshot(ctx, repo, root, snap)
 	}
 	if stageErr != nil {
 		code, msg := mapStageError(stageErr)
@@ -965,11 +965,11 @@ func targetResultPaths(results []synth.TargetResult) []string {
 // A restore failure is reported, not hidden: the commit already failed,
 // and silence would leave the caller believing staging was rolled back
 // when it was not.
-func rollbackIndex(stderr io.Writer, snap *synth.IndexSnapshot, results []synth.TargetResult) {
+func rollbackIndex(ctx context.Context, stderr io.Writer, snap *synth.IndexSnapshot, results []synth.TargetResult) {
 	if snap == nil {
 		return
 	}
-	if rerr := snap.Restore(); rerr != nil {
+	if rerr := snap.Restore(ctx); rerr != nil {
 		fmt.Fprintf(stderr, "rgit: restoring pre-commit index: %v\n", rerr)
 		return
 	}

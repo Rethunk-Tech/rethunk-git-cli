@@ -586,6 +586,13 @@ func (fp *filePlan) close() {
 // naming any anchor there collapses its index entry back to
 // HEAD-plus-named-anchors, the same as every other named path.
 func (p *Plan) Apply(ctx context.Context, repo *gitx.Repo, root string) error {
+	return p.ApplyWithSnapshot(ctx, repo, root, nil)
+}
+
+// ApplyWithSnapshot is Apply that also records, in snap, the index it swapped
+// in, so snap.Restore can later undo exactly what this call staged. snap may
+// be nil.
+func (p *Plan) ApplyWithSnapshot(ctx context.Context, repo *gitx.Repo, root string, snap *IndexSnapshot) error {
 	if len(p.pathspecs) == 0 && len(p.files) == 0 {
 		return nil
 	}
@@ -593,20 +600,12 @@ func (p *Plan) Apply(ctx context.Context, repo *gitx.Repo, root string) error {
 	if err != nil {
 		return err
 	}
-	swapped := false
-	defer func() {
-		if !swapped {
-			staging.abort()
-		}
-	}()
+	defer staging.release()
 	if err := p.StageInto(ctx, repo, root, staging.repo); err != nil {
+		staging.abort()
 		return err
 	}
-	if err := staging.swap(); err != nil {
-		return err
-	}
-	swapped = true
-	return nil
+	return staging.swap(snap)
 }
 
 // StageInto writes the plan's entries into index's index file, reading
@@ -649,6 +648,7 @@ type tempStaging struct {
 	tmp   string
 	final string
 	mode  os.FileMode
+	lock  string
 }
 
 // newTempStaging seeds a temp index file beside the caller's own (same
@@ -661,6 +661,50 @@ func newTempStaging(ctx context.Context, root string) (*tempStaging, error) {
 	if err != nil {
 		return nil, err
 	}
+	lock, err := lockIndex(ctx, final)
+	if err != nil {
+		return nil, err
+	}
+	s, err := seedTempIndex(final)
+	if err != nil {
+		_ = os.Remove(lock)
+		return nil, err
+	}
+	// Repo carries env; construction must not mutate the process.
+	// callerIndexPath still reads process GIT_INDEX_FILE when the caller
+	// set it -- that is git's own contract. Only the temp-index pointer
+	// lives on the Repo.
+	s.repo = gitx.New(root).WithIndexFile(s.tmp)
+	s.lock = lock
+	return s, nil
+}
+
+// lockIndex takes git's own index lock (<index>.lock, created exclusively)
+// so a concurrent `git add` cannot slip an entry in between the seed copy
+// and the swap and then lose it. Another holder is waited for briefly: it is
+// normally a sibling git process that releases within milliseconds.
+func lockIndex(ctx context.Context, index string) (string, error) {
+	lock := index + ".lock"
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		f, err := os.OpenFile(lock, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600) //nolint:gosec // lock path is the caller's Git index path plus ".lock"
+		if err == nil {
+			return lock, f.Close()
+		}
+		if !os.IsExist(err) || time.Now().After(deadline) {
+			return "", fmt.Errorf("unable to create %s: %w", lock, err)
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+}
+
+// seedTempIndex copies index into a new temp file beside it. A missing index
+// leaves the temp path unused, so git creates it on first write.
+func seedTempIndex(final string) (*tempStaging, error) {
 	tmpFile, err := os.CreateTemp(filepath.Dir(final), "rgit-index-*")
 	if err != nil {
 		return nil, err
@@ -717,40 +761,40 @@ func newTempStaging(ctx context.Context, root string) (*tempStaging, error) {
 	if info, serr := os.Stat(final); serr == nil {
 		mode = info.Mode()
 	}
-	// Repo carries env; construction must not mutate the process.
-	// callerIndexPath still reads process GIT_INDEX_FILE when the caller
-	// set it -- that is git's own contract. Only the temp-index pointer
-	// lives on the Repo.
-	tr := gitx.New(root).WithIndexFile(tmp)
-	return &tempStaging{repo: tr, tmp: tmp, final: final, mode: mode}, nil
+	return &tempStaging{tmp: tmp, final: final, mode: mode}, nil
 }
 
-// swap moves the staged temp index over the caller's index. Both live in
-// the same directory, so a rename does it atomically; the byte copy is only
-// a cross-device fallback that same-directory placement already rules out.
-// A temp nothing was ever written to -- e.g. Add's already-staged no-op
-// path -- means the caller's index is already exactly right and there is
-// nothing to move.
-func (s *tempStaging) swap() error {
-	if _, err := os.Stat(s.tmp); os.IsNotExist(err) {
+// swap moves the staged temp index over the caller's index and records the
+// result in snap. Both live in the same directory, so a rename does it
+// atomically. A temp nothing was ever written to -- e.g. Add's already-staged
+// no-op path -- means the caller's index is already exactly right and there
+// is nothing to move.
+func (s *tempStaging) swap(snap *IndexSnapshot) error {
+	data, err := os.ReadFile(filepath.Clean(s.tmp))
+	if os.IsNotExist(err) {
 		return nil
 	}
-	if err := os.Rename(s.tmp, s.final); err == nil {
-		return nil
-	} else if data, rerr := os.ReadFile(s.tmp); rerr != nil {
-		return rerr
-	} else if werr := os.WriteFile(s.final, data, s.mode); werr != nil { //nolint:gosec // s.final is the caller's Git index path captured during staging setup
-		return werr
-	} else {
-		_ = os.Remove(s.tmp)
-		return nil
+	if err != nil {
+		return err
 	}
+	if err := os.Rename(s.tmp, s.final); err != nil {
+		return err
+	}
+	if snap != nil {
+		snap.applied = data
+	}
+	return nil
 }
 
 // abort discards the temp index after a staging failure. The caller's index
 // was never written, so removing the temp is the whole rollback.
 func (s *tempStaging) abort() {
 	_ = os.Remove(s.tmp)
+}
+
+// release drops the index lock.
+func (s *tempStaging) release() {
+	_ = os.Remove(s.lock)
 }
 
 // callerIndexPath resolves the index file the caller's git invocations use:
@@ -780,14 +824,13 @@ func callerIndexPath(ctx context.Context, root string) (string, error) {
 }
 
 // IndexSnapshot is a byte copy of the caller's index file, taken so a later
-// failure (a hook rejecting the commit) can put the index back exactly as
-// found. Data is nil when no index file existed; restoring that removes the
-// file again rather than leaving an empty one behind.
+// failure (a hook rejecting the commit) can undo what ApplyWithSnapshot
+// staged. data is nil when no index file existed.
 type IndexSnapshot struct {
+	root    string
 	path    string
 	data    []byte
-	mode    os.FileMode
-	existed bool
+	applied []byte
 }
 
 // SnapshotIndex copies the caller's current index file. Pure read: it never
@@ -798,36 +841,121 @@ func SnapshotIndex(ctx context.Context, root string) (*IndexSnapshot, error) {
 		return nil, err
 	}
 	data, err := os.ReadFile(filepath.Clean(path))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return &IndexSnapshot{path: path}, nil
-		}
+	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	mode := os.FileMode(0o644)
-	if info, serr := os.Stat(path); serr == nil {
-		mode = info.Mode()
-	}
-	return &IndexSnapshot{path: path, data: data, mode: mode, existed: true}, nil
+	return &IndexSnapshot{root: root, path: path, data: data}, nil
 }
 
-// Restore writes the snapshot back over the current index file, or removes
-// the file when none existed at snapshot time. Index-only, like everything
-// else here: no worktree byte moves.
-func (s *IndexSnapshot) Restore() error {
-	if s == nil {
+// Restore reverts the entries ApplyWithSnapshot changed to their snapshot
+// state, under git's index lock. An entry someone else has staged since stays
+// as they left it, as does every path rgit never touched. Index-only, like
+// everything else here: no worktree byte moves.
+func (s *IndexSnapshot) Restore(ctx context.Context) error {
+	if s == nil || s.applied == nil {
 		return nil
 	}
-	if !s.existed {
-		if err := os.Remove(s.path); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		return nil
-	}
-	if err := os.WriteFile(s.path, s.data, s.mode); err != nil {
+	lock, err := lockIndex(ctx, s.path)
+	if err != nil {
 		return err
 	}
-	return os.Chmod(s.path, s.mode)
+	defer func() { _ = os.Remove(lock) }()
+
+	before, err := indexEntries(ctx, s.root, s.data)
+	if err != nil {
+		return err
+	}
+	applied, err := indexEntries(ctx, s.root, s.applied)
+	if err != nil {
+		return err
+	}
+	current, err := indexEntries(ctx, s.root, nil)
+	if err != nil {
+		return err
+	}
+	var info bytes.Buffer
+	for key, entry := range applied {
+		if before[key].line == entry.line || current[key].line != entry.line {
+			continue
+		}
+		if old, ok := before[key]; ok {
+			info.WriteString(old.line)
+		} else {
+			info.WriteString("0 " + strings.Repeat("0", len(entry.sha)) + " 0\t" + entry.path)
+		}
+		info.WriteByte(0)
+	}
+	for key, entry := range before {
+		if _, ok := applied[key]; ok || current[key].line != "" {
+			continue
+		}
+		info.WriteString(entry.line)
+		info.WriteByte(0)
+	}
+	if info.Len() == 0 {
+		return nil
+	}
+
+	seed, err := seedTempIndex(s.path)
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, "git", "-C", s.root, "update-index", "-z", "--index-info") //nolint:gosec // root is rgit's selected repository path, passed as git -C argv rather than shell input
+	cmd.Env = append(os.Environ(), "GIT_INDEX_FILE="+seed.tmp)
+	cmd.Stdin = &info
+	if out, err := cmd.CombinedOutput(); err != nil {
+		_ = os.Remove(seed.tmp)
+		return fmt.Errorf("restoring index entries: %w: %s", err, bytes.TrimSpace(out))
+	}
+	if err := os.Rename(seed.tmp, s.path); err != nil {
+		_ = os.Remove(seed.tmp)
+		return err
+	}
+	return nil
+}
+
+type indexEntry struct {
+	line string // "<mode> <sha> <stage>\t<path>", ready for update-index --index-info
+	sha  string
+	path string
+}
+
+// indexEntries lists an index's entries keyed by path and stage. data is the
+// index file's bytes; nil lists the caller's live index instead.
+func indexEntries(ctx context.Context, root string, data []byte) (map[string]indexEntry, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", root, "ls-files", "-s", "-z") //nolint:gosec // root is rgit's selected repository path, passed as git -C argv rather than shell input
+	if data != nil {
+		f, err := os.CreateTemp("", "rgit-snapshot-*")
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = os.Remove(f.Name()) }()
+		if _, err := f.Write(data); err != nil {
+			_ = f.Close()
+			return nil, err
+		}
+		if err := f.Close(); err != nil {
+			return nil, err
+		}
+		cmd.Env = append(os.Environ(), "GIT_INDEX_FILE="+f.Name())
+	}
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("listing index entries: %w", err)
+	}
+	entries := map[string]indexEntry{}
+	for _, rec := range bytes.Split(out, []byte{0}) {
+		meta, path, ok := strings.Cut(string(rec), "\t")
+		if !ok {
+			continue
+		}
+		fields := strings.Fields(meta)
+		if len(fields) != 3 {
+			continue
+		}
+		entries[fields[2]+"\x00"+path] = indexEntry{line: meta + "\t" + path, sha: fields[1], path: path}
+	}
+	return entries, nil
 }
 
 // inheritEOF supplies the trailing newline for a file with no HEAD blob to

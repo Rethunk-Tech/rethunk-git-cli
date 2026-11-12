@@ -293,6 +293,36 @@ func TestRun_HookRejectionRestoresStaging(t *testing.T) {
 	qt.Assert(t, qt.Equals(string(after), string(workA)))
 }
 
+// TestRun_HookRejectionKeepsConcurrentStaging: staging another session did
+// while the hook ran is not rgit's to roll back.
+func TestRun_HookRejectionKeepsConcurrentStaging(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	writeAppFile(t, dir, "c.txt", "other\n")
+	gittest.InstallHook(t.Context(), t, dir, "pre-commit", "#!/bin/sh\ngit add c.txt\nexit 1\n")
+
+	_, _, code := runApp(t, "-C", dir, "commit", "-m", "feat(a): update A", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))
+
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "status", "--porcelain"), " M a.go\nA  c.txt\n"))
+}
+
+// TestRun_HookAddedFileIsCommitted: a hook that stages a file and passes
+// lands it in the commit, as with plain git.
+func TestRun_HookAddedFileIsCommitted(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	writeAppFile(t, dir, "c.txt", "other\n")
+	gittest.InstallHook(t.Context(), t, dir, "pre-commit", "#!/bin/sh\ngit add c.txt\n")
+
+	_, _, code := runApp(t, "-C", dir, "commit", "-m", "feat(a): update A", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+
+	qt.Assert(t, qt.StringContains(gitOut(t, dir, "show", "--name-only", "--format=", "HEAD"), "c.txt"))
+}
+
 // TestRun_AmendWithNoMessageReusesHeadSubject pins docs/USAGE.md: rgit never
 // opens an editor, so --amend with neither -m nor -F has exactly one
 // sensible meaning, `git commit --amend --no-edit`.

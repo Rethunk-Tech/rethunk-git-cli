@@ -185,67 +185,35 @@ func TestResolveMode_InheritsFromIndexThenHead(t *testing.T) {
 	}
 }
 
-// TestSnapshotIndex_Restore pins the rollback a rejected commit performs: the
-// index comes back byte-identical to the snapshot, and a snapshot taken when
-// no index file existed removes the file again rather than leaving an empty
-// one behind for git to read as "everything deleted".
-func TestSnapshotIndex_Restore(t *testing.T) {
+// TestSnapshotIndex_RestoreRevertsOnlyAppliedPaths pins the rollback a
+// rejected commit performs: the entries Apply staged go back to the snapshot,
+// while staging another session did meanwhile survives.
+func TestSnapshotIndex_RestoreRevertsOnlyAppliedPaths(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
+	dir, repo := gittest.New(ctx, t)
+	gittest.Write(t, dir, "a.txt", "one\n")
+	gittest.Commit(ctx, t, dir, "chore: initial")
+	gittest.Write(t, dir, "a.txt", "two\n")
+	gittest.Write(t, dir, "c.txt", "other\n")
 
-	t.Run("existing index is restored byte for byte", func(t *testing.T) {
-		t.Parallel()
-		sub, _ := gittest.RepoWithFile(ctx, t, "a.txt", "one\n", "chore: initial")
-		indexPath := filepath.Join(sub, ".git", "index")
-		gittest.Write(t, sub, "a.txt", "two\n")
-		gittest.Git(ctx, t, sub, "add", "a.txt")
-		want, err := os.ReadFile(filepath.Clean(indexPath))
-		if err != nil {
-			t.Fatal(err)
-		}
+	snap, err := SnapshotIndex(ctx, dir)
+	if err != nil {
+		t.Fatalf("SnapshotIndex: %v", err)
+	}
+	plan, err := PlanStage(ctx, repo, dir, []Target{PathTarget("a.txt")})
+	if err != nil {
+		t.Fatalf("PlanStage: %v", err)
+	}
+	if err := plan.ApplyWithSnapshot(ctx, repo, dir, snap); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	gittest.Git(ctx, t, dir, "add", "c.txt")
 
-		snap, err := SnapshotIndex(ctx, sub)
-		if err != nil {
-			t.Fatalf("SnapshotIndex: %v", err)
-		}
-		if err := os.Remove(indexPath); err != nil {
-			t.Fatal(err)
-		}
-		if err := snap.Restore(); err != nil {
-			t.Fatalf("Restore: %v", err)
-		}
-		got, err := os.ReadFile(filepath.Clean(indexPath))
-		if err != nil {
-			t.Fatalf("index after Restore: %v", err)
-		}
-		if string(got) != string(want) {
-			t.Error("Restore did not reproduce the snapshot's index bytes")
-		}
-	})
-
-	t.Run("no index at snapshot time means the file is removed again", func(t *testing.T) {
-		t.Parallel()
-		sub, _ := gittest.New(ctx, t)
-		indexPath := filepath.Join(sub, ".git", "index")
-		if err := os.Remove(indexPath); err != nil && !os.IsNotExist(err) {
-			t.Fatal(err)
-		}
-
-		snap, err := SnapshotIndex(ctx, sub)
-		if err != nil {
-			t.Fatalf("SnapshotIndex: %v", err)
-		}
-		gittest.Write(t, sub, "a.txt", "a\n")
-		gittest.Git(ctx, t, sub, "add", "a.txt")
-		if _, err := os.Stat(indexPath); err != nil {
-			t.Fatalf("index was not created by staging: %v", err)
-		}
-
-		if err := snap.Restore(); err != nil {
-			t.Fatalf("Restore: %v", err)
-		}
-		if _, err := os.Stat(indexPath); !os.IsNotExist(err) {
-			t.Errorf("index exists after restoring a no-index snapshot (err = %v); want it removed", err)
-		}
-	})
+	if err := snap.Restore(ctx); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if got := gittest.Git(ctx, t, dir, "status", "--porcelain"); got != " M a.txt\nA  c.txt\n" {
+		t.Errorf("status after Restore = %q; want a.txt unstaged and c.txt still staged", got)
+	}
 }

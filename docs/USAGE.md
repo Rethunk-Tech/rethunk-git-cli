@@ -479,7 +479,11 @@ A missing conventional-commit shape warns; the commit proceeds.
   that default made explicit.
 + A hook rejecting the commit rolls staging back to its pre-commit state
   (under `--only` nothing was staged). Snapshot, temp index, restore on
-  failure. Index entries only — no worktree file is written.
+  failure. Only the entries rgit staged are reverted; staging another
+  session did meanwhile stays. Index entries only — no worktree file is
+  written. Staging holds git's `index.lock`.
++ `--only` during a merge, cherry-pick, or revert is refused ("cannot do a
+  partial commit during a merge"), as in git.
 + Hooks are not policed. `--no-verify` disables them.
 + Merge / cherry-pick / revert without `-m`/`-F` uses `--no-edit`. Rebase
   remains `git rebase --continue`.
