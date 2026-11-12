@@ -26,12 +26,12 @@ Install and runbook: [HUMANS.md](HUMANS.md).
 
 ## Highlights
 
-- **Symbol anchors** — `FILE:NAME` addresses a function, method, type, or const; `@imports`, `@header`, `@toplevel` reach regions no symbol owns.
-- **Bare positionals** — mix symbols and paths, every git pathspec form, no flags required.
-- **Closed loop** — `rgit diff` emits exactly the anchors `rgit commit` consumes.
-- **Verified extents** — tree-sitter resolves; a language server cross-checks; mismatch hard-fails on `commit`.
-- **Git semantics** — git exit codes, pathspecs, hooks, and config throughout.
-- **Sixteen grammars ship unconditionally** — a seventeenth, SQL, behind `rgit_sql` tag; anything else stages by path ([docs/LIMITATIONS.md](docs/LIMITATIONS.md)).
+- **Symbol anchors**: `FILE:NAME` addresses a function, method, type, or const; `@imports`, `@header`, `@toplevel` reach regions no symbol owns.
+- **Bare positionals**: mix symbols and paths, every git pathspec form, no flags required.
+- **Closed loop**: `rgit diff` emits exactly the anchors `rgit commit` consumes.
+- **Verified extents**: tree-sitter resolves; a language server cross-checks; mismatch hard-fails on `commit`.
+- **Git semantics**: git exit codes, pathspecs, hooks, and config throughout.
+- **Sixteen grammars ship unconditionally**: a seventeenth, SQL, behind `rgit_sql` tag; anything else stages by path ([docs/LIMITATIONS.md](docs/LIMITATIONS.md)).
 
 ## Documentation
 
