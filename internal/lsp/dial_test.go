@@ -275,6 +275,47 @@ func TestDialStdio_CloseTearsDownConnectionThenProcess(t *testing.T) {
 	}
 }
 
+// TestDialStdio_CloseLeavesNothingInTMPDIR pins that a one-shot server's
+// scratch goes with it: Close SIGKILLs the server, so whatever it put in
+// TMPDIR (pyright's pyright-<pid>-* dir) is never removed by the server.
+func TestDialStdio_CloseLeavesNothingInTMPDIR(t *testing.T) {
+	// cannot Parallel because t.Setenv("TMPDIR", ...) below
+	if testing.Short() {
+		t.Skip("live language-server dial skipped under -short")
+	}
+	const bin = "pyright-langserver"
+	if _, err := exec.LookPath(bin); err != nil {
+		t.Skipf("%s not on PATH", bin)
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fixture.py")
+	src := []byte("def foo():\n    return 1\n")
+	if err := os.WriteFile(path, src, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	client, degraded := Dial(ctx, "python", dir)
+	if degraded {
+		t.Fatal("Dial degraded with pyright-langserver on PATH")
+	}
+	if _, err := client.DocumentSymbols(ctx, path, src); err != nil {
+		t.Fatalf("DocumentSymbols: %v", err)
+	}
+	_ = client.Close()
+
+	left, err := os.ReadDir(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) != 0 {
+		t.Errorf("server left %v in TMPDIR", left)
+	}
+}
+
 // --- the managed socket directory must be trusted, not assumed ---
 
 // TestPrivateSocketDir_CreatesPrivateDirectory covers the ordinary case: a

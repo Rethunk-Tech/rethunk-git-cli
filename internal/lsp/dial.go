@@ -341,8 +341,16 @@ func dialStdio(ctx context.Context, spec serverSpec, repoRoot string) (*Client, 
 	}
 	// As in trySpawnDaemon, the server's own stderr is not rgit's to show.
 	cmd.Stderr = nil
+	// killAndReap's SIGKILL lands before the server can remove what it put
+	// in TMPDIR (pyright's pyright-<pid>-* dir), so it gets one of its own.
+	tmp, err := os.MkdirTemp("", "rgit-lsp-")
+	if err != nil {
+		return nil, true
+	}
+	cmd.Env = append(os.Environ(), "TMPDIR="+tmp)
 
 	if err := cmd.Start(); err != nil {
+		_ = os.RemoveAll(tmp)
 		return nil, true
 	}
 	// killAndReap is cleanup after the connection is already down, never
@@ -351,7 +359,9 @@ func dialStdio(ctx context.Context, spec serverSpec, repoRoot string) (*Client, 
 	// process so it does not linger as a zombie.
 	killAndReap := func() error {
 		_ = cmd.Process.Kill()
-		return cmd.Wait()
+		waitErr := cmd.Wait()
+		_ = os.RemoveAll(tmp)
+		return waitErr
 	}
 
 	handshakeCtx, cancel := context.WithTimeout(ctx, dialBudget()+queryDeadline())
