@@ -1003,22 +1003,32 @@ func (r *Repo) lockCommits(ctx context.Context, notice io.Writer, after time.Dur
 	if err != nil {
 		return nil, err
 	}
-	acquired := make(chan error, 1)
-	go func() { acquired <- lockFile(f) }()
-	select {
-	case err = <-acquired:
-	case <-time.After(after):
-		holder, _ := os.ReadFile(filepath.Clean(filepath.Join(gitDir, "rgit-commit.lock")))
-		msg := "rgit: waiting for the commit lock held by another rgit commit"
-		if pid := strings.TrimSpace(string(holder)); pid != "" {
-			msg += " (pid " + pid + ")"
+	deadline := time.Now().Add(after)
+	noticed := false
+	for {
+		err = lockFile(f)
+		if err == nil {
+			break
 		}
-		_, _ = fmt.Fprintln(notice, msg)
-		err = <-acquired
-	}
-	if err != nil {
-		_ = f.Close()
-		return nil, err
+		if !lockBusy(err) {
+			_ = f.Close()
+			return nil, err
+		}
+		if !noticed && !time.Now().Before(deadline) {
+			holder, _ := os.ReadFile(filepath.Clean(filepath.Join(gitDir, "rgit-commit.lock")))
+			msg := "rgit: waiting for the commit lock held by another rgit commit"
+			if pid := strings.TrimSpace(string(holder)); pid != "" {
+				msg += " (pid " + pid + ")"
+			}
+			_, _ = fmt.Fprintln(notice, msg)
+			noticed = true
+		}
+		select {
+		case <-ctx.Done():
+			_ = f.Close()
+			return nil, ctx.Err()
+		case <-time.After(10 * time.Millisecond):
+		}
 	}
 	// Advisory only: lets a waiter name the holder.
 	if f.Truncate(0) == nil {
