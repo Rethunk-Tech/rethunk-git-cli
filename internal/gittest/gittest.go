@@ -59,12 +59,18 @@ var (
 // read-only from then on; the hooks directory is created empty because a
 // template replaces the ones git would otherwise copy in, and
 // InstallHook writes real hooks into .git/hooks.
-var fixtureTemplate = sync.OnceValues(func() (string, error) {
-	dir, err := os.MkdirTemp("", "rgit-git-template-*")
-	if err != nil {
-		return "", err
-	}
-	if err := os.MkdirAll(filepath.Join(dir, "hooks"), 0o750); err != nil {
+var fixtureTemplate = sync.OnceValues(templateIn)
+
+// templateIn publishes the template under one fixed per-user name in
+// the temp directory: every test binary shares it, so nothing accumulates
+// however a run ends. The config is replaced by rename so a concurrent
+// binary never reads a partial file.
+//
+// shortcut: the predictable name trusts $TMPDIR to be private to the user,
+// upgrade to an owner check if fixtures ever run on a shared host.
+func templateIn() (string, error) {
+	dir := filepath.Join(os.TempDir(), fmt.Sprintf("rgit-git-template-%d", os.Getuid()))
+	if err := os.MkdirAll(filepath.Join(dir, "hooks"), 0o700); err != nil {
 		return "", err
 	}
 	config := "[user]\n" +
@@ -74,11 +80,24 @@ var fixtureTemplate = sync.OnceValues(func() (string, error) {
 		"\tauto = 0\n" +
 		"[maintenance]\n" +
 		"\tauto = false\n"
-	if err := os.WriteFile(filepath.Join(dir, "config"), []byte(config), 0o600); err != nil {
+	tmp, err := os.CreateTemp(dir, "config-*")
+	if err != nil {
+		return "", err
+	}
+	_, werr := tmp.WriteString(config)
+	if cerr := tmp.Close(); werr == nil {
+		werr = cerr
+	}
+	if werr != nil {
+		_ = os.Remove(tmp.Name())
+		return "", werr
+	}
+	if err := os.Rename(tmp.Name(), filepath.Join(dir, "config")); err != nil {
+		_ = os.Remove(tmp.Name())
 		return "", err
 	}
 	return dir, nil
-})
+}
 
 // New initialises an empty repository in a temp directory and returns it
 // alongside a gitx.Repo rooted there.

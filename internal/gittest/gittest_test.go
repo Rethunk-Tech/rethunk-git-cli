@@ -78,3 +78,29 @@ func TestNewCarriesTemplateSettings(t *testing.T) {
 	// directory InstallHook writes real hooks into has to exist.
 	InstallHook(t.Context(), t, dir, "pre-commit", "#!/bin/sh\nexit 0\n")
 }
+
+// TestTemplateLeavesOneFixedEntry pins the leak fix: however many times a
+// test binary builds the template, TMPDIR holds the one per-user directory.
+func TestTemplateLeavesOneFixedEntry(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	for range 3 {
+		if _, err := templateIn(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entries, err := os.ReadDir(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("TMPDIR holds %d entries after template builds; want 1 fixed one", len(entries))
+	}
+	left, err := os.ReadDir(filepath.Join(tmp, entries[0].Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) != 2 { // config, hooks
+		t.Errorf("template dir holds %d entries; want config and hooks only", len(left))
+	}
+}
