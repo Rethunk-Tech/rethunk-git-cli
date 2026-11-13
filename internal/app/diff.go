@@ -87,6 +87,7 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 
 	root, prefix, repo, code := openRepo(ctx, dir, stderr)
 	if code != exitcode.Success {
+		hintRepoForTargets(ctx, stderr, "diff", dir, slices.Concat(positionals, f.syms, f.files))
 		return code
 	}
 

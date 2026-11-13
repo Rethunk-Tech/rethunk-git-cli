@@ -174,8 +174,13 @@ func parseFlagsOrHelp(fs *pflag.FlagSet, args []string, stdout, stderr io.Writer
 		return exitcode.Success, true
 	}
 	fmt.Fprintf(stderr, "rgit: %v\n", err)
+	if strings.HasPrefix(err.Error(), "unknown shorthand flag: 'C' in ") {
+		fmt.Fprintln(stderr, dashCHint)
+	}
 	return exitcode.InvalidUsage, true
 }
+
+const dashCHint = "rgit: -C goes before the command: rgit -C <path> <command> ..."
 
 // pathAnchorContradiction implements docs/USAGE.md's "--sym and --file on
 // the same path → exit 5": naming a path both ways is a contradiction the
@@ -273,6 +278,58 @@ func openRepo(ctx context.Context, dir string, stderr io.Writer) (root, prefix s
 	}
 
 	return top, pfx, probe.Reroot(top), exitcode.Success
+}
+
+// hintRepoForTargets follows a failed openRepo when rgit ran outside any
+// repository: if every target path lies in one repository, it prints the -C
+// spelling with repo-relative targets, the form the caller meant.
+func hintRepoForTargets(ctx context.Context, stderr io.Writer, cmdName, dir string, targets []string) {
+	if dir != "" {
+		return
+	}
+	var top string
+	rels := make([]string, 0, len(targets))
+	for _, t := range targets {
+		if t == "--" {
+			continue
+		}
+		path, suffix := t, ""
+		if i := strings.LastIndexByte(t, ':'); i > 0 {
+			if _, err := os.Lstat(t); err != nil {
+				path, suffix = t[:i], t[i:]
+			}
+		}
+		abs, err := filepath.Abs(path)
+		if err != nil {
+			return
+		}
+		probe, base := abs, ""
+		if info, err := os.Stat(abs); err != nil || !info.IsDir() {
+			probe, base = filepath.Dir(abs), filepath.Base(abs)
+		}
+		root, prefix, err := gitx.New(probe).RootAndPrefix(ctx)
+		if err != nil || (top != "" && root != top) {
+			return
+		}
+		top = root
+		rel := filepath.Join(prefix, base)
+		if rel == "" {
+			rel = "."
+		}
+		rels = append(rels, shellWord(rel+suffix))
+	}
+	if top == "" {
+		return
+	}
+	fmt.Fprintf(stderr, "run: rgit -C %s %s … %s\n", shellWord(top), cmdName, strings.Join(rels, " "))
+}
+
+// shellWord single-quotes s when a shell would otherwise split or expand it.
+func shellWord(s string) string {
+	if s != "" && !strings.ContainsAny(s, " \t\n'\"$`\\*?[]{}()<>|&;!#~") {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // anchorSourceFunc fetches the blob resolveAnchorExtent resolves an
@@ -662,6 +719,9 @@ func (p anchorParser) refusePositional(a string, have, maxPositionals int, refus
 	case maxPositionals > 0 && have >= maxPositionals,
 		a != "--" && strings.HasPrefix(a, "-"):
 		fmt.Fprintf(p.stderr, "rgit: %s: unrecognized argument %q\n", p.cmdName, a)
+		if strings.HasPrefix(a, "-C") {
+			fmt.Fprintln(p.stderr, dashCHint)
+		}
 	default:
 		return false
 	}

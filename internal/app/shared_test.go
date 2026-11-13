@@ -47,3 +47,25 @@ func TestRun_DiffStripsControlBytesFromPaths(t *testing.T) {
 	qt.Assert(t, qt.StringContains(stdout, "PWNED"))
 	qt.Assert(t, qt.IsFalse(strings.ContainsAny(stdout+stderr, "\x1b\x07")))
 }
+
+// No t.Parallel: the case needs a working directory outside any repository.
+func TestRun_CommitOutsideARepoHintsTheDashCSpelling(t *testing.T) {
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	top, err := filepath.EvalSymlinks(dir)
+	qt.Assert(t, qt.IsNil(err))
+	t.Chdir(t.TempDir())
+
+	_, stderr, code := runApp(t, "commit", "-m", "fix(a): x", filepath.Join(dir, "a.go")+":A")
+
+	qt.Assert(t, qt.Not(qt.Equals(code, exitcode.Success)))
+	qt.Assert(t, qt.StringContains(stderr, "run: rgit -C "+top+" commit … a.go:A\n"))
+}
+
+func TestRun_DashCAfterTheCommandSaysWhereItGoes(t *testing.T) {
+	t.Parallel()
+	_, stderr, code := runApp(t, "commit", "-C", "x", "-m", "fix(a): x", "a.go")
+
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "-C goes before the command"))
+}

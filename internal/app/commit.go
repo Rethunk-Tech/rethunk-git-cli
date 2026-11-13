@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -187,6 +188,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 
 	root, prefix, repo, code := openRepo(ctx, dir, stderr)
 	if code != exitcode.Success {
+		hintRepoForTargets(ctx, stderr, "commit", dir, slices.Concat(positionalsGiven, f.syms, f.files))
 		return code
 	}
 
