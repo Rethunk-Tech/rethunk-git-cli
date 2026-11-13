@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -339,8 +338,9 @@ func writeContextJSON(w io.Writer, stream string) error {
 // contextDirtyUntracked counts files in the committable report: dirty is
 // staged and/or unstaged, untracked is everything else in the report.
 func contextDirtyUntracked(report *diffpkg.Report, staged, unstaged []string) (dirty, untracked int) {
+	inStaged, inUnstaged := pathSet(staged), pathSet(unstaged)
 	for _, f := range report.Files {
-		if slices.Contains(staged, f.Path) || slices.Contains(unstaged, f.Path) {
+		if inStaged[f.Path] || inUnstaged[f.Path] {
 			dirty++
 			continue
 		}
@@ -497,10 +497,21 @@ func buildContextStream(records []string, budget int) string {
 // stageRecords renders one T record per file in the diff report: where its
 // change sits, `staged`, `unstaged`, `both`, or `untracked`. Files appear
 // in the order the F rows do, so a reader can pair them.
+// pathSet indexes paths for membership tests: a slice scan per changed file
+// is quadratic in the dirty-tree size.
+func pathSet(paths []string) map[string]bool {
+	set := make(map[string]bool, len(paths))
+	for _, p := range paths {
+		set[p] = true
+	}
+	return set
+}
+
 func stageRecords(report *diffpkg.Report, staged, unstaged []string) []string {
 	var out []string
+	stagedSet, unstagedSet := pathSet(staged), pathSet(unstaged)
 	for _, f := range report.Files {
-		inStaged, inUnstaged := slices.Contains(staged, f.Path), slices.Contains(unstaged, f.Path)
+		inStaged, inUnstaged := stagedSet[f.Path], unstagedSet[f.Path]
 		where := "untracked"
 		switch {
 		case inStaged && inUnstaged:
