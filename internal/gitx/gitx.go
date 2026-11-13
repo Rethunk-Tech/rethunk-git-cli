@@ -981,7 +981,7 @@ func (r *Repo) NewOnlyIndex(ctx context.Context) (*OnlyIndex, error) {
 	// data wherever the entry matches the tree, as git's own --only does;
 	// without it git commit's refresh rehashes every tracked file. An index
 	// read-tree -m refuses (unmerged entries) falls back to a bare read.
-	if r.copyIndexTo(ctx, o.Path) == nil {
+	if r.copyIndexTo(ctx, dir) == nil {
 		if _, err := o.Repo.checked(ctx, "read-tree", "-m", tree); err == nil {
 			return o, nil
 		}
@@ -997,10 +997,10 @@ func (r *Repo) NewOnlyIndex(ctx context.Context) (*OnlyIndex, error) {
 // Close removes the private index.
 func (o *OnlyIndex) Close() { _ = os.RemoveAll(filepath.Dir(o.Path)) }
 
-// copyIndexTo byte-copies r's index file to dst, keeping its mtime: git
-// trusts an entry's stat only when it is older than the index file itself,
-// so a copy stamped now would read a same-second edit as clean.
-func (r *Repo) copyIndexTo(ctx context.Context, dst string) error {
+// copyIndexTo byte-copies r's index file to dir/index, keeping its mtime:
+// git trusts an entry's stat only when it is older than the index file
+// itself, so a copy stamped now would read a same-second edit as clean.
+func (r *Repo) copyIndexTo(ctx context.Context, dir string) error {
 	src, err := r.indexPath(ctx)
 	if err != nil {
 		return err
@@ -1013,10 +1013,15 @@ func (r *Repo) copyIndexTo(ctx context.Context, dst string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(dst, data, 0o600); err != nil {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
 		return err
 	}
-	return os.Chtimes(dst, time.Time{}, info.ModTime())
+	defer func() { _ = root.Close() }()
+	if err := root.WriteFile("index", data, 0o600); err != nil {
+		return err
+	}
+	return root.Chtimes("index", time.Time{}, info.ModTime())
 }
 
 // indexPath is the index file r's git invocations use, GIT_INDEX_FILE

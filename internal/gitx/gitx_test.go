@@ -902,7 +902,6 @@ func TestCommitOnlyWaitsOutABusyIndexLock(t *testing.T) {
 // match HEAD: without it git commit's refresh rehashes every tracked file, so
 // a --only commit costs a read of the whole worktree.
 func TestNewOnlyIndexKeepsStatData(t *testing.T) {
-	t.Parallel()
 	dir, repo := gittest.RepoWithFile(t.Context(), t, "a.txt", "a\n", "chore: initial")
 	only, err := repo.NewOnlyIndex(t.Context())
 	if err != nil {
@@ -910,13 +909,9 @@ func TestNewOnlyIndexKeepsStatData(t *testing.T) {
 	}
 	defer only.Close()
 
-	cmd := exec.CommandContext(t.Context(), "git", "-C", dir, "ls-files", "--debug", "--", "a.txt")
-	cmd.Env = append(os.Environ(), "GIT_INDEX_FILE="+only.Path)
-	out, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("ls-files --debug: %v", err)
-	}
-	if strings.Contains(string(out), "mtime: 0:0") {
+	t.Setenv("GIT_INDEX_FILE", only.Path)
+	out := gittest.Git(t.Context(), t, dir, "ls-files", "--debug", "--", "a.txt")
+	if strings.Contains(out, "mtime: 0:0") {
 		t.Errorf("private index entry has no stat data:\n%s", out)
 	}
 }
