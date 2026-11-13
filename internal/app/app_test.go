@@ -637,7 +637,9 @@ func TestRun_DiffScopesAndOutput(t *testing.T) {
 	})
 }
 
-func TestRun_DiffPrintsTSOnlyNoticeOnce(t *testing.T) {
+// TestRun_DiffDialsNoLanguageServer: diff rows come from tree-sitter alone,
+// so a server that cannot be reached leaves no ts-only notice behind.
+func TestRun_DiffDialsNoLanguageServer(t *testing.T) {
 	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
 	t.Setenv("PATH", "/usr/bin:/bin")
@@ -646,7 +648,7 @@ func TestRun_DiffPrintsTSOnlyNoticeOnce(t *testing.T) {
 
 	_, stderr, code := runApp(t, "-C", dir, "diff")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	qt.Assert(t, qt.Equals(strings.Count(stderr, tsOnlyNotice), 1))
+	qt.Assert(t, qt.Not(qt.StringContains(stderr, tsOnlyNotice)))
 }
 
 func TestRun_DiffStatIsAcceptedNoOp(t *testing.T) {

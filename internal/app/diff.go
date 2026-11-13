@@ -100,15 +100,6 @@ func runDiff(ctx context.Context, dir string, args []string, stdout, stderr io.W
 		return diffRunFailure(err, stderr)
 	}
 
-	// tsOnlyNotice (app.go) is shared with rgit commit's own identical
-	// print, so the two staging commands cannot answer "was the
-	// cross-check live?" differently. Printed regardless of --quiet, which
-	// suppresses the report on stdout rather than diagnostics, exactly as
-	// the warnings below already are.
-	if report.TSOnly {
-		fmt.Fprintln(stderr, tsOnlyNotice)
-	}
-
 	// Reported, never fatal: the identical disagreement is exit 6 at commit
 	// time, and the point of saying so here is that the caller finds out
 	// while reading the diff rather than mid-commit.
@@ -241,6 +232,9 @@ func buildDiffOptions(ctx context.Context, f *diffFlags, positionals []string, r
 		Files:           allFiles,
 		Syms:            allSyms,
 		RevPaths:        revPaths,
+		// Rows come from tree-sitter alone; the language-server check guards
+		// what commit stages, and dialling it here cost diff about a second.
+		SkipCrossCheck: true,
 		// Skip fetching the patch entirely when output is suppressed by
 		// --quiet: nothing would ever read it, so there is no reason to pay
 		// for the extra `git diff` invocation.

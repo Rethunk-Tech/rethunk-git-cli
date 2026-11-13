@@ -114,8 +114,8 @@ writes the root commit.
 
 Aligned layout by default. `--porcelain` is
 [`CODES.md`](CODES.md#output-records). `[ts-only] no live language server
-reached in time; extents unverified` prints once per `diff` or `commit`
-invocation, not once per row.
+reached in time; extents unverified` prints once per `commit` invocation,
+not once per row. `diff` never dials a language server.
 
 A `chmod +x` with no content edit is `MODE`. Stage with a pathspec;
 `--sym` cannot express it.
@@ -248,8 +248,8 @@ C<TAB>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2<TAB>fix(auth): reject expired tok
 ```
 
 One-call orientation. It never dials a language server, so it emits no
-`W ts-only` record and no extent-disagreement warnings (`rgit diff` and
-`rgit commit` still cross-check); it costs milliseconds on a dirty tree
+`W ts-only` record and no extent-disagreement warnings (`rgit commit` still
+cross-checks); it costs milliseconds on a dirty tree
 instead of 1-2s. `--json` is that stream as one object
 ([`CODES.md`](CODES.md#rgit-context---json)). `--brief` prints the `B`
 record with dirty and untracked file counts appended as two extra fields,

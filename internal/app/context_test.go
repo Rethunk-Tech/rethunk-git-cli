@@ -173,7 +173,7 @@ func TestRun_ContextEmitsDiffRowsBeforeCommits(t *testing.T) {
 // TestRun_ContextNeverDialsALanguageServer pins that context skips the
 // cross-check: a live server that would report an extent disagreement for
 // this edit is never connected to, so no ts-only or warning record appears.
-// The same edit through rgit diff does reach it.
+// diff skips it too; the same edit through rgit commit --dry-run does reach it.
 func TestRun_ContextNeverDialsALanguageServer(t *testing.T) {
 	dir := chdirTempRepo(t)
 	t.Setenv("PATH", isolatedPATHWithGopls(t))
@@ -200,9 +200,12 @@ func TestRun_ContextNeverDialsALanguageServer(t *testing.T) {
 	qt.Check(t, qt.Not(qt.StringContains(stderr, "[warning]")))
 	qt.Check(t, qt.StringContains(stdout, "F\ta.go\tA\tMOD\t"))
 
-	_, diffErr, code := runApp(t, "diff")
+	_, _, code = runApp(t, "diff")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	qt.Check(t, qt.StringContains(diffErr, `a.go: resolve: "A":`))
+	qt.Check(t, qt.Equals(dials.Load(), int32(0)))
+
+	_, commitErr, _ := runApp(t, "commit", "--dry-run", "-m", "fix(a): x", "a.go:A")
+	qt.Check(t, qt.StringContains(commitErr, `"A"`))
 	qt.Check(t, qt.IsTrue(dials.Load() > 0))
 }
 
