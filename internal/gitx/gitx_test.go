@@ -998,3 +998,34 @@ func commitOnly(t *testing.T, repo *gitx.Repo, paths []string, opts gitx.CommitO
 	_, err = repo.Commit(t.Context(), opts)
 	return err
 }
+
+func TestRepoRunsNoRepoConfiguredPrograms(t *testing.T) {
+	ctx := t.Context()
+	dir, repo := gittest.New(ctx, t)
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("one\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".gitattributes"), []byte("*.txt diff=evil\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gittest.Commit(ctx, t, dir, "init")
+
+	marker := filepath.Join(t.TempDir(), "ran")
+	hook := "touch " + marker
+	gittest.Git(ctx, t, dir, "config", "core.fsmonitor", hook)
+	gittest.Git(ctx, t, dir, "config", "diff.evil.command", hook)
+	gittest.Git(ctx, t, dir, "config", "diff.evil.textconv", hook)
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("two\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := repo.DiffPatch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.DiffNumstat(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("a repo-configured program ran during a read diff")
+	}
+}
