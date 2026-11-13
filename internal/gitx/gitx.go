@@ -1121,9 +1121,13 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 		if err := r.checkOnlyHead(ctx, opts); err != nil {
 			return Result{}, err
 		}
+		hooksPath, userHooks, err := opts.Only.installGuardHooks(ctx, r)
+		if err != nil {
+			return Result{}, err
+		}
 		beforeOnlyCommit()
-		commitRepo = opts.Only.guarded()
-		runArgs = append([]string{"-c", "hook.rgit-only-guard.event=reference-transaction", "-c", "hook.rgit-only-guard.command=" + onlyGuardHook}, args...)
+		commitRepo = opts.Only.guarded(userHooks)
+		runArgs = append([]string{"-c", "core.hooksPath=" + hooksPath}, args...)
 	}
 	res, err := commitRepo.run(ctx, stdin, runArgs...)
 	if err != nil {
@@ -1205,28 +1209,77 @@ func (opts CommitOptions) args() []string {
 // commit starting.
 var beforeOnlyCommit = func() {}
 
-// onlyGuardHook is a reference-transaction hook added to a --only commit's
-// own hooks. git commit reads HEAD before running any hook and passes that
-// value as the update's expected old value, then fails the update if HEAD
-// moved since; the guard closes the remaining gap by refusing an expected old
-// value other than the private index's base. The first HEAD update that
-// matches arms the marker and disarms the guard, so a post-commit hook that
-// moves HEAD itself is left alone. config hooks need git 2.54; older git
-// ignores the keys and finishOnlyCommit falls back to checkOnlyBase. git
-// appends "$@" to a shell hook command; the trailing # keeps the state
-// argument out of awk's file list.
-const onlyGuardHook = `[ "$1" = preparing ] && [ ! -e "$RGIT_ONLY_GUARD" ] || { cat >/dev/null; exit 0; }; ` +
-	`exec awk '$3 == "HEAD" { if ($1 == ENVIRON["RGIT_ONLY_BASE"]) ok = 1; else bad = 1 } ` +
-	`END { if (bad) exit 1; if (ok) printf "" > ENVIRON["RGIT_ONLY_GUARD"] }' #`
+// onlyGuardHook is the reference-transaction hook written into a --only
+// commit's private hooksPath. git commit reads HEAD before running any hook
+// and passes that value as the update's expected old value, then fails the
+// update if HEAD moved since; the guard closes the remaining gap by refusing
+// an expected old value other than the private index's base. The first HEAD
+// update that matches arms the marker and disarms the guard, so a post-commit
+// hook that moves HEAD itself is left alone. A user reference-transaction
+// hook still runs, with its stdin replayed from the copy this script saved.
+// File hooks exist since git 2.28; finishOnlyCommit falls back to
+// checkOnlyBase if this never armed the marker.
+const onlyGuardHook = `#!/bin/sh
+in="${RGIT_ONLY_GUARD}.in"
+cat > "$in"
+if [ "$1" = preparing ] && [ ! -e "$RGIT_ONLY_GUARD" ]; then
+	awk '$3 == "HEAD" { if ($1 == ENVIRON["RGIT_ONLY_BASE"]) ok = 1; else bad = 1 }
+	END { if (bad) exit 1; if (ok) printf "" > ENVIRON["RGIT_ONLY_GUARD"] }' "$in" || exit 1
+fi
+user="${RGIT_USER_HOOKS}/reference-transaction"
+if [ -x "$user" ]; then
+	exec "$user" "$@" < "$in"
+fi
+`
+
+// installGuardHooks writes onlyGuardHook into a private hooks directory and
+// symlinks every other user hook so core.hooksPath does not skip them.
+func (o *OnlyIndex) installGuardHooks(ctx context.Context, real *Repo) (hooksPath, userHooks string, err error) {
+	hooksPath = filepath.Join(filepath.Dir(o.Path), "hooks")
+	if err := os.Mkdir(hooksPath, 0o700); err != nil {
+		return "", "", err
+	}
+	userHooks, err = real.hooksDir(ctx)
+	if err != nil {
+		return "", "", err
+	}
+	entries, err := os.ReadDir(userHooks)
+	if err != nil && !os.IsNotExist(err) {
+		return "", "", err
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if name == "reference-transaction" || strings.HasSuffix(name, ".sample") || e.IsDir() {
+			continue
+		}
+		_ = os.Symlink(filepath.Join(userHooks, name), filepath.Join(hooksPath, name))
+	}
+	if err := os.WriteFile(filepath.Join(hooksPath, "reference-transaction"), []byte(onlyGuardHook), 0o700); err != nil {
+		return "", "", err
+	}
+	return hooksPath, userHooks, nil
+}
+
+func (r *Repo) hooksDir(ctx context.Context) (string, error) {
+	p, err := r.checkedLine(ctx, "rev-parse", "--git-path", "hooks")
+	if err != nil {
+		return "", err
+	}
+	if filepath.IsAbs(p) {
+		return p, nil
+	}
+	return filepath.Join(r.root, p), nil
+}
 
 // guarded is o.Repo with onlyGuardHook's inputs in its environment.
-func (o *OnlyIndex) guarded() *Repo {
+func (o *OnlyIndex) guarded(userHooks string) *Repo {
 	base := o.BaseCommit
 	if base == "" {
 		base = strings.Repeat("0", len(o.BaseTree))
 	}
 	env := withEnv(o.Repo.env, "RGIT_ONLY_BASE", base)
 	env = withEnv(env, "RGIT_ONLY_GUARD", filepath.ToSlash(o.guardMarker()))
+	env = withEnv(env, "RGIT_USER_HOOKS", filepath.ToSlash(userHooks))
 	return &Repo{root: o.Repo.root, env: env}
 }
 
@@ -1267,9 +1320,9 @@ func (r *Repo) finishOnlyCommit(ctx context.Context, commitRepo *Repo, opts Comm
 	return nil
 }
 
-// checkOnlyBase is the after-the-fact check for git older than 2.54, where
-// onlyGuardHook never runs: it verifies the private index was built on the
-// commit git actually acted on. git takes that commit from HEAD when it starts, never
+// checkOnlyBase is the after-the-fact check when onlyGuardHook never armed
+// its marker: it verifies the private index was built on the commit git
+// actually acted on. git takes that commit from HEAD when it starts, never
 // from the tree the private index was seeded with, so a writer landing in
 // between leaves a commit whose tree undoes that writer's work. Under
 // --amend the foreign commit is the one replaced: the branch ends up carrying

@@ -406,7 +406,7 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 | `--amend` | Amend previous. No `-m`/`-F`: reuse HEAD (`--no-edit`). No targets: amend the index as it stands. |
 | `--allow-empty` | Permit no changes; suppresses exit 11. No targets: commit the index; still needs a message unless another auto-message flag is set. |
 | `-i`, `--include` | Stage named targets into the index, then commit it (git's `--include`). Needs a target. Exclusive with `--only` and `--stage-only`. |
-| `-o`, `--only` | Commit only the named targets; other staged paths stay. Needs a target unless `--amend`. Private index + `rgit-commit.lock`. Another writer moving HEAD mid-commit: 128, nothing committed on git 2.54+ (older git detects it after the commit lands). |
+| `-o`, `--only` | Commit only the named targets; other staged paths stay. Needs a target unless `--amend`. Private index + `rgit-commit.lock`. Another writer moving HEAD mid-commit: 128, nothing committed. |
 | `--reuse-message=<commit>` | Git's `--reuse-message`. Long form only. Exclusive with `-m`. |
 | `--reedit-message` | Refused (129). |
 | `--push` | Push after a successful commit. No rollback. No upstream: exit-8 names the branch and `git push -u origin <branch>` / `push.autoSetupRemote`. Never adds `-u`. |

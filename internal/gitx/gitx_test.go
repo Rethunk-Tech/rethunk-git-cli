@@ -1010,15 +1010,11 @@ func TestCommitOnlyAmendDetectsAForeignCommit(t *testing.T) {
 // A writer outside rgit's commit lock can land between Commit's HEAD check
 // and git commit reading HEAD. git would then build on that writer's commit
 // with a tree seeded before it, reverting its work, so the branch update must
-// be refused and nothing else touched.
+// be refused and nothing else touched. The git wrapper drops hook.* config
+// keys so this asserts the file-hook guard git 2.32 can run, not the
+// config-defined hook that needs 2.54.
 func TestCommitOnlyRefusesAWriterThatLandsBeforeGitStarts(t *testing.T) {
-	var major, minor int
-	if _, err := fmt.Sscanf(gittest.Git(t.Context(), t, t.TempDir(), "version"), "git version %d.%d", &major, &minor); err != nil {
-		t.Fatalf("parsing git version: %v", err)
-	}
-	if major == 2 && minor < 54 {
-		t.Skipf("git %d.%d predates config-defined hooks, so the guard cannot run", major, minor)
-	}
+	ignoreConfigDefinedHooks(t)
 	for _, amend := range []bool{false, true} {
 		t.Run(fmt.Sprintf("amend=%v", amend), func(t *testing.T) {
 			dir, repo := gittest.RepoWithFile(t.Context(), t, "a.txt", "a\n", "chore: initial")
@@ -1056,6 +1052,34 @@ func TestCommitOnlyRefusesAWriterThatLandsBeforeGitStarts(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ignoreConfigDefinedHooks puts a git wrapper first on PATH that drops
+// hook.rgit-only-guard.* -c keys, matching git before 2.54 which ignores
+// config-defined hooks.
+func ignoreConfigDefinedHooks(t *testing.T) {
+	t.Helper()
+	real, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	script := fmt.Sprintf(`#!/usr/bin/env python3
+import os, sys
+real = %q
+args, out, i = sys.argv[1:], [], 0
+while i < len(args):
+    if args[i] == "-c" and i + 1 < len(args) and args[i + 1].startswith("hook.rgit-only-guard."):
+        i += 2
+        continue
+    out.append(args[i])
+    i += 1
+os.execv(real, [real] + out)
+`, real)
+	if err := os.WriteFile(filepath.Join(dir, "git"), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
 
 func TestWithIndexFileDoesNotMutateProcessEnv(t *testing.T) {
