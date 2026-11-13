@@ -2,7 +2,9 @@ package resolve
 
 import (
 	"fmt"
+	"slices"
 	"sync"
+	"unicode/utf8"
 
 	ts "github.com/tree-sitter/go-tree-sitter"
 
@@ -238,11 +240,49 @@ func parseSource(lang Language, src []byte) (*ts.Tree, error) {
 	if err != nil {
 		return nil, err
 	}
-	tree := parser.Parse(src, nil)
+	tree := parser.Parse(ctypeSafe(lang, src), nil)
 	if tree == nil {
 		return nil, fmt.Errorf("resolve: %s: parse produced no tree", lang.Name())
 	}
 	return tree, nil
+}
+
+// ctypeSafe hides from the markdown, bash, and zsh scanners every non-ASCII
+// rune that directly follows an ASCII digit, '{', or '.': those scanners pass
+// that code point to C's isdigit, whose table lookup reads out of bounds and
+// segfaults for a large one. The filler keeps every byte offset, and names
+// are read from the caller's src, so only the parser sees it.
+// shortcut: a guard around third-party C, drop it once each grammar's scanner
+// checks digits as ASCII (markdown fixed this upstream after v0.5.1, the last
+// release with a Go module).
+func ctypeSafe(lang Language, src []byte) []byte {
+	switch lang.Name() {
+	case "markdown", "shell", "zsh":
+	default:
+		return src
+	}
+	var out []byte
+	for i := 1; i < len(src); i++ {
+		if src[i] < utf8.RuneSelf || !isDigitBraceOrDot(src[i-1]) {
+			continue
+		}
+		if out == nil {
+			out = slices.Clone(src)
+		}
+		_, n := utf8.DecodeRune(src[i:])
+		for j := i; j < i+n; j++ {
+			out[j] = '_'
+		}
+		i += n - 1
+	}
+	if out == nil {
+		return src
+	}
+	return out
+}
+
+func isDigitBraceOrDot(b byte) bool {
+	return (b >= '0' && b <= '9') || b == '{' || b == '.'
 }
 
 // cachedParserLocked returns lang's cached parser, creating and caching one
