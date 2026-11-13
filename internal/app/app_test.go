@@ -191,10 +191,6 @@ func TestRun_UsageErrors(t *testing.T) {
 		args: []string{"commit", "-m", "feat(x): y", "-F", "msg.txt", "a.go"},
 		want: "-m and -F are mutually exclusive; " + stdinMessageHint,
 	}, {
-		name: "commit: -m with a newline points at -F -",
-		args: []string{"commit", "-m", "feat(x): y\n\nbody", "a.go"},
-		want: "-m cannot carry a multi-line message; " + stdinMessageHint,
-	}, {
 		name: "commit: -F - and --pathspec-from-file=- are mutually exclusive",
 		args: []string{"commit", "-F", "-", "--pathspec-from-file=-"},
 		want: "-F - and --pathspec-from-file=- are mutually exclusive",

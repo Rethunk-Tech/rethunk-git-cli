@@ -57,6 +57,17 @@ func TestRun_CommitSignoffAppendsSignedOffBy(t *testing.T) {
 	qt.Assert(t, qt.StringContains(gitOut(t, dir, "log", "-1", "--format=%b"), "Signed-off-by: rgit Test <rgit-test@example.com>"))
 }
 
+func TestRun_CommitMultiLineMessageCarriesBody(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+
+	_, stderr, code := runApp(t, "-C", dir, "commit", "-m", "fix(a): subject\n\nbody line", "a.go:A")
+
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s%n%b"), "fix(a): subject\nbody line\n\n"))
+}
+
 func TestRun_CommitTrailerForwardsToGit(t *testing.T) {
 	t.Parallel()
 	dir := tempRepo(t)

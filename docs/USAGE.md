@@ -399,7 +399,7 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 | `--file PATH` | Explicit pathspec. Repeatable. |
 | `--pathspec-from-file FILE` | (`commit`, `diff`) One target per line, or stdin when `-`. Exclusive with `-F -` when both would take stdin (129). |
 | `--pathspec-file-nul` | NUL-delimited `--pathspec-from-file`. |
-| `-m MSG`, `--message MSG` | Repeatable; values join as blank-line paragraphs. One line each: a value with a newline is refused (129) and points at `-F -`. |
+| `-m MSG`, `--message MSG` | Repeatable; values join as blank-line paragraphs. A value may span lines, as in git. |
 | `-F FILE`, `--message-file FILE` | Message from file or stdin. Exclusive with `-m`. |
 | `-s`, `--signoff` | `Signed-off-by:`. Forwarded. |
 | `--trailer TOKEN:VALUE` | Repeatable, forwarded. |
