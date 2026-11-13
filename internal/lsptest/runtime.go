@@ -14,14 +14,16 @@ import (
 // outlives the run. A test that wants a daemon sets its own
 // XDG_RUNTIME_DIR or RGIT_LSP_SOCKET with t.Setenv.
 func RunWithoutManagedDaemon(m *testing.M) int {
-	dir, err := os.MkdirTemp(os.TempDir(), "rgit-test-runtime-*")
-	if err != nil {
+	// One fixed per-user directory, shared by every test binary and never
+	// removed: a per-run directory leaks whenever a run is killed before its
+	// defer fires.
+	dir := filepath.Join(os.TempDir(), fmt.Sprintf("rgit-test-runtime-%d", os.Getuid()))
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		fmt.Fprintln(os.Stderr, "lsptest:", err)
 		return 1
 	}
-	defer func() { _ = os.RemoveAll(dir) }()
 	untrusted := filepath.Join(dir, fmt.Sprintf("rgit-%d", os.Getuid()))
-	if err := os.Mkdir(untrusted, 0o755); err != nil { //nolint:gosec // fixture intentionally creates an untrusted world-readable runtime directory
+	if err := os.MkdirAll(untrusted, 0o755); err != nil { //nolint:gosec // fixture intentionally creates an untrusted world-readable runtime directory
 		fmt.Fprintln(os.Stderr, "lsptest:", err)
 		return 1
 	}
