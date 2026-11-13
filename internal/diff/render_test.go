@@ -174,3 +174,22 @@ func TestRender_StructuredDataIsPathOnly(t *testing.T) {
 		t.Errorf("RenderPorcelain = %q; want Go symbol row unchanged", porcelain)
 	}
 }
+
+func TestRender_TSOnlyIsNotPerRow(t *testing.T) {
+	t.Parallel()
+	report := &Report{TSOnly: true, Files: []FileReport{
+		{Path: "a.go", lang: "go", Rows: []Row{
+			{Symbol: "A", Status: StatusMod, Added: "1", Deleted: "0"},
+			{Symbol: "B", Status: StatusMod, Added: "2", Deleted: "0"},
+			{Symbol: "C", Status: StatusMod, Added: "3", Deleted: "0"},
+		}},
+	}}
+	text := RenderText(report)
+	porcelain := RenderPorcelain(report)
+	if strings.Contains(text, "ts-only") || strings.Contains(porcelain, "ts-only") {
+		t.Errorf("render embedded ts-only in rows:\ntext=%q\nporcelain=%q", text, porcelain)
+	}
+	if strings.Count(text, "a.go") != 1 {
+		t.Errorf("RenderText = %q; want the file named once, not per row", text)
+	}
+}

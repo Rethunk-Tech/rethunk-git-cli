@@ -113,7 +113,9 @@ writes the root commit.
 ## Output
 
 Aligned layout by default. `--porcelain` is
-[`CODES.md`](CODES.md#output-records).
+[`CODES.md`](CODES.md#output-records). `[ts-only] no live language server
+reached in time; extents unverified` prints once per `diff` or `commit`
+invocation, not once per row.
 
 A `chmod +x` with no content edit is `MODE`. Stage with a pathspec;
 `--sym` cannot express it.

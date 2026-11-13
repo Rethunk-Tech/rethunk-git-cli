@@ -641,6 +641,18 @@ func TestRun_DiffScopesAndOutput(t *testing.T) {
 	})
 }
 
+func TestRun_DiffPrintsTSOnlyNoticeOnce(t *testing.T) {
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 222\n}\n")
+	t.Setenv("PATH", "/usr/bin:/bin")
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	t.Setenv("RGIT_LSP_SOCKET", "")
+
+	_, stderr, code := runApp(t, "-C", dir, "diff")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(strings.Count(stderr, tsOnlyNotice), 1))
+}
+
 func TestRun_DiffStatIsAcceptedNoOp(t *testing.T) {
 	t.Parallel()
 	dir := tempRepo(t)
