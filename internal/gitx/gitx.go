@@ -1234,12 +1234,12 @@ fi
 
 // installGuardHooks writes onlyGuardHook into a private hooks directory and
 // symlinks every other user hook so core.hooksPath does not skip them.
-func (o *OnlyIndex) installGuardHooks(ctx context.Context, real *Repo) (hooksPath, userHooks string, err error) {
+func (o *OnlyIndex) installGuardHooks(ctx context.Context, repo *Repo) (hooksPath, userHooks string, err error) {
 	hooksPath = filepath.Join(filepath.Dir(o.Path), "hooks")
 	if err := os.Mkdir(hooksPath, 0o700); err != nil {
 		return "", "", err
 	}
-	userHooks, err = real.hooksDir(ctx)
+	userHooks, err = repo.hooksDir(ctx)
 	if err != nil {
 		return "", "", err
 	}
@@ -1254,7 +1254,15 @@ func (o *OnlyIndex) installGuardHooks(ctx context.Context, real *Repo) (hooksPat
 		}
 		_ = os.Symlink(filepath.Join(userHooks, name), filepath.Join(hooksPath, name))
 	}
-	if err := os.WriteFile(filepath.Join(hooksPath, "reference-transaction"), []byte(onlyGuardHook), 0o700); err != nil {
+	hookPath := filepath.Join(hooksPath, "reference-transaction")
+	if err := os.WriteFile(hookPath, []byte(onlyGuardHook), 0o600); err != nil {
+		return "", "", err
+	}
+	info, err := os.Stat(hookPath)
+	if err != nil {
+		return "", "", err
+	}
+	if err := os.Chmod(hookPath, info.Mode()|0o100); err != nil {
 		return "", "", err
 	}
 	return hooksPath, userHooks, nil

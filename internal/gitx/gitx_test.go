@@ -1059,14 +1059,14 @@ func TestCommitOnlyRefusesAWriterThatLandsBeforeGitStarts(t *testing.T) {
 // config-defined hooks.
 func ignoreConfigDefinedHooks(t *testing.T) {
 	t.Helper()
-	real, err := exec.LookPath("git")
+	gitBin, err := exec.LookPath("git")
 	if err != nil {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
 	script := fmt.Sprintf(`#!/usr/bin/env python3
 import os, sys
-real = %q
+gitBin = %q
 args, out, i = sys.argv[1:], [], 0
 while i < len(args):
     if args[i] == "-c" and i + 1 < len(args) and args[i + 1].startswith("hook.rgit-only-guard."):
@@ -1074,9 +1074,17 @@ while i < len(args):
         continue
     out.append(args[i])
     i += 1
-os.execv(real, [real] + out)
-`, real)
-	if err := os.WriteFile(filepath.Join(dir, "git"), []byte(script), 0o700); err != nil {
+os.execv(gitBin, [gitBin] + out)
+`, gitBin)
+	shim := filepath.Join(dir, "git")
+	if err := os.WriteFile(shim, []byte(script), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(shim)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(shim, info.Mode()|0o100); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
