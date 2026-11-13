@@ -245,10 +245,11 @@ C<TAB>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2<TAB>fix(auth): reject expired tok
 One-call orientation. It never dials a language server, so it emits no
 `W ts-only` record and no extent-disagreement warnings (`rgit diff` and
 `rgit commit` still cross-check); it costs milliseconds on a dirty tree
-instead of 1-2s. **The records are fixed** — a command with options
-becomes `git status` with extra steps. `--json` is that stream as one
-object ([`CODES.md`](CODES.md#rgit-context---json)). Any other argument
-is 129. Grammar: [`CODES.md`](CODES.md#rgit-context).
+instead of 1-2s. `--json` is that stream as one object
+([`CODES.md`](CODES.md#rgit-context---json)). `--brief` prints the `B`
+record with dirty and untracked file counts appended as two extra fields,
+and omits every other record. Any other argument is 129. Grammar:
+[`CODES.md`](CODES.md#rgit-context).
 
 **Capped at 16 KiB.** `B`/`H`, then `S`, `W`, `F` (survive first), then
 `T`, then `C` (last 20). Trailing `X` names withheld rows. `--json`
@@ -382,7 +383,7 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 `symbols`: `--for-commit`, `--with-lines`, `--with-filename`,
 `--porcelain`, `--json`, `--help`.
 `doctor`: `--porcelain`, `--json`, `--deep`, `--help`.
-`context`: `--json`, `--help`/`-h`.
+`context`: `--json`, `--brief`, `--help`/`-h`.
 `completion`: `--help`/`-h` plus the shell argument.
 
 | Flag | Behavior |

@@ -24,7 +24,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
 )
 
-const contextHelp = `usage: rgit context [--json]
+const contextHelp = `usage: rgit context [--json] [--brief]
 
 One-call repository orientation for an agent's first turn: the same
 per-file, per-symbol diffstat "rgit diff" itself reports for everything
@@ -35,9 +35,9 @@ editing.
 
 --json lists those same records as one JSON object: see
 docs/CODES.md#rgit-context---json. Without it, the text stream below is
-what is written. There is still nothing here to select or narrow ("a
-command with options becomes git status with extra steps" -- see
-docs/USAGE.md § Context): any other argument is refused.
+what is written.
+--brief prints the B record with dirty and untracked file counts
+appended, and omits every other record. Any other argument is refused.
 
 Records, one per line, tab-separated, no header:
 
@@ -111,9 +111,11 @@ const contextRecentCommitLimit = 20
 const contextByteBudget = 16384
 
 // runContext is hand-parsed. --json is an encoding of the same record
-// stream, not a filter. --help wins wherever it appears.
+// stream, not a filter. --brief is the one narrowing option: the B record
+// plus dirty and untracked counts. --help wins wherever it appears.
 func runContext(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	asJSON := jsonFlag(ctx)
+	brief := false
 	var extra []string
 	afterSeparator := false
 	for _, arg := range args {
@@ -133,6 +135,8 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 			return exitcode.Success
 		case "--json":
 			asJSON = true
+		case "--brief":
+			brief = true
 		default:
 			extra = append(extra, arg)
 		}
@@ -199,6 +203,19 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 	// on stderr rather than folded into the record stream.
 	for _, w := range report.Warnings {
 		fmt.Fprintf(stderr, "[warning] %s\n", w)
+	}
+
+	if brief {
+		dirty, untracked := contextDirtyUntracked(report, staged, unstaged)
+		if asJSON {
+			if err := writeContextBriefJSON(stdout, branchRecord, dirty, untracked); err != nil {
+				fmt.Fprintf(stderr, "rgit: context: %v\n", err)
+				return exitcode.GitFailure
+			}
+			return exitcode.Success
+		}
+		writeContextBrief(stdout, branchRecord, dirty, untracked)
+		return exitcode.Success
 	}
 
 	records := assembleContextRecords(report, commits, staged, unstaged, branchRecord, detachedRecord, sequencerOp, sequencerActive, hasStash, sparseCheckout)
@@ -316,6 +333,51 @@ func writeContextJSON(w io.Writer, stream string) error {
 		}
 	}
 	return encodeJSON(w, contextReport{Schema: jsonSchema, Records: records})
+}
+
+// contextDirtyUntracked counts files in the committable report: dirty is
+// staged and/or unstaged, untracked is everything else in the report.
+func contextDirtyUntracked(report *diffpkg.Report, staged, unstaged []string) (dirty, untracked int) {
+	for _, f := range report.Files {
+		if slices.Contains(staged, f.Path) || slices.Contains(unstaged, f.Path) {
+			dirty++
+			continue
+		}
+		untracked++
+	}
+	return dirty, untracked
+}
+
+func writeContextBrief(w io.Writer, branchRecord string, dirty, untracked int) {
+	line := strings.TrimRight(branchRecord, "\n")
+	if line == "" {
+		line = "B\t\t\t0\t0"
+	}
+	fmt.Fprintf(w, "%s\t%d\t%d\n", line, dirty, untracked)
+}
+
+func writeContextBriefJSON(w io.Writer, branchRecord string, dirty, untracked int) error {
+	rec := map[string]string{
+		"type":      "B",
+		"branch":    "",
+		"upstream":  "",
+		"ahead":     "0",
+		"behind":    "0",
+		"dirty":     strconv.Itoa(dirty),
+		"untracked": strconv.Itoa(untracked),
+	}
+	if branchRecord != "" {
+		parsed, err := contextRecord(strings.TrimRight(branchRecord, "\n"))
+		if err != nil {
+			return err
+		}
+		for k, v := range parsed {
+			rec[k] = v
+		}
+		rec["dirty"] = strconv.Itoa(dirty)
+		rec["untracked"] = strconv.Itoa(untracked)
+	}
+	return encodeJSON(w, contextReport{Schema: jsonSchema, Records: []map[string]string{rec}})
 }
 
 // contextRecord turns one text-stream line into the JSON object's fields.

@@ -30,9 +30,9 @@ func TestRun_ContextHelpAndUsage(t *testing.T) {
 		})
 	}
 
-	// docs/USAGE.md § Context's own guardrail: "a command with options
-	// becomes git status with extra steps". --json encodes the same stream;
-	// anything else, including a second output mode, is refused.
+	// --json encodes the same stream; --brief narrows it to B plus
+	// dirty/untracked counts. Anything else, including a second output
+	// mode, is refused.
 	t.Run("any other argument is refused", func(t *testing.T) {
 		chdirTempRepo(t)
 		for _, args := range [][]string{
@@ -52,6 +52,38 @@ func TestRun_ContextHelpAndUsage(t *testing.T) {
 // TestRun_ContextJSONMatchesTextStream pins that --json is the text stream's
 // records as one object, including the same F-row count, and that a second
 // output mode is still exit 129.
+func TestRun_ContextBriefPrintsBranchAndCounts(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	writeAppFile(t, dir, "new.txt", "untracked content\n")
+
+	full, _, code := runApp(t, "-C", dir, "context")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(full, "F\t"))
+	qt.Assert(t, qt.StringContains(full, "C\t"))
+
+	stdout, stderr, code := runApp(t, "-C", dir, "context", "--brief")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+	lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
+	qt.Assert(t, qt.Equals(len(lines), 1))
+	fields := strings.Split(lines[0], "\t")
+	qt.Assert(t, qt.Equals(len(fields), 7))
+	qt.Assert(t, qt.Equals(fields[0], "B"))
+	qt.Assert(t, qt.Equals(fields[5], "1"))
+	qt.Assert(t, qt.Equals(fields[6], "1"))
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "F\t")))
+	qt.Assert(t, qt.Not(qt.StringContains(stdout, "C\t")))
+
+	jsonOut, _, code := runApp(t, "-C", dir, "context", "--brief", "--json")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(jsonOut, `"dirty": "1"`))
+	qt.Assert(t, qt.StringContains(jsonOut, `"untracked": "1"`))
+	qt.Assert(t, qt.Not(qt.StringContains(jsonOut, `"type": "F"`)))
+	qt.Assert(t, qt.Not(qt.StringContains(jsonOut, `"type": "C"`)))
+}
+
 func TestRun_ContextJSONMatchesTextStream(t *testing.T) {
 	t.Parallel()
 	dir := tempRepo(t)

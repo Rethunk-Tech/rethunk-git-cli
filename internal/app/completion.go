@@ -127,7 +127,7 @@ const (
 	rgitShowFlags       = "--source --follow-rename --porcelain --with-header -h --help"
 	rgitBlameFlags      = "-p --porcelain --follow-rename --source -h --help"
 	rgitLogFlags        = "--porcelain --json -p --patch --follow --follow-rename --source --since --until -n --max-count -h --help"
-	rgitContextFlags    = "--json -h --help"
+	rgitContextFlags    = "--json --brief -h --help"
 	rgitSymbolsFlags    = "--for-commit --with-lines --with-filename --porcelain --json -h --help"
 )
 
