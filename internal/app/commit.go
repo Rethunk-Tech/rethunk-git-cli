@@ -3,6 +3,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/spf13/pflag"
 
@@ -43,6 +45,7 @@ type commitFlags struct {
 	porcelain    bool
 	asJSON       bool
 	quiet        bool
+	verbose      bool
 	include      bool
 	only         bool
 	stageOnly    bool
@@ -234,18 +237,21 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	// and the snapshot already holds any pre-existing staged work, so
 	// restoring it destroys nothing either way. Exit code is unchanged.
 	res, err := repo.Commit(ctx, opts)
-	// Hook output goes to the user either way: on success it is the
-	// formatter or codegen telling them what it did, and on failure it is
-	// usually the reason.
-	if len(res.Stderr) > 0 {
-		_, _ = stderr.Write(res.Stderr)
+	summary, stdoutHooks := splitCommitStdout(res.Stdout)
+	if err != nil || r.f.verbose {
+		if len(res.Stderr) > 0 {
+			_, _ = stderr.Write(res.Stderr)
+		}
+		if len(stdoutHooks) > 0 {
+			_, _ = stderr.Write(stdoutHooks)
+		}
 	}
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		rollbackIndex(ctx, stderr, indexSnap, targetResults)
 		return exitcode.GitFailure
 	}
-	jsonSHA, code := r.summarize(ctx, repo, res.Stdout, targetResults)
+	jsonSHA, code := r.summarize(ctx, repo, summary, targetResults)
 	if code != exitcode.Success {
 		return code
 	}
@@ -327,6 +333,7 @@ func registerCommitFlags(fs *pflag.FlagSet, f *commitFlags) (reeditMessage *bool
 	fs.BoolVar(&f.porcelain, "porcelain", false, "list staged targets as stable tab-separated records")
 	fs.BoolVar(&f.asJSON, "json", false, "one JSON object of the porcelain records")
 	fs.BoolVarP(&f.quiet, "quiet", "q", false, "suppress the commit summary and target listing")
+	fs.BoolVar(&f.verbose, "verbose", false, "print hook output even when the commit succeeds")
 	fs.BoolVarP(&f.include, "include", "i", false, "stage named targets and commit them with other staged work")
 	fs.BoolVarP(&f.only, "only", "o", false, "commit only named targets")
 	fs.BoolVar(&f.stageOnly, "stage-only", false, "stage the named targets into the index without committing")
@@ -779,6 +786,72 @@ func (r *commitRun) summarize(ctx context.Context, repo *gitx.Repo, gitStdout []
 		writeTargetListing(r.stdout, results)
 	}
 	return "", exitcode.Success
+}
+
+// splitCommitStdout peels hook text off git commit's stdout. Git's own
+// summary starts at the "[branch sha] subject" line; pre-commit hooks can
+// write before it and post-commit hooks after. Unrecognised stdout is left
+// as the summary so a quiet success cannot swallow git's report.
+func splitCommitStdout(stdout []byte) (summary, hooks []byte) {
+	if len(stdout) == 0 {
+		return nil, nil
+	}
+	lines := bytes.SplitAfter(stdout, []byte("\n"))
+	start := -1
+	for i, line := range lines {
+		if gitCommitSummaryLine(line) {
+			start = i
+			break
+		}
+	}
+	if start < 0 {
+		return stdout, nil
+	}
+	end := start + 1
+	for end < len(lines) {
+		body := bytes.TrimRight(lines[end], "\n")
+		if len(body) == 0 || body[0] == ' ' {
+			end++
+			continue
+		}
+		break
+	}
+	var before, after []byte
+	for _, line := range lines[:start] {
+		before = append(before, line...)
+	}
+	for _, line := range lines[start:end] {
+		summary = append(summary, line...)
+	}
+	for _, line := range lines[end:] {
+		after = append(after, line...)
+	}
+	return summary, append(before, after...)
+}
+
+func gitCommitSummaryLine(line []byte) bool {
+	s := bytes.TrimRight(line, "\n")
+	if len(s) == 0 || s[0] != '[' {
+		return false
+	}
+	close := bytes.IndexByte(s, ']')
+	if close < 2 || close+1 >= len(s) || s[close+1] != ' ' {
+		return false
+	}
+	sp := bytes.LastIndexByte(s[1:close], ' ')
+	if sp < 0 {
+		return false
+	}
+	sha := s[1+sp+1 : close]
+	if len(sha) < 7 {
+		return false
+	}
+	for _, c := range sha {
+		if !unicode.Is(unicode.ASCII_Hex_Digit, rune(c)) {
+			return false
+		}
+	}
+	return true
 }
 
 // reportPushFailure prints a failed push. A push failure does not roll back

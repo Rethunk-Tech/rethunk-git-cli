@@ -277,6 +277,66 @@ func TestCommit_HookFailureRestoresPrestagedState(t *testing.T) {
 	}
 }
 
+func TestCommit_HooksSilentOnSuccessUnlessVerbose(t *testing.T) {
+	t.Parallel()
+	dir, _ := gittest.New(t.Context(), t)
+	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n")
+	gittest.Commit(t.Context(), t, dir, "chore: initial")
+	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 2\n}\n")
+	const banner = "HOOK-BANNER"
+	gittest.InstallHook(t.Context(), t, dir, "pre-commit", "#!/bin/sh\necho "+banner+" >&2\necho "+banner+"-out\nexit 0\n")
+
+	var stdout, stderr strings.Builder
+	code := runCommit(t.Context(), dir, []string{"-m", "fix(a): update A", "a.go:A"}, &stdout, &stderr)
+	if code != exitcode.Success {
+		t.Fatalf("runCommit = %v; stderr: %s", code, stderr.String())
+	}
+	if strings.Contains(stderr.String(), banner) {
+		t.Errorf("success stderr = %q; want hook banner omitted", stderr.String())
+	}
+	if strings.Contains(stdout.String(), banner) {
+		t.Errorf("success stdout = %q; want hook banner omitted", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 3\n}\n")
+	code = runCommit(t.Context(), dir, []string{"--verbose", "-m", "fix(a): update A again", "a.go:A"}, &stdout, &stderr)
+	if code != exitcode.Success {
+		t.Fatalf("runCommit --verbose = %v; stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), banner) {
+		t.Errorf("--verbose stderr = %q; want hook banner", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 4\n}\n")
+	gittest.InstallHook(t.Context(), t, dir, "pre-commit", "#!/bin/sh\necho "+banner+" >&2\nexit 1\n")
+	code = runCommit(t.Context(), dir, []string{"-m", "fix(a): rejected", "a.go:A"}, &stdout, &stderr)
+	if code != exitcode.GitFailure {
+		t.Fatalf("runCommit rejected = %v; want GitFailure; stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), banner) {
+		t.Errorf("failure stderr = %q; want hook banner", stderr.String())
+	}
+}
+
+func TestSplitCommitStdout_SeparatesHookTextFromSummary(t *testing.T) {
+	t.Parallel()
+	stdout := []byte("lefthook banner\n[main abcdef0] fix(a): update A\n 1 file changed, 1 insertion(+)\npost-commit noise\n")
+	summary, hooks := splitCommitStdout(stdout)
+	if !strings.Contains(string(summary), "[main abcdef0]") {
+		t.Errorf("summary = %q; want git's [branch sha] line", summary)
+	}
+	if strings.Contains(string(summary), "lefthook") || strings.Contains(string(summary), "post-commit") {
+		t.Errorf("summary = %q; want hook text stripped", summary)
+	}
+	if !strings.Contains(string(hooks), "lefthook banner") || !strings.Contains(string(hooks), "post-commit noise") {
+		t.Errorf("hooks = %q; want pre- and post-commit text", hooks)
+	}
+}
+
 // Concurrent --only commits in one checkout each land exactly their own
 // path, and staged work that belongs to none of them stays staged.
 func TestRunCommit_OnlyConcurrentCommitsAllLand(t *testing.T) {

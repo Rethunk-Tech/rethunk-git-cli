@@ -413,7 +413,8 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 | `--reset-author` | Forwarded; git accepts it only with `--amend` or `--fixup=amend:`. |
 | `--porcelain` | (`commit`) `H<TAB>SHA` then target records. `--dry-run`: targets only. |
 | `--json` | (`commit`) Same facts as `--porcelain` as one object. Omits `sha` when porcelain would omit `H`. A real commit adds `left` (`dirty` paths, `upstream`, `ahead`). Exclusive with `--porcelain` and `-q`. |
-| `-q`, `--quiet` | (`commit`) Empty stdout; stderr still carries warnings and hooks. |
+| `-q`, `--quiet` | (`commit`) Empty stdout; stderr still carries warnings. |
+| `--verbose` | (`commit`) Print hook output even on a successful commit. On success, hooks are otherwise silent. |
 | `-S`, `-S<key-id>`, `--gpg-sign`, `--gpg-sign=<key-id>` | GPG-sign. See `-S` parsing below. |
 | `--no-gpg-sign` | Override `commit.gpgsign=true`. |
 | `--unstaged` | (`diff`) Worktree vs index. |
@@ -447,7 +448,7 @@ shorthand would misread `-SDEADBEEF` as a flag chain. Everything after
 `-S` in the same token is the key id (`-Ss` is key `s`). `-sS` is
 refused by name.
 
-Success relays `git commit`'s summary, then each target's `+N/-M`. Last line: `left: N dirty (a, b, c, …) · M ahead of UPSTREAM`, or `left: clean`; the ahead part is omitted with no upstream; not printed with `-q` or `--porcelain`.
+Success relays `git commit`'s summary, then each target's `+N/-M`. Hook output is held and printed only when the commit fails; `--verbose` prints it always. Last line: `left: N dirty (a, b, c, …) · M ahead of UPSTREAM`, or `left: clean`; the ahead part is omitted with no upstream; not printed with `-q` or `--porcelain`.
 `--porcelain`: [`CODES.md`](CODES.md#output-records).
 
 ```console
