@@ -6,18 +6,23 @@
 run = "[ -n \"$CI\" ] || gitleaks detect --no-banner --redact"
 
 [gates.build]
+timeout = "5m"
 run = "cache=$(go env GOCACHE); rm -f \"$cache/rgit-gate-ready\" \"$cache/rgit-gate-fail\"; go build -race ./...; e=$?; if [ \"$e\" -eq 0 ]; then touch \"$cache/rgit-gate-ready\"; else touch \"$cache/rgit-gate-fail\"; fi; exit \"$e\""
 
 [gates.lint]
+timeout = "5m"
 run = "cache=$(go env GOCACHE); while [ ! -f \"$cache/rgit-gate-ready\" ] && [ ! -f \"$cache/rgit-gate-fail\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready\" ] && make lint"
 env = { GOFLAGS = "-race" }
 
 [gates.test]
+timeout = "5m"
 run = "cache=$(go env GOCACHE); while [ ! -f \"$cache/rgit-gate-ready\" ] && [ ! -f \"$cache/rgit-gate-fail\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready\" ] && go test -race -short ./..."
 
 [gates.vuln]
+timeout = "5m"
 run = "cache=$(go env GOCACHE); while [ ! -f \"$cache/rgit-gate-ready\" ] && [ ! -f \"$cache/rgit-gate-fail\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready\" ] && govulncheck ./..."
 env = { GOFLAGS = "-race" }
 
 [gates.xcheck]
+timeout = "5m"
 run = "cache=$(go env GOCACHE); while [ ! -f \"$cache/rgit-gate-ready\" ] && [ ! -f \"$cache/rgit-gate-fail\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready\" ] && go vet -tags rgit_xcheck ./cmd/xcheck/..."
