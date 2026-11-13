@@ -205,6 +205,12 @@ func buildIndex(lang Language, src []byte, root *ts.Node) *index {
 		if cq := containerQualified(s); cq != s.Decl.Bare {
 			idx.byBare[cq] = append(idx.byBare[cq], s)
 		}
+		// A generic receiver also answers to its type name without type
+		// parameters, "Stack.Len" for "Stack[T].Len", the way Go code names it.
+		if i := strings.IndexByte(s.Decl.Container, '['); i > 0 && lang.Name() == "go" {
+			alias := joinQualified(s.Decl.Container[:i], s.Decl.Bare, s.Decl.Sep)
+			idx.byBare[alias] = append(idx.byBare[alias], s)
+		}
 	}
 	return idx
 }

@@ -17,6 +17,7 @@ Notable changes to `rgit`. The format follows
 
 - `rgit commit --only` refuses to move the branch when another writer committed between rgit's HEAD check and git reading HEAD (git 2.54+): it exits 128 with `HEAD moved ... nothing was committed, retry` and leaves the branch, index, and working tree as they were. Before, the commit landed on top and reverted that writer's work. Older git still detects it after the fact.
 - `rgit diff` and `rgit context` in a CRLF checkout (`core.autocrlf`, or a `text eol=crlf` attribute) report only the symbols that changed, comparing the worktree after git's CRLF-to-LF conversion. Before, every symbol in a touched file showed as changed.
+- A Go generic method resolves by its type name without type parameters, `stack.go:Stack.Len` for `Stack[T].Len` ([ANCHORS.md](docs/ANCHORS.md)). Before, it exited 3 with no suggestion.
 - `rgit diff` and `rgit context` attribute a change inside a Go or TypeScript declaration whose doc comment holds a comma, or a TypeScript generic with two type parameters, to that declaration instead of `(unanchorable)`.
 - `rgit commit --only` waits up to 5 s for another git process's `index.lock` when it updates the index after the commit lands. Giving up left the index staging that commit's reversal, which the next commit of staged work would have recorded.
 - A digit, `{`, or `.` followed by a large code point (an emoji tag character, say) in a Markdown, shell, or zsh file no longer segfaults `rgit symbols`, `diff`, `context`, or `commit`.

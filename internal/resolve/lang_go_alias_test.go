@@ -49,3 +49,33 @@ type Box struct{}
 		}
 	}
 }
+
+// A generic receiver's container keeps its type parameters, "Stack[T].Len",
+// but callers name the type as Go code does elsewhere, "Stack.Len".
+func TestResolve_GoGenericReceiverWithoutTypeParams(t *testing.T) {
+	t.Parallel()
+
+	const src = `package sample
+
+type Stack[T any] struct{ items []T }
+
+func (s *Stack[T]) Len() int { return len(s.items) }
+
+func (s Stack[T]) Peek() T { return s.items[0] }
+`
+	lang := goLang(t)
+	for _, tt := range []struct{ anchor, want string }{
+		{"Stack.Len", "func (s *Stack[T]) Len()"},
+		{"Stack[T].Len", "func (s *Stack[T]) Len()"},
+		{"Stack.Peek", "func (s Stack[T]) Peek()"},
+	} {
+		res, err := Resolve(lang, []byte(src), tt.anchor)
+		if err != nil {
+			t.Errorf("Resolve(%q) = %v; want it to resolve", tt.anchor, err)
+			continue
+		}
+		if got := string(srcAt([]byte(src), res.Extent)); !strings.Contains(got, tt.want) {
+			t.Errorf("Resolve(%q) extent = %q; want it to cover %q", tt.anchor, got, tt.want)
+		}
+	}
+}

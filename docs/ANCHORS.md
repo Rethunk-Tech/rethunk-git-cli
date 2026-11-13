@@ -44,6 +44,7 @@ member warns. The unfiltered listing does not — every sibling has a row.
 | Bare | `auth.go:ValidateToken` | Exit 4 if several match |
 | Container-qualified | `auth.go:A.Get` | Preferred |
 | gopls spelling | `auth.go:(*A).Get` | Accepted; needs quoting |
+| Go generic receiver | `stack.go:Stack[T].Len` | Emitted; `Stack.Len` accepted on input |
 | Markdown slug | `USAGE.md:diff-scope` | Emitted; raw heading text accepted on input |
 | Ordinal | `auth.go:init#2` | Last resort; warns |
 
