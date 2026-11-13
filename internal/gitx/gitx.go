@@ -1531,6 +1531,41 @@ func (r *Repo) LsFilesTracked(ctx context.Context, extra ...string) ([]string, e
 	return strings.Split(string(trimmed), "\x00"), nil
 }
 
+// CleansCRLF reports whether git's clean conversion turns path's CRLF line
+// endings into LF when content (the worktree bytes) is added, the way git
+// diff sees a worktree file: the text attribute forces it, text=auto or an
+// unset attribute under core.autocrlf true/input converts unless the index
+// copy already holds a CRLF. The caller rules out binary content, which
+// text=auto never converts. An untracked path is reported as unconverted.
+func (r *Repo) CleansCRLF(ctx context.Context, path string) (bool, error) {
+	out, err := r.checked(ctx, "ls-files", "--eol", "-z", "--", ":(literal)"+path)
+	if err != nil {
+		return false, err
+	}
+	info, _, ok := strings.Cut(string(out), "\t")
+	if !ok {
+		return false, nil
+	}
+	_, attr, _ := strings.Cut(info, "attr/")
+	attr = strings.TrimSpace(attr)
+	switch {
+	case attr == "-text":
+		return false, nil
+	case attr == "text" || strings.HasPrefix(attr, "text "):
+		return true, nil
+	case attr == "":
+		autocrlf, _, err := r.optionalLine(ctx, "config", "--get", "core.autocrlf")
+		if err != nil {
+			return false, err
+		}
+		if autocrlf != "input" && autocrlf != "true" {
+			return false, nil
+		}
+	}
+	index := strings.Fields(info)[0]
+	return index != "i/crlf" && index != "i/mixed", nil
+}
+
 // LsFilesStage reads path's index-stage-0 mode via `git ls-files --stage`.
 // found is false when path is simply not in the index — the normal case
 // for a file that is untracked or staged-deleted, not a failure.

@@ -1246,3 +1246,44 @@ func TestWithPathspecs_ClosesOptionsBeforeRevisions(t *testing.T) {
 		})
 	}
 }
+
+// A checkout that converts LF to CRLF leaves every worktree line differing
+// from the blob by its CR; git diff compares the worktree's clean form, so
+// only the edited symbol may show.
+func TestRun_CRLFCheckoutReportsOnlyTheEditedSymbol(t *testing.T) {
+	t.Parallel()
+	const lf = "package p\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n\nfunc C() int {\n\treturn 3\n}\n"
+	crlf := strings.ReplaceAll(strings.Replace(lf, "return 2", "return 22", 1), "\n", "\r\n")
+	for name, setup := range map[string]func(dir string){
+		"core.autocrlf=true": func(dir string) {
+			gittest.Git(t.Context(), t, dir, "config", "core.autocrlf", "true")
+		},
+		"eol=crlf attribute": func(dir string) {
+			gittest.Write(t, dir, ".gitattributes", "*.go text eol=crlf\n")
+			gittest.Commit(t.Context(), t, dir, "chore: crlf checkout")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			dir, repo := gittest.RepoWithFile(t.Context(), t, "a.go", lf, "chore: initial")
+			setup(dir)
+			gittest.Write(t, dir, "a.go", crlf)
+
+			report, err := Run(t.Context(), repo, dir, Options{})
+			if err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			file, ok := findFile(report.Files, "a.go")
+			if !ok {
+				t.Fatalf("report.Files = %+v; want a.go", report.Files)
+			}
+			var symbols []string
+			for _, row := range file.Rows {
+				symbols = append(symbols, row.Symbol)
+			}
+			if !slices.Equal(symbols, []string{"B"}) {
+				t.Errorf("changed symbols = %q; want [B]", symbols)
+			}
+		})
+	}
+}

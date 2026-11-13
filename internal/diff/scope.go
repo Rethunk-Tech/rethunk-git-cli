@@ -1,6 +1,7 @@
 package diff
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -58,7 +59,7 @@ func (s contentSide) read(ctx context.Context, repo *gitx.Repo, root, path strin
 func (s contentSide) readBounded(ctx context.Context, repo *gitx.Repo, root, path string, cache *blobCache) (content []byte, exists, tooLarge bool, err error) {
 	switch s.kind {
 	case sideWorktree:
-		content, exists, err = util.ReadFileIfExists(root, path)
+		content, exists, err = readWorktreeClean(ctx, repo, root, path)
 		return content, exists, false, err
 	case sideIndex:
 		// CatFile builds rev+":"+path; an empty rev yields ":path", which
@@ -91,6 +92,21 @@ func (s contentSide) readBounded(ctx context.Context, repo *gitx.Repo, root, pat
 		return content, exists, false, err
 	}
 	return nil, false, false, fmt.Errorf("diff: unknown content side kind %d", s.kind)
+}
+
+// readWorktreeClean reads path from the worktree with the CRLF-to-LF
+// conversion git applies before comparing it to a blob, so a CRLF checkout
+// does not show every line as changed.
+func readWorktreeClean(ctx context.Context, repo *gitx.Repo, root, path string) ([]byte, bool, error) {
+	content, exists, err := util.ReadFileIfExists(root, path)
+	if err != nil || !bytes.Contains(content, []byte("\r\n")) || util.LooksBinary(content) {
+		return content, exists, err
+	}
+	clean, err := repo.CleansCRLF(ctx, path)
+	if err != nil || !clean {
+		return content, exists, err
+	}
+	return bytes.ReplaceAll(content, []byte("\r\n"), []byte("\n")), exists, nil
 }
 
 // mode returns the git file mode recorded for path on this side, for
