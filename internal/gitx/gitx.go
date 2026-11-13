@@ -977,6 +977,16 @@ func (r *Repo) NewOnlyIndex(ctx context.Context) (*OnlyIndex, error) {
 	}
 	o := &OnlyIndex{Path: filepath.Join(dir, "index"), BaseCommit: commit, BaseTree: tree}
 	o.Repo = r.WithIndexFile(o.Path)
+	// A one-tree read-tree -m over a copy of the real index keeps its stat
+	// data wherever the entry matches the tree, as git's own --only does;
+	// without it git commit's refresh rehashes every tracked file. An index
+	// read-tree -m refuses (unmerged entries) falls back to a bare read.
+	if r.copyIndexTo(ctx, o.Path) == nil {
+		if _, err := o.Repo.checked(ctx, "read-tree", "-m", tree); err == nil {
+			return o, nil
+		}
+		_ = os.Remove(o.Path)
+	}
 	if _, err := o.Repo.checked(ctx, "read-tree", tree); err != nil {
 		o.Close()
 		return nil, err
@@ -986,6 +996,41 @@ func (r *Repo) NewOnlyIndex(ctx context.Context) (*OnlyIndex, error) {
 
 // Close removes the private index.
 func (o *OnlyIndex) Close() { _ = os.RemoveAll(filepath.Dir(o.Path)) }
+
+// copyIndexTo byte-copies r's index file to dst, keeping its mtime: git
+// trusts an entry's stat only when it is older than the index file itself,
+// so a copy stamped now would read a same-second edit as clean.
+func (r *Repo) copyIndexTo(ctx context.Context, dst string) error {
+	src, err := r.indexPath(ctx)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(filepath.Clean(src))
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(dst, data, 0o600); err != nil {
+		return err
+	}
+	return os.Chtimes(dst, time.Time{}, info.ModTime())
+}
+
+// indexPath is the index file r's git invocations use, GIT_INDEX_FILE
+// included.
+func (r *Repo) indexPath(ctx context.Context) (string, error) {
+	index, err := r.checkedLine(ctx, "rev-parse", "--git-path", "index")
+	if err != nil {
+		return "", err
+	}
+	if !filepath.IsAbs(index) {
+		index = filepath.Join(r.root, index)
+	}
+	return index, nil
+}
 
 // LockCommits serializes rgit's --only commits in one worktree: each builds
 // on the HEAD it read, and git's own ref check would only reject, not
@@ -1269,12 +1314,9 @@ func (r *Repo) writeEntries(ctx context.Context, entries map[string]indexEntry) 
 // indexLocked reports whether r's index file currently has a <index>.lock
 // beside it, the language-independent sign another git process holds it.
 func (r *Repo) indexLocked(ctx context.Context) bool {
-	index, err := r.checkedLine(ctx, "rev-parse", "--git-path", "index")
+	index, err := r.indexPath(ctx)
 	if err != nil {
 		return false
-	}
-	if !filepath.IsAbs(index) {
-		index = filepath.Join(r.root, index)
 	}
 	_, err = os.Stat(index + ".lock")
 	return err == nil
