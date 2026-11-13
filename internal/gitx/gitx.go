@@ -1248,8 +1248,36 @@ func (r *Repo) writeEntries(ctx context.Context, entries map[string]indexEntry) 
 	for path, entry := range entries {
 		fmt.Fprintf(&info, "%s %s\t%s\x00", entry.mode, entry.sha, path)
 	}
-	_, err := r.checkedStdin(ctx, &info, "update-index", "-z", "--index-info")
-	return err
+	// A sibling git process (a status refresh) holds index.lock for
+	// milliseconds; giving up after a --only commit landed would leave the
+	// real index staging that commit's reversal. update-index is atomic, so a
+	// retry never applies half an earlier attempt.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		_, err := r.checkedStdin(ctx, bytes.NewReader(info.Bytes()), "update-index", "-z", "--index-info")
+		if err == nil || !time.Now().Before(deadline) || !r.indexLocked(ctx) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+}
+
+// indexLocked reports whether r's index file currently has a <index>.lock
+// beside it, the language-independent sign another git process holds it.
+func (r *Repo) indexLocked(ctx context.Context) bool {
+	index, err := r.checkedLine(ctx, "rev-parse", "--git-path", "index")
+	if err != nil {
+		return false
+	}
+	if !filepath.IsAbs(index) {
+		index = filepath.Join(r.root, index)
+	}
+	_, err = os.Stat(index + ".lock")
+	return err == nil
 }
 
 type indexEntry struct{ mode, sha string }

@@ -879,6 +879,25 @@ func TestCommitOnlySyncsHookStagedPathsToIndex(t *testing.T) {
 	}
 }
 
+// A sibling git process (a `git status` refresh) holding index.lock as the
+// --only commit lands must be waited out: failing the sync instead leaves the
+// real index staging the reversal of the commit that just landed.
+func TestCommitOnlyWaitsOutABusyIndexLock(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "a.txt", "a before\n", "chore: initial")
+	gittest.InstallHook(t.Context(), t, dir, "post-commit", "#!/bin/sh\ntouch .git/index.lock\n(sleep 0.3; rm -f .git/index.lock) >/dev/null 2>&1 &\n")
+	gittest.Write(t, dir, "a.txt", "a after\n")
+
+	if err := commitOnly(t, repo, []string{"a.txt"}, gitx.CommitOptions{
+		Messages: []string{"feat: update a"},
+	}); err != nil {
+		t.Fatalf("Commit(Only) with index.lock briefly held: %v", err)
+	}
+	if got := gittest.Git(t.Context(), t, dir, "diff", "--cached", "--name-only"); got != "" {
+		t.Errorf("cached paths after --only commit = %q; want the index in sync with HEAD", got)
+	}
+}
+
 func TestCommitOnlyCommitsADeletedPath(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t.Context(), t)
