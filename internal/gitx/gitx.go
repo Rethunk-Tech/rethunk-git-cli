@@ -1453,8 +1453,11 @@ func (r *Repo) BlameRevision(ctx context.Context, rev, path string, start, end i
 	return r.blame(ctx, rev, path, start, end, extra...)
 }
 
+// blame and log pass --no-textconv first, so a caller can still opt back in:
+// git enables a repository's diff.<driver>.textconv program on both, and
+// rgit reports lines of the real bytes its extents were resolved against.
 func (r *Repo) blame(ctx context.Context, rev, path string, start, end int, extra ...string) ([]byte, error) {
-	args := append([]string{"blame", fmt.Sprintf("-L%d,%d", start, end)}, extra...)
+	args := append([]string{"blame", "--no-textconv", fmt.Sprintf("-L%d,%d", start, end)}, extra...)
 	if rev != "" {
 		args = append(args, rev)
 	}
@@ -1491,7 +1494,7 @@ func (r *Repo) LogLineRange(ctx context.Context, path string, start, end int, ex
 	if strings.ContainsAny(path, ":\n\x00") {
 		return nil, &LineRangePathError{Path: path}
 	}
-	args := append([]string{"log", fmt.Sprintf("-L%d,%d:%s", start, end, path)}, extra...)
+	args := append([]string{"log", "--no-textconv", fmt.Sprintf("-L%d,%d:%s", start, end, path)}, extra...)
 	return r.checked(ctx, args...)
 }
 
@@ -1552,7 +1555,7 @@ func (r *Repo) FindRename(ctx context.Context, rev, path string) (commit, oldPat
 // unparseable date or an unwalkable path is a genuine failure -- so any
 // non-zero exit is a *GitError.
 func (r *Repo) Log(ctx context.Context, since, until string, paths []string, extra ...string) ([]byte, error) {
-	args := []string{"log"}
+	args := []string{"log", "--no-textconv"}
 	if since != "" {
 		args = append(args, "--since="+since)
 	}

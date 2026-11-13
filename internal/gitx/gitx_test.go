@@ -1029,3 +1029,35 @@ func TestRepoRunsNoRepoConfiguredPrograms(t *testing.T) {
 		t.Fatal("a repo-configured program ran during a read diff")
 	}
 }
+
+func TestHistoryReadsRunNoRepoConfiguredTextconv(t *testing.T) {
+	ctx := t.Context()
+	dir, repo := gittest.New(ctx, t)
+	write := func(name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(".gitattributes", "*.txt diff=evil\n")
+	write("a.txt", "one\ntwo\n")
+	gittest.Commit(ctx, t, dir, "init")
+	write("a.txt", "one\nthree\n")
+	gittest.Commit(ctx, t, dir, "edit")
+
+	marker := filepath.Join(t.TempDir(), "ran")
+	gittest.Git(ctx, t, dir, "config", "diff.evil.textconv", "touch "+marker+"; cat")
+
+	if _, err := repo.Blame(ctx, "a.txt", 1, 2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.LogLineRange(ctx, "a.txt", 1, 2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.Log(ctx, "", "", []string{"a.txt"}, "-p"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("a repo-configured textconv program ran during a history read")
+	}
+}
