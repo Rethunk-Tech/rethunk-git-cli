@@ -1012,6 +1012,13 @@ func TestCommitOnlyAmendDetectsAForeignCommit(t *testing.T) {
 // with a tree seeded before it, reverting its work, so the branch update must
 // be refused and nothing else touched.
 func TestCommitOnlyRefusesAWriterThatLandsBeforeGitStarts(t *testing.T) {
+	var major, minor int
+	if _, err := fmt.Sscanf(gittest.Git(t.Context(), t, t.TempDir(), "version"), "git version %d.%d", &major, &minor); err != nil {
+		t.Fatalf("parsing git version: %v", err)
+	}
+	if major == 2 && minor < 54 {
+		t.Skipf("git %d.%d predates config-defined hooks, so the guard cannot run", major, minor)
+	}
 	for _, amend := range []bool{false, true} {
 		t.Run(fmt.Sprintf("amend=%v", amend), func(t *testing.T) {
 			dir, repo := gittest.RepoWithFile(t.Context(), t, "a.txt", "a\n", "chore: initial")
