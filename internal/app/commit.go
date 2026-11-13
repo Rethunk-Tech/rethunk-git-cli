@@ -238,14 +238,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	// restoring it destroys nothing either way. Exit code is unchanged.
 	res, err := repo.Commit(ctx, opts)
 	summary, stdoutHooks := splitCommitStdout(res.Stdout)
-	if err != nil || r.f.verbose {
-		if len(res.Stderr) > 0 {
-			_, _ = stderr.Write(res.Stderr)
-		}
-		if len(stdoutHooks) > 0 {
-			_, _ = stderr.Write(stdoutHooks)
-		}
-	}
+	r.writeHookOutput(res.Stderr, stdoutHooks, err != nil)
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		rollbackIndex(ctx, stderr, indexSnap, targetResults)
@@ -303,6 +296,18 @@ type commitRun struct {
 	// the caller named the file from -- see messageFile.
 	invocationDir  string
 	stdout, stderr io.Writer
+}
+
+func (r *commitRun) writeHookOutput(stderrOut, stdoutHooks []byte, failed bool) {
+	if !failed && !r.f.verbose {
+		return
+	}
+	if len(stderrOut) > 0 {
+		_, _ = r.stderr.Write(stderrOut)
+	}
+	if len(stdoutHooks) > 0 {
+		_, _ = r.stderr.Write(stdoutHooks)
+	}
 }
 
 func (r *commitRun) usage(format string, a ...any) exitcode.Code {
@@ -834,15 +839,15 @@ func gitCommitSummaryLine(line []byte) bool {
 	if len(s) == 0 || s[0] != '[' {
 		return false
 	}
-	close := bytes.IndexByte(s, ']')
-	if close < 2 || close+1 >= len(s) || s[close+1] != ' ' {
+	end := bytes.IndexByte(s, ']')
+	if end < 2 || end+1 >= len(s) || s[end+1] != ' ' {
 		return false
 	}
-	sp := bytes.LastIndexByte(s[1:close], ' ')
+	sp := bytes.LastIndexByte(s[1:end], ' ')
 	if sp < 0 {
 		return false
 	}
-	sha := s[1+sp+1 : close]
+	sha := s[1+sp+1 : end]
 	if len(sha) < 7 {
 		return false
 	}

@@ -15,6 +15,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -371,9 +372,7 @@ func writeContextBriefJSON(w io.Writer, branchRecord string, dirty, untracked in
 		if err != nil {
 			return err
 		}
-		for k, v := range parsed {
-			rec[k] = v
-		}
+		maps.Copy(rec, parsed)
 		rec["dirty"] = strconv.Itoa(dirty)
 		rec["untracked"] = strconv.Itoa(untracked)
 	}

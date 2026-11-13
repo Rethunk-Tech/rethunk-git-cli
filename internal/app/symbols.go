@@ -47,89 +47,129 @@ a listing.
 Full reference: docs/USAGE.md
 `
 
-func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
-	forCommit := false
-	withLines := false
-	withFilename := false
-	porcelain := false
-	asJSON := jsonFlag(ctx)
-	limit := -1
-	var match *regexp.Regexp
-	positionals := make([]string, 0, 1)
+type symbolsOpts struct {
+	forCommit, withLines, withFilename, porcelain, asJSON bool
+	limit                                                 int
+	match                                                 *regexp.Regexp
+	positionals                                           []string
+}
+
+func parseSymbolsArgs(ctx context.Context, args []string, stdout, stderr io.Writer) (opts symbolsOpts, code exitcode.Code, done bool) {
+	opts.asJSON = jsonFlag(ctx)
+	opts.limit = -1
+	opts.positionals = make([]string, 0, 1)
 	afterSeparator := false
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		if arg == "--" && !afterSeparator {
-			// Consumed, not kept: everything after it is a file, including a
-			// name that looks like a flag (docs/USAGE.md § Argument shape).
 			afterSeparator = true
 			continue
 		}
 		if afterSeparator {
-			positionals = append(positionals, arg)
+			opts.positionals = append(opts.positionals, arg)
 			continue
 		}
 		switch {
 		case arg == "--help" || arg == "-h":
 			fmt.Fprint(stdout, symbolsHelp)
-			return exitcode.Success
+			return opts, exitcode.Success, true
 		case arg == "--for-commit":
-			forCommit = true
+			opts.forCommit = true
 		case arg == "--with-lines":
-			withLines = true
+			opts.withLines = true
 		case arg == "--with-filename":
-			withFilename = true
+			opts.withFilename = true
 		case arg == "--porcelain":
-			porcelain = true
+			opts.porcelain = true
 		case arg == "--json":
-			asJSON = true
+			opts.asJSON = true
 		case arg == "--limit" || strings.HasPrefix(arg, "--limit="):
-			value, next, ok := flagValue(args, i, "--limit")
+			n, next, code, ok := parseSymbolsLimit(args, i, stderr)
 			if !ok {
-				fmt.Fprintln(stderr, "rgit: --limit requires a count")
-				fmt.Fprint(stderr, symbolsHelp)
-				return exitcode.InvalidUsage
+				return opts, code, true
 			}
-			n, err := strconv.Atoi(value)
-			if err != nil || n < 0 {
-				fmt.Fprintf(stderr, "rgit: symbols: invalid value %q for --limit\n", value)
-				fmt.Fprint(stderr, symbolsHelp)
-				return exitcode.InvalidUsage
-			}
-			limit = n
+			opts.limit = n
 			if next {
 				i++
 			}
 		case arg == "--match" || strings.HasPrefix(arg, "--match="):
-			value, next, ok := flagValue(args, i, "--match")
+			re, next, code, ok := parseSymbolsMatch(args, i, stderr)
 			if !ok {
-				fmt.Fprintln(stderr, "rgit: --match requires a regular expression")
-				fmt.Fprint(stderr, symbolsHelp)
-				return exitcode.InvalidUsage
+				return opts, code, true
 			}
-			re, err := regexp.Compile(value)
-			if err != nil {
-				fmt.Fprintf(stderr, "rgit: symbols: invalid value %q for --match: %v\n", value, err)
-				fmt.Fprint(stderr, symbolsHelp)
-				return exitcode.InvalidUsage
-			}
-			match = re
+			opts.match = re
 			if next {
 				i++
 			}
 		default:
-			positionals = append(positionals, arg)
+			opts.positionals = append(opts.positionals, arg)
 		}
 	}
-	if porcelain && asJSON {
+	if opts.porcelain && opts.asJSON {
 		fmt.Fprintln(stderr, "rgit: --porcelain and --json are mutually exclusive")
 		fmt.Fprint(stderr, symbolsHelp)
-		return exitcode.InvalidUsage
+		return opts, exitcode.InvalidUsage, true
 	}
-	if len(positionals) == 0 {
+	if len(opts.positionals) == 0 {
 		fmt.Fprintln(stderr, "rgit: symbols requires at least one file argument")
 		fmt.Fprint(stderr, symbolsHelp)
-		return exitcode.InvalidUsage
+		return opts, exitcode.InvalidUsage, true
+	}
+	return opts, exitcode.Success, false
+}
+
+func parseSymbolsLimit(args []string, i int, stderr io.Writer) (n int, next bool, code exitcode.Code, ok bool) {
+	value, next, ok := flagValue(args, i, "--limit")
+	if !ok {
+		fmt.Fprintln(stderr, "rgit: --limit requires a count")
+		fmt.Fprint(stderr, symbolsHelp)
+		return 0, false, exitcode.InvalidUsage, false
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil || n < 0 {
+		fmt.Fprintf(stderr, "rgit: symbols: invalid value %q for --limit\n", value)
+		fmt.Fprint(stderr, symbolsHelp)
+		return 0, false, exitcode.InvalidUsage, false
+	}
+	return n, next, exitcode.Success, true
+}
+
+func parseSymbolsMatch(args []string, i int, stderr io.Writer) (re *regexp.Regexp, next bool, code exitcode.Code, ok bool) {
+	value, next, ok := flagValue(args, i, "--match")
+	if !ok {
+		fmt.Fprintln(stderr, "rgit: --match requires a regular expression")
+		fmt.Fprint(stderr, symbolsHelp)
+		return nil, false, exitcode.InvalidUsage, false
+	}
+	re, err := regexp.Compile(value)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: symbols: invalid value %q for --match: %v\n", value, err)
+		fmt.Fprint(stderr, symbolsHelp)
+		return nil, false, exitcode.InvalidUsage, false
+	}
+	return re, next, exitcode.Success, true
+}
+
+func filterSymbolRecords(records []symbolRecord, match *regexp.Regexp, limit int) []symbolRecord {
+	if match != nil {
+		kept := records[:0]
+		for _, rec := range records {
+			if match.MatchString(rec.Symbol) {
+				kept = append(kept, rec)
+			}
+		}
+		records = kept
+	}
+	if limit >= 0 && len(records) > limit {
+		records = records[:limit]
+	}
+	return records
+}
+
+func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
+	opts, code, done := parseSymbolsArgs(ctx, args, stdout, stderr)
+	if done {
+		return code
 	}
 
 	root, prefix, repo, code := openRepo(ctx, dir, stderr)
@@ -145,34 +185,23 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 	// Every file is resolved before anything is written, matching show's own
 	// all-or-nothing rule: a listing cut off midway reads as "that file has
 	// no more symbols", which is exactly the wrong conclusion.
-	listings := make([][]string, 0, len(positionals))
-	for _, positional := range positionals {
-		lines, code := symbolLines(ctx, root, prefix, repo, ignoreCase, positional, forCommit, withLines, stderr)
+	listings := make([][]string, 0, len(opts.positionals))
+	for _, positional := range opts.positionals {
+		lines, code := symbolLines(ctx, root, prefix, repo, ignoreCase, positional, opts.forCommit, opts.withLines, stderr)
 		if code != exitcode.Success {
 			return code
 		}
 		listings = append(listings, lines)
 	}
 
-	showName := withFilename || len(positionals) > 1
-	records, err := symbolRecords(positionals, listings, showName, withLines)
+	showName := opts.withFilename || len(opts.positionals) > 1
+	records, err := symbolRecords(opts.positionals, listings, showName, opts.withLines)
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: symbols: %v\n", err)
 		return exitcode.GitFailure
 	}
-	if match != nil {
-		kept := records[:0]
-		for _, rec := range records {
-			if match.MatchString(rec.Symbol) {
-				kept = append(kept, rec)
-			}
-		}
-		records = kept
-	}
-	if limit >= 0 && len(records) > limit {
-		records = records[:limit]
-	}
-	if asJSON {
+	records = filterSymbolRecords(records, opts.match, opts.limit)
+	if opts.asJSON {
 		if err := writeSymbolsJSON(stdout, records); err != nil {
 			fmt.Fprintf(stderr, "rgit: symbols: %v\n", err)
 			return exitcode.GitFailure
@@ -183,12 +212,12 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 	// stays where it was, and the symbol stays last, so a parser splits on
 	// NUL for records and on the first tabs for fields.
 	end := "\n"
-	if porcelain {
+	if opts.porcelain {
 		end = "\x00"
 	}
 	for _, rec := range records {
 		line := rec.Symbol
-		if withLines {
+		if opts.withLines {
 			line = rec.Start + "," + rec.End + "\t" + rec.Symbol
 		}
 		if showName {
@@ -257,9 +286,8 @@ func flagValue(args []string, i int, name string) (value string, next, ok bool) 
 		}
 		return args[i+1], true, true
 	}
-	prefix := name + "="
-	if strings.HasPrefix(arg, prefix) {
-		return strings.TrimPrefix(arg, prefix), false, true
+	if rest, ok := strings.CutPrefix(arg, name+"="); ok {
+		return rest, false, true
 	}
 	return "", false, false
 }
