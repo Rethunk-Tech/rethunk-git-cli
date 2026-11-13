@@ -761,7 +761,7 @@ type controlWriter struct {
 }
 
 func (c *controlWriter) Write(p []byte) (int, error) {
-	data := append(c.pending, p...)
+	data := slices.Concat(c.pending, p)
 	c.pending = nil
 	if last := len(data) - 1; last >= 0 && (data[last] == 0xc2 || data[last] == '\r') {
 		c.pending = []byte{data[last]}
