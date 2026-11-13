@@ -1149,3 +1149,22 @@ func TestHistoryReadsRunNoRepoConfiguredTextconv(t *testing.T) {
 		t.Fatal("a repo-configured textconv program ran during a history read")
 	}
 }
+
+// A closed private index leaves nothing behind in the temp directory.
+func TestOnlyIndexCloseLeavesNoTempEntries(t *testing.T) {
+	_, repo := gittest.RepoWithFile(t.Context(), t, "a.txt", "a\n", "chore: initial")
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	only, err := repo.NewOnlyIndex(t.Context())
+	if err != nil {
+		t.Fatalf("NewOnlyIndex: %v", err)
+	}
+	only.Close()
+	entries, err := os.ReadDir(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("TMPDIR holds %d entries after Close; want 0", len(entries))
+	}
+}
