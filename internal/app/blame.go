@@ -136,7 +136,7 @@ func runBlame(ctx context.Context, dir string, args []string, stdout, stderr io.
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return exitcode.GitFailure
 	}
-	_, _ = stdout.Write(out)
+	_, _ = stdout.Write(stripControl(out))
 	return exitcode.Success
 }
 
@@ -152,7 +152,7 @@ func runBlameFollowRename(ctx context.Context, repo *gitx.Repo, startRev, file s
 			fmt.Fprintf(stderr, "rgit: %v\n", err)
 			return exitcode.GitFailure
 		}
-		_, _ = stdout.Write(out)
+		_, _ = stdout.Write(stripControl(out))
 		return exitcode.Success
 	})
 }

@@ -668,3 +668,24 @@ func (p anchorParser) refusePositional(a string, have, maxPositionals int, refus
 	fmt.Fprint(p.stderr, p.help)
 	return true
 }
+
+// stripControl removes terminal control bytes from git text that rgit prints
+// verbatim (commit subjects, authors, paths from a hostile repository): C0
+// controls other than \n and \t (ESC, BEL, CR), DEL, and UTF-8-encoded C1
+// controls (U+0080-U+009F, which include CSI and OSC introducers).
+func stripControl(b []byte) []byte {
+	out := make([]byte, 0, len(b))
+	for i := 0; i < len(b); i++ {
+		c := b[i]
+		switch {
+		case c == '\n' || c == '\t':
+		case c < 0x20 || c == 0x7f:
+			continue
+		case c == 0xc2 && i+1 < len(b) && b[i+1] >= 0x80 && b[i+1] <= 0x9f:
+			i++
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
+}
