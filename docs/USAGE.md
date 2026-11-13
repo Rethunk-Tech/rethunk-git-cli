@@ -425,6 +425,7 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 | `--exit-code` | (`diff`) 1 if committable, 0 if clean. |
 | `--quiet` | (`diff`) Implies `--exit-code`, suppresses output. |
 | `-p`, `--patch` | (`diff`) Git's patch after the report. Exclusive with `--porcelain` and `--json`. |
+| `--stat` | (`diff`) Accepted as a no-op: every row already carries `+N/-M`. |
 | `--with-header` | (`show`) Deprecated `--porcelain` alias. |
 | `--porcelain` | (`show`) Length-framed extents. |
 | `--with-filename` | (`symbols`) `FILE<TAB>` prefix. |

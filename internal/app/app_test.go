@@ -641,6 +641,22 @@ func TestRun_DiffScopesAndOutput(t *testing.T) {
 	})
 }
 
+func TestRun_DiffStatIsAcceptedNoOp(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+
+	plain, plainErr, code := runApp(t, "-C", dir, "diff")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Not(qt.Equals(plain, "")))
+
+	withStat, stderr, code := runApp(t, "-C", dir, "diff", "--stat")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Not(qt.StringContains(stderr, "unknown flag")))
+	qt.Assert(t, qt.Equals(withStat, plain))
+	qt.Assert(t, qt.Equals(stderr, plainErr))
+}
+
 // TestRun_DiffPatchFlag covers -p/--patch on rgit diff: it reaches git and
 // carries real content, is mutually exclusive with --porcelain the same way
 // --quiet already is, and -- the requirement the design settled on --

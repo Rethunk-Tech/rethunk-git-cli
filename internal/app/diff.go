@@ -39,6 +39,7 @@ type diffFlags struct {
 	patch        bool
 	pathspecFile string
 	pathspecNUL  bool
+	stat         bool
 	syms         []string
 	files        []string
 }
@@ -142,6 +143,7 @@ func registerDiffFlags(fs *pflag.FlagSet, f *diffFlags) {
 	fs.BoolVar(&f.exitCode, "exit-code", false, "exit 1 when anything is committable")
 	fs.BoolVar(&f.quiet, "quiet", false, "implies --exit-code and suppresses output")
 	fs.BoolVarP(&f.patch, "patch", "p", false, "include the real patch body")
+	fs.BoolVar(&f.stat, "stat", false, "accepted; rows already carry +N/-M")
 	fs.StringVar(&f.pathspecFile, "pathspec-from-file", "", "read targets from a file, or - for stdin")
 	fs.BoolVar(&f.pathspecNUL, "pathspec-file-nul", false, "separate pathspec-file targets with NUL")
 }
