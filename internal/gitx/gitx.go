@@ -1297,10 +1297,15 @@ func (r *Repo) writeEntries(ctx context.Context, entries map[string]indexEntry) 
 	// milliseconds; giving up after a --only commit landed would leave the
 	// real index staging that commit's reversal. update-index is atomic, so a
 	// retry never applies half an earlier attempt.
+	index, err := r.indexPath(ctx)
+	if err != nil {
+		return err
+	}
+	lock := index + ".lock"
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		_, err := r.checkedStdin(ctx, bytes.NewReader(info.Bytes()), "update-index", "-z", "--index-info")
-		if err == nil || !time.Now().Before(deadline) || !r.indexLocked(ctx) {
+		if err == nil || !time.Now().Before(deadline) || !lockContention(err, lock) {
 			return err
 		}
 		select {
@@ -1311,15 +1316,15 @@ func (r *Repo) writeEntries(ctx context.Context, entries map[string]indexEntry) 
 	}
 }
 
-// indexLocked reports whether r's index file currently has a <index>.lock
-// beside it, the language-independent sign another git process holds it.
-func (r *Repo) indexLocked(ctx context.Context) bool {
-	index, err := r.indexPath(ctx)
-	if err != nil {
-		return false
+// lockContention reports whether err is git failing on lock: the lock file
+// is still there, or git's message names it (the holder may have released it
+// since). The path is matched rather than the message, which git translates.
+func lockContention(err error, lock string) bool {
+	if _, statErr := os.Stat(lock); statErr == nil {
+		return true
 	}
-	_, err = os.Stat(index + ".lock")
-	return err == nil
+	gitErr, ok := errors.AsType[*GitError](err)
+	return ok && bytes.Contains(gitErr.Stderr, []byte(filepath.ToSlash(lock)))
 }
 
 type indexEntry struct{ mode, sha string }
