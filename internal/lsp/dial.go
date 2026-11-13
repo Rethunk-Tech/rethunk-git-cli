@@ -62,7 +62,7 @@ func dialSocket(ctx context.Context, spec serverSpec, repoRoot string) (*Client,
 		}
 
 		handshakeCtx, cancel := context.WithTimeout(ctx, dialBudget()+queryDeadline())
-		client, err := NewClient(handshakeCtx, conn, repoRoot)
+		client, err := newClient(handshakeCtx, conn, repoRoot, spec.initOptions)
 		cancel()
 		if err != nil {
 			// A socket answered but the handshake failed -- a stale or
@@ -366,7 +366,7 @@ func dialStdio(ctx context.Context, spec serverSpec, repoRoot string) (*Client, 
 
 	handshakeCtx, cancel := context.WithTimeout(ctx, dialBudget()+queryDeadline())
 	defer cancel()
-	client, err := NewClient(handshakeCtx, pipeRWC{stdout, stdin}, repoRoot)
+	client, err := newClient(handshakeCtx, pipeRWC{stdout, stdin}, repoRoot, spec.initOptions)
 	if err != nil {
 		// NewClient already closed the connection (and, through it, the
 		// pipes -- client.go's own close-on-error) on this path; only the

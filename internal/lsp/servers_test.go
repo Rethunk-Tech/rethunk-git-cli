@@ -1,7 +1,10 @@
 package lsp
 
 import (
+	"bufio"
 	"context"
+	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,6 +12,8 @@ import (
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/lsptest"
 )
 
 // TestDial_NewServers exercises each server added to the servers map
@@ -169,5 +174,88 @@ func TestGoplsDaemonIdleTimeoutOutlastsASession(t *testing.T) {
 	want := []string{"-listen=unix;/run/x/rgit-gopls.sock", "-listen.timeout=2h"}
 	if !slices.Equal(args, want) {
 		t.Errorf("gopls daemon args = %v, want %v", args, want)
+	}
+}
+
+func TestRustAnalyzerInitializeDisablesBuildScriptsAndProcMacros(t *testing.T) {
+	t.Parallel()
+	spec, ok := servers["rust"]
+	if !ok {
+		t.Fatal("servers map has no rust entry")
+	}
+	assertRustAnalyzerInitOptions(t, spec.initOptions)
+
+	clientConn, serverConn := net.Pipe()
+	defer func() { _ = clientConn.Close() }()
+	defer func() { _ = serverConn.Close() }()
+
+	type result struct {
+		opts map[string]any
+		err  error
+	}
+	got := make(chan result, 1)
+	go func() {
+		r := bufio.NewReader(serverConn)
+		msg, ok, err := lsptest.ReadFrame(r)
+		if err != nil {
+			got <- result{err: err}
+			return
+		}
+		if !ok {
+			got <- result{err: fmt.Errorf("eof before initialize")}
+			return
+		}
+		if method, _ := msg["method"].(string); method != "initialize" {
+			got <- result{err: fmt.Errorf("method = %v, want initialize", msg["method"])}
+			return
+		}
+		params, _ := msg["params"].(map[string]any)
+		opts, _ := params["initializationOptions"].(map[string]any)
+		id := msg["id"]
+		if err := lsptest.WriteFrame(serverConn, map[string]any{
+			"jsonrpc": "2.0",
+			"id":      id,
+			"result":  map[string]any{"capabilities": map[string]any{}},
+		}); err != nil {
+			got <- result{err: err}
+			return
+		}
+		_, _, _ = lsptest.ReadFrame(r) // initialized notification
+		got <- result{opts: opts}
+	}()
+
+	client, err := newClient(t.Context(), clientConn, t.TempDir(), spec.initOptions)
+	if err != nil {
+		t.Fatalf("newClient: %v", err)
+	}
+	defer func() { _ = client.Close() }()
+
+	select {
+	case r := <-got:
+		if r.err != nil {
+			t.Fatalf("initialize frame: %v", r.err)
+		}
+		assertRustAnalyzerInitOptions(t, r.opts)
+	case <-t.Context().Done():
+		t.Fatal("timed out waiting for initialize")
+	}
+}
+
+func assertRustAnalyzerInitOptions(t *testing.T, opts map[string]any) {
+	t.Helper()
+	cargo, _ := opts["cargo"].(map[string]any)
+	buildScripts, _ := cargo["buildScripts"].(map[string]any)
+	enable, ok := buildScripts["enable"].(bool)
+	if !ok || enable {
+		t.Errorf("cargo.buildScripts.enable = %v (present=%v), want false", buildScripts["enable"], ok)
+	}
+	run, ok := cargo["runBuildScripts"].(bool)
+	if !ok || run {
+		t.Errorf("cargo.runBuildScripts = %v (present=%v), want false", cargo["runBuildScripts"], ok)
+	}
+	procMacro, _ := opts["procMacro"].(map[string]any)
+	enable, ok = procMacro["enable"].(bool)
+	if !ok || enable {
+		t.Errorf("procMacro.enable = %v (present=%v), want false", procMacro["enable"], ok)
 	}
 }

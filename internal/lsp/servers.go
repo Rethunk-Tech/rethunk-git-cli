@@ -39,6 +39,10 @@ type serverSpec struct {
 	// stdioArgs is the fixed argv for spawning bin as a one-shot stdio
 	// subprocess. Only set for transportStdio servers.
 	stdioArgs []string
+	// initOptions is sent as LSP InitializeParams.initializationOptions so a
+	// server cannot run code from the repo it opens. rust-analyzer honours
+	// cargo.buildScripts.enable, cargo.runBuildScripts, and procMacro.enable.
+	initOptions map[string]any
 }
 
 // vtslsSpec is shared by the "typescript" and "tsx" catalog entries below:
@@ -90,6 +94,16 @@ var servers = map[string]serverSpec{
 		// pyright-langserver it has no --stdio to opt into, and unlike
 		// bash-language-server no subcommand either.
 		stdioArgs: nil,
+		// rust-analyzer must not compile or run repo code when rgit opens a
+		// crate: build scripts and proc macros stay off, including the older
+		// cargo.runBuildScripts key still honoured by some versions.
+		initOptions: map[string]any{
+			"cargo": map[string]any{
+				"buildScripts":    map[string]any{"enable": false},
+				"runBuildScripts": false,
+			},
+			"procMacro": map[string]any{"enable": false},
+		},
 	},
 	"shell": {
 		name:      "bash-language-server",

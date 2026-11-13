@@ -3,6 +3,7 @@ package lsp
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -44,6 +45,10 @@ type Client struct {
 // going through Dial's socket-probe/spawn machinery; production callers use
 // Dial.
 func NewClient(handshakeCtx context.Context, rwc io.ReadWriteCloser, root string) (*Client, error) {
+	return newClient(handshakeCtx, rwc, root, nil)
+}
+
+func newClient(handshakeCtx context.Context, rwc io.ReadWriteCloser, root string, initOptions map[string]any) (*Client, error) {
 	stream := jsonrpc2.NewStream(rwc)
 	// The background context here is deliberate: it governs the
 	// connection's read goroutine (jsonrpc2 conn.Go), which must keep
@@ -80,6 +85,14 @@ func NewClient(handshakeCtx context.Context, rwc io.ReadWriteCloser, root string
 	params.WorkspaceFolders = protocol.NewNullable([]protocol.WorkspaceFolder{
 		{URI: uri.File(root), Name: filepath.Base(root)},
 	})
+	if initOptions != nil {
+		raw, err := json.Marshal(initOptions)
+		if err != nil {
+			_ = conn.Close()
+			return nil, fmt.Errorf("lsp: initialization options: %w", err)
+		}
+		params.InitializationOptions = raw
+	}
 	if _, err := server.Initialize(handshakeCtx, params); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("lsp: initialize: %w", err)

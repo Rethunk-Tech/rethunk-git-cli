@@ -8,6 +8,7 @@ Notable changes to `rgit`. The format follows
 
 ### Changed
 
+- rust-analyzer no longer runs Cargo build scripts or proc macros from the repo it opens: initialize sends `cargo.buildScripts.enable`, `cargo.runBuildScripts`, and `procMacro.enable` as false.
 - `rgit context` no longer cross-checks extents against a language server, so it never dials or spawns one: 552 ms to 234 ms on a 10-file dirty tree in a 3.6k-file repo, and 1-2 s saved where a stdio server (vtsls, marksman) would have started. It no longer emits `W ts-only` or extent-disagreement warnings; `rgit diff` and `rgit commit` still verify.
 - The gopls daemon rgit spawns now idles for 2 hours (was 10 minutes), so a working session pays the module load once instead of after every pause.
 - `rgit commit --only` seeds its private index with the real index's stat data, so git no longer rehashes every tracked file: 1.08 s to 0.22 s on a 50k-file checkout.
