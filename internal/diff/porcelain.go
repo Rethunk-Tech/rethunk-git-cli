@@ -14,7 +14,7 @@ func RenderPorcelain(report *Report) string {
 	}
 	var buf bytes.Buffer
 	for _, f := range report.Files {
-		for _, row := range f.Rows {
+		for _, row := range rowsForRender(f) {
 			fmt.Fprintf(&buf, "%s\t%s\t%s\t%s\t%s\n", f.Path, row.Symbol, row.Status.Porcelain(), row.Added, row.Deleted)
 		}
 	}

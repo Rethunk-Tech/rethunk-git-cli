@@ -139,3 +139,38 @@ func TestRenderText_NoTrailingWhitespace(t *testing.T) {
 		}
 	}
 }
+
+func TestRender_StructuredDataIsPathOnly(t *testing.T) {
+	t.Parallel()
+	report := &Report{Files: []FileReport{
+		{Path: "config.json", lang: "json", Rows: []Row{
+			{Symbol: "name", Status: StatusMod, Added: "1", Deleted: "0"},
+			{Symbol: "version", Status: StatusMod, Added: "2", Deleted: "1"},
+		}},
+		{Path: "a.go", lang: "go", Rows: []Row{
+			{Symbol: "A", Status: StatusMod, Added: "3", Deleted: "1"},
+		}},
+	}}
+
+	text := RenderText(report)
+	if strings.Contains(text, "name") || strings.Contains(text, "version") {
+		t.Errorf("RenderText = %q; want no JSON keys (commit refuses FILE:key)", text)
+	}
+	if !strings.Contains(text, "config.json") || !strings.Contains(text, "+3/-1") {
+		t.Errorf("RenderText = %q; want one path-only JSON row with summed counts", text)
+	}
+	if !strings.Contains(text, "A") {
+		t.Errorf("RenderText = %q; want Go symbols unchanged", text)
+	}
+
+	porcelain := RenderPorcelain(report)
+	if strings.Contains(porcelain, "\tname\t") || strings.Contains(porcelain, "\tversion\t") {
+		t.Errorf("RenderPorcelain = %q; want no JSON keys", porcelain)
+	}
+	if !strings.Contains(porcelain, "config.json\t\tMOD\t3\t1\n") {
+		t.Errorf("RenderPorcelain = %q; want path-only MOD row", porcelain)
+	}
+	if !strings.Contains(porcelain, "a.go\tA\tMOD\t3\t1\n") {
+		t.Errorf("RenderPorcelain = %q; want Go symbol row unchanged", porcelain)
+	}
+}

@@ -118,6 +118,9 @@ Aligned layout by default. `--porcelain` is
 A `chmod +x` with no content edit is `MODE`. Stage with a pathspec;
 `--sym` cannot express it.
 
+JSON, JSONC, JSON5, YAML, and TOML files render as one path row: `commit`
+refuses `FILE:key` on those files, so the listing names the path instead.
+
 `--sym FILE:member` on a member of a container new to `HEAD` warns:
 `commit` would stage the whole container
 ([`ANCHORS.md`](ANCHORS.md#qualification)). The unfiltered listing does

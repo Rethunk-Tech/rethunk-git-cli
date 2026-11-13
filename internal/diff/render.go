@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"regexp"
+	"strconv"
 	"text/tabwriter"
+
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
 )
 
 // RenderText renders report in the default aligned layout from
@@ -19,7 +22,8 @@ func RenderText(report *Report) string {
 	var buf bytes.Buffer
 	tw := tabwriter.NewWriter(&buf, 0, 4, 2, ' ', 0)
 	for _, f := range report.Files {
-		for i, row := range f.Rows {
+		rows := rowsForRender(f)
+		for i, row := range rows {
 			file := ""
 			if i == 0 {
 				file = f.Path
@@ -130,3 +134,54 @@ var trailingSpace = regexp.MustCompile(`(?m)[ \t]+$`)
 
 // TrimLineEnds drops the padding tabwriter writes after an empty last cell.
 func TrimLineEnds(s string) string { return trailingSpace.ReplaceAllString(s, "") }
+
+// rowsForRender collapses JSON/YAML/TOML files to one path-only row, the
+// same filter `rgit symbols --for-commit` uses: commit refuses FILE:key on
+// those files, so naming the keys here would send callers into exit 12.
+func rowsForRender(f FileReport) []Row {
+	lang, ok, _, err := resolve.LanguageForPathFolding("", f.Path, false, nil)
+	if err != nil || !ok || !resolve.IsStructuredData(lang) {
+		return f.Rows
+	}
+	if len(f.Rows) == 0 || (len(f.Rows) == 1 && f.Rows[0].Symbol == "") {
+		return f.Rows
+	}
+	return []Row{pathOnlyRow(f.Rows)}
+}
+
+func pathOnlyRow(rows []Row) Row {
+	status := StatusNoSymbols
+	if len(rows) > 0 {
+		s := rows[0].Status
+		same := true
+		for _, r := range rows[1:] {
+			if r.Status != s {
+				same = false
+				break
+			}
+		}
+		if same && (s == StatusUntracked || s == StatusDeleted || s == StatusBinary || s == StatusMode) {
+			status = s
+		}
+	}
+	added, deleted := 0, 0
+	binary := true
+	for _, r := range rows {
+		if r.Added == "-" && r.Deleted == "-" {
+			continue
+		}
+		binary = false
+		a, _ := strconv.Atoi(r.Added)
+		d, _ := strconv.Atoi(r.Deleted)
+		added += a
+		deleted += d
+	}
+	row := Row{Status: status, Added: strconv.Itoa(added), Deleted: strconv.Itoa(deleted)}
+	if binary {
+		row.Added, row.Deleted = "-", "-"
+	}
+	if status == StatusMode && len(rows) == 1 {
+		row.ModeNote = rows[0].ModeNote
+	}
+	return row
+}
