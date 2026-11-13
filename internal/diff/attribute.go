@@ -69,11 +69,20 @@ func resolveRegions(lang resolve.Language, src []byte, f declResolver) ([]region
 		if rerr != nil {
 			return nil, fmt.Errorf("resolve: internal inconsistency: %s DeclOrder emitted %q, which Resolve then rejected: %w", lang.Name(), name, rerr)
 		}
-		ext := res.Extent
-		if isMultiDeclaratorLang(lang) {
-			ext = narrowMultiDeclarator(src, ext)
+		regions = append(regions, region{name: name, ext: res.Extent})
+	}
+	// Only names sharing one statement's extent are declarators of it; a
+	// function's doc comment or type parameters carry commas too.
+	if isMultiDeclaratorLang(lang) {
+		shared := map[resolve.Extent]int{}
+		for _, r := range regions {
+			shared[r.ext]++
 		}
-		regions = append(regions, region{name: name, ext: ext})
+		for i, r := range regions {
+			if shared[r.ext] > 1 {
+				regions[i].ext = narrowMultiDeclarator(src, r.ext)
+			}
+		}
 	}
 	for _, pseudo := range []string{"@header", "@imports"} {
 		if res, rerr := f.Resolve(pseudo); rerr == nil {

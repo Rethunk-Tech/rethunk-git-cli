@@ -114,6 +114,29 @@ func TestAttributeSymbols_GoInlineMultiNameConstFallsBackUnanchorable(t *testing
 	}
 }
 
+// A comma in a doc comment, or between TypeScript type parameters, is not a
+// second declarator: only names sharing one extent are narrowed, or a change
+// in the body of an ordinary function falls to (unanchorable).
+func TestAttributeSymbols_CommaOutsideAMultiDeclaratorKeepsTheBody(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct{ ext, old, new, want string }{
+		{".go", "package p\n\n// F does a, b.\nfunc F() int {\n\treturn 1\n}\n", "package p\n\n// F does a, b.\nfunc F() int {\n\treturn 2\n}\n", "F"},
+		{".ts", "export function f<T, U>(x: T): T {\n  return x;\n}\n", "export function f<T, U>(x: T): T {\n  return x as T;\n}\n", "f"},
+	} {
+		lang, ok := resolve.ForExtension(tt.ext)
+		if !ok {
+			t.Fatalf("no adapter for %s", tt.ext)
+		}
+		rows, err := attributeSymbols(lang, []byte(tt.old), []byte(tt.new), 1, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rows) != 1 || rows[0].Symbol != tt.want {
+			t.Errorf("%s rows = %+v; want one row for %s", tt.ext, rows, tt.want)
+		}
+	}
+}
+
 func TestNarrowMultiDeclarator(t *testing.T) {
 	t.Parallel()
 	src := []byte("const a = 1, b = 2")

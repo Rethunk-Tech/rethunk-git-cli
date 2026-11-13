@@ -15,6 +15,7 @@ Notable changes to `rgit`. The format follows
 
 ### Fixed
 
+- `rgit diff` and `rgit context` attribute a change inside a Go or TypeScript declaration whose doc comment holds a comma, or a TypeScript generic with two type parameters, to that declaration instead of `(unanchorable)`.
 - `rgit commit --only` waits up to 5 s for another git process's `index.lock` when it updates the index after the commit lands. Giving up left the index staging that commit's reversal, which the next commit of staged work would have recorded.
 - A digit, `{`, or `.` followed by a large code point (an emoji tag character, say) in a Markdown, shell, or zsh file no longer segfaults `rgit symbols`, `diff`, `context`, or `commit`.
 
