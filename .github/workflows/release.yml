@@ -203,6 +203,21 @@ jobs:
       - name: sign checksums
         run: cosign sign-blob --yes --bundle dist/SHA256SUMS.sigstore.json dist/SHA256SUMS
 
+      # Detached signature over SHA256SUMS; the Homebrew tap and Scoop bucket verify it against the pinned
+      # fingerprint (see SECURITY.md).
+      - name: Sign SHA256SUMS
+        env:
+          RELEASE_GPG_KEY: ${{ secrets.RELEASE_GPG_KEY }}
+        run: |
+          set -euo pipefail
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          install -d -m 700 "$GNUPGHOME"
+          trap 'gpgconf --kill all >/dev/null 2>&1 || true; rm -rf "$GNUPGHOME"' EXIT
+          printf '%s\n' "$RELEASE_GPG_KEY" | gpg --batch --quiet --import
+          fpr=$(gpg --with-colons --list-secret-keys | awk -F: '/^fpr/{print $10; exit}')
+          gpg --batch --yes --local-user "$fpr" --armor --detach-sign -o dist/SHA256SUMS.asc dist/SHA256SUMS
+          gpg --batch --verify dist/SHA256SUMS.asc dist/SHA256SUMS
+
       # Distinct artifact name: upload-artifact names must be unique in a run.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
