@@ -379,7 +379,7 @@ func runLogFollowRename(ctx context.Context, repo *gitx.Repo, startRev, file str
 			fmt.Fprintf(stderr, "rgit: %v\n", err)
 			return exitcode.GitFailure
 		}
-		_, _ = stdout.Write(stripControl(out))
+		_, _ = stdout.Write(out)
 		return exitcode.Success
 	})
 }
@@ -471,7 +471,7 @@ func refuseLogFormatConflict(porcelain, asJSON, patch bool, stderr io.Writer) ex
 
 func writeLogOutput(stdout, stderr io.Writer, out []byte, asJSON bool) exitcode.Code {
 	if !asJSON {
-		_, _ = stdout.Write(stripControl(out))
+		_, _ = stdout.Write(out)
 		return exitcode.Success
 	}
 	if err := writeLogJSON(stdout, out); err != nil {

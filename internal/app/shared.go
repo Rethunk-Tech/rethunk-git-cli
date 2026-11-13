@@ -669,16 +669,18 @@ func (p anchorParser) refusePositional(a string, have, maxPositionals int, refus
 	return true
 }
 
-// stripControl removes terminal control bytes from git text that rgit prints
-// verbatim (commit subjects, authors, paths from a hostile repository): C0
-// controls other than \n and \t (ESC, BEL, CR), DEL, and UTF-8-encoded C1
-// controls (U+0080-U+009F, which include CSI and OSC introducers).
+// stripControl removes terminal control bytes from text rgit prints (commit
+// subjects, authors, paths from a hostile repository): C0 controls other than
+// \n, \t, NUL (symbols --porcelain's record separator) and the CR of a CRLF,
+// plus DEL and UTF-8-encoded C1 controls (U+0080-U+009F, which include CSI
+// and OSC introducers).
 func stripControl(b []byte) []byte {
 	out := make([]byte, 0, len(b))
 	for i := 0; i < len(b); i++ {
 		c := b[i]
 		switch {
-		case c == '\n' || c == '\t':
+		case c == '\n' || c == '\t' || c == 0:
+		case c == '\r' && i+1 < len(b) && b[i+1] == '\n':
 		case c < 0x20 || c == 0x7f:
 			continue
 		case c == 0xc2 && i+1 < len(b) && b[i+1] >= 0x80 && b[i+1] <= 0x9f:
@@ -688,4 +690,37 @@ func stripControl(b []byte) []byte {
 		out = append(out, c)
 	}
 	return out
+}
+
+// controlWriter applies stripControl to everything Run writes. A trailing
+// 0xc2 or CR is held until the next byte says whether it starts a C1 control
+// or a CRLF; flush settles the held byte once output is done.
+type controlWriter struct {
+	w       io.Writer
+	pending []byte
+}
+
+func (c *controlWriter) Write(p []byte) (int, error) {
+	data := append(c.pending, p...)
+	c.pending = nil
+	if last := len(data) - 1; last >= 0 && (data[last] == 0xc2 || data[last] == '\r') {
+		c.pending = []byte{data[last]}
+		data = data[:last]
+	}
+	if len(data) == 0 {
+		return len(p), nil
+	}
+	if _, err := c.w.Write(stripControl(data)); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+func (c *controlWriter) flush() error {
+	if len(c.pending) == 0 {
+		return nil
+	}
+	_, err := c.w.Write(stripControl(c.pending))
+	c.pending = nil
+	return err
 }

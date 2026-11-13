@@ -77,6 +77,9 @@ func versionBuildLine() string {
 // supplied by the caller so the build-time -ldflags value stays attached to
 // package main.
 func Run(ctx context.Context, version string, args []string, stdout, stderr io.Writer) exitcode.Code {
+	outW, errW := &controlWriter{w: stdout}, &controlWriter{w: stderr}
+	defer func() { _, _ = outW.flush(), errW.flush() }()
+	stdout, stderr = outW, errW
 	// --json is stripped here so it can sit before or after the command,
 	// then handed to the subcommand through ctx rather than parsed again.
 	args, asJSON := takeJSON(args)
