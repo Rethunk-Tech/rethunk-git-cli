@@ -128,7 +128,7 @@ const (
 	rgitBlameFlags      = "-p --porcelain --follow-rename --source -h --help"
 	rgitLogFlags        = "--porcelain --json -p --patch --follow --follow-rename --source --since --until -n --max-count -h --help"
 	rgitContextFlags    = "--json --brief -h --help"
-	rgitSymbolsFlags    = "--for-commit --with-lines --with-filename --porcelain --json -h --help"
+	rgitSymbolsFlags    = "--for-commit --with-lines --with-filename --limit --match --porcelain --json -h --help"
 )
 
 // bashCompletionScript is emitted verbatim by `rgit completion bash`. The

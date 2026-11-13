@@ -76,6 +76,72 @@ func TestRunSymbolsListsCleanWorktreeDeclarations(t *testing.T) {
 	}
 }
 
+func TestRunSymbolsLimitAndMatch(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	source := []byte("package demo\n\nconst answer = 42\n\nfunc First() {}\n\ntype Thing struct{}\n\nfunc (Thing) Method() {}\n")
+	gittest.Git(t.Context(), t, root, "init", "--quiet")
+	if err := os.WriteFile(filepath.Join(root, "main.go"), source, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gittest.Git(t.Context(), t, root, "add", "main.go")
+	gittest.Git(t.Context(), t, root, "-c", "user.name=rgit test", "-c", "user.email=rgit@example.invalid", "commit", "--quiet", "-m", "initial")
+
+	var stdout, stderr strings.Builder
+	code := runSymbols(t.Context(), root, []string{"--limit", "1", "main.go"}, &stdout, &stderr)
+	if code != exitcode.Success {
+		t.Fatalf("runSymbols(--limit 1) = %d, stderr = %q", code, stderr.String())
+	}
+	got := strings.Fields(stdout.String())
+	if len(got) != 1 {
+		t.Fatalf("runSymbols(--limit 1) = %q; want exactly one symbol", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = runSymbols(t.Context(), root, []string{"--match", "^Thing", "main.go"}, &stdout, &stderr)
+	if code != exitcode.Success {
+		t.Fatalf("runSymbols(--match) = %d, stderr = %q", code, stderr.String())
+	}
+	got = strings.Fields(stdout.String())
+	for _, name := range got {
+		if !strings.HasPrefix(name, "Thing") {
+			t.Errorf("runSymbols(--match ^Thing) listed %q", name)
+		}
+	}
+	if !containsString(got, "Thing") || !containsString(got, "Thing.Method") {
+		t.Errorf("runSymbols(--match ^Thing) = %q; want Thing and Thing.Method", got)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = runSymbols(t.Context(), root, []string{"--match=^Thing", "--limit=1", "main.go"}, &stdout, &stderr)
+	if code != exitcode.Success {
+		t.Fatalf("runSymbols(--match --limit) = %d, stderr = %q", code, stderr.String())
+	}
+	got = strings.Fields(stdout.String())
+	if len(got) != 1 || got[0] != "Thing" {
+		t.Errorf("runSymbols(--match ^Thing --limit 1) = %q; want [Thing]", got)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = runSymbols(t.Context(), root, []string{"--match", "[", "main.go"}, &stdout, &stderr)
+	if code != exitcode.InvalidUsage {
+		t.Fatalf("runSymbols(invalid --match) = %d, want %d; stderr = %q", code, exitcode.InvalidUsage, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "--match") {
+		t.Errorf("invalid --match stderr = %q; want it to name --match", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = runSymbols(t.Context(), root, []string{"--limit", "main.go"}, &stdout, &stderr)
+	if code != exitcode.InvalidUsage {
+		t.Fatalf("runSymbols(--limit main.go) = %d, want %d; stderr = %q", code, exitcode.InvalidUsage, stderr.String())
+	}
+}
+
 func TestRunSymbolsHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()

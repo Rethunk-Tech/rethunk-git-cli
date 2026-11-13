@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
@@ -13,7 +15,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
 )
 
-const symbolsHelp = `usage: rgit symbols [--for-commit] [--with-lines] [--with-filename] [--porcelain | --json] <file>... (parsers: use --porcelain for NUL-terminated records)
+const symbolsHelp = `usage: rgit symbols [--for-commit] [--with-lines] [--with-filename] [--limit N] [--match REGEX] [--porcelain | --json] <file>... (parsers: use --porcelain for NUL-terminated records)
 
 List every declared symbol that can be resolved from each worktree file or its
 HEAD blob.
@@ -35,6 +37,8 @@ HEAD blob.
                  docs/CODES.md#rgit-symbols---json. The fields are the same
                  as --porcelain, including --with-lines and --with-filename.
                  Mutually exclusive with --porcelain.
+--limit N        Print at most N records, after --match.
+--match REGEX    Keep symbols whose name matches REGEX (Go regular expression).
 
 Every file is resolved before any line is written, so an unreadable or
 unsupported file anywhere in the list leaves stdout untouched rather than half
@@ -49,9 +53,12 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 	withFilename := false
 	porcelain := false
 	asJSON := jsonFlag(ctx)
+	limit := -1
+	var match *regexp.Regexp
 	positionals := make([]string, 0, 1)
 	afterSeparator := false
-	for _, arg := range args {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
 		if arg == "--" && !afterSeparator {
 			// Consumed, not kept: everything after it is a file, including a
 			// name that looks like a flag (docs/USAGE.md § Argument shape).
@@ -62,20 +69,54 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 			positionals = append(positionals, arg)
 			continue
 		}
-		switch arg {
-		case "--help", "-h":
+		switch {
+		case arg == "--help" || arg == "-h":
 			fmt.Fprint(stdout, symbolsHelp)
 			return exitcode.Success
-		case "--for-commit":
+		case arg == "--for-commit":
 			forCommit = true
-		case "--with-lines":
+		case arg == "--with-lines":
 			withLines = true
-		case "--with-filename":
+		case arg == "--with-filename":
 			withFilename = true
-		case "--porcelain":
+		case arg == "--porcelain":
 			porcelain = true
-		case "--json":
+		case arg == "--json":
 			asJSON = true
+		case arg == "--limit" || strings.HasPrefix(arg, "--limit="):
+			value, next, ok := flagValue(args, i, "--limit")
+			if !ok {
+				fmt.Fprintln(stderr, "rgit: --limit requires a count")
+				fmt.Fprint(stderr, symbolsHelp)
+				return exitcode.InvalidUsage
+			}
+			n, err := strconv.Atoi(value)
+			if err != nil || n < 0 {
+				fmt.Fprintf(stderr, "rgit: symbols: invalid value %q for --limit\n", value)
+				fmt.Fprint(stderr, symbolsHelp)
+				return exitcode.InvalidUsage
+			}
+			limit = n
+			if next {
+				i++
+			}
+		case arg == "--match" || strings.HasPrefix(arg, "--match="):
+			value, next, ok := flagValue(args, i, "--match")
+			if !ok {
+				fmt.Fprintln(stderr, "rgit: --match requires a regular expression")
+				fmt.Fprint(stderr, symbolsHelp)
+				return exitcode.InvalidUsage
+			}
+			re, err := regexp.Compile(value)
+			if err != nil {
+				fmt.Fprintf(stderr, "rgit: symbols: invalid value %q for --match: %v\n", value, err)
+				fmt.Fprint(stderr, symbolsHelp)
+				return exitcode.InvalidUsage
+			}
+			match = re
+			if next {
+				i++
+			}
 		default:
 			positionals = append(positionals, arg)
 		}
@@ -118,6 +159,18 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: symbols: %v\n", err)
 		return exitcode.GitFailure
+	}
+	if match != nil {
+		kept := records[:0]
+		for _, rec := range records {
+			if match.MatchString(rec.Symbol) {
+				kept = append(kept, rec)
+			}
+		}
+		records = kept
+	}
+	if limit >= 0 && len(records) > limit {
+		records = records[:limit]
 	}
 	if asJSON {
 		if err := writeSymbolsJSON(stdout, records); err != nil {
@@ -192,6 +245,23 @@ func symbolRecords(positionals []string, listings [][]string, showName, withLine
 
 func writeSymbolsJSON(w io.Writer, records []symbolRecord) error {
 	return encodeJSON(w, symbolsReport{Schema: jsonSchema, Symbols: records})
+}
+
+// flagValue reads --name VALUE or --name=VALUE at args[i]. next is true
+// when the value was a separate argument.
+func flagValue(args []string, i int, name string) (value string, next, ok bool) {
+	arg := args[i]
+	if arg == name {
+		if i+1 >= len(args) {
+			return "", false, false
+		}
+		return args[i+1], true, true
+	}
+	prefix := name + "="
+	if strings.HasPrefix(arg, prefix) {
+		return strings.TrimPrefix(arg, prefix), false, true
+	}
+	return "", false, false
 }
 
 // symbolLines is one file's worth of runSymbols: resolve the path, pick the

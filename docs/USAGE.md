@@ -355,9 +355,11 @@ with no output.
 `--with-lines` is git's `-L` range
 ([`CODES.md`](CODES.md#rgit-symbols---with-lines)). Several files prefix
 `FILE<TAB>` as `grep` does; `--with-filename` forces it for one.
+`--limit N` caps the listing; `--match REGEX` keeps names that match.
 `--porcelain` is NUL-terminated. `--json`:
 [`CODES.md`](CODES.md#rgit-symbols---json). Exclusive with `--porcelain`
-(129). All files resolve before any write.
+(129). All files resolve before any write. Filter and limit apply after
+that, to the combined listing.
 
 No file argument: usage on stderr, 129. Unreadable: 128. Unsupported
 language: 9.
@@ -384,7 +386,7 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 `show`: `--source`, `--follow-rename`, `--porcelain`, `--with-header`,
 `--help`.
 `symbols`: `--for-commit`, `--with-lines`, `--with-filename`,
-`--porcelain`, `--json`, `--help`.
+`--limit`, `--match`, `--porcelain`, `--json`, `--help`.
 `doctor`: `--porcelain`, `--json`, `--deep`, `--help`.
 `context`: `--json`, `--brief`, `--help`/`-h`.
 `completion`: `--help`/`-h` plus the shell argument.
@@ -432,6 +434,8 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 | `--with-header` | (`show`) Deprecated `--porcelain` alias. |
 | `--porcelain` | (`show`) Length-framed extents. |
 | `--with-filename` | (`symbols`) `FILE<TAB>` prefix. |
+| `--limit N` | (`symbols`) At most N records, after `--match`. |
+| `--match REGEX` | (`symbols`) Keep symbol names matching REGEX. |
 | `--porcelain` | (`symbols`) NUL records. |
 | `--json` | Global. One object on stdout for `diff`, `commit`, `log`, `context`, `languages`, `doctor`, `symbols`. Before or after the command. Other commands: 129. |
 | `--json` | (`symbols`) One object. Exclusive with `--porcelain`. |
