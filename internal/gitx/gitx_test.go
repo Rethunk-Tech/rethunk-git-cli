@@ -1007,6 +1007,50 @@ func TestCommitOnlyAmendDetectsAForeignCommit(t *testing.T) {
 	}
 }
 
+// A writer outside rgit's commit lock can land between Commit's HEAD check
+// and git commit reading HEAD. git would then build on that writer's commit
+// with a tree seeded before it, reverting its work, so the branch update must
+// be refused and nothing else touched.
+func TestCommitOnlyRefusesAWriterThatLandsBeforeGitStarts(t *testing.T) {
+	for _, amend := range []bool{false, true} {
+		t.Run(fmt.Sprintf("amend=%v", amend), func(t *testing.T) {
+			dir, repo := gittest.RepoWithFile(t.Context(), t, "a.txt", "a\n", "chore: initial")
+			only, err := repo.NewOnlyIndex(t.Context())
+			if err != nil {
+				t.Fatalf("NewOnlyIndex: %v", err)
+			}
+			defer only.Close()
+			gittest.Write(t, dir, "a.txt", "a changed\n")
+			if err := only.Repo.Add(t.Context(), "a.txt"); err != nil {
+				t.Fatalf("Add(a.txt): %v", err)
+			}
+			defer gitx.SetBeforeOnlyCommit(func() {
+				gittest.Write(t, dir, "foreign.txt", "foreign\n")
+				gittest.Git(t.Context(), t, dir, "add", "foreign.txt")
+				gittest.Git(t.Context(), t, dir, "commit", "-q", "-m", "chore: foreign")
+			})()
+
+			_, err = repo.Commit(t.Context(), gitx.CommitOptions{
+				Messages: []string{"chore: change a"},
+				Amend:    amend,
+				Only:     only,
+			})
+			if err == nil || !strings.Contains(err.Error(), "HEAD moved") || !strings.Contains(err.Error(), "retry") {
+				t.Fatalf("Commit(--only) error = %v; want HEAD moved, retry", err)
+			}
+			if got := gittest.Git(t.Context(), t, dir, "log", "-1", "--format=%s"); got != "chore: foreign\n" {
+				t.Errorf("HEAD subject = %q; want the foreign commit left at the tip", got)
+			}
+			if got := gittest.Git(t.Context(), t, dir, "diff", "--cached", "--name-only"); got != "" {
+				t.Errorf("real index staged %q; want it untouched", got)
+			}
+			if got := gittest.Git(t.Context(), t, dir, "diff", "--name-only"); got != "a.txt\n" {
+				t.Errorf("unstaged paths = %q; want the working-tree edit kept", got)
+			}
+		})
+	}
+}
+
 func TestWithIndexFileDoesNotMutateProcessEnv(t *testing.T) {
 	t.Parallel()
 	before, had := os.LookupEnv("GIT_INDEX_FILE")

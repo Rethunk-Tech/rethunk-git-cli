@@ -1116,17 +1116,25 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 	}
 
 	commitRepo := r
+	runArgs := args
 	if opts.Only != nil {
-		commitRepo = opts.Only.Repo
 		if err := r.checkOnlyHead(ctx, opts); err != nil {
 			return Result{}, err
 		}
+		beforeOnlyCommit()
+		commitRepo = opts.Only.guarded()
+		runArgs = append([]string{"-c", "hook.rgit-only-guard.event=reference-transaction", "-c", "hook.rgit-only-guard.command=" + onlyGuardHook}, args...)
 	}
-	res, err := commitRepo.run(ctx, stdin, args...)
+	res, err := commitRepo.run(ctx, stdin, runArgs...)
 	if err != nil {
 		return Result{}, err
 	}
 	if res.ExitCode != 0 {
+		if opts.Only != nil {
+			if moved := r.checkOnlyHead(ctx, opts); moved != nil {
+				return res, moved
+			}
+		}
 		return res, gitError(args, res)
 	}
 	if opts.Only == nil {
@@ -1193,13 +1201,41 @@ func (opts CommitOptions) args() []string {
 	return args
 }
 
-// checkOnlyHead refuses git commit when HEAD is no longer the commit the
-// private index was seeded from. checkOnlyBase still runs after, for a
-// writer that lands during git commit itself.
-func (r *Repo) checkOnlyHead(ctx context.Context, opts CommitOptions) error {
-	if opts.Only.BaseCommit == "" {
-		return nil
+// beforeOnlyCommit is a test seam: it runs between checkOnlyHead and git
+// commit starting.
+var beforeOnlyCommit = func() {}
+
+// onlyGuardHook is a reference-transaction hook added to a --only commit's
+// own hooks. git commit reads HEAD before running any hook and passes that
+// value as the update's expected old value, then fails the update if HEAD
+// moved since; the guard closes the remaining gap by refusing an expected old
+// value other than the private index's base. The first HEAD update that
+// matches arms the marker and disarms the guard, so a post-commit hook that
+// moves HEAD itself is left alone. config hooks need git 2.54; older git
+// ignores the keys and finishOnlyCommit falls back to checkOnlyBase. git
+// appends "$@" to a shell hook command; the trailing # keeps the state
+// argument out of awk's file list.
+const onlyGuardHook = `[ "$1" = preparing ] && [ ! -e "$RGIT_ONLY_GUARD" ] || { cat >/dev/null; exit 0; }; ` +
+	`exec awk '$3 == "HEAD" { if ($1 == ENVIRON["RGIT_ONLY_BASE"]) ok = 1; else bad = 1 } ` +
+	`END { if (bad) exit 1; if (ok) printf "" > ENVIRON["RGIT_ONLY_GUARD"] }' #`
+
+// guarded is o.Repo with onlyGuardHook's inputs in its environment.
+func (o *OnlyIndex) guarded() *Repo {
+	base := o.BaseCommit
+	if base == "" {
+		base = strings.Repeat("0", len(o.BaseTree))
 	}
+	env := withEnv(o.Repo.env, "RGIT_ONLY_BASE", base)
+	env = withEnv(env, "RGIT_ONLY_GUARD", filepath.ToSlash(o.guardMarker()))
+	return &Repo{root: o.Repo.root, env: env}
+}
+
+func (o *OnlyIndex) guardMarker() string { return filepath.Join(filepath.Dir(o.Path), "guarded") }
+
+// checkOnlyHead refuses git commit when HEAD is no longer the commit the
+// private index was seeded from, and names a refused commit's cause after
+// git exits non-zero.
+func (r *Repo) checkOnlyHead(ctx context.Context, opts CommitOptions) error {
 	head, _, err := r.RevParseVerify(ctx, "HEAD")
 	if err != nil {
 		return err
@@ -1207,16 +1243,20 @@ func (r *Repo) checkOnlyHead(ctx context.Context, opts CommitOptions) error {
 	if head == opts.Only.BaseCommit {
 		return nil
 	}
-	if opts.Amend {
-		return fmt.Errorf("gitx: HEAD moved while amending %s: HEAD is now %s, so its tree may undo another commit's changes", opts.Only.BaseCommit, head)
+	base := opts.Only.BaseCommit
+	if base == "" {
+		base = "an unborn branch"
 	}
-	return fmt.Errorf("gitx: HEAD moved from %s to %s while committing; HEAD's tree was built on %s and may undo %s's changes", opts.Only.BaseCommit, head, opts.Only.BaseCommit, head)
+	if opts.Amend {
+		return fmt.Errorf("gitx: HEAD moved while amending %s: HEAD is now %s; nothing was committed, retry", base, head)
+	}
+	return fmt.Errorf("gitx: HEAD moved from %s to %s while committing; nothing was committed, retry", base, head)
 }
 
 // finishOnlyCommit checks that HEAD did not move under a --only commit and
 // brings the real index in line with what the private index committed.
 func (r *Repo) finishOnlyCommit(ctx context.Context, commitRepo *Repo, opts CommitOptions) error {
-	if opts.Only.BaseCommit != "" {
+	if _, err := os.Stat(opts.Only.guardMarker()); err != nil && opts.Only.BaseCommit != "" {
 		if err := r.checkOnlyBase(ctx, opts); err != nil {
 			return err
 		}
@@ -1227,8 +1267,9 @@ func (r *Repo) finishOnlyCommit(ctx context.Context, commitRepo *Repo, opts Comm
 	return nil
 }
 
-// checkOnlyBase verifies the private index was built on the commit git
-// actually acted on. git takes that commit from HEAD when it starts, never
+// checkOnlyBase is the after-the-fact check for git older than 2.54, where
+// onlyGuardHook never runs: it verifies the private index was built on the
+// commit git actually acted on. git takes that commit from HEAD when it starts, never
 // from the tree the private index was seeded with, so a writer landing in
 // between leaves a commit whose tree undoes that writer's work. Under
 // --amend the foreign commit is the one replaced: the branch ends up carrying
