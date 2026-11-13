@@ -1048,6 +1048,9 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 	commitRepo := r
 	if opts.Only != nil {
 		commitRepo = opts.Only.Repo
+		if err := r.checkOnlyHead(ctx, opts); err != nil {
+			return Result{}, err
+		}
 	}
 	res, err := commitRepo.run(ctx, stdin, args...)
 	if err != nil {
@@ -1118,6 +1121,26 @@ func (opts CommitOptions) args() []string {
 		args = append(args, "--no-verify")
 	}
 	return args
+}
+
+// checkOnlyHead refuses git commit when HEAD is no longer the commit the
+// private index was seeded from. checkOnlyBase still runs after, for a
+// writer that lands during git commit itself.
+func (r *Repo) checkOnlyHead(ctx context.Context, opts CommitOptions) error {
+	if opts.Only.BaseCommit == "" {
+		return nil
+	}
+	head, _, err := r.RevParseVerify(ctx, "HEAD")
+	if err != nil {
+		return err
+	}
+	if head == opts.Only.BaseCommit {
+		return nil
+	}
+	if opts.Amend {
+		return fmt.Errorf("gitx: HEAD moved while amending %s: HEAD is now %s, so its tree may undo another commit's changes", opts.Only.BaseCommit, head)
+	}
+	return fmt.Errorf("gitx: HEAD moved from %s to %s while committing; HEAD's tree was built on %s and may undo %s's changes", opts.Only.BaseCommit, head, opts.Only.BaseCommit, head)
 }
 
 // finishOnlyCommit checks that HEAD did not move under a --only commit and

@@ -962,6 +962,12 @@ func TestCommitOnlyAmendDetectsAForeignCommit(t *testing.T) {
 	if !strings.Contains(err.Error(), "HEAD moved while amending") {
 		t.Errorf("Commit(--only --amend) error = %q; want it to name the moved HEAD", err)
 	}
+	if got := gittest.Git(t.Context(), t, dir, "ls-tree", "HEAD", "--", "foreign.txt"); !strings.Contains(got, "foreign.txt") {
+		t.Errorf("HEAD foreign.txt = %q; want the foreign commit left in place", got)
+	}
+	if got := gittest.Git(t.Context(), t, dir, "log", "-1", "--format=%s"); got != "chore: foreign\n" {
+		t.Errorf("HEAD subject = %q; want chore: foreign", got)
+	}
 }
 
 func TestWithIndexFileDoesNotMutateProcessEnv(t *testing.T) {
