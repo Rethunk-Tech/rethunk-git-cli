@@ -277,6 +277,31 @@ func TestCommit_HookFailureRestoresPrestagedState(t *testing.T) {
 	}
 }
 
+// A rejected commit shows the hook's own output, and a retry after the
+// rollback reaches the hook again instead of being swallowed.
+func TestCommit_HookFailureShowsHookOutputOnEveryAttempt(t *testing.T) {
+	t.Parallel()
+	dir, _ := gittest.New(t.Context(), t)
+	gittest.Write(t, dir, "a.txt", "base\n")
+	gittest.Commit(t.Context(), t, dir, "chore: initial")
+	gittest.Write(t, dir, "a.txt", "changed\n")
+	gittest.Write(t, dir, "new.txt", "new\n")
+	gittest.InstallHook(t.Context(), t, dir, "pre-commit", "#!/bin/sh\necho 'LINT-FAILED' >&2\necho 'LINT-STDOUT'\nexit 1\n")
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		var stdout, stderr strings.Builder
+		code := runCommit(t.Context(), dir, []string{"-m", "fix(a): change", "a.txt", "new.txt"}, &stdout, &stderr)
+		if code != exitcode.GitFailure {
+			t.Fatalf("attempt %d: runCommit = %v; want GitFailure; stderr: %s", attempt, code, stderr.String())
+		}
+		for _, want := range []string{"LINT-FAILED", "LINT-STDOUT", "staging rolled back"} {
+			if !strings.Contains(stderr.String(), want) {
+				t.Errorf("attempt %d: stderr = %q; want %q", attempt, stderr.String(), want)
+			}
+		}
+	}
+}
+
 func TestCommit_HooksSilentOnSuccessUnlessVerbose(t *testing.T) {
 	t.Parallel()
 	dir, _ := gittest.New(t.Context(), t)
