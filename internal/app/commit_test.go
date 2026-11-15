@@ -523,3 +523,17 @@ func TestRun_CommitMessageFileResolvesFromInvocationDir(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("%s", stderr))
 	qt.Assert(t, qt.Equals(gitOut(t, dir, "log", "-1", "--format=%s"), "chore: sub message\n"))
 }
+
+func TestCollapseRepeats(t *testing.T) {
+	t.Parallel()
+	for in, want := range map[string]string{
+		"a\na\nb\n":                 "a\nb\n",
+		"sum\n  ok\nsum\n  ok\nz\n": "sum\n  ok\nz\n",
+		"a\nb\na\n":                 "a\nb\na\n",
+		"":                          "",
+	} {
+		if got := string(collapseRepeats([]byte(in))); got != want {
+			t.Errorf("collapseRepeats(%q) = %q; want %q", in, got, want)
+		}
+	}
+}

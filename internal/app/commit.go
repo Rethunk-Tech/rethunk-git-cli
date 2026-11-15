@@ -305,11 +305,28 @@ func (r *commitRun) writeHookOutput(stderrOut, stdoutHooks []byte, failed bool) 
 		return
 	}
 	if len(stderrOut) > 0 {
-		_, _ = r.stderr.Write(stderrOut)
+		_, _ = r.stderr.Write(collapseRepeats(stderrOut))
 	}
 	if len(stdoutHooks) > 0 {
-		_, _ = r.stderr.Write(stdoutHooks)
+		_, _ = r.stderr.Write(collapseRepeats(stdoutHooks))
 	}
+}
+
+// collapseRepeats drops a line, or a run of lines, that immediately repeats
+// itself (a hook runner printing its summary twice). Distinct lines are kept.
+func collapseRepeats(b []byte) []byte {
+	lines := strings.SplitAfter(string(b), "\n")
+	out := make([]string, 0, len(lines))
+	for _, l := range lines {
+		out = append(out, l)
+		for k := 1; 2*k <= len(out); k++ {
+			if slices.Equal(out[len(out)-2*k:len(out)-k], out[len(out)-k:]) {
+				out = out[:len(out)-k]
+				break
+			}
+		}
+	}
+	return []byte(strings.Join(out, ""))
 }
 
 func (r *commitRun) usage(format string, a ...any) exitcode.Code {
