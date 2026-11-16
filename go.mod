@@ -3,7 +3,7 @@ module github.com/Rethunk-Tech/rethunk-git-cli/v2
 go 1.27.4
 
 require (
-	github.com/aymanbagabas/go-udiff v0.4.1
+	github.com/aymanbagabas/go-udiff v0.4.2
 	github.com/georgeharker/tree-sitter-zsh v0.63.5
 	github.com/go-quicktest/qt v1.102.0
 	github.com/spf13/pflag v1.1.0
