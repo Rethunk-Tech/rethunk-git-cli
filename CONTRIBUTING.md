@@ -6,7 +6,7 @@ Read [`AGENTS.md`](AGENTS.md) first.
 
 A change that makes `rgit` diverge from `git add <pathspec> && git commit`
 must say so in the PR. Deliberate divergence lives next to the implementation;
-rejected alternatives live in `TODO.md`. Contradicting either
+rejected alternatives live in canon pattern `patterns-todo-00002`. Contradicting either
 needs a new measurement, not a reword.
 
 ## Commits
@@ -137,17 +137,18 @@ list. One errcheck exemption: `fmt.Fprint*` to the caller's stdout/stderr.
 ## Dependencies
 
 Every dependency needs a measured justification, recorded with it or in
-`TODO.md`. Reimplementing git is rejected
+canon pattern `patterns-todo-00002`. Reimplementing git is rejected
 ([`AGENTS.md`](AGENTS.md#delegation-boundary)).
 
 ## Documentation
 
 README orients; `HUMANS.md` is run-and-use; `docs/` is the reference;
-`AGENTS.md` is internals; this file is process; `TODO.md` is unbuilt work
-and closed measurements. One home per fact; the other links.
+`AGENTS.md` is internals; this file is process; canon pattern
+`patterns-todo-00002` is unbuilt work and closed measurements. One home
+per fact; the other links.
 
 - **`docs/` ships with the tool.** Why-the-code lives beside the code; unbuilt
-  decisions live in `TODO.md`.
+  decisions live in canon pattern `patterns-todo-00002`.
 - **An `@-reference` in `AGENTS.md` is a budget line.** `CLAUDE.md` is
   `@AGENTS.md`, so every `@path` loads in every session. Only
   `@CONTRIBUTING.md` stays: its test rules bind changes that would not look

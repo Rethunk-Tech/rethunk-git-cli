@@ -990,4 +990,5 @@ What ships:
 
 Known limitations are catalogued in
 [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md); designs accepted but not built,
-and the measurements that closed a question, are in [`TODO.md`](TODO.md).
+and the measurements that closed a question, live in canon pattern
+`patterns-todo-00002`.
