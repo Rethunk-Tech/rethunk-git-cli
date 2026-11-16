@@ -35,6 +35,44 @@ func TestStage_FirstMemberOfAnEmptyContainerSplicesInsideIt(t *testing.T) {
 	}
 }
 
+// TestStage_CRLFWorktreeFileKeepsItsLineEndings pins byte-identity for a
+// worktree file that uses CRLF: the separator a splice writes is part of the
+// blob, so an LF pair spliced into a CRLF file commits mixed endings and
+// leaves the file looking dirty after a commit that reported success.
+func TestStage_CRLFWorktreeFileKeepsItsLineEndings(t *testing.T) {
+	t.Parallel()
+
+	t.Run("appended function", func(t *testing.T) {
+		t.Parallel()
+		dir, repo := gittest.RepoWithFile(t.Context(), t, "a.go", "package a\r\n\r\nfunc A() int {\r\n\treturn 1\r\n}\r\n", "chore: crlf a.go")
+		work := "package a\r\n\r\nfunc A() int {\r\n\treturn 1\r\n}\r\n\r\nfunc B() int {\r\n\treturn 2\r\n}\r\n"
+		gittest.Write(t, dir, "a.go", work)
+
+		if err := stageTargets(t.Context(), repo, dir, []Target{AnchorTarget("a.go", "B")}); err != nil {
+			t.Fatalf("stageTargets: %v", err)
+		}
+
+		if got := gittest.Git(t.Context(), t, dir, "show", ":a.go"); got != work {
+			t.Errorf("staged a.go = %q; want the worktree bytes %q", got, work)
+		}
+	})
+
+	t.Run("deleted function", func(t *testing.T) {
+		t.Parallel()
+		dir, repo := gittest.RepoWithFile(t.Context(), t, "a.go", "package a\r\n\r\nfunc A() int {\r\n\treturn 1\r\n}\r\n\r\nfunc B() int {\r\n\treturn 2\r\n}\r\n", "chore: crlf a.go")
+		work := "package a\r\n\r\nfunc A() int {\r\n\treturn 1\r\n}\r\n"
+		gittest.Write(t, dir, "a.go", work)
+
+		if err := stageTargets(t.Context(), repo, dir, []Target{AnchorTarget("a.go", "B")}); err != nil {
+			t.Fatalf("stageTargets: %v", err)
+		}
+
+		if got := gittest.Git(t.Context(), t, dir, "show", ":a.go"); got != work {
+			t.Errorf("staged a.go = %q; want the worktree bytes %q", got, work)
+		}
+	})
+}
+
 // TestStage_MemberKeepsItsPositionBesideAKnownSibling pins the other half of
 // that walk: when HEAD has some members but not the new one, and the new one
 // lands ahead of the first member HEAD knows, the splice goes in at that

@@ -443,6 +443,7 @@ func (fp *filePlan) addPreamble(named map[string]bool) (pairs []autoOp) {
 			start: 0,
 			seq:   int(res.Extent.Start),
 			text:  append([]byte(nil), fp.workSrc[ext.Start:ext.End]...),
+			nl:    newlineOf(fp.workSrc),
 		}
 		fp.ops = append(fp.ops, op)
 		pairs = append(pairs, autoOp{name: pseudo, op: op})

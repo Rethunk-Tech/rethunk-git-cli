@@ -66,6 +66,12 @@ type editOp struct {
 	// top-level insertion keeps its blank-line padding unchanged.
 	member bool
 
+	// nl is the newline convention of the worktree file this op was
+	// resolved against ("\n" or "\r\n"), so the structural minimum
+	// separator widerGap falls back to matches the bytes around it rather
+	// than writing an LF into a CRLF file. Nil means "\n".
+	nl []byte
+
 	// leadGap and trailGap are the blank-line run that already sits before
 	// and after this anchor's own extent in the WORKTREE (classify.go's
 	// leadingGap/trailingGap) -- the real separator a byte-identical splice
@@ -228,13 +234,14 @@ func mergeInsertTies(ops []editOp) []editOp {
 		// point in the same file, so they share one container context (or
 		// lack of one) -- the first op's flag speaks for the whole group.
 		member := group[0].member
+		nl := group[0].nl
 		text := group[0].text
 		for _, g := range group[1:] {
 			// The separator between two merged items is that LATER item's
 			// own leading gap: the true worktree distance between the
 			// previous item and this one, not a distance involving
 			// whatever precedes the whole group.
-			text = joinWithSeparator(text, g.text, widerGap(member, g.leadGap))
+			text = joinWithSeparator(text, g.text, widerGap(member, g.leadGap, nl))
 		}
 		merged = append(merged, editOp{
 			kind:  editInsert,
@@ -246,6 +253,7 @@ func mergeInsertTies(ops []editOp) []editOp {
 			leadGap:  group[0].leadGap,
 			trailGap: group[len(group)-1].trailGap,
 			member:   member,
+			nl:       nl,
 		})
 	}
 	return merged
@@ -272,7 +280,7 @@ func spliceReplace(out []byte, start, end uint, text []byte) []byte {
 // never changes EOF newline-or-not.
 func spliceExcise(out []byte, start, end uint) []byte {
 	after := out[end:]
-	trimmed := bytes.TrimLeft(after, "\n")
+	trimmed := trimLeadingLineBreaks(after)
 	if len(trimmed) != 0 {
 		result := make([]byte, 0, start+uint(len(trimmed)))
 		result = append(result, out[:start]...)
@@ -280,12 +288,12 @@ func spliceExcise(out []byte, start, end uint) []byte {
 		return result
 	}
 
-	prefix := bytes.TrimRight(out[:start], "\n")
+	prefix := trimTrailingLineBreaks(out[:start])
 	if len(prefix) == 0 {
 		return prefix
 	}
 	if bytes.HasSuffix(out, []byte("\n")) {
-		prefix = append(prefix, '\n')
+		prefix = append(prefix, newlineOf(out)...)
 	}
 	return prefix
 }
@@ -304,19 +312,62 @@ func spliceInsert(out []byte, op editOp) []byte {
 	before := out[:start]
 	after := out[start:]
 
-	mid := joinWithSeparator(before, op.text, widerGap(op.member, op.leadGap))
+	mid := joinWithSeparator(before, op.text, widerGap(op.member, op.leadGap, op.nl))
 	// Both empty and newlines-only mean end-of-file: nothing follows the
 	// insertion but the file's own terminator. Appending after the last
 	// symbol lands in the newlines-only case, since HEAD's trailing
 	// newline sits between that symbol and EOF.
-	if len(bytes.TrimLeft(after, "\n")) == 0 {
-		mid = bytes.TrimRight(mid, "\n")
+	if len(trimLeadingLineBreaks(after)) == 0 {
+		mid = trimTrailingLineBreaks(mid)
 		if bytes.HasSuffix(out, []byte("\n")) {
-			mid = append(mid, '\n')
+			nl := op.nl
+			if len(nl) == 0 {
+				nl = newlineOf(out)
+			}
+			mid = append(mid, nl...)
 		}
 		return mid
 	}
-	return joinWithSeparator(mid, after, widerGap(op.member, op.trailGap))
+	return joinWithSeparator(mid, after, widerGap(op.member, op.trailGap, op.nl))
+}
+
+// newlineOf reports the line terminator src uses: "\r\n" when its first line
+// break is a CRLF pair, "\n" otherwise (an empty source included).
+func newlineOf(src []byte) []byte {
+	if i := bytes.IndexByte(src, '\n'); i > 0 && src[i-1] == '\r' {
+		return []byte("\r\n")
+	}
+	return []byte("\n")
+}
+
+// trimTrailingLineBreaks drops every line break at the end of b, CRLF pairs
+// as one break: trimming only '\n' would leave the '\r' behind and splice
+// stray carriage returns into a CRLF file.
+func trimTrailingLineBreaks(b []byte) []byte {
+	end := len(b)
+	for end > 0 && b[end-1] == '\n' {
+		end--
+		if end > 0 && b[end-1] == '\r' {
+			end--
+		}
+	}
+	return b[:end]
+}
+
+// trimLeadingLineBreaks is trimTrailingLineBreaks' mirror.
+func trimLeadingLineBreaks(b []byte) []byte {
+	start := 0
+	for start < len(b) {
+		switch {
+		case b[start] == '\r' && start+1 < len(b) && b[start+1] == '\n':
+			start += 2
+		case b[start] == '\n':
+			start++
+		default:
+			return b[start:]
+		}
+	}
+	return b[start:]
 }
 
 // widerGap picks the separator a splice should actually use: gap -- the
@@ -324,29 +375,34 @@ func spliceInsert(out []byte, op editOp) []byte {
 // -- when it is wider than the structural minimum (member selects which:
 // a blank line between two top-level declarations, exactly one newline
 // between two members of the same struct, interface, or class), else the
-// minimum itself. Only ever widens, never narrows: gap stays nil (shorter
-// than any minimum) for an op that never computed one (addPreamble's, which
-// already owns its trailing separator via
-// resolve.ExtendThroughOwnedSeparator), so those fall back to the minimum
-// when gap is nil.
-func widerGap(member bool, gap []byte) []byte {
-	minimum := "\n\n"
+// minimum itself. nl is the file's own line terminator, so a minimum built
+// here is made of the same bytes the rest of the file uses. Only ever
+// widens, never narrows: gap stays nil (shorter than any minimum) for an op
+// that never computed one (addPreamble's, which already owns its trailing
+// separator via resolve.ExtendThroughOwnedSeparator), so those fall back to
+// the minimum when gap is nil.
+func widerGap(member bool, gap, nl []byte) []byte {
+	if len(nl) == 0 {
+		nl = []byte("\n")
+	}
+	minimum := make([]byte, 0, 2*len(nl))
+	minimum = append(append(minimum, nl...), nl...)
 	if member {
-		minimum = "\n"
+		minimum = minimum[:len(nl)]
 	}
 	if len(gap) > len(minimum) {
 		return gap
 	}
-	return []byte(minimum)
+	return minimum
 }
 
-// joinWithSeparator concatenates a and b, trimming any newlines a already
-// trails or b already leads so repeated splices cannot accumulate extra
-// blank lines, then rejoining with sep. An empty side contributes no
+// joinWithSeparator concatenates a and b, trimming any line breaks a
+// already trails or b already leads so repeated splices cannot accumulate
+// extra blank lines, then rejoining with sep. An empty side contributes no
 // separator -- joining onto nothing is not a boundary.
 func joinWithSeparator(a, b, sep []byte) []byte {
-	a = bytes.TrimRight(a, "\n")
-	b = bytes.TrimLeft(b, "\n")
+	a = trimTrailingLineBreaks(a)
+	b = trimLeadingLineBreaks(b)
 	switch {
 	case len(a) == 0:
 		return append([]byte(nil), b...)

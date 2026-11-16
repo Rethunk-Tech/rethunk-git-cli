@@ -85,6 +85,7 @@ func (fp *filePlan) classify(anchor string) (op editOp, unchanged bool, err erro
 			trailGap: trailingGap(fp.workSrc, workRes.Extent.End),
 			wstart:   workRes.Extent.Start,
 			wend:     workRes.Extent.End,
+			nl:       newlineOf(fp.workSrc),
 			// A structurally nested member only sits flush against its
 			// siblings when the language's own convention keeps it that
 			// way (Language.MembersSitFlush) -- Python requires a blank line
@@ -202,25 +203,37 @@ func lineStart(src []byte, off uint) uint {
 	return start
 }
 
-// leadingGap is the run of consecutive '\n' bytes in src immediately
+// leadingGap is the run of consecutive line breaks in src immediately
 // preceding start -- the blank-line gap the worktree already has in front
-// of whatever begins there. Byte-exact by construction, so a splice that
-// reproduces it needs no separate "how many blank lines does this file's
-// convention want" guess (widerGap, synth.go).
+// of whatever begins there. A CRLF pair counts as one break and is returned
+// whole: the gap is spliced back verbatim, so half of a pair would put a
+// lone carriage return in the blob. Byte-exact by construction, so a splice
+// that reproduces it needs no separate "how many blank lines does this
+// file's convention want" guess (widerGap, synth.go).
 func leadingGap(src []byte, start uint) []byte {
 	end := start
 	for end > 0 && src[end-1] == '\n' {
 		end--
+		if end > 0 && src[end-1] == '\r' {
+			end--
+		}
 	}
 	return src[end:start]
 }
 
-// trailingGap is leadingGap's mirror: the run of consecutive '\n' bytes in
+// trailingGap is leadingGap's mirror: the run of consecutive line breaks in
 // src immediately following end.
 func trailingGap(src []byte, end uint) []byte {
 	stop := end
-	for stop < uint(len(src)) && src[stop] == '\n' {
-		stop++
+	for stop < uint(len(src)) {
+		switch {
+		case src[stop] == '\r' && stop+1 < uint(len(src)) && src[stop+1] == '\n':
+			stop += 2
+		case src[stop] == '\n':
+			stop++
+		default:
+			return src[end:stop]
+		}
 	}
 	return src[end:stop]
 }
