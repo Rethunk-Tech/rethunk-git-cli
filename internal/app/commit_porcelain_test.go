@@ -56,6 +56,83 @@ func TestRunCommit_PorcelainEmitsCommitSHA(t *testing.T) {
 	}
 }
 
+// TestRunCommit_DeletedMemberCountMatchesDiff pins docs/CODES.md's "every
+// per-symbol row agrees with `rgit commit --dry-run`" for a deleted
+// container member. A member is separated from its siblings by a line break,
+// not a blank line, so its removal takes no extra line with it -- counting
+// one anyway made the preview report a phantom deletion the commit never
+// made.
+func TestRunCommit_DeletedMemberCountMatchesDiff(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, path, head, work, anchor, symbol string
+	}{
+		{
+			name:   "go struct field",
+			path:   "t.go",
+			head:   "package a\n\ntype B struct {\n\tA int\n\tC int\n}\n",
+			work:   "package a\n\ntype B struct {\n\tC int\n}\n",
+			anchor: "t.go:B.A",
+			symbol: "B.A",
+		},
+		{
+			name:   "python class method",
+			path:   "t.py",
+			head:   "class C:\n    def a(self):\n        return 1\n\n    def b(self):\n        return 2\n",
+			work:   "class C:\n    def b(self):\n        return 2\n",
+			anchor: "t.py:C.a",
+			symbol: "C.a",
+		},
+		{
+			name:   "typescript class method",
+			path:   "t.ts",
+			head:   "export class C {\n  a(): number {\n    return 1;\n  }\n\n  b(): number {\n    return 2;\n  }\n}\n",
+			work:   "export class C {\n  b(): number {\n    return 2;\n  }\n}\n",
+			anchor: "t.ts:C.a",
+			symbol: "C.a",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dir, _ := gittest.RepoWithFile(t.Context(), t, tc.path, tc.head, "chore: fixture")
+			gittest.Write(t, dir, tc.path, tc.work)
+
+			diffOut, _, code := runApp(t, "-C", dir, "diff", "--porcelain")
+			if code != exitcode.Success {
+				t.Fatalf("diff = %v", code)
+			}
+			preview, _, code := runApp(t, "-C", dir, "commit", "--dry-run", "--porcelain", "-m", "feat: delete", tc.anchor)
+			if code != exitcode.Success {
+				t.Fatalf("commit --dry-run = %v", code)
+			}
+
+			want := rowFor(t, diffOut, tc.symbol)
+			got := rowFor(t, preview, tc.symbol)
+			if got != want {
+				t.Errorf("dry-run row = %q; diff row = %q; want the preview to agree with the diff", got, want)
+			}
+		})
+	}
+}
+
+// rowFor returns the ADDED and DELETED a porcelain stream reports for
+// symbol, so a test compares counts across the two dialects without pinning
+// the columns they do not share.
+func rowFor(t *testing.T, porcelain, symbol string) string {
+	t.Helper()
+	var found []string
+	for line := range strings.SplitSeq(strings.TrimRight(porcelain, "\n"), "\n") {
+		fields := strings.Split(line, "\t")
+		if len(fields) >= 2 && fields[1] == symbol {
+			found = append(found, strings.Join(fields[len(fields)-2:], "\t"))
+		}
+	}
+	if len(found) != 1 {
+		t.Fatalf("porcelain %q: %d records name %q; want exactly one", porcelain, len(found), symbol)
+	}
+	return found[0]
+}
+
 func TestRunCommit_QuietSuccessEmptyStdout(t *testing.T) {
 	t.Parallel()
 	dir, _ := gittest.RepoWithFile(t.Context(), t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n", "feat: add A")

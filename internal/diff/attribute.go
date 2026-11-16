@@ -107,11 +107,6 @@ type regionTree struct {
 	// identical range (two names sharing one declaration, a Go multi-name
 	// spec), which contain each other just as fully.
 	holes map[string][]resolve.Extent
-
-	// nested marks a region that sits inside another one -- a struct's field,
-	// a class's method, a Markdown subsection, or one of those identical-range
-	// siblings.
-	nested map[string]bool
 }
 
 // buildRegionTree resolves containment for regions in one pass. A region's
@@ -128,10 +123,7 @@ func buildRegionTree(regions []region) *regionTree {
 		return cmp.Compare(b.ext.End, a.ext.End)
 	})
 
-	t := &regionTree{
-		holes:  make(map[string][]resolve.Extent, len(regions)),
-		nested: make(map[string]bool, len(regions)),
-	}
+	t := &regionTree{holes: make(map[string][]resolve.Extent, len(regions))}
 	// byRange groups the names sharing one extent, for the identical-range
 	// case below.
 	byRange := make(map[resolve.Extent][]string, len(regions))
@@ -142,16 +134,11 @@ func buildRegionTree(regions []region) *regionTree {
 			stack = stack[:len(stack)-1]
 		}
 		if len(stack) > 0 {
-			parent := stack[len(stack)-1]
-			if parent.ext == r.ext {
-				// Identical ranges contain each other equally, so neither is
-				// the other's child; both are nested, and each cuts the other
-				// out. Leaving the first on the stack keeps a following
-				// strictly-inner region parented to the same container.
-				t.nested[r.name] = true
-				t.nested[parent.name] = true
-			} else {
-				t.nested[r.name] = true
+			// Identical ranges contain each other equally, so neither is the
+			// other's child and neither is cut out here -- byRange below
+			// handles that pair. Leaving the first on the stack keeps a
+			// following strictly-inner region parented to the same container.
+			if parent := stack[len(stack)-1]; parent.ext != r.ext {
 				t.holes[parent.name] = append(t.holes[parent.name], r.ext)
 			}
 		}
@@ -306,16 +293,18 @@ func topLevelComma(text []byte) int {
 // between top-level defs, synth still moves one, and the second genuinely
 // stays unowned. That leftover is what (unanchorable) is for.
 //
-// A nested region gets none: members are separated by a single newline
-// rather than a blank line (joinWithSeparator's member case), which the
-// member's own extent already accounts for.
+// A nested region is treated exactly like a top-level one: how many blank
+// lines a removal actually takes is a property of the bytes around it, not
+// of the declaration's nesting. A Go struct field sits flush against its
+// siblings and carries nothing; a PEP 8 class method has a blank line after
+// it and carries that one.
 //
 // The gap is looked for after the region first and before it only at
 // end-of-file, mirroring spliceExcise: it trims the following gap when
 // anything follows, and falls back to the preceding one when the region was
 // last in the file.
-func separatorLines(src []byte, ext resolve.Extent, nested bool) int {
-	return SeparatorLines(src, ext.Start, ext.End, nested)
+func separatorLines(src []byte, ext resolve.Extent) int {
+	return SeparatorLines(src, ext.Start, ext.End)
 }
 
 // SeparatorLines is separatorLines' own rule, taking a plain byte range so
@@ -324,18 +313,29 @@ func separatorLines(src []byte, ext resolve.Extent, nested bool) int {
 // Exported for the same reason LineCounts is: `rgit diff` and
 // `rgit commit --dry-run` promise to agree row for row (docs/CODES.md), and
 // two implementations of "does this symbol carry its separator" would be
-// free to drift apart, producing a phantom (unanchorable) row.
-func SeparatorLines(src []byte, start, end uint, member bool) int {
-	if member {
-		return 0
-	}
-
-	trailing := 0
-	for e := end; e < uint(len(src)) && src[e] == '\n'; e++ {
-		trailing++
-	}
-	if end+uint(trailing) < uint(len(src)) {
-		return min(trailing, 1)
+// free to drift apart, producing a phantom (unanchorable) row. It is at most
+// one line, because spliceExcise collapses the blank run it leaves to a
+// single line break rather than reproducing it -- PEP 8's second blank line
+// stays unowned, which is what (unanchorable) is for.
+func SeparatorLines(src []byte, start, end uint) int {
+	// The first line break after the region terminates its own last line and
+	// is already counted there; each further break ends a blank line the
+	// excision takes with it. Counting every break instead reported one
+	// phantom deleted line for every container member, whose siblings sit a
+	// single newline away.
+	pos, breaks := end, 0
+	for pos < uint(len(src)) {
+		switch {
+		case src[pos] == '\r' && pos+1 < uint(len(src)) && src[pos+1] == '\n':
+			pos += 2
+		case src[pos] == '\n':
+			pos++
+		default:
+			// Something follows the blank run, so the excision stops here
+			// rather than at the file's own terminator.
+			return min(max(breaks-1, 0), 1)
+		}
+		breaks++
 	}
 
 	// Nothing but the file's own terminator follows, so the gap that moves
@@ -418,7 +418,7 @@ func attributeSymbolsOpen(lang resolve.Language, oldSrc, newSrc []byte, oldFile,
 			if deleted == 0 {
 				return
 			}
-			deleted += separatorLines(oldSrc, oldExt, oldTree.nested[name])
+			deleted += separatorLines(oldSrc, oldExt)
 			accDeleted += deleted
 			// A deleted symbol has no position in the new file, so it sorts
 			// by its prior line position in the old file — stable, and close to where a reader
@@ -429,7 +429,7 @@ func attributeSymbolsOpen(lang resolve.Language, oldSrc, newSrc []byte, oldFile,
 			if added == 0 {
 				return
 			}
-			added += separatorLines(newSrc, newExt, newTree.nested[name])
+			added += separatorLines(newSrc, newExt)
 			accAdded += added
 			rows = append(rows, Row{Symbol: name, Status: StatusMod, Added: strconv.Itoa(added), Deleted: "0", pos: newExt.Start})
 			if container, isNew := newlyEscalatedContainer(lang, oldFile, newFile, name); isNew {

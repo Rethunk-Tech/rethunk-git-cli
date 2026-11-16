@@ -1037,7 +1037,7 @@ func opLineCounts(fp *filePlan, op editOp) (added, deleted int) {
 
 	switch op.kind {
 	case editDelete:
-		deleted += diff.SeparatorLines(fp.headSrc, op.start, op.end, op.member)
+		deleted += diff.SeparatorLines(fp.headSrc, op.start, op.end)
 	case editInsert:
 		// spliceInsert joins onto whatever precedes the insertion point, so
 		// there is a separator to add only when something precedes it: the
