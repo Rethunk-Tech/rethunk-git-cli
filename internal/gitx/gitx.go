@@ -799,20 +799,33 @@ func (r *Repo) IgnoreCase(ctx context.Context) (bool, error) {
 	return r.ignoreCase, r.ignoreCaseErr
 }
 
-// NumstatEntry holds the raw fields from one `git diff --numstat` line.
+// NumstatEntry holds the raw fields from one `git diff --numstat -z` record.
+// OldPath is set only for a rename, where git names both sides in their own
+// fields; Path is the destination (the path the change is reported under).
 type NumstatEntry struct {
 	Added   string
 	Deleted string
 	Path    string
+	OldPath string
 }
 
-// DiffNumstat runs `git diff --numstat` with the given extra arguments
-// (revision ranges, --staged, pathspecs, ...) and returns each line's raw
-// fields. Added/Deleted stay strings because git prints "-" for a binary
-// file's counts; Path is passed through verbatim, including git's own
-// "old => new" rename shorthand, for the diff-rendering layer to interpret.
+// DiffNumstat runs `git diff --numstat -z` with the given extra arguments
+// (revision ranges, --staged, pathspecs, ...) and returns each entry's
+// raw fields. Added/Deleted stay strings because git prints "-" for a binary
+// file's counts.
+//
+// -z is what makes Path a name rather than git's rendering of one.
+// core.quotePath=false alone only stops the quoting of non-ASCII bytes: a
+// tab, a quote or a backslash in a name is still C-quoted even with it set
+// ("we\tird.go", "q\"uote.go"), and a quoted name is not a pathspec, not an
+// anchor, and not equal to the same file's name from ChangedPaths'
+// -z output -- which made context label a modified tracked file untracked.
+// With -z git emits the name as its own bytes, NUL-terminated, and the
+// rename shorthand as two separate fields (old, then new) instead of
+// "old => new" or "dir/{old => new}/suffix", so no name has to be
+// un-escaped or a shorthand split on a delimiter the name may itself hold.
 func (r *Repo) DiffNumstat(ctx context.Context, extra ...string) ([]NumstatEntry, error) {
-	out, err := r.checked(ctx, append(diffArgs("--numstat"), extra...)...)
+	out, err := r.checked(ctx, append(diffArgs("--numstat", "-z"), extra...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -820,11 +833,11 @@ func (r *Repo) DiffNumstat(ctx context.Context, extra ...string) ([]NumstatEntry
 }
 
 // diffArgs is the fixed prefix both diff readers share. core.quotePath=false
-// is what keeps a reported path usable: git's default C-quotes every non-ASCII
-// byte ("caf\303\251.go"), and neither a caller pasting that back as an anchor
-// nor this package's own path lookups can do anything with the quoted form --
-// while the same repository's `git diff --name-only -z` (ChangedPaths) is
-// unquoted, leaving the two disagreeing about one file's own name.
+// is what keeps a *patch header* usable: git's default C-quotes every
+// non-ASCII byte ("caf\303\251.go"). DiffNumstat does not rely on it (it
+// passes -z), but DiffPatch's output is git's patch text, which has no
+// NUL-terminated form; a patch is the one place the quoting is git's own and
+// must stay, which is why the flag is here rather than removed.
 // --no-ext-diff and --no-textconv keep a repository's own diff.<driver>.command
 // and .textconv from running a program on a read verb: rgit attributes the
 // real bytes, so a driver's rewritten output would be wrong as well as unsafe.
@@ -843,26 +856,42 @@ func (r *Repo) DiffPatch(ctx context.Context, extra ...string) ([]byte, error) {
 	return r.checked(ctx, append(diffArgs(), extra...)...)
 }
 
-// parseNumstat fails loudly on a line that does not split into exactly
-// three tab-separated fields -- the same posture internal/diff takes on a
-// numstat count that fails to parse as an integer -- rather than dropping
-// it: a caller computing a total from a silently shortened list would
-// underreport it with nothing to say why. SplitN's 3-way split already
-// tolerates the one legitimate irregularity in a path field, git's own
-// "{old => new}" rename shorthand, since that shorthand contains no tab of
-// its own.
+// parseNumstat reads `git diff --numstat -z` output: one record per change, a
+// "ADDED<TAB>DELETED<TAB>PATH" record NUL-terminated, and -- for a rename --
+// that record ending right after the second tab with the source and
+// destination names as the next two NUL-terminated fields. Naming a path in
+// its own field is what keeps a tab, a quote or a newline in a name intact;
+// the newline form would have C-quoted it.
+//
+// A record that does not fit that shape is an error rather than a skipped
+// entry: a caller computing a total from a silently shortened list would
+// underreport it with nothing to say why.
 func parseNumstat(out []byte) ([]NumstatEntry, error) {
-	trimmed := strings.TrimRight(string(out), "\n")
-	if trimmed == "" {
-		return nil, nil
-	}
-	entries := make([]NumstatEntry, 0, strings.Count(trimmed, "\n")+1)
-	for line := range strings.SplitSeq(trimmed, "\n") {
-		parts := strings.SplitN(line, "\t", 3)
-		if len(parts) != 3 {
-			return nil, fmt.Errorf("gitx: malformed numstat line %q", line)
+	fields := strings.Split(string(out), "\x00")
+	entries := make([]NumstatEntry, 0, len(fields)/2)
+	for i := 0; i < len(fields); i++ {
+		// Every record ends with a NUL, so the final split element is empty
+		// (as is the only element of an empty output).
+		if fields[i] == "" {
+			continue
 		}
-		entries = append(entries, NumstatEntry{Added: parts[0], Deleted: parts[1], Path: parts[2]})
+		parts := strings.SplitN(fields[i], "\t", 3)
+		if len(parts) != 3 {
+			return nil, fmt.Errorf("gitx: malformed numstat record %q", fields[i])
+		}
+		entry := NumstatEntry{Added: parts[0], Deleted: parts[1], Path: parts[2]}
+		if entry.Path == "" {
+			// A rename: the record carries no name of its own, and the next
+			// two fields are the source and the destination. Both are real
+			// names, so neither can be the empty field that terminates the
+			// output.
+			if i+2 >= len(fields) || fields[i+1] == "" || fields[i+2] == "" {
+				return nil, fmt.Errorf("gitx: rename numstat record %q names no pair of paths", fields[i])
+			}
+			entry.OldPath, entry.Path = fields[i+1], fields[i+2]
+			i += 2
+		}
+		entries = append(entries, entry)
 	}
 	return entries, nil
 }

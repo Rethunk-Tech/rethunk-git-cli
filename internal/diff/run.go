@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
@@ -79,7 +78,13 @@ func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Repo
 	newPaths := make([]string, len(entries))
 	readable := make([]bool, len(entries))
 	for i, e := range entries {
-		oldPaths[i], newPaths[i] = NumstatPath(e.Path)
+		// OldPath is set only for a rename, which DiffNumstat reads from
+		// numstat -z's own two name fields; otherwise both sides are the
+		// one path git named.
+		oldPaths[i], newPaths[i] = e.OldPath, e.Path
+		if oldPaths[i] == "" {
+			oldPaths[i] = e.Path
+		}
 		// git's own "-"/"-" numstat counts are its answer that the file is
 		// binary. buildFileReport discards the content of exactly those
 		// entries, so reading their blobs first was pure cost: a repo whose
@@ -421,43 +426,6 @@ func formatModeNote(oldMode string, oldFound bool, newMode string, newFound bool
 		n = trim(newMode)
 	}
 	return o + "->" + n
-}
-
-// NumstatPath parses gitx.NumstatEntry.Path, which may carry git's own
-// rename shorthand — a full "old => new" or a common-prefix
-// "dir/{old => new}" form — into the two paths content resolution needs.
-// For a non-rename entry, old and new are identical.
-//
-// Exported because internal/synth reads the same numstat output when it
-// breaks a pathspec target into per-file rows, and a second parser for
-// git's shorthand would be free to disagree about which path a rename
-// lands on.
-func NumstatPath(raw string) (oldPath, newPath string) {
-	if braceStart := strings.Index(raw, "{"); braceStart >= 0 {
-		if braceEnd := strings.Index(raw[braceStart:], "}"); braceEnd >= 0 {
-			braceEnd += braceStart
-			inner := raw[braceStart+1 : braceEnd]
-			if before, after, ok := strings.Cut(inner, " => "); ok {
-				prefix, suffix := raw[:braceStart], raw[braceEnd+1:]
-				return braceSide(prefix, before, suffix), braceSide(prefix, after, suffix)
-			}
-		}
-	}
-	if before, after, ok := strings.Cut(raw, " => "); ok {
-		return before, after
-	}
-	return raw, raw
-}
-
-// braceSide rebuilds one side of git's "prefix{old => new}suffix" form.
-// An empty side means the path gained or lost directory levels there, and
-// git keeps the separator on both prefix and suffix ("a/{ => lib}/f.ts"),
-// so exactly one of the two is dropped.
-func braceSide(prefix, side, suffix string) string {
-	if side == "" {
-		return prefix + strings.TrimPrefix(suffix, "/")
-	}
-	return prefix + side + suffix
 }
 
 // filterPaths keeps only the paths whose parallel keep entry is true, for a

@@ -456,6 +456,47 @@ func TestDiffNumstat_KeepsNonASCIIPathUnquoted(t *testing.T) {
 	}
 }
 
+// TestDiffNumstat_KeepsTabQuoteAndBackslashNamesLiteral is the regression
+// for the second half of the quoting rule: core.quotePath=false turns off
+// C-quoting for non-ASCII bytes only, so a name holding a tab, a quote or a
+// backslash is still quoted ("we\tird.go", "q\"uote.go") and came back as
+// text no pathspec, anchor or index lookup can use -- and unequal to the
+// same file's literal name from DirtyPaths/ChangedPaths, which made
+// `rgit context` call a modified tracked file untracked. numstat -z emits
+// each name as its own bytes, so nothing needs un-escaping.
+func TestDiffNumstat_KeepsTabQuoteAndBackslashNamesLiteral(t *testing.T) {
+	t.Parallel()
+	for _, name := range []string{"we\tird.go", "q\"uote.go", "back\\slash.go", "new\nline.go", "caf\u00e9.go"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			dir, repo := gittest.New(t.Context(), t)
+			gittest.Write(t, dir, name, "package p\n")
+			gittest.Commit(t.Context(), t, dir, "chore: initial")
+			gittest.Write(t, dir, name, "package p\n\nfunc A() int { return 1 }\n")
+			gittest.Git(t.Context(), t, dir, "add", "-A")
+
+			entries, err := repo.DiffNumstat(t.Context(), "--staged")
+			if err != nil {
+				t.Fatalf("DiffNumstat: %v", err)
+			}
+			if len(entries) != 1 || entries[0].Path != name {
+				t.Fatalf("DiffNumstat paths = %+v; want exactly %q, unquoted", entries, name)
+			}
+
+			// DirtyPaths reads its own -z listing; the two must agree about
+			// the name or context's F rows and T records describe different
+			// files.
+			dirty, err := repo.DirtyPaths(t.Context())
+			if err != nil {
+				t.Fatalf("DirtyPaths: %v", err)
+			}
+			if len(dirty) != 1 || dirty[0] != entries[0].Path {
+				t.Errorf("DirtyPaths = %q; want the same literal name as DiffNumstat's %q", dirty, entries[0].Path)
+			}
+		})
+	}
+}
+
 // TestDiffPatch pins that DiffPatch returns git's own real patch body
 // unmodified, and that it respects the same extra args (--staged, a
 // pathspec after --) DiffNumstat already does -- the two are supposed to

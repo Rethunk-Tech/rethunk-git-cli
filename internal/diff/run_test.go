@@ -833,34 +833,33 @@ func TestRun_RevPathTwoBlobScope(t *testing.T) {
 	}
 }
 
-// TestNumstatPath covers git's two numstat rename spellings plus the
-// non-rename identity case: a full "old => new" (already exercised
-// indirectly by every rename fixture elsewhere in this package), and the
-// common-prefix "dir/{old => new}suffix" shorthand git switches to once a
-// rename shares a path prefix, which nothing in this package's own tests
-// reached before.
-func TestNumstatPath(t *testing.T) {
+// TestRun_RenameWithQuotedNameAttributesBothSides is the regression for
+// git's C-quoting of a name holding a quote, tab or backslash: numstat's
+// newline form quotes such a name even with core.quotePath=false, so the
+// path the report looked up was not the path git named. Reading numstat -z
+// keeps the name literal. Git also stops abbreviating a rename as
+// "old => new" here -- the two sides are separate NUL-terminated fields --
+// so both sides have to keep resolving to the real content.
+func TestRun_RenameWithQuotedNameAttributesBothSides(t *testing.T) {
 	t.Parallel()
+	const oldName = "pkg/o\"ld\tname.go"
+	const newName = "pkg/n\"ew\tname.go"
+	dir, repo := gittest.RepoWithFile(t.Context(), t, oldName, "package p\n\nfunc Foo() int { return 1 }\n", "chore: initial")
+	if err := os.MkdirAll(filepath.Join(dir, "pkg"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	gittest.Git(t.Context(), t, dir, "mv", oldName, newName)
 
-	for _, tc := range []struct {
-		name    string
-		raw     string
-		oldPath string
-		newPath string
-	}{
-		{"no rename", "unchanged.go", "unchanged.go", "unchanged.go"},
-		{"full rename", "old.go => new.go", "old.go", "new.go"},
-		{"common-prefix brace shorthand", "pkg/{old => new}/file.go", "pkg/old/file.go", "pkg/new/file.go"},
-		{"brace shorthand, empty old side", "a/{ => lib/server}/f.ts", "a/f.ts", "a/lib/server/f.ts"},
-		{"brace shorthand, empty new side", "a/{lib => }/f.ts", "a/lib/f.ts", "a/f.ts"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			oldPath, newPath := NumstatPath(tc.raw)
-			if oldPath != tc.oldPath || newPath != tc.newPath {
-				t.Errorf("NumstatPath(%q) = (%q, %q); want (%q, %q)", tc.raw, oldPath, newPath, tc.oldPath, tc.newPath)
-			}
-		})
+	report, err := Run(t.Context(), repo, dir, Options{Staged: true})
+	if err != nil {
+		t.Fatalf("Run --staged: %v", err)
+	}
+	fr, ok := findFile(report.Files, newName)
+	if !ok {
+		t.Fatalf("report.Files = %+v; want the rename listed under its real name %q", report.Files, newName)
+	}
+	if len(fr.Rows) != 1 || fr.Rows[0].Status != StatusMod {
+		t.Errorf("%q rows = %+v; want one MOD row", newName, fr.Rows)
 	}
 }
 

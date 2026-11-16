@@ -84,6 +84,33 @@ func TestRun_ContextBriefPrintsBranchAndCounts(t *testing.T) {
 	qt.Assert(t, qt.Not(qt.StringContains(jsonOut, `"type": "C"`)))
 }
 
+// TestRun_ContextLabelsQuotedNameFileAsDirty is the regression for git's
+// C-quoting of a name holding a quote: numstat's newline form quotes it even
+// with core.quotePath=false, so the F row named a file ChangedPaths never
+// named, and a modified tracked file was reported as `untracked` -- with
+// --brief counting it among the untracked.
+func TestRun_ContextLabelsQuotedNameFileAsDirty(t *testing.T) {
+	t.Parallel()
+	const name = "q\"uote.txt"
+	dir := tempRepo(t)
+	writeAppFile(t, dir, name, "one\n")
+	gittest.Commit(t.Context(), t, dir, "feat: add oddly named file")
+	writeAppFile(t, dir, name, "two\n")
+
+	full, stderr, code := runApp(t, "-C", dir, "context")
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
+	qt.Assert(t, qt.StringContains(full, "F\t"+name+"\t\tMOD\t1\t1\n"))
+	qt.Assert(t, qt.StringContains(full, "T\t"+name+"\tunstaged\n"))
+	qt.Assert(t, qt.Not(qt.StringContains(full, "untracked\n")))
+
+	brief, _, code := runApp(t, "-C", dir, "context", "--brief")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	fields := strings.Split(strings.TrimRight(brief, "\n"), "\t")
+	qt.Assert(t, qt.Equals(len(fields), 7))
+	qt.Assert(t, qt.Equals(fields[5], "1"), qt.Commentf("brief = %q", brief))
+	qt.Assert(t, qt.Equals(fields[6], "0"), qt.Commentf("brief = %q", brief))
+}
+
 func TestRun_ContextJSONMatchesTextStream(t *testing.T) {
 	t.Parallel()
 	dir := tempRepo(t)

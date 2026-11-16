@@ -67,17 +67,36 @@ func TestParseNumstat(t *testing.T) {
 		{name: "empty", in: "", want: nil},
 		{
 			name: "one file",
-			in:   "1\t2\ta.go\n",
+			in:   "1\t2\ta.go\x00",
 			want: []NumstatEntry{{Added: "1", Deleted: "2", Path: "a.go"}},
 		},
 		{
-			name: "binary counts stay dashes; rename shorthand stays in the path field",
-			in:   "-\t-\told.go => new.go\n",
-			want: []NumstatEntry{{Added: "-", Deleted: "-", Path: "old.go => new.go"}},
+			name: "binary counts stay dashes",
+			in:   "-\t-\tlogo.png\x00",
+			want: []NumstatEntry{{Added: "-", Deleted: "-", Path: "logo.png"}},
 		},
 		{
-			name:    "two fields is malformed",
-			in:      "1\ta.go\n",
+			// A rename names both sides in their own fields, so a name
+			// holding a tab or a quote needs no shorthand parsing.
+			name: "rename names both sides",
+			in:   "0\t0\t\x00old name.go\x00new\tname.go\x00",
+			want: []NumstatEntry{{Added: "0", Deleted: "0", OldPath: "old name.go", Path: "new\tname.go"}},
+		},
+		{
+			// The name is never escaped: a quote, tab or newline is its
+			// own bytes here, unlike the newline form git C-quotes.
+			name: "a special name stays literal",
+			in:   "1\t1\tq\"uote\tname.go\x00",
+			want: []NumstatEntry{{Added: "1", Deleted: "1", Path: "q\"uote\tname.go"}},
+		},
+		{
+			name:    "missing counts column is malformed",
+			in:      "1\ta.go\x00",
+			wantErr: true,
+		},
+		{
+			name:    "rename without both names is malformed",
+			in:      "0\t0\t\x00old name.go\x00",
 			wantErr: true,
 		},
 	}
