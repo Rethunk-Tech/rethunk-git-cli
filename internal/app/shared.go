@@ -784,3 +784,24 @@ func (c *controlWriter) flush() error {
 	c.pending = nil
 	return err
 }
+
+// writeVerbatim writes p as the exact bytes it is, bypassing stripControl.
+// For output whose own contract is byte-exactness -- a symbol's extent, or
+// git's own patch body -- rewriting a control byte would emit something
+// other than what rgit promised: show's length frame would then count bytes
+// it never wrote, and the patch would stop matching git's. Everywhere else
+// the stripping stands (a hostile repository names a file with an escape
+// sequence, and a terminal must not obey it).
+func writeVerbatim(w io.Writer, p []byte) error {
+	if c, ok := w.(*controlWriter); ok {
+		// Any byte held back from the previous write must land first, or
+		// it would be emitted after this payload instead of before it.
+		if err := c.flush(); err != nil {
+			return err
+		}
+		_, err := c.w.Write(p)
+		return err
+	}
+	_, err := w.Write(p)
+	return err
+}

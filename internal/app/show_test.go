@@ -205,6 +205,49 @@ func TestShow_WithHeaderIsAPorcelainAlias(t *testing.T) {
 	qt.Assert(t, qt.Equals(multiHeader, multiPorcelain))
 }
 
+// TestShow_FramingCountsBytesEmittedForControlBytes is the regression for
+// show's length frame against the control-byte strip every write goes
+// through: NBYTES described the raw extent, but a form feed or ESC inside
+// it was deleted on the way out, so a reader consuming exactly NBYTES ran
+// past the extent's end and consumed the next record's header. The frame
+// must count the bytes actually emitted -- which means the extent itself is
+// written verbatim.
+func TestShow_FramingCountsBytesEmittedForControlBytes(t *testing.T) {
+	t.Parallel()
+	cwd := tempRepo(t)
+	writeAppFile(t, cwd, "a.go", "package a\n\nfunc A() {\n\tprintln(\"x\f y\")\n}\n\nfunc B() {\n\tprintln(\"z\")\n}\n")
+
+	stdout, stderr, code := runApp(t, "-C", cwd, "show", "--porcelain", "a.go:A", "a.go:B")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stderr, ""))
+
+	const wantA = "func A() {\n\tprintln(\"x\f y\")\n}"
+	const wantB = "func B() {\n\tprintln(\"z\")\n}"
+	want := "a.go:A\t" + strconv.Itoa(len(wantA)) + "\n" + wantA + "a.go:B\t" + strconv.Itoa(len(wantB)) + "\n" + wantB
+	qt.Assert(t, qt.Equals(stdout, want))
+
+	// One anchor prints the extent's own bytes, control bytes included.
+	raw, _, code := runApp(t, "-C", cwd, "show", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(raw, wantA))
+}
+
+// TestShow_HeaderStillStripsControlBytesInAPath keeps the security half of
+// the strip: the frame line itself is text rgit renders from a repository's
+// own path names, and a hostile name must not reach the terminal as an
+// escape sequence.
+func TestShow_HeaderStillStripsControlBytesInAPath(t *testing.T) {
+	t.Parallel()
+	cwd := tempRepo(t)
+	const hostile = "e\x1b]0;PWNED\x07n.go"
+	writeAppFile(t, cwd, hostile, "package a\n\nfunc H() {\n\treturn 1\n}\n")
+
+	stdout, stderr, code := runApp(t, "-C", cwd, "show", "--porcelain", hostile+":H")
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
+	qt.Assert(t, qt.IsFalse(strings.ContainsAny(stdout+stderr, "\x1b\x07")))
+	qt.Assert(t, qt.StringContains(stdout, "PWNED"))
+}
+
 // TestShow_FollowRenamePrintsPreRenameBytes pins the rename walk: the same
 // anchor on the new path prints the pre-rename extent, and without the flag
 // show still reads the path as it stands.

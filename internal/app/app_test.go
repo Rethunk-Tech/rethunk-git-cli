@@ -726,6 +726,23 @@ func TestRun_DiffPatchFlag(t *testing.T) {
 	})
 }
 
+// TestRun_DiffPatchIsGitPatchByteForByte is the regression for the
+// control-byte strip reaching the patch body: -p promises git's own patch,
+// so a changed line holding a form feed must arrive with it. Before, the
+// strip deleted the byte and the patch was a patch git never produced --
+// and could no longer be applied.
+func TestRun_DiffPatchIsGitPatchByteForByte(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int {\n\tprintln(\"x\f y\")\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+
+	stdout, stderr, code := runApp(t, "-C", dir, "diff", "-p")
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
+	patch := gitOut(t, dir, "-c", "core.quotePath=false", "diff")
+	qt.Assert(t, qt.StringContains(stdout, patch))
+	qt.Assert(t, qt.IsTrue(strings.HasSuffix(stdout, patch)), qt.Commentf("patch tail = %q; want %q", stdout, patch))
+}
+
 // TestRun_DiffFromSubdirectory pins git's own rule: a path is relative to
 // where you stand, while output stays root-relative.
 func TestRun_DiffFromSubdirectory(t *testing.T) {

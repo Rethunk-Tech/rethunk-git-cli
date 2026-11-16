@@ -288,7 +288,14 @@ func writeDiffReport(f *diffFlags, asJSON bool, report *diffpkg.Report, stdout, 
 		default:
 			fmt.Fprint(stdout, diffpkg.RenderText(report))
 			if f.patch {
-				_, _ = stdout.Write(report.Patch)
+				// Verbatim: the flag promises git's own patch body, and a
+				// source line holding a form feed or an ESC is still that
+				// patch's bytes -- stripping it would print a patch git
+				// never produced, and one that would not apply.
+				if err := writeVerbatim(stdout, report.Patch); err != nil {
+					fmt.Fprintf(stderr, "rgit: cannot write: %v\n", err)
+					return exitcode.GitFailure
+				}
 			}
 		}
 	}

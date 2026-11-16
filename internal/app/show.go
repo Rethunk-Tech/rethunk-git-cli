@@ -7,7 +7,6 @@
 package app
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -108,16 +107,20 @@ func runShow(ctx context.Context, dir string, args []string, stdout, stderr io.W
 	}
 
 	framed := porcelain || withHeader || len(extents) > 1
-	var out bytes.Buffer
 	for i, ext := range extents {
+		// The header goes through the ordinary (control-stripped) writer: it
+		// is a line of text, and a hostile path in it must not reach the
+		// terminal as an escape sequence. The extent does not -- NBYTES
+		// frames bytes rgit promised to write verbatim, so stripping one
+		// would leave the count describing output that was never emitted and
+		// push every later record out of frame.
 		if framed {
-			fmt.Fprintf(&out, "%s\t%d\n", positionals[i], len(ext))
+			fmt.Fprintf(stdout, "%s\t%d\n", positionals[i], len(ext))
 		}
-		out.Write(ext)
-	}
-	if _, err := stdout.Write(out.Bytes()); err != nil {
-		fmt.Fprintf(stderr, "rgit: cannot write: %v\n", err)
-		return exitcode.GitFailure
+		if err := writeVerbatim(stdout, ext); err != nil {
+			fmt.Fprintf(stderr, "rgit: cannot write: %v\n", err)
+			return exitcode.GitFailure
+		}
 	}
 	return exitcode.Success
 }
