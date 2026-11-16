@@ -1143,10 +1143,10 @@ func TestRun_StagedRenameAcrossDirectoryDepth(t *testing.T) {
 
 // TestRun_ZeroCountChangeIsNotAModeRow pins the classification of a change
 // git reports with 0 added / 0 deleted that is not a mode edit: a staged pure
-// rename and an added empty file both used to render as "mode 644->644" (and
-// "?->644" for the empty addition), with no row naming the move at all. Only
-// a genuine mode disagreement is a MODE row; everything else keeps a row of
-// its own at the path git lists it under.
+// rename and an added empty file keep a named row, never "mode 644->644"
+// (or "?->644" for the empty addition). Only a genuine mode disagreement is a
+// MODE row; everything else keeps a row of its own at the path git lists it
+// under.
 func TestRun_ZeroCountChangeIsNotAModeRow(t *testing.T) {
 	t.Parallel()
 

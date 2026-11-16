@@ -41,7 +41,7 @@ var (
 )
 
 // fixtureTemplate is a git template directory carrying the two things every
-// fixture repository needs, which used to cost four `git config`
+// fixture repository needs, so New does not pay four `git config`
 // subprocesses per repository:
 //
 //   - user.name/user.email, so a repository created off it can commit

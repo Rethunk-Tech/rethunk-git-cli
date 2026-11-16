@@ -148,17 +148,10 @@ func TestNarrowMultiDeclarator(t *testing.T) {
 }
 
 // TestAttributeSymbols_ScalesLinearlyInDeclarations guards the shape of the
-// containment work, not an absolute duration: exclusiveText and the
-// nested-region test both used to rescan every sibling region for every
-// region, which is quadratic in declaration count. A generated file of
-// 16 000 declarations took seconds where `git diff --numstat` takes none.
-// Region nesting is now resolved once (buildRegionTree), so 16x the
-// declarations costs about 16x the time rather than 256x.
-//
-// The bound is deliberately loose -- a ratio, with the minimum of several
-// runs, so a loaded machine inflating both measurements cancels out. The old
-// quadratic code measured well above 30x here; the linear walk comfortably
-// below it.
+// containment work, not an absolute duration: a per-region sibling rescan
+// is quadratic in declaration count, so region nesting is resolved once
+// (buildRegionTree). The bound is a ratio, taking the minimum of several
+// runs, so a loaded machine inflating both measurements cancels out.
 func TestAttributeSymbols_ScalesLinearlyInDeclarations(t *testing.T) {
 	t.Parallel()
 	lang, ok := resolve.ForExtension(".go")

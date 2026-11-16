@@ -41,10 +41,10 @@ func readCount(t *testing.T, countFile string) int64 {
 }
 
 // TestNewCostsOneGitProcess pins the fixture's own cost: a repository built
-// by New must come from the template in a single `git init`, not from the
-// four `git config` invocations it used to take to write the same settings
-// afterwards. Those four were the largest single block of subprocesses in
-// the unit lane, so a regression here is a slow suite, not a failing one.
+// by New must come from the template in a single `git init`, not from four
+// `git config` invocations afterwards. Those four would be the largest
+// single block of subprocesses in the unit lane, so a regression here is a
+// slow suite, not a failing one.
 func TestNewCostsOneGitProcess(t *testing.T) {
 	bin, countFile := countingGit(t)
 	t.Setenv("PATH", bin)
