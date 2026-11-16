@@ -200,6 +200,31 @@ func TestResolveRangeScope_ExplicitFormFallsBackToSingleRevision(t *testing.T) {
 	}
 }
 
+// TestRun_StagedOnUnbornBranchReadsEmptyFile pins the empty-file case on a
+// branch with no commit yet. The old side is bound to "HEAD", which names no
+// commit, so scope.Old.mode's `git ls-tree HEAD` fails outright and took the
+// whole report down with git's 128. Reading the mode from the empty tree the
+// scope already stands for gives the same answer -- no entry on the old
+// side -- without asking git for a tree that cannot exist.
+func TestRun_StagedOnUnbornBranchReadsEmptyFile(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t.Context(), t)
+	gittest.Write(t, dir, "empty.go", "")
+	gittest.Git(t.Context(), t, dir, "add", "empty.go")
+
+	report, err := Run(t.Context(), repo, dir, Options{Staged: true})
+	if err != nil {
+		t.Fatalf("Run --staged on an unborn branch: %v", err)
+	}
+	fr, ok := findFile(report.Files, "empty.go")
+	if !ok {
+		t.Fatalf("report.Files = %+v; want empty.go present", report.Files)
+	}
+	if len(fr.Rows) != 1 || fr.Rows[0].Status == StatusMode {
+		t.Errorf("empty.go rows = %+v; want one non-MODE row", fr.Rows)
+	}
+}
+
 // TestCommittableBase_UnbornBranchFallsBackToEmptyTree covers
 // gitx.Repo.CommittableBase's reason to exist: gittest.New's repo has no
 // commit yet, so HEAD is unborn and `git diff HEAD` would fail outright --

@@ -271,7 +271,16 @@ func ResolveScope(ctx context.Context, repo *gitx.Repo, opts Options) (Scope, er
 	case len(opts.RevPaths) == 2:
 		return resolveRevPathScope(opts.RevPaths[0], opts.RevPaths[1]), nil
 	case opts.Staged:
-		return Scope{Old: revSide("HEAD"), New: indexSide(), NumstatArgs: []string{"--staged"}}, nil
+		// The old side is HEAD, or the empty tree on an unborn branch: on a
+		// branch with no commit yet, HEAD names no object at all, so asking
+		// git to read it failed the whole report with git's own 128 --
+		// where plain `git diff --staged` compares against the empty tree
+		// and succeeds.
+		base, err := repo.CommittableBase(ctx)
+		if err != nil {
+			return Scope{}, err
+		}
+		return Scope{Old: revSide(base), New: indexSide(), NumstatArgs: []string{"--staged"}}, nil
 	case opts.Unstaged:
 		return Scope{Old: indexSide(), New: worktreeSide()}, nil
 	case rangeToken != "":
