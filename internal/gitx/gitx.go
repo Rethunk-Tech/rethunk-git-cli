@@ -1621,6 +1621,23 @@ func (r *Repo) LsFilesTracked(ctx context.Context, extra ...string) ([]string, e
 	return strings.Split(string(trimmed), "\x00"), nil
 }
 
+// LsFilesTrackedAndOthers lists the files `git add <pathspec>` would stage:
+// the tracked entries the pathspec selects plus the untracked,
+// non-ignored ones, which is the pair `git add` itself expands. It exists
+// so a caller can tell whether a pathspec reaches a given file without
+// reimplementing git's pathspec matching.
+func (r *Repo) LsFilesTrackedAndOthers(ctx context.Context, pathspec string) ([]string, error) {
+	out, err := r.checked(ctx, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", pathspec)
+	if err != nil {
+		return nil, err
+	}
+	trimmed := bytes.Trim(out, "\x00")
+	if len(trimmed) == 0 {
+		return nil, nil
+	}
+	return strings.Split(string(trimmed), "\x00"), nil
+}
+
 // CleansCRLF reports whether git's clean conversion turns path's CRLF line
 // endings into LF when content (the worktree bytes) is added, the way git
 // diff sees a worktree file: the text attribute forces it, text=auto or an

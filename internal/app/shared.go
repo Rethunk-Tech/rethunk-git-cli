@@ -194,10 +194,26 @@ const dashCHint = "rgit: -C goes before the command: rgit -C <path> <command> ..
 // both through means the anchor silently discards the rest of the file's
 // worktree changes -- the caller asked for the whole path and would get one
 // symbol, with nothing on stderr to say so.
-func pathAnchorContradiction(paths, anchorFiles []string, stderr io.Writer) exitcode.Code {
+//
+// Each pathspec is expanded through git rather than compared as a string,
+// because `git add` matches more than an exact name: "src" stages every file
+// under it, and a glob or a leading-colon magic form stages whatever it
+// selects. Comparing the literal pathspec left all of those contradictions
+// undetected.
+func pathAnchorContradiction(ctx context.Context, repo *gitx.Repo, paths, anchorFiles []string, stderr io.Writer) exitcode.Code {
+	if len(anchorFiles) == 0 {
+		return exitcode.Success
+	}
 	pathSet := make(map[string]bool, len(paths))
 	for _, path := range paths {
-		pathSet[path] = true
+		if err := addPathspecMatches(ctx, repo, path, pathSet); err != nil {
+			// The expansion is a check on arguments rgit already accepted,
+			// so failing it is fatal rather than a silent pass: an
+			// unevaluable pathspec is exactly one whose overlap cannot be
+			// ruled out.
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return exitcode.GitFailure
+		}
 	}
 	for _, file := range anchorFiles {
 		if pathSet[file] {
@@ -206,6 +222,23 @@ func pathAnchorContradiction(paths, anchorFiles []string, stderr io.Writer) exit
 		}
 	}
 	return exitcode.Success
+}
+
+// addPathspecMatches adds every file pathspec stages -- tracked, ignored-but-
+// tracked, and untracked-but-addable -- to out. `git add` is the authority on
+// what a pathspec matches, so this asks git for the identical set with
+// ls-files' --cached/--others pair rather than reimplementing pathspec
+// matching here. A pathspec naming nothing contributes nothing; `git add`
+// reports that itself.
+func addPathspecMatches(ctx context.Context, repo *gitx.Repo, pathspec string, out map[string]bool) error {
+	matches, err := repo.LsFilesTrackedAndOthers(ctx, pathspec)
+	if err != nil {
+		return err
+	}
+	for _, path := range matches {
+		out[path] = true
+	}
+	return nil
 }
 
 // conventionalShapeRe and hasConventionalShape below are commit.go's own

@@ -653,7 +653,7 @@ func (r *commitRun) planTargets(ctx context.Context, root, prefix string, repo *
 	// been resolved against the invocation prefix, so "src/a.go" named from
 	// a subdirectory and "a.go" named from the root compare equal.
 	paths, anchorFiles := targetPaths(targets)
-	if code := pathAnchorContradiction(paths, anchorFiles, r.stderr); code != exitcode.Success {
+	if code := pathAnchorContradiction(ctx, repo, paths, anchorFiles, r.stderr); code != exitcode.Success {
 		return nil, code
 	}
 	if code := refuseStructuredDataAnchors(ctx, repo, root, targets, r.stderr); code != exitcode.Success {

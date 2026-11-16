@@ -220,7 +220,7 @@ func buildDiffOptions(ctx context.Context, f *diffFlags, positionals []string, r
 	for _, s := range allSyms {
 		anchorFiles = append(anchorFiles, s.File)
 	}
-	if code := pathAnchorContradiction(allFiles, anchorFiles, stderr); code != exitcode.Success {
+	if code := pathAnchorContradiction(ctx, repo, allFiles, anchorFiles, stderr); code != exitcode.Success {
 		return diffpkg.Options{}, code
 	}
 

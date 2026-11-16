@@ -428,6 +428,18 @@ func TestRun_CommitExitCodes(t *testing.T) {
 		qt.Assert(t, qt.StringContains(stderr, "named both as a path and as a symbol anchor"))
 	})
 
+	// A directory pathspec is the same contradiction as naming the file
+	// itself: `git add src` stages every byte of src/f.go, and the anchor
+	// target then overwrites that entry with its synthesized blob.
+	t.Run("a directory pathspec covering the anchored file is exit 5", func(t *testing.T) {
+		t.Parallel()
+		dir, _ := gittest.RepoWithFile(t.Context(), t, "src/f.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n\nfunc B() int {\n\treturn 2\n}\n", "chore: initial")
+		writeAppFile(t, dir, "src/f.go", "package a\n\nfunc A() int {\n\treturn 3\n}\n\nfunc B() int {\n\treturn 4\n}\n")
+		_, stderr, code := runApp(t, "-C", dir, "commit", "-m", "fix(a): x", "src", "src/f.go:A")
+		qt.Assert(t, qt.Equals(code, exitcode.ContradictoryAnchors))
+		qt.Assert(t, qt.StringContains(stderr, "named both as a path and as a symbol anchor"))
+	})
+
 	t.Run("an unresolvable anchor is exit 3", func(t *testing.T) {
 		t.Parallel()
 		dir := tempRepo(t)
