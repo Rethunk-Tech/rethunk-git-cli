@@ -133,6 +133,34 @@ func rowFor(t *testing.T, porcelain, symbol string) string {
 	return found[0]
 }
 
+// TestRunCommit_DuplicateAnchorListsOneRow pins the one-edit answer for an
+// anchor named twice: `git add p p` stages p once, so two rows would
+// double-count a single change for any caller summing them.
+func TestRunCommit_DuplicateAnchorListsOneRow(t *testing.T) {
+	t.Parallel()
+	dir, _ := gittest.RepoWithFile(t.Context(), t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n", "feat: add A")
+	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 2\n}\n")
+
+	stdout, stderr, code := runApp(t, "-C", dir, "commit", "--dry-run", "--porcelain", "-m", "feat: A", "a.go:A", "a.go:A")
+	if code != exitcode.Success {
+		t.Fatalf("dry-run = %v; stderr: %s", code, stderr)
+	}
+	if lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n"); len(lines) != 1 {
+		t.Errorf("dry-run porcelain = %q; want one record for one edit", stdout)
+	}
+
+	stdout, stderr, code = runApp(t, "-C", dir, "commit", "--porcelain", "-m", "feat: A", "a.go:A", "a.go:A")
+	if code != exitcode.Success {
+		t.Fatalf("commit = %v; stderr: %s", code, stderr)
+	}
+	if lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n"); len(lines) != 2 {
+		t.Errorf("commit porcelain = %q; want one H record plus one target record", stdout)
+	}
+	if got := gittest.Git(t.Context(), t, dir, "show", "HEAD:a.go"); !strings.Contains(got, "return 2") {
+		t.Errorf("HEAD:a.go = %q; want the single edit committed", got)
+	}
+}
+
 func TestRunCommit_QuietSuccessEmptyStdout(t *testing.T) {
 	t.Parallel()
 	dir, _ := gittest.RepoWithFile(t.Context(), t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n", "feat: add A")

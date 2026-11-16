@@ -16,6 +16,7 @@ Notable changes to `rgit`. The format follows
 
 ### Fixed
 
+- Naming one anchor twice (`rgit commit -m … a.go:A a.go:A`) stages it once and lists it once. Before, the target was reported twice, so any caller summing rows double-counted the edit.
 - `rgit diff` and `rgit commit --dry-run` count a deleted container member the way the commit moves it: a Go struct field, Python method, or TypeScript class method no longer reports one phantom deleted line. Before, the preview and the real commit disagreed for every deleted member.
 - `rgit commit --only` refuses to move the branch when another writer committed between rgit's HEAD check and git reading HEAD: it exits 128 with `HEAD moved ... nothing was committed, retry` and leaves the branch, index, and working tree as they were. Before, the commit landed on top and reverted that writer's work (git older than 2.54 detected it only after the fact).
 - `rgit diff` and `rgit context` in a CRLF checkout (`core.autocrlf`, or a `text eol=crlf` attribute) report only the symbols that changed, comparing the worktree after git's CRLF-to-LF conversion. Before, every symbol in a touched file showed as changed.

@@ -289,6 +289,12 @@ func (p *Plan) symbolFile(ctx context.Context, repo *gitx.Repo, root, path strin
 }
 
 func (p *Plan) planSymbol(fp *filePlan, t Target, named map[string]map[string]bool) error {
+	// Naming the same anchor twice is one edit, not two: `git add p p`
+	// stages p once, and a second op would splice the same bytes in twice at
+	// one offset while reporting the row twice.
+	if named[fp.path] != nil && named[fp.path][t.Symbol.Anchor] {
+		return nil
+	}
 	op, unchanged, err := fp.classify(t.Symbol.Anchor)
 	if err != nil {
 		return err
