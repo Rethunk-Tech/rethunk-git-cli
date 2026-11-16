@@ -279,6 +279,31 @@ func TestCommit_HookFailureRestoresPrestagedState(t *testing.T) {
 
 // A rejected commit shows the hook's own output, and a retry after the
 // rollback reaches the hook again instead of being swallowed.
+// TestCommit_HookFailureRollsBackWhenRepositoryHadNoIndex is the same rule
+// for a repository that has never staged anything, so no index file exists
+// to snapshot. There is nothing to read back, which is not the same thing as
+// "whatever the index says now": treating the absent snapshot as the live
+// index made the rollback compare the index against itself, see no
+// difference, and leave the rejected commit's entry staged.
+func TestCommit_HookFailureRollsBackWhenRepositoryHadNoIndex(t *testing.T) {
+	t.Parallel()
+	dir, _ := gittest.New(t.Context(), t)
+	gittest.Write(t, dir, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n")
+	gittest.InstallHook(t.Context(), t, dir, "pre-commit", "#!/bin/sh\nexit 1\n")
+
+	var stdout, stderr strings.Builder
+	code := runCommit(t.Context(), dir, []string{"-m", "feat: A", "a.go:A"}, &stdout, &stderr)
+	if code != exitcode.GitFailure {
+		t.Fatalf("runCommit = %v; want GitFailure; stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "staging rolled back") {
+		t.Errorf("stderr = %q; want the rollback notice", stderr.String())
+	}
+	if got := gittest.Git(t.Context(), t, dir, "status", "--porcelain"); got != "?? a.go\n" {
+		t.Errorf("status = %q; want a.go left untracked with nothing staged", got)
+	}
+}
+
 func TestCommit_HookFailureShowsHookOutputOnEveryAttempt(t *testing.T) {
 	t.Parallel()
 	dir, _ := gittest.New(t.Context(), t)

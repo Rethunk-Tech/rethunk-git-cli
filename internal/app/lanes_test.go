@@ -304,6 +304,29 @@ func TestRun_HookRejectionRestoresStaging(t *testing.T) {
 	qt.Assert(t, qt.Equals(string(after), string(workA)))
 }
 
+// TestRun_HookRejectionRestoresStagingWithNoIndexFile is the regression for
+// the rollback skipping a repository whose index file did not exist yet: the
+// snapshot's "no bytes" state was passed to the entry lister as "read the
+// live index", which by then was the post-staging one -- so every entry
+// looked pre-existing and nothing was rolled back, leaving the rejected
+// commit's staging in the index.
+func TestRun_HookRejectionRestoresStagingWithNoIndexFile(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	gittest.Git(t.Context(), t, dir, "init")
+	gittest.Write(t, dir, "a.txt", "one\n")
+	gittest.InstallHook(t.Context(), t, dir, "pre-commit", "#!/bin/sh\nexit 1\n")
+	// A repository with no index file at all: `git init` plus a worktree file,
+	// nothing ever added. That absence is the state this case is about.
+	qt.Assert(t, qt.IsTrue(os.IsNotExist(func() error { _, err := os.Stat(filepath.Join(dir, ".git", "index")); return err }())))
+
+	_, _, code := runApp(t, "-C", dir, "commit", "-m", "feat: add a", "a.txt")
+	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))
+
+	// Nothing survives the rejection: a.txt is untracked again, not staged.
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "status", "--porcelain"), "?? a.txt\n"))
+}
+
 // TestRun_HookRejectionKeepsConcurrentStaging: staging another session did
 // while the hook ran is not rgit's to roll back.
 func TestRun_HookRejectionKeepsConcurrentStaging(t *testing.T) {
