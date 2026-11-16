@@ -217,3 +217,40 @@ func TestSnapshotIndex_RestoreRevertsOnlyAppliedPaths(t *testing.T) {
 		t.Errorf("status after Restore = %q; want a.txt unstaged and c.txt still staged", got)
 	}
 }
+
+// TestSnapshotIndex_RestoreWithNoIndexFile covers the same rollback when the
+// repository has no index file at all when staging starts. The snapshot then
+// holds no bytes, which indexEntries also spells as "read the live index" --
+// so without the snapshot recording that the index was absent, "before"
+// resolved to what this very commit had just staged and every entry compared
+// equal, leaving the rejected commit's staging behind.
+func TestSnapshotIndex_RestoreWithNoIndexFile(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	dir, repo := gittest.New(ctx, t)
+	gittest.Write(t, dir, "a.txt", "one\n")
+	gittest.Commit(ctx, t, dir, "chore: initial")
+	gittest.Write(t, dir, "a.txt", "two\n")
+	if err := os.Remove(filepath.Join(dir, ".git", "index")); err != nil {
+		t.Fatal(err)
+	}
+	before := gittest.Git(ctx, t, dir, "status", "--porcelain")
+
+	snap, err := SnapshotIndex(ctx, dir)
+	if err != nil {
+		t.Fatalf("SnapshotIndex: %v", err)
+	}
+	plan, err := PlanStage(ctx, repo, dir, []Target{PathTarget("a.txt")})
+	if err != nil {
+		t.Fatalf("PlanStage: %v", err)
+	}
+	if err := plan.ApplyWithSnapshot(ctx, repo, dir, snap); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if err := snap.Restore(ctx); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if got := gittest.Git(ctx, t, dir, "status", "--porcelain"); got != before {
+		t.Errorf("status after Restore = %q; want the pre-staging %q", got, before)
+	}
+}

@@ -832,11 +832,15 @@ func callerIndexPath(ctx context.Context, root string) (string, error) {
 
 // IndexSnapshot is a byte copy of the caller's index file, taken so a later
 // failure (a hook rejecting the commit) can undo what ApplyWithSnapshot
-// staged. data is nil when no index file existed.
+// staged. absent records that there was no index file to copy, which is not
+// the same answer as an empty index: indexEntries' nil data means "list the
+// live index", so a nil data with no absent flag would make Restore compare
+// the staged result against itself.
 type IndexSnapshot struct {
 	root    string
 	path    string
 	data    []byte
+	absent  bool
 	applied []byte
 }
 
@@ -848,10 +852,23 @@ func SnapshotIndex(ctx context.Context, root string) (*IndexSnapshot, error) {
 		return nil, err
 	}
 	data, err := os.ReadFile(filepath.Clean(path))
-	if err != nil && !os.IsNotExist(err) {
+	if os.IsNotExist(err) {
+		return &IndexSnapshot{root: root, path: path, absent: true}, nil
+	}
+	if err != nil {
 		return nil, err
 	}
 	return &IndexSnapshot{root: root, path: path, data: data}, nil
+}
+
+// beforeEntries lists the snapshot's own pre-staging entries. An index file
+// that did not exist held nothing, so it is the empty set rather than
+// whatever the live index holds now.
+func (s *IndexSnapshot) beforeEntries(ctx context.Context) (map[string]indexEntry, error) {
+	if s.absent {
+		return map[string]indexEntry{}, nil
+	}
+	return indexEntries(ctx, s.root, s.data)
 }
 
 // Restore reverts the entries ApplyWithSnapshot changed to their snapshot
@@ -868,7 +885,7 @@ func (s *IndexSnapshot) Restore(ctx context.Context) error {
 	}
 	defer func() { _ = os.Remove(lock) }()
 
-	before, err := indexEntries(ctx, s.root, s.data)
+	before, err := s.beforeEntries(ctx)
 	if err != nil {
 		return err
 	}
