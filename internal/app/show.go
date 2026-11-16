@@ -87,7 +87,7 @@ func runShow(ctx context.Context, dir string, args []string, stdout, stderr io.W
 	}
 	extents := make([][]byte, 0, len(positionals))
 	for _, positional := range positionals {
-		repo, file, src, res, anchorName, code := resolveAnchorExtent(ctx, dir, stderr, positional, "show", showHelp, fetch)
+		repo, file, src, res, anchorName, code := resolveAnchorExtent(ctx, dir, stderr, positional, source, "show", showHelp, fetch)
 		if code != exitcode.Success {
 			return code
 		}
@@ -158,19 +158,13 @@ func followRenameSymbol(ctx context.Context, repo *gitx.Repo, startRev, file str
 
 // showSource builds the anchorSourceFunc for one --source value: a revision's
 // blob when given, otherwise the worktree with blame's own HEAD fallback.
+//
+// The revision itself was verified by resolveAnchorExtent before
+// classification ran, so a typo'd --source is already an exit-128 refusal by
+// the time this is reached; only the path's presence here is a question.
 func showSource(source string) anchorSourceFunc {
 	return func(ctx context.Context, repo *gitx.Repo, root, file string) ([]byte, string, bool, error) {
 		if source != "" {
-			// Verified before the read, because cat-file reports a typo'd
-			// revision and a path genuinely absent at a real one
-			// identically -- both are simply "no such object". Without
-			// this, `--source mian` would read as "your symbol is not in
-			// that commit" rather than "that is not a commit".
-			if _, ok, err := repo.RevParseVerify(ctx, source); err != nil {
-				return nil, "", false, err
-			} else if !ok {
-				return nil, "", false, fmt.Errorf("not a valid revision: %s", source)
-			}
 			blob, exists, err := repo.CatFile(ctx, source, file)
 			if err != nil {
 				return nil, "", false, err

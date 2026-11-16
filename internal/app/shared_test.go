@@ -10,6 +10,7 @@ import (
 	"github.com/go-quicktest/qt"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gittest"
 )
 
 func TestStripControl(t *testing.T) {
@@ -46,6 +47,51 @@ func TestRun_DiffStripsControlBytesFromPaths(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
 	qt.Assert(t, qt.StringContains(stdout, "PWNED"))
 	qt.Assert(t, qt.IsFalse(strings.ContainsAny(stdout+stderr, "\x1b\x07")))
+}
+
+// TestRun_SourceRevisionReadsAPathGoneFromHEAD pins the FILE half's extra
+// existence probe: with --source, a path has to be looked for at that
+// revision too, not only in the worktree, index, or HEAD. A file deleted by
+// a later commit exists in none of those three, so show, blame, and log all
+// refused an anchor naming it as unclassifiable (129) instead of reading the
+// blob the caller pointed them at.
+func TestRun_SourceRevisionReadsAPathGoneFromHEAD(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "gone.go", "package gone\n\nfunc Gone() int {\n\treturn 1\n}\n")
+	gittest.Commit(t.Context(), t, dir, "feat: add gone.go")
+	gittest.Git(t.Context(), t, dir, "rm", "-q", "gone.go")
+	gittest.Commit(t.Context(), t, dir, "chore: drop gone.go")
+
+	t.Run("show", func(t *testing.T) {
+		t.Parallel()
+		stdout, stderr, code := runApp(t, "-C", dir, "show", "--source", "HEAD~1", "gone.go:Gone")
+		qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
+		qt.Assert(t, qt.Equals(stdout, "func Gone() int {\n\treturn 1\n}"))
+	})
+
+	t.Run("blame", func(t *testing.T) {
+		t.Parallel()
+		stdout, stderr, code := runApp(t, "-C", dir, "blame", "--source", "HEAD~1", "gone.go:Gone")
+		qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
+		qt.Assert(t, qt.StringContains(stdout, "func Gone() int {"))
+	})
+
+	t.Run("log", func(t *testing.T) {
+		t.Parallel()
+		stdout, stderr, code := runApp(t, "-C", dir, "log", "--source", "HEAD~1", "gone.go:Gone")
+		qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
+		qt.Assert(t, qt.StringContains(stdout, "feat: add gone.go"))
+	})
+
+	// The probe must not turn a typo'd revision into the anchor codes:
+	// docs/CODES.md pins an unknown --source revision at 128.
+	t.Run("an unknown revision stays 128", func(t *testing.T) {
+		t.Parallel()
+		_, stderr, code := runApp(t, "-C", dir, "show", "--source", "nosuchrev", "gone.go:Gone")
+		qt.Assert(t, qt.Equals(code, exitcode.GitFailure), qt.Commentf("stderr: %s", stderr))
+		qt.Assert(t, qt.StringContains(stderr, "not a valid revision"))
+	})
 }
 
 // No t.Parallel: the case needs a working directory outside any repository.

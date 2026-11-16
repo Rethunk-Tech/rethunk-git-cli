@@ -271,7 +271,7 @@ func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr
 	if opts.source != "" {
 		fetch = showSource(opts.source)
 	}
-	repo, file, blob, res, anchorName, code := resolveAnchorExtent(ctx, dir, stderr, opts.positional, "log", logHelp, fetch)
+	repo, file, blob, res, anchorName, code := resolveAnchorExtent(ctx, dir, stderr, opts.positional, opts.source, "log", logHelp, fetch)
 	if code != exitcode.Success {
 		return code
 	}

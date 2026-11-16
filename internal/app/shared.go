@@ -394,10 +394,24 @@ type anchorSourceFunc func(ctx context.Context, repo *gitx.Repo, root, file stri
 // On success code is exitcode.Success and repo, file, src, res are all
 // populated; otherwise every refusal has already been written to stderr
 // and the caller must return code immediately.
-func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, positional, cmdName, help string, fetchSource anchorSourceFunc) (repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, anchorName string, code exitcode.Code) {
+func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, positional, sourceRev, cmdName, help string, fetchSource anchorSourceFunc) (repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, anchorName string, code exitcode.Code) {
 	root, prefix, repo, code := openRepo(ctx, dir, stderr)
 	if code != exitcode.Success {
 		return nil, "", nil, nil, "", code
+	}
+
+	// sourceRev is verified here, before classification consults it: rule 4
+	// asks git whether the FILE half exists at that revision, and a revision
+	// git cannot resolve would otherwise read as "no such path" -- exit 3 or
+	// 129 -- instead of docs/CODES.md's 128 for an unknown --source.
+	if sourceRev != "" && sourceRev != "HEAD" {
+		if _, ok, err := repo.RevParseVerify(ctx, sourceRev); err != nil {
+			fmt.Fprintf(stderr, "rgit: %v\n", err)
+			return nil, "", nil, nil, "", exitcode.GitFailure
+		} else if !ok {
+			fmt.Fprintf(stderr, "rgit: not a valid revision: %s\n", sourceRev)
+			return nil, "", nil, nil, "", exitcode.GitFailure
+		}
 	}
 
 	// Reused rather than hand-parsed: the six-rule precedence table
@@ -405,7 +419,7 @@ func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, posi
 	// commit and diff, and a bare pathspec here (an existing path with no
 	// name after it) must be refused the same way rather than silently
 	// misread as an anchor with an empty name.
-	checker := cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}
+	checker := cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo, ExtraRev: sourceRev}
 	classified, err := cli.ClassifyArgs(ctx, []string{positional}, false, &checker, cli.GitRevisionResolver{Repo: repo})
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)

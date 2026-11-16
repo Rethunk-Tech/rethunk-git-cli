@@ -203,6 +203,14 @@ type GitPathChecker struct {
 	indexIgnoreCase bool
 	indexPaths      map[string]struct{}
 	indexErr        error
+
+	// ExtraRev, when non-empty, is one more revision whose tree counts as a
+	// place the path may exist. show, blame, and log --source set it to the
+	// revision they read from: that is the only place a path's FILE half
+	// can still be found once a later commit deleted it, and without it
+	// reading a deleted file at an old revision was refused as
+	// unclassifiable rather than resolved.
+	ExtraRev string
 }
 
 func (c *GitPathChecker) ExistsInWorktreeOrHEAD(ctx context.Context, path string) (bool, error) {
@@ -245,6 +253,16 @@ func (c *GitPathChecker) ExistsInWorktreeOrHEAD(ctx context.Context, path string
 	}
 
 	_, found, err := c.Repo.LsTreeTolerant(ctx, "HEAD", rel)
+	if err != nil {
+		return false, err
+	}
+	if found {
+		return true, nil
+	}
+	if c.ExtraRev == "" || c.ExtraRev == "HEAD" {
+		return false, nil
+	}
+	_, found, err = c.Repo.LsTreeTolerant(ctx, c.ExtraRev, rel)
 	if err != nil {
 		return false, err
 	}
