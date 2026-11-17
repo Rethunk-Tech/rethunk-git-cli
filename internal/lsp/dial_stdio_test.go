@@ -225,7 +225,7 @@ func buildFakeLSP(t *testing.T) string {
 		t.Fatal(err)
 	}
 	bin := filepath.Join(dir, "fake-lsp")
-	cmd := exec.Command("go", "build", "-o", bin, ".") //nolint:gosec // fixed argv: compile the in-test fake LSP helper
+	cmd := exec.CommandContext(t.Context(), "go", "build", "-o", bin, ".") //nolint:gosec // fixed argv: compile the in-test fake LSP helper
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("go build fake-lsp: %v\n%s", err, out)
