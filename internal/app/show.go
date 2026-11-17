@@ -17,7 +17,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
 )
 
-const showHelp = `usage: rgit show FILE:SYMBOL... [--source <rev>] [--follow-rename] [--porcelain] [--with-header]
+const showHelp = `usage: rgit show FILE:SYMBOL... [--source <rev>] [--follow-rename] [--porcelain]
 
 Print each named symbol's own bytes -- exactly the extent the anchor resolves
 to, with no trailing newline the file did not already carry.
@@ -34,11 +34,8 @@ to, with no trailing newline the file did not already carry.
                 need not special-case an argument list that happens to hold
                 one. Single-anchor and multi-anchor output are both framed;
                 this is the machine-readable framing scripts should parse.
---with-header   Deprecated alias for --porcelain, retained so existing
-                scripts keep working. Identical framing; prefer --porcelain
-                in new scripts.
 
-With one anchor and neither --porcelain nor --with-header, stdout is those bytes and nothing else,
+With one anchor and no --porcelain, stdout is those bytes and nothing else,
 so it pipes. With several, each extent is framed by a header line
 "FILE:ANCHOR<TAB>NBYTES" followed by exactly NBYTES bytes: a symbol's own text
 can contain anything, including a line that looks like a header, so the length
@@ -63,14 +60,12 @@ Full reference: docs/USAGE.md
 // identically across all three.
 func runShow(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	source := ""
-	withHeader := false
 	porcelain := false
 	followRename := false
 	positionals, code, done := parseAnchorCommandArgs("show", args,
 		[]anchorCommandFlag{
 			{tokens: []string{"--source"}, val: &source},
 			{tokens: []string{"--porcelain"}, set: &porcelain},
-			{tokens: []string{"--with-header"}, set: &withHeader},
 			{tokens: []string{"--follow-rename"}, set: &followRename},
 		},
 		0, showHelp, stdout, stderr, false)
@@ -106,7 +101,7 @@ func runShow(ctx context.Context, dir string, args []string, stdout, stderr io.W
 		extents = append(extents, ext)
 	}
 
-	framed := porcelain || withHeader || len(extents) > 1
+	framed := porcelain || len(extents) > 1
 	for i, ext := range extents {
 		// The header goes through the ordinary (control-stripped) writer: it
 		// is a line of text, and a hostile path in it must not reach the

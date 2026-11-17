@@ -128,16 +128,6 @@ func TestShow_MultipleAnchorsAreLengthFramed(t *testing.T) {
 	qt.Assert(t, qt.Equals(stderr, ""))
 	want := "a.go:A\t" + strconv.Itoa(len(a)) + "\n" + a + "a.go:B\t" + strconv.Itoa(len(b)) + "\n" + b
 	qt.Assert(t, qt.Equals(stdout, want))
-
-	// --with-header frames a lone anchor identically, so a caller looping
-	// over an argument list need not branch on its length.
-	stdout, _, code = runApp(t, "-C", cwd, "show", "--with-header", "a.go:A")
-	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	qt.Assert(t, qt.Equals(stdout, "a.go:A\t"+strconv.Itoa(len(a))+"\n"+a))
-
-	// The declared length is the extent's real byte count, so a reader can
-	// consume the stream without scanning for a separator at all.
-	qt.Assert(t, qt.IsTrue(strings.HasSuffix(stdout, a)))
 }
 
 // TestShow_ResolvesEveryAnchorBeforeWriting pins the all-or-nothing rule: a
@@ -186,23 +176,14 @@ func TestShow_PorcelainFramesSingleAndMultiAnchors(t *testing.T) {
 	qt.Assert(t, qt.Equals(raw, a))
 }
 
-// TestShow_WithHeaderIsAPorcelainAlias pins --with-header as a deprecated
-// alias that still works: identical bytes to --porcelain, in both arities.
-func TestShow_WithHeaderIsAPorcelainAlias(t *testing.T) {
+// TestShow_WithHeaderIsUnrecognized pins that the old --porcelain alias is
+// gone: a leftover script using it is a usage error, not silent framing.
+func TestShow_WithHeaderIsUnrecognized(t *testing.T) {
 	t.Parallel()
 	cwd := tempRepo(t)
-
-	singlePorcelain, _, code := runApp(t, "-C", cwd, "show", "--porcelain", "a.go:A")
-	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	singleHeader, _, code := runApp(t, "-C", cwd, "show", "--with-header", "a.go:A")
-	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	qt.Assert(t, qt.Equals(singleHeader, singlePorcelain))
-
-	multiPorcelain, _, code := runApp(t, "-C", cwd, "show", "--porcelain", "a.go:A", "a.go:B")
-	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	multiHeader, _, code := runApp(t, "-C", cwd, "show", "--with-header", "a.go:A", "a.go:B")
-	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	qt.Assert(t, qt.Equals(multiHeader, multiPorcelain))
+	_, stderr, code := runApp(t, "-C", cwd, "show", "--with-header", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, `unrecognized argument "--with-header"`))
 }
 
 // TestShow_FramingCountsBytesEmittedForControlBytes is the regression for

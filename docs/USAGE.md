@@ -146,10 +146,9 @@ $ rgit show --source v1.4.0 auth.go:ValidateToken | diff - <(rgit show auth.go:V
 ```
 
 Writes the resolved extent, no added newline. One anchor, no
-`--porcelain`/`--with-header`: raw bytes. Several: `FILE:ANCHOR<TAB>NBYTES`
+`--porcelain`: raw bytes. Several: `FILE:ANCHOR<TAB>NBYTES`
 then exactly those bytes. `--porcelain` forces framing for one too
-([`CODES.md`](CODES.md#rgit-show---porcelain)). `--with-header` is a
-deprecated alias. All anchors resolve before any write.
+([`CODES.md`](CODES.md#rgit-show---porcelain)). All anchors resolve before any write.
 
 Default source: worktree, else `HEAD`. `--source <rev>` reads `<rev>:FILE`
 (both spellings). Unknown revision: 128. Path absent at a known
@@ -385,8 +384,7 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 `log`: `--porcelain`, `--json`, `-p`/`--patch`, `--follow`,
 `--follow-rename`, `--source`, `-n`/`--max-count`, `--since`/`--until`,
 `--help`.
-`show`: `--source`, `--follow-rename`, `--porcelain`, `--with-header`,
-`--help`.
+`show`: `--source`, `--follow-rename`, `--porcelain`, `--help`.
 `symbols`: `--for-commit`, `--with-lines`, `--with-filename`,
 `--limit`, `--match`, `--porcelain`, `--json`, `--help`.
 `doctor`: `--porcelain`, `--json`, `--deep`, `--help`.
@@ -433,7 +431,6 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 | `--quiet` | (`diff`) Implies `--exit-code`, suppresses output. |
 | `-p`, `--patch` | (`diff`) Git's patch after the report. Exclusive with `--porcelain` and `--json`. |
 | `--stat` | (`diff`) Accepted as a no-op: every row already carries `+N/-M`. |
-| `--with-header` | (`show`) Deprecated `--porcelain` alias. |
 | `--porcelain` | (`show`) Length-framed extents. |
 | `--with-filename` | (`symbols`) `FILE<TAB>` prefix. |
 | `--limit N` | (`symbols`) At most N records, after `--match`. |

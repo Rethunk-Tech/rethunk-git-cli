@@ -467,8 +467,7 @@ import (
 ```
 
 Every extent: `FILE:ANCHOR<TAB>NBYTES` then exactly `NBYTES` bytes.
-Without the flag, one anchor is raw bytes. `--with-header` is a deprecated
-alias.
+Without the flag, one anchor is raw bytes.
 
 ## Rules the diff and commit forms obey
 

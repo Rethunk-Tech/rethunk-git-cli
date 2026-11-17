@@ -6,6 +6,10 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Removed
+
+- `rgit show --with-header`, the deprecated alias for `--porcelain`. Use `--porcelain`. See [`docs/USAGE.md`](docs/USAGE.md#show).
+
 ### Changed
 
 - rust-analyzer no longer runs Cargo build scripts or proc macros from the repo it opens: initialize sends `cargo.buildScripts.enable`, `cargo.runBuildScripts`, and `procMacro.enable` as false.
