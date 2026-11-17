@@ -14,15 +14,23 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/prereq"
 )
 
-const generateOnlyChildEnv = "RGIT_INSTALL_TEST_AS_GENERATE_ONLY"
+const (
+	generateOnlyChildEnv = "RGIT_INSTALL_TEST_AS_GENERATE_ONLY"
+	dryRunChildEnv       = "RGIT_INSTALL_TEST_AS_DRY_RUN"
+)
 
-// Re-execs this test binary as `rgit-install -generate-only` so
-// TestGenerateOnlyExitsNonZeroWhenSQLSkipped does not `go run` (a second
-// compile of this package on every `go test -race`).
+// Re-execs this test binary as rgit-install so subprocess cases do not
+// `go run` (a second compile of this package on every `go test -race`).
 func TestMain(m *testing.M) {
-	if os.Getenv(generateOnlyChildEnv) == "1" {
+	switch {
+	case os.Getenv(generateOnlyChildEnv) == "1":
 		flag.CommandLine = flag.NewFlagSet("rgit-install", flag.ContinueOnError)
 		os.Args = []string{"rgit-install", "-generate-only"}
+		main()
+		os.Exit(0)
+	case os.Getenv(dryRunChildEnv) == "1":
+		flag.CommandLine = flag.NewFlagSet("rgit-install", flag.ContinueOnError)
+		os.Args = []string{"rgit-install", "-dry-run"}
 		main()
 		os.Exit(0)
 	}
@@ -263,14 +271,32 @@ func TestFindSQLAdapterOutsideAModule(t *testing.T) {
 
 func TestGenerateSQLParserWith(t *testing.T) {
 	t.Parallel()
-	// The one branch reachable without the network or a real tree-sitter
-	// CLI: not found on PATH at all, the common case on a machine that
-	// never opted into SQL support. Everything past this needs both for
-	// real -- see generateSQLParser's own doc comment.
-	ok, msg := generateSQLParserWith("/repo", "/repo/internal/resolve/sqlgrammar", false,
-		func(string) (string, error) { return "", os.ErrNotExist })
-	qt.Assert(t, qt.IsFalse(ok))
-	qt.Assert(t, qt.StringContains(msg, "tree-sitter CLI not found on PATH"))
+	lookOK := func(string) (string, error) { return "/bin/true", nil }
+
+	t.Run("tree-sitter CLI missing", func(t *testing.T) {
+		t.Parallel()
+		// The common case on a machine that never opted into SQL support.
+		ok, msg := generateSQLParserWith("/repo", "/repo/internal/resolve/sqlgrammar", false,
+			func(string) (string, error) { return "", os.ErrNotExist })
+		qt.Assert(t, qt.IsFalse(ok))
+		qt.Assert(t, qt.StringContains(msg, "tree-sitter CLI not found on PATH"))
+	})
+
+	t.Run("grammar module not resolvable", func(t *testing.T) {
+		t.Parallel()
+		ok, msg := generateSQLParserWith(filepath.Join(t.TempDir(), "missing"), t.TempDir(), false, lookOK)
+		qt.Assert(t, qt.IsFalse(ok))
+		qt.Assert(t, qt.StringContains(msg, "not resolvable"))
+	})
+
+	t.Run("dry-run would generate", func(t *testing.T) {
+		t.Parallel()
+		repo, err := resolveRepoRoot()
+		qt.Assert(t, qt.IsNil(err))
+		ok, msg := generateSQLParserWith(repo, filepath.Join(repo, "internal", "resolve", "sqlgrammar"), true, lookOK)
+		qt.Assert(t, qt.IsTrue(ok))
+		qt.Assert(t, qt.StringContains(msg, "would generate the SQL parser"))
+	})
 }
 
 func TestGenerateOnlyExitsNonZeroWhenSQLSkipped(t *testing.T) {
@@ -344,12 +370,20 @@ func TestGitVersionNotARepo(t *testing.T) {
 
 func TestResolvePrefix(t *testing.T) {
 	t.Parallel()
-	// Only the flagPrefix branch is a pure transformation; the GOBIN/GOPATH
-	// fallback shells out to `go env` via goEnv and is exercised by hand
-	// instead, rather than mocked here.
-	got, err := resolvePrefix("/custom/prefix")
-	qt.Assert(t, qt.IsNil(err))
-	qt.Assert(t, qt.Equals(got, "/custom/prefix"))
+
+	t.Run("flag overrides go env", func(t *testing.T) {
+		t.Parallel()
+		got, err := resolvePrefix("/custom/prefix")
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(got, "/custom/prefix"))
+	})
+
+	t.Run("empty flag uses go env GOBIN", func(t *testing.T) {
+		t.Parallel()
+		got, err := resolvePrefix("")
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(got, goEnv("GOBIN")))
+	})
 }
 
 func TestCopyFile(t *testing.T) {
@@ -373,6 +407,22 @@ func TestCopyFile(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
 		err := copyFile(filepath.Join(dir, "nope"), filepath.Join(dir, "dst"))
+		qt.Assert(t, qt.IsNotNil(err))
+	})
+
+	t.Run("source directory missing", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		err := copyFile(filepath.Join(dir, "no", "src"), filepath.Join(dir, "dst"))
+		qt.Assert(t, qt.IsNotNil(err))
+	})
+
+	t.Run("dest directory missing", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		src := filepath.Join(dir, "src.txt")
+		qt.Assert(t, qt.IsNil(os.WriteFile(src, []byte("x"), 0o600)))
+		err := copyFile(src, filepath.Join(dir, "no", "dst"))
 		qt.Assert(t, qt.IsNotNil(err))
 	})
 }
@@ -443,6 +493,30 @@ func TestFinalizeGenerated(t *testing.T) {
 		_, statErr := os.Stat(final + ".old")
 		qt.Assert(t, qt.IsTrue(os.IsNotExist(statErr)))
 	})
+
+	t.Run("final path is under a file", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		blocker := filepath.Join(dir, "blocker")
+		qt.Assert(t, qt.IsNil(os.WriteFile(blocker, []byte("x"), 0o600)))
+		staging := filepath.Join(dir, "csrc.tmp")
+		qt.Assert(t, qt.IsNil(os.MkdirAll(staging, 0o750)))
+		err := finalizeGenerated(staging, filepath.Join(blocker, "csrc"))
+		qt.Assert(t, qt.IsNotNil(err))
+		qt.Assert(t, qt.StringContains(err.Error(), "stat"))
+	})
+
+	t.Run("cannot move existing final aside", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		final := filepath.Join(dir, "csrc")
+		qt.Assert(t, qt.IsNil(os.MkdirAll(final, 0o750)))
+		qt.Assert(t, qt.IsNil(os.Chmod(dir, 0o555)))   //nolint:gosec // parent must not be writable so Rename(final, old) fails
+		t.Cleanup(func() { _ = os.Chmod(dir, 0o750) }) //nolint:gosec // restore so TempDir cleanup can remove it
+		err := finalizeGenerated(filepath.Join(dir, "staging"), final)
+		qt.Assert(t, qt.IsNotNil(err))
+		qt.Assert(t, qt.StringContains(err.Error(), "move existing"))
+	})
 }
 
 func TestSQLCSRCContentHash(t *testing.T) {
@@ -487,6 +561,27 @@ func TestSQLCSRCContentHash(t *testing.T) {
 		_, err := sqlCSRCContentHash(t.TempDir())
 		qt.Assert(t, qt.IsNotNil(err))
 	})
+
+	t.Run("csrc is a file", func(t *testing.T) {
+		t.Parallel()
+		pkgDir := t.TempDir()
+		qt.Assert(t, qt.IsNil(os.WriteFile(filepath.Join(pkgDir, "csrc"), []byte("x"), 0o600)))
+		_, err := sqlCSRCContentHash(pkgDir)
+		qt.Assert(t, qt.IsNotNil(err))
+	})
+
+	t.Run("unreadable file under csrc", func(t *testing.T) {
+		t.Parallel()
+		pkgDir := t.TempDir()
+		csrc := filepath.Join(pkgDir, "csrc")
+		qt.Assert(t, qt.IsNil(os.MkdirAll(csrc, 0o750)))
+		path := filepath.Join(csrc, "parser.c")
+		qt.Assert(t, qt.IsNil(os.WriteFile(path, []byte("x"), 0o600)))
+		qt.Assert(t, qt.IsNil(os.Chmod(path, 0)))
+		t.Cleanup(func() { _ = os.Chmod(path, 0o600) })
+		_, err := sqlCSRCContentHash(pkgDir)
+		qt.Assert(t, qt.IsNotNil(err))
+	})
 }
 
 func TestParserABIVersion(t *testing.T) {
@@ -524,6 +619,20 @@ func TestParserABIVersion(t *testing.T) {
 		_, err := parserABIVersion(path)
 		qt.Assert(t, qt.IsNotNil(err))
 	})
+
+	t.Run("missing file", func(t *testing.T) {
+		t.Parallel()
+		_, err := parserABIVersion(filepath.Join(t.TempDir(), "parser.c"))
+		qt.Assert(t, qt.IsNotNil(err))
+	})
+
+	t.Run("define without trailing newline", func(t *testing.T) {
+		t.Parallel()
+		path := write(t, "#define LANGUAGE_VERSION 15")
+		abi, err := parserABIVersion(path)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(abi, 15))
+	})
 }
 
 func TestCgoCFlagsWithHash_KeepsGoDefaults(t *testing.T) {
@@ -531,4 +640,34 @@ func TestCgoCFlagsWithHash_KeepsGoDefaults(t *testing.T) {
 	got := cgoCFlagsWithHash(t.TempDir(), os.Environ(), "abc")
 	qt.Assert(t, qt.IsTrue(strings.Contains(got, "-O2")))
 	qt.Assert(t, qt.IsTrue(strings.HasSuffix(got, "-DRGIT_SQL_CSRC_HASH=abc")))
+}
+
+func TestCgoCFlagsWithHash_GoEnvFails(t *testing.T) {
+	t.Parallel()
+	got := cgoCFlagsWithHash(filepath.Join(t.TempDir(), "missing"), os.Environ(), "abc")
+	qt.Assert(t, qt.Equals(got, "-DRGIT_SQL_CSRC_HASH=abc"))
+}
+
+func TestDryRunPrintsWouldBuild(t *testing.T) {
+	t.Parallel()
+	cmd := exec.CommandContext(t.Context(), os.Args[0]) //nolint:gosec // re-execs this test binary, never an untrusted path
+	cmd.Env = append(os.Environ(), dryRunChildEnv+"=1")
+	out, err := cmd.CombinedOutput()
+	qt.Assert(t, qt.IsNil(err), qt.Commentf("%s", out))
+	qt.Assert(t, qt.StringContains(string(out), "Would build ./cmd/rgit"))
+	qt.Assert(t, qt.StringContains(string(out), "and install to"))
+}
+
+func TestDryRunWithoutSQLAdapter(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	qt.Assert(t, qt.IsNil(os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/rgitinstalltest\n\ngo 1.22\n"), 0o600)))
+	cmd := exec.CommandContext(t.Context(), os.Args[0]) //nolint:gosec // re-execs this test binary, never an untrusted path
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), dryRunChildEnv+"=1")
+	out, err := cmd.CombinedOutput()
+	qt.Assert(t, qt.IsNil(err), qt.Commentf("%s", out))
+	qt.Assert(t, qt.StringContains(string(out), "No SQL adapter package present yet"))
+	qt.Assert(t, qt.StringContains(string(out), "Would build ./cmd/rgit"))
+	qt.Assert(t, qt.Not(qt.StringContains(string(out), "-tags rgit_sql")))
 }
