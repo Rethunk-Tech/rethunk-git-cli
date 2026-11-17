@@ -4,7 +4,7 @@ Internals for changing this repo. Usage: [HUMANS.md](HUMANS.md). Process: [CONTR
 
 ## The one invariant
 
-**`rgit` is `git add <pathspec> && git commit` at symbol granularity.** Match git wherever git has an opinion. Divergence needs an explicit PR argument.
+**`rgit commit <targets>` is `git commit --only` at symbol granularity.** No targets: `git commit` of the index. Match git wherever git has an opinion. Divergence needs an explicit PR argument.
 
 Inherited behaviour: [docs/USAGE.md § Behaviour inherited from git](docs/USAGE.md#behaviour-inherited-from-git).
 

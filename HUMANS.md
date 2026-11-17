@@ -63,7 +63,7 @@ Everything else stays plain `git`. Full command reference: [docs/USAGE.md](docs/
 
 ## Inherited git behaviour
 
-`rgit` deliberately behaves like `git add <pathspec> && git commit`. Surprising consequences are git's own — see [docs/USAGE.md § Behaviour inherited from git](docs/USAGE.md#behaviour-inherited-from-git).
+`rgit commit` with named targets is `git commit --only` at symbol granularity — already-staged work stays out. `-i`/`--include` takes it along. No targets: the index, like `git commit`. See [docs/USAGE.md § Behaviour inherited from git](docs/USAGE.md#behaviour-inherited-from-git).
 
 ## Anchor limits
 

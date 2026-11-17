@@ -142,10 +142,11 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	reeditMessage := registerCommitFlags(fs, &f)
 
 	help := "usage: rgit commit [flags] [target...]\n\n" +
-		"Stage named targets -- pathspecs and/or FILE:NAME symbol anchors\n" +
-		"(e.g. auth.go:ValidateToken) -- and commit them, or with --stage-only\n" +
-		"stage them and stop. Un-staging is plain git: \"git restore --staged FILE\"\n" +
-		"is per file, so a half-staged symbol comes out with its whole file.\n\n" +
+		"Commit named targets -- pathspecs and/or FILE:NAME symbol anchors\n" +
+		"(e.g. auth.go:ValidateToken) -- and only those; already-staged work\n" +
+		"stays uncommitted unless -i/--include. --stage-only stages and stops.\n" +
+		"Un-staging is plain git: \"git restore --staged FILE\" is per file, so a\n" +
+		"half-staged symbol comes out with its whole file.\n\n" +
 		fs.FlagUsages() +
 		"\nFull reference: docs/USAGE.md\n"
 	if code, done := parseFlagsOrHelp(fs, expandGPGSignShorthand(fs, args), stdout, stderr, help); done {
@@ -183,6 +184,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 	if code := r.validateTargetCount(targetCount); code != exitcode.Success {
 		return code
 	}
+	f.implyOnly(targetCount)
 
 	r.warnUnconventionalMessage()
 
@@ -358,8 +360,8 @@ func registerCommitFlags(fs *pflag.FlagSet, f *commitFlags) (reeditMessage *bool
 	fs.BoolVar(&f.asJSON, "json", false, "one JSON object of the porcelain records")
 	fs.BoolVarP(&f.quiet, "quiet", "q", false, "suppress the commit summary and target listing")
 	fs.BoolVar(&f.verbose, "verbose", false, "print hook output even when the commit succeeds")
-	fs.BoolVarP(&f.include, "include", "i", false, "stage named targets and commit them with other staged work")
-	fs.BoolVarP(&f.only, "only", "o", false, "commit only named targets")
+	fs.BoolVarP(&f.include, "include", "i", false, "commit named targets with other staged work")
+	fs.BoolVarP(&f.only, "only", "o", false, "commit only named targets (default when any are given)")
 	fs.BoolVar(&f.stageOnly, "stage-only", false, "stage the named targets into the index without committing")
 	// -S is not registered as a shorthand here; expandGPGSignShorthand
 	// rewrites it before Parse, for the pflag reason documented there.
@@ -550,8 +552,7 @@ func (r *commitRun) validateFlags() exitcode.Code {
 		return r.usage("--porcelain and --json are mutually exclusive")
 	}
 	// git commit -i and -o are alternate ways to build the commit from
-	// paths (builtin/commit.c die_for_incompatible_opt4). rgit's default
-	// already follows -i; the flag is that spelling made explicit.
+	// paths (builtin/commit.c die_for_incompatible_opt4).
 	if f.include && f.only {
 		return r.usage("--include and --only are mutually exclusive")
 	}
@@ -567,6 +568,14 @@ func (r *commitRun) validateFlags() exitcode.Code {
 		return r.usage("-F - and --pathspec-from-file=- are mutually exclusive")
 	}
 	return exitcode.Success
+}
+
+// implyOnly makes named targets a partial commit: already-staged work
+// stays out unless -i asked for it.
+func (f *commitFlags) implyOnly(targetCount int) {
+	if targetCount > 0 && !f.include && !f.only && !f.stageOnly {
+		f.only = true
+	}
 }
 
 func (r *commitRun) validateTargetCount(targetCount int) exitcode.Code {

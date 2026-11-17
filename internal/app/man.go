@@ -27,7 +27,7 @@ func writeManPage(ctx context.Context, version string, w io.Writer) {
 		version = "rgit"
 	}
 	fmt.Fprintf(w, ".TH RGIT 1 \"\" \"rgit %s\" \"User Commands\"\n", groffEscape(version))
-	fmt.Fprint(w, ".SH NAME\nrgit \\- git add and git commit at symbol granularity\n")
+	fmt.Fprint(w, ".SH NAME\nrgit \\- git commit --only at symbol granularity\n")
 	fmt.Fprint(w, ".SH SYNOPSIS\n.nf\n")
 	fmt.Fprint(w, groffPre(usageLine))
 	fmt.Fprint(w, "\n.fi\n.SH DESCRIPTION\n.nf\n")

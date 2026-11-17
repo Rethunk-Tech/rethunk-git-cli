@@ -1,4 +1,4 @@
-// Command rgit is git add <pathspec> && git commit at symbol granularity.
+// Command rgit is git commit --only at symbol granularity when targets are named.
 // See AGENTS.md for the governing invariant and docs/USAGE.md for the full
 // command reference.
 //

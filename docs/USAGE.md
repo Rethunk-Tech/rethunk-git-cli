@@ -403,8 +403,8 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 | `--trailer TOKEN:VALUE` | Repeatable, forwarded. |
 | `--amend` | Amend previous. No `-m`/`-F`: reuse HEAD (`--no-edit`). No targets: amend the index as it stands. |
 | `--allow-empty` | Permit no changes; suppresses exit 11. No targets: commit the index; still needs a message unless another auto-message flag is set. |
-| `-i`, `--include` | Stage named targets into the index, then commit it (git's `--include`). Needs a target. Exclusive with `--only` and `--stage-only`. |
-| `-o`, `--only` | Commit only the named targets; other staged paths stay. Needs a target unless `--amend`. Private index + `rgit-commit.lock`. Another writer moving HEAD mid-commit: 128, nothing committed. |
+| `-i`, `--include` | Stage named targets into the index, then commit it (git's `--include`). Needs a target. Exclusive with `--only` and `--stage-only`. The way to take already-staged work along when naming targets. |
+| `-o`, `--only` | Commit only the named targets; other staged paths stay. Default when any target is given. Needs a target unless `--amend`. Private index + `rgit-commit.lock`. Another writer moving HEAD mid-commit: 128, nothing committed. |
 | `--reuse-message=<commit>` | Git's `--reuse-message`. Long form only. Exclusive with `-m`. |
 | `--reedit-message` | Refused (129). |
 | `--push` | Push after a successful commit. No rollback. No upstream: exit-8 names the branch and `git push -u origin <branch>` / `push.autoSetupRemote`. Never adds `-u`. |
@@ -447,8 +447,9 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 
 `commit` needs `-m` or `-F` unless `--amend`, `--fixup`, `--squash`, or
 `--reuse-message`. It needs a target unless those or `--allow-empty`.
-Zero targets means skip staging, not `git add -A`. During merge,
-cherry-pick, or revert, omitting `-m`/`-F` reuses Git's message.
+Zero targets means skip staging, not `git add -A`. Named targets imply
+`--only`. During merge, cherry-pick, or revert, omitting `-m`/`-F` reuses
+Git's message; naming a target then needs `-i` (partial commit is refused).
 
 `-S` is rewritten to the long form before pflag: an optional-value
 shorthand would misread `-SDEADBEEF` as a flag chain. Everything after
@@ -482,10 +483,10 @@ A missing conventional-commit shape warns; the commit proceeds.
 
 ## Behaviour inherited from git
 
-`rgit` is `git add <pathspec> && git commit` at symbol granularity:
+`rgit commit` with targets is `git commit --only` at symbol granularity:
 
-+ Pre-staged work **comes along**, unless `--only`. `-i`/`--include` is
-  that default made explicit.
++ Named targets commit **only those**. Already-staged work stays in the
+  index. `-i`/`--include` takes it along. `--only` is accepted.
 + A hook rejecting the commit rolls staging back to its pre-commit state
   (under `--only` nothing was staged). Snapshot, temp index, restore on
   failure. Only the entries rgit staged are reverted; staging another

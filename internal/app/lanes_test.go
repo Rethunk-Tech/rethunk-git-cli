@@ -79,10 +79,10 @@ func TestRun_CommitTrailerForwardsToGit(t *testing.T) {
 	qt.Assert(t, qt.StringContains(gitOut(t, dir, "log", "-1", "--format=%b"), "Refs: #1"))
 }
 
-// TestRun_PreStagedSiblingFileComesAlong pins AGENTS.md's inherited-from-git
-// behaviour: work staged before invoking rgit comes along with the commit,
-// exactly as a bare `git commit` would carry it.
-func TestRun_PreStagedSiblingFileComesAlong(t *testing.T) {
+// TestRun_NamedTargetsLeaveOtherStagedWorkUncommitted: a path or FILE:SYMBOL
+// with none of --only/-i/--stage-only is a partial commit. Already-staged
+// work the caller did not name stays in the index.
+func TestRun_NamedTargetsLeaveOtherStagedWorkUncommitted(t *testing.T) {
 	t.Parallel()
 	dir := tempRepo(t)
 	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
@@ -92,8 +92,10 @@ func TestRun_PreStagedSiblingFileComesAlong(t *testing.T) {
 	_, _, code := runApp(t, "-C", dir, "commit", "-m", "feat(a): update A", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 
-	show := gitOut(t, dir, "show", "--stat", "HEAD")
-	qt.Assert(t, qt.StringContains(show, "sibling.txt"))
+	head := gitOut(t, dir, "ls-tree", "-r", "--name-only", "HEAD")
+	qt.Assert(t, qt.StringContains(head, "a.go"))
+	qt.Assert(t, qt.Not(qt.StringContains(head, "sibling.txt")))
+	qt.Assert(t, qt.StringContains(gitOut(t, dir, "status", "--porcelain"), "A  sibling.txt"))
 }
 
 // TestRun_IncludeCommitsNamedTargetsWithPreStagedWork pins git commit -i:
@@ -336,7 +338,7 @@ func TestRun_HookRejectionKeepsConcurrentStaging(t *testing.T) {
 	writeAppFile(t, dir, "c.txt", "other\n")
 	gittest.InstallHook(t.Context(), t, dir, "pre-commit", "#!/bin/sh\ngit add c.txt\nexit 1\n")
 
-	_, _, code := runApp(t, "-C", dir, "commit", "-m", "feat(a): update A", "a.go:A")
+	_, _, code := runApp(t, "-C", dir, "commit", "-i", "-m", "feat(a): update A", "a.go:A")
 	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))
 
 	qt.Assert(t, qt.Equals(gitOut(t, dir, "status", "--porcelain"), " M a.go\nA  c.txt\n"))
@@ -383,7 +385,7 @@ func TestRun_MergeWithNoMessageUsesMergeMessage(t *testing.T) {
 	gitOut(t, dir, "checkout", "-q", "main")
 	gitOut(t, dir, "merge", "--no-ff", "--no-commit", "feature")
 
-	_, stderr, code := runApp(t, "-C", dir, "commit", "--no-verify", "feature.txt")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "-i", "--no-verify", "feature.txt")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "requires a message")))
@@ -406,7 +408,7 @@ func TestRun_CherryPickWithNoMessageUsesCherryPickMessage(t *testing.T) {
 	expectGitFailure(t, dir, "cherry-pick", source)
 	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 2 }\n")
 
-	_, stderr, code := runApp(t, "-C", dir, "commit", "--no-verify", "a.go")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "-i", "--no-verify", "a.go")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "requires a message")))
@@ -458,7 +460,7 @@ func TestRun_RevertWithNoMessageUsesRevertMessage(t *testing.T) {
 	expectGitFailure(t, dir, "revert", "HEAD~1")
 	writeAppFile(t, dir, "a.go", "package a\n\nfunc A() int { return 1 }\n")
 
-	_, stderr, code := runApp(t, "-C", dir, "commit", "--no-verify", "a.go")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "-i", "--no-verify", "a.go")
 
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "requires a message")))

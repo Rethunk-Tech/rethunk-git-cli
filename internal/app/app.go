@@ -32,13 +32,13 @@ const tsOnlyNotice = "rgit: [ts-only] no live language server reached in time; e
 // a manual -- docs/USAGE.md is that.
 const topLevelHelp = usageLine + `
 
-rgit is "git add <pathspec> && git commit" at symbol granularity: name a
+rgit commit with targets is "git commit --only" at symbol granularity: name a
 FILE:NAME anchor (e.g. auth.go:ValidateToken) instead of a whole path, and
-only that symbol's extent is staged.
+only that symbol's extent is committed. -i includes other staged work.
 
 Commands:
   diff        Show what is committable: staged, unstaged, and untracked
-  commit      Stage named targets and commit them
+  commit      Commit named targets (only those; -i includes other staged work)
   show        Print one symbol's own bytes, at the worktree or a revision
   blame       Blame bounded to one symbol's own extent
   log         Patch-free history of one symbol

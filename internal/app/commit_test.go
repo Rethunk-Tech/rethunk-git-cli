@@ -249,7 +249,7 @@ func TestCommit_HookFailureRestoresPrestagedState(t *testing.T) {
 	gittest.InstallHook(t.Context(), t, dir, "pre-commit", "#!/bin/sh\nexit 1\n")
 
 	var stdout, stderr strings.Builder
-	code := runCommit(t.Context(), dir, []string{"-m", "fix(a): update A", "a.go:A"}, &stdout, &stderr)
+	code := runCommit(t.Context(), dir, []string{"-i", "-m", "fix(a): update A", "a.go:A"}, &stdout, &stderr)
 	if code != exitcode.GitFailure {
 		t.Fatalf("runCommit = %v; want exitcode.GitFailure; stderr: %s", code, stderr.String())
 	}
@@ -292,7 +292,7 @@ func TestCommit_HookFailureRollsBackWhenRepositoryHadNoIndex(t *testing.T) {
 	gittest.InstallHook(t.Context(), t, dir, "pre-commit", "#!/bin/sh\nexit 1\n")
 
 	var stdout, stderr strings.Builder
-	code := runCommit(t.Context(), dir, []string{"-m", "feat: A", "a.go:A"}, &stdout, &stderr)
+	code := runCommit(t.Context(), dir, []string{"-i", "-m", "feat: A", "a.go:A"}, &stdout, &stderr)
 	if code != exitcode.GitFailure {
 		t.Fatalf("runCommit = %v; want GitFailure; stderr: %s", code, stderr.String())
 	}
@@ -315,7 +315,7 @@ func TestCommit_HookFailureShowsHookOutputOnEveryAttempt(t *testing.T) {
 
 	for attempt := 1; attempt <= 2; attempt++ {
 		var stdout, stderr strings.Builder
-		code := runCommit(t.Context(), dir, []string{"-m", "fix(a): change", "a.txt", "new.txt"}, &stdout, &stderr)
+		code := runCommit(t.Context(), dir, []string{"-i", "-m", "fix(a): change", "a.txt", "new.txt"}, &stdout, &stderr)
 		if code != exitcode.GitFailure {
 			t.Fatalf("attempt %d: runCommit = %v; want GitFailure; stderr: %s", attempt, code, stderr.String())
 		}
