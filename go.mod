@@ -4,7 +4,7 @@ go 1.27.4
 
 require (
 	github.com/aymanbagabas/go-udiff v0.4.2
-	github.com/georgeharker/tree-sitter-zsh v0.63.5
+	github.com/georgeharker/tree-sitter-zsh v0.64.3
 	github.com/go-quicktest/qt v1.102.0
 	github.com/spf13/pflag v1.1.0
 	github.com/tree-sitter-grammars/tree-sitter-markdown v0.5.1
