@@ -392,11 +392,6 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 		}
 	}
 	asJSON := jsonFlag(ctx)
-	if noPush && branch == "" {
-		fmt.Fprintln(d.stderr, "rgit land: --no-push needs --branch")
-		fmt.Fprintln(d.stderr, landUsageLine)
-		return exitcode.InvalidUsage
-	}
 	if branch != "" {
 		if len(repos) > 1 {
 			fmt.Fprintln(d.stderr, "rgit land: --branch lands one repo")
@@ -404,6 +399,11 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 			return exitcode.InvalidUsage
 		}
 		return landBranch(ctx, repos[0], branch, wait, install, noPush, d)
+	}
+	if noPush {
+		fmt.Fprintln(d.stderr, "rgit land: --no-push needs --branch")
+		fmt.Fprintln(d.stderr, landUsageLine)
+		return exitcode.InvalidUsage
 	}
 	return landRepos(ctx, repos, wait, asJSON, install, d)
 }
