@@ -355,6 +355,92 @@ func TestLandWatcherResultAndNotify(t *testing.T) {
 	}
 }
 
+func TestLandWatchFastForwardsCleanDefault(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	other := t.TempDir()
+	gitOut(t, other, "clone", bare, ".")
+	gitOut(t, other, "config", "user.name", "test")
+	gitOut(t, other, "config", "user.email", "test@test")
+	gittest.Write(t, other, "merged.txt", "from-pr\n")
+	gittest.Commit(t.Context(), t, other, "merged via pr")
+	gitOut(t, other, "push", "origin", "HEAD")
+	originTip := strings.TrimSpace(gitOut(t, other, "rev-parse", "HEAD"))
+	localBefore := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	if localBefore == originTip {
+		t.Fatal("origin did not advance past the local default")
+	}
+
+	d := testLandDeps(t)
+	d.gh = &fakeGH{
+		prs: []prInfo{{State: "MERGED", MergeSHA: originTip, URL: "https://github.com/acme/demo/pull/51"}},
+		run: workflowRun{Status: "completed", Conclusion: "success"},
+	}
+	res := watchUntilDone(landWatchJob{
+		ID:      "acme-demo-51-id",
+		Repo:    dir,
+		Slug:    "acme/demo",
+		PR:      51,
+		URL:     "https://github.com/acme/demo/pull/51",
+		Default: "main",
+	}, d)
+	if res.State != "merged" {
+		t.Fatalf("state = %q", res.State)
+	}
+	got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	if got != originTip {
+		t.Errorf("local HEAD = %s; want origin tip %s", got, originTip)
+	}
+}
+
+func TestLandWatchLeavesDirtyDefault(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	other := t.TempDir()
+	gitOut(t, other, "clone", bare, ".")
+	gitOut(t, other, "config", "user.name", "test")
+	gitOut(t, other, "config", "user.email", "test@test")
+	gittest.Write(t, other, "merged.txt", "from-pr\n")
+	gittest.Commit(t.Context(), t, other, "merged via pr")
+	gitOut(t, other, "push", "origin", "HEAD")
+	originTip := strings.TrimSpace(gitOut(t, other, "rev-parse", "HEAD"))
+	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	gittest.Write(t, dir, "base.txt", "dirty\n")
+
+	d := testLandDeps(t)
+	var stderr strings.Builder
+	d.stderr = &stderr
+	d.gh = &fakeGH{
+		prs: []prInfo{{State: "MERGED", MergeSHA: originTip, URL: "https://github.com/acme/demo/pull/51"}},
+		run: workflowRun{Status: "completed", Conclusion: "success"},
+	}
+	res := watchUntilDone(landWatchJob{
+		ID:      "acme-demo-51-id",
+		Repo:    dir,
+		Slug:    "acme/demo",
+		PR:      51,
+		URL:     "https://github.com/acme/demo/pull/51",
+		Default: "main",
+	}, d)
+	if res.State != "merged" {
+		t.Fatalf("state = %q", res.State)
+	}
+	got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	if got != before {
+		t.Errorf("dirty HEAD moved %s -> %s", before, got)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "base.txt")) //nolint:gosec // test fixture path
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "dirty\n" {
+		t.Errorf("dirty worktree = %q", body)
+	}
+	if !strings.Contains(stderr.String(), "dirty tracked files") {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+}
+
 func TestLandWatcherNotifyErrorOnClosed(t *testing.T) {
 	t.Parallel()
 	var notified [][]string

@@ -1655,7 +1655,40 @@ func watchUntilDone(job landWatchJob, d landDeps) landWatchResult {
 		res.FinishedAt = d.clock.Now().UTC().Format(time.RFC3339)
 		return res
 	}
+	fastForwardDefaultAfterMerge(job, d)
 	return waitForCI(res, owner, name, ok, job.Default, info.MergeSHA, d)
+}
+
+func fastForwardDefaultAfterMerge(job landWatchJob, d landDeps) {
+	if job.Repo == "" || job.Default == "" {
+		return
+	}
+	if out, err := d.git.run(job.Repo, "fetch", "-q", "origin"); err != nil {
+		fmt.Fprintf(d.stderr, "rgit land: %s: left %s (%s)\n", job.Repo, job.Default, gitErrDetail(out, err))
+		return
+	}
+	cur := strings.TrimSpace(mustGit(job.Repo, d, "rev-parse", "--abbrev-ref", "HEAD"))
+	if cur != job.Default {
+		fmt.Fprintf(d.stderr, "rgit land: %s: left %s (on %s, not %s)\n", job.Repo, job.Default, cur, job.Default)
+		return
+	}
+	if dirtyTracked(job.Repo, d) {
+		fmt.Fprintf(d.stderr, "rgit land: %s: left %s (dirty tracked files)\n", job.Repo, job.Default)
+		return
+	}
+	if out, err := d.git.run(job.Repo, "merge", "--ff-only", "origin/"+job.Default); err != nil {
+		fmt.Fprintf(d.stderr, "rgit land: %s: left %s (%s)\n", job.Repo, job.Default, gitErrDetail(out, err))
+	}
+}
+
+func gitErrDetail(out string, err error) string {
+	if s := strings.TrimSpace(out); s != "" {
+		return lastNonEmptyLine(s)
+	}
+	if err != nil {
+		return err.Error()
+	}
+	return "unknown error"
 }
 
 func pollPR(owner, name string, ok bool, job landWatchJob, d landDeps) (prInfo, string) {
