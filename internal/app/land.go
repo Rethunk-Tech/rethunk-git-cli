@@ -1006,10 +1006,14 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 	}
 	sha := strings.TrimSpace(mustGit(prep.repo, d, "rev-parse", prep.branch))
 	if noPush {
-		// Merged into the local default branch, so the branch and its worktree are done either way.
-		if !prep.dirty {
-			cleanupLandBranch(prep, landResult{Kind: landPushed, Route: "direct"}, d)
+		// A dirty default branch skipped the fast-forward, so nothing landed; the push route covers that
+		// case by pushing the branch itself, which --no-push forbids.
+		if prep.dirty {
+			fmt.Fprintf(d.stderr, "error: %s has uncommitted changes; --no-push cannot land %s\n", prep.repo, prep.branch)
+			return 1
 		}
+		// Merged into the local default branch, so the branch and its worktree are done either way.
+		cleanupLandBranch(prep, landResult{Kind: landPushed, Route: "direct"}, d)
 		fmt.Fprintf(d.stdout, "%s %s %s %s local\n", prep.repo, prep.branch, sha, logPath)
 		return exitcode.Success
 	}

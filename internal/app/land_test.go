@@ -1844,3 +1844,37 @@ func containsAll(argv []string, needles ...string) bool {
 	}
 	return true
 }
+
+func TestLandBranchNoPushRefusesDirtyMain(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, "feat.txt", "feat\n")
+	gitOut(t, wt, "add", "feat.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "feat")
+	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	originBefore := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD"))
+	gittest.Write(t, dir, "base.txt", "base\ndirty\n")
+
+	d := testLandDeps(t)
+	var stdout, stderr strings.Builder
+	d.stdout = &stdout
+	d.stderr = &stderr
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--no-push"}, d)
+	if code == exitcode.Success {
+		t.Fatalf("dirty main with --no-push succeeded: stdout=%q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "uncommitted changes") {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != before {
+		t.Errorf("HEAD moved %s -> %s", before, got)
+	}
+	if got := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD")); got != originBefore {
+		t.Errorf("origin moved %s -> %s", originBefore, got)
+	}
+	if out := gitOut(t, dir, "branch", "--list", "feat"); strings.TrimSpace(out) == "" {
+		t.Error("branch feat deleted though it never landed")
+	}
+}
