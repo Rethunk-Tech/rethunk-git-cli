@@ -91,7 +91,7 @@ type gitRunner interface {
 type execGit struct{}
 
 func (execGit) run(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...) //nolint:gosec // git argv is constructed by rgit, never a shell string
+	cmd := exec.CommandContext(context.Background(), "git", args...) //nolint:gosec // git argv is constructed by rgit, never a shell string
 	if dir != "" {
 		cmd.Dir = dir
 	}
@@ -109,7 +109,7 @@ func newGHCLI() *ghCLI {
 }
 
 func runGH(dir string, args ...string) (string, error) {
-	cmd := exec.Command("gh", args...) //nolint:gosec // gh argv is constructed by rgit, never a shell string
+	cmd := exec.CommandContext(context.Background(), "gh", args...) //nolint:gosec // gh argv is constructed by rgit, never a shell string
 	if dir != "" {
 		cmd.Dir = dir
 	}
@@ -231,7 +231,7 @@ func defaultLandDeps(stdout, stderr io.Writer) landDeps {
 }
 
 func runNotify(argv []string) error {
-	cmd := exec.Command(argv[0], argv[1:]...) //nolint:gosec // argv is nomad-hud-notify plus flags rgit built
+	cmd := exec.CommandContext(context.Background(), argv[0], argv[1:]...) //nolint:gosec // argv is nomad-hud-notify plus flags rgit built
 	cmd.Stdin = nil
 	return cmd.Run()
 }
@@ -244,7 +244,7 @@ func startDetachedWatch(argv []string, logPath string) error {
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command(argv[0], argv[1:]...) //nolint:gosec // argv is rgit's own executable plus land --watch flags
+	cmd := exec.CommandContext(context.Background(), argv[0], argv[1:]...) //nolint:gosec // argv is rgit's own executable plus land --watch flags
 	cmd.Stdin = nil
 	cmd.Stdout = log
 	cmd.Stderr = log
