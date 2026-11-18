@@ -2,7 +2,10 @@ package gitx_test
 
 import (
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -315,5 +318,266 @@ func TestExecErrorWhenGitIsMissing(t *testing.T) {
 	}
 	if !errors.Is(err, exec.ErrNotFound) {
 		t.Errorf("ExecError = %v; want it to wrap exec.ErrNotFound", err)
+	}
+}
+
+// TestCleansCRLFReportsWhetherGitWouldConvertLineEndings pins the decision
+// tree git's own `ls-files --eol` plus core.autocrlf feed: a text attribute
+// forces conversion, -text forbids it, text=auto and an unset attribute
+// follow the index copy (and autocrlf, when the attribute is unset), and an
+// untracked path is reported unconverted because there is no index copy to
+// consult.
+func TestCleansCRLFReportsWhetherGitWouldConvertLineEndings(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		tracked   bool
+		content   string
+		attr      string
+		autocrlf  string
+		wantClean bool
+	}{
+		{
+			name:      "untracked path has no index copy",
+			content:   "hello\n",
+			wantClean: false,
+		},
+		{
+			name:      "-text never converts",
+			tracked:   true,
+			content:   "hello\n",
+			attr:      "* -text\n",
+			wantClean: false,
+		},
+		{
+			name:      "text forces conversion",
+			tracked:   true,
+			content:   "hello\n",
+			attr:      "* text\n",
+			wantClean: true,
+		},
+		{
+			name:      "text with extra tokens still forces conversion",
+			tracked:   true,
+			content:   "hello\n",
+			attr:      "* text eol=lf\n",
+			wantClean: true,
+		},
+		{
+			name:      "unset attribute and autocrlf off leaves LF alone",
+			tracked:   true,
+			content:   "hello\n",
+			wantClean: false,
+		},
+		{
+			name:      "text=auto converts an LF index copy",
+			tracked:   true,
+			content:   "hello\n",
+			attr:      "* text=auto\n",
+			wantClean: true,
+		},
+		{
+			name:      "unset attribute under autocrlf=input converts LF",
+			tracked:   true,
+			content:   "hello\n",
+			autocrlf:  "input",
+			wantClean: true,
+		},
+		{
+			name:      "unset attribute under autocrlf=true leaves CRLF already in the index",
+			tracked:   true,
+			content:   "hello\r\n",
+			autocrlf:  "true",
+			wantClean: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			dir, repo := gittest.New(t.Context(), t)
+			ctx := t.Context()
+			gittest.Write(t, dir, "file.txt", tt.content)
+			if tt.attr != "" {
+				gittest.Write(t, dir, ".gitattributes", tt.attr)
+			}
+			if tt.tracked {
+				gittest.Git(ctx, t, dir, "add", "file.txt")
+				if tt.attr != "" {
+					gittest.Git(ctx, t, dir, "add", ".gitattributes")
+				}
+				gittest.Git(ctx, t, dir, "commit", "-q", "-m", "chore: fixture")
+			}
+			// autocrlf is set after the index copy exists so a CRLF blob is
+			// still i/crlf; setting it first would let `git add` convert.
+			if tt.autocrlf != "" {
+				gittest.Git(ctx, t, dir, "config", "core.autocrlf", tt.autocrlf)
+			}
+
+			got, err := repo.CleansCRLF(ctx, "file.txt")
+			if err != nil {
+				t.Fatalf("CleansCRLF: %v", err)
+			}
+			if got != tt.wantClean {
+				t.Errorf("CleansCRLF = %v; want %v", got, tt.wantClean)
+			}
+		})
+	}
+}
+
+// TestLsFilesSplitsTrackedUntrackedAndPathspec pins the three ls-files
+// wrappers against a real index: empty output is an empty list (not a
+// one-element slice of ""), two untracked names split on NUL, and extra
+// arguments after the flags scope the listing the way `git add -- <pathspec>`
+// would.
+func TestLsFilesSplitsTrackedUntrackedAndPathspec(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t.Context(), t)
+	ctx := t.Context()
+
+	assertNames := func(t *testing.T, got []string, err error, want ...string) {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("ls-files: %v", err)
+		}
+		if got == nil {
+			got = []string{}
+		}
+		slices.Sort(got)
+		want = append([]string(nil), want...)
+		slices.Sort(want)
+		if !slices.Equal(got, want) {
+			t.Errorf("names = %v; want %v", got, want)
+		}
+	}
+
+	others, err := repo.LsFilesOthers(ctx)
+	assertNames(t, others, err)
+	tracked, err := repo.LsFilesTracked(ctx)
+	assertNames(t, tracked, err)
+	both, err := repo.LsFilesTrackedAndOthers(ctx, ".")
+	assertNames(t, both, err)
+
+	gittest.Write(t, dir, "keep.txt", "keep\n")
+	gittest.Write(t, dir, "skip.txt", "skip\n")
+	others, err = repo.LsFilesOthers(ctx)
+	assertNames(t, others, err, "keep.txt", "skip.txt")
+	tracked, err = repo.LsFilesTracked(ctx)
+	assertNames(t, tracked, err)
+	both, err = repo.LsFilesTrackedAndOthers(ctx, "keep.txt")
+	assertNames(t, both, err, "keep.txt")
+
+	gittest.Git(ctx, t, dir, "add", "keep.txt")
+	gittest.Git(ctx, t, dir, "commit", "-q", "-m", "chore: keep")
+	others, err = repo.LsFilesOthers(ctx)
+	assertNames(t, others, err, "skip.txt")
+	tracked, err = repo.LsFilesTracked(ctx)
+	assertNames(t, tracked, err, "keep.txt")
+	both, err = repo.LsFilesTrackedAndOthers(ctx, ".")
+	assertNames(t, both, err, "keep.txt", "skip.txt")
+}
+
+// TestIgnoreCaseReportsFalseWhenTheSettingIsUnset pins git's own missing-key
+// answer (exit 1), distinct from a configured false: rgit must not turn that
+// into an error, because a newly-initialized Linux repository has no
+// core.ignorecase at all.
+func TestIgnoreCaseReportsFalseWhenTheSettingIsUnset(t *testing.T) {
+	t.Parallel()
+	dir, _ := gittest.New(t.Context(), t)
+	cmd := exec.CommandContext(t.Context(), "git", "-C", dir, "config", "--unset-all", "core.ignorecase") //nolint:gosec // dir is a test temp path passed as argv
+	_ = cmd.Run()
+	repo := gitx.New(dir)
+
+	got, err := repo.IgnoreCase(t.Context())
+	if err != nil {
+		t.Fatalf("IgnoreCase: %v", err)
+	}
+	if got {
+		t.Error("IgnoreCase = true; want false when core.ignorecase is unset")
+	}
+}
+
+// TestCurrentBranchNamesMainAfterTheFirstCommit pins rev-parse --abbrev-ref
+// HEAD once a commit exists: gittest forces the branch to "main", and a
+// detached HEAD is the one case that would instead return the literal "HEAD".
+func TestCurrentBranchNamesMainAfterTheFirstCommit(t *testing.T) {
+	t.Parallel()
+	_, repo := gittest.RepoWithFile(t.Context(), t, "a.txt", "a\n", "chore: initial")
+
+	got, err := repo.CurrentBranch(t.Context())
+	if err != nil {
+		t.Fatalf("CurrentBranch: %v", err)
+	}
+	if got != "main" {
+		t.Errorf("CurrentBranch = %q; want main", got)
+	}
+}
+
+// TestBlameRevisionReadsTheNamedCommitNotTheWorktree pins that BlameRevision
+// blames rev's blob: a worktree edit of the same line must not appear in the
+// output when blaming HEAD.
+func TestBlameRevisionReadsTheNamedCommitNotTheWorktree(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "a.txt", "committed\n", "chore: initial")
+	gittest.Write(t, dir, "a.txt", "dirty\n")
+
+	out, err := repo.BlameRevision(t.Context(), "HEAD", "a.txt", 1, 1)
+	if err != nil {
+		t.Fatalf("BlameRevision: %v", err)
+	}
+	if !strings.Contains(string(out), "committed") {
+		t.Errorf("BlameRevision = %q; want HEAD's line", out)
+	}
+	if strings.Contains(string(out), "dirty") {
+		t.Errorf("BlameRevision = %q; want the worktree edit absent", out)
+	}
+}
+
+// TestRerootRunsGitAgainstTheGivenDirectory pins that Reroot copies the
+// environment but replaces the root: a blob that exists only in the other
+// repository must be readable through the rerooted handle.
+func TestRerootRunsGitAgainstTheGivenDirectory(t *testing.T) {
+	t.Parallel()
+	_, repo := gittest.RepoWithFile(t.Context(), t, "here.txt", "here\n", "chore: here")
+	other, _ := gittest.RepoWithFile(t.Context(), t, "there.txt", "there\n", "chore: there")
+
+	moved := repo.Reroot(other)
+	content, exists, err := moved.CatFile(t.Context(), "HEAD", "there.txt")
+	if err != nil || !exists {
+		t.Fatalf("CatFile(rerooted, there.txt) = (%q, %v, %v); want found", content, exists, err)
+	}
+	if string(content) != "there\n" {
+		t.Errorf("CatFile(rerooted, there.txt) = %q; want there", content)
+	}
+	if _, exists, err := moved.CatFile(t.Context(), "HEAD", "here.txt"); err != nil || exists {
+		t.Errorf("CatFile(rerooted, here.txt) exists=%v err=%v; want absent", exists, err)
+	}
+}
+
+// TestUpdateIndexCacheinfoStagesAHashedBlob pins the last step of blob
+// synthesis: a SHA produced by HashObject must be addressable from the index
+// after UpdateIndexCacheinfo, without a worktree add.
+func TestUpdateIndexCacheinfoStagesAHashedBlob(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t.Context(), t)
+	ctx := t.Context()
+	const rel = "staged.txt"
+	sha, err := repo.HashObject(ctx, rel, []byte("blob\n"))
+	if err != nil {
+		t.Fatalf("HashObject: %v", err)
+	}
+	if err := repo.UpdateIndexCacheinfo(ctx, "100644", sha, rel); err != nil {
+		t.Fatalf("UpdateIndexCacheinfo: %v", err)
+	}
+	content, exists, err := repo.CatFile(ctx, "", rel)
+	if err != nil || !exists {
+		t.Fatalf("CatFile(index, %s) = (%q, %v, %v); want found", rel, content, exists, err)
+	}
+	if string(content) != "blob\n" {
+		t.Errorf("index blob = %q; want blob\\n", content)
+	}
+	if _, err := os.Stat(filepath.Join(dir, rel)); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("worktree %s: %v; want it absent -- only the index was written", rel, err)
 	}
 }

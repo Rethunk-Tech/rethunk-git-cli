@@ -1,6 +1,7 @@
 package gitx_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -56,4 +57,33 @@ func TestSparseCheckout(t *testing.T) {
 	sparse, err = repo.SparseCheckout(ctx)
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.IsFalse(sparse))
+}
+
+// TestSparseCheckoutRejectsANonBooleanValue pins git's own refusal of a
+// core.sparseCheckout that is neither true nor false: rgit must surface that
+// as an error rather than treating it as "sparse checkout is off".
+func TestSparseCheckoutRejectsANonBooleanValue(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t.Context(), t)
+	gittest.Git(t.Context(), t, dir, "config", "core.sparseCheckout", "maybe")
+
+	_, err := repo.SparseCheckout(t.Context())
+	if err == nil {
+		t.Fatal("SparseCheckout = nil; want an error for a non-boolean value")
+	}
+}
+
+// TestSparseCheckoutPropagatesACancelledContext pins the run-failure path:
+// git never starts, so the answer is the context error, not "sparse checkout
+// is off".
+func TestSparseCheckoutPropagatesACancelledContext(t *testing.T) {
+	t.Parallel()
+	_, repo := gittest.New(t.Context(), t)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := repo.SparseCheckout(ctx)
+	if err == nil {
+		t.Fatal("SparseCheckout(cancelled) = nil; want the cancelled context")
+	}
 }
