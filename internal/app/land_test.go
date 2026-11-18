@@ -525,6 +525,12 @@ func TestLandBranchNoPushLeavesOrigin(t *testing.T) {
 	if !strings.Contains(got[3], "land-branch") {
 		t.Errorf("gate log path = %q", got[3])
 	}
+	if _, err := os.Stat(wt); !os.IsNotExist(err) {
+		t.Errorf("worktree %s still present: %v", wt, err)
+	}
+	if out := gitOut(t, dir, "branch", "--list", "feat"); strings.TrimSpace(out) != "" {
+		t.Errorf("branch feat still present: %q", out)
+	}
 }
 
 func TestLandBranchDirtyMainLeavesMain(t *testing.T) {

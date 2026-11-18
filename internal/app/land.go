@@ -1006,6 +1006,10 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 	}
 	sha := strings.TrimSpace(mustGit(prep.repo, d, "rev-parse", prep.branch))
 	if noPush {
+		// Merged into the local default branch, so the branch and its worktree are done either way.
+		if !prep.dirty {
+			cleanupLandBranch(prep, landResult{Kind: landPushed, Route: "direct"}, d)
+		}
 		fmt.Fprintf(d.stdout, "%s %s %s %s local\n", prep.repo, prep.branch, sha, logPath)
 		return exitcode.Success
 	}
