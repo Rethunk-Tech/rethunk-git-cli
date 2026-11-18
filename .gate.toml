@@ -27,6 +27,7 @@ env = { GOFLAGS = "-race" }
 timeout = "5m"
 run = "cache=$(go env GOCACHE); while [ ! -f \"$cache/rgit-gate-ready\" ] && [ ! -f \"$cache/rgit-gate-fail\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready\" ] && go vet -tags rgit_xcheck ./cmd/xcheck/..."
 
+# CI cross-compiles in its own job with zig installed; the unit lane has no zig.
 [gates.cross]
 timeout = "5m"
-run = "cache=$(go env GOCACHE); while [ ! -f \"$cache/rgit-gate-ready\" ] && [ ! -f \"$cache/rgit-gate-fail\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready\" ] && make -o sql-parser cross"
+run = "[ \"${GITHUB_ACTIONS:-}\" = true ] && exit 0; cache=$(go env GOCACHE); while [ ! -f \"$cache/rgit-gate-ready\" ] && [ ! -f \"$cache/rgit-gate-fail\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready\" ] && make -o sql-parser cross"
