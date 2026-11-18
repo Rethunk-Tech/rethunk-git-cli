@@ -11,9 +11,9 @@ import (
 func TestCheckOnlyBaseAcceptsHEADBuiltOnTheSeededCommit(t *testing.T) {
 	t.Parallel()
 	dir, repo := commitRepo(t)
-	writeCommit(t, dir, "a.txt", "one\n", "chore: one")
-	base := revParse(t, dir, "HEAD")
-	writeCommit(t, dir, "a.txt", "two\n", "chore: two")
+	writeCommit(t, dir, "one\n", "chore: one")
+	base := headSHA(t, dir)
+	writeCommit(t, dir, "two\n", "chore: two")
 
 	err := repo.checkOnlyBase(t.Context(), CommitOptions{
 		Only: &OnlyIndex{BaseCommit: base},
@@ -26,9 +26,9 @@ func TestCheckOnlyBaseAcceptsHEADBuiltOnTheSeededCommit(t *testing.T) {
 func TestCheckOnlyBaseRefusesWhenHEADParentIsNotTheSeededCommit(t *testing.T) {
 	t.Parallel()
 	dir, repo := commitRepo(t)
-	writeCommit(t, dir, "a.txt", "one\n", "chore: one")
-	writeCommit(t, dir, "a.txt", "two\n", "chore: two")
-	head := revParse(t, dir, "HEAD")
+	writeCommit(t, dir, "one\n", "chore: one")
+	writeCommit(t, dir, "two\n", "chore: two")
+	head := headSHA(t, dir)
 
 	err := repo.checkOnlyBase(t.Context(), CommitOptions{
 		Only: &OnlyIndex{BaseCommit: head},
@@ -44,9 +44,9 @@ func TestCheckOnlyBaseRefusesWhenHEADParentIsNotTheSeededCommit(t *testing.T) {
 func TestCheckOnlyBaseAmendAcceptsWhenParentsStillMatch(t *testing.T) {
 	t.Parallel()
 	dir, repo := commitRepo(t)
-	writeCommit(t, dir, "a.txt", "one\n", "chore: one")
-	writeCommit(t, dir, "a.txt", "two\n", "chore: two")
-	base := revParse(t, dir, "HEAD")
+	writeCommit(t, dir, "one\n", "chore: one")
+	writeCommit(t, dir, "two\n", "chore: two")
+	base := headSHA(t, dir)
 
 	err := repo.checkOnlyBase(t.Context(), CommitOptions{
 		Amend: true,
@@ -60,9 +60,9 @@ func TestCheckOnlyBaseAmendAcceptsWhenParentsStillMatch(t *testing.T) {
 func TestCheckOnlyBaseAmendRefusesWhenAForeignCommitWasReplaced(t *testing.T) {
 	t.Parallel()
 	dir, repo := commitRepo(t)
-	writeCommit(t, dir, "a.txt", "one\n", "chore: one")
-	base := revParse(t, dir, "HEAD")
-	writeCommit(t, dir, "a.txt", "two\n", "chore: two")
+	writeCommit(t, dir, "one\n", "chore: one")
+	base := headSHA(t, dir)
+	writeCommit(t, dir, "two\n", "chore: two")
 
 	err := repo.checkOnlyBase(t.Context(), CommitOptions{
 		Amend: true,
@@ -79,8 +79,8 @@ func TestCheckOnlyBaseAmendRefusesWhenAForeignCommitWasReplaced(t *testing.T) {
 func TestCheckOnlyBaseAmendOfARootCommitAcceptsARootHEAD(t *testing.T) {
 	t.Parallel()
 	dir, repo := commitRepo(t)
-	writeCommit(t, dir, "a.txt", "one\n", "chore: one")
-	base := revParse(t, dir, "HEAD")
+	writeCommit(t, dir, "one\n", "chore: one")
+	base := headSHA(t, dir)
 
 	err := repo.checkOnlyBase(t.Context(), CommitOptions{
 		Amend: true,
@@ -103,18 +103,18 @@ func commitRepo(t *testing.T) (dir string, repo *Repo) {
 	return dir, New(dir)
 }
 
-func writeCommit(t *testing.T, dir, rel, content, msg string) {
+func writeCommit(t *testing.T, dir, content, msg string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, rel), []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	runGit(t, dir, "add", rel)
+	runGit(t, dir, "add", "a.txt")
 	runGit(t, dir, "commit", "-q", "-m", msg)
 }
 
-func revParse(t *testing.T, dir, rev string) string {
+func headSHA(t *testing.T, dir string) string {
 	t.Helper()
-	return strings.TrimSpace(runGit(t, dir, "rev-parse", "--verify", rev))
+	return strings.TrimSpace(runGit(t, dir, "rev-parse", "--verify", "HEAD"))
 }
 
 func runGit(t *testing.T, dir string, args ...string) string {
