@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -311,8 +312,195 @@ func TestLandHelp(t *testing.T) {
 	if code != exitcode.Success {
 		t.Fatalf("code = %v", code)
 	}
-	if !strings.Contains(stdout.String(), "usage: rgit land") {
-		t.Errorf("stdout = %q", stdout.String())
+	out := stdout.String()
+	if !strings.Contains(out, "usage: rgit land") {
+		t.Errorf("stdout = %q", out)
+	}
+	if !strings.Contains(out, "--branch") {
+		t.Errorf("help missing --branch: %q", out)
+	}
+}
+
+func TestLandBranchCleanMainFFPush(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, "feat.txt", "feat\n")
+	gitOut(t, wt, "add", "feat.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "feat")
+	tip := strings.TrimSpace(gitOut(t, wt, "rev-parse", "HEAD"))
+
+	d := testLandDeps(t)
+	var stdout, stderr strings.Builder
+	d.stdout = &stdout
+	d.stderr = &stderr
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
+	if code != exitcode.Success {
+		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	if got := strings.TrimSpace(gitOut(t, bare, "log", "-1", "--pretty=%s")); got != "feat" {
+		t.Errorf("origin subject = %q", got)
+	}
+	if _, err := d.git.run(dir, "show-ref", "--verify", "--quiet", "refs/heads/feat"); err == nil {
+		t.Error("clean-main left branch feat")
+	}
+	if _, err := os.Stat(wt); !os.IsNotExist(err) {
+		t.Errorf("clean-main left worktree: %v", err)
+	}
+	last := lastNonEmptyLine(stdout.String())
+	got := strings.Fields(last)
+	if len(got) != 5 || got[0] != dir || got[1] != "feat" || got[2] != tip || got[4] != "direct" {
+		t.Errorf("summary = %q", last)
+	}
+	if !strings.Contains(got[3], "land-branch") {
+		t.Errorf("gate log path = %q", got[3])
+	}
+	assertFleetTouch(t, d, dir, "1")
+}
+
+func TestLandBranchDirtyMainLeavesMain(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, "feat.txt", "feat\n")
+	gitOut(t, wt, "add", "feat.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "feat")
+	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	gittest.Write(t, dir, "base.txt", "base\ndirty\n")
+
+	d := testLandDeps(t)
+	var stdout, stderr strings.Builder
+	d.stdout = &stdout
+	d.stderr = &stderr
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
+	if code != exitcode.Success {
+		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != before {
+		t.Errorf("dirty main moved HEAD %s -> %s", before, got)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "base.txt")) //nolint:gosec // test fixture path
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "base\ndirty\n" {
+		t.Errorf("dirty main worktree = %q", body)
+	}
+	if got := strings.TrimSpace(gitOut(t, bare, "log", "-1", "--pretty=%s")); got != "feat" {
+		t.Errorf("origin subject = %q", got)
+	}
+	last := lastNonEmptyLine(stdout.String())
+	if !strings.HasSuffix(last, " direct") {
+		t.Errorf("summary = %q", last)
+	}
+}
+
+func TestLandBranchConflictExit2(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, "base.txt", "branch\n")
+	gitOut(t, wt, "add", "base.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "branch")
+	gittest.Write(t, dir, "base.txt", "mainline\n")
+	gittest.Commit(t.Context(), t, dir, "mainline")
+	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+
+	d := testLandDeps(t)
+	var stdout, stderr strings.Builder
+	d.stdout = &stdout
+	d.stderr = &stderr
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
+	if code != 2 {
+		t.Fatalf("code = %v stdout=%q stderr=%q; want 2", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "conflict: hand to solver") {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != before {
+		t.Errorf("conflict moved main")
+	}
+	if _, err := d.git.run(dir, "show-ref", "--verify", "--quiet", "refs/heads/feat"); err != nil {
+		t.Error("conflict deleted branch feat")
+	}
+}
+
+func TestLandBranchRedGateExit3(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, "feat.txt", "feat\n")
+	gitOut(t, wt, "add", "feat.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "feat")
+	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+
+	d := testLandDeps(t)
+	d.gate = func(string, bool) (string, error) {
+		return "stub-gate-fail\ngate: failed: unit -> /x.log\n", errors.New("exit 1")
+	}
+	var stdout, stderr strings.Builder
+	d.stdout = &stdout
+	d.stderr = &stderr
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
+	if code != 3 {
+		t.Fatalf("code = %v stdout=%q stderr=%q; want 3", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "stub-gate-fail") {
+		t.Errorf("stderr missing log body: %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), filepath.Join(d.cacheHome(), "land-branch")) {
+		t.Errorf("stderr missing log path: %q", stderr.String())
+	}
+	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != before {
+		t.Error("red gate moved main")
+	}
+}
+
+func TestLandBranchFlakeLoggedAndLands(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, "feat.txt", "feat\n")
+	gitOut(t, wt, "add", "feat.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "feat")
+
+	n := 0
+	d := testLandDeps(t)
+	d.gate = func(string, bool) (string, error) {
+		n++
+		if n == 1 {
+			return "gate: failed: unit -> /x.log\n", errors.New("exit 1")
+		}
+		return "ok\n", nil
+	}
+	var stdout, stderr strings.Builder
+	d.stdout = &stdout
+	d.stderr = &stderr
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
+	if code != exitcode.Success {
+		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "flake: unit passed on re-run") {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+	body, err := os.ReadFile(filepath.Join(d.cacheHome(), "land-branch", "flakes.tsv")) //nolint:gosec // test cache path
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "2026-11-18T00:00:00Z\t" + filepath.Base(dir) + "\tfeat\tunit\n"
+	if string(body) != want {
+		t.Errorf("flakes.tsv = %q; want %q", body, want)
+	}
+	if got := strings.TrimSpace(gitOut(t, bare, "log", "-1", "--pretty=%s")); got != "feat" {
+		t.Errorf("origin subject = %q", got)
+	}
+	if last := lastNonEmptyLine(stdout.String()); !strings.HasSuffix(last, " direct") {
+		t.Errorf("summary = %q", last)
 	}
 }
 
@@ -379,6 +567,7 @@ func testLandDeps(t *testing.T) landDeps {
 	d.lookPath = func(string) (string, error) { return "", os.ErrNotExist }
 	d.notify = func([]string) error { return nil }
 	d.startWatch = func([]string, string) error { return nil }
+	d.gate = func(string, bool) (string, error) { return "", nil }
 	d.executable = func() (string, error) { return "/bin/rgit", nil }
 	d.clock = &fakeClock{now: time.Date(2026, 11, 18, 0, 0, 0, 0, time.UTC)}
 	d.randN = func() int { return 1 }

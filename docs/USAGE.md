@@ -392,6 +392,37 @@ Header line: `path:start-end kind name`. Exit 0 with hits, 1 with none
 (stderr names the dirs searched and the file count). No query: 129.
 Does not start language servers.
 
+## Land
+
+```console
+$ rgit land --repos ~/src/foo ~/src/bar
+/src/foo: pushed
+/src/bar: PR https://github.com/acme/bar/pull/12 (queued)
+watching: acme-bar-12-20260102T030405Z
+
+$ rgit land --branch feat
+/src/foo feat abcdef1 ~/.cache/land-branch/foo-feat-1234.log direct
+```
+
+Pushes each repo's ahead commits on the default branch: a direct push when
+branch rules allow it, otherwise a timestamped `land/` branch, PR, and
+merge or merge-queue request. Dirty or off-default repos are skipped.
+`--wait` polls each open PR until it merges (or the cap); otherwise a
+background watcher records the result.
+
+`--branch BR` lands local branch BR onto the default branch in one repo
+(`--repos DIR` or the current directory), then takes that same push route.
+The repo must be the main checkout. A dirty main is left alone: BR is
+rebased onto `origin/<default>` in BR's worktree and pushed from there. A
+clean main must be on the default branch; BR is rebased onto it,
+fast-forwarded, and pushed. Rebase conflict: `conflict: hand to solver` on
+stderr, exit 2. `gate -C <worktree>` red after a `--failed` re-run: log
+path and last 40 lines on stderr, exit 3. A gate that passes on the re-run
+is a flake (appended to `$XDG_CACHE_HOME/land-branch/flakes.tsv`) and
+landing continues. Merge queue that does not enqueue: exit 4, names the
+branch. Last stdout line:
+`<repo> <branch> <sha> <gate log> <direct|PR|queue>`.
+
 ## Shell completion
 
 `rgit completion bash|zsh|fish|pwsh` prints a script to stdout.
