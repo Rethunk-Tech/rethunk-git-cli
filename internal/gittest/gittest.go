@@ -80,7 +80,9 @@ func templateIn() (string, error) {
 		"\tauto = 0\n" +
 		"[maintenance]\n" +
 		"\tauto = false\n"
-	tmp, err := os.CreateTemp(dir, "config-*")
+	// The temp file sits beside the template, not in it: a concurrent git init
+	// copies every file it lists there, and this one is renamed away mid-copy.
+	tmp, err := os.CreateTemp(filepath.Dir(dir), filepath.Base(dir)+"-config-*")
 	if err != nil {
 		return "", err
 	}
