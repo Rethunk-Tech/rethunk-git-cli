@@ -91,7 +91,7 @@ type gitRunner interface {
 type execGit struct{}
 
 func (execGit) run(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+	cmd := exec.Command("git", args...) //nolint:gosec // git argv is constructed by rgit, never a shell string
 	if dir != "" {
 		cmd.Dir = dir
 	}
@@ -109,7 +109,7 @@ func newGHCLI() *ghCLI {
 }
 
 func runGH(dir string, args ...string) (string, error) {
-	cmd := exec.Command("gh", args...)
+	cmd := exec.Command("gh", args...) //nolint:gosec // gh argv is constructed by rgit, never a shell string
 	if dir != "" {
 		cmd.Dir = dir
 	}
@@ -231,7 +231,7 @@ func defaultLandDeps(stdout, stderr io.Writer) landDeps {
 }
 
 func runNotify(argv []string) error {
-	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd := exec.Command(argv[0], argv[1:]...) //nolint:gosec // argv is nomad-hud-notify plus flags rgit built
 	cmd.Stdin = nil
 	return cmd.Run()
 }
@@ -240,11 +240,11 @@ func startDetachedWatch(argv []string, logPath string) error {
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o700); err != nil {
 		return err
 	}
-	log, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	log, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600) //nolint:gosec // logPath is under the cache dir rgit created for this watch id
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd := exec.Command(argv[0], argv[1:]...) //nolint:gosec // argv is rgit's own executable plus land --watch flags
 	cmd.Stdin = nil
 	cmd.Stdout = log
 	cmd.Stderr = log
@@ -431,13 +431,13 @@ type landResult struct {
 }
 
 type landWatchJob struct {
-	ID      string
-	Parent  string
-	Repo    string
-	Slug    string
-	PR      int
-	URL     string
-	Default string
+	ID      string `json:"id"`
+	Parent  string `json:"parent"`
+	Repo    string `json:"repo"`
+	Slug    string `json:"slug"`
+	PR      int    `json:"pr"`
+	URL     string `json:"url"`
+	Default string `json:"default"`
 }
 
 type landWatchResult struct {
@@ -575,7 +575,6 @@ func landOne(r string, d landDeps) landResult {
 			res.Lines = []string{summaryRed(repo, out)}
 			return res
 		}
-		needPR = true
 	}
 
 	br := "land/" + d.clock.Now().UTC().Format("20060102-150405")
@@ -658,7 +657,7 @@ func dirtyTracked(repo string, d landDeps) bool {
 func pushRetry(repo, to string, d landDeps) (string, error) {
 	var out string
 	var err error
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		args := []string{"push"}
 		if to != "" {
 			args = append(args, "origin", "HEAD:"+to)
@@ -760,7 +759,7 @@ func parseRuleTypes(out string) []string {
 		return lines
 	}
 	var types []string
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		line = strings.TrimSpace(line)
 		if line != "" {
 			types = append(types, line)
@@ -870,7 +869,7 @@ func lastNonEmptyLine(s string) string {
 
 func nonEmptyLines(s string) []string {
 	var out []string
-	for _, line := range strings.Split(s, "\n") {
+	for line := range strings.SplitSeq(s, "\n") {
 		line = strings.TrimRight(line, "\r")
 		if line != "" {
 			out = append(out, line)
@@ -881,14 +880,14 @@ func nonEmptyLines(s string) []string {
 
 func touchFleet(repo string, pushed int, d landDeps) {
 	dir := filepath.Join(d.cacheHome(), "nomad-hud", "fleet-touch")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return
 	}
 	base := fmt.Sprintf("land-%d-%d", d.pid, d.randN())
 	tmp := filepath.Join(dir, base+".tmp")
 	final := filepath.Join(dir, base+".tsv")
 	body := fmt.Sprintf("%s\t%d\n", repo, pushed)
-	if err := os.WriteFile(tmp, []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(tmp, []byte(body), 0o600); err != nil {
 		return
 	}
 	_ = os.Rename(tmp, final)
@@ -938,7 +937,7 @@ func runLandWatch(id, parent string, d landDeps) exitcode.Code {
 
 func loadWatchJob(id, parent string, d landDeps) (landWatchJob, error) {
 	path := filepath.Join(d.cacheHome(), "rgit", "land", id, "state.json")
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) //nolint:gosec // path is the watch state file under the cache dir rgit created
 	if err != nil {
 		return landWatchJob{}, err
 	}
@@ -965,6 +964,19 @@ func watchUntilDone(job landWatchJob, d landDeps) landWatchResult {
 		CI:     "none",
 	}
 	owner, name, ok := splitSlug(job.Slug)
+	info, state := pollPR(owner, name, ok, job, d)
+	if info.URL != "" {
+		res.URL = info.URL
+	}
+	res.State = state
+	if state != "merged" {
+		res.FinishedAt = d.clock.Now().UTC().Format(time.RFC3339)
+		return res
+	}
+	return waitForCI(res, owner, name, ok, job.Default, info.MergeSHA, d)
+}
+
+func pollPR(owner, name string, ok bool, job landWatchJob, d landDeps) (prInfo, string) {
 	deadline := d.clock.Now().Add(landPollCap)
 	var info prInfo
 	for {
@@ -972,57 +984,38 @@ func watchUntilDone(job landWatchJob, d landDeps) landWatchResult {
 			got, err := d.gh.pullRequest(owner, name, job.PR)
 			if err == nil {
 				info = got
-				if info.URL != "" {
-					res.URL = info.URL
-				}
 			}
 		}
-		if info.State == "MERGED" || info.Merged {
-			res.State = "merged"
-			break
-		}
-		if info.State == "CLOSED" || info.Closed {
-			res.State = "closed"
-			res.FinishedAt = d.clock.Now().UTC().Format(time.RFC3339)
-			return res
-		}
-		if !d.clock.Now().Before(deadline) {
-			res.State = "timeout"
-			res.CI = "none"
-			res.FinishedAt = d.clock.Now().UTC().Format(time.RFC3339)
-			return res
+		switch {
+		case info.State == "MERGED" || info.Merged:
+			return info, "merged"
+		case info.State == "CLOSED" || info.Closed:
+			return info, "closed"
+		case !d.clock.Now().Before(deadline):
+			return info, "timeout"
 		}
 		d.clock.Sleep(landPollInterval)
 	}
+}
 
-	sha := info.MergeSHA
-	ciDeadline := d.clock.Now().Add(landPollCap)
-	res.CI = "none"
+func waitForCI(res landWatchResult, owner, name string, ok bool, branch, sha string, d landDeps) landWatchResult {
+	deadline := d.clock.Now().Add(landPollCap)
 	for {
 		if ok && sha != "" {
-			run, err := d.gh.latestWorkflowRun(owner, name, job.Default, sha)
+			run, err := d.gh.latestWorkflowRun(owner, name, branch, sha)
 			if err == nil && (run.Status != "" || run.Conclusion != "") {
-				switch {
-				case run.Status == "completed" && run.Conclusion == "success":
-					res.CI = "success"
-				case run.Status == "completed":
-					res.CI = "failure"
-				default:
-					res.CI = "running"
-				}
+				res.CI = ciFromRun(run)
 				if run.Status == "completed" {
 					res.FinishedAt = d.clock.Now().UTC().Format(time.RFC3339)
 					return res
 				}
 			}
 		}
-		if !d.clock.Now().Before(ciDeadline) {
-			if res.CI == "none" {
-				res.FinishedAt = d.clock.Now().UTC().Format(time.RFC3339)
-				return res
+		if !d.clock.Now().Before(deadline) {
+			if res.CI != "none" {
+				res.State = "timeout"
+				res.CI = "running"
 			}
-			res.State = "timeout"
-			res.CI = "running"
 			res.FinishedAt = d.clock.Now().UTC().Format(time.RFC3339)
 			return res
 		}
@@ -1030,9 +1023,20 @@ func watchUntilDone(job landWatchJob, d landDeps) landWatchResult {
 	}
 }
 
+func ciFromRun(run workflowRun) string {
+	switch {
+	case run.Status == "completed" && run.Conclusion == "success":
+		return "success"
+	case run.Status == "completed":
+		return "failure"
+	default:
+		return "running"
+	}
+}
+
 func writeWatchResult(res landWatchResult, d landDeps) {
 	dir := filepath.Join(d.cacheHome(), "nomad-hud", "land")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return
 	}
 	tmp := filepath.Join(dir, res.ID+".tmp")
@@ -1041,7 +1045,7 @@ func writeWatchResult(res landWatchResult, d landDeps) {
 	if err != nil {
 		return
 	}
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
 		return
 	}
 	_ = os.Rename(tmp, final)

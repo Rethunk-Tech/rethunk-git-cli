@@ -153,7 +153,7 @@ func TestLandWatcherResultAndNotify(t *testing.T) {
 	notifyWatch(res, d)
 
 	path := filepath.Join(d.cacheHome(), "nomad-hud", "land", job.ID+".json")
-	body, err := os.ReadFile(path)
+	body, err := os.ReadFile(path) //nolint:gosec // path is under the test cache dir
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -368,7 +368,7 @@ func assertFleetTouch(t *testing.T, d landDeps, repo, pushed string) {
 	var found string
 	for _, e := range ents {
 		if strings.HasSuffix(e.Name(), ".tsv") {
-			b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+			b, err := os.ReadFile(filepath.Join(dir, e.Name())) //nolint:gosec // names come from the test cache dir listing
 			if err != nil {
 				t.Fatal(err)
 			}
