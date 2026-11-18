@@ -200,3 +200,108 @@ func TestStage_RustMemberOfANewImplBringsTheBlock(t *testing.T) {
 	qt.Assert(t, qt.IsNil(plan.Apply(t.Context(), repo, dir)))
 	qt.Assert(t, qt.Equals(stagedBlob(t, repo, "lib.rs"), work))
 }
+
+// TestClassify_MissingAnchorKeepsDidYouMean pins the both-sides-nil path:
+// an unresolvable name is the ResolveError idx.suggest already built, not a
+// fresh exit-3 with the candidates dropped.
+func TestClassify_MissingAnchorKeepsDidYouMean(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "a.go", "package p\n\nfunc Known() {}\n", "chore: fixture")
+
+	fp, err := openFilePlan(t.Context(), repo, dir, "a.go")
+	qt.Assert(t, qt.IsNil(err))
+	defer fp.close()
+
+	_, _, err = fp.classify("Know")
+	var rerr *resolve.ResolveError
+	qt.Assert(t, qt.ErrorAs(err, &rerr))
+	qt.Assert(t, qt.Equals(rerr.Code, exitcode.AnchorUnresolvable))
+	qt.Assert(t, qt.Equals(rerr.Anchor, "Know"))
+	qt.Assert(t, qt.IsTrue(strings.Contains(strings.Join(rerr.Candidates, ","), "Known")))
+}
+
+// TestContainerBodyEndPlacesFirstMemberAboveTheCloser pins where a first
+// member is spliced: a brace/paren/bracket closer is the start of that
+// closer's line, a Python-style (no delimiter) container keeps the extent
+// end, and an empty or whitespace-only extent does not walk off the start.
+func TestContainerBodyEndPlacesFirstMemberAboveTheCloser(t *testing.T) {
+	t.Parallel()
+
+	goStruct := "type Box struct {\n}\n"
+	closeAt := strings.LastIndex(goStruct, "}")
+	tests := []struct {
+		name string
+		src  string
+		ext  resolve.Extent
+		want uint
+	}{
+		{
+			name: "empty extent",
+			src:  "x",
+			ext:  resolve.Extent{Start: 1, End: 1},
+			want: 1,
+		},
+		{
+			name: "whitespace-only extent",
+			src:  "{\n  \n}",
+			ext:  resolve.Extent{Start: 1, End: 5},
+			want: 5,
+		},
+		{
+			name: "Python class has no closer, so the member lands at the extent end",
+			src:  "class C:\n    x = 1\n",
+			ext:  resolve.Extent{Start: 0, End: uint(len("class C:\n    x = 1\n"))},
+			want: uint(len("class C:\n    x = 1\n")),
+		},
+		{
+			name: "Go struct closer is the start of the closing-brace line",
+			src:  goStruct,
+			ext:  resolve.Extent{Start: 0, End: uint(closeAt + 1)},
+			want: uint(closeAt),
+		},
+		{
+			name: "bracket closer is the start of the closing-bracket line",
+			src:  "[\n]\n",
+			ext:  resolve.Extent{Start: 0, End: 3},
+			want: 2,
+		},
+		{
+			name: "paren closer is the start of the closing-paren line",
+			src:  "(\n)\n",
+			ext:  resolve.Extent{Start: 0, End: 3},
+			want: 2,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := containerBodyEnd([]byte(tt.src), tt.ext)
+			if got != tt.want {
+				t.Errorf("containerBodyEnd(%q, %+v) = %d; want %d", tt.src, tt.ext, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestReferencesIdentifierMatchesAWholeNameOnly pins the textual-name filter
+// referencedNewSiblings uses: a substring of a longer identifier is not a
+// reference, and selectors/slugs/empty names are not identifiers at all.
+func TestReferencesIdentifierMatchesAWholeNameOnly(t *testing.T) {
+	t.Parallel()
+
+	if referencesIdentifier([]byte("FooBar"), "Foo") {
+		t.Error("Foo inside FooBar counted as a reference")
+	}
+	if !referencesIdentifier([]byte("return Foo + 1"), "Foo") {
+		t.Error("standalone Foo was not a reference")
+	}
+	if referencesIdentifier([]byte("bar"), "Foo") {
+		t.Error("absent name counted as a reference")
+	}
+	if isIdentifier("") || isIdentifier("1ab") || isIdentifier("tag#id") {
+		t.Error("empty, digit-leading, or selector names counted as identifiers")
+	}
+	if !isIdentifier("Foo_1") {
+		t.Error("Foo_1 was not an identifier")
+	}
+}

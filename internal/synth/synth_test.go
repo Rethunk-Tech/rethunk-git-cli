@@ -38,6 +38,13 @@ func TestSpliceExcise_CollapsesToEOF(t *testing.T) {
 			end:   uint(len(twoFuncs)),
 			want:  "func A() {}\n",
 		},
+		{
+			name:  "deleting a symbol that something follows collapses the gap and keeps the rest",
+			out:   twoFuncs,
+			start: 0,
+			end:   uint(len("func A() {}\n")),
+			want:  "func B() {}\n",
+		},
 	}
 
 	for _, tt := range tests {

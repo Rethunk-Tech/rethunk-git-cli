@@ -240,6 +240,95 @@ func TestClassifyPath_HeadOnlyBranches(t *testing.T) {
 	})
 }
 
+// TestOpenFilePlan_RefusesWorktreeSymlinkAndGitlink pins classifyWorktreeEntry
+// for the two kinds that exist on disk as themselves (a symlink is not
+// followed; a directory containing .git is a submodule), and the PathError
+// openFilePlan then returns instead of trying to parse them as source.
+func TestOpenFilePlan_RefusesWorktreeSymlinkAndGitlink(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+
+	t.Run("symlink", func(t *testing.T) {
+		t.Parallel()
+		dir, repo := gittest.New(ctx, t)
+		if err := os.WriteFile(filepath.Join(dir, "target.txt"), []byte("x\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink("target.txt", filepath.Join(dir, "link.txt")); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err := openFilePlan(ctx, repo, dir, "link.txt")
+		var pathErr *PathError
+		if !errors.As(err, &pathErr) {
+			t.Fatalf("openFilePlan = %v (%T); want *PathError", err, err)
+		}
+		if pathErr.Code != exitcode.SpecialPathRefused {
+			t.Errorf("Code = %v; want SpecialPathRefused", pathErr.Code)
+		}
+		if pathErr.Reason != "symlink; name the path instead of a symbol" {
+			t.Errorf("Reason = %q; want symlink refusal", pathErr.Reason)
+		}
+	})
+
+	t.Run("submodule directory", func(t *testing.T) {
+		t.Parallel()
+		dir, repo := gittest.New(ctx, t)
+		subDir := filepath.Join(dir, "sub")
+		if err := os.MkdirAll(subDir, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		gittest.Git(ctx, t, subDir, "init", "-q")
+
+		_, err := openFilePlan(ctx, repo, dir, "sub")
+		var pathErr *PathError
+		if !errors.As(err, &pathErr) {
+			t.Fatalf("openFilePlan = %v (%T); want *PathError", err, err)
+		}
+		if pathErr.Reason != "submodule; name the path instead of a symbol" {
+			t.Errorf("Reason = %q; want submodule refusal", pathErr.Reason)
+		}
+	})
+}
+
+// TestRefusalForNamesEachSpecialPathKind pins the PathError each pathKind
+// produces, including the unknown-kind fallthrough that leaves a regular
+// (addressable) path unrefused.
+func TestRefusalForNamesEachSpecialPathKind(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		kind   pathKind
+		reason string
+	}{
+		{pathSymlink, "symlink; name the path instead of a symbol"},
+		{pathGitlink, "submodule; name the path instead of a symbol"},
+		{pathBinary, "binary; name the path instead of a symbol"},
+		{pathUnmerged, "unmerged; name the path instead of a symbol"},
+		{pathSkipWorktree, "skip-worktree; name the path instead of a symbol"},
+		{pathAssumeUnchanged, "assume-unchanged; name the path instead of a symbol"},
+		{pathRegular, ""},
+		{pathKind(99), ""},
+	}
+	for _, tt := range tests {
+		err := refusalFor("p", tt.kind)
+		if tt.reason == "" {
+			if err != nil {
+				t.Errorf("refusalFor(%v) = %v; want nil", tt.kind, err)
+			}
+			continue
+		}
+		var pathErr *PathError
+		if !errors.As(err, &pathErr) {
+			t.Errorf("refusalFor(%v) = %v (%T); want *PathError", tt.kind, err, err)
+			continue
+		}
+		if pathErr.Reason != tt.reason {
+			t.Errorf("refusalFor(%v).Reason = %q; want %q", tt.kind, pathErr.Reason, tt.reason)
+		}
+	}
+}
+
 func TestStage_RefusesUnmergedSymbol(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.RepoWithFile(t.Context(), t, "conflict.go", "package p\n\nfunc Keep() {}\n", "chore: add conflict fixture")
