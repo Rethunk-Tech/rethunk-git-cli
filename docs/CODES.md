@@ -78,7 +78,7 @@ folds into 128.
 
 `--porcelain` is tab-separated records, no header. `--json` is one object
 with `"schema": 1` first, then the payload (`diffs`, `sha`/`targets`,
-`languages`, `checks`, `records`, `commits`, or `symbols`). Mutually
+`languages`, `checks`, `records`, `commits`, `symbols`, or `hits`). Mutually
 exclusive with `--porcelain` on `diff`, `commit`, `languages`, `doctor`,
 `symbols`, and `log`. `context` has no `--porcelain`; `--json` encodes the
 same stream. Errors under `--json` stay text on stderr; the exit code is
@@ -453,6 +453,28 @@ unchanged. `SYMBOL` is last (unbounded); split on the first tab.
 
 `file` when `--with-filename` or several files. `start`/`end` with
 `--with-lines`, as strings. `--json` with `--porcelain` is 129.
+
+### `rgit find --json`
+
+```json
+{
+  "schema": 1,
+  "hits": [
+    {
+      "file": "auth.go",
+      "start": 12,
+      "end": 27,
+      "kind": "function",
+      "name": "ValidateToken",
+      "body": "func ValidateToken(tok string) error {\n ... \n}"
+    }
+  ]
+}
+```
+
+`body` is present on the top `--bodies` hits (default 3) and omitted for
+the rest and under `--names`. `start`/`end` are 1-based inclusive line
+numbers.
 
 ### `rgit show --porcelain`
 

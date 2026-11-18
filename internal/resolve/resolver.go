@@ -137,6 +137,10 @@ type Declared struct {
 
 	// Extent is the same byte extent Resolve returns for that anchor.
 	Extent Extent
+
+	// Kind is the tree-sitter node kind of the outermost staged node
+	// (function_declaration, method_declaration, ...).
+	Kind string
 }
 
 // DeclExtents returns each declaration's anchor and extent, in source order —
@@ -147,7 +151,11 @@ type Declared struct {
 func (f *File) DeclExtents() []Declared {
 	out := make([]Declared, len(f.idx.order))
 	for i, s := range f.idx.order {
-		out[i] = Declared{Anchor: s.Qualified, Extent: s.Full}
+		kind := ""
+		if s.Decl.Node != nil {
+			kind = s.Decl.Node.Kind()
+		}
+		out[i] = Declared{Anchor: s.Qualified, Extent: s.Full, Kind: kind}
 	}
 	return out
 }
@@ -196,55 +204,57 @@ func DeclExtents(lang Language, src []byte) ([]Declared, error) {
 	return f.DeclExtents(), nil
 }
 
-// parserCache holds one *ts.Parser per distinct *ts.Language, reused across
-// every resolve.Open call rather than constructing and discarding one per
-// parse. internal/diff's attributeSymbolsOpen already cuts how
-// many times a file gets opened; this cuts what each Open itself costs --
-// ts.NewParser() is real construction work (allocating the parser's C-side
-// state), not a cheap wrapper, and buildFileReport/attributeSymbolsOpen and
-// internal/synth's openFilePlan between them can call Open several times
-// per invocation. Parsers are never closed: like the registered-language
-// map (lang.go's registered), they live for the process's lifetime, and
-// rgit is a short-lived CLI invocation with nothing else to reclaim them
-// for.
+// parserPools holds one *sync.Pool of *ts.Parser per distinct *ts.Language.
+// A *ts.Parser is not safe for concurrent use, so find's parallel file
+// walk needs one in-flight parser per worker rather than one per language.
+// Sequential callers still reuse a parser across Open calls: the pool
+// hands the same instance back when nothing else is parsing.
 //
 // Keyed by *ts.Language rather than by name: TSLanguage() already returns
 // the one compiled grammar handle each adapter caches for itself
 // (lang_go.go's own goLanguage.lang is the pattern every adapter follows),
-// so pointer identity is exactly "the same grammar", with no risk of two
-// distinct languages colliding on a reused string key the way "go" could
-// coincidentally collide with a future adapter's own Name().
-var (
-	parserCacheMu sync.Mutex
-	parserCache   = map[*ts.Language]*ts.Parser{}
-)
+// so pointer identity is exactly "the same grammar".
+var parserPools sync.Map // *ts.Language -> *sync.Pool
 
-// parseSource parses src with lang's cached parser. The lock is held for
-// the whole parse, not just the cache lookup: a *ts.Parser is not
-// documented safe for concurrent use, and this package's own test suite
-// (CONTRIBUTING.md's t.Parallel() rule) calls Open from many goroutines at
-// once even though no production call path in this codebase parses
-// concurrently -- the lock is what makes a shared cache correct under both,
-// at a cost this package's own sequential production usage never pays a
-// contended wait for.
+// parseSource parses src with a pooled parser for lang.
 //
 // oldTree is always nil (no caller here does incremental reparsing), so
 // reusing a parser across unrelated src buffers is safe without an
 // intervening Parser.Reset(): Parse(text, nil) always parses text from
 // scratch, regardless of what the same parser instance parsed before.
 func parseSource(lang Language, src []byte) (*ts.Tree, error) {
-	parserCacheMu.Lock()
-	defer parserCacheMu.Unlock()
-
-	parser, err := cachedParserLocked(lang)
+	tsLang := lang.TSLanguage()
+	poolAny, _ := parserPools.LoadOrStore(tsLang, &sync.Pool{})
+	pool, ok := poolAny.(*sync.Pool)
+	if !ok {
+		return nil, fmt.Errorf("resolve: parser pool has unexpected type %T", poolAny)
+	}
+	parser, err := parserFromPool(pool, lang, tsLang)
 	if err != nil {
 		return nil, err
 	}
 	tree := parser.Parse(ctypeSafe(lang, src), nil)
+	pool.Put(parser)
 	if tree == nil {
 		return nil, fmt.Errorf("resolve: %s: parse produced no tree", lang.Name())
 	}
 	return tree, nil
+}
+
+func parserFromPool(pool *sync.Pool, lang Language, tsLang *ts.Language) (*ts.Parser, error) {
+	if v := pool.Get(); v != nil {
+		p, ok := v.(*ts.Parser)
+		if !ok {
+			return nil, fmt.Errorf("resolve: pooled parser has unexpected type %T", v)
+		}
+		return p, nil
+	}
+	p := ts.NewParser()
+	if err := p.SetLanguage(tsLang); err != nil {
+		p.Close()
+		return nil, fmt.Errorf("resolve: set language %s: %w", lang.Name(), err)
+	}
+	return p, nil
 }
 
 // ctypeSafe hides from the markdown, bash, and zsh scanners every non-ASCII
@@ -283,22 +293,6 @@ func ctypeSafe(lang Language, src []byte) []byte {
 
 func isDigitBraceOrDot(b byte) bool {
 	return (b >= '0' && b <= '9') || b == '{' || b == '.'
-}
-
-// cachedParserLocked returns lang's cached parser, creating and caching one
-// on first use. Callers must hold parserCacheMu.
-func cachedParserLocked(lang Language) (*ts.Parser, error) {
-	tsLang := lang.TSLanguage()
-	if p, ok := parserCache[tsLang]; ok {
-		return p, nil
-	}
-	p := ts.NewParser()
-	if err := p.SetLanguage(tsLang); err != nil {
-		p.Close()
-		return nil, fmt.Errorf("resolve: set language %s: %w", lang.Name(), err)
-	}
-	parserCache[tsLang] = p
-	return p, nil
 }
 
 func isPseudoAnchor(anchor string) bool {

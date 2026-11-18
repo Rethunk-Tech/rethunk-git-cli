@@ -31,7 +31,7 @@ binaries collapse to one `(untracked)` row.
 before or after it.
 
 `--json` prints one object on stdout (`diff`, `commit`, `log`, `context`,
-`languages`, `doctor`, `symbols`) and nothing else there. Human narration
+`languages`, `doctor`, `symbols`, `find`) and nothing else there. Human narration
 stays on stderr. Other commands: 129. Envelope:
 [`CODES.md`](CODES.md#output-records).
 
@@ -366,8 +366,31 @@ No file argument: usage on stderr, 129. Unreadable: 128. Unsupported
 language: 9.
 
 When `core.ignorecase` is true, extension lookup is case-insensitive for
-`symbols`, `commit`, `diff`, `blame`, `log`, and `languages`; the path is
+`symbols`, `find`, `commit`, `diff`, `blame`, `log`, and `languages`; the path is
 unchanged.
+
+## Find
+
+```console
+$ rgit find parseShell
+internal/app/parse.go:40-88 function parseShell
+func parseShell(args []string) { ... }
+```
+
+Finds declared symbols matching `QUERY` in tracked files under each `DIR`
+(default: the repository root of `-C` or cwd). Match order: exact name,
+case-insensitive exact, prefix, substring, subsequence (fuzzy: `prsShl`
+matches `parseShell`). A query with a dot also matches `Receiver.Method` /
+`Class.method`.
+
+`--bodies N` (default 3) prints each hit's own bytes — the same extent
+`show` would — for the top N hits; remaining hits print the header only.
+`--limit N` (default 20) caps the listing. `--names` prints header lines
+only. `--json`: [`CODES.md`](CODES.md#rgit-find---json).
+
+Header line: `path:start-end kind name`. Exit 0 with hits, 1 with none
+(stderr names the dirs searched and the file count). No query: 129.
+Does not start language servers.
 
 ## Shell completion
 
@@ -387,6 +410,7 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 `show`: `--source`, `--follow-rename`, `--porcelain`, `--help`.
 `symbols`: `--for-commit`, `--with-lines`, `--with-filename`,
 `--limit`, `--match`, `--porcelain`, `--json`, `--help`.
+`find`: `--bodies`, `--limit`, `--names`, `--json`, `--help`.
 `doctor`: `--porcelain`, `--json`, `--deep`, `--help`.
 `context`: `--json`, `--brief`, `--help`/`-h`.
 `completion`: `--help`/`-h` plus the shell argument.
@@ -436,8 +460,12 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 | `--limit N` | (`symbols`) At most N records, after `--match`. |
 | `--match REGEX` | (`symbols`) Keep symbol names matching REGEX. |
 | `--porcelain` | (`symbols`) NUL records. |
-| `--json` | Global. One object on stdout for `diff`, `commit`, `log`, `context`, `languages`, `doctor`, `symbols`. Before or after the command. Other commands: 129. |
+| `--json` | Global. One object on stdout for `diff`, `commit`, `log`, `context`, `languages`, `doctor`, `symbols`, `find`. Before or after the command. Other commands: 129. |
 | `--json` | (`symbols`) One object. Exclusive with `--porcelain`. |
+| `--bodies N` | (`find`) Print bodies for the top N hits (default 3). |
+| `--names` | (`find`) Header lines only. |
+| `--limit N` | (`find`) At most N hits, after ranking (default 20). |
+| `--json` | (`find`) One object. |
 | `--follow-rename` | (`show`, `blame`, `log`) Re-resolve at each rename. Combined with `--source`, starts at that revision. Plain path: 129. |
 | `--source REV` | (`show`, `blame`, `log`) Read/blame/walk `REV:FILE`. Unknown rev: 128. Absent path: 3. |
 | `--since DATE`, `--until DATE` | (`log`) Date bounds. Forwarded unparsed. |

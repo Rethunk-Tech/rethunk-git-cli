@@ -17,7 +17,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
 )
 
-const usageLine = "usage: rgit [--version] [--json] [-C <path>] <diff|commit|show|blame|log|context|languages|doctor|completion|symbols> [flags] [target...]"
+const usageLine = "usage: rgit [--version] [--json] [-C <path>] <diff|commit|show|blame|log|context|languages|doctor|completion|symbols|find> [flags] [target...]"
 
 // tsOnlyNotice is what any command that runs the diff cross-check --
 // currently rgit diff, rgit commit, and rgit context -- prints when no live
@@ -47,16 +47,17 @@ Commands:
   doctor      Report environment health (language servers, grammars, git)
   completion  Print a shell completion script (bash, zsh, fish, pwsh)
   symbols     List declared symbols in a worktree file
+  find        Find symbols by name and print their code
 
 Global flags:
   -C <path>    run as if rgit was started in <path> (before the command)
-  --json       one JSON object on stdout (diff, commit, log, context, languages, doctor, symbols)
+  --json       one JSON object on stdout (diff, commit, log, context, languages, doctor, symbols, find)
   --version    print the version and exit
   -h, --help   show this help and exit
 
 Run 'rgit <command> --help' for that command's own flags -- show, blame, log,
-languages, doctor, and symbols each have a real flag surface too, not only diff
-and commit.
+languages, doctor, symbols, and find each have a real flag surface too, not only
+diff and commit.
 Full reference: docs/USAGE.md
 `
 
@@ -151,6 +152,8 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 		return runMan(ctx, version, args[1:], stdout, stderr)
 	case "symbols":
 		return runSymbols(ctx, dir, args[1:], stdout, stderr)
+	case "find":
+		return runFind(ctx, dir, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "rgit: unknown command %q\n", args[0])
 		fmt.Fprintln(stderr, usageLine)
@@ -189,6 +192,8 @@ func runHelp(ctx context.Context, dir string, args []string, stdout, stderr io.W
 		return runCompletion(helpArgs, stdout, stderr)
 	case "symbols":
 		return runSymbols(ctx, dir, helpArgs, stdout, stderr)
+	case "find":
+		return runFind(ctx, dir, helpArgs, stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "rgit: unknown command %q\n", cmd)
 		fmt.Fprintln(stderr, usageLine)
