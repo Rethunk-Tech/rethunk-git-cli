@@ -492,6 +492,41 @@ func TestLandBranchCleanMainFFPush(t *testing.T) {
 	assertFleetTouch(t, d, dir, "1")
 }
 
+func TestLandBranchNoPushLeavesOrigin(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, "feat.txt", "feat\n")
+	gitOut(t, wt, "add", "feat.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "feat")
+	tip := strings.TrimSpace(gitOut(t, wt, "rev-parse", "HEAD"))
+	originBefore := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD"))
+
+	d := testLandDeps(t)
+	var stdout, stderr strings.Builder
+	d.stdout = &stdout
+	d.stderr = &stderr
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--no-push"}, d)
+	if code != exitcode.Success {
+		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	if got := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD")); got != originBefore {
+		t.Errorf("origin HEAD = %s; want %s", got, originBefore)
+	}
+	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != tip {
+		t.Errorf("local default = %s; want %s", got, tip)
+	}
+	last := lastNonEmptyLine(stdout.String())
+	got := strings.Fields(last)
+	if len(got) != 5 || got[0] != dir || got[1] != "feat" || got[2] != tip || got[4] != "local" {
+		t.Errorf("summary = %q", last)
+	}
+	if !strings.Contains(got[3], "land-branch") {
+		t.Errorf("gate log path = %q", got[3])
+	}
+}
+
 func TestLandBranchDirtyMainLeavesMain(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
@@ -1611,6 +1646,20 @@ func TestLandArgNames(t *testing.T) {
 		t.Errorf("unknown flag code = %v; want InvalidUsage", code)
 	}
 	if !strings.Contains(stderr.String(), "unknown argument: --bogus") {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+}
+
+func TestLandNoPushNeedsBranch(t *testing.T) {
+	t.Parallel()
+	d := testLandDeps(t)
+	var stdout, stderr strings.Builder
+	d.stdout = &stdout
+	d.stderr = &stderr
+	if code := runLandWith(t.Context(), "", []string{"--no-push"}, d); code != exitcode.InvalidUsage {
+		t.Errorf("code = %v; want InvalidUsage", code)
+	}
+	if !strings.Contains(stderr.String(), "--no-push needs --branch") {
 		t.Errorf("stderr = %q", stderr.String())
 	}
 }

@@ -422,6 +422,11 @@ exit 5.
 The repo must be the main checkout. Last stdout line:
 `<repo> <branch> <sha> <gate log> <direct|PR|queue>`.
 
+`--no-push` with `--branch` does the rebase, gate, and local fast-forward,
+then stops: no push, `land/` branch, PR, background watch, or `--install`.
+Last stdout line uses route `local`. Without `--branch`, `--no-push` is
+usage (`--no-push needs --branch`).
+
 | Condition | What happens |
 | --- | --- |
 | BR pushed and its worktree clean | Linked worktree removed (`git worktree remove`); local BR deleted (`git branch -d`); stdout `removed worktree PATH`, `deleted branch BR` |

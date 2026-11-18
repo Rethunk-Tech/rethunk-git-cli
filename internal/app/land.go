@@ -18,7 +18,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
 )
 
-const landUsageLine = "usage: rgit land [--repos DIR...] [--wait] [--json] [--install] | rgit land --branch BR [--repos DIR] [--install]"
+const landUsageLine = "usage: rgit land [--repos DIR...] [--wait] [--json] [--install] | rgit land --branch BR [--repos DIR] [--no-push] [--install]"
 
 const landHelp = landUsageLine + `
 
@@ -30,8 +30,11 @@ repo; exit 1 if any repo is red.
 --branch BR lands local branch BR onto the default branch in one repo
 (--repos DIR, or the current directory), then pushes through that same
 route. Last stdout line: <repo> <branch> <sha> <gate log> <direct|PR|queue>.
-Exit 2 on rebase conflict, 3 on a red gate, 4 if a merge-queue PR does
-not enqueue, 5 if --install fails.
+--no-push with --branch rebases, runs the gate, and fast-forwards the
+local default branch, then stops: no push, land/ branch, PR, watch, or
+--install. That last line uses route local. --no-push without --branch
+is a usage error. Exit 2 on rebase conflict, 3 on a red gate, 4 if a
+merge-queue PR does not enqueue, 5 if --install fails.
 
 --install runs make install from each directly pushed, clean HEAD after
 every repo in the run has been pushed. A merged or queued PR is not
@@ -44,6 +47,7 @@ case land polls inline and prints the final line per repo.
 Flags:
   --repos DIR...  repositories to land (default: the current directory)
   --branch BR     land local branch BR onto the default branch, then push
+  --no-push       with --branch: stop after the local fast-forward; do not push
   --wait          poll each open PR until it merges or the cap is hit
   --json          one JSON object on stdout
   --install       after a direct push, make install from that HEAD
@@ -309,6 +313,7 @@ func runLand(ctx context.Context, dir string, args []string, stdout, stderr io.W
 func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exitcode.Code {
 	wait := false
 	install := false
+	noPush := false
 	watchID := ""
 	watchParent := d.parent
 	branch := ""
@@ -324,6 +329,8 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 			wait = true
 		case a == "--install":
 			install = true
+		case a == "--no-push":
+			noPush = true
 		case a == "--json":
 			// already applied via ctx; accepted here so it can sit after the command
 		case a == "--repos":
@@ -385,13 +392,18 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 		}
 	}
 	asJSON := jsonFlag(ctx)
+	if noPush && branch == "" {
+		fmt.Fprintln(d.stderr, "rgit land: --no-push needs --branch")
+		fmt.Fprintln(d.stderr, landUsageLine)
+		return exitcode.InvalidUsage
+	}
 	if branch != "" {
 		if len(repos) > 1 {
 			fmt.Fprintln(d.stderr, "rgit land: --branch lands one repo")
 			fmt.Fprintln(d.stderr, landUsageLine)
 			return exitcode.InvalidUsage
 		}
-		return landBranch(ctx, repos[0], branch, wait, install, d)
+		return landBranch(ctx, repos[0], branch, wait, install, noPush, d)
 	}
 	return landRepos(ctx, repos, wait, asJSON, install, d)
 }
@@ -820,7 +832,7 @@ type landBranchPrep struct {
 	opts                  landPushOpts
 }
 
-func landBranch(ctx context.Context, repoArg, branch string, wait, install bool, d landDeps) exitcode.Code {
+func landBranch(ctx context.Context, repoArg, branch string, wait, install, noPush bool, d landDeps) exitcode.Code {
 	prep, code := prepareLandBranch(repoArg, branch, d)
 	if code != exitcode.Success {
 		return code
@@ -829,7 +841,7 @@ func landBranch(ctx context.Context, repoArg, branch string, wait, install bool,
 	if code != exitcode.Success {
 		return code
 	}
-	return finishLandBranch(ctx, prep, logPath, wait, install, d)
+	return finishLandBranch(ctx, prep, logPath, wait, install, noPush, d)
 }
 
 func prepareLandBranch(repoArg, branch string, d landDeps) (landBranchPrep, exitcode.Code) {
@@ -979,7 +991,7 @@ func unlinkLandEnvLinks(links []string) {
 	}
 }
 
-func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, wait, install bool, d landDeps) exitcode.Code {
+func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, wait, install, noPush bool, d landDeps) exitcode.Code {
 	if !prep.dirty {
 		if out, err := d.git.run(prep.repo, "merge", "--ff-only", prep.branch); err != nil {
 			fmt.Fprintf(d.stderr, "error: %s\n", strings.TrimSpace(out))
@@ -993,6 +1005,10 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 		}
 	}
 	sha := strings.TrimSpace(mustGit(prep.repo, d, "rev-parse", prep.branch))
+	if noPush {
+		fmt.Fprintf(d.stdout, "%s %s %s %s local\n", prep.repo, prep.branch, sha, logPath)
+		return exitcode.Success
+	}
 	res := landByRules(prep.repo, prep.def, d, prep.opts)
 	if res.Kind == landRed {
 		for _, line := range res.Lines {
