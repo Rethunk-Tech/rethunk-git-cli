@@ -322,29 +322,32 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 		case a == "--repos":
 			reposFlag = true
 		case a == "--branch":
-			if i+1 >= len(args) {
+			val, next, ok := landFlagValue(args, i)
+			if !ok {
 				fmt.Fprintln(d.stderr, "rgit land: --branch needs a name")
 				fmt.Fprintln(d.stderr, landUsageLine)
 				return exitcode.InvalidUsage
 			}
-			i++
-			branch = args[i]
+			branch = val
+			i = next
 		case a == landWatchFlag:
-			if i+1 >= len(args) {
+			val, next, ok := landFlagValue(args, i)
+			if !ok {
 				fmt.Fprintln(d.stderr, "rgit land: --watch needs an id")
 				fmt.Fprintln(d.stderr, landUsageLine)
 				return exitcode.InvalidUsage
 			}
-			i++
-			watchID = args[i]
+			watchID = val
+			i = next
 		case a == "--parent":
-			if i+1 >= len(args) {
+			val, next, ok := landFlagValue(args, i)
+			if !ok {
 				fmt.Fprintln(d.stderr, "rgit land: --parent needs an id")
 				fmt.Fprintln(d.stderr, landUsageLine)
 				return exitcode.InvalidUsage
 			}
-			i++
-			watchParent = args[i]
+			watchParent = val
+			i = next
 		case strings.HasPrefix(a, "-"):
 			fmt.Fprintf(d.stderr, "rgit land: unknown argument: %s\n", a)
 			fmt.Fprintln(d.stderr, landUsageLine)
@@ -384,6 +387,14 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 		return landBranch(repos[0], branch, wait, d)
 	}
 	return landRepos(repos, wait, asJSON, d)
+}
+
+func landFlagValue(args []string, i int) (value string, next int, ok bool) {
+	tail := args[i:]
+	if len(tail) < 2 {
+		return "", i, false
+	}
+	return tail[1], i + 1, true
 }
 
 func landRepos(repos []string, wait, asJSON bool, d landDeps) exitcode.Code {
@@ -606,6 +617,7 @@ func landOne(r string, d landDeps) landResult {
 		}
 		_, _ = d.git.run(repo, "reset", "-q", "--keep", "origin/"+def)
 		touchFleet(repo, 0, d)
+	case landSkipped, landRed:
 	}
 	return res
 }
@@ -711,129 +723,147 @@ func landByRules(repo, def string, d landDeps, opts landPushOpts) landResult {
 	return res
 }
 
+type landBranchPrep struct {
+	repo, branch, def, wt string
+	dirty                 bool
+	opts                  landPushOpts
+}
+
 func landBranch(repoArg, branch string, wait bool, d landDeps) exitcode.Code {
+	prep, code := prepareLandBranch(repoArg, branch, d)
+	if code != exitcode.Success {
+		return code
+	}
+	logPath, code := gateLandBranch(prep, d)
+	if code != exitcode.Success {
+		return code
+	}
+	return finishLandBranch(prep, logPath, wait, d)
+}
+
+func prepareLandBranch(repoArg, branch string, d landDeps) (landBranchPrep, exitcode.Code) {
 	repo, err := d.git.run(repoArg, "rev-parse", "--show-toplevel")
 	if err != nil {
 		fmt.Fprintf(d.stderr, "error: %s is not a git repo\n", repoArg)
-		return 1
+		return landBranchPrep{}, 1
 	}
 	repo = strings.TrimSpace(repo)
-
-	gdir := strings.TrimSpace(mustGit(repo, d, "rev-parse", "--absolute-git-dir"))
-	if isLinkedWorktree(gdir) {
+	if isLinkedWorktree(strings.TrimSpace(mustGit(repo, d, "rev-parse", "--absolute-git-dir"))) {
 		fmt.Fprintf(d.stderr, "error: %s is not the main checkout\n", repo)
-		return 1
+		return landBranchPrep{}, 1
 	}
-
 	def, ok := defaultBranchChecked(repo, d)
 	if !ok {
 		fmt.Fprintf(d.stderr, "error: cannot determine default branch for %s\n", repo)
-		return 1
+		return landBranchPrep{}, 1
 	}
-
 	dirty := dirtyTracked(repo, d)
 	if !dirty {
 		cur := strings.TrimSpace(mustGit(repo, d, "rev-parse", "--abbrev-ref", "HEAD"))
 		if cur != def {
 			fmt.Fprintf(d.stderr, "error: %s is on %s, not %s\n", repo, cur, def)
-			return 1
+			return landBranchPrep{}, 1
 		}
 	}
-
 	if _, err := d.git.run(repo, "show-ref", "--verify", "--quiet", "refs/heads/"+branch); err != nil {
 		fmt.Fprintf(d.stderr, "error: branch %s does not exist\n", branch)
-		return 1
+		return landBranchPrep{}, 1
 	}
-
 	wt, found := findBranchWorktree(repo, branch, d)
 	if !found {
 		tmp, err := os.MkdirTemp("", "land-branch.")
 		if err != nil {
 			fmt.Fprintf(d.stderr, "error: %v\n", err)
-			return 1
+			return landBranchPrep{}, 1
 		}
 		_ = os.Remove(tmp)
 		if out, err := d.git.run(repo, "worktree", "add", tmp, branch); err != nil {
 			fmt.Fprintf(d.stderr, "error: %s\n", strings.TrimSpace(out))
-			return 1
+			return landBranchPrep{}, 1
 		}
 		wt = tmp
 	}
-
+	prep := landBranchPrep{repo: repo, branch: branch, def: def, wt: wt, dirty: dirty}
 	base := def
-	opts := landPushOpts{}
 	if dirty {
 		_, _ = d.git.run(repo, "fetch", "-q", "origin")
 		base = "origin/" + def
-		opts.pushDir = wt
-		opts.pushTo = def
-		opts.prRef = branch
-		opts.logRange = "origin/" + def + ".." + branch
+		prep.opts = landPushOpts{
+			pushDir:  wt,
+			pushTo:   def,
+			prRef:    branch,
+			logRange: "origin/" + def + ".." + branch,
+		}
 	}
 	if _, err := d.git.run(wt, "rebase", base); err != nil {
 		_, _ = d.git.run(wt, "rebase", "--abort")
 		fmt.Fprintln(d.stderr, "conflict: hand to solver")
-		return 2
+		return landBranchPrep{}, 2
 	}
+	return prep, exitcode.Success
+}
 
+func gateLandBranch(prep landBranchPrep, d landDeps) (string, exitcode.Code) {
 	logdir := filepath.Join(d.cacheHome(), "land-branch")
 	if err := os.MkdirAll(logdir, 0o750); err != nil {
 		fmt.Fprintf(d.stderr, "error: %v\n", err)
-		return 1
+		return "", 1
 	}
-	safe := strings.ReplaceAll(branch, "/", "_")
-	logPath := filepath.Join(logdir, filepath.Base(repo)+"-"+safe+"-"+strconv.Itoa(d.pid)+".log")
-	out, gateErr := d.gate(wt, false)
+	safe := strings.ReplaceAll(prep.branch, "/", "_")
+	logPath := filepath.Join(logdir, filepath.Base(prep.repo)+"-"+safe+"-"+strconv.Itoa(d.pid)+".log")
+	out, gateErr := d.gate(prep.wt, false)
 	if werr := os.WriteFile(logPath, []byte(out), 0o600); werr != nil {
 		fmt.Fprintf(d.stderr, "error: %v\n", werr)
-		return 1
+		return "", 1
 	}
-	if gateErr != nil {
-		failed := failedGateNames(out)
-		retry, retryErr := d.gate(wt, true)
-		f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0o600) //nolint:gosec // logPath is under the cache dir rgit created
-		if err == nil {
-			_, _ = f.WriteString(retry)
-			_ = f.Close()
-		}
-		if retryErr != nil {
-			fmt.Fprintln(d.stderr, logPath)
-			for _, line := range lastNLines(out+retry, 40) {
-				fmt.Fprintln(d.stderr, line)
-			}
-			return 3
-		}
-		if err := appendFlake(logdir, filepath.Base(repo), branch, failed, d); err != nil {
-			fmt.Fprintf(d.stderr, "error: %v\n", err)
-			return 1
-		}
-		fmt.Fprintf(d.stderr, "flake: %s passed on re-run\n", failed)
+	if gateErr == nil {
+		return logPath, exitcode.Success
 	}
+	failed := failedGateNames(out)
+	retry, retryErr := d.gate(prep.wt, true)
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0o600) //nolint:gosec // logPath is under the cache dir rgit created
+	if err == nil {
+		_, _ = f.WriteString(retry)
+		_ = f.Close()
+	}
+	if retryErr != nil {
+		fmt.Fprintln(d.stderr, logPath)
+		for _, line := range lastNLines(out+retry, 40) {
+			fmt.Fprintln(d.stderr, line)
+		}
+		return logPath, 3
+	}
+	if err := appendFlake(logdir, filepath.Base(prep.repo), prep.branch, failed, d); err != nil {
+		fmt.Fprintf(d.stderr, "error: %v\n", err)
+		return "", 1
+	}
+	fmt.Fprintf(d.stderr, "flake: %s passed on re-run\n", failed)
+	return logPath, exitcode.Success
+}
 
-	if !dirty {
-		if out, err := d.git.run(repo, "merge", "--ff-only", branch); err != nil {
+func finishLandBranch(prep landBranchPrep, logPath string, wait bool, d landDeps) exitcode.Code {
+	if !prep.dirty {
+		if out, err := d.git.run(prep.repo, "merge", "--ff-only", prep.branch); err != nil {
 			fmt.Fprintf(d.stderr, "error: %s\n", strings.TrimSpace(out))
 			return 1
 		}
-		head := strings.TrimSpace(mustGit(repo, d, "rev-parse", "HEAD"))
-		tip := strings.TrimSpace(mustGit(repo, d, "rev-parse", branch))
+		head := strings.TrimSpace(mustGit(prep.repo, d, "rev-parse", "HEAD"))
+		tip := strings.TrimSpace(mustGit(prep.repo, d, "rev-parse", prep.branch))
 		if head != tip {
-			fmt.Fprintf(d.stderr, "error: HEAD %s != %s %s\n", head, branch, tip)
+			fmt.Fprintf(d.stderr, "error: HEAD %s != %s %s\n", head, prep.branch, tip)
 			return 1
 		}
 	}
-	sha := strings.TrimSpace(mustGit(repo, d, "rev-parse", branch))
-
+	sha := strings.TrimSpace(mustGit(prep.repo, d, "rev-parse", prep.branch))
 	removed := false
-	if !dirty {
-		if _, err := d.git.run(repo, "worktree", "remove", wt); err == nil {
+	if !prep.dirty {
+		if _, err := d.git.run(prep.repo, "worktree", "remove", prep.wt); err == nil {
 			removed = true
 		} else {
-			fmt.Fprintf(d.stderr, "worktree remove refused; keeping %s\n", wt)
+			fmt.Fprintf(d.stderr, "worktree remove refused; keeping %s\n", prep.wt)
 		}
 	}
-
-	res := landByRules(repo, def, d, opts)
+	res := landByRules(prep.repo, prep.def, d, prep.opts)
 	if res.Kind == landRed {
 		for _, line := range res.Lines {
 			fmt.Fprintln(d.stdout, line)
@@ -841,29 +871,37 @@ func landBranch(repoArg, branch string, wait bool, d landDeps) exitcode.Code {
 		return 1
 	}
 	if res.Route == "queue" && res.PRState == "" {
-		fmt.Fprintf(d.stderr, "error: PR for %s is open but neither queued nor set to auto-merge\n", branch)
+		fmt.Fprintf(d.stderr, "error: PR for %s is open but neither queued nor set to auto-merge\n", prep.branch)
 		return 4
 	}
-
-	if dirty {
-		_, _ = d.git.run(repo, "fetch", "-q", "origin")
-		if _, err := d.git.run(repo, "worktree", "remove", wt); err == nil {
-			if res.Route == "direct" && cherryUpstream(repo, def, branch, d) {
-				_, _ = d.git.run(repo, "branch", "-D", branch)
-			}
-		}
-	} else if res.Route != "direct" {
-		_, _ = d.git.run(repo, "reset", "-q", "--keep", "origin/"+def)
-	} else if removed {
-		_, _ = d.git.run(repo, "branch", "-d", branch)
-	}
-
+	cleanupLandBranch(prep, res, removed, d)
 	if res.Kind == landPushed {
-		touchFleet(repo, 1, d)
+		touchFleet(prep.repo, 1, d)
 	} else {
-		touchFleet(repo, 0, d)
+		touchFleet(prep.repo, 0, d)
 	}
+	printLandBranchResult(prep, res, sha, logPath, wait, d)
+	return exitcode.Success
+}
 
+func cleanupLandBranch(prep landBranchPrep, res landResult, removed bool, d landDeps) {
+	if prep.dirty {
+		_, _ = d.git.run(prep.repo, "fetch", "-q", "origin")
+		if _, err := d.git.run(prep.repo, "worktree", "remove", prep.wt); err == nil && res.Route == "direct" && cherryUpstream(prep.repo, prep.def, prep.branch, d) {
+			_, _ = d.git.run(prep.repo, "branch", "-D", prep.branch)
+		}
+		return
+	}
+	if res.Route != "direct" {
+		_, _ = d.git.run(prep.repo, "reset", "-q", "--keep", "origin/"+prep.def)
+		return
+	}
+	if removed {
+		_, _ = d.git.run(prep.repo, "branch", "-d", prep.branch)
+	}
+}
+
+func printLandBranchResult(prep landBranchPrep, res landResult, sha, logPath string, wait bool, d landDeps) {
 	for _, line := range res.Lines {
 		fmt.Fprintln(d.stdout, line)
 	}
@@ -878,16 +916,14 @@ func landBranch(repoArg, branch string, wait bool, d landDeps) exitcode.Code {
 			Default: res.Default,
 		}
 		if wait {
-			fin := watchUntilDone(job, d)
-			fmt.Fprintln(d.stdout, finalWaitLine(res, fin))
+			fmt.Fprintln(d.stdout, finalWaitLine(res, watchUntilDone(job, d)))
 		} else if err := spawnWatcher(job, d); err != nil {
 			fmt.Fprintf(d.stderr, "rgit land: watch %s: %v\n", job.ID, err)
 		} else {
 			fmt.Fprintf(d.stdout, "watching: %s\n", job.ID)
 		}
 	}
-	fmt.Fprintf(d.stdout, "%s %s %s %s %s\n", repo, branch, sha, logPath, res.Route)
-	return exitcode.Success
+	fmt.Fprintf(d.stdout, "%s %s %s %s %s\n", prep.repo, prep.branch, sha, logPath, res.Route)
 }
 
 func isLinkedWorktree(gitDir string) bool {

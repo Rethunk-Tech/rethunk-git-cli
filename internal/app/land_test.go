@@ -488,7 +488,7 @@ func TestLandBranchFlakeLoggedAndLands(t *testing.T) {
 	if !strings.Contains(stderr.String(), "flake: unit passed on re-run") {
 		t.Errorf("stderr = %q", stderr.String())
 	}
-	body, err := os.ReadFile(filepath.Join(d.cacheHome(), "land-branch", "flakes.tsv")) //nolint:gosec // test cache path
+	body, err := os.ReadFile(filepath.Join(d.cacheHome(), "land-branch", "flakes.tsv"))
 	if err != nil {
 		t.Fatal(err)
 	}
