@@ -1,4 +1,4 @@
-# One race compile of the cgo grammars, then lint / test / vuln in parallel.
+# One race compile of the cgo grammars, then lint / test / vuln / cross in parallel.
 # They wait on a stamp in GOCACHE so they do not start a second compile beside
 # build. Gitleaks, actionlint, and shellcheck need no Go cache and overlap
 # the build.
@@ -26,3 +26,7 @@ env = { GOFLAGS = "-race" }
 [gates.xcheck]
 timeout = "5m"
 run = "cache=$(go env GOCACHE); while [ ! -f \"$cache/rgit-gate-ready\" ] && [ ! -f \"$cache/rgit-gate-fail\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready\" ] && go vet -tags rgit_xcheck ./cmd/xcheck/..."
+
+[gates.cross]
+timeout = "5m"
+run = "cache=$(go env GOCACHE); while [ ! -f \"$cache/rgit-gate-ready\" ] && [ ! -f \"$cache/rgit-gate-fail\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready\" ] && make -o sql-parser cross"
