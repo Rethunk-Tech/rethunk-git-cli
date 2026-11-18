@@ -410,7 +410,12 @@ Pushes each repo's ahead commits on the default branch: a direct push when
 branch rules allow it, otherwise a timestamped `land/` branch, PR, and
 merge or merge-queue request. Dirty or off-default repos are skipped.
 `--wait` polls each open PR until it merges (or the cap); otherwise a
-background watcher records the result.
+background watcher records the result. `--install` runs `make install`
+from each directly pushed, clean HEAD after every repo in the run has
+been pushed. A merged or queued PR is not installed. No Makefile, or a
+Makefile with no `install` target: one skip line naming the reason.
+Success: `DIR: installed <describe>`. Install failure: the failing tail,
+exit 5.
 
 `--branch BR` lands local branch BR onto the default branch in one repo
 (`--repos DIR` or the current directory), then takes that same push route.
@@ -431,7 +436,7 @@ stderr, exit 2. `gate -C <worktree>` red after a `--failed` re-run: log
 path and last 40 lines on stderr, exit 3. A gate that passes on the re-run
 is a flake (appended to `$XDG_CACHE_HOME/land-branch/flakes.tsv`) and
 landing continues. Merge queue that does not enqueue: exit 4, names the
-branch. Last stdout line:
+branch. `--install` failure: the failing tail, exit 5. Last stdout line:
 `<repo> <branch> <sha> <gate log> <direct|PR|queue>`.
 
 ## Shell completion

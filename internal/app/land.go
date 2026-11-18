@@ -18,7 +18,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
 )
 
-const landUsageLine = "usage: rgit land [--repos DIR...] [--wait] [--json] | rgit land --branch BR [--repos DIR]"
+const landUsageLine = "usage: rgit land [--repos DIR...] [--wait] [--json] [--install] | rgit land --branch BR [--repos DIR] [--install]"
 
 const landHelp = landUsageLine + `
 
@@ -31,7 +31,11 @@ repo; exit 1 if any repo is red.
 (--repos DIR, or the current directory), then pushes through that same
 route. Last stdout line: <repo> <branch> <sha> <gate log> <direct|PR|queue>.
 Exit 2 on rebase conflict, 3 on a red gate, 4 if a merge-queue PR does
-not enqueue.
+not enqueue, 5 if --install fails.
+
+--install runs make install from each directly pushed, clean HEAD after
+every repo in the run has been pushed. A merged or queued PR is not
+installed.
 
 Control returns after the push or the merge/queue request. PRs not yet
 merged are then watched in the background unless --wait is set, in which
@@ -42,6 +46,7 @@ Flags:
   --branch BR     land local branch BR onto the default branch, then push
   --wait          poll each open PR until it merges or the cap is hit
   --json          one JSON object on stdout
+  --install       after a direct push, make install from that HEAD
   -h, --help      show this help and exit
 
 Full reference: docs/USAGE.md
@@ -303,6 +308,7 @@ func runLand(ctx context.Context, dir string, args []string, stdout, stderr io.W
 
 func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exitcode.Code {
 	wait := false
+	install := false
 	watchID := ""
 	watchParent := d.parent
 	branch := ""
@@ -316,6 +322,8 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 			return exitcode.Success
 		case a == "--wait":
 			wait = true
+		case a == "--install":
+			install = true
 		case a == "--json":
 			// already applied via ctx; accepted here so it can sit after the command
 		case a == "--repos":
@@ -383,9 +391,9 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 			fmt.Fprintln(d.stderr, landUsageLine)
 			return exitcode.InvalidUsage
 		}
-		return landBranch(repos[0], branch, wait, d)
+		return landBranch(repos[0], branch, wait, install, d)
 	}
-	return landRepos(repos, wait, asJSON, d)
+	return landRepos(repos, wait, asJSON, install, d)
 }
 
 func landFlagValue(args []string, i int) (value string, next int, ok bool) {
@@ -396,7 +404,7 @@ func landFlagValue(args []string, i int) (value string, next int, ok bool) {
 	return tail[1], i + 1, true
 }
 
-func landRepos(repos []string, wait, asJSON bool, d landDeps) exitcode.Code {
+func landRepos(repos []string, wait, asJSON, install bool, d landDeps) exitcode.Code {
 	ordered := orderRepos(repos)
 	var results []landResult
 	red := false
@@ -442,6 +450,11 @@ func landRepos(repos []string, wait, asJSON bool, d landDeps) exitcode.Code {
 		}
 	}
 
+	instFail := false
+	if install {
+		instFail = installPushedRepos(results, d)
+	}
+
 	if !wait {
 		for _, job := range watches {
 			if err := spawnWatcher(job, d); err != nil {
@@ -455,7 +468,86 @@ func landRepos(repos []string, wait, asJSON bool, d landDeps) exitcode.Code {
 	if red {
 		return 1
 	}
+	if instFail {
+		return 5
+	}
 	return exitcode.Success
+}
+
+func installPushedRepos(results []landResult, d landDeps) bool {
+	failed := false
+	for _, res := range results {
+		if res.Kind != landPushed {
+			continue
+		}
+		if installOne(res.Repo, d) {
+			failed = true
+		}
+	}
+	return failed
+}
+
+func makefileName(dir string) string {
+	for _, name := range []string{"GNUmakefile", "Makefile", "makefile"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			return name
+		}
+	}
+	return ""
+}
+
+func makeHasInstall(dir string) bool {
+	cmd := exec.CommandContext(context.Background(), "make", "-q", "install") //nolint:gosec // make argv is constructed by rgit, never a shell string
+	cmd.Dir = dir
+	cmd.Stdin = nil
+	if err := cmd.Run(); err == nil {
+		return true
+	}
+	if cmd.ProcessState != nil && cmd.ProcessState.ExitCode() == 1 {
+		return true
+	}
+	return false
+}
+
+func runMakeInstall(dir string) (string, error) {
+	cmd := exec.CommandContext(context.Background(), "make", "install") //nolint:gosec // make argv is constructed by rgit, never a shell string
+	cmd.Dir = dir
+	cmd.Stdin = nil
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+func installOne(repo string, d landDeps) bool {
+	if dirtyTracked(repo, d) {
+		fmt.Fprintln(d.stdout, repo+": skipped (dirty tracked files)")
+		return false
+	}
+	if makefileName(repo) == "" {
+		fmt.Fprintln(d.stdout, repo+": skipped (no Makefile)")
+		return false
+	}
+	if !makeHasInstall(repo) {
+		fmt.Fprintln(d.stdout, repo+": skipped (no install target)")
+		return false
+	}
+	out, err := runMakeInstall(repo)
+	if err != nil {
+		lines := lastNLines(out, 40)
+		if len(lines) == 0 {
+			fmt.Fprintln(d.stdout, repo+": "+err.Error())
+		} else {
+			for _, line := range lines {
+				fmt.Fprintln(d.stdout, line)
+			}
+		}
+		return true
+	}
+	describe := lastNonEmptyLine(out)
+	if describe == "" {
+		describe = "make install"
+	}
+	fmt.Fprintln(d.stdout, repo+": installed "+describe)
+	return false
 }
 
 type landKind int
@@ -728,7 +820,7 @@ type landBranchPrep struct {
 	opts                  landPushOpts
 }
 
-func landBranch(repoArg, branch string, wait bool, d landDeps) exitcode.Code {
+func landBranch(repoArg, branch string, wait, install bool, d landDeps) exitcode.Code {
 	prep, code := prepareLandBranch(repoArg, branch, d)
 	if code != exitcode.Success {
 		return code
@@ -737,7 +829,7 @@ func landBranch(repoArg, branch string, wait bool, d landDeps) exitcode.Code {
 	if code != exitcode.Success {
 		return code
 	}
-	return finishLandBranch(prep, logPath, wait, d)
+	return finishLandBranch(prep, logPath, wait, install, d)
 }
 
 func prepareLandBranch(repoArg, branch string, d landDeps) (landBranchPrep, exitcode.Code) {
@@ -887,7 +979,7 @@ func unlinkLandEnvLinks(links []string) {
 	}
 }
 
-func finishLandBranch(prep landBranchPrep, logPath string, wait bool, d landDeps) exitcode.Code {
+func finishLandBranch(prep landBranchPrep, logPath string, wait, install bool, d landDeps) exitcode.Code {
 	if !prep.dirty {
 		if out, err := d.git.run(prep.repo, "merge", "--ff-only", prep.branch); err != nil {
 			fmt.Fprintf(d.stderr, "error: %s\n", strings.TrimSpace(out))
@@ -919,6 +1011,11 @@ func finishLandBranch(prep landBranchPrep, logPath string, wait bool, d landDeps
 		touchFleet(prep.repo, 0, d)
 	}
 	printLandBranchResult(prep, res, sha, logPath, wait, d)
+	if install && res.Kind == landPushed {
+		if installOne(prep.repo, d) {
+			return 5
+		}
+	}
 	return exitcode.Success
 }
 

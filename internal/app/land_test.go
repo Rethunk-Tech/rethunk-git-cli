@@ -156,7 +156,7 @@ func TestLandPushedLocalBare(t *testing.T) {
 	d := testLandDeps(t)
 	var stdout strings.Builder
 	d.stdout = &stdout
-	code := landRepos([]string{dir}, false, false, d)
+	code := landRepos([]string{dir}, false, false, false, d)
 	if code != exitcode.Success {
 		t.Fatalf("code = %v stdout=%q", code, stdout.String())
 	}
@@ -165,6 +165,128 @@ func TestLandPushedLocalBare(t *testing.T) {
 		t.Errorf("stdout = %q; want %q", stdout.String(), want)
 	}
 	assertFleetTouch(t, d, dir, "1")
+}
+
+func TestLandInstallAfterDirectPush(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	gittest.Write(t, dir, "Makefile", ".PHONY: install\ninstall:\n\t@echo test-bin > installed.marker\n\t@echo test-bin\n")
+	gittest.Commit(t.Context(), t, dir, "add install")
+
+	d := testLandDeps(t)
+	var stdout strings.Builder
+	d.stdout = &stdout
+	code := runLandWith(t.Context(), dir, []string{"--install"}, d)
+	if code != exitcode.Success {
+		t.Fatalf("code = %v stdout=%q", code, stdout.String())
+	}
+	out := stdout.String()
+	if !strings.Contains(out, dir+": pushed\n") {
+		t.Errorf("stdout = %q", out)
+	}
+	if !strings.Contains(out, dir+": installed test-bin\n") {
+		t.Errorf("missing installed line: %q", out)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "installed.marker")) //nolint:gosec // test fixture path
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "test-bin\n" {
+		t.Errorf("marker = %q", body)
+	}
+}
+
+func TestLandInstallSkipsWithoutMakefile(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	gittest.Write(t, dir, "ahead.txt", "x\n")
+	gittest.Commit(t.Context(), t, dir, "ahead")
+
+	d := testLandDeps(t)
+	var stdout strings.Builder
+	d.stdout = &stdout
+	code := runLandWith(t.Context(), dir, []string{"--install"}, d)
+	if code != exitcode.Success {
+		t.Fatalf("code = %v stdout=%q", code, stdout.String())
+	}
+	if !strings.Contains(stdout.String(), dir+": skipped (no Makefile)\n") {
+		t.Errorf("stdout = %q", stdout.String())
+	}
+}
+
+func TestLandInstallSkipsWithoutTarget(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	gittest.Write(t, dir, "Makefile", "all:\n\t@true\n")
+	gittest.Commit(t.Context(), t, dir, "makefile without install")
+
+	d := testLandDeps(t)
+	var stdout strings.Builder
+	d.stdout = &stdout
+	code := runLandWith(t.Context(), dir, []string{"--install"}, d)
+	if code != exitcode.Success {
+		t.Fatalf("code = %v stdout=%q", code, stdout.String())
+	}
+	if !strings.Contains(stdout.String(), dir+": skipped (no install target)\n") {
+		t.Errorf("stdout = %q", stdout.String())
+	}
+}
+
+func TestLandInstallFailureExit5(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	gittest.Write(t, dir, "Makefile", ".PHONY: install\ninstall:\n\t@echo boom\n\t@false\n")
+	gittest.Commit(t.Context(), t, dir, "add failing install")
+
+	d := testLandDeps(t)
+	var stdout strings.Builder
+	d.stdout = &stdout
+	code := runLandWith(t.Context(), dir, []string{"--install"}, d)
+	if code != 5 {
+		t.Fatalf("code = %v stdout=%q; want 5", code, stdout.String())
+	}
+	out := stdout.String()
+	if !strings.Contains(out, dir+": pushed\n") {
+		t.Errorf("stdout = %q", out)
+	}
+	if strings.Contains(out, ": installed ") {
+		t.Errorf("printed installed on failure: %q", out)
+	}
+	if !strings.Contains(out, "boom") && !strings.Contains(out, "Error") {
+		t.Errorf("missing failing tail: %q", out)
+	}
+}
+
+func TestLandInstallSkipsPR(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	gitOut(t, dir, "remote", "set-url", "origin", "git@github.com:acme/demo.git")
+	gitOut(t, dir, "remote", "set-url", "--push", "origin", bare)
+	gittest.Write(t, dir, "Makefile", ".PHONY: install\ninstall:\n\t@echo test-bin > installed.marker\n\t@echo test-bin\n")
+	gittest.Commit(t.Context(), t, dir, "ahead")
+
+	gh := &fakeGH{
+		rules:  []string{"pull_request"},
+		squash: true,
+		url:    "https://github.com/acme/demo/pull/4",
+		number: 4,
+		prs:    []prInfo{{State: "OPEN", HasAutoMerge: true, URL: "https://github.com/acme/demo/pull/4"}},
+	}
+	d := testLandDeps(t)
+	d.gh = gh
+	d.clock = &fakeClock{now: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)}
+	var stdout strings.Builder
+	d.stdout = &stdout
+	code := runLandWith(t.Context(), dir, []string{"--install"}, d)
+	if code != exitcode.Success {
+		t.Fatalf("code = %v stdout=%q", code, stdout.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, "installed.marker")); !os.IsNotExist(err) {
+		t.Errorf("PR route ran install: %v", err)
+	}
+	if strings.Contains(stdout.String(), "installed ") {
+		t.Errorf("PR route printed install: %q", stdout.String())
+	}
 }
 
 func TestLandWatcherResultAndNotify(t *testing.T) {
@@ -279,7 +401,7 @@ func TestLandPRViaRules(t *testing.T) {
 		return nil
 	}
 	d.parent = "parent-sid"
-	code := landRepos([]string{dir}, false, false, d)
+	code := landRepos([]string{dir}, false, false, false, d)
 	if code != exitcode.Success {
 		t.Fatalf("code = %v stdout=%q", code, stdout.String())
 	}
@@ -318,6 +440,9 @@ func TestLandHelp(t *testing.T) {
 	}
 	if !strings.Contains(out, "--branch") {
 		t.Errorf("help missing --branch: %q", out)
+	}
+	if !strings.Contains(out, "--install") {
+		t.Errorf("help missing --install: %q", out)
 	}
 }
 
