@@ -412,7 +412,11 @@ background watcher records the result.
 
 `--branch BR` lands local branch BR onto the default branch in one repo
 (`--repos DIR` or the current directory), then takes that same push route.
-The repo must be the main checkout. A dirty main is left alone: BR is
+The repo must be the main checkout. Before `gate -C <worktree>`, ignored
+untracked files in the main checkout named `.env`, `.env.local`, or
+`.env.*.local` are symlinked into the worktree at the same relative path
+when that path is absent; those links are removed after the gate, success
+or fail. `.env.example` and tracked files are left alone. A dirty main is left alone: BR is
 rebased onto `origin/<default>` in BR's worktree and pushed from there. A
 clean main must be on the default branch; BR is rebased onto it,
 fast-forwarded, and pushed. Rebase conflict: `conflict: hand to solver` on

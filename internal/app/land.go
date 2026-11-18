@@ -811,6 +811,9 @@ func gateLandBranch(prep landBranchPrep, d landDeps) (string, exitcode.Code) {
 	}
 	safe := strings.ReplaceAll(prep.branch, "/", "_")
 	logPath := filepath.Join(logdir, filepath.Base(prep.repo)+"-"+safe+"-"+strconv.Itoa(d.pid)+".log")
+	// Linked worktrees omit gitignored env files the main checkout uses for the build.
+	links := linkIgnoredEnvFiles(prep.repo, prep.wt, d)
+	defer unlinkLandEnvLinks(links)
 	out, gateErr := d.gate(prep.wt, false)
 	if werr := os.WriteFile(logPath, []byte(out), 0o600); werr != nil {
 		fmt.Fprintf(d.stderr, "error: %v\n", werr)
@@ -839,6 +842,50 @@ func gateLandBranch(prep landBranchPrep, d landDeps) (string, exitcode.Code) {
 	}
 	fmt.Fprintf(d.stderr, "flake: %s passed on re-run\n", failed)
 	return logPath, exitcode.Success
+}
+
+func isIgnoredEnvName(base string) bool {
+	if base == ".env" || base == ".env.local" {
+		return true
+	}
+	return strings.HasPrefix(base, ".env.") && strings.HasSuffix(base, ".local") &&
+		len(base) > len(".env.")+len(".local")
+}
+
+func linkIgnoredEnvFiles(repo, wt string, d landDeps) []string {
+	if repo == "" || wt == "" || repo == wt {
+		return nil
+	}
+	out, err := d.git.run(repo, "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--",
+		".env", ".env.local", ".env.*.local",
+		":(glob)**/.env", ":(glob)**/.env.local", ":(glob)**/.env.*.local")
+	if err != nil {
+		return nil
+	}
+	var made []string
+	for rel := range strings.SplitSeq(out, "\x00") {
+		if rel == "" || !isIgnoredEnvName(filepath.Base(rel)) {
+			continue
+		}
+		dst := filepath.Join(wt, filepath.FromSlash(rel))
+		if _, err := os.Lstat(dst); err == nil || !os.IsNotExist(err) {
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
+			continue
+		}
+		if err := os.Symlink(filepath.Join(repo, filepath.FromSlash(rel)), dst); err != nil {
+			continue
+		}
+		made = append(made, dst)
+	}
+	return made
+}
+
+func unlinkLandEnvLinks(links []string) {
+	for _, p := range links {
+		_ = os.Remove(p)
+	}
 }
 
 func finishLandBranch(prep landBranchPrep, logPath string, wait bool, d landDeps) exitcode.Code {

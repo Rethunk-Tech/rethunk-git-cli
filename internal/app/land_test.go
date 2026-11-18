@@ -460,6 +460,89 @@ func TestLandBranchRedGateExit3(t *testing.T) {
 	}
 }
 
+func TestGateLandBranchLinksIgnoredEnvLocal(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	gittest.Write(t, dir, ".gitignore", ".env.local\n")
+	gittest.Commit(t.Context(), t, dir, "ignore env.local")
+	envDir := filepath.Join(dir, "apps", "web")
+	if err := os.MkdirAll(envDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(envDir, ".env.local"), []byte("NEXT_PUBLIC_SITE_URL=https://example.test\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+
+	d := testLandDeps(t)
+	d.gate = func(gateDir string, _ bool) (string, error) {
+		if _, err := os.ReadFile(filepath.Join(gateDir, "apps", "web", ".env.local")); err != nil { //nolint:gosec // test reads the linked path, not the secret
+			return "missing env", err
+		}
+		return "ok\n", nil
+	}
+	prep := landBranchPrep{repo: dir, branch: "feat", def: "main", wt: wt}
+	if _, code := gateLandBranch(prep, d); code != exitcode.Success {
+		t.Fatalf("code = %v; want success", code)
+	}
+	if _, err := os.Lstat(filepath.Join(wt, "apps", "web", ".env.local")); !os.IsNotExist(err) {
+		t.Errorf("env link still present: %v", err)
+	}
+}
+
+func TestGateLandBranchLeavesExistingEnvLocal(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	gittest.Write(t, dir, ".gitignore", ".env.local\n")
+	gittest.Commit(t.Context(), t, dir, "ignore env.local")
+	if err := os.MkdirAll(filepath.Join(dir, "apps", "web"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "apps", "web", ".env.local"), []byte("from-main\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	if err := os.MkdirAll(filepath.Join(wt, "apps", "web"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	wtEnv := filepath.Join(wt, "apps", "web", ".env.local")
+	if err := os.WriteFile(wtEnv, []byte("from-worktree\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	d := testLandDeps(t)
+	d.gate = func(gateDir string, _ bool) (string, error) {
+		body, err := os.ReadFile(filepath.Join(gateDir, "apps", "web", ".env.local")) //nolint:gosec // test fixture path
+		if err != nil {
+			return "missing env", err
+		}
+		if string(body) != "from-worktree\n" {
+			return "replaced", errors.New("replaced")
+		}
+		return "ok\n", nil
+	}
+	prep := landBranchPrep{repo: dir, branch: "feat", def: "main", wt: wt}
+	if _, code := gateLandBranch(prep, d); code != exitcode.Success {
+		t.Fatalf("code = %v; want success", code)
+	}
+	fi, err := os.Lstat(wtEnv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		t.Error("existing worktree env file was replaced with a symlink")
+	}
+	body, err := os.ReadFile(wtEnv) //nolint:gosec // test fixture path
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "from-worktree\n" {
+		t.Error("existing worktree env file contents changed")
+	}
+}
+
 func TestLandBranchFlakeLoggedAndLands(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
