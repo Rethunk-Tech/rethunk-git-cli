@@ -391,9 +391,9 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 			fmt.Fprintln(d.stderr, landUsageLine)
 			return exitcode.InvalidUsage
 		}
-		return landBranch(repos[0], branch, wait, install, d)
+		return landBranch(ctx, repos[0], branch, wait, install, d)
 	}
-	return landRepos(repos, wait, asJSON, install, d)
+	return landRepos(ctx, repos, wait, asJSON, install, d)
 }
 
 func landFlagValue(args []string, i int) (value string, next int, ok bool) {
@@ -404,7 +404,7 @@ func landFlagValue(args []string, i int) (value string, next int, ok bool) {
 	return tail[1], i + 1, true
 }
 
-func landRepos(repos []string, wait, asJSON, install bool, d landDeps) exitcode.Code {
+func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, d landDeps) exitcode.Code {
 	ordered := orderRepos(repos)
 	var results []landResult
 	red := false
@@ -452,7 +452,7 @@ func landRepos(repos []string, wait, asJSON, install bool, d landDeps) exitcode.
 
 	instFail := false
 	if install {
-		instFail = installPushedRepos(results, d)
+		instFail = installPushedRepos(ctx, results, d)
 	}
 
 	if !wait {
@@ -474,13 +474,13 @@ func landRepos(repos []string, wait, asJSON, install bool, d landDeps) exitcode.
 	return exitcode.Success
 }
 
-func installPushedRepos(results []landResult, d landDeps) bool {
+func installPushedRepos(ctx context.Context, results []landResult, d landDeps) bool {
 	failed := false
 	for _, res := range results {
 		if res.Kind != landPushed {
 			continue
 		}
-		if installOne(res.Repo, d) {
+		if installOne(ctx, res.Repo, d) {
 			failed = true
 		}
 	}
@@ -496,8 +496,8 @@ func makefileName(dir string) string {
 	return ""
 }
 
-func makeHasInstall(dir string) bool {
-	cmd := exec.CommandContext(context.Background(), "make", "-q", "install") //nolint:gosec // make argv is constructed by rgit, never a shell string
+func makeHasInstall(ctx context.Context, dir string) bool {
+	cmd := exec.CommandContext(ctx, "make", "-q", "install")
 	cmd.Dir = dir
 	cmd.Stdin = nil
 	if err := cmd.Run(); err == nil {
@@ -509,15 +509,15 @@ func makeHasInstall(dir string) bool {
 	return false
 }
 
-func runMakeInstall(dir string) (string, error) {
-	cmd := exec.CommandContext(context.Background(), "make", "install") //nolint:gosec // make argv is constructed by rgit, never a shell string
+func runMakeInstall(ctx context.Context, dir string) (string, error) {
+	cmd := exec.CommandContext(ctx, "make", "install")
 	cmd.Dir = dir
 	cmd.Stdin = nil
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
 
-func installOne(repo string, d landDeps) bool {
+func installOne(ctx context.Context, repo string, d landDeps) bool {
 	if dirtyTracked(repo, d) {
 		fmt.Fprintln(d.stdout, repo+": skipped (dirty tracked files)")
 		return false
@@ -526,11 +526,11 @@ func installOne(repo string, d landDeps) bool {
 		fmt.Fprintln(d.stdout, repo+": skipped (no Makefile)")
 		return false
 	}
-	if !makeHasInstall(repo) {
+	if !makeHasInstall(ctx, repo) {
 		fmt.Fprintln(d.stdout, repo+": skipped (no install target)")
 		return false
 	}
-	out, err := runMakeInstall(repo)
+	out, err := runMakeInstall(ctx, repo)
 	if err != nil {
 		lines := lastNLines(out, 40)
 		if len(lines) == 0 {
@@ -820,7 +820,7 @@ type landBranchPrep struct {
 	opts                  landPushOpts
 }
 
-func landBranch(repoArg, branch string, wait, install bool, d landDeps) exitcode.Code {
+func landBranch(ctx context.Context, repoArg, branch string, wait, install bool, d landDeps) exitcode.Code {
 	prep, code := prepareLandBranch(repoArg, branch, d)
 	if code != exitcode.Success {
 		return code
@@ -829,7 +829,7 @@ func landBranch(repoArg, branch string, wait, install bool, d landDeps) exitcode
 	if code != exitcode.Success {
 		return code
 	}
-	return finishLandBranch(prep, logPath, wait, install, d)
+	return finishLandBranch(ctx, prep, logPath, wait, install, d)
 }
 
 func prepareLandBranch(repoArg, branch string, d landDeps) (landBranchPrep, exitcode.Code) {
@@ -979,7 +979,7 @@ func unlinkLandEnvLinks(links []string) {
 	}
 }
 
-func finishLandBranch(prep landBranchPrep, logPath string, wait, install bool, d landDeps) exitcode.Code {
+func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, wait, install bool, d landDeps) exitcode.Code {
 	if !prep.dirty {
 		if out, err := d.git.run(prep.repo, "merge", "--ff-only", prep.branch); err != nil {
 			fmt.Fprintf(d.stderr, "error: %s\n", strings.TrimSpace(out))
@@ -1012,7 +1012,7 @@ func finishLandBranch(prep landBranchPrep, logPath string, wait, install bool, d
 	}
 	printLandBranchResult(prep, res, sha, logPath, wait, d)
 	if install && res.Kind == landPushed {
-		if installOne(prep.repo, d) {
+		if installOne(ctx, prep.repo, d) {
 			return 5
 		}
 	}

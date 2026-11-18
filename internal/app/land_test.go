@@ -156,7 +156,7 @@ func TestLandPushedLocalBare(t *testing.T) {
 	d := testLandDeps(t)
 	var stdout strings.Builder
 	d.stdout = &stdout
-	code := landRepos([]string{dir}, false, false, false, d)
+	code := landRepos(t.Context(), []string{dir}, false, false, false, d)
 	if code != exitcode.Success {
 		t.Fatalf("code = %v stdout=%q", code, stdout.String())
 	}
@@ -401,7 +401,7 @@ func TestLandPRViaRules(t *testing.T) {
 		return nil
 	}
 	d.parent = "parent-sid"
-	code := landRepos([]string{dir}, false, false, false, d)
+	code := landRepos(t.Context(), []string{dir}, false, false, false, d)
 	if code != exitcode.Success {
 		t.Fatalf("code = %v stdout=%q", code, stdout.String())
 	}

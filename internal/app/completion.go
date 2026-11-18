@@ -130,7 +130,7 @@ const (
 	rgitContextFlags    = "--json --brief -h --help"
 	rgitSymbolsFlags    = "--for-commit --with-lines --with-filename --limit --match --porcelain --json -h --help"
 	rgitFindFlags       = "--bodies --limit --names --json -h --help"
-	rgitLandFlags       = "--repos --branch --wait --json -h --help"
+	rgitLandFlags       = "--repos --branch --wait --json --install -h --help"
 )
 
 // bashCompletionScript is emitted verbatim by `rgit completion bash`. The
