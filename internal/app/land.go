@@ -900,7 +900,7 @@ func gateVerdicts(out string) (cmds, logs []string) {
 }
 
 func lastLogLines(path string, n int) []string {
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil
 	}
@@ -970,17 +970,18 @@ func isErrorish(line string) bool {
 }
 
 func stripTrailingTiming(s string) string {
-	if i := strings.LastIndex(s, " ("); i >= 0 && strings.HasSuffix(s, ")") {
-		return strings.TrimSpace(s[:i])
+	before, after, ok := strings.CutLast(s, " (")
+	if ok && strings.HasSuffix(after, ")") {
+		return strings.TrimSpace(before)
 	}
 	return s
 }
 
-func capJoin(parts []string, max int) string {
+func capJoin(parts []string, limit int) string {
 	s := strings.Join(parts, " | ")
 	n := 0
 	for i := range s {
-		if n == max {
+		if n == limit {
 			return s[:i]
 		}
 		n++
