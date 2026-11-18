@@ -419,25 +419,24 @@ exit 5.
 
 `--branch BR` lands local branch BR onto the default branch in one repo
 (`--repos DIR` or the current directory), then takes that same push route.
-The repo must be the main checkout. After BR is pushed successfully and
-its worktree is clean, that linked worktree is removed (`git worktree
-remove`) and local branch BR is deleted (`git branch -d`), one stdout line
-each (`removed worktree PATH`, `deleted branch BR`). A dirty worktree, a
-red gate, a rebase conflict, or a queued-not-merged PR leaves both in
-place. Before `gate -C <worktree>`, ignored
-untracked files in the main checkout named `.env`, `.env.local`, or
-`.env.*.local` are symlinked into the worktree at the same relative path
-when that path is absent; those links are removed after the gate, success
-or fail. `.env.example` and tracked files are left alone. A dirty main is left alone: BR is
-rebased onto `origin/<default>` in BR's worktree and pushed from there. A
-clean main must be on the default branch; BR is rebased onto it,
-fast-forwarded, and pushed. Rebase conflict: `conflict: hand to solver` on
-stderr, exit 2. `gate -C <worktree>` red after a `--failed` re-run: log
-path and last 40 lines on stderr, exit 3. A gate that passes on the re-run
-is a flake (appended to `$XDG_CACHE_HOME/land-branch/flakes.tsv`) and
-landing continues. Merge queue that does not enqueue: exit 4, names the
-branch. `--install` failure: the failing tail, exit 5. Last stdout line:
+The repo must be the main checkout. Last stdout line:
 `<repo> <branch> <sha> <gate log> <direct|PR|queue>`.
+
+| Condition | What happens |
+| --- | --- |
+| BR pushed and its worktree clean | Linked worktree removed (`git worktree remove`); local BR deleted (`git branch -d`); stdout `removed worktree PATH`, `deleted branch BR` |
+| Dirty worktree, red gate, rebase conflict, or queued-not-merged PR | Worktree and branch left in place |
+| Dirty main | Left alone; BR rebased onto `origin/<default>` in BR's worktree and pushed from there |
+| Clean main | Must be on the default branch; BR rebased onto it, fast-forwarded, and pushed |
+| Before `gate -C <worktree>` | Ignored untracked `.env`, `.env.local`, `.env.*.local` in the main checkout are symlinked into the worktree at the same relative path when that path is absent; links removed after the gate, success or fail. `.env.example` and tracked files are left alone |
+| Gate flake (passes on a `--failed` re-run) | Appended to `$XDG_CACHE_HOME/land-branch/flakes.tsv`; landing continues |
+
+| Failure | Stderr | Exit |
+| --- | --- | --- |
+| Rebase conflict | `conflict: hand to solver` | 2 |
+| `gate -C <worktree>` red after a `--failed` re-run | log path and last 40 lines | 3 |
+| Merge queue that does not enqueue | names the branch | 4 |
+| `--install` failure | the failing tail | 5 |
 
 ## Shell completion
 

@@ -1,0 +1,8 @@
+{
+  "skip_paths": [
+    "internal/app/lanes_test.go",
+    "internal/app/log.go",
+    "internal/cli/precedence.go",
+    "internal/cli/precedence_test.go"
+  ]
+}
