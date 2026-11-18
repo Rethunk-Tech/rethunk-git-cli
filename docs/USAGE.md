@@ -400,7 +400,7 @@ $ rgit land --repos ~/src/foo ~/src/bar
 /src/bar: PR https://github.com/acme/bar/pull/12 (queued)
 watching: acme-bar-12-20260102T030405Z
 
-$ rgit land --branch feat
+$ rgit land --branch feat --push
 removed worktree /tmp/feat
 deleted branch feat
 /src/foo feat abcdef1 ~/.cache/land-branch/foo-feat-1234.log direct
@@ -418,24 +418,24 @@ Success: `DIR: installed <describe>`. Install failure: the failing tail,
 exit 5.
 
 `--branch BR` lands local branch BR onto the default branch in one repo
-(`--repos DIR` or the current directory), then takes that same push route.
-The repo must be the main checkout. Last stdout line:
-`<repo> <branch> <sha> <gate log> <direct|PR|queue>`.
-
-`--no-push` with `--branch` does the rebase, gate, and local fast-forward,
-then stops: no push, `land/` branch, PR, background watch, or `--install`.
-Last stdout line uses route `local`. Without `--branch`, `--no-push` is
-usage (`--no-push needs --branch`). It rebases onto the local default
-branch whether or not the checkout is dirty, so unpushed default-branch
-commits stay in the base, and it fast-forwards a dirty checkout when the
-dirty files are not ones the branch changes.
+(`--repos DIR` or the current directory). The repo must be the main
+checkout. By default it does the rebase, gate, and local fast-forward,
+then stops: no push, `land/` branch, PR, or background watch;
+`--install` still runs `make install`. Last stdout line:
+`<repo> <branch> <sha> <gate log> local`. It rebases onto the local
+default branch whether or not the checkout is dirty, so unpushed
+default-branch commits stay in the base, and it fast-forwards a dirty
+checkout when the dirty files are not ones the branch changes.
+`--push` instead takes the push route (direct, PR, or queue); the last
+line ends `<direct|PR|queue>`. Without `--branch`, `--push` is usage
+(`--push needs --branch`).
 
 | Condition | What happens |
 | --- | --- |
 | BR pushed and its worktree clean | Linked worktree removed (`git worktree remove`); local BR deleted (`git branch -d`); stdout `removed worktree PATH`, `deleted branch BR` |
 | Dirty worktree, red gate, rebase conflict, or queued-not-merged PR | Worktree and branch left in place |
-| Dirty main | `--no-push`: fast-forwarded when the dirty files are not ones BR changes; otherwise exit 13 naming the overlap. Push route: left alone; BR rebased onto `origin/<default>` in BR's worktree and pushed from there |
-| Clean main | Must be on the default branch; BR rebased onto it, fast-forwarded, and pushed |
+| Dirty main | Default (local): fast-forwarded when the dirty files are not ones BR changes; otherwise exit 13 naming the overlap. `--push`: left alone; BR rebased onto `origin/<default>` in BR's worktree and pushed from there |
+| Clean main | Must be on the default branch; BR rebased onto it, fast-forwarded, and (with `--push`) pushed |
 | Before `gate -C <worktree>` | Ignored untracked `.env`, `.env.local`, `.env.*.local` in the main checkout are symlinked into the worktree at the same relative path when that path is absent; links removed after the gate, success or fail. `.env.example` and tracked files are left alone |
 | Gate flake (passes on a `--failed` re-run) | Appended to `$XDG_CACHE_HOME/land-branch/flakes.tsv`; landing continues |
 
@@ -445,7 +445,7 @@ dirty files are not ones the branch changes.
 | `gate -C <worktree>` red after a `--failed` re-run | log path and last 40 lines | 3 |
 | Merge queue that does not enqueue | names the branch | 4 |
 | `--install` failure | the failing tail | 5 |
-| `--no-push` ff-merge refused: the dirty checkout edits files BR changes | the overlapping paths | 13 |
+| Local ff-merge refused: the dirty checkout edits files BR changes | the overlapping paths | 13 |
 
 ## Shell completion
 

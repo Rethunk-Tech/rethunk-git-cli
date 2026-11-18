@@ -547,7 +547,7 @@ func TestLandBranchCleanMainFFPush(t *testing.T) {
 	var stdout, stderr strings.Builder
 	d.stdout = &stdout
 	d.stderr = &stderr
-	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d)
 	if code != exitcode.Success {
 		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
@@ -578,7 +578,7 @@ func TestLandBranchCleanMainFFPush(t *testing.T) {
 	assertFleetTouch(t, d, dir, "1")
 }
 
-func TestLandBranchNoPushLeavesOrigin(t *testing.T) {
+func TestLandBranchLocalLeavesOrigin(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
 	wt := filepath.Join(t.TempDir(), "wt")
@@ -593,7 +593,7 @@ func TestLandBranchNoPushLeavesOrigin(t *testing.T) {
 	var stdout, stderr strings.Builder
 	d.stdout = &stdout
 	d.stderr = &stderr
-	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--no-push"}, d)
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
 	if code != exitcode.Success {
 		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
@@ -634,7 +634,7 @@ func TestLandBranchDirtyMainLeavesMain(t *testing.T) {
 	var stdout, stderr strings.Builder
 	d.stdout = &stdout
 	d.stderr = &stderr
-	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d)
 	if code != exitcode.Success {
 		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
@@ -686,7 +686,7 @@ func TestLandBranchConflictExit2(t *testing.T) {
 	var stdout, stderr strings.Builder
 	d.stdout = &stdout
 	d.stderr = &stderr
-	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d)
 	if code != 2 {
 		t.Fatalf("code = %v stdout=%q stderr=%q; want 2", code, stdout.String(), stderr.String())
 	}
@@ -721,7 +721,7 @@ func TestLandBranchRedGateExit3(t *testing.T) {
 	var stdout, stderr strings.Builder
 	d.stdout = &stdout
 	d.stderr = &stderr
-	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d)
 	if code != 3 {
 		t.Fatalf("code = %v stdout=%q stderr=%q; want 3", code, stdout.String(), stderr.String())
 	}
@@ -756,7 +756,7 @@ func TestLandBranchDirtyWorktreeLeavesBoth(t *testing.T) {
 	var stdout, stderr strings.Builder
 	d.stdout = &stdout
 	d.stderr = &stderr
-	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d)
 	if code != exitcode.Success {
 		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
@@ -788,7 +788,7 @@ func TestLandBranchRedPushLeavesBoth(t *testing.T) {
 	var stdout, stderr strings.Builder
 	d.stdout = &stdout
 	d.stderr = &stderr
-	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d)
 	if code != 1 {
 		t.Fatalf("code = %v stdout=%q stderr=%q; want 1", code, stdout.String(), stderr.String())
 	}
@@ -823,7 +823,7 @@ func TestLandBranchQueuedPRLeavesBoth(t *testing.T) {
 	var stdout, stderr strings.Builder
 	d.stdout = &stdout
 	d.stderr = &stderr
-	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d)
 	if code != exitcode.Success {
 		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
@@ -946,7 +946,7 @@ func TestLandBranchFlakeLoggedAndLands(t *testing.T) {
 	var stdout, stderr strings.Builder
 	d.stdout = &stdout
 	d.stderr = &stderr
-	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d)
 	if code != exitcode.Success {
 		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
@@ -1368,7 +1368,7 @@ func TestPrepareLandBranchWorktreeAddFailure(t *testing.T) {
 	var stdout, stderr strings.Builder
 	d.stdout = &stdout
 	d.stderr = &stderr
-	if code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d); code != 1 {
+	if code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d); code != 1 {
 		t.Fatalf("code = %v stdout=%q stderr=%q; want 1", code, stdout.String(), stderr.String())
 	}
 	if !strings.Contains(stderr.String(), "error: ") {
@@ -1742,16 +1742,16 @@ func TestLandArgNames(t *testing.T) {
 	}
 }
 
-func TestLandNoPushNeedsBranch(t *testing.T) {
+func TestLandPushNeedsBranch(t *testing.T) {
 	t.Parallel()
 	d := testLandDeps(t)
 	var stdout, stderr strings.Builder
 	d.stdout = &stdout
 	d.stderr = &stderr
-	if code := runLandWith(t.Context(), "", []string{"--no-push"}, d); code != exitcode.InvalidUsage {
+	if code := runLandWith(t.Context(), "", []string{"--push"}, d); code != exitcode.InvalidUsage {
 		t.Errorf("code = %v; want InvalidUsage", code)
 	}
-	if !strings.Contains(stderr.String(), "--no-push needs --branch") {
+	if !strings.Contains(stderr.String(), "--push needs --branch") {
 		t.Errorf("stderr = %q", stderr.String())
 	}
 }
@@ -1931,7 +1931,7 @@ func containsAll(argv []string, needles ...string) bool {
 	return true
 }
 
-func TestLandBranchNoPushDirtyUnrelatedFileLands(t *testing.T) {
+func TestLandBranchLocalDirtyUnrelatedFileLands(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
 	wt := filepath.Join(t.TempDir(), "wt")
@@ -1947,7 +1947,7 @@ func TestLandBranchNoPushDirtyUnrelatedFileLands(t *testing.T) {
 	var stdout, stderr strings.Builder
 	d.stdout = &stdout
 	d.stderr = &stderr
-	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--no-push"}, d)
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
 	if code != exitcode.Success {
 		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
@@ -1972,7 +1972,7 @@ func TestLandBranchNoPushDirtyUnrelatedFileLands(t *testing.T) {
 	}
 }
 
-func TestLandBranchNoPushDirtyOverlapExitsDirtyOverlap(t *testing.T) {
+func TestLandBranchLocalDirtyOverlapExitsDirtyOverlap(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
 	wt := filepath.Join(t.TempDir(), "wt")
@@ -1988,7 +1988,7 @@ func TestLandBranchNoPushDirtyOverlapExitsDirtyOverlap(t *testing.T) {
 	var stdout, stderr strings.Builder
 	d.stdout = &stdout
 	d.stderr = &stderr
-	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--no-push"}, d)
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
 	if code != exitcode.DirtyOverlap {
 		t.Fatalf("code = %v stdout=%q stderr=%q; want %v", code, stdout.String(), stderr.String(), exitcode.DirtyOverlap)
 	}
@@ -2016,7 +2016,7 @@ func TestLandBranchNoPushDirtyOverlapExitsDirtyOverlap(t *testing.T) {
 	}
 }
 
-func TestLandBranchNoPushRebasesOntoLocalDefault(t *testing.T) {
+func TestLandBranchLocalRebasesOntoLocalDefault(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
 	wt := filepath.Join(t.TempDir(), "wt")
@@ -2037,7 +2037,7 @@ func TestLandBranchNoPushRebasesOntoLocalDefault(t *testing.T) {
 	var stdout, stderr strings.Builder
 	d.stdout = &stdout
 	d.stderr = &stderr
-	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--no-push"}, d)
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
 	if code != exitcode.Success {
 		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}

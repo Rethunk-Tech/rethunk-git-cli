@@ -19,7 +19,7 @@ Authoritative exit codes and machine-readable output. Flags:
 | 10 | Symbol anchor refused on a special path (`commit` only) |
 | 11 | All named targets resolve but have no uncommitted changes |
 | 12 | Symbol anchor on JSON/JSONC/JSON5/YAML/TOML (`commit` only) |
-| 13 | `land --no-push` could not fast-forward: the checkout's own uncommitted edits touch files the branch changes. Retry later |
+| 13 | `land --branch` (without `--push`) could not fast-forward: the checkout's own uncommitted edits touch files the branch changes. Retry later |
 | 128 | Fatal git / system failure (hook rejection, GPG, `-C` unenterable) |
 | 129 | Invalid usage |
 

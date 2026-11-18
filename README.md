@@ -29,7 +29,7 @@ Install and runbook: [HUMANS.md](HUMANS.md).
 - **Symbol anchors**: `FILE:NAME` addresses a function, method, type, or const; `@imports`, `@header`, `@toplevel` reach regions no symbol owns.
 - **Bare positionals**: mix symbols and paths, every git pathspec form, no flags required.
 - **Find**: `rgit find parseShell` locates a symbol by name and prints its code.
-- **Land**: `rgit land --repos DIR...` pushes ahead commits, or opens a PR when branch rules require it.
+- **Land**: `rgit land --repos DIR...` pushes ahead commits, or opens a PR when branch rules require it. `rgit land --branch BR` lands a local branch locally; `--push` also pushes.
 - **Closed loop**: `rgit diff` emits exactly the anchors `rgit commit` consumes.
 - **Verified extents**: tree-sitter resolves; a language server cross-checks; mismatch hard-fails on `commit`.
 - **Git semantics**: git exit codes, pathspecs, hooks, and config throughout.

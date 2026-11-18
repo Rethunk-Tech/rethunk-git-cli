@@ -54,7 +54,7 @@ const (
 	// anchor targeted JSON/YAML/TOML. Name the path instead.
 	StructuredDataAnchorRefused Code = 12
 
-	// DirtyOverlap means a --no-push landing could not fast-forward because the
+	// DirtyOverlap means a local (non---push) `land --branch` could not fast-forward because the
 	// checkout's own uncommitted edits touch the same files: retry later.
 	DirtyOverlap Code = 13
 

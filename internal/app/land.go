@@ -18,7 +18,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
 )
 
-const landUsageLine = "usage: rgit land [--repos DIR...] [--wait] [--json] [--install] | rgit land --branch BR [--repos DIR] [--no-push] [--install]"
+const landUsageLine = "usage: rgit land [--repos DIR...] [--wait] [--json] [--install] | rgit land --branch BR [--repos DIR] [--push] [--install]"
 
 const landHelp = landUsageLine + `
 
@@ -28,12 +28,12 @@ PR, and merge (or merge-queue) request when it is not. One summary line per
 repo; exit 1 if any repo is red.
 
 --branch BR lands local branch BR onto the default branch in one repo
-(--repos DIR, or the current directory), then pushes through that same
-route. Last stdout line: <repo> <branch> <sha> <gate log> <direct|PR|queue>.
---no-push with --branch rebases onto the local default branch, runs the
-gate, and fast-forwards it even from a checkout whose uncommitted changes
-touch none of BR's files, then stops: no push, land/ branch, PR, watch, or
---install. That last line uses route local. --no-push without --branch
+(--repos DIR, or the current directory). By default it rebases onto the
+local default branch, runs the gate, and fast-forwards it even from a
+checkout whose uncommitted changes touch none of BR's files, then stops:
+no push, land/ branch, PR, or watch. Last stdout line: <repo> <branch>
+<sha> <gate log> local. --push pushes through the repo's branch rules
+instead; its last line ends <direct|PR|queue>. --push without --branch
 is a usage error. Exit 2 on rebase conflict, 3 on a red gate, 4 if a
 merge-queue PR does not enqueue, 5 if --install fails, 13 if the checkout's
 dirty files overlap BR's.
@@ -48,8 +48,8 @@ case land polls inline and prints the final line per repo.
 
 Flags:
   --repos DIR...  repositories to land (default: the current directory)
-  --branch BR     land local branch BR onto the default branch, then push
-  --no-push       with --branch: stop after the local fast-forward; do not push
+  --branch BR     land local branch BR onto the local default branch (no push)
+  --push          with --branch: also push through the repo's branch rules
   --wait          poll each open PR until it merges or the cap is hit
   --json          one JSON object on stdout
   --install       after a direct push, make install from that HEAD
@@ -315,7 +315,7 @@ func runLand(ctx context.Context, dir string, args []string, stdout, stderr io.W
 func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exitcode.Code {
 	wait := false
 	install := false
-	noPush := false
+	push := false
 	watchID := ""
 	watchParent := d.parent
 	branch := ""
@@ -331,8 +331,8 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 			wait = true
 		case a == "--install":
 			install = true
-		case a == "--no-push":
-			noPush = true
+		case a == "--push":
+			push = true
 		case a == "--json":
 			// already applied via ctx; accepted here so it can sit after the command
 		case a == "--repos":
@@ -400,10 +400,10 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 			fmt.Fprintln(d.stderr, landUsageLine)
 			return exitcode.InvalidUsage
 		}
-		return landBranch(ctx, repos[0], branch, wait, install, noPush, d)
+		return landBranch(ctx, repos[0], branch, wait, install, !push, d)
 	}
-	if noPush {
-		fmt.Fprintln(d.stderr, "rgit land: --no-push needs --branch")
+	if push {
+		fmt.Fprintln(d.stderr, "rgit land: --push needs --branch")
 		fmt.Fprintln(d.stderr, landUsageLine)
 		return exitcode.InvalidUsage
 	}
@@ -1016,6 +1016,9 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 		// Merged into the local default branch, so the branch and its worktree are done either way.
 		cleanupLandBranch(prep, landResult{Kind: landPushed, Route: "direct"}, true, d)
 		fmt.Fprintf(d.stdout, "%s %s %s %s local\n", prep.repo, prep.branch, sha, logPath)
+		if install && installOne(ctx, prep.repo, d) {
+			return 5
+		}
 		return exitcode.Success
 	}
 	res := landByRules(prep.repo, prep.def, d, prep.opts)
