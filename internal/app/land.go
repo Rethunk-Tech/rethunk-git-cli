@@ -12,7 +12,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 	"unicode"
 
@@ -270,7 +269,7 @@ func startDetachedWatch(argv []string, logPath string) error {
 	cmd.Stdin = nil
 	cmd.Stdout = log
 	cmd.Stderr = log
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	cmd.SysProcAttr = detachedAttr()
 	if err := cmd.Start(); err != nil {
 		_ = log.Close()
 		return err
