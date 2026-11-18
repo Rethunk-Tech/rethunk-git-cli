@@ -91,7 +91,7 @@ func runCompletion(args []string, stdout, stderr io.Writer) exitcode.Code {
 // checks it against topLevelHelp's own Commands section, generated at
 // test time rather than copied, so a new subcommand missing here fails
 // the suite instead of only being missing from a shell's tab completion.
-const rgitSubcommands = "diff commit show blame log context languages doctor completion symbols find help version -C -h --help --version --json"
+const rgitSubcommands = "diff commit show blame log context languages doctor completion symbols find land help version -C -h --help --version --json"
 
 // rgitDiffFlags and rgitCommitFlags are the static parts of completion:
 // each subcommand's own flag surface, mirroring docs/USAGE.md § Flags plus
@@ -130,6 +130,7 @@ const (
 	rgitContextFlags    = "--json --brief -h --help"
 	rgitSymbolsFlags    = "--for-commit --with-lines --with-filename --limit --match --porcelain --json -h --help"
 	rgitFindFlags       = "--bodies --limit --names --json -h --help"
+	rgitLandFlags       = "--repos --wait --json -h --help"
 )
 
 // bashCompletionScript is emitted verbatim by `rgit completion bash`. The
@@ -159,6 +160,7 @@ _rgit_doctor_flags="` + rgitDoctorFlags + `"
 _rgit_completion_flags="` + rgitCompletionFlags + `"
 _rgit_symbols_flags="` + rgitSymbolsFlags + `"
 _rgit_find_flags="` + rgitFindFlags + `"
+_rgit_land_flags="` + rgitLandFlags + `"
 
 # Symbol candidates come from rgit symbols FILE (commit uses --for-commit).
 _rgit_symbols() {
@@ -201,6 +203,7 @@ _rgit_completion() {
         doctor) flags="$_rgit_doctor_flags" ;;
         symbols) flags="$_rgit_symbols_flags" ;;
         find) flags="$_rgit_find_flags" ;;
+        land) flags="$_rgit_land_flags" ;;
         completion)
             flags="$_rgit_completion_flags"
             if [[ $COMP_CWORD -eq $((i+1)) && "$cur" != -* ]]; then
@@ -261,6 +264,7 @@ _rgit_doctor_flags=(` + rgitDoctorFlags + `)
 _rgit_completion_flags=(` + rgitCompletionFlags + `)
 _rgit_symbols_flags=(` + rgitSymbolsFlags + `)
 _rgit_find_flags=(` + rgitFindFlags + `)
+_rgit_land_flags=(` + rgitLandFlags + `)
 
 # Symbol candidates come from rgit symbols FILE (commit uses --for-commit).
 _rgit_symbols() {
@@ -302,6 +306,7 @@ _rgit() {
         doctor) flags=("${_rgit_doctor_flags[@]}") ;;
         symbols) flags=("${_rgit_symbols_flags[@]}") ;;
         find) flags=("${_rgit_find_flags[@]}") ;;
+        land) flags=("${_rgit_land_flags[@]}") ;;
         completion)
             flags=("${_rgit_completion_flags[@]}")
             if (( CURRENT == i+1 )) && [[ "$cur" != -* ]]; then
@@ -379,6 +384,7 @@ function __rgit_doctor_flags; string split ' ' -- '` + rgitDoctorFlags + `'; end
 function __rgit_completion_flags; string split ' ' -- '` + rgitCompletionFlags + `'; end
 function __rgit_symbols_flags; string split ' ' -- '` + rgitSymbolsFlags + `'; end
 function __rgit_find_flags; string split ' ' -- '` + rgitFindFlags + `'; end
+function __rgit_land_flags; string split ' ' -- '` + rgitLandFlags + `'; end
 
 # Symbol candidates come from rgit symbols FILE (commit uses --for-commit).
 function __rgit_symbols
@@ -437,6 +443,8 @@ function __rgit_complete
             set flags (__rgit_symbols_flags)
         case find
             set flags (__rgit_find_flags)
+        case land
+            set flags (__rgit_land_flags)
         case completion
             set flags (__rgit_completion_flags)
             if test (count $tokens) -eq $i; and not string match -q -- '-*' $cur
@@ -499,6 +507,7 @@ $rgitDoctorFlags = '` + rgitDoctorFlags + `'.Split(' ')
 $rgitCompletionFlags = '` + rgitCompletionFlags + `'.Split(' ')
 $rgitSymbolsFlags = '` + rgitSymbolsFlags + `'.Split(' ')
 $rgitFindFlags = '` + rgitFindFlags + `'.Split(' ')
+$rgitLandFlags = '` + rgitLandFlags + `'.Split(' ')
 
 Register-ArgumentCompleter -Native -CommandName rgit -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
@@ -590,6 +599,7 @@ Register-ArgumentCompleter -Native -CommandName rgit -ScriptBlock {
         doctor { $flags = $rgitDoctorFlags }
         symbols { $flags = $rgitSymbolsFlags }
         find { $flags = $rgitFindFlags }
+        land { $flags = $rgitLandFlags }
         completion {
             $flags = $rgitCompletionFlags
             if ($currentIndex -eq ($commandIndex + 1) -and -not $wordToComplete.StartsWith('-')) {

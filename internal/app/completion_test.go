@@ -150,6 +150,7 @@ func TestCompletionFlags_MatchLiveFlagSets(t *testing.T) {
 		{"completion", runCompletionHelpText(), rgitCompletionFlags, []string{"-h", "--help"}},
 		{"symbols", runSymbolsHelpText(), rgitSymbolsFlags, []string{"-h", "--help"}},
 		{"find", runFindHelpText(), rgitFindFlags, []string{"-h", "--help"}},
+		{"land", runLandHelpText(), rgitLandFlags, []string{"-h", "--help"}},
 	}
 	pwshFlagVariables := map[string]string{
 		"diff":       "$rgitDiffFlags",
@@ -163,6 +164,7 @@ func TestCompletionFlags_MatchLiveFlagSets(t *testing.T) {
 		"completion": "$rgitCompletionFlags",
 		"symbols":    "$rgitSymbolsFlags",
 		"find":       "$rgitFindFlags",
+		"land":       "$rgitLandFlags",
 	}
 
 	for _, tt := range tests {
@@ -306,6 +308,12 @@ func runFindHelpText() string {
 	return stdout.String()
 }
 
+func runLandHelpText() string {
+	var stdout, stderr strings.Builder
+	runLand(context.Background(), "", []string{"--help"}, &stdout, &stderr)
+	return stdout.String()
+}
+
 func TestHandWrittenHelpFullReferenceFooter(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -324,6 +332,7 @@ func TestHandWrittenHelpFullReferenceFooter(t *testing.T) {
 		{"completion", runCompletionHelpText(), true},
 		{"symbols", runSymbolsHelpText(), true},
 		{"find", runFindHelpText(), true},
+		{"land", runLandHelpText(), true},
 	}
 
 	const footer = "Full reference: docs/USAGE.md"

@@ -17,7 +17,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
 )
 
-const usageLine = "usage: rgit [--version] [--json] [-C <path>] <diff|commit|show|blame|log|context|languages|doctor|completion|symbols|find> [flags] [target...]"
+const usageLine = "usage: rgit [--version] [--json] [-C <path>] <diff|commit|show|blame|log|context|languages|doctor|completion|symbols|find|land> [flags] [target...]"
 
 // tsOnlyNotice is what any command that runs the diff cross-check --
 // currently rgit diff, rgit commit, and rgit context -- prints when no live
@@ -48,10 +48,11 @@ Commands:
   completion  Print a shell completion script (bash, zsh, fish, pwsh)
   symbols     List declared symbols in a worktree file
   find        Find symbols by name and print their code
+  land        Push ahead commits, or open a PR when branch rules require it
 
 Global flags:
   -C <path>    run as if rgit was started in <path> (before the command)
-  --json       one JSON object on stdout (diff, commit, log, context, languages, doctor, symbols, find)
+  --json       one JSON object on stdout (diff, commit, log, context, languages, doctor, symbols, find, land)
   --version    print the version and exit
   -h, --help   show this help and exit
 
@@ -154,6 +155,8 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 		return runSymbols(ctx, dir, args[1:], stdout, stderr)
 	case "find":
 		return runFind(ctx, dir, args[1:], stdout, stderr)
+	case "land":
+		return runLand(ctx, dir, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "rgit: unknown command %q\n", args[0])
 		fmt.Fprintln(stderr, usageLine)
@@ -194,6 +197,8 @@ func runHelp(ctx context.Context, dir string, args []string, stdout, stderr io.W
 		return runSymbols(ctx, dir, helpArgs, stdout, stderr)
 	case "find":
 		return runFind(ctx, dir, helpArgs, stdout, stderr)
+	case "land":
+		return runLand(ctx, dir, helpArgs, stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "rgit: unknown command %q\n", cmd)
 		fmt.Fprintln(stderr, usageLine)

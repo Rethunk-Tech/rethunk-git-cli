@@ -159,7 +159,7 @@ func TestRun_HelpCommandMatchesFlagHelp(t *testing.T) {
 	cwd := t.TempDir()
 	for _, cmd := range []string{
 		"diff", "commit", "show", "blame", "log",
-		"context", "languages", "doctor", "completion", "symbols", "find",
+		"context", "languages", "doctor", "completion", "symbols", "find", "land",
 	} {
 		t.Run(cmd, func(t *testing.T) {
 			t.Parallel()
