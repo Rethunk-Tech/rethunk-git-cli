@@ -29,6 +29,7 @@ func TestCodes_MatchDocumentedTable(t *testing.T) {
 		{"SpecialPathRefused", SpecialPathRefused, 10},
 		{"NothingToCommit", NothingToCommit, 11},
 		{"StructuredDataAnchorRefused", StructuredDataAnchorRefused, 12},
+		{"DirtyOverlap", DirtyOverlap, 13},
 		{"GitFailure", GitFailure, 128},
 		{"InvalidUsage", InvalidUsage, 129},
 	}

@@ -1931,7 +1931,7 @@ func containsAll(argv []string, needles ...string) bool {
 	return true
 }
 
-func TestLandBranchNoPushRefusesDirtyMain(t *testing.T) {
+func TestLandBranchNoPushDirtyUnrelatedFileLands(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
 	wt := filepath.Join(t.TempDir(), "wt")
@@ -1939,6 +1939,47 @@ func TestLandBranchNoPushRefusesDirtyMain(t *testing.T) {
 	gittest.Write(t, wt, "feat.txt", "feat\n")
 	gitOut(t, wt, "add", "feat.txt")
 	gitOut(t, wt, "commit", "-q", "-m", "feat")
+	tip := strings.TrimSpace(gitOut(t, wt, "rev-parse", "HEAD"))
+	originBefore := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD"))
+	gittest.Write(t, dir, "base.txt", "base\ndirty\n")
+
+	d := testLandDeps(t)
+	var stdout, stderr strings.Builder
+	d.stdout = &stdout
+	d.stderr = &stderr
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--no-push"}, d)
+	if code != exitcode.Success {
+		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != tip {
+		t.Errorf("local default = %s; want %s", got, tip)
+	}
+	if got := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD")); got != originBefore {
+		t.Errorf("origin moved %s -> %s", originBefore, got)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "base.txt")) //nolint:gosec // test fixture path
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "base\ndirty\n" {
+		t.Errorf("dirty file = %q", body)
+	}
+	if _, err := os.Stat(wt); !os.IsNotExist(err) {
+		t.Errorf("worktree %s still present: %v", wt, err)
+	}
+	if out := gitOut(t, dir, "branch", "--list", "feat"); strings.TrimSpace(out) != "" {
+		t.Errorf("branch feat still present: %q", out)
+	}
+}
+
+func TestLandBranchNoPushDirtyOverlapExitsDirtyOverlap(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, "base.txt", "branch\n")
+	gitOut(t, wt, "add", "base.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "feat touches base")
 	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
 	originBefore := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD"))
 	gittest.Write(t, dir, "base.txt", "base\ndirty\n")
@@ -1948,11 +1989,11 @@ func TestLandBranchNoPushRefusesDirtyMain(t *testing.T) {
 	d.stdout = &stdout
 	d.stderr = &stderr
 	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--no-push"}, d)
-	if code == exitcode.Success {
-		t.Fatalf("dirty main with --no-push succeeded: stdout=%q", stdout.String())
+	if code != exitcode.DirtyOverlap {
+		t.Fatalf("code = %v stdout=%q stderr=%q; want %v", code, stdout.String(), stderr.String(), exitcode.DirtyOverlap)
 	}
-	if !strings.Contains(stderr.String(), "uncommitted changes") {
-		t.Errorf("stderr = %q", stderr.String())
+	if !strings.Contains(stderr.String(), "base.txt") {
+		t.Errorf("stderr does not name the overlapping file: %q", stderr.String())
 	}
 	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != before {
 		t.Errorf("HEAD moved %s -> %s", before, got)
@@ -1960,7 +2001,53 @@ func TestLandBranchNoPushRefusesDirtyMain(t *testing.T) {
 	if got := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD")); got != originBefore {
 		t.Errorf("origin moved %s -> %s", originBefore, got)
 	}
+	body, err := os.ReadFile(filepath.Join(dir, "base.txt")) //nolint:gosec // test fixture path
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "base\ndirty\n" {
+		t.Errorf("dirty file = %q; want untouched", body)
+	}
 	if out := gitOut(t, dir, "branch", "--list", "feat"); strings.TrimSpace(out) == "" {
 		t.Error("branch feat deleted though it never landed")
+	}
+	if _, err := os.Stat(wt); err != nil {
+		t.Errorf("worktree removed though it never landed: %v", err)
+	}
+}
+
+func TestLandBranchNoPushRebasesOntoLocalDefault(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, "feat.txt", "feat\n")
+	gitOut(t, wt, "add", "feat.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "feat")
+	gittest.Write(t, dir, "local.txt", "unpushed\n")
+	gittest.Commit(t.Context(), t, dir, "unpushed local work")
+	localTip := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	originTip := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD"))
+	if localTip == originTip {
+		t.Fatal("the local default has no unpushed commit to rebase onto")
+	}
+	gittest.Write(t, dir, "unrelated.txt", "scratch\n")
+
+	d := testLandDeps(t)
+	var stdout, stderr strings.Builder
+	d.stdout = &stdout
+	d.stderr = &stderr
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--no-push"}, d)
+	if code != exitcode.Success {
+		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD~1")); got != localTip {
+		t.Errorf("landed branch parent = %s; want the local unpushed tip %s", got, localTip)
+	}
+	if got := strings.TrimSpace(gitOut(t, dir, "log", "-1", "--pretty=%s")); got != "feat" {
+		t.Errorf("default subject = %q", got)
+	}
+	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "origin/main")); got != originTip {
+		t.Errorf("origin/main = %s; want unchanged %s", got, originTip)
 	}
 }

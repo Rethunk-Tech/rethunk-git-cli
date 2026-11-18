@@ -21,6 +21,7 @@ Notable changes to `rgit`. The format follows
 
 ### Fixed
 
+- `rgit land --branch BR --no-push` lands a branch from a checkout with uncommitted changes that touch none of the files BR changes, instead of refusing outright. It now rebases onto the local default branch rather than `origin/<default>`, so local unpushed default-branch commits stay in the base. When the dirty files do overlap, it names them and exits 13. See [`docs/CODES.md`](docs/CODES.md#exit-codes).
 - `rgit land` names the hook or gate command that turned a repo red, instead of echoing lefthook's closing summary box.
 - A worktree file that uses CRLF keeps its line endings when `rgit commit` splices a symbol into or out of it: the separator a splice writes is now the file's own line terminator, so the commit no longer leaves the file looking dirty. Before, the separator was a bare LF pair and the committed blob carried mixed endings.
 - Naming one anchor twice (`rgit commit -m … a.go:A a.go:A`) stages it once and lists it once. Before, the target was reported twice, so any caller summing rows double-counted the edit.

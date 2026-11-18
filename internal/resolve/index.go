@@ -80,6 +80,7 @@ func (e *ResolveError) Error() string {
 		exitcode.SpecialPathRefused,
 		exitcode.NothingToCommit,
 		exitcode.StructuredDataAnchorRefused,
+		exitcode.DirtyOverlap,
 		exitcode.GitFailure,
 		exitcode.InvalidUsage:
 		// Keep the default unresolved label for codes that do not have

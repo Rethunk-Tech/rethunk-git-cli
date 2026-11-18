@@ -30,11 +30,13 @@ repo; exit 1 if any repo is red.
 --branch BR lands local branch BR onto the default branch in one repo
 (--repos DIR, or the current directory), then pushes through that same
 route. Last stdout line: <repo> <branch> <sha> <gate log> <direct|PR|queue>.
---no-push with --branch rebases, runs the gate, and fast-forwards the
-local default branch, then stops: no push, land/ branch, PR, watch, or
+--no-push with --branch rebases onto the local default branch, runs the
+gate, and fast-forwards it even from a checkout whose uncommitted changes
+touch none of BR's files, then stops: no push, land/ branch, PR, watch, or
 --install. That last line uses route local. --no-push without --branch
 is a usage error. Exit 2 on rebase conflict, 3 on a red gate, 4 if a
-merge-queue PR does not enqueue, 5 if --install fails.
+merge-queue PR does not enqueue, 5 if --install fails, 13 if the checkout's
+dirty files overlap BR's.
 
 --install runs make install from each directly pushed, clean HEAD after
 every repo in the run has been pushed. A merged or queued PR is not
@@ -833,7 +835,7 @@ type landBranchPrep struct {
 }
 
 func landBranch(ctx context.Context, repoArg, branch string, wait, install, noPush bool, d landDeps) exitcode.Code {
-	prep, code := prepareLandBranch(repoArg, branch, d)
+	prep, code := prepareLandBranch(repoArg, branch, noPush, d)
 	if code != exitcode.Success {
 		return code
 	}
@@ -844,7 +846,7 @@ func landBranch(ctx context.Context, repoArg, branch string, wait, install, noPu
 	return finishLandBranch(ctx, prep, logPath, wait, install, noPush, d)
 }
 
-func prepareLandBranch(repoArg, branch string, d landDeps) (landBranchPrep, exitcode.Code) {
+func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBranchPrep, exitcode.Code) {
 	repo, err := d.git.run(repoArg, "rev-parse", "--show-toplevel")
 	if err != nil {
 		fmt.Fprintf(d.stderr, "error: %s is not a git repo\n", repoArg)
@@ -861,8 +863,8 @@ func prepareLandBranch(repoArg, branch string, d landDeps) (landBranchPrep, exit
 		return landBranchPrep{}, 1
 	}
 	dirty := dirtyTracked(repo, d)
-	if !dirty {
-		cur := strings.TrimSpace(mustGit(repo, d, "rev-parse", "--abbrev-ref", "HEAD"))
+	cur := strings.TrimSpace(mustGit(repo, d, "rev-parse", "--abbrev-ref", "HEAD"))
+	if !dirty || noPush {
 		if cur != def {
 			fmt.Fprintf(d.stderr, "error: %s is on %s, not %s\n", repo, cur, def)
 			return landBranchPrep{}, 1
@@ -888,7 +890,7 @@ func prepareLandBranch(repoArg, branch string, d landDeps) (landBranchPrep, exit
 	}
 	prep := landBranchPrep{repo: repo, branch: branch, def: def, wt: wt, dirty: dirty}
 	base := def
-	if dirty {
+	if dirty && !noPush {
 		_, _ = d.git.run(repo, "fetch", "-q", "origin")
 		base = "origin/" + def
 		prep.opts = landPushOpts{
@@ -992,8 +994,13 @@ func unlinkLandEnvLinks(links []string) {
 }
 
 func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, wait, install, noPush bool, d landDeps) exitcode.Code {
-	if !prep.dirty {
+	if !prep.dirty || noPush {
 		if out, err := d.git.run(prep.repo, "merge", "--ff-only", prep.branch); err != nil {
+			if overlap := mergeOverlapFiles(prep.repo, prep.branch, d); noPush && prep.dirty && len(overlap) > 0 {
+				fmt.Fprintf(d.stderr, "error: %s has uncommitted changes to %s; %s not landed\n",
+					prep.repo, strings.Join(overlap, ", "), prep.branch)
+				return exitcode.DirtyOverlap
+			}
 			fmt.Fprintf(d.stderr, "error: %s\n", strings.TrimSpace(out))
 			return 1
 		}
@@ -1006,14 +1013,8 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 	}
 	sha := strings.TrimSpace(mustGit(prep.repo, d, "rev-parse", prep.branch))
 	if noPush {
-		// A dirty default branch skipped the fast-forward, so nothing landed; the push route covers that
-		// case by pushing the branch itself, which --no-push forbids.
-		if prep.dirty {
-			fmt.Fprintf(d.stderr, "error: %s has uncommitted changes; --no-push cannot land %s\n", prep.repo, prep.branch)
-			return 1
-		}
 		// Merged into the local default branch, so the branch and its worktree are done either way.
-		cleanupLandBranch(prep, landResult{Kind: landPushed, Route: "direct"}, d)
+		cleanupLandBranch(prep, landResult{Kind: landPushed, Route: "direct"}, true, d)
 		fmt.Fprintf(d.stdout, "%s %s %s %s local\n", prep.repo, prep.branch, sha, logPath)
 		return exitcode.Success
 	}
@@ -1028,7 +1029,7 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 		fmt.Fprintf(d.stderr, "error: PR for %s is open but neither queued nor set to auto-merge\n", prep.branch)
 		return 4
 	}
-	cleanupLandBranch(prep, res, d)
+	cleanupLandBranch(prep, res, false, d)
 	if res.Kind == landPushed {
 		touchFleet(prep.repo, 1, d)
 	} else {
@@ -1043,10 +1044,10 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 	return exitcode.Success
 }
 
-func cleanupLandBranch(prep landBranchPrep, res landResult, d landDeps) {
-	if prep.dirty {
+func cleanupLandBranch(prep landBranchPrep, res landResult, local bool, d landDeps) {
+	if prep.dirty && !local {
 		_, _ = d.git.run(prep.repo, "fetch", "-q", "origin")
-	} else if res.Route != "direct" {
+	} else if !prep.dirty && res.Route != "direct" {
 		_, _ = d.git.run(prep.repo, "reset", "-q", "--keep", "origin/"+prep.def)
 	}
 	if res.Kind == landPR && res.PRState != "merged" {
@@ -1058,7 +1059,7 @@ func cleanupLandBranch(prep landBranchPrep, res landResult, d landDeps) {
 	}
 	fmt.Fprintf(d.stdout, "removed worktree %s\n", prep.wt)
 	del := []string{"branch", "-d", prep.branch}
-	if prep.dirty {
+	if prep.dirty && !local {
 		if !cherryUpstream(prep.repo, prep.def, prep.branch, d) {
 			return
 		}
@@ -1134,6 +1135,38 @@ func findBranchWorktree(repo, branch string, d landDeps) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func mergeOverlapFiles(repo, branch string, d landDeps) []string {
+	out, err := d.git.run(repo, "diff", "--name-only", "HEAD", branch)
+	if err != nil {
+		return nil
+	}
+	changed := map[string]bool{}
+	for line := range strings.SplitSeq(out, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			changed[line] = true
+		}
+	}
+	status, err := d.git.run(repo, "status", "--porcelain=v1", "-uno")
+	if err != nil {
+		return nil
+	}
+	var hit []string
+	for line := range strings.SplitSeq(status, "\n") {
+		if len(line) < 4 {
+			continue
+		}
+		path := strings.TrimSpace(line[3:])
+		if i := strings.LastIndex(path, " -> "); i >= 0 {
+			path = path[i+4:]
+		}
+		path = strings.Trim(path, `"`)
+		if changed[path] {
+			hit = append(hit, path)
+		}
+	}
+	return hit
 }
 
 func cherryUpstream(repo, def, branch string, d landDeps) bool {

@@ -425,13 +425,16 @@ The repo must be the main checkout. Last stdout line:
 `--no-push` with `--branch` does the rebase, gate, and local fast-forward,
 then stops: no push, `land/` branch, PR, background watch, or `--install`.
 Last stdout line uses route `local`. Without `--branch`, `--no-push` is
-usage (`--no-push needs --branch`).
+usage (`--no-push needs --branch`). It rebases onto the local default
+branch whether or not the checkout is dirty, so unpushed default-branch
+commits stay in the base, and it fast-forwards a dirty checkout when the
+dirty files are not ones the branch changes.
 
 | Condition | What happens |
 | --- | --- |
 | BR pushed and its worktree clean | Linked worktree removed (`git worktree remove`); local BR deleted (`git branch -d`); stdout `removed worktree PATH`, `deleted branch BR` |
 | Dirty worktree, red gate, rebase conflict, or queued-not-merged PR | Worktree and branch left in place |
-| Dirty main | Left alone; BR rebased onto `origin/<default>` in BR's worktree and pushed from there |
+| Dirty main | `--no-push`: fast-forwarded when the dirty files are not ones BR changes; otherwise exit 13 naming the overlap. Push route: left alone; BR rebased onto `origin/<default>` in BR's worktree and pushed from there |
 | Clean main | Must be on the default branch; BR rebased onto it, fast-forwarded, and pushed |
 | Before `gate -C <worktree>` | Ignored untracked `.env`, `.env.local`, `.env.*.local` in the main checkout are symlinked into the worktree at the same relative path when that path is absent; links removed after the gate, success or fail. `.env.example` and tracked files are left alone |
 | Gate flake (passes on a `--failed` re-run) | Appended to `$XDG_CACHE_HOME/land-branch/flakes.tsv`; landing continues |
@@ -442,6 +445,7 @@ usage (`--no-push needs --branch`).
 | `gate -C <worktree>` red after a `--failed` re-run | log path and last 40 lines | 3 |
 | Merge queue that does not enqueue | names the branch | 4 |
 | `--install` failure | the failing tail | 5 |
+| `--no-push` ff-merge refused: the dirty checkout edits files BR changes | the overlapping paths | 13 |
 
 ## Shell completion
 

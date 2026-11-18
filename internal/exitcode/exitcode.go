@@ -54,6 +54,10 @@ const (
 	// anchor targeted JSON/YAML/TOML. Name the path instead.
 	StructuredDataAnchorRefused Code = 12
 
+	// DirtyOverlap means a --no-push landing could not fast-forward because the
+	// checkout's own uncommitted edits touch the same files: retry later.
+	DirtyOverlap Code = 13
+
 	// GitFailure includes hook rejection and GPG failure, not only git's.
 	GitFailure Code = 128
 
