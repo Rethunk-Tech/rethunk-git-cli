@@ -58,6 +58,8 @@ jobs:
       # No restored cache: a poisoned entry would otherwise reach the published binaries.
       - uses: Rethunk-Tech/gh-actions/setup-go@d7c92df451d210ac9db9aa3d1fea9e8a1692e448 # v1.30
         with:
+          # cgo grammars: the default CGO-off Windows compile cannot build rgit; the zig cross job covers Windows.
+          run-windows-compile: "false"
           cache: "false"
 
       # zig is the single cross-compilation toolchain `make cross` drives;

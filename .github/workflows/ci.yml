@@ -47,6 +47,8 @@ jobs:
           persist-credentials: false
       - uses: Rethunk-Tech/gh-actions/setup-go@d7c92df451d210ac9db9aa3d1fea9e8a1692e448 # v1.30
         with:
+          # cgo grammars: the default CGO-off Windows compile cannot build rgit; the zig cross job covers Windows.
+          run-windows-compile: "false"
           run-lint: "true"
           run-govulncheck: "true"
 
@@ -64,6 +66,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: Rethunk-Tech/gh-actions/setup-go@d7c92df451d210ac9db9aa3d1fea9e8a1692e448 # v1.30
+        with:
+          run-windows-compile: "false"
       # Same target as a local `gate` (.gate.toml): race build,
       # lint/vuln with GOFLAGS=-race, go test -race -short. gate runs lint and
       # govulncheck itself, so both are installed here rather than run twice.
@@ -84,6 +88,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: Rethunk-Tech/gh-actions/setup-go@d7c92df451d210ac9db9aa3d1fea9e8a1692e448 # v1.30
+        with:
+          run-windows-compile: "false"
       # cmd/rgit-install's own tests (TestRunPrereqChecks, TestFindSQLAdapter)
       # assert tree-sitter's PATH presence for the prereq check itself -- not
       # a build-time SQL lane (this file's own top comment).
@@ -142,6 +148,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: Rethunk-Tech/gh-actions/setup-go@d7c92df451d210ac9db9aa3d1fea9e8a1692e448 # v1.30
+        with:
+          run-windows-compile: "false"
       # Same toolchain release.yml drives: rgit links tree-sitter through
       # cgo, so every target needs a real C compiler (docs/INSTALL.md § Cross
       # builds). setup-zig caches zig's global cache itself.
@@ -194,6 +202,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: Rethunk-Tech/gh-actions/setup-go@d7c92df451d210ac9db9aa3d1fea9e8a1692e448 # v1.30
+        with:
+          run-windows-compile: "false"
         id: go
 
       # Compiling gopls is ~40s; the binary depends only on its own version
