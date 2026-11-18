@@ -901,14 +901,6 @@ func finishLandBranch(prep landBranchPrep, logPath string, wait bool, d landDeps
 		}
 	}
 	sha := strings.TrimSpace(mustGit(prep.repo, d, "rev-parse", prep.branch))
-	removed := false
-	if !prep.dirty {
-		if _, err := d.git.run(prep.repo, "worktree", "remove", prep.wt); err == nil {
-			removed = true
-		} else {
-			fmt.Fprintf(d.stderr, "worktree remove refused; keeping %s\n", prep.wt)
-		}
-	}
 	res := landByRules(prep.repo, prep.def, d, prep.opts)
 	if res.Kind == landRed {
 		for _, line := range res.Lines {
@@ -920,7 +912,7 @@ func finishLandBranch(prep landBranchPrep, logPath string, wait bool, d landDeps
 		fmt.Fprintf(d.stderr, "error: PR for %s is open but neither queued nor set to auto-merge\n", prep.branch)
 		return 4
 	}
-	cleanupLandBranch(prep, res, removed, d)
+	cleanupLandBranch(prep, res, d)
 	if res.Kind == landPushed {
 		touchFleet(prep.repo, 1, d)
 	} else {
@@ -930,21 +922,31 @@ func finishLandBranch(prep landBranchPrep, logPath string, wait bool, d landDeps
 	return exitcode.Success
 }
 
-func cleanupLandBranch(prep landBranchPrep, res landResult, removed bool, d landDeps) {
+func cleanupLandBranch(prep landBranchPrep, res landResult, d landDeps) {
 	if prep.dirty {
 		_, _ = d.git.run(prep.repo, "fetch", "-q", "origin")
-		if _, err := d.git.run(prep.repo, "worktree", "remove", prep.wt); err == nil && res.Route == "direct" && cherryUpstream(prep.repo, prep.def, prep.branch, d) {
-			_, _ = d.git.run(prep.repo, "branch", "-D", prep.branch)
-		}
-		return
-	}
-	if res.Route != "direct" {
+	} else if res.Route != "direct" {
 		_, _ = d.git.run(prep.repo, "reset", "-q", "--keep", "origin/"+prep.def)
+	}
+	if res.Kind == landPR && res.PRState != "merged" {
 		return
 	}
-	if removed {
-		_, _ = d.git.run(prep.repo, "branch", "-d", prep.branch)
+	if _, err := d.git.run(prep.repo, "worktree", "remove", prep.wt); err != nil {
+		fmt.Fprintf(d.stderr, "worktree remove refused; keeping %s\n", prep.wt)
+		return
 	}
+	fmt.Fprintf(d.stdout, "removed worktree %s\n", prep.wt)
+	del := []string{"branch", "-d", prep.branch}
+	if prep.dirty {
+		if !cherryUpstream(prep.repo, prep.def, prep.branch, d) {
+			return
+		}
+		del[1] = "-D"
+	}
+	if _, err := d.git.run(prep.repo, del...); err != nil {
+		return
+	}
+	fmt.Fprintf(d.stdout, "deleted branch %s\n", prep.branch)
 }
 
 func printLandBranchResult(prep landBranchPrep, res landResult, sha, logPath string, wait bool, d landDeps) {

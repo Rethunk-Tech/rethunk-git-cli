@@ -401,6 +401,8 @@ $ rgit land --repos ~/src/foo ~/src/bar
 watching: acme-bar-12-20260102T030405Z
 
 $ rgit land --branch feat
+removed worktree /tmp/feat
+deleted branch feat
 /src/foo feat abcdef1 ~/.cache/land-branch/foo-feat-1234.log direct
 ```
 
@@ -412,7 +414,12 @@ background watcher records the result.
 
 `--branch BR` lands local branch BR onto the default branch in one repo
 (`--repos DIR` or the current directory), then takes that same push route.
-The repo must be the main checkout. Before `gate -C <worktree>`, ignored
+The repo must be the main checkout. After BR is pushed successfully and
+its worktree is clean, that linked worktree is removed (`git worktree
+remove`) and local branch BR is deleted (`git branch -d`), one stdout line
+each (`removed worktree PATH`, `deleted branch BR`). A dirty worktree, a
+red gate, a rebase conflict, or a queued-not-merged PR leaves both in
+place. Before `gate -C <worktree>`, ignored
 untracked files in the main checkout named `.env`, `.env.local`, or
 `.env.*.local` are symlinked into the worktree at the same relative path
 when that path is absent; those links are removed after the gate, success

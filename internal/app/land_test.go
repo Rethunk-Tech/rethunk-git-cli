@@ -348,7 +348,14 @@ func TestLandBranchCleanMainFFPush(t *testing.T) {
 	if _, err := os.Stat(wt); !os.IsNotExist(err) {
 		t.Errorf("clean-main left worktree: %v", err)
 	}
-	last := lastNonEmptyLine(stdout.String())
+	out := stdout.String()
+	if !strings.Contains(out, "removed worktree "+wt+"\n") {
+		t.Errorf("missing worktree removal: %q", out)
+	}
+	if !strings.Contains(out, "deleted branch feat\n") {
+		t.Errorf("missing branch deletion: %q", out)
+	}
+	last := lastNonEmptyLine(out)
 	got := strings.Fields(last)
 	if len(got) != 5 || got[0] != dir || got[1] != "feat" || got[2] != tip || got[4] != "direct" {
 		t.Errorf("summary = %q", last)
@@ -391,7 +398,20 @@ func TestLandBranchDirtyMainLeavesMain(t *testing.T) {
 	if got := strings.TrimSpace(gitOut(t, bare, "log", "-1", "--pretty=%s")); got != "feat" {
 		t.Errorf("origin subject = %q", got)
 	}
-	last := lastNonEmptyLine(stdout.String())
+	if _, err := d.git.run(dir, "show-ref", "--verify", "--quiet", "refs/heads/feat"); err == nil {
+		t.Error("dirty-main left branch feat")
+	}
+	if _, err := os.Stat(wt); !os.IsNotExist(err) {
+		t.Errorf("dirty-main left worktree: %v", err)
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "removed worktree "+wt+"\n") {
+		t.Errorf("missing worktree removal: %q", out)
+	}
+	if !strings.Contains(out, "deleted branch feat\n") {
+		t.Errorf("missing branch deletion: %q", out)
+	}
+	last := lastNonEmptyLine(out)
 	if !strings.HasSuffix(last, " direct") {
 		t.Errorf("summary = %q", last)
 	}
@@ -426,6 +446,9 @@ func TestLandBranchConflictExit2(t *testing.T) {
 	if _, err := d.git.run(dir, "show-ref", "--verify", "--quiet", "refs/heads/feat"); err != nil {
 		t.Error("conflict deleted branch feat")
 	}
+	if _, err := os.Stat(wt); err != nil {
+		t.Errorf("conflict removed worktree: %v", err)
+	}
 }
 
 func TestLandBranchRedGateExit3(t *testing.T) {
@@ -457,6 +480,112 @@ func TestLandBranchRedGateExit3(t *testing.T) {
 	}
 	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != before {
 		t.Error("red gate moved main")
+	}
+	if _, err := d.git.run(dir, "show-ref", "--verify", "--quiet", "refs/heads/feat"); err != nil {
+		t.Error("red gate deleted branch feat")
+	}
+	if _, err := os.Stat(wt); err != nil {
+		t.Errorf("red gate removed worktree: %v", err)
+	}
+}
+
+func TestLandBranchDirtyWorktreeLeavesBoth(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, "feat.txt", "feat\n")
+	gitOut(t, wt, "add", "feat.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "feat")
+	gittest.Write(t, wt, "scratch.txt", "untracked\n")
+
+	d := testLandDeps(t)
+	var stdout, stderr strings.Builder
+	d.stdout = &stdout
+	d.stderr = &stderr
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
+	if code != exitcode.Success {
+		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	if got := strings.TrimSpace(gitOut(t, bare, "log", "-1", "--pretty=%s")); got != "feat" {
+		t.Errorf("origin subject = %q", got)
+	}
+	if _, err := d.git.run(dir, "show-ref", "--verify", "--quiet", "refs/heads/feat"); err != nil {
+		t.Error("dirty worktree deleted branch feat")
+	}
+	if _, err := os.Stat(wt); err != nil {
+		t.Errorf("dirty worktree removed worktree: %v", err)
+	}
+	if strings.Contains(stdout.String(), "removed worktree") || strings.Contains(stdout.String(), "deleted branch") {
+		t.Errorf("dirty worktree printed removal: %q", stdout.String())
+	}
+}
+
+func TestLandBranchRedPushLeavesBoth(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, "feat.txt", "feat\n")
+	gitOut(t, wt, "add", "feat.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "feat")
+	gitOut(t, dir, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "missing.git"))
+
+	d := testLandDeps(t)
+	var stdout, stderr strings.Builder
+	d.stdout = &stdout
+	d.stderr = &stderr
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
+	if code != 1 {
+		t.Fatalf("code = %v stdout=%q stderr=%q; want 1", code, stdout.String(), stderr.String())
+	}
+	if _, err := d.git.run(dir, "show-ref", "--verify", "--quiet", "refs/heads/feat"); err != nil {
+		t.Error("red push deleted branch feat")
+	}
+	if _, err := os.Stat(wt); err != nil {
+		t.Errorf("red push removed worktree: %v", err)
+	}
+}
+
+func TestLandBranchQueuedPRLeavesBoth(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	gitOut(t, dir, "remote", "set-url", "origin", "git@github.com:acme/demo.git")
+	gitOut(t, dir, "remote", "set-url", "--push", "origin", bare)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, "feat.txt", "feat\n")
+	gitOut(t, wt, "add", "feat.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "feat")
+
+	gh := &fakeGH{
+		rules:  []string{"merge_queue"},
+		url:    "https://github.com/acme/demo/pull/4",
+		number: 4,
+		prs:    []prInfo{{State: "OPEN", HasQueue: true, URL: "https://github.com/acme/demo/pull/4"}},
+	}
+	d := testLandDeps(t)
+	d.gh = gh
+	d.clock = &fakeClock{now: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)}
+	var stdout, stderr strings.Builder
+	d.stdout = &stdout
+	d.stderr = &stderr
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
+	if code != exitcode.Success {
+		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	if _, err := d.git.run(dir, "show-ref", "--verify", "--quiet", "refs/heads/feat"); err != nil {
+		t.Error("queued PR deleted branch feat")
+	}
+	if _, err := os.Stat(wt); err != nil {
+		t.Errorf("queued PR removed worktree: %v", err)
+	}
+	if strings.Contains(stdout.String(), "removed worktree") || strings.Contains(stdout.String(), "deleted branch") {
+		t.Errorf("queued PR printed removal: %q", stdout.String())
+	}
+	last := lastNonEmptyLine(stdout.String())
+	if !strings.HasSuffix(last, " queue") {
+		t.Errorf("summary = %q", last)
 	}
 }
 
