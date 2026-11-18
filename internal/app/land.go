@@ -9,10 +9,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
 )
@@ -848,15 +850,142 @@ func summaryPR(repo, url, state string) string {
 }
 
 func summaryRed(repo, out string) string {
-	return repo + ": red (" + last5Piped(out) + ")"
+	return repo + ": red (" + redDetail(out) + ")"
 }
 
-func last5Piped(out string) string {
-	lines := nonEmptyLines(out)
+const redDetailCap = 300
+
+var (
+	ansiCSI        = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
+	gateFailedRE   = regexp.MustCompile(`(?m)^gate: failed: (.+?) -> (\S+)\s*$`)
+	gateFailRE     = regexp.MustCompile(`(?m)^gate: FAIL\b(.*)$`)
+	lefthookFailRE = regexp.MustCompile(`^✗\s+(\S+)`)
+)
+
+func redDetail(out string) string {
+	// Lefthook's closing box never names the failure; the ✗ row and gate verdict do.
+	out = ansiCSI.ReplaceAllString(out, "")
+	if cmds, logs := gateVerdicts(out); len(cmds) > 0 {
+		parts := append([]string{}, cmds...)
+		for _, p := range logs {
+			parts = append(parts, lastLogLines(p, 3)...)
+		}
+		return capJoin(parts, redDetailCap)
+	}
+	lines := meaningfulLines(out)
+	if names := lefthookFailed(lines); len(names) > 0 {
+		parts := append([]string{}, names...)
+		parts = append(parts, errorishLines(lines)...)
+		return capJoin(parts, redDetailCap)
+	}
 	if len(lines) > 5 {
 		lines = lines[len(lines)-5:]
 	}
-	return strings.Join(lines, "|")
+	return capJoin(lines, redDetailCap)
+}
+
+func gateVerdicts(out string) (cmds, logs []string) {
+	for _, m := range gateFailedRE.FindAllStringSubmatch(out, -1) {
+		cmds = append(cmds, strings.TrimSpace(m[1]))
+		logs = append(logs, m[2])
+	}
+	for _, m := range gateFailRE.FindAllStringSubmatch(out, -1) {
+		rest := strings.TrimSpace(m[1])
+		if rest == "" {
+			continue
+		}
+		cmds = append(cmds, stripTrailingTiming(rest))
+	}
+	return cmds, logs
+}
+
+func lastLogLines(path string, n int) []string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	lines := nonEmptyLines(string(b))
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return lines
+}
+
+func meaningfulLines(out string) []string {
+	var lines []string
+	for _, line := range nonEmptyLines(out) {
+		line = strings.TrimSpace(line)
+		if line == "" || isDecorationLine(line) {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+func isDecorationLine(line string) bool {
+	if strings.HasPrefix(strings.ToLower(line), "summary:") {
+		return true
+	}
+	stripped := strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) || (r >= 0x2500 && r <= 0x257F) {
+			return -1
+		}
+		return r
+	}, line)
+	return stripped == ""
+}
+
+func lefthookFailed(lines []string) []string {
+	var names []string
+	for _, line := range lines {
+		m := lefthookFailRE.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		names = append(names, m[1])
+	}
+	return names
+}
+
+func errorishLines(lines []string) []string {
+	var out []string
+	for _, line := range lines {
+		if lefthookFailRE.MatchString(line) {
+			continue
+		}
+		if isErrorish(line) {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+func isErrorish(line string) bool {
+	if strings.Contains(line, "×") {
+		return true
+	}
+	lower := strings.ToLower(line)
+	return strings.Contains(lower, "error") || strings.Contains(lower, "fail")
+}
+
+func stripTrailingTiming(s string) string {
+	if i := strings.LastIndex(s, " ("); i >= 0 && strings.HasSuffix(s, ")") {
+		return strings.TrimSpace(s[:i])
+	}
+	return s
+}
+
+func capJoin(parts []string, max int) string {
+	s := strings.Join(parts, " | ")
+	n := 0
+	for i := range s {
+		if n == max {
+			return s[:i]
+		}
+		n++
+	}
+	return s
 }
 
 func lastNonEmptyLine(s string) string {

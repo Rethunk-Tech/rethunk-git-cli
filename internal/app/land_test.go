@@ -29,9 +29,56 @@ func TestLandSummaryWording(t *testing.T) {
 	if got := summaryPR("/r", "https://example/pr/1", "merged"); got != "/r: PR https://example/pr/1 (merged)" {
 		t.Errorf("summaryPR merged = %q", got)
 	}
-	red := summaryRed("/r", "a\nb\nc\nd\ne\nf\n")
-	if red != "/r: red (b|c|d|e|f)" {
-		t.Errorf("summaryRed = %q", red)
+}
+
+func TestLandSummaryRed(t *testing.T) {
+	t.Parallel()
+	logPath := filepath.Join(t.TempDir(), "gate.log")
+	if err := os.WriteFile(logPath, []byte("ok pkg\n\n--- FAIL: TestFoo (0.01s)\nFAIL\nFAIL\tpkg\t0.02s\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bosun := "exit status 1\n────\nsummary: (done in 51.56 seconds)\n✗ gates (48.03 seconds)\nerror: failed to push some refs ...\n"
+	cases := []struct {
+		name, repo, out, want string
+	}{
+		{
+			name: "lefthook summary box",
+			repo: "bosun",
+			out:  bosun,
+			want: "bosun: red (gates | error: failed to push some refs ...)",
+		},
+		{
+			name: "gate verdict",
+			repo: "bosun",
+			out: "────\nsummary: (done in 51.56 seconds)\n✗ gates (48.03 seconds)\ngate: failed: go test -race -short ./... -> " +
+				logPath + "\nerror: failed to push some refs ...\n",
+			want: "bosun: red (go test -race -short ./... | --- FAIL: TestFoo (0.01s) | FAIL | FAIL\tpkg\t0.02s)",
+		},
+		{
+			name: "plain git rejection",
+			repo: "repo",
+			out: "Enumerating objects: 5, done.\nTo github.com:org/repo.git\n" +
+				" ! [rejected] main -> main (non-fast-forward)\n" +
+				"error: failed to push some refs to 'origin'\n" +
+				"hint: Updates were rejected\nhint: git pull before pushing again\n",
+			want: "repo: red (To github.com:org/repo.git | ! [rejected] main -> main (non-fast-forward) | " +
+				"error: failed to push some refs to 'origin' | hint: Updates were rejected | " +
+				"hint: git pull before pushing again)",
+		},
+		{
+			name: "ANSI coloured lefthook",
+			repo: "bosun",
+			out:  "\x1b[31mexit status 1\x1b[0m\n\x1b[90m────\x1b[0m\nsummary: (done in 51.56 seconds)\n\x1b[31m✗ gates (48.03 seconds)\x1b[0m\n\x1b[1;31merror: failed to push some refs ...\x1b[0m\n",
+			want: "bosun: red (gates | error: failed to push some refs ...)",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := summaryRed(tc.repo, tc.out); got != tc.want {
+				t.Errorf("summaryRed = %q; want %q", got, tc.want)
+			}
+		})
 	}
 }
 
