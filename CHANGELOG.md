@@ -6,6 +6,10 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `rgit land --sha SHA` lands one ahead commit instead of HEAD through the repo's branch rules (direct push, or `land/` branch, PR and merge request), leaving a dirty tree and newer local commits alone. See [`docs/USAGE.md`](docs/USAGE.md#land).
+
 ### Changed
 
 - **Breaking:** `rgit land --branch BR` now lands locally by default (rebase onto the local default branch, gate, fast-forward, `--install`) and no longer pushes. Pass `--push` for the push route. `--no-push` is removed. See [`docs/USAGE.md`](docs/USAGE.md).

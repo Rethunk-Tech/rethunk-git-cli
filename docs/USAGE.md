@@ -417,6 +417,11 @@ Makefile with no `install` target: one skip line naming the reason.
 Success: `DIR: installed <describe>`. Install failure: the failing tail,
 exit 5.
 
+`--sha SHA` lands that one ahead commit (an ancestor of HEAD, not yet
+upstream) instead of HEAD, by the same direct, PR or queue route. It
+neither rebases nor resets: the checkout may be dirty and newer local
+commits stay local. Not with `--branch`.
+
 `--branch BR` lands local branch BR onto the default branch in one repo
 (`--repos DIR` or the current directory). The repo must be the main
 checkout. By default it does the rebase, gate, and local fast-forward,

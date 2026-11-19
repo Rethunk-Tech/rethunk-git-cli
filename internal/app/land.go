@@ -18,7 +18,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
 )
 
-const landUsageLine = "usage: rgit land [--repos DIR...] [--wait] [--json] [--install] | rgit land --branch BR [--repos DIR] [--push] [--install]"
+const landUsageLine = "usage: rgit land [--repos DIR...] [--sha SHA] [--wait] [--json] [--install] | rgit land --branch BR [--repos DIR] [--push] [--install]"
 
 const landHelp = landUsageLine + `
 
@@ -26,6 +26,10 @@ Push each repo's ahead commits the way its GitHub branch rules require: a
 direct push when the default branch is open, or a timestamped land/ branch,
 PR, and merge (or merge-queue) request when it is not. One summary line per
 repo; exit 1 if any repo is red.
+
+--sha SHA lands that ahead commit (an ancestor of HEAD) instead of HEAD:
+the same direct, PR or queue route, no rebase, dirty tree allowed, local
+default branch left alone.
 
 --branch BR lands local branch BR onto the default branch in one repo
 (--repos DIR, or the current directory). By default it rebases onto the
@@ -48,6 +52,7 @@ case land polls inline and prints the final line per repo.
 
 Flags:
   --repos DIR...  repositories to land (default: the current directory)
+  --sha SHA       land this ahead commit instead of HEAD (not with --branch)
   --branch BR     land local branch BR onto the local default branch (no push)
   --push          with --branch: also push through the repo's branch rules
   --wait          poll each open PR until it merges or the cap is hit
@@ -239,6 +244,7 @@ type landDeps struct {
 	pid        int
 	randN      func() int
 	parent     string
+	sha        string
 	stdout     io.Writer
 	stderr     io.Writer
 }
@@ -346,6 +352,15 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 			}
 			branch = val
 			i = next
+		case a == "--sha":
+			val, next, ok := landFlagValue(args, i)
+			if !ok {
+				fmt.Fprintln(d.stderr, "rgit land: --sha needs a commit")
+				fmt.Fprintln(d.stderr, landUsageLine)
+				return exitcode.InvalidUsage
+			}
+			d.sha = val
+			i = next
 		case a == landWatchFlag:
 			val, next, ok := landFlagValue(args, i)
 			if !ok {
@@ -394,6 +409,11 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 		}
 	}
 	asJSON := jsonFlag(ctx)
+	if d.sha != "" && branch != "" {
+		fmt.Fprintln(d.stderr, "rgit land: --sha does not combine with --branch")
+		fmt.Fprintln(d.stderr, landUsageLine)
+		return exitcode.InvalidUsage
+	}
 	if branch != "" {
 		if len(repos) > 1 {
 			fmt.Fprintln(d.stderr, "rgit land: --branch lands one repo")
@@ -669,6 +689,9 @@ func landOne(r string, d landDeps) landResult {
 
 	def := defaultBranch(repo, d)
 	res.Default = def
+	if d.sha != "" {
+		return landSha(repo, def, d)
+	}
 	if dirtyTracked(repo, d) {
 		res.Kind = landSkipped
 		res.Lines = []string{repo + ": skipped (dirty tracked files)"}
@@ -727,8 +750,43 @@ func landOne(r string, d landDeps) landResult {
 	return res
 }
 
+// landSha lands one already-committed ahead commit by the repo's branch rules. The working tree and
+// the local default branch stay as they are, so a dirty checkout or newer unpushed commits do not block it.
+func landSha(repo, def string, d landDeps) landResult {
+	res := landResult{Repo: repo, Default: def, Kind: landSkipped}
+	sha, err := d.git.run(repo, "rev-parse", "--verify", "-q", d.sha+"^{commit}")
+	sha = strings.TrimSpace(sha)
+	if err != nil || sha == "" {
+		res.Lines = []string{fmt.Sprintf("%s: skipped (no commit %s)", repo, d.sha)}
+		return res
+	}
+	if cur := strings.TrimSpace(mustGit(repo, d, "rev-parse", "--abbrev-ref", "HEAD")); cur != def {
+		res.Lines = []string{fmt.Sprintf("%s: skipped (on %s, not %s)", repo, cur, def)}
+		return res
+	}
+	_, _ = d.git.run(repo, "fetch", "-q")
+	if _, err := d.git.run(repo, "merge-base", "--is-ancestor", sha, "HEAD"); err != nil {
+		res.Lines = []string{fmt.Sprintf("%s: skipped (%s is not on %s)", repo, d.sha, def)}
+		return res
+	}
+	if _, err := d.git.run(repo, "merge-base", "--is-ancestor", sha, "@{u}"); err == nil {
+		res.Lines = []string{summarySkippedAlreadyUpstream(repo)}
+		return res
+	}
+	res = landByRules(repo, def, d, landPushOpts{pushRef: sha, pushTo: def, prRef: sha, logRange: "@{u}.." + sha})
+	switch res.Kind {
+	case landPushed:
+		touchFleet(repo, 1, d)
+	case landPR:
+		touchFleet(repo, 0, d)
+	case landSkipped, landRed:
+	}
+	return res
+}
+
 type landPushOpts struct {
 	pushDir  string
+	pushRef  string
 	pushTo   string
 	prRef    string
 	logRange string
@@ -759,7 +817,13 @@ func landByRules(repo, def string, d landDeps, opts landPushOpts) landResult {
 	needPR, mergeQueue := rulesNeedPR(rules)
 	res.Queue = mergeQueue
 	if !needPR {
-		out, err := pushRetry(pushDir, opts.pushTo, d)
+		var out string
+		var err error
+		if opts.pushRef != "" {
+			out, err = d.git.run(pushDir, "push", "origin", opts.pushRef+":refs/heads/"+opts.pushTo)
+		} else {
+			out, err = pushRetry(pushDir, opts.pushTo, d)
+		}
 		if err == nil {
 			res.Kind = landPushed
 			res.Route = "direct"

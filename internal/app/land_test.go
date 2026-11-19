@@ -2051,3 +2051,78 @@ func TestLandBranchLocalRebasesOntoLocalDefault(t *testing.T) {
 		t.Errorf("origin/main = %s; want unchanged %s", got, originTip)
 	}
 }
+
+func TestLandShaDirectPushesOnlyThatCommit(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	gittest.Write(t, dir, "one.txt", "1\n")
+	gittest.Commit(t.Context(), t, dir, "one")
+	sha := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	gittest.Write(t, dir, "two.txt", "2\n")
+	gittest.Commit(t.Context(), t, dir, "two")
+	head := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	gittest.Write(t, dir, "base.txt", "dirty\n")
+
+	d := testLandDeps(t)
+	var stdout strings.Builder
+	d.stdout = &stdout
+	d.sha = sha
+	if code := landRepos(t.Context(), []string{dir}, false, false, false, d); code != exitcode.Success {
+		t.Fatalf("code = %v stdout=%q", code, stdout.String())
+	}
+	if got := strings.TrimSpace(gitOut(t, bare, "rev-parse", "main")); got != sha {
+		t.Errorf("remote main = %s; want %s", got, sha)
+	}
+	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != head {
+		t.Errorf("HEAD moved to %s; want %s", got, head)
+	}
+}
+
+func TestLandShaPRKeepsLocalMain(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	gitOut(t, dir, "remote", "set-url", "origin", "git@github.com:acme/demo.git")
+	gitOut(t, dir, "remote", "set-url", "--push", "origin", bare)
+	gittest.Write(t, dir, "one.txt", "1\n")
+	gittest.Commit(t.Context(), t, dir, "one")
+	sha := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	gittest.Write(t, dir, "two.txt", "2\n")
+	gittest.Commit(t.Context(), t, dir, "two")
+	head := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+
+	gh := &fakeGH{
+		rules:  []string{"pull_request"},
+		squash: true,
+		url:    "https://github.com/acme/demo/pull/5",
+		number: 5,
+		prs:    []prInfo{{State: "OPEN", HasAutoMerge: true, URL: "https://github.com/acme/demo/pull/5"}},
+	}
+	d := testLandDeps(t)
+	d.gh = gh
+	d.clock = &fakeClock{now: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)}
+	var stdout strings.Builder
+	d.stdout = &stdout
+	d.sha = sha
+	if code := landRepos(t.Context(), []string{dir}, false, false, false, d); code != exitcode.Success {
+		t.Fatalf("code = %v stdout=%q", code, stdout.String())
+	}
+	if got := strings.TrimSpace(gitOut(t, bare, "rev-parse", "land/20260102-030405")); got != sha {
+		t.Errorf("land branch = %s; want %s", got, sha)
+	}
+	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != head {
+		t.Errorf("HEAD = %s; want %s (no reset)", got, head)
+	}
+	if !strings.Contains(stdout.String(), "pull/5") {
+		t.Errorf("stdout = %q", stdout.String())
+	}
+}
+
+func TestLandShaNotAhead(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	d := testLandDeps(t)
+	d.sha = "HEAD"
+	if res := landOne(dir, d); res.Kind != landSkipped || res.Lines[0] != dir+": skipped (already upstream)" {
+		t.Errorf("res = %#v", res)
+	}
+}
