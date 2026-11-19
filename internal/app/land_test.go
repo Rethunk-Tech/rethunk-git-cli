@@ -304,7 +304,7 @@ func TestLandWatcherResultAndNotify(t *testing.T) {
 	d := testLandDeps(t)
 	d.clock = clock
 	d.gh = gh
-	d.lookPath = func(string) (string, error) { return "/bin/nomad-hud-notify", nil }
+	d.lookPath = func(string) (string, error) { return "/bin/bosun", nil }
 	d.notify = func(argv []string) error { notified = append(notified, append([]string{}, argv...)); return nil }
 
 	job := landWatchJob{
@@ -343,7 +343,7 @@ func TestLandWatcherResultAndNotify(t *testing.T) {
 	}
 	argv := notified[0]
 	want := []string{
-		"/bin/nomad-hud-notify",
+		"/bin/bosun", "notify",
 		"--source", "rgit-land",
 		"--key", "land-o-r-9",
 		"--level", "info",
@@ -447,14 +447,14 @@ func TestLandWatcherNotifyErrorOnClosed(t *testing.T) {
 	d := testLandDeps(t)
 	d.clock = &fakeClock{now: time.Date(2026, 11, 18, 7, 0, 0, 0, time.UTC)}
 	d.gh = &fakeGH{prs: []prInfo{{State: "CLOSED", URL: "https://github.com/o/r/pull/3"}}}
-	d.lookPath = func(string) (string, error) { return "/bin/nomad-hud-notify", nil }
+	d.lookPath = func(string) (string, error) { return "/bin/bosun", nil }
 	d.notify = func(argv []string) error { notified = append(notified, append([]string{}, argv...)); return nil }
 	res := watchUntilDone(landWatchJob{ID: "id", Slug: "o/r", PR: 3, URL: "https://github.com/o/r/pull/3"}, d)
 	notifyWatch(res, d)
 	if res.State != "closed" {
 		t.Fatalf("state = %q", res.State)
 	}
-	if len(notified) != 1 || notified[0][6] != "error" {
+	if len(notified) != 1 || notified[0][7] != "error" {
 		t.Errorf("argv = %#v", notified)
 	}
 }

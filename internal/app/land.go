@@ -269,7 +269,7 @@ func defaultLandDeps(stdout, stderr io.Writer) landDeps {
 }
 
 func runNotify(argv []string) error {
-	cmd := exec.CommandContext(context.Background(), argv[0], argv[1:]...) //nolint:gosec // argv is nomad-hud-notify plus flags rgit built
+	cmd := exec.CommandContext(context.Background(), argv[0], argv[1:]...) //nolint:gosec // argv is `bosun notify` plus flags rgit built
 	cmd.Stdin = nil
 	return cmd.Run()
 }
@@ -1857,7 +1857,7 @@ func writeWatchResult(res landWatchResult, d landDeps) {
 }
 
 func notifyWatch(res landWatchResult, d landDeps) {
-	bin, err := d.lookPath("nomad-hud-notify")
+	bin, err := d.lookPath("bosun")
 	if err != nil {
 		return
 	}
@@ -1875,7 +1875,7 @@ func notifyWatch(res landWatchResult, d landDeps) {
 	if res.State != "merged" {
 		msg = fmt.Sprintf("%s #%d: %s, CI %s", name, res.PR, res.State, res.CI)
 	}
-	argv := []string{bin, "--source", "rgit-land", "--key", key, "--level", level, "--url", res.URL, msg}
+	argv := []string{bin, "notify", "--source", "rgit-land", "--key", key, "--level", level, "--url", res.URL, msg}
 	_ = d.notify(argv)
 }
 
