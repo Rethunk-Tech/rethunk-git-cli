@@ -314,6 +314,14 @@ func randInt() int {
 	return int(b[0])<<8 | int(b[1])
 }
 
+// landValueFlags maps each flag that takes a value to what its missing-value error asks for.
+var landValueFlags = map[string]string{
+	"--branch":    "a name",
+	"--sha":       "a commit",
+	landWatchFlag: "an id",
+	"--parent":    "an id",
+}
+
 func runLand(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	return runLandWith(ctx, dir, args, defaultLandDeps(stdout, stderr))
 }
@@ -343,42 +351,24 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 			// already applied via ctx; accepted here so it can sit after the command
 		case a == "--repos":
 			reposFlag = true
-		case a == "--branch":
+		case landValueFlags[a] != "":
 			val, next, ok := landFlagValue(args, i)
 			if !ok {
-				fmt.Fprintln(d.stderr, "rgit land: --branch needs a name")
+				fmt.Fprintf(d.stderr, "rgit land: %s needs %s\n", a, landValueFlags[a])
 				fmt.Fprintln(d.stderr, landUsageLine)
 				return exitcode.InvalidUsage
 			}
-			branch = val
 			i = next
-		case a == "--sha":
-			val, next, ok := landFlagValue(args, i)
-			if !ok {
-				fmt.Fprintln(d.stderr, "rgit land: --sha needs a commit")
-				fmt.Fprintln(d.stderr, landUsageLine)
-				return exitcode.InvalidUsage
+			switch a {
+			case "--branch":
+				branch = val
+			case "--sha":
+				d.sha = val
+			case landWatchFlag:
+				watchID = val
+			default:
+				watchParent = val
 			}
-			d.sha = val
-			i = next
-		case a == landWatchFlag:
-			val, next, ok := landFlagValue(args, i)
-			if !ok {
-				fmt.Fprintln(d.stderr, "rgit land: --watch needs an id")
-				fmt.Fprintln(d.stderr, landUsageLine)
-				return exitcode.InvalidUsage
-			}
-			watchID = val
-			i = next
-		case a == "--parent":
-			val, next, ok := landFlagValue(args, i)
-			if !ok {
-				fmt.Fprintln(d.stderr, "rgit land: --parent needs an id")
-				fmt.Fprintln(d.stderr, landUsageLine)
-				return exitcode.InvalidUsage
-			}
-			watchParent = val
-			i = next
 		case strings.HasPrefix(a, "-"):
 			fmt.Fprintf(d.stderr, "rgit land: unknown argument: %s\n", a)
 			fmt.Fprintln(d.stderr, landUsageLine)
