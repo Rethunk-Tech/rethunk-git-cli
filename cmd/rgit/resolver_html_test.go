@@ -158,15 +158,10 @@ func TestResolve_HTMLDuplicateTagIDOrdinal(t *testing.T) {
 	))
 }
 
-// TestResolve_HTMLVoidElementDeclOnlyTrimmed pins the seam declOnlyExtent
-// consults for HTML alone: a void element followed by inline text with no
-// enclosing tag or sibling element to stop it (unlike TestResolve_HTML's own
-// "<input ...>\n</div>" fixture, where the enclosing tag's own close already
-// bounds it) absorbs that text into its own node's EndByte() -- left alone
-// in the extent that gets staged (Extent, TestResolve_HTML's own coverage),
-// but trimmed back to the start_tag's own end in DeclOnly, the extent the
-// later LSP cross-check compares against a server that never reports that
-// absorbed text as part of the element either.
+// TestResolve_HTMLVoidElementDeclOnlyTrimmed pins that a void element followed by inline
+// text with no enclosing tag or sibling element to stop it (the grammar absorbs that text
+// into the element's node) is trimmed back to its start_tag's end, both in the staged
+// Extent and in DeclOnly, the extent the LSP cross-check compares.
 func TestResolve_HTMLVoidElementDeclOnlyTrimmed(t *testing.T) {
 	t.Parallel()
 	src := []byte(`<div id="app">
@@ -184,8 +179,8 @@ func TestResolve_HTMLVoidElementDeclOnlyTrimmed(t *testing.T) {
 	qt.Assert(t, qt.Equals(declOnly, `<input id="name" type="text">`))
 
 	full := string(src[res.Extent.Start:res.Extent.End])
-	qt.Assert(t, qt.StringContains(full, "trailing text with no sibling to stop it"),
-		qt.Commentf("Extent (what gets staged) keeps the grammar's own absorption -- only DeclOnly (cross-check) is trimmed"))
+	qt.Assert(t, qt.Equals(full, declOnly),
+		qt.Commentf("the staged extent stops at the void element's tag, not at the text after it"))
 
 	// An element with a real end_tag is unaffected: DeclOnly and Extent
 	// agree, nothing to trim.
