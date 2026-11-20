@@ -729,7 +729,7 @@ func (r *Repo) RevParseVerify(ctx context.Context, rev string) (sha string, ok b
 // IsUnmerged reports whether path has any unmerged index entries, via
 // `git ls-files -u`. An empty result is the normal clean-index answer.
 func (r *Repo) IsUnmerged(ctx context.Context, path string) (bool, error) {
-	out, err := r.checked(ctx, "ls-files", "-u", "--", path)
+	out, err := r.checked(ctx, "ls-files", "-u", "--", ":(literal)"+path)
 	if err != nil {
 		return false, err
 	}
@@ -1677,7 +1677,17 @@ func (r *Repo) CleansCRLF(ctx context.Context, path string) (bool, error) {
 // found is false when path is simply not in the index — the normal case
 // for a file that is untracked or staged-deleted, not a failure.
 func (r *Repo) LsFilesStage(ctx context.Context, path string) (mode string, found bool, err error) {
-	out, err := r.checked(ctx, "ls-files", "--stage", "--", path)
+	return r.lsFilesStage(ctx, ":(literal)"+path)
+}
+
+// LsFilesStageFold is LsFilesStage matching path case-insensitively, for a
+// core.ignorecase checkout whose index spells the name differently.
+func (r *Repo) LsFilesStageFold(ctx context.Context, path string) (mode string, found bool, err error) {
+	return r.lsFilesStage(ctx, ":(literal,icase)"+path)
+}
+
+func (r *Repo) lsFilesStage(ctx context.Context, spec string) (mode string, found bool, err error) {
+	out, err := r.checked(ctx, "ls-files", "--stage", "--", spec)
 	if err != nil {
 		return "", false, err
 	}

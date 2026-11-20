@@ -7,7 +7,7 @@ import (
 
 // IndexWorktreeBits reports the stage-0 worktree bits for path.
 func (r *Repo) IndexWorktreeBits(ctx context.Context, path string) (skip, assume, found bool, err error) {
-	out, err := r.checked(ctx, "ls-files", "-v", "--", path)
+	out, err := r.checked(ctx, "ls-files", "-v", "--", ":(literal)"+path)
 	if err != nil {
 		return false, false, false, err
 	}

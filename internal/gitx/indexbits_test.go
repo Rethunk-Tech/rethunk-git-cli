@@ -44,3 +44,19 @@ func TestIndexWorktreeBits(t *testing.T) {
 		})
 	}
 }
+
+// TestIndexQueriesTakePathsLiterally pins that a bracketed path is never
+// glob-matched against a sibling: r/[id].ts must not find r/i.ts.
+func TestIndexQueriesTakePathsLiterally(t *testing.T) {
+	t.Parallel()
+	_, repo := gittest.RepoWithFile(t.Context(), t, "r/i.ts", "x\n", "test: add i")
+	if _, _, found, err := repo.IndexWorktreeBits(t.Context(), "r/[id].ts"); err != nil || found {
+		t.Errorf("IndexWorktreeBits found=%t err=%v; want not found", found, err)
+	}
+	if _, found, err := repo.LsFilesStage(t.Context(), "r/[id].ts"); err != nil || found {
+		t.Errorf("LsFilesStage found=%t err=%v; want not found", found, err)
+	}
+	if bad, err := repo.IsUnmerged(t.Context(), "r/[id].ts"); err != nil || bad {
+		t.Errorf("IsUnmerged = %t, %v; want false", bad, err)
+	}
+}
