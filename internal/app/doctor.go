@@ -242,6 +242,10 @@ func runEnvironmentChecks(ctx context.Context) (checks []prereq.Check, fatal err
 		checks = append(checks, prereq.CheckGitVersion(ctx, git.Detail, prereq.MinGitVersion))
 	}
 
+	checks = append(checks,
+		prereq.LookPath("gate", "gate", "optional -- rgit land runs it on HEAD before pushing (--no-gate skips it)"),
+		prereq.LookPath("gh", "gh", "optional -- rgit land reads branch rules and opens PRs with it"))
+
 	ts := prereq.LookPath("tree-sitter CLI", "tree-sitter", "optional -- only needed to rebuild with SQL support, see docs/INSTALL.md § SQL support")
 	checks = append(checks, ts)
 

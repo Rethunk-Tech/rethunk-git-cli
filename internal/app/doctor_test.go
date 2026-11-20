@@ -103,3 +103,18 @@ func mapKeys[V any](m map[string]V) []string {
 	slices.Sort(keys)
 	return keys
 }
+
+// TestRunEnvironmentChecksNamesLandTools pins that doctor reports the tools rgit land shells out to.
+func TestRunEnvironmentChecksNamesLandTools(t *testing.T) {
+	t.Parallel()
+	checks, _ := runEnvironmentChecks(t.Context())
+	var names []string
+	for _, c := range checks {
+		names = append(names, c.Name)
+	}
+	for _, want := range []string{"gate", "gh"} {
+		if !slices.Contains(names, want) {
+			t.Errorf("checks %v lack %q", names, want)
+		}
+	}
+}

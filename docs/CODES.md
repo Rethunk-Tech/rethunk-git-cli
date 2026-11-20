@@ -259,6 +259,8 @@ wiring, not reachability. `--in-repo` narrows rows, not shape.
 ```text
 env<TAB>git<TAB>ok<TAB>/usr/bin/git
 env<TAB>git version<TAB>ok<TAB>2.43.0
+env<TAB>gate<TAB>ok<TAB>/home/user/go/bin/gate
+env<TAB>gh<TAB>ok<TAB>/usr/bin/gh
 env<TAB>tree-sitter CLI<TAB>MISSING<TAB>optional -- only needed to rebuild with SQL support, see docs/INSTALL.md § SQL support
 server<TAB>gopls (go)<TAB>ok<TAB>/home/user/go/bin/gopls (reachable)
 server<TAB>vtsls (typescript, tsx)<TAB>MISSING<TAB>not on PATH -- see docs/INSTALL.md § Language servers

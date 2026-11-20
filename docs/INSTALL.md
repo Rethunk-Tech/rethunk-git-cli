@@ -5,6 +5,8 @@
 - **Go 1.27+** with cgo — the grammars are C.
 - **git 2.32+** on `PATH` (`git commit --trailer`). `rgit doctor` reports
   the resolved version; it does not refuse below the floor.
+- For `rgit land`: **`gate`** (runs the repo's gate before any push) and
+  **`gh`** (branch rules, PRs). `rgit doctor` reports both.
 - Optionally a **language server** per language ([Language servers](#language-servers)).
 - Optionally the **tree-sitter CLI** for `.sql` ([SQL support](#sql-support)).
 
