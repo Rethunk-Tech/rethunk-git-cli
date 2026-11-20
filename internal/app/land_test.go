@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ import (
 
 func TestLandSummaryWording(t *testing.T) {
 	t.Parallel()
-	if got := summaryPushed("/r"); got != "/r: pushed" {
+	if got := summaryPushed("/r", "abc"); got != "/r: pushed abc" {
 		t.Errorf("summaryPushed = %q", got)
 	}
 	if got := summarySkippedAlreadyUpstream("/r"); got != "/r: skipped (already upstream)" {
@@ -162,7 +163,7 @@ func TestLandPushedLocalBare(t *testing.T) {
 	if code != exitcode.Success {
 		t.Fatalf("code = %v stdout=%q", code, stdout.String())
 	}
-	want := dir + ": pushed\n"
+	want := dir + ": pushed " + strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")) + "\n"
 	if stdout.String() != want {
 		t.Errorf("stdout = %q; want %q", stdout.String(), want)
 	}
@@ -183,7 +184,7 @@ func TestLandInstallAfterDirectPush(t *testing.T) {
 		t.Fatalf("code = %v stdout=%q", code, stdout.String())
 	}
 	out := stdout.String()
-	if !strings.Contains(out, dir+": pushed\n") {
+	if !strings.Contains(out, dir+": pushed ") {
 		t.Errorf("stdout = %q", out)
 	}
 	if !strings.Contains(out, dir+": installed test-bin\n") {
@@ -248,7 +249,7 @@ func TestLandInstallFailureExit5(t *testing.T) {
 		t.Fatalf("code = %v stdout=%q; want 5", code, stdout.String())
 	}
 	out := stdout.String()
-	if !strings.Contains(out, dir+": pushed\n") {
+	if !strings.Contains(out, dir+": pushed ") {
 		t.Errorf("stdout = %q", out)
 	}
 	if strings.Contains(out, ": installed ") {
@@ -1431,38 +1432,6 @@ func TestLastNLinesTail(t *testing.T) {
 	}
 }
 
-func TestPushRetry(t *testing.T) {
-	t.Parallel()
-	var calls []string
-	git := &fakeGitRunner{respond: func(_ string, args []string) (string, error) {
-		calls = append(calls, strings.Join(args, " "))
-		return "", nil
-	}}
-	d := testLandDeps(t)
-	d.git = git
-	if _, err := pushRetry("/src/r", "main", d); err != nil {
-		t.Fatal(err)
-	}
-	if calls[0] != "push origin HEAD:main" {
-		t.Errorf("push argv = %q; want origin HEAD:main", calls[0])
-	}
-
-	calls = nil
-	git.respond = func(_ string, args []string) (string, error) {
-		calls = append(calls, strings.Join(args, " "))
-		if args[0] == "push" {
-			return " ! [rejected] (fetch first)", errors.New("exit 1")
-		}
-		return "", errors.New("pull failed")
-	}
-	if _, err := pushRetry("/src/r", "main", d); err == nil {
-		t.Fatal("want the original push error")
-	}
-	if !containsAll(calls, "rebase --abort") {
-		t.Errorf("calls = %#v; want rebase --abort after a failed pull", calls)
-	}
-}
-
 func TestMergeStrategyOrder(t *testing.T) {
 	t.Parallel()
 	d := testLandDeps(t)
@@ -2170,5 +2139,51 @@ func TestLandBranchPushRefusesToRebaseAfterGate(t *testing.T) {
 				t.Errorf("origin tip = %q; want the competing commit untouched", got)
 			}
 		})
+	}
+}
+
+// moveBeforePush runs hook once, just before the first push, standing in for
+// another client landing on origin after land's last look at it.
+type moveBeforePush struct {
+	gitRunner
+	hook func()
+	once sync.Once
+}
+
+func (m *moveBeforePush) run(dir string, args ...string) (string, error) {
+	if len(args) > 0 && args[0] == "push" {
+		m.once.Do(m.hook)
+	}
+	return m.gitRunner.run(dir, args...)
+}
+
+// TestLandPlainRefusesToRebaseWhenOriginMoves pins that a rejected plain push
+// stops with exit 1 and pushes nothing, instead of rebasing onto the new tip.
+func TestLandPlainRefusesToRebaseWhenOriginMoves(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	gittest.Write(t, dir, "ahead.txt", "x\n")
+	gittest.Commit(t.Context(), t, dir, "ahead")
+
+	d := testLandDeps(t)
+	var stdout, stderr strings.Builder
+	d.stdout = &stdout
+	d.stderr = &stderr
+	d.git = &moveBeforePush{gitRunner: d.git, hook: func() {
+		other := filepath.Join(t.TempDir(), "other")
+		gitOut(t, t.TempDir(), "clone", "-q", bare, other)
+		gittest.Write(t, other, "moved.txt", "moved\n")
+		gitOut(t, other, "add", "moved.txt")
+		gitOut(t, other, "commit", "-q", "-m", "moved")
+		gitOut(t, other, "push", "-q", "origin", "HEAD")
+	}}
+	if code := runLandWith(t.Context(), dir, nil, d); code != 1 {
+		t.Fatalf("code = %v stdout=%q stderr=%q; want 1", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "origin moved; nothing pushed, re-run") {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+	if got := strings.TrimSpace(gitOut(t, bare, "log", "-1", "--pretty=%s")); got != "moved" {
+		t.Errorf("origin tip = %q; want the competing commit untouched", got)
 	}
 }

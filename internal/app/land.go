@@ -46,6 +46,10 @@ dirty files overlap BR's.
 every repo in the run has been pushed. A merged or queued PR is not
 installed.
 
+A push rejected because origin moved is never rebased and retried: land
+exits 1 with "origin moved; nothing pushed, re-run" on stderr ("origin moved
+during the gate" with --branch), so only verified commits are pushed.
+
 Control returns after the push or the merge/queue request. PRs not yet
 merged are then watched in the background unless --wait is set, in which
 case land polls inline and prints the final line per repo.
@@ -468,8 +472,12 @@ func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, 
 		_ = enc.Encode(landJSON{Repos: jsonResults(results, watches, wait)})
 	} else {
 		for _, res := range results {
+			out := d.stdout
+			if res.Moved {
+				out = d.stderr
+			}
 			for _, line := range res.Lines {
-				fmt.Fprintln(d.stdout, line)
+				fmt.Fprintln(out, line)
 			}
 		}
 	}
@@ -781,9 +789,8 @@ type landPushOpts struct {
 	pushTo   string
 	prRef    string
 	logRange string
-	// noRebase pushes exactly what was gated: a rejected push reports that
-	// origin moved instead of rebasing onto it and pushing an ungated commit.
-	noRebase bool
+	// afterGate words the origin-moved error for a push that follows a gate.
+	afterGate bool
 }
 
 func landByRules(repo, def string, d landDeps, opts landPushOpts) landResult {
@@ -811,32 +818,8 @@ func landByRules(repo, def string, d landDeps, opts landPushOpts) landResult {
 	needPR, mergeQueue := rulesNeedPR(rules)
 	res.Queue = mergeQueue
 	if !needPR {
-		var out string
-		var err error
-		switch {
-		case opts.pushRef != "":
-			out, err = d.git.run(pushDir, "push", "origin", opts.pushRef+":refs/heads/"+opts.pushTo)
-		case opts.noRebase:
-			out, err = pushOnce(pushDir, opts.pushTo, d)
-			if err != nil && pushRetryable(out) {
-				res.Kind = landRed
-				res.Moved = true
-				res.Lines = []string{"error: origin moved during the gate; nothing pushed, re-run"}
-				return res
-			}
-		default:
-			out, err = pushRetry(pushDir, opts.pushTo, d)
-		}
-		if err == nil {
-			res.Kind = landPushed
-			res.Route = "direct"
-			res.Lines = []string{summaryPushed(repo)}
-			return res
-		}
-		if !pushRejectedProtected(out) {
-			res.Kind = landRed
-			res.Lines = []string{summaryRed(repo, out)}
-			return res
+		if direct, done := pushDirect(repo, pushDir, d, opts, res); done {
+			return direct
 		}
 	}
 
@@ -967,7 +950,7 @@ func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBra
 			logRange: "origin/" + def + ".." + branch,
 		}
 	}
-	prep.opts.noRebase = true
+	prep.opts.afterGate = true
 	if _, err := d.git.run(wt, "rebase", base); err != nil {
 		_, _ = d.git.run(wt, "rebase", "--abort")
 		fmt.Fprintln(d.stderr, "conflict: hand to solver")
@@ -1326,35 +1309,47 @@ func dirtyTracked(repo string, d landDeps) bool {
 	return strings.TrimSpace(out) != ""
 }
 
+// pushDirect pushes exactly what was verified: a rejected push reports that
+// origin moved rather than rebasing onto it and pushing an unverified commit.
+// done is false only when a protected branch sends the caller to the PR route.
+func pushDirect(repo, pushDir string, d landDeps, opts landPushOpts, res landResult) (landResult, bool) {
+	var out string
+	var err error
+	pushed := opts.pushRef
+	if pushed != "" {
+		out, err = d.git.run(pushDir, "push", "origin", pushed+":refs/heads/"+opts.pushTo)
+	} else {
+		out, err = pushOnce(pushDir, opts.pushTo, d)
+		pushed = strings.TrimSpace(mustGit(pushDir, d, "rev-parse", "HEAD"))
+	}
+	switch {
+	case err == nil:
+		res.Kind = landPushed
+		res.Route = "direct"
+		res.Lines = []string{summaryPushed(repo, pushed)}
+	case pushRetryable(out):
+		msg := "error: origin moved; nothing pushed, re-run"
+		if opts.afterGate {
+			msg = "error: origin moved during the gate; nothing pushed, re-run"
+		}
+		res.Kind = landRed
+		res.Moved = true
+		res.Lines = []string{msg}
+	case !pushRejectedProtected(out):
+		res.Kind = landRed
+		res.Lines = []string{summaryRed(repo, out)}
+	default:
+		return res, false
+	}
+	return res, true
+}
+
 func pushOnce(repo, to string, d landDeps) (string, error) {
 	args := []string{"push"}
 	if to != "" {
 		args = append(args, "origin", "HEAD:"+to)
 	}
 	return d.git.run(repo, args...)
-}
-
-func pushRetry(repo, to string, d landDeps) (string, error) {
-	var out string
-	var err error
-	for range 4 {
-		out, err = pushOnce(repo, to, d)
-		if err == nil {
-			return out, nil
-		}
-		if !pushRetryable(out) {
-			return out, err
-		}
-		pullArgs := []string{"pull", "-q", "--rebase"}
-		if to != "" {
-			pullArgs = append(pullArgs, "origin", to)
-		}
-		if _, pullErr := d.git.run(repo, pullArgs...); pullErr != nil {
-			_, _ = d.git.run(repo, "rebase", "--abort")
-			return out, err
-		}
-	}
-	return out, err
 }
 
 func pushRetryable(out string) bool {
@@ -1510,7 +1505,7 @@ func parseWorkflowQuery(out string) workflowRun {
 	return workflowRun{}
 }
 
-func summaryPushed(repo string) string { return repo + ": pushed" }
+func summaryPushed(repo, sha string) string { return repo + ": pushed " + sha }
 
 func summarySkippedAlreadyUpstream(repo string) string {
 	return repo + ": skipped (already upstream)"

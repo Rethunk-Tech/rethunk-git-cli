@@ -396,7 +396,7 @@ Does not start language servers.
 
 ```console
 $ rgit land --repos ~/src/foo ~/src/bar
-/src/foo: pushed
+/src/foo: pushed 3f2a9c1d0e5b7a8c9d0e1f2a3b4c5d6e7f8a9b0c
 /src/bar: PR https://github.com/acme/bar/pull/12 (queued)
 watching: acme-bar-12-20260102T030405Z
 
@@ -416,6 +416,11 @@ been pushed. A merged or queued PR is not installed. No Makefile, or a
 Makefile with no `install` target: one skip line naming the reason.
 Success: `DIR: installed <describe>`. Install failure: the failing tail,
 exit 5.
+
+A push rejected because origin moved is never rebased and retried: land
+exits 1 with `origin moved; nothing pushed, re-run` on stderr (`origin moved
+during the gate` with `--branch`), since the commit that would go out is not
+the one that was verified. Success prints the pushed SHA.
 
 `--sha SHA` lands that one ahead commit (an ancestor of HEAD, not yet
 upstream) instead of HEAD, by the same direct, PR or queue route. It
