@@ -1375,28 +1375,21 @@ func mergeStrategy(slug string, d landDeps) string {
 
 func slugFromOrigin(origin string) string {
 	slug := strings.TrimSuffix(strings.TrimSpace(origin), ".git")
-	switch {
-	case strings.Contains(slug, "@") && strings.Contains(slug, ":"):
-		// git@host:owner/repo
-		if i := strings.Index(slug, ":"); i >= 0 && !strings.Contains(slug[i+1:], "://") {
-			at := strings.LastIndex(slug[:i], "@")
-			if at >= 0 {
-				return slug[i+1:]
-			}
+	if _, rest, ok := strings.Cut(slug, "://"); ok {
+		// host (with any userinfo and port) up to the first slash.
+		_, path, ok := strings.Cut(rest, "/")
+		if !ok {
+			return ""
 		}
-		return ""
-	case strings.HasPrefix(slug, "http://") || strings.HasPrefix(slug, "https://") || strings.HasPrefix(slug, "ssh://"):
-		rest := slug
-		if i := strings.Index(rest, "://"); i >= 0 {
-			rest = rest[i+3:]
-		}
-		if i := strings.Index(rest, "/"); i >= 0 {
-			return rest[i+1:]
-		}
-		return ""
-	default:
-		return ""
+		return path
 	}
+	// scp-like git@host:owner/repo
+	if at := strings.Index(slug, "@"); at >= 0 {
+		if colon := strings.Index(slug[at:], ":"); colon >= 0 {
+			return slug[at+colon+1:]
+		}
+	}
+	return ""
 }
 
 func splitSlug(slug string) (owner, name string, ok bool) {

@@ -1452,14 +1452,18 @@ func TestMergeStrategyOrder(t *testing.T) {
 func TestSlugFromOriginForms(t *testing.T) {
 	t.Parallel()
 	cases := map[string]string{
-		"git@github.com:acme/demo.git":     "acme/demo",
-		"git@github.com:acme/demo":         "acme/demo",
-		"https://github.com/acme/demo.git": "acme/demo",
-		"http://example.com/acme/demo":     "acme/demo",
-		"ssh://git.example.com/acme/demo":  "acme/demo",
-		"http://example.com":               "",
-		"/local/checkout/demo.git":         "",
-		"":                                 "",
+		"git@github.com:acme/demo.git":            "acme/demo",
+		"git@github.com:acme/demo":                "acme/demo",
+		"https://github.com/acme/demo.git":        "acme/demo",
+		"http://example.com/acme/demo":            "acme/demo",
+		"ssh://git.example.com/acme/demo":         "acme/demo",
+		"http://example.com":                      "",
+		"ssh://git@host/o/r":                      "o/r",
+		"ssh://git@host:22/o/r.git":               "o/r",
+		"https://user@host/o/r":                   "o/r",
+		"https://x-access-token:tok@host/o/r.git": "o/r",
+		"/local/checkout/demo.git":                "",
+		"":                                        "",
 	}
 	for origin, want := range cases {
 		if got := slugFromOrigin(origin); got != want {
