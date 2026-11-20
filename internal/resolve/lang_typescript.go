@@ -117,6 +117,8 @@ func (l *tsFamily) Declarations(src []byte, root *ts.Node) []Declaration {
 				decls = append(decls, classMembers(target, d.Bare, src)...)
 			case "internal_module", "module":
 				decls = append(decls, moduleMembers(target, d.Bare, src)...)
+			case "lexical_declaration", "variable_declaration":
+				decls = append(decls, variableExtras(target, d, src)...)
 			}
 		}
 	}
@@ -132,6 +134,103 @@ func onlyNamedChild(n *ts.Node) *ts.Node {
 		return nil
 	}
 	return n.NamedChild(0)
+}
+
+// variableExtras adds what a `const NAME = <value>` declarator exposes beyond
+// NAME itself: an object literal's function members (`api.rescanFleet`), and
+// the inner name of a wrapped function expression (`memo(function TurnView()
+// {})` also answers to TurnView, over the same span as NAME).
+func variableExtras(target *ts.Node, d Declaration, src []byte) []Declaration {
+	for j := uint(0); j < target.NamedChildCount(); j++ {
+		vd := target.NamedChild(j)
+		if vd == nil || vd.Kind() != "variable_declarator" {
+			continue
+		}
+		if name := vd.ChildByFieldName("name"); name == nil || nodeText(src, name) != d.Bare {
+			continue
+		}
+		value := vd.ChildByFieldName("value")
+		for value != nil && (value.Kind() == "as_expression" || value.Kind() == "satisfies_expression" || value.Kind() == "parenthesized_expression") {
+			value = value.NamedChild(0)
+		}
+		if value == nil {
+			return nil
+		}
+		switch value.Kind() {
+		case "object":
+			return objectMembers(value, d.Bare, src)
+		case "call_expression":
+			return wrappedFunctionAlias(value, d, src)
+		}
+	}
+	return nil
+}
+
+// wrappedFunctionAlias indexes the name of a named function expression passed
+// as an argument (`memo(function TurnView() {})`) as an alias of d's span.
+func wrappedFunctionAlias(call *ts.Node, d Declaration, src []byte) []Declaration {
+	args := call.ChildByFieldName("arguments")
+	if args == nil {
+		return nil
+	}
+	for i := uint(0); i < args.NamedChildCount(); i++ {
+		fn := args.NamedChild(i)
+		if fn.Kind() != "function_expression" && fn.Kind() != "generator_function" {
+			continue
+		}
+		if name := fn.ChildByFieldName("name"); name != nil && nodeText(src, name) != d.Bare {
+			alias := d
+			alias.Bare = nodeText(src, name)
+			return []Declaration{alias}
+		}
+	}
+	return nil
+}
+
+// objectMembers enumerates an object literal's function-valued members --
+// methods, and properties holding an arrow or function expression --
+// container-qualified like classMembers. Plain-data properties stay
+// unaddressable.
+func objectMembers(obj *ts.Node, container string, src []byte) []Declaration {
+	var out []Declaration
+	for i := uint(0); i < obj.NamedChildCount(); i++ {
+		member := obj.NamedChild(i)
+		var key *ts.Node
+		switch member.Kind() {
+		case "method_definition":
+			key = member.ChildByFieldName("name")
+		case "pair":
+			if v := member.ChildByFieldName("value"); v != nil &&
+				(v.Kind() == "arrow_function" || v.Kind() == "function_expression") {
+				key = member.ChildByFieldName("key")
+			}
+		}
+		if key == nil || (key.Kind() != "property_identifier" && key.Kind() != "identifier") {
+			continue
+		}
+		out = append(out, Declaration{Node: member, Bare: nodeText(src, key), Container: container})
+	}
+	return out
+}
+
+// extendThroughSeparator implements separatorExtender for object-literal
+// members only: deleting `a() {}` from `{ a() {}, b() {} }` must take its
+// comma too, or the result is `{ , b() {} }`.
+func (l *tsFamily) extendThroughSeparator(src []byte, node *ts.Node) uint {
+	end := node.EndByte()
+	if p := node.Parent(); p == nil || p.Kind() != "object" {
+		return end
+	}
+	for i := end; i < uint(len(src)); i++ {
+		switch src[i] {
+		case ' ', '\t':
+		case ',':
+			return i + 1
+		default:
+			return end
+		}
+	}
+	return end
 }
 
 // overloadRun tracks a run of same-name overload signatures

@@ -242,3 +242,38 @@ class C {
 		}
 	}
 }
+
+// TestResolve_TSObjectMembersAndWrappedNames pins object-literal function
+// members (qualified and bare, comma included) and a wrapped function
+// expression's inner name as an alias of the same span.
+func TestResolve_TSObjectMembersAndWrappedNames(t *testing.T) {
+	t.Parallel()
+	const src = `export const api = { rescanFleet() {}, x: () => {}, y: 1 };
+const Turn = memo(function TurnView() {});
+`
+	lang, _ := ForExtension(".ts")
+	tests := []struct{ anchor, want string }{
+		{"api.rescanFleet", "rescanFleet() {},"},
+		{"rescanFleet", "rescanFleet() {},"},
+		{"api.x", "x: () => {},"},
+		{"api.y", ""},
+		{"TurnView", "const Turn = memo(function TurnView() {});"},
+		{"Turn", "const Turn = memo(function TurnView() {});"},
+	}
+	for _, tt := range tests {
+		res, err := Resolve(lang, []byte(src), tt.anchor)
+		if tt.want == "" {
+			if err == nil {
+				t.Errorf("%s resolved; want unresolvable", tt.anchor)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("%s: %v", tt.anchor, err)
+			continue
+		}
+		if got := string(srcAt([]byte(src), res.Extent)); got != tt.want {
+			t.Errorf("%s extent = %q; want %q", tt.anchor, got, tt.want)
+		}
+	}
+}
