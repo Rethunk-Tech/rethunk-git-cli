@@ -911,7 +911,7 @@ func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBra
 		return landBranchPrep{}, 1
 	}
 	repo = strings.TrimSpace(repo)
-	if isLinkedWorktree(strings.TrimSpace(mustGit(repo, d, "rev-parse", "--absolute-git-dir"))) {
+	if isLinkedWorktree(repo, d) {
 		fmt.Fprintf(d.stderr, "error: %s is not the main checkout\n", repo)
 		return landBranchPrep{}, 1
 	}
@@ -1172,8 +1172,15 @@ func printLandBranchResult(prep landBranchPrep, res landResult, sha, logPath str
 	fmt.Fprintf(d.stdout, "%s %s %s %s %s\n", prep.repo, prep.branch, sha, logPath, res.Route)
 }
 
-func isLinkedWorktree(gitDir string) bool {
-	return strings.Contains(filepath.ToSlash(gitDir), "/worktrees/")
+// isLinkedWorktree is true when repo's git dir differs from the common one,
+// which only a linked worktree's does.
+func isLinkedWorktree(repo string, d landDeps) bool {
+	out, err := d.git.run(repo, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir")
+	if err != nil {
+		return false
+	}
+	dirs := strings.Split(strings.TrimSpace(out), "\n")
+	return len(dirs) == 2 && filepath.Clean(dirs[0]) != filepath.Clean(dirs[1])
 }
 
 func defaultBranchChecked(repo string, d landDeps) (string, bool) {

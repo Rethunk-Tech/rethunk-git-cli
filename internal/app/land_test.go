@@ -2241,3 +2241,23 @@ func TestMergeOverlapFilesNonASCII(t *testing.T) {
 		t.Errorf("overlap = %q; want [é ü.txt]", got)
 	}
 }
+
+// TestIsLinkedWorktree pins the git-dir vs common-dir comparison: a main
+// checkout living under a directory named "worktrees" is not a linked one.
+func TestIsLinkedWorktree(t *testing.T) {
+	t.Parallel()
+	d := testLandDeps(t)
+	dir, _ := gittest.RepoWithFile(t.Context(), t, "a.txt", "a\n", "base")
+	nested := filepath.Join(t.TempDir(), "worktrees", "main")
+	gitOut(t, t.TempDir(), "clone", "-q", dir, nested)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	for _, tc := range []struct {
+		path string
+		want bool
+	}{{dir, false}, {nested, false}, {wt, true}} {
+		if got := isLinkedWorktree(tc.path, d); got != tc.want {
+			t.Errorf("isLinkedWorktree(%s) = %t; want %t", tc.path, got, tc.want)
+		}
+	}
+}
