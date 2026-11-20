@@ -183,6 +183,10 @@ func TestLandPlainGate(t *testing.T) {
 		{"red", func(string) (string, error) {
 			return "gate: failed: unit -> /x.log\n", errors.New("exit 1")
 		}, 1, false, ": red (gate failed: unit; log "},
+		{"gate leaves untracked file", func(dir string) (string, error) {
+			gittest.Write(t, dir, "coverage.out", "x\n")
+			return "", nil
+		}, exitcode.Success, true, ": pushed "},
 		{"moved", func(dir string) (string, error) {
 			gittest.Write(t, dir, "more.txt", "m\n")
 			gitOut(t, dir, "add", "more.txt")

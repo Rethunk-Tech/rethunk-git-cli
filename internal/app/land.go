@@ -758,7 +758,7 @@ func gateHead(repo string, d landDeps) (string, bool) {
 	}
 	state := func() string {
 		head := mustGit(repo, d, "rev-parse", "HEAD")
-		st, _ := d.git.run(repo, "status", "--porcelain")
+		st, _ := d.git.run(repo, "status", "--porcelain", "-uno")
 		return head + st
 	}
 	before := state()
