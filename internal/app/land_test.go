@@ -1797,6 +1797,7 @@ type fakeGH struct {
 	pi     int
 	run    workflowRun
 	merges []string
+	prErr  error
 }
 
 func (f *fakeGH) branchRuleTypes(string, string) ([]string, error) { return f.rules, nil }
@@ -1819,6 +1820,9 @@ func (f *fakeGH) mergePR(_, _ string, auto bool, strategy string) error {
 }
 func (f *fakeGH) prNumber(string, string) (int, error) { return f.number, nil }
 func (f *fakeGH) pullRequest(string, string, int) (prInfo, error) {
+	if f.prErr != nil {
+		return prInfo{}, f.prErr
+	}
 	if len(f.prs) == 0 {
 		return prInfo{}, nil
 	}
@@ -2189,5 +2193,32 @@ func TestLandPlainRefusesToRebaseWhenOriginMoves(t *testing.T) {
 	}
 	if got := strings.TrimSpace(gitOut(t, bare, "log", "-1", "--pretty=%s")); got != "moved" {
 		t.Errorf("origin tip = %q; want the competing commit untouched", got)
+	}
+}
+
+// TestLandPRLookupFailureIsUnknownState pins that a failed PR lookup is
+// reported as unknown, not as "neither queued nor auto-merge", and that the
+// queue route does not treat it as a failed enqueue.
+func TestLandPRLookupFailureIsUnknownState(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	gitOut(t, dir, "remote", "set-url", "origin", "git@github.com:acme/demo.git")
+	gitOut(t, dir, "remote", "set-url", "--push", "origin", bare)
+	gittest.Write(t, dir, "ahead.txt", "x\n")
+	gittest.Commit(t.Context(), t, dir, "ahead")
+
+	d := testLandDeps(t)
+	d.gh = &fakeGH{
+		rules:  []string{"pull_request", "merge_queue"},
+		url:    "https://github.com/acme/demo/pull/4",
+		number: 4,
+		prErr:  errors.New("api down"),
+	}
+	res := landOne(dir, d)
+	if res.Kind != landPR || res.PRState != prStateUnknown {
+		t.Fatalf("kind = %v state = %q lines=%v; want PR with unknown state", res.Kind, res.PRState, res.Lines)
+	}
+	if got := strings.Join(res.Lines, "\n"); !strings.Contains(got, "PR state unknown") || strings.Contains(got, "neither queued") {
+		t.Errorf("lines = %q", got)
 	}
 }

@@ -738,8 +738,14 @@ func landOne(r string, d landDeps) landResult {
 	case landPushed:
 		touchFleet(repo, 1, d)
 	case landPR:
-		if res.PRState == "" {
-			note := repo + ": note: PR open but neither queued nor set to auto-merge"
+		note := ""
+		switch res.PRState {
+		case prStateUnknown:
+			note = repo + ": note: PR state unknown (lookup failed)"
+		case "":
+			note = repo + ": note: PR open but neither queued nor set to auto-merge"
+		}
+		if note != "" {
 			res.Lines = append([]string{note}, res.Lines...)
 		}
 		_, _ = d.git.run(repo, "reset", "-q", "--keep", "origin/"+def)
@@ -860,7 +866,9 @@ func landByRules(repo, def string, d landDeps, opts landPushOpts) landResult {
 	queued := ""
 	if owner, name, ok := splitSlug(slug); ok && num > 0 {
 		info, err := d.gh.pullRequest(owner, name, num)
-		if err == nil {
+		if err != nil {
+			queued = prStateUnknown
+		} else {
 			queued = judgePRState(info)
 			if res.URL == "" {
 				res.URL = info.URL
@@ -1444,6 +1452,10 @@ func rulesNeedPR(types []string) (needPR, mergeQueue bool) {
 	}
 	return needPR, mergeQueue
 }
+
+// prStateUnknown is PRState when the PR lookup failed: neither queued nor
+// unqueued is known, so it must not read as the latter.
+const prStateUnknown = "unknown"
 
 func judgePRState(info prInfo) string {
 	if info.State == "MERGED" || info.Merged {
