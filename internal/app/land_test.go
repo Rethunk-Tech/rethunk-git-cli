@@ -2222,3 +2222,22 @@ func TestLandPRLookupFailureIsUnknownState(t *testing.T) {
 		t.Errorf("lines = %q", got)
 	}
 }
+
+// TestMergeOverlapFilesNonASCII pins that a dirty file whose name git would
+// quote (non-ASCII) still counts as overlapping the branch's changes.
+func TestMergeOverlapFilesNonASCII(t *testing.T) {
+	t.Parallel()
+	dir, _ := gittest.RepoWithFile(t.Context(), t, "é ü.txt", "base\n", "base")
+	gitOut(t, dir, "branch", "feat")
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", wt, "feat")
+	gittest.Write(t, wt, "é ü.txt", "feat\n")
+	gitOut(t, wt, "add", "é ü.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "feat")
+	gittest.Write(t, dir, "é ü.txt", "dirty\n")
+
+	got := mergeOverlapFiles(dir, "feat", testLandDeps(t))
+	if len(got) != 1 || got[0] != "é ü.txt" {
+		t.Errorf("overlap = %q; want [é ü.txt]", got)
+	}
+}

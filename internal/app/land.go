@@ -1214,31 +1214,32 @@ func findBranchWorktree(repo, branch string, d landDeps) (string, bool) {
 }
 
 func mergeOverlapFiles(repo, branch string, d landDeps) []string {
-	out, err := d.git.run(repo, "diff", "--name-only", "HEAD", branch)
+	out, err := d.git.run(repo, "diff", "--name-only", "-z", "HEAD", branch)
 	if err != nil {
 		return nil
 	}
 	changed := map[string]bool{}
-	for line := range strings.SplitSeq(out, "\n") {
-		if line = strings.TrimSpace(line); line != "" {
-			changed[line] = true
+	for p := range strings.SplitSeq(out, "\x00") {
+		if p != "" {
+			changed[p] = true
 		}
 	}
-	status, err := d.git.run(repo, "status", "--porcelain=v1", "-uno")
+	status, err := d.git.run(repo, "status", "--porcelain=v1", "-z", "-uno")
 	if err != nil {
 		return nil
 	}
 	var hit []string
-	for line := range strings.SplitSeq(status, "\n") {
-		if len(line) < 4 {
+	entries := strings.Split(status, "\x00")
+	for i := 0; i < len(entries); i++ {
+		e := entries[i]
+		if len(e) < 4 {
 			continue
 		}
-		path := strings.TrimSpace(line[3:])
-		if i := strings.LastIndex(path, " -> "); i >= 0 {
-			path = path[i+4:]
+		// A rename or copy carries its source as the next NUL field.
+		if e[0] == 'R' || e[0] == 'C' || e[1] == 'R' || e[1] == 'C' {
+			i++
 		}
-		path = strings.Trim(path, `"`)
-		if changed[path] {
+		if path := e[3:]; changed[path] {
 			hit = append(hit, path)
 		}
 	}
