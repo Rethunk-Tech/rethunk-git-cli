@@ -1391,7 +1391,7 @@ func pushDirect(repo, pushDir string, d landDeps, opts landPushOpts, res landRes
 		pushed = strings.TrimSpace(mustGit(pushDir, d, "rev-parse", "HEAD"))
 	}
 	switch {
-	case err == nil:
+	case err == nil || remoteHolds(pushDir, d, pushed, opts.pushTo):
 		res.Kind = landPushed
 		res.Route = "direct"
 		res.Lines = []string{summaryPushed(repo, pushed)}
@@ -1410,6 +1410,22 @@ func pushDirect(repo, pushDir string, d landDeps, opts landPushOpts, res landRes
 		return res, false
 	}
 	return res, true
+}
+
+// remoteHolds reports whether origin's branch already equals the pushed
+// commit: a push can fail updating only the local tracking ref (a concurrent
+// fetch holding its lock) after the remote moved.
+func remoteHolds(dir string, d landDeps, pushed, to string) bool {
+	if to == "" {
+		return false
+	}
+	want, err := d.git.run(dir, "rev-parse", pushed+"^{commit}")
+	if err != nil {
+		return false
+	}
+	out, err := d.git.run(dir, "ls-remote", "origin", "refs/heads/"+to)
+	f := strings.Fields(out)
+	return err == nil && len(f) > 0 && f[0] == strings.TrimSpace(want)
 }
 
 func pushOnce(repo, to string, d landDeps) (string, error) {

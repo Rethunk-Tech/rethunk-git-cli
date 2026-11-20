@@ -2261,6 +2261,31 @@ func TestLandPlainRefusesToRebaseWhenOriginMoves(t *testing.T) {
 	}
 }
 
+// TestLandPushedDespiteLockedTrackingRef pins that a push which reached origin
+// but failed to update the locked local tracking ref is reported as pushed.
+func TestLandPushedDespiteLockedTrackingRef(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	gittest.Write(t, dir, "ahead.txt", "x\n")
+	gittest.Commit(t.Context(), t, dir, "ahead")
+	lock := filepath.Join(dir, ".git", "refs", "remotes", "origin", "main.lock")
+	if err := os.WriteFile(lock, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	d := testLandDeps(t)
+	var stdout, stderr strings.Builder
+	d.stdout = &stdout
+	d.stderr = &stderr
+	if code := runLandWith(t.Context(), dir, nil, d); code != 0 {
+		t.Fatalf("code = %v stdout=%q stderr=%q; want 0", code, stdout.String(), stderr.String())
+	}
+	head := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	if got := strings.TrimSpace(gitOut(t, bare, "rev-parse", "main")); got != head {
+		t.Errorf("origin main = %s; want %s", got, head)
+	}
+}
+
 // TestLandPRLookupFailureIsUnknownState pins that a failed PR lookup is
 // reported as unknown, not as "neither queued nor auto-merge", and that the
 // queue route does not treat it as a failed enqueue.
