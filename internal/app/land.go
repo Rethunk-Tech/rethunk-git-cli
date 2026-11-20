@@ -48,6 +48,9 @@ is a usage error. Exit 2 on rebase conflict, 3 on a red gate, 4 if a
 merge-queue PR does not enqueue, 5 if --install fails, 13 if the checkout's
 dirty files overlap BR's.
 
+Before anything else, a clean default branch whose remote gained a PR merge
+is fast-forwarded and installed: "DIR: caught up to SHA (merged PR #N)".
+
 --install runs make install from each directly pushed, clean HEAD after
 every repo in the run has been pushed. A merged or queued PR is not
 installed.
@@ -406,8 +409,11 @@ func landFlagValue(args []string, i int) (value string, next int, ok bool) {
 func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, d landDeps) exitcode.Code {
 	ordered := orderRepos(repos)
 	var results []landResult
-	red, subRed := false, false
+	red, subRed, caughtUpFail := false, false, false
 	for _, r := range ordered {
+		if d.sha == "" && catchUp(ctx, r, d) {
+			caughtUpFail = true
+		}
 		if subRed && isUmbrella(r) {
 			// An umbrella pushed past a red submodule can point at a commit that never reached its remote.
 			results = append(results, landResult{Repo: r, Kind: landSkipped, Lines: []string{r + ": skipped (a submodule repo is red)"}})
@@ -462,10 +468,50 @@ func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, 
 	if red {
 		return 1
 	}
-	if instFail {
+	if instFail || caughtUpFail {
 		return 5
 	}
 	return exitcode.Success
+}
+
+var prNumberInSubject = regexp.MustCompile(`#(\d+)`)
+
+// catchUp fast-forwards a clean default branch to a remote that gained PR merges since the last land,
+// then installs, so a PR that an earlier land opened and bosun saw merge is picked up before new work.
+// It reports whether the install failed.
+func catchUp(ctx context.Context, r string, d landDeps) bool {
+	top, err := d.git.run(r, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return false
+	}
+	repo := strings.TrimSpace(top)
+	def := defaultBranch(repo, d)
+	if _, err := d.git.run(repo, "fetch", "-q", "origin"); err != nil {
+		return false
+	}
+	subjects, err := d.git.run(repo, "log", "--format=%s", "HEAD..origin/"+def)
+	if err != nil {
+		return false
+	}
+	pr := ""
+	for _, line := range strings.SplitSeq(subjects, "\n") {
+		if m := prNumberInSubject.FindStringSubmatch(line); m != nil {
+			pr = m[1]
+			break
+		}
+	}
+	if pr == "" {
+		return false
+	}
+	before := strings.TrimSpace(mustGit(repo, d, "rev-parse", "HEAD"))
+	fastForwardDefaultAfterMerge(landWatchJob{Repo: repo, Default: def}, d)
+	after := strings.TrimSpace(mustGit(repo, d, "rev-parse", "HEAD"))
+	if after == before {
+		return false
+	}
+	short := strings.TrimSpace(mustGit(repo, d, "rev-parse", "--short", "HEAD"))
+	fmt.Fprintf(d.stdout, "%s: caught up to %s (merged PR #%s)\n", repo, short, pr)
+	return installOne(ctx, repo, d)
 }
 
 func installPushedRepos(ctx context.Context, results []landResult, d landDeps) bool {

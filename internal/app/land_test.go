@@ -1148,11 +1148,13 @@ func TestLandRootsRelativeRepos(t *testing.T) {
 	if code := runLandWith(t.Context(), base, []string{"one", "two"}, d); code != exitcode.Success {
 		t.Fatalf("code = %v stdout=%q", code, stdout.String())
 	}
-	want := []string{filepath.Join(base, "one"), filepath.Join(base, "two")}
+	one, two := filepath.Join(base, "one"), filepath.Join(base, "two")
+	// Each repo is probed twice: once by the catch-up, once by the land.
+	want := []string{one, one, two, two}
 	if strings.Join(git.dirs, "\x00") != strings.Join(want, "\x00") {
 		t.Errorf("dirs = %#v; want %#v", git.dirs, want)
 	}
-	for _, r := range want {
+	for _, r := range []string{one, two} {
 		if !strings.Contains(stdout.String(), r+": skipped (not a git repo)\n") {
 			t.Errorf("stdout missing %q: %q", r, stdout.String())
 		}
@@ -2316,5 +2318,68 @@ func TestIsLinkedWorktree(t *testing.T) {
 		if got := isLinkedWorktree(tc.path, d); got != tc.want {
 			t.Errorf("isLinkedWorktree(%s) = %t; want %t", tc.path, got, tc.want)
 		}
+	}
+}
+
+func pushMergedPR(t *testing.T, bare, subject string) (tip string) {
+	t.Helper()
+	other := t.TempDir()
+	gitOut(t, other, "clone", bare, ".")
+	gitOut(t, other, "config", "user.name", "test")
+	gitOut(t, other, "config", "user.email", "test@test")
+	gittest.Write(t, other, "Makefile", ".PHONY: install\ninstall:\n\t@echo caught > installed.marker\n\t@echo caught\n")
+	gittest.Commit(t.Context(), t, other, subject)
+	gitOut(t, other, "push", "origin", "HEAD")
+	return strings.TrimSpace(gitOut(t, other, "rev-parse", "HEAD"))
+}
+
+func TestCatchUpFastForwardsAndInstalls(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	tip := pushMergedPR(t, bare, "feat: thing (#51)")
+	d := testLandDeps(t)
+	var stdout strings.Builder
+	d.stdout = &stdout
+	if failed := catchUp(t.Context(), dir, d); failed {
+		t.Fatalf("install failed: %q", stdout.String())
+	}
+	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != tip {
+		t.Errorf("HEAD = %s; want %s", got, tip)
+	}
+	out := stdout.String()
+	if !strings.Contains(out, dir+": caught up to "+tip[:7]) || !strings.Contains(out, "(merged PR #51)\n") {
+		t.Errorf("stdout = %q", out)
+	}
+	if !strings.Contains(out, dir+": installed caught\n") {
+		t.Errorf("missing install line: %q", out)
+	}
+}
+
+func TestCatchUpLeavesDivergedAndUnrelated(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	pushMergedPR(t, bare, "feat: thing (#52)")
+	gittest.Write(t, dir, "local.txt", "x\n")
+	gittest.Commit(t.Context(), t, dir, "local work")
+	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	d := testLandDeps(t)
+	var stdout, stderr strings.Builder
+	d.stdout, d.stderr = &stdout, &stderr
+	catchUp(t.Context(), dir, d)
+	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != before {
+		t.Errorf("diverged HEAD moved to %s", got)
+	}
+	if stdout.Len() != 0 || !strings.Contains(stderr.String(), "left main") {
+		t.Errorf("stdout = %q stderr = %q", stdout.String(), stderr.String())
+	}
+
+	dir2, bare2 := repoWithOrigin(t)
+	before2 := strings.TrimSpace(gitOut(t, dir2, "rev-parse", "HEAD"))
+	pushMergedPR(t, bare2, "chore: direct push")
+	var out2 strings.Builder
+	d.stdout = &out2
+	catchUp(t.Context(), dir2, d)
+	if got := strings.TrimSpace(gitOut(t, dir2, "rev-parse", "HEAD")); got != before2 || out2.Len() != 0 {
+		t.Errorf("a remote with no PR merge was caught up: HEAD %s out %q", got, out2.String())
 	}
 }

@@ -8,6 +8,7 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit land` first fast-forwards a clean default branch to remote PR merges and installs, replacing the removed detached PR watcher.
 - `rgit land --sha SHA` lands one ahead commit instead of HEAD through the repo's branch rules (direct push, or `land/` branch, PR and merge request), leaving a dirty tree and newer local commits alone. See [`docs/USAGE.md`](docs/USAGE.md#land).
 
 ### Changed
