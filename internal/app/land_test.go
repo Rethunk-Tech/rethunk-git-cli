@@ -2177,6 +2177,22 @@ func TestLandBranchRejectsNoGate(t *testing.T) {
 	}
 }
 
+// TestLandJSONAfterVerb pins that --json after the command emits JSON like the global form.
+func TestLandJSONAfterVerb(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	d := testLandDeps(t)
+	var stdout strings.Builder
+	d.stdout = &stdout
+	if code := runLandWith(t.Context(), dir, []string{"--json"}, d); code != 0 {
+		t.Fatalf("code = %v", code)
+	}
+	var got landJSON
+	if err := json.Unmarshal([]byte(stdout.String()), &got); err != nil || len(got.Repos) != 1 || got.Repos[0].Status != "skipped" {
+		t.Errorf("stdout = %q err=%v; want one skipped JSON repo", stdout.String(), err)
+	}
+}
+
 // failAfterPush runs a real push, then reports it failed, like git failing only the
 // local tracking-ref update.
 type failAfterPush struct{ gitRunner }

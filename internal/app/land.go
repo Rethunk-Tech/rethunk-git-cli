@@ -303,6 +303,7 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 	wait := false
 	install := false
 	push := false
+	argJSON := false
 	branch := ""
 	var repos []string
 	reposFlag := false
@@ -321,7 +322,7 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 		case a == "--no-gate":
 			d.noGate = true
 		case a == "--json":
-			// already applied via ctx; accepted here so it can sit after the command
+			argJSON = true
 		case a == "--repos":
 			reposFlag = true
 		case landValueFlags[a] != "":
@@ -364,7 +365,10 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 			}
 		}
 	}
-	asJSON := jsonFlag(ctx)
+	return landDispatch(ctx, repos, branch, push, wait, install, jsonFlag(ctx) || argJSON, d)
+}
+
+func landDispatch(ctx context.Context, repos []string, branch string, push, wait, install, asJSON bool, d landDeps) exitcode.Code {
 	if d.sha != "" && branch != "" {
 		fmt.Fprintln(d.stderr, "rgit land: --sha does not combine with --branch")
 		fmt.Fprintln(d.stderr, landUsageLine)
