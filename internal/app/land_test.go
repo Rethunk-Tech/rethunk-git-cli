@@ -2121,6 +2121,49 @@ func TestLandPushedDespiteLockedTrackingRef(t *testing.T) {
 	}
 }
 
+// TestLandRedGateReportsReasonLogAndJSON pins the red line when no gate names match, the
+// distinct log per same-named repo, and the reason and log in --json.
+func TestLandRedGateReportsReasonLogAndJSON(t *testing.T) {
+	t.Parallel()
+	a, _ := repoWithOrigin(t)
+	b, _ := repoWithOrigin(t)
+	for _, dir := range []string{a, b} {
+		gittest.Write(t, dir, "ahead.txt", "x\n")
+		gittest.Commit(t.Context(), t, dir, "ahead")
+	}
+	a2 := filepath.Join(t.TempDir(), "cli")
+	b2 := filepath.Join(t.TempDir(), "cli")
+	if err := os.Rename(a, a2); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(b, b2); err != nil {
+		t.Fatal(err)
+	}
+
+	d := testLandDeps(t)
+	d.gate = func(dir string, _ bool) (string, error) {
+		return "", errors.New("exec: \"gate\": executable file not found in $PATH")
+	}
+	var stdout strings.Builder
+	d.stdout = &stdout
+	if code := landRepos(t.Context(), []string{a2, b2}, false, true, false, d); code != 1 {
+		t.Fatalf("code = %v stdout=%q", code, stdout.String())
+	}
+	var got landJSON
+	if err := json.Unmarshal([]byte(stdout.String()), &got); err != nil || len(got.Repos) != 2 {
+		t.Fatalf("json = %q err=%v", stdout.String(), err)
+	}
+	if got.Repos[0].Log == got.Repos[1].Log || got.Repos[0].Log == "" {
+		t.Errorf("logs = %q, %q; want two distinct paths", got.Repos[0].Log, got.Repos[1].Log)
+	}
+	if !strings.Contains(got.Repos[0].Detail, "executable file not found") || strings.Contains(got.Repos[0].Detail, "gate failed: ?") {
+		t.Errorf("detail = %q", got.Repos[0].Detail)
+	}
+	if body, _ := os.ReadFile(got.Repos[0].Log); !strings.Contains(string(body), "executable file not found") {
+		t.Errorf("log body = %q", body)
+	}
+}
+
 // failAfterPush runs a real push, then reports it failed, like git failing only the
 // local tracking-ref update.
 type failAfterPush struct{ gitRunner }

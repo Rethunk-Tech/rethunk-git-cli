@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -553,7 +555,8 @@ type landResult struct {
 	Default  string
 	Route    string
 	Queue    bool
-	Moved    bool // push rejected because origin moved (no-rebase route)
+	Log      string // gate log of a red gate
+	Moved    bool   // push rejected because origin moved (no-rebase route)
 	Watch    *landWatchResult
 }
 
@@ -583,6 +586,8 @@ type landJSONRepo struct {
 	Status string           `json:"status"`
 	URL    string           `json:"url,omitempty"`
 	State  string           `json:"state,omitempty"`
+	Detail string           `json:"detail,omitempty"`
+	Log    string           `json:"log,omitempty"`
 	Watch  *landWatchResult `json:"watch,omitempty"`
 }
 
@@ -597,6 +602,8 @@ func jsonResults(results []landResult) []landJSONRepo {
 			jr.Status = "skipped"
 		case landRed:
 			jr.Status = "red"
+			jr.Detail = strings.Join(res.Lines, "\n")
+			jr.Log = res.Log
 		case landPR:
 			jr.Status = "pr"
 		}
@@ -677,9 +684,10 @@ func landOne(r string, d landDeps) landResult {
 		return res
 	}
 
-	if line, ok := gateHead(repo, d); !ok {
+	if line, log, ok := gateHead(repo, d); !ok {
 		res.Kind = landRed
 		res.Lines = []string{line}
+		res.Log = log
 		return res
 	}
 	res = landByRules(repo, def, d, landPushOpts{remote: upstreamRemote(repo, def, d), pushTo: def})
@@ -733,9 +741,10 @@ func landSha(repo, def string, d landDeps) landResult {
 			res.Lines = []string{summaryRed(repo, "--sha can be gated only as HEAD on a clean tree; nothing pushed (--no-gate if already gated)")}
 			return res
 		}
-		if line, ok := gateHead(repo, d); !ok {
+		if line, log, ok := gateHead(repo, d); !ok {
 			res.Kind = landRed
 			res.Lines = []string{line}
+			res.Log = log
 			return res
 		}
 	}
@@ -752,9 +761,9 @@ func landSha(repo, def string, d landDeps) landResult {
 
 // gateHead runs the repo's full gate on its HEAD before anything is pushed. It returns the
 // summary line when the gate is red or HEAD or the tree moved during it.
-func gateHead(repo string, d landDeps) (string, bool) {
+func gateHead(repo string, d landDeps) (line, logPath string, ok bool) {
 	if d.noGate {
-		return "", true
+		return "", "", true
 	}
 	state := func() string {
 		head := mustGit(repo, d, "rev-parse", "HEAD")
@@ -764,17 +773,28 @@ func gateHead(repo string, d landDeps) (string, bool) {
 	before := state()
 	out, gateErr := d.gate(repo, false)
 	logdir := filepath.Join(d.cacheHome(), "land")
-	logPath := filepath.Join(logdir, filepath.Base(repo)+"-"+strconv.Itoa(d.pid)+".log")
+	sum := sha256.Sum256([]byte(repo))
+	logPath = filepath.Join(logdir, filepath.Base(repo)+"-"+hex.EncodeToString(sum[:4])+"-"+strconv.Itoa(d.pid)+".log")
+	logBody := out
+	if gateErr != nil && out == "" {
+		logBody = gateErr.Error() + "\n"
+	}
 	if err := os.MkdirAll(logdir, 0o750); err == nil {
-		_ = os.WriteFile(logPath, []byte(out), 0o600)
+		_ = os.WriteFile(logPath, []byte(logBody), 0o600)
 	}
 	if gateErr != nil {
-		return repo + ": red (gate failed: " + failedGateNames(out) + "; log " + logPath + ")", false
+		names := failedGateNames(out)
+		if names == "?" {
+			if names = redDetail(out); names == "" {
+				names = gateErr.Error()
+			}
+		}
+		return repo + ": red (gate failed: " + names + "; log " + logPath + ")", logPath, false
 	}
 	if state() != before {
-		return repo + ": error: HEAD moved during the gate; nothing pushed, re-run", false
+		return repo + ": error: HEAD moved during the gate; nothing pushed, re-run", "", false
 	}
-	return "", true
+	return "", "", true
 }
 
 type landPushOpts struct {
