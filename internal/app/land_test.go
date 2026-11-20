@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -2124,5 +2125,50 @@ func TestLandShaNotAhead(t *testing.T) {
 	d.sha = "HEAD"
 	if res := landOne(dir, d); res.Kind != landSkipped || res.Lines[0] != dir+": skipped (already upstream)" {
 		t.Errorf("res = %#v", res)
+	}
+}
+
+// TestLandBranchPushRefusesToRebaseAfterGate pins that the --branch route
+// never rebases onto an origin that moved during the gate: the ungated commit
+// would be pushed. Both the clean and the dirty-checkout routes are covered.
+func TestLandBranchPushRefusesToRebaseAfterGate(t *testing.T) {
+	t.Parallel()
+	for _, dirty := range []bool{false, true} {
+		t.Run(fmt.Sprintf("dirty=%v", dirty), func(t *testing.T) {
+			t.Parallel()
+			dir, bare := repoWithOrigin(t)
+			wt := filepath.Join(t.TempDir(), "wt")
+			gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+			gittest.Write(t, wt, "feat.txt", "feat\n")
+			gitOut(t, wt, "add", "feat.txt")
+			gitOut(t, wt, "commit", "-q", "-m", "feat")
+			if dirty {
+				gittest.Write(t, dir, "base.txt", "dirty\n")
+			}
+
+			d := testLandDeps(t)
+			d.gate = func(string, bool) (string, error) {
+				other := filepath.Join(t.TempDir(), "other")
+				gitOut(t, t.TempDir(), "clone", "-q", bare, other)
+				gittest.Write(t, other, "moved.txt", "moved\n")
+				gitOut(t, other, "add", "moved.txt")
+				gitOut(t, other, "commit", "-q", "-m", "moved")
+				gitOut(t, other, "push", "-q", "origin", "HEAD")
+				return "ok\n", nil
+			}
+			var stdout, stderr strings.Builder
+			d.stdout = &stdout
+			d.stderr = &stderr
+			code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d)
+			if code != 1 {
+				t.Fatalf("code = %v stdout=%q stderr=%q; want 1", code, stdout.String(), stderr.String())
+			}
+			if !strings.Contains(stderr.String(), "origin moved during the gate; nothing pushed, re-run") {
+				t.Errorf("stderr = %q", stderr.String())
+			}
+			if got := strings.TrimSpace(gitOut(t, bare, "log", "-1", "--pretty=%s")); got != "moved" {
+				t.Errorf("origin tip = %q; want the competing commit untouched", got)
+			}
+		})
 	}
 }

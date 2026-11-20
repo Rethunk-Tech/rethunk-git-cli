@@ -594,6 +594,7 @@ type landResult struct {
 	Default  string
 	Route    string
 	Queue    bool
+	Moved    bool // push rejected because origin moved (no-rebase route)
 	Watch    *landWatchResult
 }
 
@@ -780,6 +781,9 @@ type landPushOpts struct {
 	pushTo   string
 	prRef    string
 	logRange string
+	// noRebase pushes exactly what was gated: a rejected push reports that
+	// origin moved instead of rebasing onto it and pushing an ungated commit.
+	noRebase bool
 }
 
 func landByRules(repo, def string, d landDeps, opts landPushOpts) landResult {
@@ -809,9 +813,18 @@ func landByRules(repo, def string, d landDeps, opts landPushOpts) landResult {
 	if !needPR {
 		var out string
 		var err error
-		if opts.pushRef != "" {
+		switch {
+		case opts.pushRef != "":
 			out, err = d.git.run(pushDir, "push", "origin", opts.pushRef+":refs/heads/"+opts.pushTo)
-		} else {
+		case opts.noRebase:
+			out, err = pushOnce(pushDir, opts.pushTo, d)
+			if err != nil && pushRetryable(out) {
+				res.Kind = landRed
+				res.Moved = true
+				res.Lines = []string{"error: origin moved during the gate; nothing pushed, re-run"}
+				return res
+			}
+		default:
 			out, err = pushRetry(pushDir, opts.pushTo, d)
 		}
 		if err == nil {
@@ -954,6 +967,7 @@ func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBra
 			logRange: "origin/" + def + ".." + branch,
 		}
 	}
+	prep.opts.noRebase = true
 	if _, err := d.git.run(wt, "rebase", base); err != nil {
 		_, _ = d.git.run(wt, "rebase", "--abort")
 		fmt.Fprintln(d.stderr, "conflict: hand to solver")
@@ -1077,10 +1091,17 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 	}
 	res := landByRules(prep.repo, prep.def, d, prep.opts)
 	if res.Kind == landRed {
+		out := d.stdout
+		if res.Moved {
+			out = d.stderr
+		}
 		for _, line := range res.Lines {
-			fmt.Fprintln(d.stdout, line)
+			fmt.Fprintln(out, line)
 		}
 		return 1
+	}
+	if res.Route == "direct" {
+		sha = strings.TrimSpace(mustGit(pushDirOf(prep), d, "rev-parse", "HEAD"))
 	}
 	if res.Route == "queue" && res.PRState == "" {
 		fmt.Fprintf(d.stderr, "error: PR for %s is open but neither queued nor set to auto-merge\n", prep.branch)
@@ -1099,6 +1120,13 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 		}
 	}
 	return exitcode.Success
+}
+
+func pushDirOf(prep landBranchPrep) string {
+	if prep.opts.pushDir != "" {
+		return prep.opts.pushDir
+	}
+	return prep.repo
 }
 
 func cleanupLandBranch(prep landBranchPrep, res landResult, local bool, d landDeps) {
@@ -1298,15 +1326,19 @@ func dirtyTracked(repo string, d landDeps) bool {
 	return strings.TrimSpace(out) != ""
 }
 
+func pushOnce(repo, to string, d landDeps) (string, error) {
+	args := []string{"push"}
+	if to != "" {
+		args = append(args, "origin", "HEAD:"+to)
+	}
+	return d.git.run(repo, args...)
+}
+
 func pushRetry(repo, to string, d landDeps) (string, error) {
 	var out string
 	var err error
 	for range 4 {
-		args := []string{"push"}
-		if to != "" {
-			args = append(args, "origin", "HEAD:"+to)
-		}
-		out, err = d.git.run(repo, args...)
+		out, err = pushOnce(repo, to, d)
 		if err == nil {
 			return out, nil
 		}
