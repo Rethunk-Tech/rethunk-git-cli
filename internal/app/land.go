@@ -371,6 +371,11 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 		return exitcode.InvalidUsage
 	}
 	if branch != "" {
+		if d.noGate {
+			fmt.Fprintln(d.stderr, "rgit land: --no-gate does not combine with --branch")
+			fmt.Fprintln(d.stderr, landUsageLine)
+			return exitcode.InvalidUsage
+		}
 		if len(repos) > 1 {
 			fmt.Fprintln(d.stderr, "rgit land: --branch lands one repo")
 			fmt.Fprintln(d.stderr, landUsageLine)

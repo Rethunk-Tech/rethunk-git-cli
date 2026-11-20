@@ -2164,6 +2164,19 @@ func TestLandRedGateReportsReasonLogAndJSON(t *testing.T) {
 	}
 }
 
+func TestLandBranchRejectsNoGate(t *testing.T) {
+	t.Parallel()
+	d := testLandDeps(t)
+	var stderr strings.Builder
+	d.stderr = &stderr
+	if code := runLandWith(t.Context(), t.TempDir(), []string{"--branch", "feat", "--no-gate"}, d); code != exitcode.InvalidUsage {
+		t.Fatalf("code = %v stderr=%q; want usage error", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "--no-gate does not combine with --branch") {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+}
+
 // failAfterPush runs a real push, then reports it failed, like git failing only the
 // local tracking-ref update.
 type failAfterPush struct{ gitRunner }
