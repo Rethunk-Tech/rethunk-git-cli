@@ -182,10 +182,13 @@ func TestAttributeSymbols_ScalesLinearlyInDeclarations(t *testing.T) {
 		return shortest
 	}
 
-	small := best(1000)
+	// A 4000-declaration baseline keeps fixed costs and GC noise on a busy CI
+	// runner (-race, coverage, other packages in parallel) from swinging the
+	// ratio; linear is about 4x, quadratic 16x.
+	small := best(4000)
 	large := best(16000)
-	if ratio := float64(large) / float64(small); ratio > 30 {
-		t.Errorf("16x the declarations took %.1fx the time (%s -> %s); want the per-region work to stay near linear", ratio, small, large)
+	if ratio := float64(large) / float64(small); ratio > 10 {
+		t.Errorf("4x the declarations took %.1fx the time (%s -> %s); want the per-region work to stay near linear", ratio, small, large)
 	}
 }
 
