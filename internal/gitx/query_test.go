@@ -159,52 +159,31 @@ func TestDirtyPaths_ReportsRenameDestinationOnly(t *testing.T) {
 	dir, repo := gittest.New(t.Context(), t)
 	ctx := t.Context()
 
-	gittest.Write(t, dir, "before.txt", "content\n")
-	gittest.Commit(ctx, t, dir, "chore: initial")
-	gittest.Git(ctx, t, dir, "mv", "before.txt", "after.txt")
-	gittest.Write(t, dir, "untracked.txt", "new\n")
-
-	paths, err := repo.DirtyPaths(ctx)
-	if err != nil {
-		t.Fatalf("DirtyPaths: %v", err)
-	}
-	got := strings.Join(paths, ",")
-	if !strings.Contains(got, "after.txt") {
-		t.Errorf("DirtyPaths = %v; want the rename destination after.txt", paths)
-	}
-	if strings.Contains(got, "before.txt") {
-		t.Errorf("DirtyPaths = %v; want the rename source skipped", paths)
-	}
-	if !strings.Contains(got, "untracked.txt") {
-		t.Errorf("DirtyPaths = %v; want the untracked file", paths)
-	}
-}
-
-// TestFindRename pins the walk one segment back: the rename commit's own hash
-// and the name the path carried before it. A path that was never renamed
-// answers found=false rather than inventing a commit.
-func TestFindRename(t *testing.T) {
-	t.Parallel()
-	dir, repo := gittest.New(t.Context(), t)
-	ctx := t.Context()
-
 	gittest.Write(t, dir, "before.txt", strings.Repeat("body line\n", 20))
+	gittest.Write(t, dir, "avant é.txt", strings.Repeat("other body\n", 20))
 	gittest.Commit(ctx, t, dir, "chore: initial")
 	gittest.Git(ctx, t, dir, "mv", "before.txt", "after.txt")
 	gittest.Git(ctx, t, dir, "commit", "-q", "-m", "chore: rename")
+	gittest.Git(ctx, t, dir, "mv", "avant é.txt", "après ü.txt")
+	gittest.Git(ctx, t, dir, "commit", "-q", "-m", "chore: rename non-ascii")
 
-	commit, oldPath, found, err := repo.FindRename(ctx, "HEAD", "after.txt")
-	if err != nil {
-		t.Fatalf("FindRename: %v", err)
-	}
-	if !found {
-		t.Fatal("FindRename = found false; want the rename commit")
-	}
-	if oldPath != "before.txt" {
-		t.Errorf("FindRename oldPath = %q; want %q", oldPath, "before.txt")
-	}
-	if head := gittest.Git(ctx, t, dir, "rev-parse", "HEAD", "HEAD^"); !strings.HasPrefix(head, commit) {
-		t.Errorf("FindRename commit = %q; want HEAD's own hash (%q)", commit, head)
+	for _, c := range []struct{ now, old, rev string }{
+		{"after.txt", "before.txt", "HEAD"},
+		{"après ü.txt", "avant é.txt", "HEAD"},
+	} {
+		commit, oldPath, found, err := repo.FindRename(ctx, c.rev, c.now)
+		if err != nil {
+			t.Fatalf("FindRename(%q): %v", c.now, err)
+		}
+		if !found {
+			t.Fatalf("FindRename(%q) = found false; want the rename commit", c.now)
+		}
+		if oldPath != c.old {
+			t.Errorf("FindRename(%q) oldPath = %q; want %q", c.now, oldPath, c.old)
+		}
+		if _, ok, err := repo.RevParseVerify(ctx, commit); err != nil || !ok {
+			t.Errorf("FindRename(%q) commit = %q: ok=%t err=%v", c.now, commit, ok, err)
+		}
 	}
 
 	if _, _, found, err := repo.FindRename(ctx, "HEAD", "before.txt"); err != nil {

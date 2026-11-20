@@ -1797,19 +1797,21 @@ func (e *LineRangePathError) Error() string {
 // before it -- the caller resolves the anchor's extent against
 // commit+"~1":oldPath to continue the walk one segment further back.
 func (r *Repo) FindRename(ctx context.Context, rev, path string) (commit, oldPath string, found bool, err error) {
-	out, err := r.checked(ctx, "log", "--follow", "--diff-filter=R", "--name-status", "--format=%H", "-1", rev, "--", path)
+	out, err := r.checked(ctx, "log", "--follow", "--diff-filter=R", "--name-status", "-z", "--format=%H", "-1", rev, "--", path)
 	if err != nil {
 		return "", "", false, err
 	}
-	lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
-	if len(lines) < 3 || lines[0] == "" {
+	// -z NUL-separates every field and leaves non-ASCII paths unquoted.
+	var fields []string
+	for f := range strings.SplitSeq(string(out), "\x00") {
+		if f = strings.Trim(f, "\n"); f != "" {
+			fields = append(fields, f)
+		}
+	}
+	if len(fields) != 4 || !strings.HasPrefix(fields[1], "R") {
 		return "", "", false, nil
 	}
-	fields := strings.Split(lines[2], "\t")
-	if len(fields) != 3 || !strings.HasPrefix(fields[0], "R") {
-		return "", "", false, nil
-	}
-	return lines[0], fields[1], true, nil
+	return fields[0], fields[2], true, nil
 }
 
 // Log runs `git log`, optionally bounded by --since/--until and a path
