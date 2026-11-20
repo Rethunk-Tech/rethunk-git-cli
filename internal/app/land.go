@@ -395,12 +395,18 @@ func landFlagValue(args []string, i int) (value string, next int, ok bool) {
 func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, d landDeps) exitcode.Code {
 	ordered := orderRepos(repos)
 	var results []landResult
-	red := false
+	red, subRed := false, false
 	for _, r := range ordered {
+		if subRed && isUmbrella(r) {
+			// An umbrella pushed past a red submodule can point at a commit that never reached its remote.
+			results = append(results, landResult{Repo: r, Kind: landSkipped, Lines: []string{r + ": skipped (a submodule repo is red)"}})
+			continue
+		}
 		res := landOne(r, d)
 		results = append(results, res)
 		if res.Kind == landRed {
 			red = true
+			subRed = subRed || !isUmbrella(r)
 		}
 	}
 
@@ -599,10 +605,15 @@ func jsonResults(results []landResult) []landJSONRepo {
 	return out
 }
 
+func isUmbrella(r string) bool {
+	_, err := os.Stat(filepath.Join(r, ".gitmodules"))
+	return err == nil
+}
+
 func orderRepos(repos []string) []string {
 	var ordered, umbrellas []string
 	for _, r := range repos {
-		if _, err := os.Stat(filepath.Join(r, ".gitmodules")); err == nil {
+		if isUmbrella(r) {
 			umbrellas = append(umbrellas, r)
 		} else {
 			ordered = append(ordered, r)

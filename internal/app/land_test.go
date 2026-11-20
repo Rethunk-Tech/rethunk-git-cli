@@ -212,6 +212,38 @@ func TestLandPlainGate(t *testing.T) {
 	}
 }
 
+// TestLandSkipsUmbrellaWhenSubmoduleRepoRed pins that an umbrella repo is not pushed
+// while a repo it may point into failed its gate.
+func TestLandSkipsUmbrellaWhenSubmoduleRepoRed(t *testing.T) {
+	t.Parallel()
+	sub, _ := repoWithOrigin(t)
+	umb, umbBare := repoWithOrigin(t)
+	gittest.Write(t, umb, ".gitmodules", "")
+	gittest.Commit(t.Context(), t, umb, "umbrella")
+	gittest.Write(t, sub, "ahead.txt", "x\n")
+	gittest.Commit(t.Context(), t, sub, "ahead")
+	before := strings.TrimSpace(gitOut(t, umbBare, "rev-parse", "HEAD"))
+
+	d := testLandDeps(t)
+	d.gate = func(dir string, _ bool) (string, error) {
+		if dir == sub {
+			return "gate: failed: unit -> /x.log\n", errors.New("exit 1")
+		}
+		return "", nil
+	}
+	var stdout strings.Builder
+	d.stdout = &stdout
+	if code := landRepos(t.Context(), []string{umb, sub}, false, false, false, d); code != 1 {
+		t.Fatalf("code = %v stdout=%q; want 1", code, stdout.String())
+	}
+	if !strings.Contains(stdout.String(), umb+": skipped (a submodule repo is red)") {
+		t.Errorf("stdout = %q", stdout.String())
+	}
+	if after := strings.TrimSpace(gitOut(t, umbBare, "rev-parse", "HEAD")); after != before {
+		t.Errorf("umbrella origin moved to %s", after)
+	}
+}
+
 func TestLandInstallAfterDirectPush(t *testing.T) {
 	t.Parallel()
 	dir, _ := repoWithOrigin(t)
