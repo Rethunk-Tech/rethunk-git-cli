@@ -209,3 +209,36 @@ func TestResolve_TrailingCommentIsNotNextSymbolsDoc(t *testing.T) {
 		})
 	}
 }
+
+// TestResolve_TSOverloadsFoldIntoImplementation pins that overload signatures
+// are part of the implementation's extent, exported or not, and in classes.
+func TestResolve_TSOverloadsFoldIntoImplementation(t *testing.T) {
+	t.Parallel()
+	const src = `// unrelated
+function h(a: string): void;
+export function f(a: string): void;
+export function f(a: number): void;
+export function f(a: any) {}
+function g(a: string): void;
+function g(a: any) {}
+class C {
+  m(a: string): void;
+  m(a: any) {}
+}
+`
+	lang, _ := ForExtension(".ts")
+	tests := []struct{ anchor, want string }{
+		{"f", "export function f(a: string): void;\nexport function f(a: number): void;\nexport function f(a: any) {}"},
+		{"g", "function g(a: string): void;\nfunction g(a: any) {}"},
+		{"C.m", "m(a: string): void;\n  m(a: any) {}"},
+	}
+	for _, tt := range tests {
+		res, err := Resolve(lang, []byte(src), tt.anchor)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.anchor, err)
+		}
+		if got := string(srcAt([]byte(src), res.Extent)); got != tt.want {
+			t.Errorf("%s extent = %q; want %q", tt.anchor, got, tt.want)
+		}
+	}
+}

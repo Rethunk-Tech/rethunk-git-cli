@@ -181,6 +181,9 @@ func buildIndex(lang Language, src []byte, root *ts.Node) *index {
 	for i := range decls {
 		d := decls[i]
 		full := fullExtent(lang, src, d.Node)
+		if d.Lead != nil {
+			full.Start = docStart(lang, src, d.Lead)
+		}
 		declOnly := declOnlyExtent(lang, src, d)
 		if c, ok := lang.(fullExtentCrossChecker); ok && c.crossCheckUsesFullExtent() {
 			declOnly = full

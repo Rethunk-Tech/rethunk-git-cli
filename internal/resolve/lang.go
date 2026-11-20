@@ -39,6 +39,11 @@ type Declaration struct {
 	// Node is the outermost node whose extent is staged.
 	Node *ts.Node
 
+	// Lead, when set, is an earlier sibling where the extent starts instead
+	// of Node's own start (TypeScript overload signatures preceding their
+	// implementation). Doc-comment attribution runs from Lead.
+	Lead *ts.Node
+
 	// Bare is the unqualified name, e.g. "Get".
 	Bare string
 

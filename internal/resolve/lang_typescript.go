@@ -74,6 +74,7 @@ func (l *tsFamily) MembersSitFlush() bool { return true }
 // C", where a naive implementation might expect "value" instead.
 func (l *tsFamily) Declarations(src []byte, root *ts.Node) []Declaration {
 	var decls []Declaration
+	var run overloadRun
 	n := root.NamedChildCount()
 	for i := range n {
 		outer := root.NamedChild(i)
@@ -105,7 +106,11 @@ func (l *tsFamily) Declarations(src []byte, root *ts.Node) []Declaration {
 			}
 		}
 
+		lead := run.step(src, outer, target)
 		for _, d := range declarationFor(outer, target, src) {
+			if lead != nil {
+				d.Lead = lead
+			}
 			decls = append(decls, d)
 			switch target.Kind() {
 			case "class_declaration", "abstract_class_declaration":
@@ -127,6 +132,40 @@ func onlyNamedChild(n *ts.Node) *ts.Node {
 		return nil
 	}
 	return n.NamedChild(0)
+}
+
+// overloadRun tracks a run of same-name overload signatures
+// (function_signature, or method_signature in a class body) so the
+// implementation that follows can start its extent at the first one. Deleting
+// the implementation alone would otherwise strand the signatures.
+type overloadRun struct {
+	name string
+	lead *ts.Node
+}
+
+// step feeds the next sibling (outer is its extent node, n the unwrapped declaration) and returns the first
+// signature of the run when n is an implementation of the same name.
+func (r *overloadRun) step(src []byte, outer, n *ts.Node) *ts.Node {
+	switch n.Kind() {
+	case "comment":
+		return nil
+	case "function_signature", "method_signature":
+		if nm := n.ChildByFieldName("name"); nm != nil {
+			name := nodeText(src, nm)
+			if r.lead == nil || r.name != name {
+				r.name, r.lead = name, outer
+			}
+			return nil
+		}
+	case "function_declaration", "method_definition":
+		if nm := n.ChildByFieldName("name"); nm != nil && r.lead != nil && r.name == nodeText(src, nm) {
+			lead := r.lead
+			r.lead = nil
+			return lead
+		}
+	}
+	r.lead = nil
+	return nil
 }
 
 // classMembers enumerates a class body's own members, container-qualified,
@@ -152,14 +191,17 @@ func classMembers(class *ts.Node, container string, src []byte) []Declaration {
 		return nil
 	}
 	var out []Declaration
+	var run overloadRun
 	for i := uint(0); i < body.NamedChildCount(); i++ {
 		member := body.NamedChild(i)
+		lead := run.step(src, member, member)
 		switch member.Kind() {
 		case "method_definition", "public_field_definition":
 		default:
 			continue
 		}
 		if d, ok := namedDecl(src, member, member); ok {
+			d.Lead = lead
 			d.Container = container
 			out = append(out, d)
 		}
