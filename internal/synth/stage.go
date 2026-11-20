@@ -717,15 +717,17 @@ func seedTempIndex(final string) (*tempStaging, error) {
 		return nil, err
 	}
 	tmp := tmpFile.Name()
+	keep := false
+	defer func() {
+		if !keep {
+			_ = os.Remove(tmp)
+		}
+	}()
 	seed, err := os.ReadFile(filepath.Clean(final))
 	switch {
 	case err == nil:
 		if _, err := tmpFile.Write(seed); err != nil {
-			if cerr := tmpFile.Close(); cerr != nil {
-				_ = os.Remove(tmp)
-				return nil, cerr
-			}
-			_ = os.Remove(tmp)
+			_ = tmpFile.Close()
 			return nil, err
 		}
 		if info, serr := os.Stat(final); serr == nil {
@@ -735,7 +737,6 @@ func seedTempIndex(final string) (*tempStaging, error) {
 			_ = tmpFile.Chmod(info.Mode())
 		}
 		if err := tmpFile.Close(); err != nil {
-			_ = os.Remove(tmp)
 			return nil, err
 		}
 		// git trusts a matching stat only for entries older than the index
@@ -744,26 +745,21 @@ func seedTempIndex(final string) (*tempStaging, error) {
 		// stages nothing; carrying the original mtime keeps git's check.
 		if info, serr := os.Stat(final); serr == nil {
 			if err := os.Chtimes(tmp, time.Time{}, info.ModTime()); err != nil {
-				_ = os.Remove(tmp)
 				return nil, err
 			}
 		}
 	case os.IsNotExist(err):
 		if err := tmpFile.Close(); err != nil {
-			_ = os.Remove(tmp)
 			return nil, err
 		}
 		if err := os.Remove(tmp); err != nil {
 			return nil, err
 		}
 	default:
-		if cerr := tmpFile.Close(); cerr != nil {
-			_ = os.Remove(tmp)
-			return nil, cerr
-		}
-		_ = os.Remove(tmp)
+		_ = tmpFile.Close()
 		return nil, err
 	}
+	keep = true
 	var mode os.FileMode = 0o644
 	if info, serr := os.Stat(final); serr == nil {
 		mode = info.Mode()
@@ -924,18 +920,15 @@ func (s *IndexSnapshot) Restore(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// Removing after a successful rename is a no-op.
+	defer func() { _ = os.Remove(seed.tmp) }()
 	cmd := exec.CommandContext(ctx, "git", "-C", s.root, "update-index", "-z", "--index-info") //nolint:gosec // root is rgit's selected repository path, passed as git -C argv rather than shell input
 	cmd.Env = append(os.Environ(), "GIT_INDEX_FILE="+seed.tmp)
 	cmd.Stdin = &info
 	if out, err := cmd.CombinedOutput(); err != nil {
-		_ = os.Remove(seed.tmp)
 		return fmt.Errorf("restoring index entries: %w: %s", err, bytes.TrimSpace(out))
 	}
-	if err := os.Rename(seed.tmp, s.path); err != nil {
-		_ = os.Remove(seed.tmp)
-		return err
-	}
-	return nil
+	return os.Rename(seed.tmp, s.path)
 }
 
 type indexEntry struct {
