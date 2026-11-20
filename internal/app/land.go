@@ -55,8 +55,8 @@ exits 1 with "origin moved; nothing pushed, re-run" on stderr ("origin moved
 during the gate" with --branch), so only verified commits are pushed.
 
 Control returns after the push or the merge/queue request. PRs not yet
-merged are then watched in the background unless --wait is set, in which
-case land polls inline and prints the final line per repo.
+merged are watched by bosun (nomad-hud records the PR line) unless --wait
+is set, in which case land polls inline and prints the final line per repo.
 
 Flags:
   --repos DIR...  repositories to land (default: the current directory)
@@ -76,8 +76,6 @@ const (
 	landPollInterval = 60 * time.Second
 	landPollCap      = 45 * time.Minute
 )
-
-const landWatchFlag = "--watch"
 
 type landClock interface {
 	Now() time.Time
@@ -241,68 +239,33 @@ func (g *ghCLI) latestWorkflowRun(owner, repo, branch, sha string) (workflowRun,
 }
 
 type landDeps struct {
-	git        gitRunner
-	gh         gitHub
-	clock      landClock
-	lookPath   func(string) (string, error)
-	notify     func(argv []string) error
-	executable func() (string, error)
-	startWatch func(argv []string, logPath string) error
-	gate       func(dir string, failedOnly bool) (string, error)
-	cacheHome  func() string
-	pid        int
-	randN      func() int
-	parent     string
-	sha        string
-	noGate     bool
-	stdout     io.Writer
-	stderr     io.Writer
+	git       gitRunner
+	gh        gitHub
+	clock     landClock
+	gate      func(dir string, failedOnly bool) (string, error)
+	cacheHome func() string
+	pid       int
+	randN     func() int
+	parent    string
+	sha       string
+	noGate    bool
+	stdout    io.Writer
+	stderr    io.Writer
 }
 
 func defaultLandDeps(stdout, stderr io.Writer) landDeps {
 	return landDeps{
-		git:        execGit{},
-		gh:         newGHCLI(),
-		clock:      realClock{},
-		lookPath:   exec.LookPath,
-		notify:     runNotify,
-		executable: os.Executable,
-		startWatch: startDetachedWatch,
-		gate:       runGateCmd,
-		cacheHome:  cacheHome,
-		pid:        os.Getpid(),
-		randN:      randInt,
-		parent:     os.Getenv("CLAUDE_CODE_SESSION_ID"),
-		stdout:     stdout,
-		stderr:     stderr,
+		git:       execGit{},
+		gh:        newGHCLI(),
+		clock:     realClock{},
+		gate:      runGateCmd,
+		cacheHome: cacheHome,
+		pid:       os.Getpid(),
+		randN:     randInt,
+		parent:    os.Getenv("CLAUDE_CODE_SESSION_ID"),
+		stdout:    stdout,
+		stderr:    stderr,
 	}
-}
-
-func runNotify(argv []string) error {
-	cmd := exec.CommandContext(context.Background(), argv[0], argv[1:]...) //nolint:gosec // argv is `bosun notify` plus flags rgit built
-	cmd.Stdin = nil
-	return cmd.Run()
-}
-
-func startDetachedWatch(argv []string, logPath string) error {
-	if err := os.MkdirAll(filepath.Dir(logPath), 0o700); err != nil {
-		return err
-	}
-	log, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600) //nolint:gosec // logPath is under the cache dir rgit created for this watch id
-	if err != nil {
-		return err
-	}
-	cmd := exec.CommandContext(context.Background(), argv[0], argv[1:]...) //nolint:gosec // argv is rgit's own executable plus land --watch flags
-	cmd.Stdin = nil
-	cmd.Stdout = log
-	cmd.Stderr = log
-	cmd.SysProcAttr = detachedAttr()
-	if err := cmd.Start(); err != nil {
-		_ = log.Close()
-		return err
-	}
-	_ = log.Close()
-	return nil
 }
 
 func cacheHome() string {
@@ -326,10 +289,8 @@ func randInt() int {
 
 // landValueFlags maps each flag that takes a value to what its missing-value error asks for.
 var landValueFlags = map[string]string{
-	"--branch":    "a name",
-	"--sha":       "a commit",
-	landWatchFlag: "an id",
-	"--parent":    "an id",
+	"--branch": "a name",
+	"--sha":    "a commit",
 }
 
 func runLand(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
@@ -340,8 +301,6 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 	wait := false
 	install := false
 	push := false
-	watchID := ""
-	watchParent := d.parent
 	branch := ""
 	var repos []string
 	reposFlag := false
@@ -376,10 +335,6 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 				branch = val
 			case "--sha":
 				d.sha = val
-			case landWatchFlag:
-				watchID = val
-			default:
-				watchParent = val
 			}
 		case strings.HasPrefix(a, "-"):
 			fmt.Fprintf(d.stderr, "rgit land: unknown argument: %s\n", a)
@@ -388,9 +343,6 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 		default:
 			repos = append(repos, a)
 		}
-	}
-	if watchID != "" {
-		return runLandWatch(watchID, watchParent, d)
 	}
 	if reposFlag && len(repos) == 0 {
 		fmt.Fprintln(d.stderr, "rgit land: --repos needs a directory")
@@ -452,14 +404,11 @@ func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, 
 		}
 	}
 
-	var watches []landWatchJob
 	for i, res := range results {
 		if res.Kind != landPR || res.PRState == "merged" || res.URL == "" {
 			continue
 		}
 		job := landWatchJob{
-			ID:      watchIDFor(res, d),
-			Parent:  d.parent,
 			Repo:    res.Repo,
 			Slug:    res.Slug,
 			PR:      res.PRNumber,
@@ -470,14 +419,12 @@ func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, 
 			fin := watchUntilDone(job, d)
 			results[i].Watch = &fin
 			results[i].Lines = append([]string{}, finalWaitLine(res, fin))
-		} else {
-			watches = append(watches, job)
 		}
 	}
 
 	if asJSON {
 		enc := json.NewEncoder(d.stdout)
-		_ = enc.Encode(landJSON{Repos: jsonResults(results, watches, wait)})
+		_ = enc.Encode(landJSON{Repos: jsonResults(results)})
 	} else {
 		for _, res := range results {
 			out := d.stdout
@@ -493,16 +440,6 @@ func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, 
 	instFail := false
 	if install {
 		instFail = installPushedRepos(ctx, results, d)
-	}
-
-	if !wait {
-		for _, job := range watches {
-			if err := spawnWatcher(job, d); err != nil {
-				fmt.Fprintf(d.stderr, "rgit land: watch %s: %v\n", job.ID, err)
-				continue
-			}
-			fmt.Fprintf(d.stdout, "watching: %s\n", job.ID)
-		}
 	}
 
 	if red {
@@ -615,8 +552,6 @@ type landResult struct {
 }
 
 type landWatchJob struct {
-	ID      string `json:"id"`
-	Parent  string `json:"parent"`
 	Repo    string `json:"repo"`
 	Slug    string `json:"slug"`
 	PR      int    `json:"pr"`
@@ -625,8 +560,6 @@ type landWatchJob struct {
 }
 
 type landWatchResult struct {
-	ID         string `json:"id"`
-	Parent     string `json:"parent"`
 	Repo       string `json:"repo"`
 	PR         int    `json:"pr"`
 	URL        string `json:"url"`
@@ -640,19 +573,14 @@ type landJSON struct {
 }
 
 type landJSONRepo struct {
-	Path     string           `json:"path"`
-	Status   string           `json:"status"`
-	URL      string           `json:"url,omitempty"`
-	State    string           `json:"state,omitempty"`
-	Watching string           `json:"watching,omitempty"`
-	Watch    *landWatchResult `json:"watch,omitempty"`
+	Path   string           `json:"path"`
+	Status string           `json:"status"`
+	URL    string           `json:"url,omitempty"`
+	State  string           `json:"state,omitempty"`
+	Watch  *landWatchResult `json:"watch,omitempty"`
 }
 
-func jsonResults(results []landResult, watches []landWatchJob, wait bool) []landJSONRepo {
-	watchByRepo := map[string]string{}
-	for _, w := range watches {
-		watchByRepo[w.Repo] = w.ID
-	}
+func jsonResults(results []landResult) []landJSONRepo {
 	out := make([]landJSONRepo, 0, len(results))
 	for _, res := range results {
 		jr := landJSONRepo{Path: res.Repo, URL: res.URL, State: res.PRState, Watch: res.Watch}
@@ -665,9 +593,6 @@ func jsonResults(results []landResult, watches []landWatchJob, wait bool) []land
 			jr.Status = "red"
 		case landPR:
 			jr.Status = "pr"
-		}
-		if !wait {
-			jr.Watching = watchByRepo[res.Repo]
 		}
 		out = append(out, jr)
 	}
@@ -1205,8 +1130,6 @@ func printLandBranchResult(prep landBranchPrep, res landResult, sha, logPath str
 	}
 	if res.Kind == landPR && res.PRState != "merged" && res.URL != "" {
 		job := landWatchJob{
-			ID:      watchIDFor(res, d),
-			Parent:  d.parent,
 			Repo:    res.Repo,
 			Slug:    res.Slug,
 			PR:      res.PRNumber,
@@ -1215,10 +1138,6 @@ func printLandBranchResult(prep landBranchPrep, res landResult, sha, logPath str
 		}
 		if wait {
 			fmt.Fprintln(d.stdout, finalWaitLine(res, watchUntilDone(job, d)))
-		} else if err := spawnWatcher(job, d); err != nil {
-			fmt.Fprintf(d.stderr, "rgit land: watch %s: %v\n", job.ID, err)
-		} else {
-			fmt.Fprintf(d.stdout, "watching: %s\n", job.ID)
 		}
 	}
 	fmt.Fprintf(d.stdout, "%s %s %s %s %s\n", prep.repo, prep.branch, sha, logPath, res.Route)
@@ -1773,75 +1692,16 @@ func touchFleet(repo string, pushed int, d landDeps) {
 	_ = os.Rename(tmp, final)
 }
 
-func watchIDFor(res landResult, d landDeps) string {
-	owner, name, ok := splitSlug(res.Slug)
-	if !ok {
-		name = filepath.Base(res.Repo)
-		owner = "local"
-	}
-	return fmt.Sprintf("%s-%s-%d-%s", owner, name, res.PRNumber, d.clock.Now().UTC().Format("20060102T150405Z"))
-}
-
-func spawnWatcher(job landWatchJob, d landDeps) error {
-	exe, err := d.executable()
-	if err != nil {
-		return err
-	}
-	dir := filepath.Join(d.cacheHome(), "rgit", "land", job.ID)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
-	state, err := json.Marshal(job)
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(dir, "state.json"), state, 0o600); err != nil {
-		return err
-	}
-	logPath := filepath.Join(dir, "watch.log")
-	argv := []string{exe, "land", landWatchFlag, job.ID, "--parent", job.Parent}
-	return d.startWatch(argv, logPath)
-}
-
-func runLandWatch(id, parent string, d landDeps) exitcode.Code {
-	job, err := loadWatchJob(id, parent, d)
-	if err != nil {
-		fmt.Fprintf(d.stderr, "rgit land: watch %s: %v\n", id, err)
-		return 1
-	}
-	res := watchUntilDone(job, d)
-	writeWatchResult(res, d)
-	notifyWatch(res, d)
-	return exitcode.Success
-}
-
-func loadWatchJob(id, parent string, d landDeps) (landWatchJob, error) {
-	path := filepath.Join(d.cacheHome(), "rgit", "land", id, "state.json")
-	b, err := os.ReadFile(path) //nolint:gosec // path is the watch state file under the cache dir rgit created
-	if err != nil {
-		return landWatchJob{}, err
-	}
-	var job landWatchJob
-	if err := json.Unmarshal(b, &job); err != nil {
-		return landWatchJob{}, err
-	}
-	job.ID = id
-	job.Parent = parent
-	return job, nil
-}
-
 func watchUntilDone(job landWatchJob, d landDeps) landWatchResult {
 	repo := job.Slug
 	if repo == "" {
 		repo = filepath.Base(job.Repo)
 	}
 	res := landWatchResult{
-		ID:     job.ID,
-		Parent: job.Parent,
-		Repo:   repo,
-		PR:     job.PR,
-		URL:    job.URL,
-		CI:     "none",
+		Repo: repo,
+		PR:   job.PR,
+		URL:  job.URL,
+		CI:   "none",
 	}
 	owner, name, ok := splitSlug(job.Slug)
 	info, state := pollPR(owner, name, ok, job, d)
@@ -1945,46 +1805,6 @@ func ciFromRun(run workflowRun) string {
 	default:
 		return "running"
 	}
-}
-
-func writeWatchResult(res landWatchResult, d landDeps) {
-	dir := filepath.Join(d.cacheHome(), "nomad-hud", "land")
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return
-	}
-	tmp := filepath.Join(dir, res.ID+".tmp")
-	final := filepath.Join(dir, res.ID+".json")
-	b, err := json.Marshal(res)
-	if err != nil {
-		return
-	}
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return
-	}
-	_ = os.Rename(tmp, final)
-}
-
-func notifyWatch(res landWatchResult, d landDeps) {
-	bin, err := d.lookPath("bosun")
-	if err != nil {
-		return
-	}
-	level := "info"
-	if res.State == "closed" || res.State == "timeout" || res.CI == "failure" {
-		level = "error"
-	}
-	owner, name, ok := splitSlug(res.Repo)
-	if !ok {
-		name = res.Repo
-		owner = "local"
-	}
-	key := "land-" + owner + "-" + name + "-" + strconv.Itoa(res.PR)
-	msg := fmt.Sprintf("%s #%d: merged, CI %s", name, res.PR, res.CI)
-	if res.State != "merged" {
-		msg = fmt.Sprintf("%s #%d: %s, CI %s", name, res.PR, res.State, res.CI)
-	}
-	argv := []string{bin, "notify", "--source", "rgit-land", "--key", key, "--level", level, "--url", res.URL, msg}
-	_ = d.notify(argv)
 }
 
 func finalWaitLine(res landResult, fin landWatchResult) string {

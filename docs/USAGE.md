@@ -398,7 +398,6 @@ Does not start language servers.
 $ rgit land --repos ~/src/foo ~/src/bar
 /src/foo: pushed 3f2a9c1d0e5b7a8c9d0e1f2a3b4c5d6e7f8a9b0c
 /src/bar: PR https://github.com/acme/bar/pull/12 (queued)
-watching: acme-bar-12-20260102T030405Z
 
 $ rgit land --branch feat --push
 removed worktree /tmp/feat
@@ -410,8 +409,8 @@ Runs each repo's full gate (`gate` in the repo directory) on HEAD, then pushes
 its ahead commits on the default branch: a direct push when
 branch rules allow it, otherwise a timestamped `land/` branch, PR, and
 merge or merge-queue request. Dirty or off-default repos are skipped.
-`--wait` polls each open PR until it merges (or the cap); otherwise a
-background watcher records the result. `--install` runs `make install`
+`--wait` polls each open PR until it merges (or the cap); otherwise bosun
+watches the PR (nomad-hud records the PR line). `--install` runs `make install`
 from each directly pushed, clean HEAD after every repo in the run has
 been pushed. A merged or queued PR is not installed. No Makefile, or a
 Makefile with no `install` target: one skip line naming the reason.
@@ -439,7 +438,7 @@ refused otherwise (red, exit 1) unless `--no-gate` is given.
 `--branch BR` lands local branch BR onto the default branch in one repo
 (`--repos DIR` or the current directory). The repo must be the main
 checkout. By default it does the rebase, gate, and local fast-forward,
-then stops: no push, `land/` branch, PR, or background watch;
+then stops: no push, `land/` branch, or PR;
 `--install` still runs `make install`. Last stdout line:
 `<repo> <branch> <sha> <gate log> local`. It rebases onto the local
 default branch whether or not the checkout is dirty, so unpushed

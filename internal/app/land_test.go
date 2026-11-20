@@ -334,71 +334,6 @@ func TestLandInstallSkipsPR(t *testing.T) {
 	}
 }
 
-func TestLandWatcherResultAndNotify(t *testing.T) {
-	t.Parallel()
-	clock := &fakeClock{now: time.Date(2026, 11, 18, 7, 0, 0, 0, time.UTC)}
-	gh := &fakeGH{
-		prs: []prInfo{
-			{State: "OPEN", URL: "https://github.com/o/r/pull/9"},
-			{State: "MERGED", MergeSHA: "abc", URL: "https://github.com/o/r/pull/9"},
-		},
-		run: workflowRun{Status: "completed", Conclusion: "success"},
-	}
-	var notified [][]string
-	d := testLandDeps(t)
-	d.clock = clock
-	d.gh = gh
-	d.lookPath = func(string) (string, error) { return "/bin/bosun", nil }
-	d.notify = func(argv []string) error { notified = append(notified, append([]string{}, argv...)); return nil }
-
-	job := landWatchJob{
-		ID:      "o-r-9-id",
-		Parent:  "sess-1",
-		Repo:    "/src/r",
-		Slug:    "o/r",
-		PR:      9,
-		URL:     "https://github.com/o/r/pull/9",
-		Default: "main",
-	}
-	res := watchUntilDone(job, d)
-	if res.State != "merged" || res.CI != "success" || res.Parent != "sess-1" {
-		t.Fatalf("result = %+v", res)
-	}
-	writeWatchResult(res, d)
-	notifyWatch(res, d)
-
-	path := filepath.Join(d.cacheHome(), "nomad-hud", "land", job.ID+".json")
-	body, err := os.ReadFile(path) //nolint:gosec // path is under the test cache dir
-	if err != nil {
-		t.Fatal(err)
-	}
-	var got landWatchResult
-	if err := json.Unmarshal(body, &got); err != nil {
-		t.Fatal(err)
-	}
-	if got.ID != job.ID || got.Parent != "sess-1" || got.Repo != "o/r" || got.PR != 9 || got.State != "merged" || got.CI != "success" {
-		t.Errorf("file = %+v", got)
-	}
-	if _, err := os.Stat(filepath.Join(d.cacheHome(), "nomad-hud", "land", job.ID+".tmp")); !os.IsNotExist(err) {
-		t.Errorf("tmp file still present: %v", err)
-	}
-	if len(notified) != 1 {
-		t.Fatalf("notify calls = %d; want 1", len(notified))
-	}
-	argv := notified[0]
-	want := []string{
-		"/bin/bosun", "notify",
-		"--source", "rgit-land",
-		"--key", "land-o-r-9",
-		"--level", "info",
-		"--url", "https://github.com/o/r/pull/9",
-		"r #9: merged, CI success",
-	}
-	if strings.Join(argv, "\x00") != strings.Join(want, "\x00") {
-		t.Errorf("argv = %#v; want %#v", argv, want)
-	}
-}
-
 func TestLandWatchFastForwardsCleanDefault(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
@@ -421,7 +356,6 @@ func TestLandWatchFastForwardsCleanDefault(t *testing.T) {
 		run: workflowRun{Status: "completed", Conclusion: "success"},
 	}
 	res := watchUntilDone(landWatchJob{
-		ID:      "acme-demo-51-id",
 		Repo:    dir,
 		Slug:    "acme/demo",
 		PR:      51,
@@ -459,7 +393,6 @@ func TestLandWatchLeavesDirtyDefault(t *testing.T) {
 		run: workflowRun{Status: "completed", Conclusion: "success"},
 	}
 	res := watchUntilDone(landWatchJob{
-		ID:      "acme-demo-51-id",
 		Repo:    dir,
 		Slug:    "acme/demo",
 		PR:      51,
@@ -485,24 +418,6 @@ func TestLandWatchLeavesDirtyDefault(t *testing.T) {
 	}
 }
 
-func TestLandWatcherNotifyErrorOnClosed(t *testing.T) {
-	t.Parallel()
-	var notified [][]string
-	d := testLandDeps(t)
-	d.clock = &fakeClock{now: time.Date(2026, 11, 18, 7, 0, 0, 0, time.UTC)}
-	d.gh = &fakeGH{prs: []prInfo{{State: "CLOSED", URL: "https://github.com/o/r/pull/3"}}}
-	d.lookPath = func(string) (string, error) { return "/bin/bosun", nil }
-	d.notify = func(argv []string) error { notified = append(notified, append([]string{}, argv...)); return nil }
-	res := watchUntilDone(landWatchJob{ID: "id", Slug: "o/r", PR: 3, URL: "https://github.com/o/r/pull/3"}, d)
-	notifyWatch(res, d)
-	if res.State != "closed" {
-		t.Fatalf("state = %q", res.State)
-	}
-	if len(notified) != 1 || notified[0][7] != "error" {
-		t.Errorf("argv = %#v", notified)
-	}
-}
-
 func TestLandPRViaRules(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
@@ -523,15 +438,6 @@ func TestLandPRViaRules(t *testing.T) {
 	d.clock = &fakeClock{now: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)}
 	var stdout strings.Builder
 	d.stdout = &stdout
-	var spawned [][]string
-	d.startWatch = func(argv []string, logPath string) error {
-		spawned = append(spawned, append([]string{}, argv...))
-		if !strings.HasSuffix(logPath, "watch.log") {
-			t.Errorf("logPath = %q", logPath)
-		}
-		return nil
-	}
-	d.parent = "parent-sid"
 	code := landRepos(t.Context(), []string{dir}, false, false, false, d)
 	if code != exitcode.Success {
 		t.Fatalf("code = %v stdout=%q", code, stdout.String())
@@ -540,14 +446,8 @@ func TestLandPRViaRules(t *testing.T) {
 	if !strings.Contains(out, dir+": PR https://github.com/acme/demo/pull/4 (auto-merge)") {
 		t.Errorf("stdout = %q", out)
 	}
-	if !strings.Contains(out, "watching: ") {
-		t.Errorf("missing watching line: %q", out)
-	}
-	if len(spawned) != 1 {
-		t.Fatalf("spawned = %d", len(spawned))
-	}
-	if !containsAll(spawned[0], "land", "--watch", "--parent", "parent-sid") {
-		t.Errorf("watch argv = %#v", spawned[0])
+	if strings.Contains(out, "watching") {
+		t.Errorf("land still announces a watcher: %q", out)
 	}
 	if len(gh.merges) < 2 || gh.merges[0] != "plain" || gh.merges[1] != "auto:--squash" {
 		t.Errorf("merges = %#v; want plain then auto:--squash", gh.merges)
@@ -1189,47 +1089,6 @@ func TestGHCLIPullRequestAndWorkflow(t *testing.T) {
 	}
 }
 
-func TestStartDetachedWatch(t *testing.T) {
-	t.Parallel()
-	if runtime.GOOS == "windows" {
-		t.Skip("uses /bin/sh as the detached child")
-	}
-	base := t.TempDir()
-	blocker := filepath.Join(base, "blocker")
-	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := startDetachedWatch([]string{"/bin/sh"}, filepath.Join(blocker, "watch.log")); err == nil {
-		t.Error("log dir under a file: want error")
-	}
-	logDir := filepath.Join(base, "logdir")
-	if err := os.MkdirAll(logDir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := startDetachedWatch([]string{"/bin/sh"}, logDir); err == nil {
-		t.Error("log path is a directory: want error")
-	}
-	if err := startDetachedWatch([]string{filepath.Join(base, "missing-bin")}, filepath.Join(base, "start.log")); err == nil {
-		t.Error("missing binary: want error")
-	}
-
-	logPath := filepath.Join(base, "nested", "watch.log")
-	if err := startDetachedWatch([]string{"/bin/sh", "-c", "echo detached-ok"}, logPath); err != nil {
-		t.Fatalf("startDetachedWatch: %v", err)
-	}
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		body, err := os.ReadFile(logPath) //nolint:gosec // path under the test temp dir
-		if err == nil && strings.Contains(string(body), "detached-ok") {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("watch log = %q, %v; want detached-ok", body, err)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
 func TestCacheHome(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", "/xdg/cache")
 	if got := cacheHome(); got != "/xdg/cache" {
@@ -1562,56 +1421,6 @@ func TestGateVerdictsBlankVerdict(t *testing.T) {
 	}
 }
 
-func TestRunLandWatchLoadsState(t *testing.T) {
-	t.Parallel()
-	d := testLandDeps(t)
-	var stderr strings.Builder
-	d.stderr = &stderr
-	if code := runLandWatch("absent-id", "sess", d); code != 1 {
-		t.Errorf("missing state code = %v; want 1", code)
-	}
-	if !strings.Contains(stderr.String(), "absent-id") {
-		t.Errorf("stderr = %q", stderr.String())
-	}
-	dir := filepath.Join(d.cacheHome(), "rgit", "land", "bad-id")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte("{not json"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if code := runLandWatch("bad-id", "sess", d); code != 1 {
-		t.Errorf("broken state code = %v; want 1", code)
-	}
-
-	good := filepath.Join(d.cacheHome(), "rgit", "land", "good-id")
-	if err := os.MkdirAll(good, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	state := `{"id":"stale","parent":"stale","repo":"/src/r","slug":"o/r","pr":7,"url":"u","default":"main"}`
-	if err := os.WriteFile(filepath.Join(good, "state.json"), []byte(state), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	d.gh = &fakeGH{
-		prs: []prInfo{{State: "MERGED", MergeSHA: "abc", URL: "u"}},
-		run: workflowRun{Status: "completed", Conclusion: "success"},
-	}
-	if code := runLandWatch("good-id", "sess", d); code != exitcode.Success {
-		t.Errorf("code = %v; want success", code)
-	}
-	body, err := os.ReadFile(filepath.Join(d.cacheHome(), "nomad-hud", "land", "good-id.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var got landWatchResult
-	if err := json.Unmarshal(body, &got); err != nil {
-		t.Fatal(err)
-	}
-	if got.ID != "good-id" || got.Parent != "sess" || got.State != "merged" || got.CI != "success" {
-		t.Errorf("watch result = %+v", got)
-	}
-}
-
 func TestWaitForCITimeoutWithRunningCI(t *testing.T) {
 	t.Parallel()
 	d := testLandDeps(t)
@@ -1772,9 +1581,9 @@ func TestLandPushNeedsBranch(t *testing.T) {
 	}
 }
 
-func TestLandWatchAndParentNeedValues(t *testing.T) {
+func TestLandFlagsNeedValues(t *testing.T) {
 	t.Parallel()
-	for _, flag := range []string{landWatchFlag, "--parent", "--branch"} {
+	for _, flag := range []string{"--sha", "--branch"} {
 		d := testLandDeps(t)
 		var stdout, stderr strings.Builder
 		d.stdout = &stdout
@@ -1885,11 +1694,7 @@ func testLandDeps(t *testing.T) landDeps {
 	cache := t.TempDir()
 	d := defaultLandDeps(&strings.Builder{}, &strings.Builder{})
 	d.cacheHome = func() string { return cache }
-	d.lookPath = func(string) (string, error) { return "", os.ErrNotExist }
-	d.notify = func([]string) error { return nil }
-	d.startWatch = func([]string, string) error { return nil }
 	d.gate = func(string, bool) (string, error) { return "", nil }
-	d.executable = func() (string, error) { return "/bin/rgit", nil }
 	d.clock = &fakeClock{now: time.Date(2026, 11, 18, 0, 0, 0, 0, time.UTC)}
 	d.randN = func() int { return 1 }
 	d.pid = 1
@@ -1939,16 +1744,6 @@ func assertFleetTouch(t *testing.T, d landDeps, repo, pushed string) {
 	if found != want {
 		t.Errorf("fleet touch = %q; want %q", found, want)
 	}
-}
-
-func containsAll(argv []string, needles ...string) bool {
-	joined := strings.Join(argv, "\x00")
-	for _, n := range needles {
-		if !strings.Contains(joined, n) {
-			return false
-		}
-	}
-	return true
 }
 
 func TestLandBranchLocalDirtyUnrelatedFileLands(t *testing.T) {
