@@ -2192,6 +2192,8 @@ func TestLandBranchPushRefusesToRebaseAfterGate(t *testing.T) {
 			d.gate = func(string, bool) (string, error) {
 				other := filepath.Join(t.TempDir(), "other")
 				gitOut(t, t.TempDir(), "clone", "-q", bare, other)
+				gitOut(t, other, "config", "user.email", "test@test")
+				gitOut(t, other, "config", "user.name", "test")
 				gittest.Write(t, other, "moved.txt", "moved\n")
 				gitOut(t, other, "add", "moved.txt")
 				gitOut(t, other, "commit", "-q", "-m", "moved")
@@ -2245,6 +2247,8 @@ func TestLandPlainRefusesToRebaseWhenOriginMoves(t *testing.T) {
 	d.git = &moveBeforePush{gitRunner: d.git, hook: func() {
 		other := filepath.Join(t.TempDir(), "other")
 		gitOut(t, t.TempDir(), "clone", "-q", bare, other)
+		gitOut(t, other, "config", "user.email", "test@test")
+		gitOut(t, other, "config", "user.name", "test")
 		gittest.Write(t, other, "moved.txt", "moved\n")
 		gitOut(t, other, "add", "moved.txt")
 		gitOut(t, other, "commit", "-q", "-m", "moved")
