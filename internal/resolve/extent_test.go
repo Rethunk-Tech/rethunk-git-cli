@@ -310,3 +310,26 @@ func TestResolve_PythonNestedClasses(t *testing.T) {
 		}
 	}
 }
+
+// TestResolve_HTMLVoidElementExtentStopsAtStartTag pins that a void element's staged extent
+// ends at its tag instead of absorbing the text after it, while an element closed
+// implicitly keeps its content.
+func TestResolve_HTMLVoidElementExtentStopsAtStartTag(t *testing.T) {
+	t.Parallel()
+	const src = "<div>\n  <img id=\"logo\">\n  Welcome text\n  <p id=\"lede\">Hi</p>\n  <ul><li id=\"a\">one\n  <li id=\"b\">two</ul>\n</div>\n"
+	lang, _ := ForExtension(".html")
+	tests := []struct{ anchor, want string }{
+		{"img#logo", `<img id="logo">`},
+		{"p#lede", `<p id="lede">Hi</p>`},
+		{"li#a", "<li id=\"a\">one\n  "},
+	}
+	for _, tt := range tests {
+		res, err := Resolve(lang, []byte(src), tt.anchor)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.anchor, err)
+		}
+		if got := string(srcAt([]byte(src), res.Extent)); got != tt.want {
+			t.Errorf("%s extent = %q; want %q", tt.anchor, got, tt.want)
+		}
+	}
+}

@@ -154,6 +154,22 @@ func (h *htmlLanguage) trimDeclOnlyEnd(_ []byte, node *ts.Node) uint {
 	return startTagEnd
 }
 
+// htmlVoidElements are the elements the HTML spec forbids an end tag on.
+var htmlVoidElements = map[string]bool{
+	"area": true, "base": true, "br": true, "col": true, "embed": true, "hr": true, "img": true,
+	"input": true, "link": true, "meta": true, "source": true, "track": true, "wbr": true,
+}
+
+// trimTrailingComment implements trailingCommentTrimmer for void elements: the staged
+// extent must stop at the tag too, or editing the text after an `<img>` is attributed
+// to it. An element closed implicitly (`<li>`) keeps its content.
+func (h *htmlLanguage) trimTrailingComment(src []byte, node *ts.Node) uint {
+	if tag, _, ok := htmlTagAndID(src, node); ok && htmlVoidElements[strings.ToLower(tag)] {
+		return h.trimDeclOnlyEnd(src, node)
+	}
+	return node.EndByte()
+}
+
 // htmlTagAndID reads node's own start_tag/self_closing_tag for its tag_name
 // and its first "id"-named attribute. Attribute names are ASCII
 // case-insensitive per the WHATWG HTML spec, so "id", "ID", and "Id" are all
