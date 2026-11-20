@@ -250,3 +250,19 @@ func attributeSymbols(lang resolve.Language, oldSrc, newSrc []byte, totalAdded, 
 	rows, _, err := attributeSymbolsOpen(lang, oldSrc, newSrc, oldFile, newFile, totalAdded, totalDeleted)
 	return rows, err
 }
+
+// A pseudo-region (@header) carries no separator line: `commit --dry-run n.go:@header`
+// reports only its own lines, and every diff row must agree with it.
+func TestAttributeSymbols_HeaderCarriesNoSeparator(t *testing.T) {
+	t.Parallel()
+	lang, _ := resolve.ForExtension(".go")
+	rows, err := attributeSymbols(lang, nil, []byte("package n\n\nfunc C() {}\n"), 3, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rows {
+		if r.Symbol == "@header" && (r.Added != "1" || r.Deleted != "0") {
+			t.Errorf("@header row = %+v; want +1/-0", r)
+		}
+	}
+}

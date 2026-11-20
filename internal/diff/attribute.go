@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 
 	udiff "github.com/aymanbagabas/go-udiff"
 
@@ -307,6 +308,15 @@ func separatorLines(src []byte, ext resolve.Extent) int {
 	return SeparatorLines(src, ext.Start, ext.End)
 }
 
+// regionSeparator is separatorLines for a named region; a pseudo-region (@header,
+// @imports) carries none, matching `commit --dry-run`.
+func regionSeparator(name string, src []byte, ext resolve.Extent) int {
+	if strings.HasPrefix(name, "@") {
+		return 0
+	}
+	return separatorLines(src, ext)
+}
+
 // SeparatorLines is separatorLines' own rule, taking a plain byte range so
 // internal/synth can apply it to the edit it is about to splice.
 //
@@ -418,7 +428,7 @@ func attributeSymbolsOpen(lang resolve.Language, oldSrc, newSrc []byte, oldFile,
 			if deleted == 0 {
 				return
 			}
-			deleted += separatorLines(oldSrc, oldExt)
+			deleted += regionSeparator(name, oldSrc, oldExt)
 			accDeleted += deleted
 			// A deleted symbol has no position in the new file, so it sorts
 			// by its prior line position in the old file — stable, and close to where a reader
@@ -429,7 +439,7 @@ func attributeSymbolsOpen(lang resolve.Language, oldSrc, newSrc []byte, oldFile,
 			if added == 0 {
 				return
 			}
-			added += separatorLines(newSrc, newExt)
+			added += regionSeparator(name, newSrc, newExt)
 			accAdded += added
 			rows = append(rows, Row{Symbol: name, Status: StatusMod, Added: strconv.Itoa(added), Deleted: "0", pos: newExt.Start})
 			if container, isNew := newlyEscalatedContainer(lang, oldFile, newFile, name); isNew {
