@@ -1241,3 +1241,25 @@ func TestOnlyIndexCloseLeavesNoTempEntries(t *testing.T) {
 		t.Errorf("TMPDIR holds %d entries after Close; want 0", len(entries))
 	}
 }
+
+// A foreign commit landing between the private index's seed and the commit
+// leaves HEAD^1 != the base: finishOnlyCommit must report it rather than
+// sync the index to a tree that undoes the foreign work.
+func TestFinishOnlyCommitRefusesAMovedBase(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "a.txt", "a\n", "chore: initial")
+	only, err := repo.NewOnlyIndex(t.Context())
+	if err != nil {
+		t.Fatalf("NewOnlyIndex: %v", err)
+	}
+	defer only.Close()
+	for _, n := range []string{"b.txt", "c.txt"} {
+		gittest.Write(t, dir, n, n+"\n")
+		gittest.Git(t.Context(), t, dir, "add", n)
+		gittest.Git(t.Context(), t, dir, "commit", "-q", "-m", "foreign "+n)
+	}
+	err = repo.FinishOnlyCommit(t.Context(), gitx.CommitOptions{Only: only})
+	if err == nil || !strings.Contains(err.Error(), "HEAD moved") {
+		t.Errorf("FinishOnlyCommit = %v; want a HEAD moved error", err)
+	}
+}

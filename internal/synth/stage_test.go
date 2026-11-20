@@ -280,3 +280,59 @@ func stageTargets(ctx context.Context, repo *gitx.Repo, root string, targets []T
 	}
 	return plan.Apply(ctx, repo, root)
 }
+
+// TestIndexLockAndSeedFailures drives the error paths around git's index
+// lock and the temp-index seed: a held lock under a cancelled context, an
+// uncreatable lock, an unreadable index, and Restore against a held lock.
+func TestIndexLockAndSeedFailures(t *testing.T) {
+	t.Parallel()
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	tests := []struct {
+		name string
+		run  func(ctx context.Context, t *testing.T, dir string) error
+		want string
+	}{
+		{"held lock, cancelled context", func(_ context.Context, t *testing.T, dir string) error {
+			index := filepath.Join(dir, ".git", "index")
+			if err := os.WriteFile(index+".lock", nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			_, err := lockIndex(canceled, index)
+			return err
+		}, "context canceled"},
+		{"lock directory missing", func(ctx context.Context, t *testing.T, dir string) error {
+			_, err := lockIndex(ctx, filepath.Join(dir, "nope", "index"))
+			return err
+		}, "unable to create"},
+		{"index is not a file", func(_ context.Context, t *testing.T, dir string) error {
+			final := filepath.Join(dir, "idx")
+			if err := os.Mkdir(final, 0o750); err != nil {
+				t.Fatal(err)
+			}
+			_, err := seedTempIndex(final)
+			return err
+		}, "is a directory"},
+		{"restore against a held lock", func(ctx context.Context, t *testing.T, dir string) error {
+			snap, err := SnapshotIndex(ctx, dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			snap.applied = []byte("x")
+			if err := os.WriteFile(snap.path+".lock", nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			return snap.Restore(canceled)
+		}, "context canceled"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			dir, _ := gittest.RepoWithFile(t.Context(), t, "a.txt", "a\n", "chore: initial")
+			err := tt.run(t.Context(), t, dir)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("err = %v; want it to contain %q", err, tt.want)
+			}
+		})
+	}
+}
