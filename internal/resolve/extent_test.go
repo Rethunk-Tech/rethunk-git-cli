@@ -182,3 +182,30 @@ func TestEnclosingName(t *testing.T) {
 		})
 	}
 }
+
+// TestResolve_TrailingCommentIsNotNextSymbolsDoc pins that a comment sharing
+// a line with code belongs to that code, so deleting the next symbol leaves it.
+func TestResolve_TrailingCommentIsNotNextSymbolsDoc(t *testing.T) {
+	t.Parallel()
+	tests := []struct{ ext, src, anchor, want string }{
+		{".go", "package p\n\nvar A = 1 // note on A\nvar B = 2\n", "B", "var B = 2"},
+		{".py", "A = 1  # note on A\nB = 2\n", "B", "B = 2"},
+		{".ts", "const A = 1; // note on A\nconst B = 2;\n", "B", "const B = 2;"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.ext, func(t *testing.T) {
+			t.Parallel()
+			lang, ok := ForExtension(tt.ext)
+			if !ok {
+				t.Fatalf("no adapter for %s", tt.ext)
+			}
+			res, err := Resolve(lang, []byte(tt.src), tt.anchor)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := string(srcAt([]byte(tt.src), res.Extent)); got != tt.want {
+				t.Errorf("extent = %q; want %q", got, tt.want)
+			}
+		})
+	}
+}

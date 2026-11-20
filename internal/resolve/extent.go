@@ -35,6 +35,15 @@ func docStart(lang Language, src []byte, node *ts.Node) uint {
 			if !binds(prev) {
 				return start
 			}
+			// A trailing comment on the previous code line documents that
+			// line, not the symbol below.
+			ls := prev.StartByte()
+			for ls > 0 && src[ls-1] != '\n' {
+				ls--
+			}
+			if len(bytes.TrimSpace(src[ls:prev.StartByte()])) > 0 {
+				return start
+			}
 			// A line comment node may end after its own newline (Rust's does),
 			// which would hide the blank line from the count below.
 			end := prev.EndByte()
