@@ -2121,6 +2121,66 @@ func TestLandPushedDespiteLockedTrackingRef(t *testing.T) {
 	}
 }
 
+// failAfterPush runs a real push, then reports it failed, like git failing only the
+// local tracking-ref update.
+type failAfterPush struct{ gitRunner }
+
+func (f failAfterPush) run(dir string, args ...string) (string, error) {
+	out, err := f.gitRunner.run(dir, args...)
+	if err == nil && len(args) > 0 && args[0] == "push" {
+		return out + "error: update_ref failed", errors.New("exit status 1")
+	}
+	return out, err
+}
+
+// TestLandPushedWhenPushErrsAfterReachingRemote pins the ls-remote check on the plain route.
+func TestLandPushedWhenPushErrsAfterReachingRemote(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	gittest.Write(t, dir, "ahead.txt", "x\n")
+	gittest.Commit(t.Context(), t, dir, "ahead")
+	d := testLandDeps(t)
+	d.git = failAfterPush{execGit{}}
+	var stdout strings.Builder
+	d.stdout = &stdout
+	if code := landRepos(t.Context(), []string{dir}, false, false, false, d); code != 0 || !strings.Contains(stdout.String(), ": pushed ") {
+		t.Fatalf("code = %v stdout=%q; want pushed", code, stdout.String())
+	}
+	head := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	if got := strings.TrimSpace(gitOut(t, bare, "rev-parse", "main")); got != head {
+		t.Errorf("origin main = %s; want %s", got, head)
+	}
+}
+
+// TestLandPushesToUpstreamRemote pins that a branch tracking a remote other than origin
+// is pushed, and checked, there.
+func TestLandPushesToUpstreamRemote(t *testing.T) {
+	t.Parallel()
+	dir, originBare := repoWithOrigin(t)
+	up := t.TempDir()
+	gitOut(t, up, "init", "--bare", "-b", "main")
+	gitOut(t, dir, "remote", "add", "up", up)
+	gitOut(t, dir, "push", "-u", "up", "HEAD:main")
+	gittest.Write(t, dir, "ahead.txt", "x\n")
+	gittest.Commit(t.Context(), t, dir, "ahead")
+	originBefore := strings.TrimSpace(gitOut(t, originBare, "rev-parse", "main"))
+
+	d := testLandDeps(t)
+	d.git = failAfterPush{execGit{}}
+	var stdout strings.Builder
+	d.stdout = &stdout
+	if code := landRepos(t.Context(), []string{dir}, false, false, false, d); code != 0 {
+		t.Fatalf("code = %v stdout=%q", code, stdout.String())
+	}
+	head := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	if got := strings.TrimSpace(gitOut(t, up, "rev-parse", "main")); got != head {
+		t.Errorf("upstream main = %s; want %s", got, head)
+	}
+	if got := strings.TrimSpace(gitOut(t, originBare, "rev-parse", "main")); got != originBefore {
+		t.Errorf("origin moved to %s", got)
+	}
+}
+
 // TestLandPRLookupFailureIsUnknownState pins that a failed PR lookup is
 // reported as unknown, not as "neither queued nor auto-merge", and that the
 // queue route does not treat it as a failed enqueue.

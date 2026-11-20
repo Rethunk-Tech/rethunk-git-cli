@@ -682,7 +682,7 @@ func landOne(r string, d landDeps) landResult {
 		res.Lines = []string{line}
 		return res
 	}
-	res = landByRules(repo, def, d, landPushOpts{})
+	res = landByRules(repo, def, d, landPushOpts{remote: upstreamRemote(repo, def, d), pushTo: def})
 	switch res.Kind {
 	case landPushed:
 		touchFleet(repo, 1, d)
@@ -697,7 +697,7 @@ func landOne(r string, d landDeps) landResult {
 		if note != "" {
 			res.Lines = append([]string{note}, res.Lines...)
 		}
-		_, _ = d.git.run(repo, "reset", "-q", "--keep", "origin/"+def)
+		_, _ = d.git.run(repo, "reset", "-q", "--keep", upstreamRemote(repo, def, d)+"/"+def)
 		touchFleet(repo, 0, d)
 	case landSkipped, landRed:
 	}
@@ -739,7 +739,7 @@ func landSha(repo, def string, d landDeps) landResult {
 			return res
 		}
 	}
-	res = landByRules(repo, def, d, landPushOpts{pushRef: sha, pushTo: def, prRef: sha, logRange: "@{u}.." + sha})
+	res = landByRules(repo, def, d, landPushOpts{remote: upstreamRemote(repo, def, d), pushRef: sha, pushTo: def, prRef: sha, logRange: "@{u}.." + sha})
 	switch res.Kind {
 	case landPushed:
 		touchFleet(repo, 1, d)
@@ -778,6 +778,8 @@ func gateHead(repo string, d landDeps) (string, bool) {
 }
 
 type landPushOpts struct {
+	// remote is where the branch rules are read and the push goes; origin when empty.
+	remote   string
 	pushDir  string
 	pushRef  string
 	pushTo   string
@@ -802,7 +804,11 @@ func landByRules(repo, def string, d landDeps, opts landPushOpts) landResult {
 		logRange = "@{u}..HEAD"
 	}
 
-	origin := strings.TrimSpace(mustGit(repo, d, "config", "--get", "remote.origin.url"))
+	remote := opts.remote
+	if remote == "" {
+		remote = "origin"
+	}
+	origin := strings.TrimSpace(mustGit(repo, d, "config", "--get", "remote."+remote+".url"))
 	slug := slugFromOrigin(origin)
 	res.Slug = slug
 	var rules []string
@@ -812,7 +818,7 @@ func landByRules(repo, def string, d landDeps, opts landPushOpts) landResult {
 	needPR, mergeQueue := rulesNeedPR(rules)
 	res.Queue = mergeQueue
 	if !needPR {
-		if direct, done := pushDirect(repo, pushDir, d, opts, res); done {
+		if direct, done := pushDirect(repo, pushDir, remote, d, opts, res); done {
 			return direct
 		}
 	}
@@ -824,7 +830,7 @@ func landByRules(repo, def string, d landDeps, opts landPushOpts) landResult {
 		res.Lines = []string{summaryRed(repo, err.Error())}
 		return res
 	}
-	pushOut, err := d.git.run(repo, "push", "-u", "origin", br)
+	pushOut, err := d.git.run(repo, "push", "-u", remote, br)
 	if err != nil {
 		res.Kind = landRed
 		res.Lines = []string{summaryRed(repo, pushOut)}
@@ -1310,18 +1316,18 @@ func dirtyTracked(repo string, d landDeps) bool {
 // pushDirect pushes exactly what was verified: a rejected push reports that
 // origin moved rather than rebasing onto it and pushing an unverified commit.
 // done is false only when a protected branch sends the caller to the PR route.
-func pushDirect(repo, pushDir string, d landDeps, opts landPushOpts, res landResult) (landResult, bool) {
+func pushDirect(repo, pushDir, remote string, d landDeps, opts landPushOpts, res landResult) (landResult, bool) {
 	var out string
 	var err error
 	pushed := opts.pushRef
 	if pushed != "" {
-		out, err = d.git.run(pushDir, "push", "origin", pushed+":refs/heads/"+opts.pushTo)
+		out, err = d.git.run(pushDir, "push", remote, pushed+":refs/heads/"+opts.pushTo)
 	} else {
-		out, err = pushOnce(pushDir, opts.pushTo, d)
+		out, err = pushOnce(pushDir, remote, opts.pushTo, d)
 		pushed = strings.TrimSpace(mustGit(pushDir, d, "rev-parse", "HEAD"))
 	}
 	switch {
-	case err == nil || remoteHolds(pushDir, d, pushed, opts.pushTo):
+	case err == nil || remoteHolds(pushDir, d, remote, pushed, opts.pushTo):
 		res.Kind = landPushed
 		res.Route = "direct"
 		res.Lines = []string{summaryPushed(repo, pushed)}
@@ -1345,7 +1351,7 @@ func pushDirect(repo, pushDir string, d landDeps, opts landPushOpts, res landRes
 // remoteHolds reports whether origin's branch already equals the pushed
 // commit: a push can fail updating only the local tracking ref (a concurrent
 // fetch holding its lock) after the remote moved.
-func remoteHolds(dir string, d landDeps, pushed, to string) bool {
+func remoteHolds(dir string, d landDeps, remote, pushed, to string) bool {
 	if to == "" {
 		return false
 	}
@@ -1353,17 +1359,26 @@ func remoteHolds(dir string, d landDeps, pushed, to string) bool {
 	if err != nil {
 		return false
 	}
-	out, err := d.git.run(dir, "ls-remote", "origin", "refs/heads/"+to)
+	out, err := d.git.run(dir, "ls-remote", remote, "refs/heads/"+to)
 	f := strings.Fields(out)
 	return err == nil && len(f) > 0 && f[0] == strings.TrimSpace(want)
 }
 
-func pushOnce(repo, to string, d landDeps) (string, error) {
-	args := []string{"push"}
-	if to != "" {
-		args = append(args, "origin", "HEAD:"+to)
+func pushOnce(repo, remote, to string, d landDeps) (string, error) {
+	if to == "" {
+		return d.git.run(repo, "push")
 	}
-	return d.git.run(repo, args...)
+	return d.git.run(repo, "push", remote, "HEAD:"+to)
+}
+
+// upstreamRemote is the remote the default branch tracks, so the rules, the push and
+// the ls-remote check all talk to the one remote a bare `git push` would use.
+func upstreamRemote(repo, def string, d landDeps) string {
+	r := strings.TrimSpace(mustGit(repo, d, "config", "--get", "branch."+def+".remote"))
+	if r == "" || r == "." {
+		return "origin"
+	}
+	return r
 }
 
 func pushRetryable(out string) bool {
