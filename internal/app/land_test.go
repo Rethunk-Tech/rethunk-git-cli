@@ -170,6 +170,48 @@ func TestLandPushedLocalBare(t *testing.T) {
 	assertFleetTouch(t, d, dir, "1")
 }
 
+func TestLandPlainGate(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		gate     func(dir string) (string, error)
+		wantCode exitcode.Code
+		pushed   bool
+		line     string
+	}{
+		{"green", func(string) (string, error) { return "", nil }, exitcode.Success, true, ": pushed "},
+		{"red", func(string) (string, error) {
+			return "gate: failed: unit -> /x.log\n", errors.New("exit 1")
+		}, 1, false, ": red (gate failed: unit; log "},
+		{"moved", func(dir string) (string, error) {
+			gittest.Write(t, dir, "more.txt", "m\n")
+			gitOut(t, dir, "add", "more.txt")
+			gitOut(t, dir, "commit", "-q", "-m", "during")
+			return "", nil
+		}, 1, false, "HEAD moved during the gate; nothing pushed, re-run"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			dir, bare := repoWithOrigin(t)
+			gittest.Write(t, dir, "ahead.txt", "x\n")
+			gittest.Commit(t.Context(), t, dir, "ahead")
+			before := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD"))
+			d := testLandDeps(t)
+			d.gate = func(dir string, _ bool) (string, error) { return c.gate(dir) }
+			var stdout strings.Builder
+			d.stdout = &stdout
+			code := landRepos(t.Context(), []string{dir}, false, false, false, d)
+			if code != c.wantCode || !strings.Contains(stdout.String(), c.line) {
+				t.Fatalf("code = %v stdout=%q; want %v with %q", code, stdout.String(), c.wantCode, c.line)
+			}
+			if after := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD")); (after != before) != c.pushed {
+				t.Errorf("origin moved = %v; want %v", after != before, c.pushed)
+			}
+		})
+	}
+}
+
 func TestLandInstallAfterDirectPush(t *testing.T) {
 	t.Parallel()
 	dir, _ := repoWithOrigin(t)
@@ -2030,6 +2072,27 @@ func TestLandBranchLocalRebasesOntoLocalDefault(t *testing.T) {
 	}
 }
 
+func TestLandShaRefusesUngatableCommit(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	gittest.Write(t, dir, "one.txt", "1\n")
+	gittest.Commit(t.Context(), t, dir, "one")
+	sha := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	gittest.Write(t, dir, "two.txt", "2\n")
+	gittest.Commit(t.Context(), t, dir, "two")
+	before := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD"))
+	d := testLandDeps(t)
+	var stdout strings.Builder
+	d.stdout = &stdout
+	d.sha = sha
+	if code := landRepos(t.Context(), []string{dir}, false, false, false, d); code != 1 || !strings.Contains(stdout.String(), "gated only as HEAD") {
+		t.Fatalf("code = %v stdout=%q", code, stdout.String())
+	}
+	if got := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD")); got != before {
+		t.Error("refused --sha pushed")
+	}
+}
+
 func TestLandShaDirectPushesOnlyThatCommit(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
@@ -2045,6 +2108,7 @@ func TestLandShaDirectPushesOnlyThatCommit(t *testing.T) {
 	var stdout strings.Builder
 	d.stdout = &stdout
 	d.sha = sha
+	d.noGate = true
 	if code := landRepos(t.Context(), []string{dir}, false, false, false, d); code != exitcode.Success {
 		t.Fatalf("code = %v stdout=%q", code, stdout.String())
 	}
@@ -2081,6 +2145,7 @@ func TestLandShaPRKeepsLocalMain(t *testing.T) {
 	var stdout strings.Builder
 	d.stdout = &stdout
 	d.sha = sha
+	d.noGate = true
 	if code := landRepos(t.Context(), []string{dir}, false, false, false, d); code != exitcode.Success {
 		t.Fatalf("code = %v stdout=%q", code, stdout.String())
 	}

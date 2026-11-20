@@ -406,7 +406,8 @@ deleted branch feat
 /src/foo feat abcdef1 ~/.cache/land-branch/foo-feat-1234.log direct
 ```
 
-Pushes each repo's ahead commits on the default branch: a direct push when
+Runs each repo's full gate (`gate` in the repo directory) on HEAD, then pushes
+its ahead commits on the default branch: a direct push when
 branch rules allow it, otherwise a timestamped `land/` branch, PR, and
 merge or merge-queue request. Dirty or off-default repos are skipped.
 `--wait` polls each open PR until it merges (or the cap); otherwise a
@@ -422,10 +423,18 @@ exits 1 with `origin moved; nothing pushed, re-run` on stderr (`origin moved
 during the gate` with `--branch`), since the commit that would go out is not
 the one that was verified. Success prints the pushed SHA.
 
+The gate runs before any push, PR or queue step. A red gate pushes nothing
+for that repo: its line is `DIR: red (gate failed: NAMES; log PATH)` and land
+exits 1. If HEAD or the tree changed while the gate ran, nothing is pushed
+(`HEAD moved during the gate; nothing pushed, re-run`). `--no-gate` skips the
+gate, for callers that already gated the commit.
+
 `--sha SHA` lands that one ahead commit (an ancestor of HEAD, not yet
 upstream) instead of HEAD, by the same direct, PR or queue route. It
 neither rebases nor resets: the checkout may be dirty and newer local
-commits stay local. Not with `--branch`.
+commits stay local. Not with `--branch`. A gate can run only on the checkout,
+so `--sha` is gated when SHA is HEAD and the tracked tree is clean, and is
+refused otherwise (red, exit 1) unless `--no-gate` is given.
 
 `--branch BR` lands local branch BR onto the default branch in one repo
 (`--repos DIR` or the current directory). The repo must be the main

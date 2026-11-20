@@ -18,18 +18,22 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
 )
 
-const landUsageLine = "usage: rgit land [--repos DIR...] [--sha SHA] [--wait] [--json] [--install] | rgit land --branch BR [--repos DIR] [--push] [--install]"
+const landUsageLine = "usage: rgit land [--repos DIR...] [--sha SHA] [--no-gate] [--wait] [--json] [--install] | rgit land --branch BR [--repos DIR] [--push] [--install]"
 
 const landHelp = landUsageLine + `
 
-Push each repo's ahead commits the way its GitHub branch rules require: a
+Gate, then push each repo's ahead commits the way its GitHub branch rules require: a
 direct push when the default branch is open, or a timestamped land/ branch,
 PR, and merge (or merge-queue) request when it is not. One summary line per
-repo; exit 1 if any repo is red.
+repo; exit 1 if any repo is red. Each repo's full gate (gate in the repo
+directory) runs on HEAD first; a red gate pushes nothing for that repo, and
+its line names the failing gates and the log path. If HEAD or the tree
+changes during the gate, nothing is pushed.
 
 --sha SHA lands that ahead commit (an ancestor of HEAD) instead of HEAD:
 the same direct, PR or queue route, no rebase, dirty tree allowed, local
-default branch left alone.
+default branch left alone. Only HEAD on a clean tree can be gated from the
+checkout, so any other --sha is refused unless --no-gate is given.
 
 --branch BR lands local branch BR onto the default branch in one repo
 (--repos DIR, or the current directory). By default it rebases onto the
@@ -57,6 +61,7 @@ case land polls inline and prints the final line per repo.
 Flags:
   --repos DIR...  repositories to land (default: the current directory)
   --sha SHA       land this ahead commit instead of HEAD (not with --branch)
+  --no-gate       skip the gate; for callers that already gated the commit
   --branch BR     land local branch BR onto the local default branch (no push)
   --push          with --branch: also push through the repo's branch rules
   --wait          poll each open PR until it merges or the cap is hit
@@ -249,6 +254,7 @@ type landDeps struct {
 	randN      func() int
 	parent     string
 	sha        string
+	noGate     bool
 	stdout     io.Writer
 	stderr     io.Writer
 }
@@ -351,6 +357,8 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 			install = true
 		case a == "--push":
 			push = true
+		case a == "--no-gate":
+			d.noGate = true
 		case a == "--json":
 			// already applied via ctx; accepted here so it can sit after the command
 		case a == "--repos":
@@ -733,6 +741,11 @@ func landOne(r string, d landDeps) landResult {
 		return res
 	}
 
+	if line, ok := gateHead(repo, d); !ok {
+		res.Kind = landRed
+		res.Lines = []string{line}
+		return res
+	}
 	res = landByRules(repo, def, d, landPushOpts{})
 	switch res.Kind {
 	case landPushed:
@@ -778,6 +791,18 @@ func landSha(repo, def string, d landDeps) landResult {
 		res.Lines = []string{summarySkippedAlreadyUpstream(repo)}
 		return res
 	}
+	if !d.noGate {
+		if head := strings.TrimSpace(mustGit(repo, d, "rev-parse", "HEAD")); head != sha || dirtyTracked(repo, d) {
+			res.Kind = landRed
+			res.Lines = []string{summaryRed(repo, "--sha can be gated only as HEAD on a clean tree; nothing pushed (--no-gate if already gated)")}
+			return res
+		}
+		if line, ok := gateHead(repo, d); !ok {
+			res.Kind = landRed
+			res.Lines = []string{line}
+			return res
+		}
+	}
 	res = landByRules(repo, def, d, landPushOpts{pushRef: sha, pushTo: def, prRef: sha, logRange: "@{u}.." + sha})
 	switch res.Kind {
 	case landPushed:
@@ -787,6 +812,33 @@ func landSha(repo, def string, d landDeps) landResult {
 	case landSkipped, landRed:
 	}
 	return res
+}
+
+// gateHead runs the repo's full gate on its HEAD before anything is pushed. It returns the
+// summary line when the gate is red or HEAD or the tree moved during it.
+func gateHead(repo string, d landDeps) (string, bool) {
+	if d.noGate {
+		return "", true
+	}
+	state := func() string {
+		head := mustGit(repo, d, "rev-parse", "HEAD")
+		st, _ := d.git.run(repo, "status", "--porcelain")
+		return head + st
+	}
+	before := state()
+	out, gateErr := d.gate(repo, false)
+	logdir := filepath.Join(d.cacheHome(), "land")
+	logPath := filepath.Join(logdir, filepath.Base(repo)+"-"+strconv.Itoa(d.pid)+".log")
+	if err := os.MkdirAll(logdir, 0o750); err == nil {
+		_ = os.WriteFile(logPath, []byte(out), 0o600)
+	}
+	if gateErr != nil {
+		return repo + ": red (gate failed: " + failedGateNames(out) + "; log " + logPath + ")", false
+	}
+	if state() != before {
+		return repo + ": error: HEAD moved during the gate; nothing pushed, re-run", false
+	}
+	return "", true
 }
 
 type landPushOpts struct {

@@ -27,11 +27,12 @@ Inherited behaviour: [docs/USAGE.md § Behaviour inherited from git](docs/USAGE.
 
 ## Delegation boundary
 
-`rgit` shells out to `git` for everything git already does. It owns:
+`rgit` shells out to `git` for everything git already does. It owns symbol-level git plus delivery:
 
 1. **Anchor resolution** — `FILE:NAME` → byte extent.
 2. **Blob synthesis** — blob as if only named symbols changed.
 3. **Argument precedence** — pathspec vs revision vs anchor.
+4. **Delivery (`land`)** — the fleet's single ship command. It runs the repo's gate itself on the HEAD it is about to land, then pushes by the branch rules; callers never chain gate and push by hand. `--no-gate` exists only for a caller that already gated the exact commit.
 
 SQL parser generation is not in `rgit`. `make sql-parser` runs `cmd/rgit-install -generate-only`; that is the only `tree-sitter generate` in the repo. Plain `go build` / `go test` never set `-tags rgit_sql`.
 

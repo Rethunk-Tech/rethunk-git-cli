@@ -12,6 +12,7 @@ Notable changes to `rgit`. The format follows
 
 ### Changed
 
+- **Breaking:** plain `rgit land` and `land --sha` now run the repo's full gate on HEAD before any push, PR or queue step. A red gate pushes nothing, prints `red (gate failed: NAMES; log PATH)` and exits 1; a HEAD or tree change during the gate pushes nothing. `--sha` is gated only when SHA is HEAD on a clean tree, otherwise refused. `--no-gate` skips the gate for callers that already ran it. See [`docs/USAGE.md`](docs/USAGE.md#land).
 - **Breaking:** `rgit land --branch BR` now lands locally by default (rebase onto the local default branch, gate, fast-forward, `--install`) and no longer pushes. Pass `--push` for the push route. `--no-push` is removed. See [`docs/USAGE.md`](docs/USAGE.md).
 
 ### Removed

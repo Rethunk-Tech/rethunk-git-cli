@@ -8,7 +8,7 @@ Authoritative exit codes and machine-readable output. Flags:
 | Exit | Condition |
 | --- | --- |
 | 0 | Success (stderr warnings for unchanged targets allowed) |
-| 1 | `diff` only, under `--exit-code`/`--quiet`: something is committable |
+| 1 | `diff` only, under `--exit-code`/`--quiet`: something is committable. `land` (plain and `--sha`): a repo is red, including a red gate |
 | 3 | Anchor unresolvable — missing in worktree and HEAD; candidates listed |
 | 4 | Ambiguous anchor — candidates listed |
 | 5 | One path named both as a path and as a symbol anchor |
