@@ -494,7 +494,7 @@ func catchUp(ctx context.Context, r string, d landDeps) bool {
 		return false
 	}
 	pr := ""
-	for _, line := range strings.SplitSeq(subjects, "\n") {
+	for line := range strings.SplitSeq(subjects, "\n") {
 		if m := prNumberInSubject.FindStringSubmatch(line); m != nil {
 			pr = m[1]
 			break
