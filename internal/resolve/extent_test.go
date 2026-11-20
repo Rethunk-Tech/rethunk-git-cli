@@ -277,3 +277,36 @@ const Turn = memo(function TurnView() {});
 		}
 	}
 }
+
+// TestResolve_PythonNestedClasses pins Outer.Inner and Outer.Inner.m, with
+// and without decorators on the inner class.
+func TestResolve_PythonNestedClasses(t *testing.T) {
+	t.Parallel()
+	const src = `class Outer:
+    class Inner:
+        def m(self):
+            pass
+
+    @dec
+    class Deco:
+        def n(self):
+            pass
+`
+	lang, _ := ForExtension(".py")
+	tests := []struct{ anchor, want string }{
+		{"Outer.Inner", "class Inner:\n        def m(self):\n            pass"},
+		{"Outer.Inner.m", "def m(self):\n            pass"},
+		{"Outer.Deco", "@dec\n    class Deco:\n        def n(self):\n            pass"},
+		{"Outer.Deco.n", "def n(self):\n            pass"},
+	}
+	for _, tt := range tests {
+		res, err := Resolve(lang, []byte(src), tt.anchor)
+		if err != nil {
+			t.Errorf("%s: %v", tt.anchor, err)
+			continue
+		}
+		if got := string(srcAt([]byte(src), res.Extent)); !strings.HasPrefix(got, tt.want) {
+			t.Errorf("%s extent = %q; want prefix %q", tt.anchor, got, tt.want)
+		}
+	}
+}

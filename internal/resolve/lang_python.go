@@ -100,7 +100,8 @@ func classBody(node *ts.Node) *ts.Node {
 
 // classMembers enumerates a class body's methods, container-qualified, so
 // `svc.py:UserService.login` addresses one method rather than the whole
-// class. class_definition's "body" is a block whose named children are
+// class; a nested class is qualified through its outer one (Outer.Inner.m).
+// class_definition's "body" is a block whose named children are
 // function_definition, or decorated_definition wrapping one -- the same two
 // forms declarationFor already handles at module level.
 func (p *pythonLanguage) classMembers(class *ts.Node, container string, src []byte) []Declaration {
@@ -117,7 +118,7 @@ func (p *pythonLanguage) classMembers(class *ts.Node, container string, src []by
 			ok bool
 		)
 		switch member.GrammarName() {
-		case "function_definition":
+		case "function_definition", "class_definition":
 			d, ok = namedDecl(src, member, member)
 		case "decorated_definition":
 			d, ok = p.decoratedDeclaration(src, member)
@@ -127,6 +128,9 @@ func (p *pythonLanguage) classMembers(class *ts.Node, container string, src []by
 		if ok {
 			d.Container = container
 			out = append(out, d)
+			if inner := classBody(member); inner != nil {
+				out = append(out, p.classMembers(inner, container+"."+d.Bare, src)...)
+			}
 		}
 	}
 	return out
