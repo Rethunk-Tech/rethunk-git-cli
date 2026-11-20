@@ -76,37 +76,23 @@ func (l *tsFamily) Declarations(src []byte, root *ts.Node) []Declaration {
 	var decls []Declaration
 	var run overloadRun
 	n := root.NamedChildCount()
+	targets := make([]*ts.Node, n)
+	for i := range n {
+		targets[i] = declTarget(root.NamedChild(i))
+	}
 	for i := range n {
 		outer := root.NamedChild(i)
-		if outer == nil {
+		target := targets[i]
+		if outer == nil || target == nil {
 			continue
-		}
-		target := outer
-		switch outer.Kind() {
-		case "export_statement":
-			if d := outer.ChildByFieldName("declaration"); d != nil {
-				target = d
-			} else {
-				// export { a, b } or export * from "…" — a re-export
-				// statement with no wrapped declaration of its own.
-				// Nothing to name; it is not an addressable symbol.
-				continue
-			}
-		case "expression_statement":
-			// A bare (non-exported) `namespace N { ... }` parses as an
-			// expression_statement wrapping internal_module, not as the
-			// internal_module directly (`export namespace N {}` instead
-			// wraps it in export_statement, handled by the case above). Only
-			// this one wrapped shape is unwrapped here; an ordinary expression
-			// statement like `foo();` has no name and must keep falling
-			// through to declarationFor's default case.
-			if only := onlyNamedChild(outer); only != nil &&
-				(only.Kind() == "internal_module" || only.Kind() == "module") {
-				target = only
-			}
 		}
 
 		lead := run.step(src, outer, target)
+		if target.Kind() == "function_signature" {
+			if lead = run.lead; !orphanSignature(src, targets, int(i)) {
+				continue
+			}
+		}
 		for _, d := range declarationFor(outer, target, src) {
 			if lead != nil {
 				d.Lead = lead
@@ -123,6 +109,70 @@ func (l *tsFamily) Declarations(src []byte, root *ts.Node) []Declaration {
 		}
 	}
 	return decls
+}
+
+// declTarget unwraps a top-level statement to the declaration it names: the
+// exported declaration, or the namespace a bare `namespace N {}` expression
+// statement wraps. It returns nil for a statement with nothing addressable,
+// such as `export { a, b }` (a re-export with no wrapped declaration).
+func declTarget(outer *ts.Node) *ts.Node {
+	if outer == nil {
+		return nil
+	}
+	switch outer.Kind() {
+	case "export_statement":
+		return unwrapAmbient(outer.ChildByFieldName("declaration"))
+	case "ambient_declaration":
+		return unwrapAmbient(outer)
+	case "expression_statement":
+		// A bare (non-exported) `namespace N { ... }` parses as an
+		// expression_statement wrapping internal_module, not as the
+		// internal_module directly (`export namespace N {}` instead
+		// wraps it in export_statement). Only this one wrapped shape is
+		// unwrapped; an ordinary expression statement like `foo();` has
+		// no name and keeps falling through to declarationFor's default.
+		if only := onlyNamedChild(outer); only != nil &&
+			(only.Kind() == "internal_module" || only.Kind() == "module") {
+			return only
+		}
+	}
+	return outer
+}
+
+// unwrapAmbient returns the declaration inside `declare ...`, or n itself.
+func unwrapAmbient(n *ts.Node) *ts.Node {
+	if n != nil && n.Kind() == "ambient_declaration" {
+		if only := onlyNamedChild(n); only != nil {
+			return only
+		}
+	}
+	return n
+}
+
+// orphanSignature reports whether the function_signature at targets[i] ends a
+// run of signatures that no implementation follows, as in a .d.ts file. Such
+// a run is addressable as one declaration; a run followed by its
+// implementation is folded into that implementation instead.
+func orphanSignature(src []byte, targets []*ts.Node, i int) bool {
+	nm := targets[i].ChildByFieldName("name")
+	if nm == nil {
+		return false
+	}
+	name := nodeText(src, nm)
+	for _, t := range targets[i+1:] {
+		if t == nil {
+			return true
+		}
+		if t.Kind() == "comment" {
+			continue
+		}
+		next := t.ChildByFieldName("name")
+		if next == nil || nodeText(src, next) != name {
+			return true
+		}
+		return t.Kind() != "function_signature" && t.Kind() != "function_declaration"
+	}
+	return true
 }
 
 // onlyNamedChild returns n's sole named child, or nil when n has zero or
@@ -320,7 +370,7 @@ func classMembers(class *ts.Node, container string, src []byte) []Declaration {
 // reports at most one.
 func declarationFor(outer, target *ts.Node, src []byte) []Declaration {
 	switch target.Kind() {
-	case "function_declaration":
+	case "function_declaration", "function_signature":
 		return declOne(namedDecl(src, outer, target))
 	case "class_declaration":
 		return declOne(namedDecl(src, outer, target))
@@ -462,18 +512,31 @@ func moduleMembers(mod *ts.Node, container string, src []byte) []Declaration {
 		return nil
 	}
 	var out []Declaration
-	for i := uint(0); i < body.NamedChildCount(); i++ {
-		member := body.NamedChild(i)
-		target := member
+	var run overloadRun
+	n := int(body.NamedChildCount())
+	targets := make([]*ts.Node, n)
+	for i := range n {
+		member := body.NamedChild(uint(i))
 		if member.Kind() == "export_statement" {
-			d := member.ChildByFieldName("declaration")
-			if d == nil {
+			targets[i] = unwrapAmbient(member.ChildByFieldName("declaration"))
+		} else {
+			targets[i] = unwrapAmbient(member)
+		}
+	}
+	for i, target := range targets {
+		if target == nil {
+			continue
+		}
+		member := body.NamedChild(uint(i))
+		lead := run.step(src, member, target)
+		if target.Kind() == "function_signature" {
+			if lead = run.lead; !orphanSignature(src, targets, i) {
 				continue
 			}
-			target = d
 		}
 		for _, d := range declarationFor(member, target, src) {
 			d.Container = container
+			d.Lead = lead
 			out = append(out, d)
 		}
 	}

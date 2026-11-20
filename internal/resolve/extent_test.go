@@ -333,3 +333,36 @@ func TestResolve_HTMLVoidElementExtentStopsAtStartTag(t *testing.T) {
 		}
 	}
 }
+
+// TestResolve_TSSignaturesInNamespaceAndDeclarationFiles pins that overloads inside a
+// namespace fold into their implementation, and that a run of
+// signatures with no implementation (a .d.ts) is addressable.
+func TestResolve_TSSignaturesInNamespaceAndDeclarationFiles(t *testing.T) {
+	t.Parallel()
+	lang, _ := ForExtension(".ts")
+	const ns = `namespace N {
+  export function q(a: string): void;
+  export function q(a: any) {}
+}
+declare namespace M {
+  export function r(a: string): void;
+  export function r(a: number): void;
+}
+export function f(a: string): string;
+export function f(a: number): number;
+`
+	tests := []struct{ anchor, want string }{
+		{"N.q", "export function q(a: string): void;\n  export function q(a: any) {}"},
+		{"M.r", "export function r(a: string): void;\n  export function r(a: number): void;"},
+		{"f", "export function f(a: string): string;\nexport function f(a: number): number;"},
+	}
+	for _, tt := range tests {
+		res, err := Resolve(lang, []byte(ns), tt.anchor)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.anchor, err)
+		}
+		if got := string(srcAt([]byte(ns), res.Extent)); got != tt.want {
+			t.Errorf("%s extent = %q; want %q", tt.anchor, got, tt.want)
+		}
+	}
+}
