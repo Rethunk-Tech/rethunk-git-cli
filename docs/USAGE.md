@@ -410,10 +410,11 @@ Runs each repo's full gate (`gate` in the repo directory) on HEAD, then pushes
 its ahead commits on the default branch: a direct push when
 branch rules allow it, otherwise a timestamped `land/` branch, PR, and
 merge or merge-queue request. Dirty or off-default repos are skipped (exit 14); a repo with nothing to push is skipped with exit 0.
-Before anything else, each repo on a clean default branch whose remote gained a
-PR merge (a `#N` in the new commits) is fast-forwarded and `make install`ed,
-printing `DIR: caught up to SHA (merged PR #N)`; a diverged or dirty branch is
-reported and left alone.
+Before anything else, each repo on a clean default branch that is behind its
+remote and not ahead is fast-forwarded and `make install`ed, printing
+`DIR: caught up to SHA`, plus ` (merged PR #N)` when a new commit subject
+carries `#N` (a rebase-merged PR has none); a diverged or dirty branch is
+left alone.
 `--wait` polls each open PR until it merges (or the cap); otherwise bosun
 watches the PR (nomad-hud records the PR line). `--install` runs `make install`
 from each directly pushed, clean HEAD after every repo in the run has

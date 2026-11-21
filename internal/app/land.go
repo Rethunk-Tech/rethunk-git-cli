@@ -50,8 +50,9 @@ is a usage error. Exit 2 on rebase conflict, 3 on a red gate, 4 if a
 merge-queue PR does not enqueue, 5 if --install fails, 13 if the checkout's
 dirty files overlap BR's.
 
-Before anything else, a clean default branch whose remote gained a PR merge
-is fast-forwarded and installed: "DIR: caught up to SHA (merged PR #N)".
+Before anything else, a clean default branch that is behind its remote and not
+ahead is fast-forwarded and installed: "DIR: caught up to SHA", with
+" (merged PR #N)" when a new commit subject carries #N.
 
 --install runs make install from each directly pushed, clean HEAD after
 every repo in the run has been pushed. A merged or queued PR is not
@@ -524,7 +525,7 @@ func skipNeedsAction(res landResult) bool {
 
 var prNumberInSubject = regexp.MustCompile(`#(\d+)`)
 
-// catchUp fast-forwards a clean default branch to a remote that gained PR merges since the last land,
+// catchUp fast-forwards a clean default branch to a remote that gained commits since the last land (a rebase-merged PR has no #N),
 // then installs, so a PR that an earlier land opened and bosun saw merge is picked up before new work.
 // It reports whether the install failed.
 func catchUp(ctx context.Context, r string, d landDeps) bool {
@@ -547,15 +548,15 @@ func catchUp(ctx context.Context, r string, d landDeps) bool {
 	if err != nil {
 		return false
 	}
+	if strings.TrimSpace(subjects) == "" {
+		return false
+	}
 	pr := ""
 	for line := range strings.SplitSeq(subjects, "\n") {
 		if m := prNumberInSubject.FindStringSubmatch(line); m != nil {
 			pr = m[1]
 			break
 		}
-	}
-	if pr == "" {
-		return false
 	}
 	before := strings.TrimSpace(mustGit(repo, d, "rev-parse", "HEAD"))
 	fastForwardDefaultAfterMerge(landWatchJob{Repo: repo, Default: def}, d)
@@ -564,7 +565,11 @@ func catchUp(ctx context.Context, r string, d landDeps) bool {
 		return false
 	}
 	short := strings.TrimSpace(mustGit(repo, d, "rev-parse", "--short", "HEAD"))
-	fmt.Fprintf(d.info(), "%s: caught up to %s (merged PR #%s)\n", repo, short, pr)
+	merged := ""
+	if pr != "" {
+		merged = " (merged PR #" + pr + ")"
+	}
+	fmt.Fprintf(d.info(), "%s: caught up to %s%s\n", repo, short, merged)
 	return installOne(ctx, repo, d)
 }
 

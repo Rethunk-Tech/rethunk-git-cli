@@ -2372,15 +2372,36 @@ func TestCatchUpLeavesDivergedAndUnrelated(t *testing.T) {
 	if stdout.Len() != 0 || stderr.Len() != 0 {
 		t.Errorf("a diverged default branch printed: stdout = %q stderr = %q", stdout.String(), stderr.String())
 	}
+}
 
-	dir2, bare2 := repoWithOrigin(t)
-	before2 := strings.TrimSpace(gitOut(t, dir2, "rev-parse", "HEAD"))
-	pushMergedPR(t, bare2, "chore: direct push")
-	var out2 strings.Builder
-	d.stdout = &out2
-	catchUp(t.Context(), dir2, d)
-	if got := strings.TrimSpace(gitOut(t, dir2, "rev-parse", "HEAD")); got != before2 || out2.Len() != 0 {
-		t.Errorf("a remote with no PR merge was caught up: HEAD %s out %q", got, out2.String())
+func TestCatchUpRebaseMergeWithoutPRNumber(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	tip := pushMergedPR(t, bare, "chore: direct push")
+	d := testLandDeps(t)
+	var stdout strings.Builder
+	d.stdout = &stdout
+	catchUp(t.Context(), dir, d)
+	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != tip {
+		t.Errorf("HEAD = %s; want %s", got, tip)
+	}
+	if want := dir + ": caught up to " + tip[:7] + "\n"; !strings.Contains(stdout.String(), want) {
+		t.Errorf("stdout = %q; want %q", stdout.String(), want)
+	}
+}
+
+func TestCatchUpLeavesDirtyClone(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	pushMergedPR(t, bare, "chore: direct push")
+	gittest.Write(t, dir, "base.txt", "dirty\n")
+	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	d := testLandDeps(t)
+	var stdout strings.Builder
+	d.stdout = &stdout
+	catchUp(t.Context(), dir, d)
+	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != before || stdout.Len() != 0 {
+		t.Errorf("dirty clone caught up: HEAD %s out %q", got, stdout.String())
 	}
 }
 
