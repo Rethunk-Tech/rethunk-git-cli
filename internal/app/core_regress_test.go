@@ -94,3 +94,18 @@ func TestRun_CRLFUnchangedSymbolExitsNothingToCommit(t *testing.T) {
 	_, _, code := runApp(t, "-C", dir, "commit", "-m", "fix: b", "a.go:B")
 	qt.Assert(t, qt.Equals(code, exitcode.NothingToCommit))
 }
+
+// A name in a multi-name Go var spec shares one extent with its siblings, so
+// committing it would commit the sibling's change; it is refused.
+func TestRun_CommitMultiNameVarSpecRefused(t *testing.T) {
+	t.Parallel()
+	dir, _ := gittest.New(t.Context(), t)
+	writeAppFile(t, dir, "a.go", "package a\n\nvar p, q = 1, 2\n")
+	gitOut(t, dir, "add", "a.go")
+	gitOut(t, dir, "commit", "-q", "-m", "chore: init")
+	writeAppFile(t, dir, "a.go", "package a\n\nvar p, q = 10, 2\n")
+	before := gitOut(t, dir, "rev-parse", "HEAD")
+	_, _, code := runApp(t, "-C", dir, "commit", "-m", "fix: q", "a.go:q")
+	qt.Assert(t, qt.Equals(code, exitcode.AnchorAmbiguous))
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "rev-parse", "HEAD"), before))
+}

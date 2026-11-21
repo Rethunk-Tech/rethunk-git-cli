@@ -55,6 +55,15 @@ func (fp *filePlan) classify(anchor string) (op editOp, unchanged bool, err erro
 		return editOp{}, false, amb
 	}
 
+	for _, side := range []struct {
+		f   *resolve.File
+		res *resolve.Resolution
+	}{{fp.workFile, workRes}, {fp.headFile, headRes}} {
+		if names := sharedExtentNames(side.f, side.res); len(names) > 0 {
+			return editOp{}, false, &resolve.ResolveError{Code: exitcode.AnchorAmbiguous, Anchor: anchor, Candidates: names}
+		}
+	}
+
 	switch {
 	case workRes != nil && headRes != nil:
 		if bare, _, ok := resolve.ParseOrdinal(anchor); ok && sameNameCount(fp.headFile, bare) != sameNameCount(fp.workFile, bare) {
@@ -133,6 +142,21 @@ func (fp *filePlan) classify(anchor string) (op editOp, unchanged bool, err erro
 		}
 		return editOp{}, false, &resolve.ResolveError{Code: exitcode.AnchorUnresolvable, Anchor: anchor}
 	}
+}
+
+// sharedExtentNames lists the other declarations whose extent is res's own: a
+// Go `var p, q = 1, 2` is one spec, so naming q would commit p's change too.
+func sharedExtentNames(f *resolve.File, res *resolve.Resolution) []string {
+	if f == nil || res == nil {
+		return nil
+	}
+	var names []string
+	for _, d := range f.DeclExtents() {
+		if d.Extent == res.Extent && d.Anchor != res.Anchor {
+			names = append(names, d.Anchor)
+		}
+	}
+	return names
 }
 
 // sameNameCount is how many declarations in f answer to bare, as `bare` or `bare#N`.

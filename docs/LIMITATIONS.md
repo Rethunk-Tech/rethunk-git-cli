@@ -18,7 +18,9 @@ syntax) has no grammar here; `.scss` is supported.
 
 Stage the containing declaration or the path.
 
-- **Go** — multi-name field (`A, B int`); embedded/anonymous field.
+- **Go** — multi-name field (`A, B int`); embedded/anonymous field; a name in a
+  multi-name `var`/`const` spec (`var p, q = 1, 2`), which `rgit commit` refuses
+  with exit 4 because the spec is one extent.
 - **TypeScript** — anonymous default export; destructuring (`const {a, b}`,
   `const [x, y]`) — several names, one extent.
 - **YAML** — sequence item; anything in a flow `{...}`/`[...]`; a
