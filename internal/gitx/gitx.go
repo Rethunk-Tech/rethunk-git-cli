@@ -1164,8 +1164,17 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 	}
 	if res.ExitCode != 0 {
 		if opts.Only != nil {
-			if moved := r.checkOnlyHead(ctx, opts); moved != nil {
-				return res, moved
+			// A signal kills git after the commit landed (a slow post-commit hook), and
+			// the real index must still be synced.
+			detached := context.WithoutCancel(ctx)
+			if moved := r.checkOnlyHead(detached, opts); moved != nil {
+				if !r.onlyLanded(detached, commitRepo, opts) {
+					return res, moved
+				}
+				if err := r.finishOnlyCommit(detached, commitRepo, opts); err != nil {
+					return res, err
+				}
+				return res, fmt.Errorf("gitx: commit landed, index updated: %w", gitError(args, res))
 			}
 		}
 		return res, gitError(args, res)
@@ -1173,7 +1182,7 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 	if opts.Only == nil {
 		return res, nil
 	}
-	return res, r.finishOnlyCommit(ctx, commitRepo, opts)
+	return res, r.finishOnlyCommit(context.WithoutCancel(ctx), commitRepo, opts)
 }
 
 // args translates o into `git commit` arguments.
@@ -1352,9 +1361,36 @@ func (r *Repo) finishOnlyCommit(ctx context.Context, commitRepo *Repo, opts Comm
 		}
 	}
 	if err := r.syncCommittedEntries(ctx, commitRepo, opts.Only.BaseTree); err != nil {
-		return fmt.Errorf("gitx: commit landed, but updating the index for its paths failed: %w", err)
+		return fmt.Errorf("gitx: commit landed, but updating the index for its paths failed: %w; the index now stages its reversal, run: %s", err, r.resetHint(ctx))
 	}
 	return nil
+}
+
+// onlyLanded reports whether HEAD is the commit git made from the private index,
+// not a foreign writer's: it sits on the seeded base and holds the private tree.
+func (r *Repo) onlyLanded(ctx context.Context, commitRepo *Repo, opts CommitOptions) bool {
+	if r.checkOnlyBase(ctx, opts) != nil {
+		return false
+	}
+	private, err := commitRepo.checkedLine(ctx, "write-tree")
+	if err != nil {
+		return false
+	}
+	head, err := r.checkedLine(ctx, "rev-parse", "--verify", "HEAD^{tree}")
+	return err == nil && head == private
+}
+
+// resetHint is the exact command that restores the index for the paths HEAD's commit touched.
+func (r *Repo) resetHint(ctx context.Context) string {
+	out, err := r.checked(ctx, "diff-tree", "--no-commit-id", "--name-only", "-r", "-z", "--root", "HEAD")
+	if err != nil {
+		return "git reset"
+	}
+	var quoted []string
+	for _, name := range bytes.Split(bytes.TrimRight(out, "\x00"), []byte{0}) {
+		quoted = append(quoted, "'"+strings.ReplaceAll(string(name), "'", `'\''`)+"'")
+	}
+	return "git reset -- " + strings.Join(quoted, " ")
 }
 
 // checkOnlyBase is the after-the-fact check when onlyGuardHook never armed

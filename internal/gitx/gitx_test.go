@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gittest"
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gitx"
@@ -1261,5 +1262,43 @@ func TestFinishOnlyCommitRefusesAMovedBase(t *testing.T) {
 	err = repo.FinishOnlyCommit(t.Context(), gitx.CommitOptions{Only: only})
 	if err == nil || !strings.Contains(err.Error(), "HEAD moved") {
 		t.Errorf("FinishOnlyCommit = %v; want a HEAD moved error", err)
+	}
+}
+
+// A signal that kills git while a slow post-commit hook runs lands after the commit:
+// the real index must still be synced, or it stages the commit's reversal.
+func TestCommitOnlyInterruptedAfterLandingSyncsIndex(t *testing.T) {
+	ignoreConfigDefinedHooks(t)
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "a.txt", "a before\n", "chore: initial")
+	marker := filepath.Join(t.TempDir(), "landed")
+	gittest.InstallHook(t.Context(), t, dir, "post-commit", "#!/bin/sh\ntouch '"+marker+"'\nsleep 5\n")
+	gittest.Write(t, dir, "a.txt", "a after\n")
+	only, err := repo.NewOnlyIndex(t.Context())
+	if err != nil {
+		t.Fatalf("NewOnlyIndex: %v", err)
+	}
+	defer only.Close()
+	if err := only.Repo.Add(t.Context(), "a.txt"); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	go func() {
+		for {
+			if _, err := os.Stat(marker); err == nil {
+				cancel()
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+	if _, err := repo.Commit(ctx, gitx.CommitOptions{Messages: []string{"feat: a"}, Only: only}); err == nil {
+		t.Fatal("Commit returned nil after git was killed; want the interruption reported")
+	}
+	if got := gittest.Git(t.Context(), t, dir, "log", "-1", "--format=%s"); got != "feat: a\n" {
+		t.Fatalf("HEAD subject = %q; the commit did not land", got)
+	}
+	if got := gittest.Git(t.Context(), t, dir, "status", "--porcelain"); got != "" {
+		t.Errorf("status after interrupted --only commit = %q; want the index in sync with HEAD", got)
 	}
 }
