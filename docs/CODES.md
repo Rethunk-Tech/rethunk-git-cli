@@ -15,7 +15,6 @@ Authoritative exit codes and machine-readable output. Flags:
 | 5 | One path named both as a path and as a symbol anchor. `land`: `--install` (or a catch-up install) failed |
 | 6 | Normalized LSP ↔ tree-sitter extent mismatch (`commit` only) |
 | 7 | Gitignored and untracked |
-| 8 | Commit succeeded; `--push` failed |
 | 9 | Unsupported language for a symbol anchor |
 | 10 | Symbol anchor refused on a special path (`commit` only) |
 | 11 | All named targets resolve but have no uncommitted changes |

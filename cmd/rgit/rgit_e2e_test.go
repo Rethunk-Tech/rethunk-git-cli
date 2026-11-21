@@ -440,23 +440,6 @@ func TestDiff_UnbornBranchListsEverythingCommittable(t *testing.T) {
 	}
 }
 
-func TestCommit_PushAfterSuccessfulCommit(t *testing.T) {
-	t.Parallel()
-	repo := initRepoWithFile(t, "auth.go", authGoV1)
-	remote := t.TempDir()
-	gittest.Git(t.Context(), t, remote, "init", "-q", "--bare")
-	gittest.Git(t.Context(), t, repo, "remote", "add", "origin", remote)
-	branch := strings.TrimSpace(gittest.Git(t.Context(), t, repo, "rev-parse", "--abbrev-ref", "HEAD"))
-	gittest.Git(t.Context(), t, repo, "push", "-q", "-u", "origin", branch)
-
-	gittest.Write(t, repo, "auth.go", authGoV2)
-	got := runRgit(t, repo, "commit", "--push", "-m", "fix(auth): reject expired", "auth.go:ValidateToken")
-	qt.Assert(t, qt.Equals(got.ExitCode, 0))
-
-	local := strings.TrimSpace(gittest.Git(t.Context(), t, repo, "rev-parse", "HEAD"))
-	qt.Assert(t, qt.Equals(strings.TrimSpace(gittest.Git(t.Context(), t, remote, "rev-parse", branch)), local))
-}
-
 // TestCommit_GoTSPythonSymbolGranularityInOneInvocation covers three
 // grammars, not every one of them: the guarantee under test is that
 // symbol granularity holds across DIFFERENT languages within a single
@@ -1057,8 +1040,7 @@ func TestHelp_SubcommandExitsZeroAndDoesNotLeakPflag(t *testing.T) {
 // --- commit --amend ------------------------------------------------------
 
 // --- Forwarded git flags: --fixup/--squash, --author/--date/--reset-author,
-// --gpg-sign/--no-gpg-sign, the --porcelain and -q output modes, and a clearer
-// --push-with-no-upstream message. Each is specified in docs/USAGE.md § Flags;
+// --gpg-sign/--no-gpg-sign, and the --porcelain and -q output modes. Each is specified in docs/USAGE.md § Flags;
 // what earns a test here is a flag rgit does more with than hand to git.
 // --amend, --fixup/--squash's own autosquash-message generation, plain
 // --author/--date forwarding, and --reset-author are all pinned at the unit
@@ -1110,34 +1092,13 @@ func TestCommit_GPGSignFlagsForwarded(t *testing.T) {
 	qt.Assert(t, qt.Equals(noSign.ExitCode, 0))
 }
 
-func TestCommit_PushWithNoUpstreamNamesTheFix(t *testing.T) {
+func TestCommit_PushFlagRemoved(t *testing.T) {
 	t.Parallel()
-	// docs/USAGE.md / AGENTS.md's one invariant: rgit does not invent an
-	// implicit `-u` (a push.default=current caller already gets a
-	// successful push with no upstream at all, and pre-empting on that
-	// basis would silently break them). What it adds on top of git's own
-	// failure is a named, concrete fix.
-	//
-	// Also pinned at the unit level
-	// (internal/app/app_test.go's TestRun_PushFailureReportsUpstreamHint),
-	// deliberately -- see that test's own comment for why this is not
-	// plain duplication: it triggers push failure via no remote configured
-	// at all, this one via a real remote with no upstream tracking, git's
-	// own distinct "no upstream branch" refusal, which only a real remote
-	// can produce.
 	repo := initRepoWithFile(t, "auth.go", authGoV1)
-	remote := t.TempDir()
-	gittest.Git(t.Context(), t, remote, "init", "-q", "--bare")
-	gittest.Git(t.Context(), t, repo, "remote", "add", "origin", remote)
-	branch := strings.TrimSpace(gittest.Git(t.Context(), t, repo, "rev-parse", "--abbrev-ref", "HEAD"))
-
 	gittest.Write(t, repo, "auth.go", authGoV2)
 	got := runRgit(t, repo, "commit", "--push", "-m", "fix(auth): reject expired", "auth.go:ValidateToken")
-
-	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.PushFailed)))
-	qt.Assert(t, qt.StringContains(got.Stderr, "git push -u origin "+branch))
-	// The commit itself still landed even though the push failed.
-	qt.Assert(t, qt.StringContains(gittest.Git(t.Context(), t, repo, "cat-file", "-p", "HEAD:auth.go"), "len(tok)"))
+	qt.Assert(t, qt.Equals(got.ExitCode, int(exitcode.InvalidUsage)))
+	qt.Assert(t, qt.StringContains(got.Stderr, "--push was removed: run `rgit land` after committing"))
 }
 
 // TestCommit_PorcelainEmitsRecords is thinned the same way: --dry-run

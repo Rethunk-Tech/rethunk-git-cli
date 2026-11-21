@@ -76,7 +76,6 @@ func (e *ResolveError) Error() string {
 		exitcode.ContradictoryAnchors,
 		exitcode.ExtentMismatch,
 		exitcode.PathRefused,
-		exitcode.PushFailed,
 		exitcode.SpecialPathRefused,
 		exitcode.NothingToCommit,
 		exitcode.StructuredDataAnchorRefused,

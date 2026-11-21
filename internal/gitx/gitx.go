@@ -1506,27 +1506,6 @@ func withEnv(env []string, key, value string) []string {
 	return append(result, prefix+value)
 }
 
-// Push runs a bare `git push` -- rgit commit's only caller never has a
-// remote or refspec of its own to add (docs/USAGE.md's --push is a plain
-// "push what was just committed"), so there is no forwarding argument to
-// carry; add one back only alongside a caller that actually has something
-// to pass. AGENTS.md is explicit that a push failure does not roll back
-// the commit that preceded it; Push reports the failure and nothing more.
-//
-// Push never adds `--set-upstream` on its own initiative, even for a
-// branch with none configured: `push.default=current` (among other
-// configurations) already pushes such a branch successfully with no
-// upstream at all, so guessing `-u` here would fail a push for some
-// callers that plain `git push` would have completed -- exactly the
-// silent divergence AGENTS.md's one invariant forbids. A caller wanting a
-// clearer message on the specific "no upstream" failure uses Upstream
-// and CurrentBranch to add one after Push has already failed, never
-// before.
-func (r *Repo) Push(ctx context.Context) error {
-	_, err := r.checked(ctx, "push")
-	return err
-}
-
 // CurrentBranch returns HEAD's branch name via `git rev-parse --abbrev-ref
 // HEAD`. Meaningful only once at least one commit exists (HEAD is
 // otherwise unborn and this fails); rgit only calls it right after a

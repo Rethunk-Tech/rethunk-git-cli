@@ -26,6 +26,7 @@ Notable changes to `rgit`. The format follows
 
 ### Removed
 
+- **Breaking:** `rgit commit --push` and its exit 8. The flag now exits 129 with `--push was removed: run `rgit land` after committing`; push with `rgit land`, which gates first.
 - `rgit show --with-header`, the deprecated alias for `--porcelain`. Use `--porcelain`. See [`docs/USAGE.md`](docs/USAGE.md#show).
 
 ### Changed

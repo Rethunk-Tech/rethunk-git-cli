@@ -25,7 +25,6 @@ func TestCodes_MatchDocumentedTable(t *testing.T) {
 		{"ContradictoryAnchors", ContradictoryAnchors, 5},
 		{"ExtentMismatch", ExtentMismatch, 6},
 		{"PathRefused", PathRefused, 7},
-		{"PushFailed", PushFailed, 8},
 		{"UnsupportedLanguage", UnsupportedLanguage, 9},
 		{"SpecialPathRefused", SpecialPathRefused, 10},
 		{"NothingToCommit", NothingToCommit, 11},

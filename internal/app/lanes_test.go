@@ -670,29 +670,6 @@ func TestRun_DiffUnbornBranchListsEverythingCommittable(t *testing.T) {
 	qt.Assert(t, qt.StringContains(stdout, "untracked.go\tUntracked\tMOD\t"))
 }
 
-// TestRun_PushAfterSuccessfulCommit: a successful --push (as
-// opposed to the failure path TestRun_PushFailureReportsUpstreamHint,
-// app_test.go, already covers) was only proven through the built binary
-// (cmd/rgit/rgit_e2e_test.go's identically named case) -- a real bare
-// remote, upstream already configured, and repo.Push actually reaching it
-// successfully.
-func TestRun_PushAfterSuccessfulCommit(t *testing.T) {
-	t.Parallel()
-	dir := tempRepo(t)
-	remote := t.TempDir()
-	gittest.Git(t.Context(), t, remote, "init", "-q", "--bare")
-	gitOut(t, dir, "remote", "add", "origin", remote)
-	branch := strings.TrimSpace(gitOut(t, dir, "rev-parse", "--abbrev-ref", "HEAD"))
-	gitOut(t, dir, "push", "-q", "-u", "origin", branch)
-
-	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-	_, _, code := runApp(t, "-C", dir, "commit", "--push", "-m", "fix(a): bump", "a.go:A")
-	qt.Assert(t, qt.Equals(code, exitcode.Success))
-
-	local := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
-	qt.Assert(t, qt.Equals(strings.TrimSpace(gittest.Git(t.Context(), t, remote, "rev-parse", branch)), local))
-}
-
 // TestRun_DiffUntrackedFileAndModeChange holds `rgit diff`'s untracked and
 // mode-only paths at the unit level: an untracked file attributes per
 // symbol (internal/diff's buildUntrackedReport) exactly like a brand-new

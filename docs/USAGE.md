@@ -511,8 +511,8 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 | `-o`, `--only` | Commit only the named targets; other staged paths stay. Default when any target is given. Needs a target unless `--amend`. Private index + `rgit-commit.lock`. Another writer moving HEAD mid-commit: 128, nothing committed. |
 | `--reuse-message=<commit>` | Git's `--reuse-message`. Long form only. Exclusive with `-m`. |
 | `--reedit-message` | Refused (129). |
-| `--push` | Push after a successful commit. No rollback. No upstream: exit-8 names the branch and `git push -u origin <branch>` / `push.autoSetupRemote`. Never adds `-u`. |
-| `--stage-only` | Stage into the real index and stop: no message, no hooks. Needs a target. Exclusive with `--include`, `--only`, `--push`, `--amend`, `--allow-empty`, `-m`/`-F`, `--fixup`, `--squash`, `--reuse-message`. No unstage of one symbol — `git restore --staged FILE` takes the whole file. |
+| `--push` | Removed (129): run `rgit land` after committing. |
+| `--stage-only` | Stage into the real index and stop: no message, no hooks. Needs a target. Exclusive with `--include`, `--only`, `--amend`, `--allow-empty`, `-m`/`-F`, `--fixup`, `--squash`, `--reuse-message`. No unstage of one symbol — `git restore --staged FILE` takes the whole file. |
 | `--dry-run` | Preview. No objects, no staging, no hooks. Same `+N/-M` as `diff`. |
 | `--no-verify` | Skip hooks. |
 | `--fixup <commit>` | Autosquash (`amend:`/`reword:` forwarded). Generates its subject; `-m`/`-F` append. |
@@ -575,7 +575,7 @@ before decode. Closes #42." \
 ```
 
 **Invalid combinations:** `--include` + `--only`; `--stage-only` with any
-of its exclusions (including `--include`); `--dry-run` + `--push`;
+of its exclusions (including `--include`);
 `--staged`/`--unstaged` + a revision; `--staged` + `--unstaged`; `--range`
 
 + a positional range; `-m` + `-F`; `--porcelain` + `--quiet` (`diff`);
@@ -607,7 +607,6 @@ A missing conventional-commit shape warns; the commit proceeds.
   remains `git rebase --continue`.
 + `commit.cleanup` and `commit.gpgsign` are honoured.
   `commit.template` is **not** — `rgit` never opens an editor.
-+ `--push` never adds `--set-upstream`.
 
 When stdin is not a terminal, `GIT_TERMINAL_PROMPT=0`.
 

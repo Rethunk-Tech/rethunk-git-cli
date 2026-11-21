@@ -488,49 +488,6 @@ func TestRunCommit_LeftLine(t *testing.T) {
 	}
 }
 
-// TestRun_PushFailureHonoursQuietAndPorcelain pins that a failed --push
-// reports through the invocation's own output mode rather than always
-// adding the human "left:" line. -q promises an empty stdout and --porcelain
-// promises records a parser can classify -- H and the target rows; a trailing
-// "left: clean" is neither, and a caller reading the failure would have to
-// special-case it.
-func TestRun_PushFailureHonoursQuietAndPorcelain(t *testing.T) {
-	t.Parallel()
-	for _, tc := range []struct {
-		name string
-		args []string
-		want func(stdout string) bool
-	}{
-		{
-			name: "quiet prints nothing",
-			args: []string{"commit", "-q", "--push", "-m", "fix(a): bump", "a.go:A"},
-			want: func(stdout string) bool { return stdout == "" },
-		},
-		{
-			name: "porcelain prints only its own records",
-			args: []string{"commit", "--push", "--porcelain", "-m", "fix(a): bump", "a.go:A"},
-			want: func(stdout string) bool {
-				lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
-				if len(lines) != 2 || !strings.HasPrefix(lines[0], "H\t") {
-					return false
-				}
-				return lines[1] == "a.go\tA\t1\t1"
-			},
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			dir := tempRepo(t)
-			writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-
-			stdout, stderr, code := runApp(t, append([]string{"-C", dir}, tc.args...)...)
-			qt.Assert(t, qt.Equals(code, exitcode.PushFailed), qt.Commentf("%s", stderr))
-			qt.Assert(t, qt.IsTrue(tc.want(stdout)), qt.Commentf("stdout = %q", stdout))
-			qt.Assert(t, qt.Not(qt.StringContains(stdout, "left:")))
-		})
-	}
-}
-
 // TestRun_CommitMessageFileResolvesFromInvocationDir pins -F's path rule:
 // git resolves it against the directory it runs in, which for rgit is the
 // repository root, so a bare relative name read a different file than

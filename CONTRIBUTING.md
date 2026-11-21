@@ -63,7 +63,7 @@ Temporary repos come from [`internal/gittest`](internal/gittest/gittest.go).
 
 | File | Happy path | Critical edges |
 | --- | --- | --- |
-| `rgit_e2e_test.go` | Init → edit → `diff` → `commit` → HEAD, clean index, hook, worktree | Hook rejection rolls staging back (exit 128; also unit-pinned); `--` and leading-colon magic reach real `git add`; pathspec parity; path escape and malformed `--sym` (129); subdirectory paths; unborn branch; `--fixup` + `-m`; `--gpg-sign`/`--no-gpg-sign`/`--push`; completion in bash/zsh/fish/pwsh; exit codes and help as a process |
+| `rgit_e2e_test.go` | Init → edit → `diff` → `commit` → HEAD, clean index, hook, worktree | Hook rejection rolls staging back (exit 128; also unit-pinned); `--` and leading-colon magic reach real `git add`; pathspec parity; path escape and malformed `--sym` (129); subdirectory paths; unborn branch; `--fixup` + `-m`; `--gpg-sign`/`--no-gpg-sign`; completion in bash/zsh/fish/pwsh; exit codes and help as a process |
 | `index_test.go` | Single-symbol blob into the real index | Unborn + gitignore (7); EOF newline; rename as two paths; glob/`:(exclude)`; `MODE`; submodule/symlink; clean filter (`--path`); nested extents; new-file preamble; class members without siblings; Go method stays a sibling; deletion stays parseable; YAML round-trip; resolve-all-before-stage; nearest-sibling insert; reverse-offset splice; no invented blank (PEP 8 excepted); `--dry-run` vs numstat |
 | `resolver_test.go` | Tree-sitter + doc comment on a Go fixture | Exit 3 + did-you-mean; new-symbol neighbours; `@header`/`@imports`/`@toplevel`; live `gopls` |
 

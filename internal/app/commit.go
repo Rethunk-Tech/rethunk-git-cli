@@ -253,24 +253,13 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		return code
 	}
 
-	if f.push {
-		if err := repo.Push(ctx); err != nil {
-			r.reportPushFailure(ctx, repo, err)
-			if code := emitLeft(ctx, repo, stdout, stderr, r.leftMode(), jsonSHA, targetResults); code != exitcode.Success {
-				return code
-			}
-			return exitcode.PushFailed
-		}
-	}
-
 	return emitLeft(ctx, repo, stdout, stderr, r.leftMode(), jsonSHA, targetResults)
 }
 
 // leftMode is which of emitLeft's three renderings this invocation's own
 // output flags ask for. -q promises an empty stdout and --porcelain promises
 // records a parser can classify, so neither may receive the human "left:"
-// line merely because a --push failed: which flags were given decides the
-// framing, and a failure is not a licence to change it.
+// line: which flags were given decides the framing.
 type leftMode int
 
 const (
@@ -346,7 +335,8 @@ func registerCommitFlags(fs *pflag.FlagSet, f *commitFlags) (reeditMessage *bool
 	fs.StringArrayVar(&f.trailers, "trailer", nil, "append a trailer TOKEN:VALUE (repeatable)")
 	fs.BoolVar(&f.amend, "amend", false, "amend the previous commit")
 	fs.BoolVar(&f.allowEmpty, "allow-empty", false, "permit a commit with no changes")
-	fs.BoolVar(&f.push, "push", false, "push upstream after a successful commit")
+	fs.BoolVar(&f.push, "push", false, "removed: run `rgit land` after committing")
+	_ = fs.MarkHidden("push")
 	fs.BoolVar(&f.dryRun, "dry-run", false, "preview only; writes and stages nothing")
 	fs.BoolVar(&f.noVerify, "no-verify", false, "skip git hooks")
 	fs.StringVar(&f.fixup, "fixup", "", "autosquash fixup for <commit> (or amend:<commit>/reword:<commit>)")
@@ -381,8 +371,6 @@ func (f *commitFlags) stageOnlyConflict() string {
 		return "--include"
 	case f.only:
 		return "--only"
-	case f.push:
-		return "--push"
 	case f.amend:
 		return "--amend"
 	case len(f.messages) > 0 || f.msgFile != "":
@@ -537,8 +525,8 @@ func (r *commitRun) validateFlags() exitcode.Code {
 	if len(f.messages) > 0 && f.msgFile != "" {
 		return r.usage("-m and -F are mutually exclusive; %s", stdinMessageHint)
 	}
-	if f.dryRun && f.push {
-		return r.usage("--dry-run and --push are mutually exclusive")
+	if f.push {
+		return r.usage("--push was removed: run `rgit land` after committing")
 	}
 	// Asking for machine-readable output and for no output is a
 	// contradiction, and silently letting one win would leave a script
@@ -789,7 +777,6 @@ func (r *commitRun) summarize(ctx context.Context, repo *gitx.Repo, gitStdout []
 			return "", exitcode.GitFailure
 		}
 		if r.asJSON {
-			// Written after the optional push so "left" is the final state.
 			return sha, exitcode.Success
 		}
 		fmt.Fprintf(r.stdout, "H\t%s\n", sha)
@@ -876,26 +863,6 @@ func gitCommitSummaryLine(line []byte) bool {
 		}
 	}
 	return true
-}
-
-// reportPushFailure prints a failed push. A push failure does not roll back
-// the commit that preceded it (docs/USAGE.md § Flags, AGENTS.md's
-// delegation boundary).
-func (r *commitRun) reportPushFailure(ctx context.Context, repo *gitx.Repo, pushErr error) {
-	fmt.Fprintf(r.stderr, "rgit: %v\n", pushErr)
-	// gitx.Push's own doc comment explains why this never becomes an
-	// implicit --set-upstream: some push.default settings push a branch
-	// with no upstream configured just fine, so guessing -u here could fail
-	// a push plain `git push` would have completed. This only adds a
-	// concrete, named fix once the push has already failed for its own
-	// reason, and only when Upstream independently confirms there genuinely
-	// is none.
-	if _, hasUpstream, uerr := repo.Upstream(ctx); uerr != nil || hasUpstream {
-		return
-	}
-	if branch, berr := repo.CurrentBranch(ctx); berr == nil && branch != "" && branch != "HEAD" {
-		fmt.Fprintf(r.stderr, "rgit: %s has no upstream tracking branch -- try `git push -u origin %s`, or set push.autoSetupRemote to do this for every push\n", branch, branch)
-	}
 }
 
 // leftState is what remains after a commit, so the caller needs no

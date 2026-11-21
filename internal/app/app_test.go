@@ -195,9 +195,9 @@ func TestRun_UsageErrors(t *testing.T) {
 		args: []string{"commit", "-F", "-", "--pathspec-from-file=-"},
 		want: "-F - and --pathspec-from-file=- are mutually exclusive",
 	}, {
-		name: "commit: --dry-run and --push are mutually exclusive",
-		args: []string{"commit", "--dry-run", "--push", "-m", "feat(x): y", "a.go"},
-		want: "--dry-run and --push are mutually exclusive",
+		name: "commit: --push was removed",
+		args: []string{"commit", "--push", "-m", "feat(x): y", "a.go"},
+		want: "--push was removed: run `rgit land` after committing",
 	}, {
 		name: "commit: --porcelain and --quiet are mutually exclusive",
 		args: []string{"commit", "--porcelain", "--quiet", "-m", "feat(x): y", "a.go"},
@@ -906,45 +906,6 @@ func TestRun_GPGSignShorthandReachesGit(t *testing.T) {
 	qt.Assert(t, qt.StringContains(stderr, "sign"))
 }
 
-// TestRun_PushFailureReportsUpstreamHint covers the --push branch the
-// --dry-run cases above never reach: --dry-run returns before repo.Push is
-// ever called, so it is the only shape of --push this file's other tests
-// exercise, leaving repo.Push, repo.Upstream, repo.CurrentBranch, and
-// exitcode.PushFailed's own message at 0% under -short even though the
-// full lane covers all four -- a regression in any of them would pass
-// `go test -short ./...` clean. A repo gittest builds has no remote
-// configured at all, so `git push` fails for the plainest possible
-// reason and Upstream's negative answer is real, not assumed.
-//
-// This is deliberately pinned again in
-// cmd/rgit/rgit_e2e_test.go's TestCommit_PushWithNoUpstreamNamesTheFix, the
-// same dual-pin CONTRIBUTING.md sanctions for hook rejection
-// (lanes_test.go's own TestRun_HookRejectionRestoresStaging) -- but for
-// a different reason than duplication would suggest. The two cases trigger
-// genuinely different git failures that both leave Upstream negative:
-// no remote configured at all here, versus a real remote with no upstream
-// tracking there (git's own literal "no upstream branch" refusal). Losing
-// this lane would still catch a regression in the message-construction
-// code, but only the e2e twin proves the hint fires for the specific
-// failure its own text names.
-func TestRun_PushFailureReportsUpstreamHint(t *testing.T) {
-	t.Parallel()
-	dir := tempRepo(t)
-	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
-
-	stdout, stderr, code := runApp(t, "-C", dir, "commit", "--push", "-m", "fix(a): bump", "a.go:A")
-
-	qt.Assert(t, qt.Equals(code, exitcode.PushFailed))
-	// AGENTS.md: a push failure never rolls back the commit that preceded
-	// it -- it already landed by the time Push is even attempted.
-	qt.Assert(t, qt.StringContains(stdout, "a.go:A"))
-	qt.Assert(t, qt.StringContains(gitOut(t, dir, "cat-file", "-p", "HEAD:a.go"), "return 111"))
-	// The concrete, named suggestion commit.go's own doc comment promises:
-	// branch "main" (gittest.New forces it) and the exact command to run.
-	qt.Assert(t, qt.StringContains(stderr, "main has no upstream tracking branch"))
-	qt.Assert(t, qt.StringContains(stderr, "git push -u origin main"))
-}
-
 // TestRun_PathspecListsEveryFileItStages asserts a pathspec naming a
 // directory lists one row per file it stages, not one aggregate row for
 // the whole pathspec, so a caller can see what moved under it, not merely
@@ -1576,7 +1537,6 @@ func TestRun_CommitStageOnlyRefusals(t *testing.T) {
 		"a message": {"commit", "--stage-only", "-m", "fix(a): x", "a.go"},
 		"--only":    {"commit", "--stage-only", "--only", "a.go"},
 		"--include": {"commit", "--stage-only", "--include", "a.go"},
-		"--push":    {"commit", "--stage-only", "--push", "a.go"},
 		"--amend":   {"commit", "--stage-only", "--amend", "a.go"},
 	} {
 		_, _, code := runApp(t, append([]string{"-C", dir}, args...)...)

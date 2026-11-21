@@ -10,6 +10,8 @@
 // carries no comment. Everything beyond that belongs in the table, so the
 // two cannot drift into disagreeing.
 //
+// Exit 8 is retired with `rgit commit --push` and not reused.
+//
 // Exit 1 is deliberately absent: `rgit diff --exit-code` uses it for "there
 // is something committable", git's own convention, and unlike every status
 // below its meaning is conditional on a flag rather than fixed. It lives at
@@ -39,9 +41,6 @@ const (
 
 	// PathRefused means gitignored and untracked, not any unusable path.
 	PathRefused Code = 7
-
-	// PushFailed means the commit succeeded and only --push failed.
-	PushFailed Code = 8
 
 	// UnsupportedLanguage means no grammar; naming the path still works.
 	UnsupportedLanguage Code = 9
