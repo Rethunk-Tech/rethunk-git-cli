@@ -139,8 +139,23 @@ func (execGit) run(dir string, args ...string) (string, error) {
 	return string(out), err
 }
 
+func hasPrePushHook(dir string) bool {
+	out, err := exec.CommandContext(context.Background(), "git", "-C", dir, "rev-parse", "--path-format=absolute", "--git-path", "hooks/pre-push").Output() //nolint:gosec // fixed argv
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(strings.TrimSpace(string(out)))
+	return err == nil
+}
+
 func runGateCmd(dir string, failedOnly bool) (string, error) {
 	args := []string{"-C", dir}
+	// A pre-push hook that runs gate turns --isolate on by itself, and gate
+	// reuses only a pass that ran the same way, so gate here as the hook
+	// will and the push does not run everything a second time.
+	if hasPrePushHook(dir) {
+		args = append(args, "--isolate")
+	}
 	if failedOnly {
 		args = append(args, "--failed")
 	}

@@ -2581,3 +2581,14 @@ func TestLandShaSkips(t *testing.T) {
 		})
 	}
 }
+
+func TestHasPrePushHook(t *testing.T) {
+	dir, _ := gittest.New(t.Context(), t)
+	if hasPrePushHook(dir) {
+		t.Fatal("a repo with no hook reports one")
+	}
+	gittest.Write(t, dir, ".git/hooks/pre-push", "#!/bin/sh\n")
+	if !hasPrePushHook(dir) {
+		t.Fatal("an installed pre-push hook is not seen")
+	}
+}
