@@ -19,6 +19,7 @@ func TestCodes_MatchDocumentedTable(t *testing.T) {
 		want Code
 	}{
 		{"Success", Success, 0},
+		{"LandConflict", LandConflict, 2},
 		{"AnchorUnresolvable", AnchorUnresolvable, 3},
 		{"AnchorAmbiguous", AnchorAmbiguous, 4},
 		{"ContradictoryAnchors", ContradictoryAnchors, 5},
@@ -29,6 +30,9 @@ func TestCodes_MatchDocumentedTable(t *testing.T) {
 		{"SpecialPathRefused", SpecialPathRefused, 10},
 		{"NothingToCommit", NothingToCommit, 11},
 		{"StructuredDataAnchorRefused", StructuredDataAnchorRefused, 12},
+		{"LandGateRed", LandGateRed, 3},
+		{"LandNotEnqueued", LandNotEnqueued, 4},
+		{"LandInstallFailed", LandInstallFailed, 5},
 		{"DirtyOverlap", DirtyOverlap, 13},
 		{"GitFailure", GitFailure, 128},
 		{"InvalidUsage", InvalidUsage, 129},

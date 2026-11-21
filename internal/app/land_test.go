@@ -1309,8 +1309,8 @@ func TestPrepareLandBranchWorktreeAddFailure(t *testing.T) {
 	var stdout, stderr strings.Builder
 	d.stdout = &stdout
 	d.stderr = &stderr
-	if code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d); code != 1 {
-		t.Fatalf("code = %v stdout=%q stderr=%q; want 1", code, stdout.String(), stderr.String())
+	if code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d); code != exitcode.GitFailure {
+		t.Fatalf("code = %v stdout=%q stderr=%q; want 128", code, stdout.String(), stderr.String())
 	}
 	if !strings.Contains(stderr.String(), "error: ") {
 		t.Errorf("stderr = %q", stderr.String())
@@ -2369,8 +2369,8 @@ func TestCatchUpLeavesDivergedAndUnrelated(t *testing.T) {
 	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != before {
 		t.Errorf("diverged HEAD moved to %s", got)
 	}
-	if stdout.Len() != 0 || !strings.Contains(stderr.String(), "left main") {
-		t.Errorf("stdout = %q stderr = %q", stdout.String(), stderr.String())
+	if stdout.Len() != 0 || stderr.Len() != 0 {
+		t.Errorf("a diverged default branch printed: stdout = %q stderr = %q", stdout.String(), stderr.String())
 	}
 
 	dir2, bare2 := repoWithOrigin(t)
@@ -2381,5 +2381,103 @@ func TestCatchUpLeavesDivergedAndUnrelated(t *testing.T) {
 	catchUp(t.Context(), dir2, d)
 	if got := strings.TrimSpace(gitOut(t, dir2, "rev-parse", "HEAD")); got != before2 || out2.Len() != 0 {
 		t.Errorf("a remote with no PR merge was caught up: HEAD %s out %q", got, out2.String())
+	}
+}
+
+// TestLandJSONOneObject pins --json: catch-up and install lines stay off stdout, the object carries
+// the pushed sha and each skip's reason.
+func TestLandJSONOneObject(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	pushMergedPR(t, bare, "feat: thing (#61)")
+	gitOut(t, dir, "pull", "-q", "--ff-only")
+	gittest.Write(t, dir, "Makefile", ".PHONY: install\ninstall:\n\t@echo ok\n")
+	gittest.Commit(t.Context(), t, dir, "ahead")
+	d := testLandDeps(t)
+	d.asJSON = true
+	var stdout, stderr strings.Builder
+	d.stdout, d.stderr = &stdout, &stderr
+	loose := t.TempDir()
+	if code := landRepos(t.Context(), []string{dir, loose}, false, true, true, d); code != exitcode.Success {
+		t.Fatalf("code = %v stderr=%q", code, stderr.String())
+	}
+	var got landJSON
+	if err := json.Unmarshal([]byte(stdout.String()), &got); err != nil {
+		t.Fatalf("stdout is not one JSON object: %v\n%q", err, stdout.String())
+	}
+	head := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	if len(got.Repos) != 2 || got.Repos[0].SHA != head || got.Repos[1].Detail != "not a git repo" {
+		t.Errorf("repos = %+v; want sha %s and a skip reason", got.Repos, head)
+	}
+	if !strings.Contains(stderr.String(), ": installed ok") {
+		t.Errorf("install line missing from stderr: %q", stderr.String())
+	}
+}
+
+func TestLandBranchJSON(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, "f.txt", "f\n")
+	gitOut(t, wt, "add", "f.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "feat")
+	d := testLandDeps(t)
+	var stdout, stderr strings.Builder
+	d.stdout, d.stderr = &stdout, &stderr
+	if code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--json"}, d); code != exitcode.Success {
+		t.Fatalf("code = %v stderr=%q", code, stderr.String())
+	}
+	var got landBranchJSON
+	if err := json.Unmarshal([]byte(stdout.String()), &got); err != nil || got.Branch != "feat" || got.Route != "local" || got.SHA == "" {
+		t.Errorf("stdout = %q (%v)", stdout.String(), err)
+	}
+}
+
+// TestLandHonestErrors pins the wording of a gate that edits tracked files, an origin that moved, and a dirty branch worktree.
+func TestLandHonestErrors(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	gittest.Write(t, dir, "ahead.txt", "x\n")
+	gittest.Commit(t.Context(), t, dir, "ahead")
+	d := testLandDeps(t)
+	d.gate = func(dir string, _ bool) (string, error) {
+		gittest.Write(t, dir, "base.txt", "gate edit\n")
+		return "", nil
+	}
+	var stdout strings.Builder
+	d.stdout = &stdout
+	if code := landRepos(t.Context(), []string{dir}, false, false, false, d); code != 1 ||
+		!strings.Contains(stdout.String(), "gate modified tracked files (base.txt)") || strings.Contains(stdout.String(), "HEAD moved") {
+		t.Errorf("tree-only change: code=%v stdout=%q", code, stdout.String())
+	}
+	gitOut(t, dir, "checkout", "-q", "--", "base.txt")
+
+	d.gate = func(string, bool) (string, error) {
+		other := t.TempDir()
+		gitOut(t, other, "clone", "-q", bare, "o")
+		o := filepath.Join(other, "o")
+		gittest.Write(t, o, "moved.txt", "m\n")
+		gitOut(t, o, "add", "moved.txt")
+		gitOut(t, o, "commit", "-q", "-m", "moved")
+		gitOut(t, o, "push", "-q", "origin", "HEAD")
+		return "", nil
+	}
+	var stderr strings.Builder
+	d.stdout, d.stderr = &stdout, &stderr
+	if code := landRepos(t.Context(), []string{dir}, false, false, false, d); code != 1 || !strings.HasPrefix(stderr.String(), dir+": error: origin moved") {
+		t.Errorf("origin moved: code=%v stderr=%q", code, stderr.String())
+	}
+
+	dir2, _ := repoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir2, "worktree", "add", "-b", "d1", wt)
+	gittest.Write(t, wt, "base.txt", "unstaged\n")
+	var stderr2 strings.Builder
+	d2 := testLandDeps(t)
+	d2.stderr = &stderr2
+	if code := runLandWith(t.Context(), dir2, []string{"--branch", "d1"}, d2); code != 1 ||
+		!strings.Contains(stderr2.String(), wt) || !strings.Contains(stderr2.String(), "base.txt") || strings.Contains(stderr2.String(), "conflict") {
+		t.Errorf("dirty worktree: code=%v stderr=%q", code, stderr2.String())
 	}
 }

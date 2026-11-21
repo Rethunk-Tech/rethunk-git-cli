@@ -22,6 +22,9 @@ type Code int
 const (
 	Success Code = 0
 
+	// LandConflict means `land --branch` could not rebase the branch.
+	LandConflict Code = 2
+
 	// AnchorUnresolvable means absent from worktree AND HEAD, not ambiguous.
 	AnchorUnresolvable Code = 3
 
@@ -53,6 +56,15 @@ const (
 	// StructuredDataAnchorRefused means commit's alone: a FILE:SYMBOL
 	// anchor targeted JSON/YAML/TOML. Name the path instead.
 	StructuredDataAnchorRefused Code = 12
+
+	// LandGateRed means `land --branch`'s gate stayed red after a --failed re-run.
+	LandGateRed Code = 3
+
+	// LandNotEnqueued means `land --branch`'s merge-queue PR was not enqueued.
+	LandNotEnqueued Code = 4
+
+	// LandInstallFailed means a `land` install, including a catch-up install, failed.
+	LandInstallFailed Code = 5
 
 	// DirtyOverlap means a local (non---push) `land --branch` could not fast-forward because the
 	// checkout's own uncommitted edits touch the same files: retry later.

@@ -9,9 +9,10 @@ Authoritative exit codes and machine-readable output. Flags:
 | --- | --- |
 | 0 | Success (stderr warnings for unchanged targets allowed) |
 | 1 | `diff` only, under `--exit-code`/`--quiet`: something is committable. `land` (plain and `--sha`): a repo is red, including a red gate |
-| 3 | Anchor unresolvable — missing in worktree and HEAD; candidates listed |
-| 4 | Ambiguous anchor — candidates listed |
-| 5 | One path named both as a path and as a symbol anchor |
+| 2 | `land --branch`: the rebase conflicted |
+| 3 | Anchor unresolvable — missing in worktree and HEAD; candidates listed. `land --branch`: the gate stayed red after a `--failed` re-run |
+| 4 | Ambiguous anchor — candidates listed. `land --branch --push`: a merge-queue PR was not enqueued |
+| 5 | One path named both as a path and as a symbol anchor. `land`: `--install` (or a catch-up install) failed |
 | 6 | Normalized LSP ↔ tree-sitter extent mismatch (`commit` only) |
 | 7 | Gitignored and untracked |
 | 8 | Commit succeeded; `--push` failed |
@@ -20,8 +21,8 @@ Authoritative exit codes and machine-readable output. Flags:
 | 11 | All named targets resolve but have no uncommitted changes |
 | 12 | Symbol anchor on JSON/JSONC/JSON5/YAML/TOML (`commit` only) |
 | 13 | `land --branch` (without `--push`) could not fast-forward: the checkout's own uncommitted edits touch files the branch changes. Retry later |
-| 128 | Fatal git / system failure (hook rejection, GPG, `-C` unenterable) |
-| 129 | Invalid usage |
+| 128 | Fatal git / system failure (hook rejection, GPG, `-C` unenterable). `land --branch` setup: not a git repo, no default branch, worktree add failed |
+| 129 | Invalid usage. `land --branch` setup: not the main checkout, branch missing, main checkout on another branch |
 
 128 and 129 follow git. 1 is git's `--exit-code` convention and is not a
 named constant — it depends on a flag. Bindings: `internal/exitcode`.

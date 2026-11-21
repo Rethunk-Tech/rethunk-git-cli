@@ -324,7 +324,8 @@ repo.
 ## Doctor
 
 Reports git on `PATH` and its version vs
-[`INSTALL.md`](INSTALL.md#prerequisites), the tree-sitter CLI, language
+[`INSTALL.md`](INSTALL.md#prerequisites), `gate` and `gh` (optional; `land`
+runs the first and reads branch rules and opens PRs with the second), the tree-sitter CLI, language
 servers on `PATH`, and the `languages` listing. Exits 0 unless rgit
 cannot function — a missing server, CLI, or below-floor git is
 informational.
@@ -422,14 +423,15 @@ Success: `DIR: installed <describe>`. Install failure: the failing tail,
 exit 5.
 
 A push rejected because origin moved is never rebased and retried: land
-exits 1 with `origin moved; nothing pushed, re-run` on stderr (`origin moved
+exits 1 with `DIR: error: origin moved; nothing pushed, re-run` on stderr (`origin moved
 during the gate` with `--branch`), since the commit that would go out is not
 the one that was verified. Success prints the pushed SHA.
 
 The gate runs before any push, PR or queue step. A red gate pushes nothing
 for that repo: its line is `DIR: red (gate failed: NAMES; log PATH)` and land
-exits 1. If HEAD or the tree changed while the gate ran, nothing is pushed
-(`HEAD moved during the gate; nothing pushed, re-run`). `--no-gate` skips the
+exits 1. If HEAD moved while the gate ran, nothing is pushed
+(`HEAD moved during the gate; nothing pushed, re-run`); if the gate edited tracked
+files, nothing is pushed and the line names them (`gate modified tracked files (NAMES)`). `--no-gate` skips the
 gate, for callers that already gated the commit.
 
 `--sha SHA` lands that one ahead commit (an ancestor of HEAD, not yet
@@ -463,7 +465,8 @@ line ends `<direct|PR|queue>`. Without `--branch`, `--push` is usage
 
 | Failure | Stderr | Exit |
 | --- | --- | --- |
-| Rebase conflict | `conflict: hand to solver` | 2 |
+| BR's worktree has uncommitted changes | the worktree and the files | 1 |
+| Rebase conflict | `conflict: hand to solver`, the worktree and the conflicting files | 2 |
 | `gate -C <worktree>` red after a `--failed` re-run | log path and last 40 lines | 3 |
 | Merge queue that does not enqueue | names the branch | 4 |
 | `--install` failure | the failing tail | 5 |

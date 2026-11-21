@@ -254,8 +254,27 @@ type landDeps struct {
 	parent    string
 	sha       string
 	noGate    bool
+	asJSON    bool
 	stdout    io.Writer
 	stderr    io.Writer
+	// branchJSON receives --branch's result line when --json is set.
+	branchJSON *landBranchJSON
+}
+
+// info is where progress lines go: stdout, except under --json where stdout holds one object.
+func (d landDeps) info() io.Writer {
+	if d.asJSON {
+		return d.stderr
+	}
+	return d.stdout
+}
+
+type landBranchJSON struct {
+	Repo   string `json:"repo"`
+	Branch string `json:"branch"`
+	SHA    string `json:"sha"`
+	Log    string `json:"log"`
+	Route  string `json:"route"`
 }
 
 func defaultLandDeps(stdout, stderr io.Writer) landDeps {
@@ -368,7 +387,8 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 			}
 		}
 	}
-	return landDispatch(ctx, repos, branch, push, wait, install, jsonFlag(ctx) || argJSON, d)
+	d.asJSON = jsonFlag(ctx) || argJSON
+	return landDispatch(ctx, repos, branch, push, wait, install, d.asJSON, d)
 }
 
 func landDispatch(ctx context.Context, repos []string, branch string, push, wait, install, asJSON bool, d landDeps) exitcode.Code {
@@ -388,7 +408,16 @@ func landDispatch(ctx context.Context, repos []string, branch string, push, wait
 			fmt.Fprintln(d.stderr, landUsageLine)
 			return exitcode.InvalidUsage
 		}
-		return landBranch(ctx, repos[0], branch, wait, install, !push, d)
+		if !asJSON {
+			return landBranch(ctx, repos[0], branch, wait, install, !push, d)
+		}
+		var out landBranchJSON
+		d.branchJSON = &out
+		code := landBranch(ctx, repos[0], branch, wait, install, !push, d)
+		if out.SHA != "" {
+			_ = json.NewEncoder(d.stdout).Encode(out)
+		}
+		return code
 	}
 	if push {
 		fmt.Fprintln(d.stderr, "rgit land: --push needs --branch")
@@ -469,7 +498,7 @@ func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, 
 		return 1
 	}
 	if instFail || caughtUpFail {
-		return 5
+		return exitcode.LandInstallFailed
 	}
 	return exitcode.Success
 }
@@ -486,7 +515,13 @@ func catchUp(ctx context.Context, r string, d landDeps) bool {
 	}
 	repo := strings.TrimSpace(top)
 	def := defaultBranch(repo, d)
+	if strings.TrimSpace(mustGit(repo, d, "rev-parse", "--abbrev-ref", "HEAD")) != def || dirtyTracked(repo, d) {
+		return false
+	}
 	if _, err := d.git.run(repo, "fetch", "-q", "origin"); err != nil {
+		return false
+	}
+	if n, err := d.git.run(repo, "rev-list", "--count", "origin/"+def+"..HEAD"); err != nil || strings.TrimSpace(n) != "0" {
 		return false
 	}
 	subjects, err := d.git.run(repo, "log", "--format=%s", "HEAD..origin/"+def)
@@ -510,7 +545,7 @@ func catchUp(ctx context.Context, r string, d landDeps) bool {
 		return false
 	}
 	short := strings.TrimSpace(mustGit(repo, d, "rev-parse", "--short", "HEAD"))
-	fmt.Fprintf(d.stdout, "%s: caught up to %s (merged PR #%s)\n", repo, short, pr)
+	fmt.Fprintf(d.info(), "%s: caught up to %s (merged PR #%s)\n", repo, short, pr)
 	return installOne(ctx, repo, d)
 }
 
@@ -559,25 +594,25 @@ func runMakeInstall(ctx context.Context, dir string) (string, error) {
 
 func installOne(ctx context.Context, repo string, d landDeps) bool {
 	if dirtyTracked(repo, d) {
-		fmt.Fprintln(d.stdout, repo+": skipped (dirty tracked files)")
+		fmt.Fprintln(d.info(), repo+": skipped (dirty tracked files)")
 		return false
 	}
 	if makefileName(repo) == "" {
-		fmt.Fprintln(d.stdout, repo+": skipped (no Makefile)")
+		fmt.Fprintln(d.info(), repo+": skipped (no Makefile)")
 		return false
 	}
 	if !makeHasInstall(ctx, repo) {
-		fmt.Fprintln(d.stdout, repo+": skipped (no install target)")
+		fmt.Fprintln(d.info(), repo+": skipped (no install target)")
 		return false
 	}
 	out, err := runMakeInstall(ctx, repo)
 	if err != nil {
 		lines := lastNLines(out, 40)
 		if len(lines) == 0 {
-			fmt.Fprintln(d.stdout, repo+": "+err.Error())
+			fmt.Fprintln(d.info(), repo+": "+err.Error())
 		} else {
 			for _, line := range lines {
-				fmt.Fprintln(d.stdout, line)
+				fmt.Fprintln(d.info(), line)
 			}
 		}
 		return true
@@ -586,7 +621,7 @@ func installOne(ctx context.Context, repo string, d landDeps) bool {
 	if describe == "" {
 		describe = "make install"
 	}
-	fmt.Fprintln(d.stdout, repo+": installed "+describe)
+	fmt.Fprintln(d.info(), repo+": installed "+describe)
 	return false
 }
 
@@ -612,6 +647,7 @@ type landResult struct {
 	Queue    bool
 	Log      string // gate log of a red gate
 	Moved    bool   // push rejected because origin moved (no-rebase route)
+	SHA      string // pushed commit
 	Watch    *landWatchResult
 }
 
@@ -642,6 +678,7 @@ type landJSONRepo struct {
 	URL    string           `json:"url,omitempty"`
 	State  string           `json:"state,omitempty"`
 	Detail string           `json:"detail,omitempty"`
+	SHA    string           `json:"sha,omitempty"`
 	Log    string           `json:"log,omitempty"`
 	Watch  *landWatchResult `json:"watch,omitempty"`
 }
@@ -653,8 +690,10 @@ func jsonResults(results []landResult) []landJSONRepo {
 		switch res.Kind {
 		case landPushed:
 			jr.Status = "pushed"
+			jr.SHA = res.SHA
 		case landSkipped:
 			jr.Status = "skipped"
+			jr.Detail = skipReason(res.Lines)
 		case landRed:
 			jr.Status = "red"
 			jr.Detail = strings.Join(res.Lines, "\n")
@@ -665,6 +704,16 @@ func jsonResults(results []landResult) []landJSONRepo {
 		out = append(out, jr)
 	}
 	return out
+}
+
+// skipReason is the parenthesised reason of a `DIR: skipped (reason)` line.
+func skipReason(lines []string) string {
+	for _, l := range lines {
+		if _, rest, ok := strings.Cut(l, ": skipped ("); ok {
+			return strings.TrimSuffix(rest, ")")
+		}
+	}
+	return ""
 }
 
 func isUmbrella(r string) bool {
@@ -820,12 +869,11 @@ func gateHead(repo string, d landDeps) (line, logPath string, ok bool) {
 	if d.noGate {
 		return "", "", true
 	}
-	state := func() string {
-		head := mustGit(repo, d, "rev-parse", "HEAD")
+	state := func() (head, status string) {
 		st, _ := d.git.run(repo, "status", "--porcelain", "-uno")
-		return head + st
+		return mustGit(repo, d, "rev-parse", "HEAD"), st
 	}
-	before := state()
+	headBefore, statusBefore := state()
 	out, gateErr := d.gate(repo, false)
 	logdir := filepath.Join(d.cacheHome(), "land")
 	sum := sha256.Sum256([]byte(repo))
@@ -846,8 +894,12 @@ func gateHead(repo string, d landDeps) (line, logPath string, ok bool) {
 		}
 		return repo + ": red (gate failed: " + names + "; log " + logPath + ")", logPath, false
 	}
-	if state() != before {
+	head, status := state()
+	if head != headBefore {
 		return repo + ": error: HEAD moved during the gate; nothing pushed, re-run", "", false
+	}
+	if status != statusBefore {
+		return repo + ": error: gate modified tracked files (" + dirtyNames(status) + "); nothing pushed, commit or revert them", "", false
 	}
 	return "", "", true
 }
@@ -911,6 +963,8 @@ func landByRules(repo, def string, d landDeps, opts landPushOpts) landResult {
 		res.Lines = []string{summaryRed(repo, pushOut)}
 		return res
 	}
+	// The remote copy carries the PR; the local ref only fed the push.
+	defer func() { _, _ = d.git.run(repo, "branch", "-D", br) }()
 	url, err := d.gh.createPR(repo, br, subj)
 	if err != nil {
 		res.Kind = landRed
@@ -977,41 +1031,41 @@ func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBra
 	repo, err := d.git.run(repoArg, "rev-parse", "--show-toplevel")
 	if err != nil {
 		fmt.Fprintf(d.stderr, "error: %s is not a git repo\n", repoArg)
-		return landBranchPrep{}, 1
+		return landBranchPrep{}, exitcode.GitFailure
 	}
 	repo = strings.TrimSpace(repo)
 	if isLinkedWorktree(repo, d) {
 		fmt.Fprintf(d.stderr, "error: %s is not the main checkout\n", repo)
-		return landBranchPrep{}, 1
+		return landBranchPrep{}, exitcode.InvalidUsage
 	}
 	def, ok := defaultBranchChecked(repo, d)
 	if !ok {
 		fmt.Fprintf(d.stderr, "error: cannot determine default branch for %s\n", repo)
-		return landBranchPrep{}, 1
+		return landBranchPrep{}, exitcode.GitFailure
 	}
 	dirty := dirtyTracked(repo, d)
 	cur := strings.TrimSpace(mustGit(repo, d, "rev-parse", "--abbrev-ref", "HEAD"))
 	if !dirty || noPush {
 		if cur != def {
 			fmt.Fprintf(d.stderr, "error: %s is on %s, not %s\n", repo, cur, def)
-			return landBranchPrep{}, 1
+			return landBranchPrep{}, exitcode.InvalidUsage
 		}
 	}
 	if _, err := d.git.run(repo, "show-ref", "--verify", "--quiet", "refs/heads/"+branch); err != nil {
 		fmt.Fprintf(d.stderr, "error: branch %s does not exist\n", branch)
-		return landBranchPrep{}, 1
+		return landBranchPrep{}, exitcode.InvalidUsage
 	}
 	wt, found := findBranchWorktree(repo, branch, d)
 	if !found {
 		tmp, err := os.MkdirTemp("", "land-branch.")
 		if err != nil {
 			fmt.Fprintf(d.stderr, "error: %v\n", err)
-			return landBranchPrep{}, 1
+			return landBranchPrep{}, exitcode.GitFailure
 		}
 		_ = os.Remove(tmp)
 		if out, err := d.git.run(repo, "worktree", "add", tmp, branch); err != nil {
 			fmt.Fprintf(d.stderr, "error: %s\n", strings.TrimSpace(out))
-			return landBranchPrep{}, 1
+			return landBranchPrep{}, exitcode.GitFailure
 		}
 		wt = tmp
 	}
@@ -1028,10 +1082,16 @@ func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBra
 		}
 	}
 	prep.opts.afterGate = true
+	if dirty := dirtyTracked(wt, d); dirty {
+		st, _ := d.git.run(wt, "status", "--porcelain=v1", "-uno")
+		fmt.Fprintf(d.stderr, "error: worktree %s has uncommitted changes (%s); %s not rebased\n", wt, dirtyNames(st), branch)
+		return landBranchPrep{}, 1
+	}
 	if _, err := d.git.run(wt, "rebase", base); err != nil {
+		files, _ := d.git.run(wt, "diff", "--name-only", "--diff-filter=U")
 		_, _ = d.git.run(wt, "rebase", "--abort")
-		fmt.Fprintln(d.stderr, "conflict: hand to solver")
-		return landBranchPrep{}, 2
+		fmt.Fprintf(d.stderr, "conflict: hand to solver (worktree %s, files %s)\n", wt, strings.Join(strings.Fields(files), ", "))
+		return landBranchPrep{}, exitcode.LandConflict
 	}
 	return prep, exitcode.Success
 }
@@ -1067,7 +1127,7 @@ func gateLandBranch(prep landBranchPrep, d landDeps) (string, exitcode.Code) {
 		for _, line := range lastNLines(out+retry, 40) {
 			fmt.Fprintln(d.stderr, line)
 		}
-		return logPath, 3
+		return logPath, exitcode.LandGateRed
 	}
 	if err := appendFlake(logdir, filepath.Base(prep.repo), prep.branch, failed, d); err != nil {
 		fmt.Fprintf(d.stderr, "error: %v\n", err)
@@ -1143,15 +1203,15 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 	if noPush {
 		// Merged into the local default branch, so the branch and its worktree are done either way.
 		cleanupLandBranch(prep, landResult{Kind: landPushed, Route: "direct"}, true, d)
-		fmt.Fprintf(d.stdout, "%s %s %s %s local\n", prep.repo, prep.branch, sha, logPath)
+		printLandBranchLine(prep, sha, logPath, "local", d)
 		if install && installOne(ctx, prep.repo, d) {
-			return 5
+			return exitcode.LandInstallFailed
 		}
 		return exitcode.Success
 	}
 	res := landByRules(prep.repo, prep.def, d, prep.opts)
 	if res.Kind == landRed {
-		out := d.stdout
+		out := d.info()
 		if res.Moved {
 			out = d.stderr
 		}
@@ -1165,7 +1225,7 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 	}
 	if res.Route == "queue" && res.PRState == "" {
 		fmt.Fprintf(d.stderr, "error: PR for %s is open but neither queued nor set to auto-merge\n", prep.branch)
-		return 4
+		return exitcode.LandNotEnqueued
 	}
 	cleanupLandBranch(prep, res, false, d)
 	if res.Kind == landPushed {
@@ -1176,7 +1236,7 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 	printLandBranchResult(prep, res, sha, logPath, wait, d)
 	if install && res.Kind == landPushed {
 		if installOne(ctx, prep.repo, d) {
-			return 5
+			return exitcode.LandInstallFailed
 		}
 	}
 	return exitcode.Success
@@ -1202,7 +1262,7 @@ func cleanupLandBranch(prep landBranchPrep, res landResult, local bool, d landDe
 		fmt.Fprintf(d.stderr, "worktree remove refused; keeping %s\n", prep.wt)
 		return
 	}
-	fmt.Fprintf(d.stdout, "removed worktree %s\n", prep.wt)
+	fmt.Fprintf(d.info(), "removed worktree %s\n", prep.wt)
 	del := []string{"branch", "-d", prep.branch}
 	if prep.dirty && !local {
 		if !cherryUpstream(prep.repo, prep.def, prep.branch, d) {
@@ -1213,12 +1273,12 @@ func cleanupLandBranch(prep landBranchPrep, res landResult, local bool, d landDe
 	if _, err := d.git.run(prep.repo, del...); err != nil {
 		return
 	}
-	fmt.Fprintf(d.stdout, "deleted branch %s\n", prep.branch)
+	fmt.Fprintf(d.info(), "deleted branch %s\n", prep.branch)
 }
 
 func printLandBranchResult(prep landBranchPrep, res landResult, sha, logPath string, wait bool, d landDeps) {
 	for _, line := range res.Lines {
-		fmt.Fprintln(d.stdout, line)
+		fmt.Fprintln(d.info(), line)
 	}
 	if res.Kind == landPR && res.PRState != "merged" && res.URL != "" {
 		job := landWatchJob{
@@ -1229,10 +1289,18 @@ func printLandBranchResult(prep landBranchPrep, res landResult, sha, logPath str
 			Default: res.Default,
 		}
 		if wait {
-			fmt.Fprintln(d.stdout, finalWaitLine(res, watchUntilDone(job, d)))
+			fmt.Fprintln(d.info(), finalWaitLine(res, watchUntilDone(job, d)))
 		}
 	}
-	fmt.Fprintf(d.stdout, "%s %s %s %s %s\n", prep.repo, prep.branch, sha, logPath, res.Route)
+	printLandBranchLine(prep, sha, logPath, res.Route, d)
+}
+
+func printLandBranchLine(prep landBranchPrep, sha, logPath, route string, d landDeps) {
+	if d.branchJSON != nil {
+		*d.branchJSON = landBranchJSON{Repo: prep.repo, Branch: prep.branch, SHA: sha, Log: logPath, Route: route}
+		return
+	}
+	fmt.Fprintf(d.stdout, "%s %s %s %s %s\n", prep.repo, prep.branch, sha, logPath, route)
 }
 
 // isLinkedWorktree is true when repo's git dir differs from the common one,
@@ -1383,6 +1451,17 @@ func defaultBranch(repo string, d landDeps) string {
 	return "master"
 }
 
+// dirtyNames lists the paths in `git status --porcelain=v1` output.
+func dirtyNames(status string) string {
+	var names []string
+	for l := range strings.SplitSeq(status, "\n") {
+		if len(l) > 3 {
+			names = append(names, l[3:])
+		}
+	}
+	return strings.Join(names, ", ")
+}
+
 func dirtyTracked(repo string, d landDeps) bool {
 	out, _ := d.git.run(repo, "status", "--porcelain=v1", "-uno")
 	return strings.TrimSpace(out) != ""
@@ -1405,11 +1484,12 @@ func pushDirect(repo, pushDir, remote string, d landDeps, opts landPushOpts, res
 	case err == nil || remoteHolds(pushDir, d, remote, pushed, opts.pushTo):
 		res.Kind = landPushed
 		res.Route = "direct"
+		res.SHA = pushed
 		res.Lines = []string{summaryPushed(repo, pushed)}
 	case pushRetryable(out):
-		msg := "error: origin moved; nothing pushed, re-run"
+		msg := repo + ": error: origin moved; nothing pushed, re-run"
 		if opts.afterGate {
-			msg = "error: origin moved during the gate; nothing pushed, re-run"
+			msg = repo + ": error: origin moved during the gate; nothing pushed, re-run"
 		}
 		res.Kind = landRed
 		res.Moved = true
