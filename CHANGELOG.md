@@ -6,6 +6,8 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+## [3.0.4] - 2026-11-21
+
 ### Fixed
 
 - `rgit land` runs the gate with `--isolate` in a repo that has a pre-push hook, so the hook's gate on the push reuses the pass instead of running everything again.
