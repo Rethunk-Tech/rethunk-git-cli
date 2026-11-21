@@ -19,9 +19,9 @@ import (
 	"strconv"
 	"strings"
 
-	diffpkg "github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/diff"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
+	diffpkg "github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/diff"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gitx"
 )
 
 const contextHelp = `usage: rgit context [--json] [--brief]

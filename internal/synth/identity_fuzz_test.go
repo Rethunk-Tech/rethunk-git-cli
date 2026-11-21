@@ -3,7 +3,7 @@ package synth
 import (
 	"testing"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/resolve"
 )
 
 // FuzzIdentitySplice drives TestApplyEdits_IdentitySpliceIsByteIdentical's

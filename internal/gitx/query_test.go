@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gittest"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gitx"
 )
 
 // TestCommittableBase covers both ends of the "what tree does a commit build

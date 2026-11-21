@@ -3,7 +3,7 @@ package gitx_test
 import (
 	"testing"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gittest"
 )
 
 func TestIndexWorktreeBits(t *testing.T) {

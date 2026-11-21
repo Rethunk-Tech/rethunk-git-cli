@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gittest"
 )
 
 func TestLandSummaryWording(t *testing.T) {

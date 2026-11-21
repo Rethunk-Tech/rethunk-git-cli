@@ -17,7 +17,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
 )
 
 const landUsageLine = "usage: rgit land [--repos DIR...] [--sha SHA] [--no-gate] [--wait] [--json] [--install] | rgit land --branch BR [--repos DIR] [--push] [--install]"

@@ -16,11 +16,11 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/cli"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/synth"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/cli"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/synth"
 )
 
 // commitFlags mirrors the `rgit commit` flag surface in docs/USAGE.md §

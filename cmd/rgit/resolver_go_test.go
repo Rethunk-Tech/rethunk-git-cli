@@ -5,8 +5,8 @@ import (
 
 	"github.com/go-quicktest/qt"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/resolve"
 )
 
 func TestResolve_ExtentAndDocAttribution(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/cli"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/cli"
 )
 
 // BucketClassified sorts cli.ClassifyArgs's per-positional results into the

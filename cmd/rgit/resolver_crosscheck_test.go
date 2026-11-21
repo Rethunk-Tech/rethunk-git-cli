@@ -10,10 +10,10 @@ import (
 
 	"github.com/go-quicktest/qt"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/lsp"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/lsptest"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/lsp"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/lsptest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/resolve"
 )
 
 // --- Language-server cross-check -------------------------------------

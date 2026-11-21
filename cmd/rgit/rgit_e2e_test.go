@@ -22,10 +22,10 @@ import (
 
 	"github.com/go-quicktest/qt"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gittest"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/lsptest"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/lsptest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/resolve"
 )
 
 // rgitBin is the built binary every end-to-end case execs. It is empty

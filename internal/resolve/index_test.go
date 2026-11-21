@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
 )
 
 // goTwoGetters is the ambiguity fixture: two methods named Get, each on its

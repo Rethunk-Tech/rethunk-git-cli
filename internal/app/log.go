@@ -34,10 +34,10 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/cli"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/cli"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/resolve"
 )
 
 const logHelp = `usage: rgit log FILE:SYMBOL [--source <rev>] [--since=DATE] [--until=DATE] [-n N|--max-count=N] [--follow-rename] [--porcelain | --json | -p|--patch]

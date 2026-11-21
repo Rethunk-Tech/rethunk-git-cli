@@ -10,7 +10,7 @@ import (
 
 	udiff "github.com/aymanbagabas/go-udiff"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/resolve"
 )
 
 // region is one named, addressable byte range in a source file: a real

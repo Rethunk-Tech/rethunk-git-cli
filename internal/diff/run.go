@@ -10,11 +10,11 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/lsp"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/util"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/lsp"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/util"
 )
 
 // Run resolves opts' scope, enumerates every changed file within it, builds

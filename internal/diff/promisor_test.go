@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gittest"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gitx"
 )
 
 func TestRun_PromisorMissingBlobIsAnError(t *testing.T) {

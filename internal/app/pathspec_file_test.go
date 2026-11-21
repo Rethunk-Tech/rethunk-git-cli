@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-quicktest/qt"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
 )
 
 func TestReadPathspecFileSkipsEmptyLines(t *testing.T) {

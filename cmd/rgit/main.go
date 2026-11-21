@@ -14,7 +14,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/app"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/app"
 )
 
 // version is overridden at build time:

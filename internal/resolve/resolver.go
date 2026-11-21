@@ -8,7 +8,7 @@ import (
 
 	ts "github.com/tree-sitter/go-tree-sitter"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
 )
 
 // Resolution is what a successful Resolve returns: the byte extent to

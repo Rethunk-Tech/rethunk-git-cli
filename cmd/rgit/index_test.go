@@ -17,10 +17,10 @@ import (
 
 	"github.com/go-quicktest/qt"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gittest"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/synth"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/synth"
 )
 
 // assertPathError pins both halves of a refusal: that staging failed with a

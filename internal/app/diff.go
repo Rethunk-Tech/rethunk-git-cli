@@ -13,11 +13,11 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/cli"
-	diffpkg "github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/diff"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/cli"
+	diffpkg "github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/diff"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/resolve"
 )
 
 // diffCommittable is docs/USAGE.md § Flags' --exit-code/--quiet value:

@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/cli"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/gitx"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/util"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/cli"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gitx"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/util"
 )
 
 // sideKind is which of the three places a file's content for one side of a

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/cli"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/cli"
 )
 
 // TestBucketClassified_SortsEveryKind covers the three branches only a

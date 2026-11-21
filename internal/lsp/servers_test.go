@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/lsptest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/lsptest"
 )
 
 // TestDial_NewServers exercises each server added to the servers map

@@ -10,8 +10,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/lsp"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v2/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/lsp"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/resolve"
 )
 
 func resolverGoLang(t *testing.T) resolve.Language { //nolint:ireturn // resolve.ForExtension's own concrete type is unexported; this forwards its interface value to resolve.Resolve
