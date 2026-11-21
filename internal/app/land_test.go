@@ -2459,7 +2459,7 @@ func TestLandHonestErrors(t *testing.T) {
 		o := filepath.Join(other, "o")
 		gittest.Write(t, o, "moved.txt", "m\n")
 		gitOut(t, o, "add", "moved.txt")
-		gitOut(t, o, "commit", "-q", "-m", "moved")
+		gitOut(t, o, "-c", "user.name=rgit test", "-c", "user.email=rgit@example.invalid", "commit", "-q", "-m", "moved")
 		gitOut(t, o, "push", "-q", "origin", "HEAD")
 		return "", nil
 	}
