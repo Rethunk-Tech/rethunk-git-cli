@@ -76,6 +76,8 @@ type Row struct {
 // FileReport is every row rgit diff has to say about one file.
 type FileReport struct {
 	Path string
+	// OldPath is the rename's source, empty when the file was not renamed.
+	OldPath string
 	Rows []Row
 
 	// lang is the resolved language's Name() (resolve.Language), set only

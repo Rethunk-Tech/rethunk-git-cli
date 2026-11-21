@@ -109,3 +109,13 @@ func TestRun_CommitMultiNameVarSpecRefused(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.AnchorAmbiguous))
 	qt.Assert(t, qt.Equals(gitOut(t, dir, "rev-parse", "HEAD"), before))
 }
+
+// A staged rename shows its source path in rgit diff.
+func TestRun_DiffStagedRenameNamesSource(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	gitOut(t, dir, "mv", "a.go", "b.go")
+	stdout, stderr, code := runApp(t, "-C", dir, "diff")
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
+	qt.Assert(t, qt.StringContains(stdout, "b.go (renamed from a.go)"))
+}

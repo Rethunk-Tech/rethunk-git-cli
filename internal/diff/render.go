@@ -27,6 +27,9 @@ func RenderText(report *Report) string {
 			file := ""
 			if i == 0 {
 				file = f.Path
+				if f.OldPath != "" {
+					file += " (renamed from " + f.OldPath + ")"
+				}
 			}
 			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", file, rowLabel(row), rowStatusWord(row), rowCounts(row), rowHint(f.Path, f.lang, row))
 		}

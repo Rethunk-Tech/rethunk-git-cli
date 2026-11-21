@@ -108,6 +108,15 @@ func Run(ctx context.Context, repo *gitx.Repo, root string, opts Options) (*Repo
 	if err != nil {
 		return nil, err
 	}
+	renamedFrom := map[string]string{}
+	for _, e := range entries {
+		if e.OldPath != "" {
+			renamedFrom[e.Path] = e.OldPath
+		}
+	}
+	for i := range trackedFiles {
+		trackedFiles[i].OldPath = renamedFrom[trackedFiles[i].Path]
+	}
 	report.Files = append(report.Files, trackedFiles...)
 	report.Warnings = append(report.Warnings, trackedWarnings...)
 	report.TSOnly = report.TSOnly || trackedTSOnly
