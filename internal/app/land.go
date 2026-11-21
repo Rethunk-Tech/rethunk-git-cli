@@ -148,12 +148,13 @@ func hasPrePushHook(dir string) bool {
 	return err == nil
 }
 
-func runGateCmd(dir string, failedOnly bool) (string, error) {
+func runGateCmd(dir string, failedOnly, pushFollows bool) (string, error) {
 	args := []string{"-C", dir}
 	// A pre-push hook that runs gate turns --isolate on by itself, and gate
 	// reuses only a pass that ran the same way, so gate here as the hook
-	// will and the push does not run everything a second time.
-	if hasPrePushHook(dir) {
+	// will and the push does not run everything a second time. Without a push
+	// no hook runs, so there is nothing to match.
+	if pushFollows && hasPrePushHook(dir) {
 		args = append(args, "--isolate")
 	}
 	if failedOnly {
@@ -265,7 +266,7 @@ type landDeps struct {
 	git       gitRunner
 	gh        gitHub
 	clock     landClock
-	gate      func(dir string, failedOnly bool) (string, error)
+	gate      func(dir string, failedOnly, pushFollows bool) (string, error)
 	cacheHome func() string
 	pid       int
 	randN     func() int
@@ -917,7 +918,7 @@ func gateHead(repo string, d landDeps) (line, logPath string, ok bool) {
 		return "", "", true
 	}
 	headBefore, statusBefore := gateState(repo, d)
-	out, gateErr := d.gate(repo, false)
+	out, gateErr := d.gate(repo, false, true)
 	logdir := filepath.Join(d.cacheHome(), "land")
 	sum := sha256.Sum256([]byte(repo))
 	logPath = filepath.Join(logdir, filepath.Base(repo)+"-"+hex.EncodeToString(sum[:4])+"-"+strconv.Itoa(d.pid)+".log")
@@ -1067,7 +1068,7 @@ func landByRules(repo, def string, d landDeps, opts landPushOpts) landResult {
 
 type landBranchPrep struct {
 	repo, branch, def, wt string
-	dirty                 bool
+	dirty, noPush         bool
 	opts                  landPushOpts
 }
 
@@ -1125,7 +1126,7 @@ func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBra
 		}
 		wt = tmp
 	}
-	prep := landBranchPrep{repo: repo, branch: branch, def: def, wt: wt, dirty: dirty}
+	prep := landBranchPrep{repo: repo, branch: branch, def: def, wt: wt, dirty: dirty, noPush: noPush}
 	base := def
 	if dirty && !noPush {
 		_, _ = d.git.run(repo, "fetch", "-q", "origin")
@@ -1136,6 +1137,10 @@ func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBra
 			prRef:    branch,
 			logRange: "origin/" + def + ".." + branch,
 		}
+	}
+	if !dirty && !noPush {
+		// Gate and push from the one worktree so a pre-push hook's gate sees the root already gated.
+		prep.opts = landPushOpts{pushDir: wt, pushTo: def}
 	}
 	prep.opts.afterGate = true
 	if dirty := dirtyTracked(wt, d); dirty {
@@ -1163,6 +1168,7 @@ func gateLandBranch(prep landBranchPrep, d landDeps) (string, exitcode.Code) {
 	// Linked worktrees omit gitignored env files the main checkout uses for the build.
 	links := linkIgnoredEnvFiles(prep.repo, prep.wt, d)
 	defer unlinkLandEnvLinks(links)
+	pushFollows := !prep.noPush
 	headBefore, statusBefore := gateState(prep.wt, d)
 	moved := func() exitcode.Code {
 		if msg := gateMoved(prep.wt, headBefore, statusBefore, d); msg != "" {
@@ -1171,7 +1177,7 @@ func gateLandBranch(prep landBranchPrep, d landDeps) (string, exitcode.Code) {
 		}
 		return exitcode.Success
 	}
-	out, gateErr := d.gate(prep.wt, false)
+	out, gateErr := d.gate(prep.wt, false, pushFollows)
 	if werr := os.WriteFile(logPath, []byte(out), 0o600); werr != nil {
 		fmt.Fprintf(d.stderr, "error: %v\n", werr)
 		return "", 1
@@ -1180,7 +1186,7 @@ func gateLandBranch(prep landBranchPrep, d landDeps) (string, exitcode.Code) {
 		return logPath, moved()
 	}
 	failed := failedGateNames(out)
-	retry, retryErr := d.gate(prep.wt, true)
+	retry, retryErr := d.gate(prep.wt, true, pushFollows)
 	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0o600) //nolint:gosec // logPath is under the cache dir rgit created
 	if err == nil {
 		_, _ = f.WriteString(retry)

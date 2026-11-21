@@ -9,6 +9,7 @@ Notable changes to `rgit`. The format follows
 ### Fixed
 
 - `rgit land` runs the gate with `--isolate` in a repo that has a pre-push hook, so the hook's gate on the push reuses the pass instead of running everything again.
+- `rgit land --branch --push` on a clean main gates and pushes from the branch worktree, so the hook's gate sees the same root and reuses land's pass. `--isolate` is passed only when a push follows; plain `--branch` runs the gate as before.
 
 ## [3.0.3] - 2026-11-21
 

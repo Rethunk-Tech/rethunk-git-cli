@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -202,7 +203,7 @@ func TestLandPlainGate(t *testing.T) {
 			gittest.Commit(t.Context(), t, dir, "ahead")
 			before := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD"))
 			d := testLandDeps(t)
-			d.gate = func(dir string, _ bool) (string, error) { return c.gate(dir) }
+			d.gate = func(dir string, _, _ bool) (string, error) { return c.gate(dir) }
 			var stdout strings.Builder
 			d.stdout = &stdout
 			code := landRepos(t.Context(), []string{dir}, false, false, false, d)
@@ -229,7 +230,7 @@ func TestLandSkipsUmbrellaWhenSubmoduleRepoRed(t *testing.T) {
 	before := strings.TrimSpace(gitOut(t, umbBare, "rev-parse", "HEAD"))
 
 	d := testLandDeps(t)
-	d.gate = func(dir string, _ bool) (string, error) {
+	d.gate = func(dir string, _, _ bool) (string, error) {
 		if dir == sub {
 			return "gate: failed: unit -> /x.log\n", errors.New("exit 1")
 		}
@@ -695,7 +696,7 @@ func TestLandBranchRedGateExit3(t *testing.T) {
 	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
 
 	d := testLandDeps(t)
-	d.gate = func(string, bool) (string, error) {
+	d.gate = func(string, bool, bool) (string, error) {
 		return "stub-gate-fail\ngate: failed: unit -> /x.log\n", errors.New("exit 1")
 	}
 	var stdout, stderr strings.Builder
@@ -838,7 +839,7 @@ func TestGateLandBranchLinksIgnoredEnvLocal(t *testing.T) {
 	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
 
 	d := testLandDeps(t)
-	d.gate = func(gateDir string, _ bool) (string, error) {
+	d.gate = func(gateDir string, _, _ bool) (string, error) {
 		if _, err := os.ReadFile(filepath.Join(gateDir, "apps", "web", ".env.local")); err != nil { //nolint:gosec // test reads the linked path, not the secret
 			return "missing env", err
 		}
@@ -875,7 +876,7 @@ func TestGateLandBranchLeavesExistingEnvLocal(t *testing.T) {
 	}
 
 	d := testLandDeps(t)
-	d.gate = func(gateDir string, _ bool) (string, error) {
+	d.gate = func(gateDir string, _, _ bool) (string, error) {
 		body, err := os.ReadFile(filepath.Join(gateDir, "apps", "web", ".env.local")) //nolint:gosec // test fixture path
 		if err != nil {
 			return "missing env", err
@@ -916,7 +917,7 @@ func TestLandBranchFlakeLoggedAndLands(t *testing.T) {
 
 	n := 0
 	d := testLandDeps(t)
-	d.gate = func(string, bool) (string, error) {
+	d.gate = func(string, bool, bool) (string, error) {
 		n++
 		if n == 1 {
 			return "gate: failed: unit -> /x.log\n", errors.New("exit 1")
@@ -1732,7 +1733,7 @@ func testLandDeps(t *testing.T) landDeps {
 	cache := t.TempDir()
 	d := defaultLandDeps(&strings.Builder{}, &strings.Builder{})
 	d.cacheHome = func() string { return cache }
-	d.gate = func(string, bool) (string, error) { return "", nil }
+	d.gate = func(string, bool, bool) (string, error) { return "", nil }
 	d.clock = &fakeClock{now: time.Date(2026, 11, 18, 0, 0, 0, 0, time.UTC)}
 	d.randN = func() int { return 1 }
 	d.pid = 1
@@ -2022,7 +2023,7 @@ func TestLandBranchPushRefusesToRebaseAfterGate(t *testing.T) {
 			}
 
 			d := testLandDeps(t)
-			d.gate = func(string, bool) (string, error) {
+			d.gate = func(string, bool, bool) (string, error) {
 				other := filepath.Join(t.TempDir(), "other")
 				gitOut(t, t.TempDir(), "clone", "-q", bare, other)
 				gitOut(t, other, "config", "user.email", "test@test")
@@ -2143,7 +2144,7 @@ func TestLandRedGateReportsReasonLogAndJSON(t *testing.T) {
 	}
 
 	d := testLandDeps(t)
-	d.gate = func(dir string, _ bool) (string, error) {
+	d.gate = func(dir string, _, _ bool) (string, error) {
 		return "", errors.New("exec: \"gate\": executable file not found in $PATH")
 	}
 	var stdout strings.Builder
@@ -2462,7 +2463,7 @@ func TestLandHonestErrors(t *testing.T) {
 	gittest.Write(t, dir, "ahead.txt", "x\n")
 	gittest.Commit(t.Context(), t, dir, "ahead")
 	d := testLandDeps(t)
-	d.gate = func(dir string, _ bool) (string, error) {
+	d.gate = func(dir string, _, _ bool) (string, error) {
 		gittest.Write(t, dir, "base.txt", "gate edit\n")
 		return "", nil
 	}
@@ -2474,7 +2475,7 @@ func TestLandHonestErrors(t *testing.T) {
 	}
 	gitOut(t, dir, "checkout", "-q", "--", "base.txt")
 
-	d.gate = func(string, bool) (string, error) {
+	d.gate = func(string, bool, bool) (string, error) {
 		other := t.TempDir()
 		gitOut(t, other, "clone", "-q", bare, "o")
 		o := filepath.Join(other, "o")
@@ -2532,7 +2533,7 @@ func TestLandBranchGateEditRefused(t *testing.T) {
 	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
 
 	d := testLandDeps(t)
-	d.gate = func(dir string, _ bool) (string, error) {
+	d.gate = func(dir string, _, _ bool) (string, error) {
 		gittest.Write(t, dir, "feat.txt", "gate edit\n")
 		return "", nil
 	}
@@ -2590,5 +2591,39 @@ func TestHasPrePushHook(t *testing.T) {
 	gittest.Write(t, dir, ".git/hooks/pre-push", "#!/bin/sh\n")
 	if !hasPrePushHook(dir) {
 		t.Fatal("an installed pre-push hook is not seen")
+	}
+}
+
+// A pre-push hook that runs gate must find land's pass: both gate the same root.
+func TestLandBranchPushHookReusesGatePass(t *testing.T) {
+	if _, err := exec.LookPath("gate"); err != nil {
+		t.Skip("gate not installed")
+	}
+	dir, _ := repoWithOrigin(t)
+	gittest.Write(t, dir, ".gate.toml", "[gates.ok]\nrun = \"true\"\n")
+	gitOut(t, dir, "add", ".gate.toml")
+	gitOut(t, dir, "commit", "-q", "-m", "gate config")
+	gitOut(t, dir, "push", "-q")
+	hookLog := filepath.Join(t.TempDir(), "hook.log")
+	gittest.InstallHook(t.Context(), t, dir, "pre-push", "#!/bin/sh\ngate >"+hookLog+" 2>&1\n")
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, "feat.txt", "feat\n")
+	gitOut(t, wt, "add", "feat.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "feat")
+
+	d := testLandDeps(t)
+	d.gate = runGateCmd
+	var stdout, stderr strings.Builder
+	d.stdout, d.stderr = &stdout, &stderr
+	if code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d); code != exitcode.Success {
+		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	b, err := os.ReadFile(hookLog) //nolint:gosec // path from t.TempDir
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "unchanged") {
+		t.Errorf("hook re-ran the gate: %q", b)
 	}
 }
