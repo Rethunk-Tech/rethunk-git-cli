@@ -33,6 +33,7 @@ func TestCodes_MatchDocumentedTable(t *testing.T) {
 		{"LandNotEnqueued", LandNotEnqueued, 4},
 		{"LandInstallFailed", LandInstallFailed, 5},
 		{"DirtyOverlap", DirtyOverlap, 13},
+		{"LandSkipped", LandSkipped, 14},
 		{"GitFailure", GitFailure, 128},
 		{"InvalidUsage", InvalidUsage, 129},
 	}

@@ -1145,7 +1145,7 @@ func TestLandRootsRelativeRepos(t *testing.T) {
 	d.git = git
 	var stdout strings.Builder
 	d.stdout = &stdout
-	if code := runLandWith(t.Context(), base, []string{"one", "two"}, d); code != exitcode.Success {
+	if code := runLandWith(t.Context(), base, []string{"one", "two"}, d); code != exitcode.LandSkipped {
 		t.Fatalf("code = %v stdout=%q", code, stdout.String())
 	}
 	one, two := filepath.Join(base, "one"), filepath.Join(base, "two")
@@ -1222,8 +1222,8 @@ func TestLandInstallSkipsDirtyTracked(t *testing.T) {
 	var stdout strings.Builder
 	d.stdout = &stdout
 	code := runLandWith(t.Context(), dir, []string{"--install"}, d)
-	if code != exitcode.Success {
-		t.Fatalf("code = %v stdout=%q", code, stdout.String())
+	if code != exitcode.LandSkipped {
+		t.Fatalf("code = %v stdout=%q; a dirty skip needs action", code, stdout.String())
 	}
 	if !strings.Contains(stdout.String(), dir+": skipped (dirty tracked files)\n") {
 		t.Errorf("stdout = %q", stdout.String())
@@ -1577,7 +1577,7 @@ func TestLandArgNames(t *testing.T) {
 	d.stdout = &stdout
 	d.stderr = &stderr
 	absent := filepath.Join(t.TempDir(), "absent")
-	if code := runLandWith(withJSONFlag(t.Context(), true), absent, []string{"--json", "--wait"}, d); code != exitcode.Success {
+	if code := runLandWith(withJSONFlag(t.Context(), true), absent, []string{"--json", "--wait"}, d); code != exitcode.LandSkipped {
 		t.Errorf("--json --wait = %v stderr=%q", code, stderr.String())
 	}
 	var jr landJSON
@@ -2398,7 +2398,7 @@ func TestLandJSONOneObject(t *testing.T) {
 	var stdout, stderr strings.Builder
 	d.stdout, d.stderr = &stdout, &stderr
 	loose := t.TempDir()
-	if code := landRepos(t.Context(), []string{dir, loose}, false, true, true, d); code != exitcode.Success {
+	if code := landRepos(t.Context(), []string{dir, loose}, false, true, true, d); code != exitcode.LandSkipped {
 		t.Fatalf("code = %v stderr=%q", code, stderr.String())
 	}
 	var got landJSON
@@ -2479,5 +2479,21 @@ func TestLandHonestErrors(t *testing.T) {
 	if code := runLandWith(t.Context(), dir2, []string{"--branch", "d1"}, d2); code != 1 ||
 		!strings.Contains(stderr2.String(), wt) || !strings.Contains(stderr2.String(), "base.txt") || strings.Contains(stderr2.String(), "conflict") {
 		t.Errorf("dirty worktree: code=%v stderr=%q", code, stderr2.String())
+	}
+}
+
+// TestLandSkipExitCodes pins that a skip the user must fix exits 14 while "not ahead" stays 0.
+func TestLandSkipExitCodes(t *testing.T) {
+	t.Parallel()
+	even, _ := repoWithOrigin(t)
+	d := testLandDeps(t)
+	d.stdout = &strings.Builder{}
+	if code := landRepos(t.Context(), []string{even}, false, false, false, d); code != exitcode.Success {
+		t.Errorf("not ahead = %v; want 0", code)
+	}
+	dirty, _ := repoWithOrigin(t)
+	gittest.Write(t, dirty, "base.txt", "changed\n")
+	if code := landRepos(t.Context(), []string{dirty}, false, false, false, d); code != exitcode.LandSkipped {
+		t.Errorf("dirty = %v; want 14", code)
 	}
 }

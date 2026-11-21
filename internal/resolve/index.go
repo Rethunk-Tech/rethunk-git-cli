@@ -81,6 +81,7 @@ func (e *ResolveError) Error() string {
 		exitcode.StructuredDataAnchorRefused,
 		exitcode.LandConflict,
 		exitcode.DirtyOverlap,
+		exitcode.LandSkipped,
 		exitcode.GitFailure,
 		exitcode.InvalidUsage:
 		// Keep the default unresolved label for codes that do not have

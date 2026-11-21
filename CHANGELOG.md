@@ -18,6 +18,7 @@ Notable changes to `rgit`. The format follows
 
 ### Fixed
 
+- `rgit land` exits 14 when it skips a repo that needs action (dirty tracked files, including after a gate edited them; wrong branch; behind origin; no upstream; not a repo). "Not ahead" and "already upstream" still exit 0. `--json` is unchanged. See `docs/CODES.md`.
 - `rgit land --json` prints exactly one JSON object on stdout: catch-up and install lines go to stderr, `--branch` honours `--json`, pushed results carry `sha` and skipped ones a `detail` reason.
 - `rgit land` names the repo in the "origin moved" error, reports a gate that edited tracked files as such (not "HEAD moved"), and reports a dirty `--branch` worktree (exit 1) apart from a rebase conflict (exit 2, with the worktree and files). `--branch` setup errors exit 128/129 instead of 1; land's exit codes 2-5 are in `docs/CODES.md`.
 - The pre-land catch-up runs only on a clean, not-ahead default branch, so it no longer prints `fatal:` on ordinary lands; local `land/<timestamp>` branches are deleted after the push.

@@ -69,6 +69,10 @@ const (
 	// checkout's own uncommitted edits touch the same files: retry later.
 	DirtyOverlap Code = 13
 
+	// LandSkipped means `land` skipped a repo for a reason the user must fix:
+	// dirty tracked files, wrong branch, behind origin, no upstream, not a repo.
+	LandSkipped Code = 14
+
 	// GitFailure includes hook rejection and GPG failure, not only git's.
 	GitFailure Code = 128
 

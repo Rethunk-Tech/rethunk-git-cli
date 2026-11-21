@@ -438,7 +438,7 @@ func landFlagValue(args []string, i int) (value string, next int, ok bool) {
 func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, d landDeps) exitcode.Code {
 	ordered := orderRepos(repos)
 	var results []landResult
-	red, subRed, caughtUpFail := false, false, false
+	red, subRed, caughtUpFail, blocked := false, false, false, false
 	for _, r := range ordered {
 		if d.sha == "" && catchUp(ctx, r, d) {
 			caughtUpFail = true
@@ -450,6 +450,7 @@ func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, 
 		}
 		res := landOne(r, d)
 		results = append(results, res)
+		blocked = blocked || skipNeedsAction(res)
 		if res.Kind == landRed {
 			red = true
 			subRed = subRed || !isUmbrella(r)
@@ -494,13 +495,29 @@ func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, 
 		instFail = installPushedRepos(ctx, results, d)
 	}
 
-	if red {
+	return landExit(red, instFail || caughtUpFail, blocked)
+}
+
+func landExit(red, installFailed, blocked bool) exitcode.Code {
+	switch {
+	case red:
 		return 1
-	}
-	if instFail || caughtUpFail {
+	case installFailed:
 		return exitcode.LandInstallFailed
+	case blocked:
+		return exitcode.LandSkipped
 	}
 	return exitcode.Success
+}
+
+// skipNeedsAction is true for a skip the user must fix (dirty tree, wrong branch, behind origin,
+// no upstream, not a repo); "not ahead" and "already upstream" mean there was nothing to land.
+func skipNeedsAction(res landResult) bool {
+	if res.Kind != landSkipped {
+		return false
+	}
+	reason := skipReason(res.Lines)
+	return reason != "not ahead" && reason != "already upstream"
 }
 
 var prNumberInSubject = regexp.MustCompile(`#(\d+)`)

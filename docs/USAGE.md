@@ -409,7 +409,7 @@ deleted branch feat
 Runs each repo's full gate (`gate` in the repo directory) on HEAD, then pushes
 its ahead commits on the default branch: a direct push when
 branch rules allow it, otherwise a timestamped `land/` branch, PR, and
-merge or merge-queue request. Dirty or off-default repos are skipped.
+merge or merge-queue request. Dirty or off-default repos are skipped (exit 14); a repo with nothing to push is skipped with exit 0.
 Before anything else, each repo on a clean default branch whose remote gained a
 PR merge (a `#N` in the new commits) is fast-forwarded and `make install`ed,
 printing `DIR: caught up to SHA (merged PR #N)`; a diverged or dirty branch is

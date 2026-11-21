@@ -20,6 +20,7 @@ Authoritative exit codes and machine-readable output. Flags:
 | 11 | All named targets resolve but have no uncommitted changes |
 | 12 | Symbol anchor on JSON/JSONC/JSON5/YAML/TOML (`commit` only) |
 | 13 | `land --branch` (without `--push`) could not fast-forward: the checkout's own uncommitted edits touch files the branch changes. Retry later |
+| 14 | `land` skipped a repo that needs action: dirty tracked files, wrong branch, behind origin with a conflicting rebase, no upstream, not a git repo, or an umbrella held back by a red submodule repo. Nothing to land (not ahead, already upstream) stays 0. `--json` still prints status and detail |
 | 128 | Fatal git / system failure (hook rejection, GPG, `-C` unenterable). `land --branch` setup: not a git repo, no default branch, worktree add failed |
 | 129 | Invalid usage. `land --branch` setup: not the main checkout, branch missing, main checkout on another branch |
 
