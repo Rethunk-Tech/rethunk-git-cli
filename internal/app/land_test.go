@@ -2599,7 +2599,7 @@ func TestLandBranchPushHookReusesGatePass(t *testing.T) {
 	if _, err := exec.LookPath("gate"); err != nil {
 		t.Skip("gate not installed")
 	}
-	if help, _ := exec.Command("gate", "--help").CombinedOutput(); !strings.Contains(string(help), "--isolate") {
+	if help, _ := exec.CommandContext(t.Context(), "gate", "--help").CombinedOutput(); !strings.Contains(string(help), "--isolate") {
 		t.Skip("installed gate has no --isolate")
 	}
 	dir, _ := repoWithOrigin(t)
