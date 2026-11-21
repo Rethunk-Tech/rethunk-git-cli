@@ -48,7 +48,7 @@ Commands:
   completion  Print a shell completion script (bash, zsh, fish, pwsh)
   symbols     List declared symbols in a worktree file
   find        Find symbols by name and print their code
-  land        Push ahead commits, or open a PR when branch rules require it
+  land        Gate, then push ahead commits, or open a PR when branch rules require it
 
 Global flags:
   -C <path>    run as if rgit was started in <path> (before the command)

@@ -8,7 +8,7 @@ Run and use `rgit`. Internals: [AGENTS.md](AGENTS.md).
 cd /some/git/repo
 rgit diff                                        # what can I commit?
 rgit commit -m "fix(auth): reject expired" auth.go:ValidateToken
-rgit land --repos .                              # push or open a land PR
+rgit land --repos .                              # gate, then push or open a land PR
 rgit -C /some/other/repo diff                    # ...without standing in it
 ```
 
@@ -58,7 +58,7 @@ install -Dm644 /tmp/rgit-assets/rgit.1    ~/.local/share/man/man1/rgit.1
 
 `rgit commit` stages **one symbol at a time** instead of one file. Name `auth.go:ValidateToken` to commit that function — doc comment, attributes, body — leaving other edits in the file uncommitted.
 
-`rgit diff` shows committable anchors that `rgit commit` accepts. `rgit show FILE:SYMBOL` prints one symbol's own bytes, at the worktree or at a revision (`--source`). `rgit find QUERY [DIR...]` locates matching symbols and prints their code without needing the file. `rgit blame FILE:SYMBOL` (worktree, or one revision with `--source`) and `rgit log FILE:SYMBOL` (`HEAD`, or one revision with `--source`) bound those commands to a symbol's extent ([docs/USAGE.md](docs/USAGE.md)). `rgit context` streams branch, warnings, diff rows, and recent commits in one call ([docs/CODES.md](docs/CODES.md#output-records)). `rgit land --repos DIR...` pushes each repo's ahead commits, or opens a PR when GitHub branch rules require it.
+`rgit diff` shows committable anchors that `rgit commit` accepts. `rgit show FILE:SYMBOL` prints one symbol's own bytes, at the worktree or at a revision (`--source`). `rgit find QUERY [DIR...]` locates matching symbols and prints their code without needing the file. `rgit blame FILE:SYMBOL` (worktree, or one revision with `--source`) and `rgit log FILE:SYMBOL` (`HEAD`, or one revision with `--source`) bound those commands to a symbol's extent ([docs/USAGE.md](docs/USAGE.md)). `rgit context` streams branch, warnings, diff rows, and recent commits in one call ([docs/CODES.md](docs/CODES.md#output-records)). `rgit land --repos DIR...` gates, then pushes each repo's ahead commits, or opens a PR when GitHub branch rules require it.
 
 Everything else stays plain `git`. Full command reference: [docs/USAGE.md](docs/USAGE.md); anchors: [docs/ANCHORS.md](docs/ANCHORS.md).
 

@@ -272,7 +272,7 @@ commands print hand-written usage. A bare `rgit` is 129, not help.
 
 ```console
 $ rgit --version
-rgit v2.2.4
+rgit v3.0.0
 optional grammars: sql
 built with go1.27.1, linux/amd64
 ```
