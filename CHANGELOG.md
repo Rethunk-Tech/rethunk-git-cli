@@ -6,6 +6,8 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+## [3.0.3] - 2026-11-21
+
 ### Fixed
 
 - `rgit land` catch-up fast-forwards any clean default branch that is behind its remote and not ahead, not only one whose new commits carry `#N`, so a rebase-merged PR no longer leaves the clone behind. A diverged or dirty clone is still left alone.
