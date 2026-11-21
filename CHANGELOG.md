@@ -6,6 +6,15 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-11-21
+
+### Fixed
+
+- `rgit land --branch BR` refuses to land when the gate edits tracked files or moves HEAD, with the same message and exit 1 as plain `land`. Before, it exited 0 on a tree the gate never saw.
+- `rgit land --sha SHA` skips with exit 14 when the branch has no upstream, and when the tracked tree is dirty (without `--no-gate`), as plain `land` does. Before, no upstream exited 0 and a dirty tree reported red.
+- CI's install-script checks live in `scripts/test-install.sh`, and `gate` now has `install-script` plus the opt-in `--e2e` gates `test-full`, `test-sql` and `xcheck-lsp`, so the CI jobs for the full test run, the SQL build tag and `make xcheck` can be run locally.
+- `rgit land` help, the command list, `README.md` and `HUMANS.md` say that land gates first; `land --help` lists exit 14. The install guide's example shows v3, and the 3.0.0 notes no longer give a `go install` line that cannot work.
+
 ## [3.0.0] - 2026-11-21
 
 ### Added
@@ -15,7 +24,7 @@ Notable changes to `rgit`. The format follows
 
 ### Changed
 
-- **Breaking:** the module path is now `github.com/Rethunk-Tech/rethunk-git-cli/v3`; install with `go install github.com/Rethunk-Tech/rethunk-git-cli/v3/cmd/rgit@v3.0.0` (or the repo's `make install`).
+- **Breaking:** the module path is now `github.com/Rethunk-Tech/rethunk-git-cli/v3`; install with `scripts/install.sh` or the repo's `make install` (see [`docs/INSTALL.md`](docs/INSTALL.md)). `go install` of the module path does not work, because `go.mod` carries a local `replace`.
 - **Breaking:** plain `rgit land` and `land --sha` now run the repo's full gate on HEAD before any push, PR or queue step. A red gate pushes nothing, prints `red (gate failed: NAMES; log PATH)` and exits 1; a HEAD or tree change during the gate pushes nothing. `--sha` is gated only when SHA is HEAD on a clean tree, otherwise refused. `--no-gate` skips the gate for callers that already ran it. See [`docs/USAGE.md`](docs/USAGE.md#land).
 - **Breaking:** `rgit land --branch BR` now lands locally by default (rebase onto the local default branch, gate, fast-forward, `--install`) and no longer pushes. Pass `--push` for the push route. `--no-push` is removed. See [`docs/USAGE.md`](docs/USAGE.md).
 - `rgit commit` with named targets commits only those targets, as `--only`: already-staged work stays in the index. `-i`/`--include` still takes that work along. `--only` remains accepted. See [`docs/USAGE.md`](docs/USAGE.md#flags).
@@ -27,21 +36,13 @@ Notable changes to `rgit`. The format follows
 
 ### Fixed
 
-- `rgit land` exits 14 when it skips a repo that needs action (dirty tracked files, including after a gate edited them; wrong branch; behind origin; no upstream; not a repo). "Not ahead" and "already upstream" still exit 0. `--json` is unchanged. See `docs/CODES.md`.
+- `rgit land` exits 14 when it skips a repo that needs action (dirty tracked files; wrong branch; behind origin; no upstream; not a repo). "Not ahead" and "already upstream" still exit 0. A gate that edits tracked files, or a HEAD that moves during it, is red and exits 1. `--json` is unchanged. See `docs/CODES.md`.
 - `rgit land --json` prints exactly one JSON object on stdout: catch-up and install lines go to stderr, `--branch` honours `--json`, pushed results carry `sha` and skipped ones a `detail` reason.
 - `rgit land` names the repo in the "origin moved" error, reports a gate that edited tracked files as such (not "HEAD moved"), and reports a dirty `--branch` worktree (exit 1) apart from a rebase conflict (exit 2, with the worktree and files). `--branch` setup errors exit 128/129 instead of 1; land's exit codes 2-5 are in `docs/CODES.md`.
 - The pre-land catch-up runs only on a clean, not-ahead default branch, so it no longer prints `fatal:` on ordinary lands; local `land/<timestamp>` branches are deleted after the push.
 - Committing a Go (or other) symbol by `FILE:SYMBOL` includes a comment on the symbol's last line; a partial qualified Python name (`Inner.meth`) gets did-you-mean candidates.
 - `rgit symbols --bogus` exits 129; usage errors print the usage line and a pointer to `--help` instead of the whole help; `doctor` help and docs list the `gate` and `gh` checks.
-
-### Removed
-
-- **Breaking:** `rgit commit --push` and its exit 8. The flag now exits 129 with `--push was removed: run `rgit land` after committing`; push with `rgit land`, which gates first.
-- `rgit show --with-header`, the deprecated alias for `--porcelain`. Use `--porcelain`. See [`docs/USAGE.md`](docs/USAGE.md#show).
-
-### Fixed
-
-- `rgit land --branch BR --no-push` lands a branch from a checkout with uncommitted changes that touch none of the files BR changes, instead of refusing outright. It now rebases onto the local default branch rather than `origin/<default>`, so local unpushed default-branch commits stay in the base. When the dirty files do overlap, it names them and exits 13. See [`docs/CODES.md`](docs/CODES.md#exit-codes).
+- `rgit land --branch BR` lands a branch from a checkout with uncommitted changes that touch none of the files BR changes, instead of refusing outright. It rebases onto the local default branch rather than `origin/<default>`, so local unpushed default-branch commits stay in the base. When the dirty files do overlap, it names them and exits 13. See [`docs/CODES.md`](docs/CODES.md#exit-codes).
 - `rgit land` names the hook or gate command that turned a repo red, instead of echoing lefthook's closing summary box.
 - A worktree file that uses CRLF keeps its line endings when `rgit commit` splices a symbol into or out of it: the separator a splice writes is now the file's own line terminator, so the commit no longer leaves the file looking dirty. Before, the separator was a bare LF pair and the committed blob carried mixed endings.
 - Naming one anchor twice (`rgit commit -m … a.go:A a.go:A`) stages it once and lists it once. Before, the target was reported twice, so any caller summing rows double-counted the edit.
@@ -54,6 +55,11 @@ Notable changes to `rgit`. The format follows
 - `rgit diff` and `rgit context` attribute a change inside a Go or TypeScript declaration whose doc comment holds a comma, or a TypeScript generic with two type parameters, to that declaration instead of `(unanchorable)`.
 - `rgit commit --only` waits up to 5 s for another git process's `index.lock` when it updates the index after the commit lands. Giving up left the index staging that commit's reversal, which the next commit of staged work would have recorded.
 - A digit, `{`, or `.` followed by a large code point (an emoji tag character, say) in a Markdown, shell, or zsh file no longer segfaults `rgit symbols`, `diff`, `context`, or `commit`.
+
+### Removed
+
+- **Breaking:** `rgit commit --push` and its exit 8. The flag now exits 129 with `--push was removed: run `rgit land` after committing`; push with `rgit land`, which gates first.
+- `rgit show --with-header`, the deprecated alias for `--porcelain`. Use `--porcelain`. See [`docs/USAGE.md`](docs/USAGE.md#show).
 
 ## [2.4.1] - 2026-11-09
 
