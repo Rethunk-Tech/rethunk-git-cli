@@ -1393,7 +1393,7 @@ func (r *Repo) resetHint(ctx context.Context) string {
 		return "git reset"
 	}
 	var quoted []string
-	for _, name := range bytes.Split(bytes.TrimRight(out, "\x00"), []byte{0}) {
+	for name := range bytes.SplitSeq(bytes.TrimRight(out, "\x00"), []byte{0}) {
 		quoted = append(quoted, "'"+strings.ReplaceAll(string(name), "'", `'\''`)+"'")
 	}
 	return "git reset -- " + strings.Join(quoted, " ")

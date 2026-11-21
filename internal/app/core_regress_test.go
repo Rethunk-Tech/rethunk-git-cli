@@ -126,12 +126,18 @@ func TestRun_DiffStagedRenameNamesSource(t *testing.T) {
 func TestRun_DiffRowsMatchNumstatAndDryRun(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct{ name, path, head, work, anchors string }{
-		{"import line", "a.ts", "import { a } from \"a\";\n\nexport function f(): number {\n  return 1;\n}\n",
-			"import { a } from \"a\";\nimport { b } from \"b\";\n\nexport function f(): number {\n  return 1;\n}\n", "@imports"},
-		{"python method", "c.py", "class C:\n    def a(self):\n        return 1\n",
-			"class C:\n    def a(self):\n        return 1\n\n    def b(self):\n        return 2\n", "C.b"},
-		{"go field after blank line", "d.go", "package p\n\ntype T struct {\n\tA int\n}\n",
-			"package p\n\ntype T struct {\n\tA int\n\n\tN string\n}\n", "T.N"},
+		{
+			"import line", "a.ts", "import { a } from \"a\";\n\nexport function f(): number {\n  return 1;\n}\n",
+			"import { a } from \"a\";\nimport { b } from \"b\";\n\nexport function f(): number {\n  return 1;\n}\n", "@imports",
+		},
+		{
+			"python method", "c.py", "class C:\n    def a(self):\n        return 1\n",
+			"class C:\n    def a(self):\n        return 1\n\n    def b(self):\n        return 2\n", "C.b",
+		},
+		{
+			"go field after blank line", "d.go", "package p\n\ntype T struct {\n\tA int\n}\n",
+			"package p\n\ntype T struct {\n\tA int\n\n\tN string\n}\n", "T.N",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -145,7 +151,7 @@ func TestRun_DiffRowsMatchNumstatAndDryRun(t *testing.T) {
 			qt.Assert(t, qt.Equals(code, exitcode.Success))
 			var added, deleted int
 			rows := map[string]string{}
-			for _, line := range strings.Split(strings.TrimSpace(diffOut), "\n") {
+			for line := range strings.SplitSeq(strings.TrimSpace(diffOut), "\n") {
 				f := strings.Split(line, "\t")
 				a, _ := strconv.Atoi(f[3])
 				d, _ := strconv.Atoi(f[4])
@@ -174,7 +180,7 @@ func TestRun_NewFileRowsAgreeBetweenDiffAndDryRun(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.Success))
 	n := strings.Split(strings.TrimSpace(diffOut), "\t")
 	var got string
-	for _, line := range strings.Split(strings.TrimSpace(dry), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(dry), "\n") {
 		if f := strings.Split(line, "\t"); f[1] == "N" {
 			got = f[2] + "\t" + f[3]
 		}

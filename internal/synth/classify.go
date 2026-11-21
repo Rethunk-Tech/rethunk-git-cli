@@ -55,12 +55,16 @@ func (fp *filePlan) classify(anchor string) (op editOp, unchanged bool, err erro
 		return editOp{}, false, amb
 	}
 
-	for _, side := range []struct {
-		f   *resolve.File
-		res *resolve.Resolution
-	}{{fp.workFile, workRes}, {fp.headFile, headRes}} {
-		if names := sharedExtentNames(side.f, side.res); len(names) > 0 {
-			return editOp{}, false, &resolve.ResolveError{Code: exitcode.AnchorAmbiguous, Anchor: anchor, Candidates: names}
+	// Only Go's multi-name specs: a CSS selector list or a TypeScript destructuring
+	// legitimately shares one extent, and committing it whole is the documented answer.
+	if fp.lang.Name() == "go" {
+		for _, side := range []struct {
+			f   *resolve.File
+			res *resolve.Resolution
+		}{{fp.workFile, workRes}, {fp.headFile, headRes}} {
+			if names := sharedExtentNames(side.f, side.res); len(names) > 0 {
+				return editOp{}, false, &resolve.ResolveError{Code: exitcode.AnchorAmbiguous, Anchor: anchor, Candidates: names}
+			}
 		}
 	}
 

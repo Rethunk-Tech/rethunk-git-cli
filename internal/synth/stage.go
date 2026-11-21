@@ -70,7 +70,7 @@ type TargetResult struct {
 	Added   int
 	Deleted int
 
-	// sepKey is the order key of a top-level insert into a file with no base
+	// sepKey is the order key of a named top-level insert into a file with no base
 	// blob; see freshInsertKey. Zero for every other row.
 	sepKey uint
 
@@ -463,7 +463,6 @@ func (p *Plan) addAutoResults(fp *filePlan, autos []autoOp) {
 			Deleted: deleted,
 			Path:    fp.path,
 			start:   a.op.start,
-			sepKey:  freshInsertKey(fp, a.op),
 		})
 	}
 }

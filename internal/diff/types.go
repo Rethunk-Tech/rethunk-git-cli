@@ -78,7 +78,7 @@ type FileReport struct {
 	Path string
 	// OldPath is the rename's source, empty when the file was not renamed.
 	OldPath string
-	Rows []Row
+	Rows    []Row
 
 	// lang is the resolved language's Name() (resolve.Language), set only
 	// when buildFileReport actually reached attributeSymbols -- the same
