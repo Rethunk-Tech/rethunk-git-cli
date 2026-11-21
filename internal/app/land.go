@@ -852,14 +852,22 @@ func landSha(repo, def string, d landDeps) landResult {
 		res.Lines = []string{fmt.Sprintf("%s: skipped (%s is not on %s)", repo, d.sha, def)}
 		return res
 	}
+	if _, err := d.git.run(repo, "rev-parse", "--verify", "-q", "@{u}"); err != nil {
+		res.Lines = []string{repo + ": skipped (no upstream)"}
+		return res
+	}
 	if _, err := d.git.run(repo, "merge-base", "--is-ancestor", sha, "@{u}"); err == nil {
 		res.Lines = []string{summarySkippedAlreadyUpstream(repo)}
 		return res
 	}
 	if !d.noGate {
-		if head := strings.TrimSpace(mustGit(repo, d, "rev-parse", "HEAD")); head != sha || dirtyTracked(repo, d) {
+		if dirtyTracked(repo, d) {
+			res.Lines = []string{repo + ": skipped (dirty tracked files)"}
+			return res
+		}
+		if head := strings.TrimSpace(mustGit(repo, d, "rev-parse", "HEAD")); head != sha {
 			res.Kind = landRed
-			res.Lines = []string{summaryRed(repo, "--sha can be gated only as HEAD on a clean tree; nothing pushed (--no-gate if already gated)")}
+			res.Lines = []string{summaryRed(repo, "--sha can be gated only as HEAD; nothing pushed (--no-gate if already gated)")}
 			return res
 		}
 		if line, log, ok := gateHead(repo, d); !ok {
@@ -886,11 +894,7 @@ func gateHead(repo string, d landDeps) (line, logPath string, ok bool) {
 	if d.noGate {
 		return "", "", true
 	}
-	state := func() (head, status string) {
-		st, _ := d.git.run(repo, "status", "--porcelain", "-uno")
-		return mustGit(repo, d, "rev-parse", "HEAD"), st
-	}
-	headBefore, statusBefore := state()
+	headBefore, statusBefore := gateState(repo, d)
 	out, gateErr := d.gate(repo, false)
 	logdir := filepath.Join(d.cacheHome(), "land")
 	sum := sha256.Sum256([]byte(repo))
@@ -911,14 +915,27 @@ func gateHead(repo string, d landDeps) (line, logPath string, ok bool) {
 		}
 		return repo + ": red (gate failed: " + names + "; log " + logPath + ")", logPath, false
 	}
-	head, status := state()
-	if head != headBefore {
-		return repo + ": error: HEAD moved during the gate; nothing pushed, re-run", "", false
-	}
-	if status != statusBefore {
-		return repo + ": error: gate modified tracked files (" + dirtyNames(status) + "); nothing pushed, commit or revert them", "", false
+	if msg := gateMoved(repo, headBefore, statusBefore, d); msg != "" {
+		return msg, "", false
 	}
 	return "", "", true
+}
+
+func gateState(repo string, d landDeps) (head, status string) {
+	st, _ := d.git.run(repo, "status", "--porcelain", "-uno")
+	return mustGit(repo, d, "rev-parse", "HEAD"), st
+}
+
+// gateMoved is the refusal line when HEAD or the tracked tree differs from what was gated.
+func gateMoved(repo, headBefore, statusBefore string, d landDeps) string {
+	head, status := gateState(repo, d)
+	if head != headBefore {
+		return repo + ": error: HEAD moved during the gate; nothing pushed, re-run"
+	}
+	if status != statusBefore {
+		return repo + ": error: gate modified tracked files (" + dirtyNames(status) + "); nothing pushed, commit or revert them"
+	}
+	return ""
 }
 
 type landPushOpts struct {
@@ -1124,13 +1141,21 @@ func gateLandBranch(prep landBranchPrep, d landDeps) (string, exitcode.Code) {
 	// Linked worktrees omit gitignored env files the main checkout uses for the build.
 	links := linkIgnoredEnvFiles(prep.repo, prep.wt, d)
 	defer unlinkLandEnvLinks(links)
+	headBefore, statusBefore := gateState(prep.wt, d)
+	moved := func() exitcode.Code {
+		if msg := gateMoved(prep.wt, headBefore, statusBefore, d); msg != "" {
+			fmt.Fprintln(d.stderr, msg)
+			return 1
+		}
+		return exitcode.Success
+	}
 	out, gateErr := d.gate(prep.wt, false)
 	if werr := os.WriteFile(logPath, []byte(out), 0o600); werr != nil {
 		fmt.Fprintf(d.stderr, "error: %v\n", werr)
 		return "", 1
 	}
 	if gateErr == nil {
-		return logPath, exitcode.Success
+		return logPath, moved()
 	}
 	failed := failedGateNames(out)
 	retry, retryErr := d.gate(prep.wt, true)
@@ -1151,7 +1176,7 @@ func gateLandBranch(prep landBranchPrep, d landDeps) (string, exitcode.Code) {
 		return "", 1
 	}
 	fmt.Fprintf(d.stderr, "flake: %s passed on re-run\n", failed)
-	return logPath, exitcode.Success
+	return logPath, moved()
 }
 
 func isIgnoredEnvName(base string) bool {

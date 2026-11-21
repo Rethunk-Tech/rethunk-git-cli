@@ -2497,3 +2497,66 @@ func TestLandSkipExitCodes(t *testing.T) {
 		t.Errorf("dirty = %v; want 14", code)
 	}
 }
+
+// TestLandBranchGateEditRefused pins that a gate that edits a tracked file in the
+// worktree lands nothing, as plain land does.
+func TestLandBranchGateEditRefused(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, "feat.txt", "feat\n")
+	gitOut(t, wt, "add", "feat.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "feat")
+	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+
+	d := testLandDeps(t)
+	d.gate = func(dir string, _ bool) (string, error) {
+		gittest.Write(t, dir, "feat.txt", "gate edit\n")
+		return "", nil
+	}
+	var stdout, stderr strings.Builder
+	d.stdout, d.stderr = &stdout, &stderr
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
+	if code != 1 || !strings.Contains(stderr.String(), "gate modified tracked files (feat.txt)") {
+		t.Fatalf("code = %v stderr=%q; want 1 with gate-modified refusal", code, stderr.String())
+	}
+	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != before {
+		t.Error("ungated branch landed on main")
+	}
+}
+
+// TestLandShaSkips pins that --sha skips like plain land: no upstream and a dirty tree
+// are skips that need action, not a green or a red.
+func TestLandShaSkips(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ name, line string }{
+		{"no upstream", ": skipped (no upstream)"},
+		{"dirty tree", ": skipped (dirty tracked files)"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			dir, bare := repoWithOrigin(t)
+			gittest.Write(t, dir, "one.txt", "1\n")
+			gittest.Commit(t.Context(), t, dir, "one")
+			sha := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+			if c.name == "no upstream" {
+				gitOut(t, dir, "branch", "--unset-upstream")
+			} else {
+				gittest.Write(t, dir, "base.txt", "dirty\n")
+			}
+			before := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD"))
+			d := testLandDeps(t)
+			var stdout strings.Builder
+			d.stdout = &stdout
+			d.sha = sha
+			code := landRepos(t.Context(), []string{dir}, false, false, false, d)
+			if code != exitcode.LandSkipped || !strings.Contains(stdout.String(), c.line) {
+				t.Fatalf("code = %v stdout=%q; want 14 with %q", code, stdout.String(), c.line)
+			}
+			if got := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD")); got != before {
+				t.Error("skipped --sha pushed")
+			}
+		})
+	}
+}
