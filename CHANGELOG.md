@@ -6,6 +6,20 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+## [3.0.2] - 2026-11-21
+
+### Fixed
+
+- An interrupt (SIGINT or SIGTERM) that kills git after a `--only` commit has landed no longer leaves the index staging that commit's reversal, which the next plain `git commit` would have recorded. rgit syncs the index anyway, and if that fails it prints the exact `git reset -- PATHS` to run.
+- `rgit commit -i` and `--stage-only` keep work already staged in the same file: symbols are spliced into the staged blob, not HEAD's, as `docs/USAGE.md` says. Before, staging `a.go:B` after `a.go:A` unstaged A.
+- Naming every symbol of a deleted file deletes the file. Before, it committed an empty file.
+- An ordinal anchor such as `init#2` is refused (exit 4) when the number of same-named declarations differs between HEAD and the worktree, since it would pair the wrong function.
+- A name in a Go multi-name `var` or `const` spec (`var p, q = 1, 2`) is refused (exit 4) because the spec is one extent and the sibling's change would be committed with it. Listed in `docs/LIMITATIONS.md`.
+- A new member in an indented container keeps the blank line before it (a struct field or class method after a blank line).
+- `rgit diff` names the source of a staged rename: `new.go (renamed from old.go)`, and `FileReport` carries `OldPath`.
+- Under `eol=crlf` or `core.autocrlf`, naming a symbol whose only difference is its line endings exits 11 (nothing to commit), not git's 128.
+- Per-symbol line counts match git and `commit --dry-run`: a one-line import addition is `+1/-0` (not `+2/-1`), a container no longer gains phantom lines when a member is added, a member in an indented container owns its blank line, and the first and later symbols of a new file split its blank line the same way in both commands.
+
 ## [3.0.1] - 2026-11-21
 
 ### Fixed
