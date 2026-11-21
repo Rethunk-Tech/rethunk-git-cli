@@ -40,7 +40,7 @@ func runCompletion(args []string, stdout, stderr io.Writer) exitcode.Code {
 		}
 		if haveShell {
 			fmt.Fprintln(stderr, "rgit: completion requires exactly one shell argument (bash, zsh, fish, or pwsh)")
-			fmt.Fprint(stderr, completionHelp)
+			printUsage(stderr, completionHelp)
 			return exitcode.InvalidUsage
 		}
 		shell = a
@@ -48,7 +48,7 @@ func runCompletion(args []string, stdout, stderr io.Writer) exitcode.Code {
 	}
 	if !haveShell {
 		fmt.Fprintln(stderr, "rgit: completion requires exactly one shell argument (bash, zsh, fish, or pwsh)")
-		fmt.Fprint(stderr, completionHelp)
+		printUsage(stderr, completionHelp)
 		return exitcode.InvalidUsage
 	}
 	switch shell {
@@ -77,7 +77,7 @@ func runCompletion(args []string, stdout, stderr io.Writer) exitcode.Code {
 		// must not leave the caller with less guidance than a bare
 		// `rgit completion` gets.
 		fmt.Fprintf(stderr, "rgit: unknown shell %q; supported: bash, zsh, fish, pwsh\n", shell)
-		fmt.Fprint(stderr, completionHelp)
+		printUsage(stderr, completionHelp)
 		return exitcode.InvalidUsage
 	}
 }

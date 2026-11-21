@@ -1250,7 +1250,7 @@ func TestRun_LanguagesHelpAndUsage(t *testing.T) {
 	stdout, stderr, code := runApp(t, "-C", cwd, "languages", "extra")
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.Equals(stdout, ""))
-	wantUsage := "rgit: languages: unrecognized argument \"extra\"\n" + languagesHelp
+	wantUsage := "rgit: languages: unrecognized argument \"extra\"\n" + usageHint(languagesHelp)
 	qt.Assert(t, qt.Equals(stderr, wantUsage))
 }
 

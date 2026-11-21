@@ -101,18 +101,22 @@ func parseSymbolsArgs(ctx context.Context, args []string, stdout, stderr io.Writ
 			if next {
 				i++
 			}
+		case strings.HasPrefix(arg, "-") && arg != "-":
+			fmt.Fprintf(stderr, "rgit: symbols: unknown flag %q\n", arg)
+			printUsage(stderr, symbolsHelp)
+			return opts, exitcode.InvalidUsage, true
 		default:
 			opts.positionals = append(opts.positionals, arg)
 		}
 	}
 	if opts.porcelain && opts.asJSON {
 		fmt.Fprintln(stderr, "rgit: --porcelain and --json are mutually exclusive")
-		fmt.Fprint(stderr, symbolsHelp)
+		printUsage(stderr, symbolsHelp)
 		return opts, exitcode.InvalidUsage, true
 	}
 	if len(opts.positionals) == 0 {
 		fmt.Fprintln(stderr, "rgit: symbols requires at least one file argument")
-		fmt.Fprint(stderr, symbolsHelp)
+		printUsage(stderr, symbolsHelp)
 		return opts, exitcode.InvalidUsage, true
 	}
 	return opts, exitcode.Success, false
@@ -122,13 +126,13 @@ func parseSymbolsLimit(args []string, i int, stderr io.Writer) (n int, next bool
 	value, next, ok := flagValue(args, i, "--limit")
 	if !ok {
 		fmt.Fprintln(stderr, "rgit: --limit requires a count")
-		fmt.Fprint(stderr, symbolsHelp)
+		printUsage(stderr, symbolsHelp)
 		return 0, false, exitcode.InvalidUsage, false
 	}
 	n, err := strconv.Atoi(value)
 	if err != nil || n < 0 {
 		fmt.Fprintf(stderr, "rgit: symbols: invalid value %q for --limit\n", value)
-		fmt.Fprint(stderr, symbolsHelp)
+		printUsage(stderr, symbolsHelp)
 		return 0, false, exitcode.InvalidUsage, false
 	}
 	return n, next, exitcode.Success, true
@@ -138,13 +142,13 @@ func parseSymbolsMatch(args []string, i int, stderr io.Writer) (re *regexp.Regex
 	value, next, ok := flagValue(args, i, "--match")
 	if !ok {
 		fmt.Fprintln(stderr, "rgit: --match requires a regular expression")
-		fmt.Fprint(stderr, symbolsHelp)
+		printUsage(stderr, symbolsHelp)
 		return nil, false, exitcode.InvalidUsage, false
 	}
 	re, err := regexp.Compile(value)
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: symbols: invalid value %q for --match: %v\n", value, err)
-		fmt.Fprint(stderr, symbolsHelp)
+		printUsage(stderr, symbolsHelp)
 		return nil, false, exitcode.InvalidUsage, false
 	}
 	return re, next, exitcode.Success, true

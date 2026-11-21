@@ -100,7 +100,7 @@ func parseFindArgs(ctx context.Context, args []string, stdout, stderr io.Writer)
 		default:
 			if strings.HasPrefix(arg, "-") {
 				fmt.Fprintf(stderr, "rgit: find: unknown option %q\n", arg)
-				fmt.Fprint(stderr, findHelp)
+				printUsage(stderr, findHelp)
 				return opts, exitcode.InvalidUsage, true
 			}
 			positionals = append(positionals, arg)
@@ -108,7 +108,7 @@ func parseFindArgs(ctx context.Context, args []string, stdout, stderr io.Writer)
 	}
 	if len(positionals) == 0 || positionals[0] == "" {
 		fmt.Fprintln(stderr, "rgit: find requires a query")
-		fmt.Fprint(stderr, findHelp)
+		printUsage(stderr, findHelp)
 		return opts, exitcode.InvalidUsage, true
 	}
 	opts.query = positionals[0]
@@ -123,13 +123,13 @@ func parseFindCount(args []string, i int, name string, stderr io.Writer) (n int,
 	value, next, ok := flagValue(args, i, name)
 	if !ok {
 		fmt.Fprintf(stderr, "rgit: %s requires a count\n", name)
-		fmt.Fprint(stderr, findHelp)
+		printUsage(stderr, findHelp)
 		return 0, false, exitcode.InvalidUsage, false
 	}
 	n, err := strconv.Atoi(value)
 	if err != nil || n < 0 {
 		fmt.Fprintf(stderr, "rgit: find: invalid value %q for %s\n", value, name)
-		fmt.Fprint(stderr, findHelp)
+		printUsage(stderr, findHelp)
 		return 0, false, exitcode.InvalidUsage, false
 	}
 	return n, next, exitcode.Success, true

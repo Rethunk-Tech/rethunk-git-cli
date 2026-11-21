@@ -434,7 +434,7 @@ func runLogPathScoped(ctx context.Context, dir string, args []string, stdout, st
 	// is exit 129, so any other count is refused before git runs.
 	if follow && len(paths) != 1 {
 		fmt.Fprintln(stderr, "rgit: log: --follow requires exactly one path")
-		fmt.Fprint(stderr, logHelp)
+		printUsage(stderr, logHelp)
 		return exitcode.InvalidUsage
 	}
 
@@ -465,7 +465,7 @@ func refuseLogFormatConflict(porcelain, asJSON, patch bool, stderr io.Writer) ex
 	default:
 		return exitcode.Success
 	}
-	fmt.Fprint(stderr, logHelp)
+	printUsage(stderr, logHelp)
 	return exitcode.InvalidUsage
 }
 

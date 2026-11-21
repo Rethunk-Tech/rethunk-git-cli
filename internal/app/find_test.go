@@ -52,7 +52,7 @@ func TestRun_FindHelpAndUsage(t *testing.T) {
 	stdout, stderr, code := runApp(t, "-C", cwd, "find")
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.Equals(stdout, ""))
-	wantUsage := "rgit: find requires a query\n" + findHelp
+	wantUsage := "rgit: find requires a query\n" + usageHint(findHelp)
 	qt.Assert(t, qt.Equals(stderr, wantUsage))
 }
 

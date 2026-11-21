@@ -25,8 +25,9 @@ import (
 
 const doctorHelp = `usage: rgit doctor [--porcelain | --json] [--deep]
 
-Report environment health: git on PATH, the optional tree-sitter CLI (only
-needed to rebuild with SQL support), which language servers this binary can
+Report environment health: git on PATH, the optional gate and gh (rgit land
+runs and uses them), the optional tree-sitter CLI (only needed to rebuild
+with SQL support), which language servers this binary can
 reach for the extent cross-check, and which grammars it was compiled with.
 
 Exits non-zero only when rgit genuinely cannot function -- a missing
@@ -72,7 +73,7 @@ func runDoctor(ctx context.Context, dir string, args []string, stdout, stderr io
 	}
 	if porcelain && asJSON {
 		fmt.Fprintln(stderr, "rgit: --porcelain and --json are mutually exclusive")
-		fmt.Fprint(stderr, doctorHelp)
+		printUsage(stderr, doctorHelp)
 		return exitcode.InvalidUsage
 	}
 

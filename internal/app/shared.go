@@ -521,10 +521,22 @@ func unsupportedLanguageHint(ext string) string {
 	return fmt.Sprintf(" (this build was compiled without -tags %s; installing the tree-sitter CLI and rebuilding would enable it -- see docs/INSTALL.md § SQL support, or run rgit doctor)", tag)
 }
 
-// refuseExtraArgs names the first unrecognized argument and prints help.
+// refuseExtraArgs names the first unrecognized argument and prints the usage hint.
+// usageHint is a usage error's hint: the usage block of help (up to its first blank line), then a pointer to the full text.
+func usageHint(help string) string {
+	head, _, _ := strings.Cut(help, "\n\n")
+	hint := strings.TrimRight(head, "\n") + "\n"
+	if f := strings.Fields(head); len(f) > 2 && f[1] == "rgit" {
+		hint += "see rgit " + f[2] + " --help\n"
+	}
+	return hint
+}
+
+func printUsage(w io.Writer, help string) { fmt.Fprint(w, usageHint(help)) }
+
 func refuseExtraArgs(cmdName string, args []string, stderr io.Writer, help string) exitcode.Code {
 	fmt.Fprintf(stderr, "rgit: %s: unrecognized argument %q\n", cmdName, args[0])
-	fmt.Fprint(stderr, help)
+	printUsage(stderr, help)
 	return exitcode.InvalidUsage
 }
 

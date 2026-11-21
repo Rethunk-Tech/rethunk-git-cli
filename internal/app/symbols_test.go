@@ -32,7 +32,7 @@ func TestRun_SymbolsHelpAndUsage(t *testing.T) {
 	stdout, stderr, code := runApp(t, "-C", cwd, "symbols")
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.Equals(stdout, ""))
-	wantUsage := "rgit: symbols requires at least one file argument\n" + symbolsHelp
+	wantUsage := "rgit: symbols requires at least one file argument\n" + usageHint(symbolsHelp)
 	qt.Assert(t, qt.Equals(stderr, wantUsage))
 }
 
