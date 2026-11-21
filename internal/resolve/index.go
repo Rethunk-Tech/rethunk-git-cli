@@ -80,6 +80,7 @@ func (e *ResolveError) Error() string {
 		exitcode.SpecialPathRefused,
 		exitcode.NothingToCommit,
 		exitcode.StructuredDataAnchorRefused,
+		exitcode.LandConflict,
 		exitcode.DirtyOverlap,
 		exitcode.GitFailure,
 		exitcode.InvalidUsage:
@@ -385,7 +386,11 @@ func (idx *index) suggest(anchor string) []string {
 	}
 	all := make([]scored, 0, len(idx.order))
 	for _, s := range idx.order {
-		all = append(all, scored{s.Qualified, levenshtein(anchor, s.Decl.Bare)})
+		dist := levenshtein(anchor, s.Decl.Bare)
+		if partialQualified(anchor, s.Qualified) {
+			dist = 0
+		}
+		all = append(all, scored{s.Qualified, dist})
 	}
 	slices.SortFunc(all, func(x, y scored) int {
 		return cmp.Or(cmp.Compare(x.dist, y.dist), cmp.Compare(x.qualified, y.qualified))
@@ -401,6 +406,26 @@ func (idx *index) suggest(anchor string) []string {
 		out = append(out, s.qualified)
 	}
 	return out
+}
+
+// partialQualified reports whether anchor's dot-separated parts appear in order in
+// qualified and end on its last part: "Inner.meth" and "Outer.meth" both abbreviate "Outer.Inner.meth".
+func partialQualified(anchor, qualified string) bool {
+	if !strings.Contains(anchor, ".") {
+		return false
+	}
+	want := strings.Split(anchor, ".")
+	have := strings.Split(qualified, ".")
+	if len(want) >= len(have) || want[len(want)-1] != have[len(have)-1] {
+		return false
+	}
+	i := 0
+	for _, h := range have[:len(have)-1] {
+		if i < len(want)-1 && h == want[i] {
+			i++
+		}
+	}
+	return i == len(want)-1
 }
 
 func levenshtein(a, b string) int {

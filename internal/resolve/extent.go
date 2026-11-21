@@ -103,7 +103,24 @@ type prefixAttacher interface {
 // fullExtent is [docStart, extentEnd) — the symbol together with any leading
 // comments attributed to it.
 func fullExtent(lang Language, src []byte, node *ts.Node) Extent {
-	return Extent{Start: docStart(lang, src, node), End: extentEnd(lang, src, node)}
+	return Extent{Start: docStart(lang, src, node), End: sameLineComment(lang, src, node, extentEnd(lang, src, node))}
+}
+
+// sameLineComment grows end over a comment that follows the node on its last line, so a diff
+// that assigns that line to the symbol and a commit of the symbol take the same bytes.
+func sameLineComment(lang Language, src []byte, node *ts.Node, end uint) uint {
+	if _, ok := lang.(trailingCommentTrimmer); ok {
+		return end
+	}
+	next := node.NextNamedSibling()
+	if next == nil || !lang.IsComment(next.Kind()) || next.StartByte() < end || bytes.IndexByte(src[end:next.StartByte()], '\n') >= 0 {
+		return end
+	}
+	ce := next.EndByte()
+	for ce > next.StartByte() && (src[ce-1] == '\n' || src[ce-1] == '\r') {
+		ce--
+	}
+	return ce
 }
 
 // trailingCommentTrimmer is an optional refinement of Language for a grammar

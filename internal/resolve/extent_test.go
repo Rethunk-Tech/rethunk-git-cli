@@ -366,3 +366,31 @@ export function f(a: number): number;
 		}
 	}
 }
+
+// TestResolve_SameLineCommentJoinsSymbol pins that a symbol's extent takes the comment
+// sharing its last line, matching the line diff assigns to it.
+func TestResolve_SameLineCommentJoinsSymbol(t *testing.T) {
+	t.Parallel()
+	lang, _ := ForExtension(".go")
+	src := []byte("package p\n\nfunc A() int { return 1 } // trailing A\nfunc B() {}\n")
+	res, err := Resolve(lang, src, "A")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(srcAt(src, res.Extent)); got != "func A() int { return 1 } // trailing A" {
+		t.Errorf("extent = %q", got)
+	}
+}
+
+// TestResolve_PythonPartialQualifiedNameSuggests pins did-you-mean for a name that skips a nesting level.
+func TestResolve_PythonPartialQualifiedNameSuggests(t *testing.T) {
+	t.Parallel()
+	lang, _ := ForExtension(".py")
+	src := []byte("class Outer:\n    class Inner:\n        def meth(self):\n            pass\n")
+	for _, anchor := range []string{"Inner.meth", "Outer.meth"} {
+		_, err := Resolve(lang, src, anchor)
+		if err == nil || !strings.Contains(err.Error(), "did you mean: Outer.Inner.meth") {
+			t.Errorf("%s: err = %v", anchor, err)
+		}
+	}
+}
