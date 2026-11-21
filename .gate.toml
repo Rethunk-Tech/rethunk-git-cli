@@ -1,5 +1,5 @@
 # One race compile of the cgo grammars, then lint / test / vuln / cross in parallel.
-# They wait on a stamp in GOCACHE so they do not start a second compile beside
+# They wait on a stamp in GOCACHE suffixed with the gate run pid, so a previous run's flag is never read so they do not start a second compile beside
 # build. Gitleaks, actionlint, and shellcheck need no Go cache and overlap
 # the build.
 [gates.gitleaks]
@@ -7,27 +7,27 @@ run = "[ -n \"$CI\" ] || gitleaks detect --no-banner --redact"
 
 [gates.build]
 timeout = "5m"
-run = "cache=$(go env GOCACHE); rm -f \"$cache/rgit-gate-ready\" \"$cache/rgit-gate-fail\"; go build -race ./...; e=$?; if [ \"$e\" -eq 0 ]; then touch \"$cache/rgit-gate-ready\"; else touch \"$cache/rgit-gate-fail\"; fi; exit \"$e\""
+run = "cache=$(go env GOCACHE); t=${GATE_ACTIVE_RUN%% *}; find \"$cache\" -maxdepth 1 -name 'rgit-gate-*' -mmin +60 -delete; rm -f \"$cache/rgit-gate-ready.$t\" \"$cache/rgit-gate-fail.$t\"; go build -race ./...; e=$?; if [ \"$e\" -eq 0 ]; then touch \"$cache/rgit-gate-ready.$t\"; else touch \"$cache/rgit-gate-fail.$t\"; fi; exit \"$e\""
 
 [gates.lint]
 timeout = "5m"
-run = "cache=$(go env GOCACHE); while [ ! -f \"$cache/rgit-gate-ready\" ] && [ ! -f \"$cache/rgit-gate-fail\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready\" ] && make lint"
+run = "cache=$(go env GOCACHE); t=${GATE_ACTIVE_RUN%% *}; while [ ! -f \"$cache/rgit-gate-ready.$t\" ] && [ ! -f \"$cache/rgit-gate-fail.$t\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready.$t\" ] && make lint"
 env = { GOFLAGS = "-race" }
 
 [gates.test]
 timeout = "5m"
-run = "cache=$(go env GOCACHE); while [ ! -f \"$cache/rgit-gate-ready\" ] && [ ! -f \"$cache/rgit-gate-fail\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready\" ] && go test -race -short ./..."
+run = "cache=$(go env GOCACHE); t=${GATE_ACTIVE_RUN%% *}; while [ ! -f \"$cache/rgit-gate-ready.$t\" ] && [ ! -f \"$cache/rgit-gate-fail.$t\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready.$t\" ] && go test -race -short ./..."
 
 [gates.vuln]
 timeout = "5m"
-run = "cache=$(go env GOCACHE); while [ ! -f \"$cache/rgit-gate-ready\" ] && [ ! -f \"$cache/rgit-gate-fail\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready\" ] && govulncheck ./..."
+run = "cache=$(go env GOCACHE); t=${GATE_ACTIVE_RUN%% *}; while [ ! -f \"$cache/rgit-gate-ready.$t\" ] && [ ! -f \"$cache/rgit-gate-fail.$t\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready.$t\" ] && govulncheck ./..."
 env = { GOFLAGS = "-race" }
 
 [gates.xcheck]
 timeout = "5m"
-run = "cache=$(go env GOCACHE); while [ ! -f \"$cache/rgit-gate-ready\" ] && [ ! -f \"$cache/rgit-gate-fail\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready\" ] && go vet -tags rgit_xcheck ./cmd/xcheck/..."
+run = "cache=$(go env GOCACHE); t=${GATE_ACTIVE_RUN%% *}; while [ ! -f \"$cache/rgit-gate-ready.$t\" ] && [ ! -f \"$cache/rgit-gate-fail.$t\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready.$t\" ] && go vet -tags rgit_xcheck ./cmd/xcheck/..."
 
 # CI cross-compiles in its own job with zig installed; the unit lane has no zig.
 [gates.cross]
 timeout = "5m"
-run = "[ \"${GITHUB_ACTIONS:-}\" = true ] && exit 0; cache=$(go env GOCACHE); while [ ! -f \"$cache/rgit-gate-ready\" ] && [ ! -f \"$cache/rgit-gate-fail\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready\" ] && { [ -f internal/resolve/sqlgrammar/csrc/parser.c ] || make sql-parser; } && make -o sql-parser cross"
+run = "[ \"${GITHUB_ACTIONS:-}\" = true ] && exit 0; cache=$(go env GOCACHE); t=${GATE_ACTIVE_RUN%% *}; while [ ! -f \"$cache/rgit-gate-ready.$t\" ] && [ ! -f \"$cache/rgit-gate-fail.$t\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready.$t\" ] && { [ -f internal/resolve/sqlgrammar/csrc/parser.c ] || make sql-parser; } && make -o sql-parser cross"
