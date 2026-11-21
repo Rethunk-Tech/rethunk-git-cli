@@ -693,8 +693,8 @@ func TestAttribute_TopLevelSymbolOwnsOneSeparator(t *testing.T) {
 		head: "package p\n\ntype S struct {\n\tA int\n}\n",
 		work: "package p\n\ntype S struct {\n\tA int\n\tB int\n}\n",
 		// A member is separated by one newline, not a blank line, so
-		// nothing extra is attributed and no remainder appears.
-		wantRows: "[S MOD +1/-0][S.B MOD +1/-0]",
+		// nothing extra is attributed and the container gains no phantom line.
+		wantRows: "[S.B MOD +1/-0]",
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			// Each case builds its own gittest repo under its own t.TempDir()

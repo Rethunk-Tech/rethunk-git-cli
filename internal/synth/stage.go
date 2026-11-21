@@ -70,6 +70,10 @@ type TargetResult struct {
 	Added   int
 	Deleted int
 
+	// sepKey is the order key of a top-level insert into a file with no base
+	// blob; see freshInsertKey. Zero for every other row.
+	sepKey uint
+
 	// Path is the file this row reports on, and the label a caller sees.
 	// For a symbol anchor it is the anchored file. For a pathspec it is
 	// one of the files that pathspec stages -- a directory or glob
@@ -230,11 +234,41 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 		}
 	}
 
+	plan.countFreshFileSeparators()
 	if err := plan.markNormalizedUnchanged(ctx, repo); err != nil {
 		return nil, err
 	}
 	sortResults(plan.Results)
 	return plan, nil
+}
+
+// freshInsertKey orders the top-level inserts that build a file with no base
+// blob (0 means the op is not one; keys are offset by one to keep 0 free).
+func freshInsertKey(fp *filePlan, op editOp) uint {
+	if op.kind != editInsert || op.member || len(fp.headSrc) > 0 {
+		return 0
+	}
+	if op.wend != 0 {
+		return op.wstart + 1
+	}
+	return uint(op.seq) + 1
+}
+
+// countFreshFileSeparators gives every top-level insert into a file with no base
+// blob except the first the blank line spliceInsert writes before it, which is
+// the line `rgit diff` attributes to that symbol.
+func (p *Plan) countFreshFileSeparators() {
+	first := map[string]uint{}
+	for _, r := range p.Results {
+		if r.sepKey != 0 && (first[r.Path] == 0 || r.sepKey < first[r.Path]) {
+			first[r.Path] = r.sepKey
+		}
+	}
+	for i := range p.Results {
+		if r := &p.Results[i]; r.sepKey != 0 && r.sepKey != first[r.Path] {
+			r.Added++
+		}
+	}
 }
 
 // markNormalizedUnchanged turns a file's results into Unchanged when its
@@ -366,6 +400,7 @@ func (p *Plan) planSymbol(fp *filePlan, t Target, named map[string]map[string]bo
 		Deleted: deleted,
 		Path:    t.Symbol.Path,
 		start:   op.start,
+		sepKey:  freshInsertKey(fp, op),
 	})
 	return nil
 }
@@ -428,6 +463,7 @@ func (p *Plan) addAutoResults(fp *filePlan, autos []autoOp) {
 			Deleted: deleted,
 			Path:    fp.path,
 			start:   a.op.start,
+			sepKey:  freshInsertKey(fp, a.op),
 		})
 	}
 }

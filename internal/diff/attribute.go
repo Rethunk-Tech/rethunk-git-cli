@@ -200,6 +200,7 @@ func (t *regionTree) exclusiveText(src []byte, name string, ext resolve.Extent) 
 	out := make([]byte, 0, ext.End-ext.Start)
 	pos := ext.Start
 	for _, h := range holes {
+		h = wholeLines(src, h)
 		if h.Start > pos {
 			out = append(out, src[pos:h.Start]...)
 		}
@@ -352,10 +353,48 @@ func SeparatorLines(src []byte, start, end uint) int {
 	// is the one before this region. One of those newlines ends the
 	// previous declaration's last line and is already counted there.
 	leading := 0
-	for s := start; s > 0 && src[s-1] == '\n'; s-- {
+	s := start
+	for s > 0 && (src[s-1] == ' ' || src[s-1] == '\t') {
+		s-- // an indented member's own indentation is not a break
+	}
+	for ; s > 0 && src[s-1] == '\n'; s-- {
 		leading++
 	}
 	return min(max(leading-1, 0), 1)
+}
+
+// wholeLines widens a member's extent over the indentation before it, the line
+// break after it and the one separator line it owns (SeparatorLines), when it
+// stands alone on its lines. Cutting only the extent would glue the leftover
+// indentation and breaks into phantom lines of the container.
+func wholeLines(src []byte, h resolve.Extent) resolve.Extent {
+	start := h.Start
+	for start > 0 && (src[start-1] == ' ' || src[start-1] == '\t') {
+		start--
+	}
+	if start > 0 && src[start-1] != '\n' {
+		return h
+	}
+	end := h.End
+	for end < uint(len(src)) && (src[end] == ' ' || src[end] == '\t') {
+		end++
+	}
+	switch {
+	case end+1 < uint(len(src)) && src[end] == '\r' && src[end+1] == '\n':
+		end += 2
+	case end < uint(len(src)) && src[end] == '\n':
+		end++
+	default:
+		return h
+	}
+	for range SeparatorLines(src, h.Start, h.End) {
+		next := bytes.IndexByte(src[end:], '\n')
+		if next < 0 {
+			break
+		}
+		end += uint(next) + 1
+	}
+	return resolve.Extent{Start: start, End: end}
 }
 
 // indexRegions maps each region's name to its extent for O(1) lookup.
@@ -517,6 +556,12 @@ func newlyEscalatedContainer(lang resolve.Language, oldFile, newFile declResolve
 // free to disagree, and a preview that disagrees with the diff it previews is
 // worse than no preview.
 func LineCounts(oldText, newText []byte) (added, deleted int) {
+	// An extent ends mid-line stream, so its last line has no newline on either
+	// side; without one, a change on that line counts as a rewrite of it twice.
+	if len(oldText) > 0 && len(newText) > 0 && !bytes.HasSuffix(oldText, []byte("\n")) && !bytes.HasSuffix(newText, []byte("\n")) {
+		oldText = append(slices.Clip(oldText), '\n')
+		newText = append(slices.Clip(newText), '\n')
+	}
 	edits := udiff.Lines(string(oldText), string(newText))
 	for _, e := range edits {
 		deleted += countLines(oldText[e.Start:e.End])

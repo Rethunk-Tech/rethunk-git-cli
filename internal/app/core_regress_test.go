@@ -5,6 +5,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -118,4 +119,65 @@ func TestRun_DiffStagedRenameNamesSource(t *testing.T) {
 	stdout, stderr, code := runApp(t, "-C", dir, "diff")
 	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
 	qt.Assert(t, qt.StringContains(stdout, "b.go (renamed from a.go)"))
+}
+
+// Per-symbol rows add up to git's own totals and agree with --dry-run: a line added
+// to an import list, or a method added to a class, is counted once.
+func TestRun_DiffRowsMatchNumstatAndDryRun(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ name, path, head, work, anchors string }{
+		{"import line", "a.ts", "import { a } from \"a\";\n\nexport function f(): number {\n  return 1;\n}\n",
+			"import { a } from \"a\";\nimport { b } from \"b\";\n\nexport function f(): number {\n  return 1;\n}\n", "@imports"},
+		{"python method", "c.py", "class C:\n    def a(self):\n        return 1\n",
+			"class C:\n    def a(self):\n        return 1\n\n    def b(self):\n        return 2\n", "C.b"},
+		{"go field after blank line", "d.go", "package p\n\ntype T struct {\n\tA int\n}\n",
+			"package p\n\ntype T struct {\n\tA int\n\n\tN string\n}\n", "T.N"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dir, _ := gittest.New(t.Context(), t)
+			writeAppFile(t, dir, tc.path, tc.head)
+			gitOut(t, dir, "add", tc.path)
+			gitOut(t, dir, "commit", "-q", "-m", "chore: init")
+			writeAppFile(t, dir, tc.path, tc.work)
+
+			diffOut, _, code := runApp(t, "-C", dir, "diff", "--porcelain")
+			qt.Assert(t, qt.Equals(code, exitcode.Success))
+			var added, deleted int
+			rows := map[string]string{}
+			for _, line := range strings.Split(strings.TrimSpace(diffOut), "\n") {
+				f := strings.Split(line, "\t")
+				a, _ := strconv.Atoi(f[3])
+				d, _ := strconv.Atoi(f[4])
+				added, deleted = added+a, deleted+d
+				rows[f[1]] = f[3] + "\t" + f[4]
+			}
+			numstat := strings.Fields(gitOut(t, dir, "diff", "--numstat", "HEAD"))
+			qt.Assert(t, qt.Equals(strconv.Itoa(added)+"\t"+strconv.Itoa(deleted), numstat[0]+"\t"+numstat[1]))
+
+			dry, _, code := runApp(t, "-C", dir, "commit", "--dry-run", "--porcelain", "-m", "x", tc.path+":"+tc.anchors)
+			qt.Assert(t, qt.Equals(code, exitcode.Success))
+			f := strings.Split(strings.TrimSpace(dry), "\t")
+			qt.Assert(t, qt.Equals(f[len(f)-2]+"\t"+f[len(f)-1], rows[tc.anchors]))
+		})
+	}
+}
+
+// For a new file, diff's rows and the commit preview give the same count to @header and the symbol.
+func TestRun_NewFileRowsAgreeBetweenDiffAndDryRun(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "n.go", "package n\n\nfunc N() int {\n\treturn 1\n}\n")
+	diffOut, _, code := runApp(t, "-C", dir, "diff", "--sym", "n.go:N", "--porcelain")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	dry, _, code := runApp(t, "-C", dir, "commit", "--dry-run", "--porcelain", "-m", "feat: n", "n.go:@header", "n.go:N")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	n := strings.Split(strings.TrimSpace(diffOut), "\t")
+	var got string
+	for _, line := range strings.Split(strings.TrimSpace(dry), "\n") {
+		if f := strings.Split(line, "\t"); f[1] == "N" {
+			got = f[2] + "\t" + f[3]
+		}
+	}
+	qt.Assert(t, qt.Equals(got, n[3]+"\t"+n[4]))
 }
