@@ -31,3 +31,31 @@ run = "cache=$(go env GOCACHE); t=${GATE_ACTIVE_RUN%% *}; while [ ! -f \"$cache/
 [gates.cross]
 timeout = "5m"
 run = "[ \"${GITHUB_ACTIONS:-}\" = true ] && exit 0; cache=$(go env GOCACHE); t=${GATE_ACTIVE_RUN%% *}; while [ ! -f \"$cache/rgit-gate-ready.$t\" ] && [ ! -f \"$cache/rgit-gate-fail.$t\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready.$t\" ] && { [ -f internal/resolve/sqlgrammar/csrc/parser.c ] || make sql-parser; } && make -o sql-parser cross"
+
+# CI's `full` job: the whole tree without -short, so the e2e cases and the live
+# gopls / rust-analyzer / marksman / zsh cases run. e2e: it needs those servers
+# installed and adds about 15 s to a gate that budgets under 10 s warm.
+[gates.test-full]
+e2e = true
+timeout = "10m"
+run = "cache=$(go env GOCACHE); t=${GATE_ACTIVE_RUN%% *}; while [ ! -f \"$cache/rgit-gate-ready.$t\" ] && [ ! -f \"$cache/rgit-gate-fail.$t\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready.$t\" ] && go test -race ./..."
+
+# CI's `full` job SQL lane (rgit_sql). e2e: it needs the generated SQL parser
+# (tree-sitter-cli, `make sql-parser`) and about 20 s of extra cgo compile.
+[gates.test-sql]
+e2e = true
+timeout = "10m"
+run = "cache=$(go env GOCACHE); t=${GATE_ACTIVE_RUN%% *}; while [ ! -f \"$cache/rgit-gate-ready.$t\" ] && [ ! -f \"$cache/rgit-gate-fail.$t\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready.$t\" ] && { [ -f internal/resolve/sqlgrammar/csrc/parser.c ] || make sql-parser; } && go test -tags rgit_sql -short ./..."
+
+# CI's `xcheck` job: every grammar against its live language server, strict.
+# e2e: it fails unless every server (gopls, rust-analyzer, marksman, vtsls, zsh
+# and the rest) is installed, which only this workstation and CI guarantee.
+[gates.xcheck-lsp]
+e2e = true
+timeout = "5m"
+run = "cache=$(go env GOCACHE); t=${GATE_ACTIVE_RUN%% *}; while [ ! -f \"$cache/rgit-gate-ready.$t\" ] && [ ! -f \"$cache/rgit-gate-fail.$t\" ]; do sleep 0.05; done; [ -f \"$cache/rgit-gate-ready.$t\" ] && make xcheck"
+
+# CI's `install-script` job: dry-run and mocked-network cases, no download.
+[gates.install-script]
+timeout = "1m"
+run = "sh scripts/test-install.sh"
