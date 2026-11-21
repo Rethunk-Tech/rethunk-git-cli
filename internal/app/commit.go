@@ -657,7 +657,11 @@ func (r *commitRun) planTargets(ctx context.Context, root, prefix string, repo *
 		return nil, code
 	}
 
-	plan, err := synth.PlanStage(ctx, repo, root, targets)
+	planner := synth.PlanStage
+	if r.f.include || r.f.stageOnly {
+		planner = synth.PlanStageOnIndex
+	}
+	plan, err := planner(ctx, repo, root, targets)
 	if err != nil {
 		code, msg := mapStageError(err)
 		fmt.Fprintf(r.stderr, "rgit: %s\n", msg)

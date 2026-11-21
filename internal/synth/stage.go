@@ -126,6 +126,7 @@ type filePlan struct {
 type Plan struct {
 	pathspecs []string
 	files     []*filePlan
+	base      string // revision symbols are spliced into; "" is the index
 
 	// Results reports what resolution found for each target, in the order
 	// PlanStage received them.
@@ -167,7 +168,18 @@ type Plan struct {
 // --dry-run preview, or the "nothing to commit" exit-11 case) never touches
 // the index at all.
 func PlanStage(ctx context.Context, repo *gitx.Repo, root string, targets []Target) (*Plan, error) {
-	plan := &Plan{}
+	return planStage(ctx, repo, root, targets, "HEAD")
+}
+
+// PlanStageOnIndex is PlanStage for staging into the real index (`-i`,
+// `--stage-only`): symbols are spliced into each file's stage-0 blob, so work
+// already staged in the same file survives.
+func PlanStageOnIndex(ctx context.Context, repo *gitx.Repo, root string, targets []Target) (*Plan, error) {
+	return planStage(ctx, repo, root, targets, "")
+}
+
+func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Target, base string) (*Plan, error) {
+	plan := &Plan{base: base}
 	byPath := map[string]*filePlan{}
 	// Anchors the caller named per path, so the new-file preamble pass below
 	// does not stage a second copy of one they asked for themselves.
@@ -279,7 +291,7 @@ func (p *Plan) symbolFile(ctx context.Context, repo *gitx.Repo, root, path strin
 	if fp, ok := byPath[path]; ok {
 		return fp, nil
 	}
-	fp, err := openFilePlan(ctx, repo, root, path)
+	fp, err := openFilePlanFrom(ctx, repo, root, path, p.base)
 	if err != nil {
 		return nil, err
 	}
@@ -464,6 +476,12 @@ func isOrdinalAnchor(anchor string) bool {
 // language lookup, HEAD and worktree content, and (when the worktree has
 // the file) its declaration order for nearest-sibling insertion.
 func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*filePlan, error) {
+	return openFilePlanFrom(ctx, repo, root, path, "HEAD")
+}
+
+// openFilePlanFrom is openFilePlan with the blob symbols are spliced into read
+// from base: a revision, or "" for the index's stage-0 entry.
+func openFilePlanFrom(ctx context.Context, repo *gitx.Repo, root, path, base string) (*filePlan, error) {
 	if err := checkGitignoreRefusal(ctx, repo, path); err != nil {
 		return nil, err
 	}
@@ -484,7 +502,7 @@ func openFilePlan(ctx context.Context, repo *gitx.Repo, root, path string) (*fil
 	if err != nil {
 		return nil, err
 	}
-	headSrc, headExists, err := repo.CatFile(ctx, "HEAD", path)
+	headSrc, headExists, err := repo.CatFile(ctx, base, path)
 	if err != nil {
 		return nil, err
 	}
@@ -626,6 +644,14 @@ func (p *Plan) StageInto(ctx context.Context, repo *gitx.Repo, root string, inde
 	}
 	for _, fp := range p.files {
 		content := inheritEOF(fp, applyEdits(fp.headSrc, fp.ops))
+		if !fp.worktreeExists && len(content) == 0 {
+			// Every symbol of a deleted file was named: stage the deletion, as
+			// `git commit --only FILE` does, instead of an empty blob.
+			if err := index.RemoveFromIndex(ctx, fp.path); err != nil {
+				return err
+			}
+			continue
+		}
 
 		// Reads go to the caller's repo: its index is the pre-staging
 		// state the temp copy was seeded from, and no write below touches

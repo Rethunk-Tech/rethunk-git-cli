@@ -596,6 +596,12 @@ func (r *Repo) UpdateIndexCacheinfo(ctx context.Context, mode, sha, path string)
 	return err
 }
 
+// RemoveFromIndex stages the deletion of path whether or not the worktree copy exists.
+func (r *Repo) RemoveFromIndex(ctx context.Context, path string) error {
+	_, err := r.checked(ctx, "update-index", "--force-remove", "--", path)
+	return err
+}
+
 // Add stages pathspecs verbatim via `git add --`, for targets that are
 // plain paths rather than symbol anchors. Staging by path is plain
 // `git add <pathspec>`, delegated rather than synthesized,
