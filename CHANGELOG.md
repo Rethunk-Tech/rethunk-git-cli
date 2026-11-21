@@ -6,6 +6,10 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The push-hook land test skips under a gate without `--isolate`, and CI installs gate v0.10.0.
+
 ## [3.0.4] - 2026-11-21
 
 ### Fixed
