@@ -230,8 +230,43 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 		}
 	}
 
+	if err := plan.markNormalizedUnchanged(ctx, repo); err != nil {
+		return nil, err
+	}
 	sortResults(plan.Results)
 	return plan, nil
+}
+
+// markNormalizedUnchanged turns a file's results into Unchanged when its
+// synthesized blob, once git's clean filters ran (eol=crlf, autocrlf), is the
+// base blob: the worktree differs from it only in line endings.
+func (p *Plan) markNormalizedUnchanged(ctx context.Context, repo *gitx.Repo) error {
+	for _, fp := range p.files {
+		if !fp.headExists || !fp.worktreeExists {
+			continue
+		}
+		content := inheritEOF(fp, applyEdits(fp.headSrc, fp.ops))
+		if bytes.Equal(content, fp.headSrc) || !bytes.Contains(content, []byte{'\r'}) {
+			continue
+		}
+		got, err := repo.HashObject(ctx, fp.path, content)
+		if err != nil {
+			return err
+		}
+		want, err := repo.HashObject(ctx, fp.path, fp.headSrc)
+		if err != nil {
+			return err
+		}
+		if got != want {
+			continue
+		}
+		for i := range p.Results {
+			if r := &p.Results[i]; r.Target.Symbol.Path == fp.path {
+				r.Outcome, r.Added, r.Deleted = Unchanged, 0, 0
+			}
+		}
+	}
+	return nil
 }
 
 func (p *Plan) planPathspec(ctx context.Context, repo *gitx.Repo, root string, t Target) error {

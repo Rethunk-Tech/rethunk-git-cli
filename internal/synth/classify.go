@@ -5,6 +5,7 @@ import (
 	"context"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/lsp"
@@ -56,6 +57,9 @@ func (fp *filePlan) classify(anchor string) (op editOp, unchanged bool, err erro
 
 	switch {
 	case workRes != nil && headRes != nil:
+		if bare, _, ok := resolve.ParseOrdinal(anchor); ok && sameNameCount(fp.headFile, bare) != sameNameCount(fp.workFile, bare) {
+			return editOp{}, false, &resolve.ResolveError{Code: exitcode.AnchorAmbiguous, Anchor: anchor}
+		}
 		workBytes := fp.workSrc[workRes.Extent.Start:workRes.Extent.End]
 		headBytes := fp.headSrc[headRes.Extent.Start:headRes.Extent.End]
 		fp.deferCrossCheck(workRes)
@@ -81,7 +85,7 @@ func (fp *filePlan) classify(anchor string) (op editOp, unchanged bool, err erro
 			start:    pos,
 			seq:      seq,
 			text:     insertionText(fp.workSrc, workRes.Extent),
-			leadGap:  leadingGap(fp.workSrc, workRes.Extent.Start),
+			leadGap:  leadingGap(fp.workSrc, lineStart(fp.workSrc, workRes.Extent.Start)),
 			trailGap: trailingGap(fp.workSrc, workRes.Extent.End),
 			wstart:   workRes.Extent.Start,
 			wend:     workRes.Extent.End,
@@ -129,6 +133,17 @@ func (fp *filePlan) classify(anchor string) (op editOp, unchanged bool, err erro
 		}
 		return editOp{}, false, &resolve.ResolveError{Code: exitcode.AnchorUnresolvable, Anchor: anchor}
 	}
+}
+
+// sameNameCount is how many declarations in f answer to bare, as `bare` or `bare#N`.
+func sameNameCount(f *resolve.File, bare string) int {
+	n := 0
+	for _, a := range f.DeclOrder() {
+		if a == bare || strings.HasPrefix(a, bare+"#") {
+			n++
+		}
+	}
+	return n
 }
 
 // deferCrossCheck queues res to be verified against a live language server
