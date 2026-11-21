@@ -6,6 +6,8 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-11-21
+
 ### Added
 
 - `rgit land` first fast-forwards a clean default branch to remote PR merges and installs, replacing the removed detached PR watcher.
@@ -13,8 +15,15 @@ Notable changes to `rgit`. The format follows
 
 ### Changed
 
+- **Breaking:** the module path is now `github.com/Rethunk-Tech/rethunk-git-cli/v3`; install with `go install github.com/Rethunk-Tech/rethunk-git-cli/v3/cmd/rgit@v3.0.0` (or the repo's `make install`).
 - **Breaking:** plain `rgit land` and `land --sha` now run the repo's full gate on HEAD before any push, PR or queue step. A red gate pushes nothing, prints `red (gate failed: NAMES; log PATH)` and exits 1; a HEAD or tree change during the gate pushes nothing. `--sha` is gated only when SHA is HEAD on a clean tree, otherwise refused. `--no-gate` skips the gate for callers that already ran it. See [`docs/USAGE.md`](docs/USAGE.md#land).
 - **Breaking:** `rgit land --branch BR` now lands locally by default (rebase onto the local default branch, gate, fast-forward, `--install`) and no longer pushes. Pass `--push` for the push route. `--no-push` is removed. See [`docs/USAGE.md`](docs/USAGE.md).
+- `rgit commit` with named targets commits only those targets, as `--only`: already-staged work stays in the index. `-i`/`--include` still takes that work along. `--only` remains accepted. See [`docs/USAGE.md`](docs/USAGE.md#flags).
+- rust-analyzer no longer runs Cargo build scripts or proc macros from the repo it opens: initialize sends `cargo.buildScripts.enable`, `cargo.runBuildScripts`, and `procMacro.enable` as false.
+- `rgit context` no longer cross-checks extents against a language server, so it never dials or spawns one: 552 ms to 234 ms on a 10-file dirty tree in a 3.6k-file repo, and 1-2 s saved where a stdio server (vtsls, marksman) would have started. It no longer emits `W ts-only` or extent-disagreement warnings; `rgit diff` and `rgit commit` still verify.
+- The gopls daemon rgit spawns now idles for 2 hours (was 10 minutes), so a working session pays the module load once instead of after every pause.
+- `rgit commit --only` seeds its private index with the real index's stat data, so git no longer rehashes every tracked file: 1.08 s to 0.22 s on a 50k-file checkout.
+- `rgit context` with a large dirty tree: 2.96 s to 1.42 s for 10k modified and 20k untracked files.
 
 ### Fixed
 
@@ -29,15 +38,6 @@ Notable changes to `rgit`. The format follows
 
 - **Breaking:** `rgit commit --push` and its exit 8. The flag now exits 129 with `--push was removed: run `rgit land` after committing`; push with `rgit land`, which gates first.
 - `rgit show --with-header`, the deprecated alias for `--porcelain`. Use `--porcelain`. See [`docs/USAGE.md`](docs/USAGE.md#show).
-
-### Changed
-
-- `rgit commit` with named targets commits only those targets, as `--only`: already-staged work stays in the index. `-i`/`--include` still takes that work along. `--only` remains accepted. See [`docs/USAGE.md`](docs/USAGE.md#flags).
-- rust-analyzer no longer runs Cargo build scripts or proc macros from the repo it opens: initialize sends `cargo.buildScripts.enable`, `cargo.runBuildScripts`, and `procMacro.enable` as false.
-- `rgit context` no longer cross-checks extents against a language server, so it never dials or spawns one: 552 ms to 234 ms on a 10-file dirty tree in a 3.6k-file repo, and 1-2 s saved where a stdio server (vtsls, marksman) would have started. It no longer emits `W ts-only` or extent-disagreement warnings; `rgit diff` and `rgit commit` still verify.
-- The gopls daemon rgit spawns now idles for 2 hours (was 10 minutes), so a working session pays the module load once instead of after every pause.
-- `rgit commit --only` seeds its private index with the real index's stat data, so git no longer rehashes every tracked file: 1.08 s to 0.22 s on a 50k-file checkout.
-- `rgit context` with a large dirty tree: 2.96 s to 1.42 s for 10k modified and 20k untracked files.
 
 ### Fixed
 
