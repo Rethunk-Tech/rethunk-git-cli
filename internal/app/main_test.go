@@ -13,8 +13,9 @@ import (
 func TestMain(m *testing.M) {
 	if dir := os.Getenv("RGIT_TEST_LAND_SIGINT_DIR"); dir != "" {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-		defer stop()
-		os.Exit(int(Run(ctx, "test", []string{"-C", dir, "land"}, os.Stdout, os.Stderr)))
+		code := Run(ctx, "test", []string{"-C", dir, "land"}, os.Stdout, os.Stderr)
+		stop()
+		os.Exit(int(code))
 	}
 	os.Exit(lsptest.RunWithoutManagedDaemon(m))
 }

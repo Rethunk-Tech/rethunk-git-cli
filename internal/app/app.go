@@ -259,7 +259,7 @@ func parseChdir(args []string, stderr io.Writer) (dir string, rest []string, cod
 	// or `--version` merely because those never open a repository. The
 	// exit code is git's own for a chdir it cannot perform (128), not the
 	// 129 a malformed option gets.
-	info, err := os.Stat(dir)
+	info, err := os.Stat(dir) //nolint:gosec // dir is the -C argument; Stat only checks it is a directory
 	if err != nil {
 		// The errno alone, matching git's own "cannot change to '<path>':
 		// No such file or directory". os.Stat's wrapper would repeat the

@@ -2752,7 +2752,7 @@ func TestLandSIGINTDuringGateExits130(t *testing.T) {
 	gitOut(t, dir, "add", ".gate.toml")
 	gitOut(t, dir, "commit", "-q", "-m", "slow gate")
 
-	cmd := exec.Command(os.Args[0]) //nolint:gosec // the test binary, intercepted in TestMain
+	cmd := exec.CommandContext(t.Context(), os.Args[0]) //nolint:gosec // the test binary, intercepted in TestMain
 	cmd.Env = append(os.Environ(),
 		"RGIT_TEST_LAND_SIGINT_DIR="+dir,
 		"XDG_CACHE_HOME="+t.TempDir(),
@@ -2787,8 +2787,7 @@ func TestLandSIGINTDuringGateExits130(t *testing.T) {
 	err := <-waited
 	code := 0
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			code = exitErr.ExitCode()
 		} else {
 			t.Fatalf("wait: %v stdout=%q stderr=%q", err, stdout.String(), stderr.String())

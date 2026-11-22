@@ -88,7 +88,8 @@ func (e *ResolveError) Error() string {
 		exitcode.DirtyOverlap,
 		exitcode.LandSkipped,
 		exitcode.GitFailure,
-		exitcode.InvalidUsage:
+		exitcode.InvalidUsage,
+		exitcode.Interrupted:
 		// Keep the default unresolved label for codes that do not have
 		// a more specific resolution error message.
 	}

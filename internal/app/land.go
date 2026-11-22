@@ -532,6 +532,10 @@ func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, 
 		}
 	}
 
+	return finishLandRepos(ctx, results, wait, asJSON, install, red, caughtUpFail, blocked, notEnqueued, d)
+}
+
+func finishLandRepos(ctx context.Context, results []landResult, wait, asJSON, install, red, caughtUpFail, blocked, notEnqueued bool, d landDeps) exitcode.Code {
 	if d.cancelled() {
 		return exitcode.Interrupted
 	}
@@ -831,7 +835,7 @@ func skipReason(lines []string) string {
 }
 
 func isUmbrella(r string) bool {
-	_, err := os.Stat(filepath.Join(r, ".gitmodules"))
+	_, err := os.Stat(filepath.Join(r, ".gitmodules")) //nolint:gosec // r is a land repo path; this only checks the well-known git file exists
 	return err == nil
 }
 
