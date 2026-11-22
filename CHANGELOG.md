@@ -6,6 +6,8 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+## [3.0.6] - 2026-11-21
+
 ### Changed
 
 - `rgit commit` with a directory or glob target stages tracked files only, like `git commit --only`; a file named directly is still added.
