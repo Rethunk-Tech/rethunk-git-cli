@@ -459,7 +459,7 @@ func landFlagValue(args []string, i int) (value string, next int, ok bool) {
 func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, d landDeps) exitcode.Code {
 	ordered := orderRepos(repos)
 	var results []landResult
-	red, subRed, caughtUpFail, blocked := false, false, false, false
+	red, subRed, caughtUpFail, blocked, notEnqueued := false, false, false, false, false
 	for _, r := range ordered {
 		if d.sha == "" && catchUp(ctx, r, d) {
 			caughtUpFail = true
@@ -472,6 +472,7 @@ func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, 
 		res := landOne(r, d)
 		results = append(results, res)
 		blocked = blocked || skipNeedsAction(res)
+		notEnqueued = notEnqueued || res.NotEnqueued
 		if res.Kind == landRed {
 			red = true
 			subRed = subRed || !isUmbrella(r)
@@ -516,13 +517,15 @@ func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, 
 		instFail = installPushedRepos(ctx, results, d)
 	}
 
-	return landExit(red, instFail || caughtUpFail, blocked)
+	return landExit(red, instFail || caughtUpFail, blocked, notEnqueued)
 }
 
-func landExit(red, installFailed, blocked bool) exitcode.Code {
+func landExit(red, installFailed, blocked, notEnqueued bool) exitcode.Code {
 	switch {
 	case red:
 		return 1
+	case notEnqueued:
+		return exitcode.LandNotEnqueued
 	case installFailed:
 		return exitcode.LandInstallFailed
 	case blocked:
@@ -595,6 +598,11 @@ func installPushedRepos(ctx context.Context, results []landResult, d landDeps) b
 	failed := false
 	for _, res := range results {
 		if res.Kind != landPushed {
+			continue
+		}
+		if head := strings.TrimSpace(mustGit(res.Repo, d, "rev-parse", "HEAD")); d.sha == "" && head != res.SHA {
+			fmt.Fprintf(d.info(), "%s: skipped install (HEAD %s is not the pushed %s)\n", res.Repo, head, res.SHA)
+			failed = true
 			continue
 		}
 		if installOne(ctx, res.Repo, d) {
@@ -689,8 +697,10 @@ type landResult struct {
 	Queue    bool
 	Log      string // gate log of a red gate
 	Moved    bool   // push rejected because origin moved (no-rebase route)
-	SHA      string // pushed commit
-	Watch    *landWatchResult
+	// NotEnqueued is a PR that is neither queued nor set to auto-merge, or whose state is unknown.
+	NotEnqueued bool
+	SHA         string // pushed commit
+	Watch       *landWatchResult
 }
 
 type landWatchJob struct {
@@ -830,13 +840,15 @@ func landOne(r string, d landDeps) landResult {
 		return res
 	}
 
+	gated := strings.TrimSpace(mustGit(repo, d, "rev-parse", "HEAD"))
 	if line, log, ok := gateHead(repo, d); !ok {
 		res.Kind = landRed
 		res.Lines = []string{line}
 		res.Log = log
 		return res
 	}
-	res = landByRules(repo, def, d, landPushOpts{remote: upstreamRemote(repo, def, d), pushTo: def})
+	// Push and branch the gated commit, not whatever HEAD became after the gate.
+	res = landByRules(repo, def, d, landPushOpts{remote: upstreamRemote(repo, def, d), pushRef: gated, pushTo: def, prRef: gated, logRange: "@{u}.." + gated})
 	switch res.Kind {
 	case landPushed:
 		touchFleet(repo, 1, d)
@@ -849,13 +861,25 @@ func landOne(r string, d landDeps) landResult {
 			note = repo + ": note: PR open but neither queued nor set to auto-merge"
 		}
 		if note != "" {
+			res.NotEnqueued = true
 			res.Lines = append([]string{note}, res.Lines...)
+			break
 		}
-		_, _ = d.git.run(repo, "reset", "-q", "--keep", upstreamRemote(repo, def, d)+"/"+def)
+		resetToRemote(repo, upstreamRemote(repo, def, d)+"/"+def, gated, d, &res)
 		touchFleet(repo, 0, d)
 	case landSkipped, landRed:
 	}
 	return res
+}
+
+// resetToRemote moves the checkout off commits that now live in a PR, only while HEAD is still the
+// commit that was branched: a commit made meanwhile is left on the branch with a warning.
+func resetToRemote(repo, target, branched string, d landDeps, res *landResult) {
+	if head := strings.TrimSpace(mustGit(repo, d, "rev-parse", "HEAD")); head != branched {
+		res.Lines = append(res.Lines, repo+": warning: HEAD moved since the PR was opened; local branch not reset")
+		return
+	}
+	_, _ = d.git.run(repo, "reset", "-q", "--keep", target)
 }
 
 // landSha lands one already-committed ahead commit by the repo's branch rules. The working tree and
@@ -1016,7 +1040,7 @@ func landByRules(repo, def string, d landDeps, opts landPushOpts) landResult {
 		res.Lines = []string{summaryRed(repo, err.Error())}
 		return res
 	}
-	pushOut, err := d.git.run(repo, "push", "-u", remote, br)
+	pushOut, err := d.git.run(repo, "push", "--recurse-submodules=check", "-u", remote, br)
 	if err != nil {
 		res.Kind = landRed
 		res.Lines = []string{summaryRed(repo, pushOut)}
@@ -1071,7 +1095,11 @@ func landByRules(repo, def string, d landDeps, opts landPushOpts) landResult {
 type landBranchPrep struct {
 	repo, branch, def, wt string
 	dirty, noPush         bool
-	opts                  landPushOpts
+	// wtCreated is true when land made wt itself; a worktree that was already there is removed only while it holds no ignored files.
+	wtCreated bool
+	// gated is the worktree HEAD the gate ran on.
+	gated string
+	opts  landPushOpts
 }
 
 func landBranch(ctx context.Context, repoArg, branch string, wait, install, noPush bool, d landDeps) exitcode.Code {
@@ -1079,6 +1107,7 @@ func landBranch(ctx context.Context, repoArg, branch string, wait, install, noPu
 	if code != exitcode.Success {
 		return code
 	}
+	prep.gated = strings.TrimSpace(mustGit(prep.wt, d, "rev-parse", "HEAD"))
 	logPath, code := gateLandBranch(prep, d)
 	if code != exitcode.Success {
 		return code
@@ -1128,7 +1157,7 @@ func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBra
 		}
 		wt = tmp
 	}
-	prep := landBranchPrep{repo: repo, branch: branch, def: def, wt: wt, dirty: dirty, noPush: noPush}
+	prep := landBranchPrep{repo: repo, branch: branch, def: def, wt: wt, dirty: dirty, noPush: noPush, wtCreated: !found}
 	base := def
 	if dirty && !noPush {
 		_, _ = d.git.run(repo, "fetch", "-q", "origin")
@@ -1281,6 +1310,10 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 		}
 		return exitcode.Success
 	}
+	if prep.gated != "" {
+		prep.opts.pushRef = prep.gated
+		prep.opts.prRef = prep.gated
+	}
 	res := landByRules(prep.repo, prep.def, d, prep.opts)
 	if res.Kind == landRed {
 		out := d.info()
@@ -1292,8 +1325,8 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 		}
 		return 1
 	}
-	if res.Route == "direct" {
-		sha = strings.TrimSpace(mustGit(pushDirOf(prep), d, "rev-parse", "HEAD"))
+	if res.Route == "direct" && res.SHA != "" {
+		sha = res.SHA
 	}
 	if res.Route == "queue" && res.PRState == "" {
 		fmt.Fprintf(d.stderr, "error: PR for %s is open but neither queued nor set to auto-merge\n", prep.branch)
@@ -1314,20 +1347,17 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 	return exitcode.Success
 }
 
-func pushDirOf(prep landBranchPrep) string {
-	if prep.opts.pushDir != "" {
-		return prep.opts.pushDir
-	}
-	return prep.repo
-}
-
 func cleanupLandBranch(prep landBranchPrep, res landResult, local bool, d landDeps) {
 	if prep.dirty && !local {
 		_, _ = d.git.run(prep.repo, "fetch", "-q", "origin")
 	} else if !prep.dirty && res.Route != "direct" {
-		_, _ = d.git.run(prep.repo, "reset", "-q", "--keep", "origin/"+prep.def)
+		resetToRemote(prep.repo, "origin/"+prep.def, prep.gated, d, &res)
 	}
 	if res.Kind == landPR && res.PRState != "merged" {
+		return
+	}
+	if !prep.wtCreated && hasIgnoredFiles(prep.wt, d) {
+		fmt.Fprintf(d.stderr, "worktree %s has ignored files; keeping it\n", prep.wt)
 		return
 	}
 	if _, err := d.git.run(prep.repo, "worktree", "remove", prep.wt); err != nil {
@@ -1346,6 +1376,12 @@ func cleanupLandBranch(prep landBranchPrep, res landResult, local bool, d landDe
 		return
 	}
 	fmt.Fprintf(d.info(), "deleted branch %s\n", prep.branch)
+}
+
+// hasIgnoredFiles reports ignored files in dir, which `git worktree remove` would delete as if clean.
+func hasIgnoredFiles(dir string, d landDeps) bool {
+	out, _ := d.git.run(dir, "ls-files", "--others", "--ignored", "--exclude-standard")
+	return strings.TrimSpace(out) != ""
 }
 
 func printLandBranchResult(prep landBranchPrep, res landResult, sha, logPath string, wait bool, d landDeps) {
@@ -1547,7 +1583,7 @@ func pushDirect(repo, pushDir, remote string, d landDeps, opts landPushOpts, res
 	var err error
 	pushed := opts.pushRef
 	if pushed != "" {
-		out, err = d.git.run(pushDir, "push", remote, pushed+":refs/heads/"+opts.pushTo)
+		out, err = d.git.run(pushDir, "push", "--recurse-submodules=check", remote, pushed+":refs/heads/"+opts.pushTo)
 	} else {
 		out, err = pushOnce(pushDir, remote, opts.pushTo, d)
 		pushed = strings.TrimSpace(mustGit(pushDir, d, "rev-parse", "HEAD"))
@@ -1595,7 +1631,7 @@ func pushOnce(repo, remote, to string, d landDeps) (string, error) {
 	if to == "" {
 		return d.git.run(repo, "push")
 	}
-	return d.git.run(repo, "push", remote, "HEAD:"+to)
+	return d.git.run(repo, "push", "--recurse-submodules=check", remote, "HEAD:"+to)
 }
 
 // upstreamRemote is the remote the default branch tracks, so the rules, the push and

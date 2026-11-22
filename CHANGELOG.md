@@ -6,6 +6,14 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `rgit land` pushes, opens the PR from, and reports the commit it gated, and `--install` skips when HEAD is not that commit, so a commit made after the gate never ships.
+- `rgit land` resets local main after a PR only while HEAD is still the branched commit; a commit made meanwhile is kept with a warning.
+- `rgit land` exits 4 when the PR is neither queued nor set to auto-merge (or its state is unknown) and leaves main as it is.
+- `rgit land` pushes with `--recurse-submodules=check`, so a gitlink to a submodule commit its remote lacks is refused.
+- `rgit land --branch` keeps a pre-existing worktree that holds ignored files instead of deleting them.
+
 ## [3.0.5] - 2026-11-21
 
 ### Changed

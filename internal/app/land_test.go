@@ -559,6 +559,29 @@ func TestLandBranchCleanMainFFPush(t *testing.T) {
 	assertFleetTouch(t, d, dir, "1")
 }
 
+func TestLandBranchKeepsWorktreeWithIgnoredFiles(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, ".gitignore", "*.local\n")
+	gittest.Write(t, wt, "feat.txt", "feat\n")
+	gitOut(t, wt, "add", ".gitignore", "feat.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "feat")
+	gittest.Write(t, wt, "secrets.local", "s\n")
+
+	d := testLandDeps(t)
+	var stdout, stderr strings.Builder
+	d.stdout = &stdout
+	d.stderr = &stderr
+	if code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d); code != exitcode.Success {
+		t.Fatalf("code = %v stderr=%q", code, stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(wt, "secrets.local")); err != nil {
+		t.Errorf("ignored file deleted: %v", err)
+	}
+}
+
 func TestLandBranchLocalLeavesOrigin(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
@@ -1210,6 +1233,68 @@ func TestLandOneNotesUnqueuedPR(t *testing.T) {
 	if len(res.Lines) == 0 || res.Lines[0] != want {
 		t.Errorf("lines = %#v; want first %q", res.Lines, want)
 	}
+	if !res.NotEnqueued || landExit(false, false, false, res.NotEnqueued) != exitcode.LandNotEnqueued {
+		t.Errorf("NotEnqueued = %v", res.NotEnqueued)
+	}
+	if n := strings.TrimSpace(gitOut(t, dir, "rev-list", "--count", "origin/main..HEAD")); n != "1" {
+		t.Errorf("unqueued PR still reset main: %s commits ahead", n)
+	}
+}
+
+func prRouteDeps(t *testing.T, dir, bare string) (landDeps, *fakeGH) {
+	t.Helper()
+	gitOut(t, dir, "remote", "set-url", "origin", "git@github.com:acme/demo.git")
+	gitOut(t, dir, "remote", "set-url", "--push", "origin", bare)
+	d := testLandDeps(t)
+	f := &fakeGH{
+		rules: []string{"pull_request"},
+		url:   "https://github.com/acme/demo/pull/4",
+		prs:   []prInfo{{State: "OPEN", HasAutoMerge: true, URL: "https://github.com/acme/demo/pull/4"}},
+	}
+	d.gh = f
+	return d, f
+}
+
+func TestLandOnePRRouteKeepsSiblingCommit(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	gittest.Write(t, dir, "ahead.txt", "x\n")
+	gittest.Commit(t.Context(), t, dir, "ahead")
+	d, f := prRouteDeps(t, dir, bare)
+	f.onCreate = func() {
+		gittest.Write(t, dir, "sib.txt", "s\n")
+		gittest.Commit(t.Context(), t, dir, "sibling")
+	}
+	res := landOne(dir, d)
+	if res.Kind != landPR {
+		t.Fatalf("kind = %v lines=%v", res.Kind, res.Lines)
+	}
+	if got := strings.TrimSpace(gitOut(t, dir, "log", "-1", "--pretty=%s")); got != "sibling" {
+		t.Errorf("sibling commit dropped, HEAD = %q", got)
+	}
+}
+
+func TestLandOnePushesGatedCommit(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	gittest.Write(t, dir, "ahead.txt", "x\n")
+	gittest.Commit(t.Context(), t, dir, "ahead")
+	gated := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	d := testLandDeps(t)
+	f := &fakeGH{onRules: func() {
+		gittest.Write(t, dir, "bad.txt", "b\n")
+		gittest.Commit(t.Context(), t, dir, "ungated")
+	}}
+	d.gh = f
+	gitOut(t, dir, "remote", "set-url", "origin", "git@github.com:acme/demo.git")
+	gitOut(t, dir, "remote", "set-url", "--push", "origin", bare)
+	res := landOne(dir, d)
+	if res.Kind != landPushed || res.SHA != gated {
+		t.Fatalf("kind = %v sha = %q want %q lines=%v", res.Kind, res.SHA, gated, res.Lines)
+	}
+	if got := strings.TrimSpace(gitOut(t, bare, "rev-parse", "main")); got != gated {
+		t.Errorf("origin main = %s, want gated %s", got, gated)
+	}
 }
 
 func TestLandInstallSkipsDirtyTracked(t *testing.T) {
@@ -1688,12 +1773,22 @@ type fakeGH struct {
 	run    workflowRun
 	merges []string
 	prErr  error
+	// onRules and onCreate run mid-land, where a concurrent session could commit.
+	onRules, onCreate func()
 }
 
-func (f *fakeGH) branchRuleTypes(string, string) ([]string, error) { return f.rules, nil }
-func (f *fakeGH) squashMergeAllowed(string) (bool, error)          { return f.squash, nil }
-func (f *fakeGH) mergeCommitAllowed(string) (bool, error)          { return f.merge, nil }
+func (f *fakeGH) branchRuleTypes(string, string) ([]string, error) {
+	if f.onRules != nil {
+		f.onRules()
+	}
+	return f.rules, nil
+}
+func (f *fakeGH) squashMergeAllowed(string) (bool, error) { return f.squash, nil }
+func (f *fakeGH) mergeCommitAllowed(string) (bool, error) { return f.merge, nil }
 func (f *fakeGH) createPR(string, string, string) (string, error) {
+	if f.onCreate != nil {
+		f.onCreate()
+	}
 	if f.err != nil {
 		return "", f.err
 	}
