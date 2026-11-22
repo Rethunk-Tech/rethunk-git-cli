@@ -2,6 +2,8 @@ package app
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -9,6 +11,7 @@ import (
 	"github.com/go-quicktest/qt"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/prereq"
 )
 
 func TestRun_DoctorHelpAndUsage(t *testing.T) {
@@ -116,5 +119,28 @@ func TestRunEnvironmentChecksNamesLandTools(t *testing.T) {
 		if !slices.Contains(names, want) {
 			t.Errorf("checks %v lack %q", names, want)
 		}
+	}
+}
+
+// TestWithGHAuth pins that doctor says whether gh holds a login, without changing the check's OK.
+func TestWithGHAuth(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		name, script, want string
+	}{
+		{"logged in", "#!/bin/sh\nexit 0\n", "(authenticated)"},
+		{"logged out", "#!/bin/sh\nexit 1\n", "(not authenticated"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			gh := filepath.Join(t.TempDir(), "gh")
+			if err := os.WriteFile(gh, []byte(c.script), 0o700); err != nil { //nolint:gosec // test shim must be executable
+				t.Fatal(err)
+			}
+			got := withGHAuth(t.Context(), prereq.Check{Name: "gh", OK: true, Detail: gh})
+			if !got.OK || !strings.Contains(got.Detail, c.want) {
+				t.Errorf("check = %+v; want OK with %q", got, c.want)
+			}
+		})
 	}
 }

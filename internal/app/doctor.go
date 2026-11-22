@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"slices"
 	"strings"
 
@@ -216,6 +217,22 @@ func doctorStatus(c prereq.Check) string {
 	return "MISSING"
 }
 
+// withGHAuth appends whether gh holds a login: land's rule lookup fails without one and then
+// pushes direct, so a gh on PATH alone says little. The check stays OK either way. `gh auth
+// token` answers offline; its output is the secret and is discarded.
+func withGHAuth(ctx context.Context, c prereq.Check) prereq.Check {
+	if !c.OK {
+		return c
+	}
+	probe := exec.CommandContext(ctx, c.Detail, "auth", "token") //nolint:gosec // c.Detail is the path exec.LookPath returned
+	if err := probe.Run(); err != nil {
+		c.Detail += " (not authenticated -- rgit land cannot read branch rules; run gh auth login)"
+		return c
+	}
+	c.Detail += " (authenticated)"
+	return c
+}
+
 // runEnvironmentChecks probes what rgit needs to run at all, not to build
 // it from source. Only git is fatal here (AGENTS.md's delegation boundary:
 // rgit shells out to git for everything git already does), unlike
@@ -245,7 +262,7 @@ func runEnvironmentChecks(ctx context.Context) (checks []prereq.Check, fatal err
 
 	checks = append(checks,
 		prereq.LookPath("gate", "gate", "optional -- rgit land runs it on HEAD before pushing (--no-gate skips it)"),
-		prereq.LookPath("gh", "gh", "optional -- rgit land reads branch rules and opens PRs with it"))
+		withGHAuth(ctx, prereq.LookPath("gh", "gh", "optional -- rgit land reads branch rules and opens PRs with it")))
 
 	ts := prereq.LookPath("tree-sitter CLI", "tree-sitter", "optional -- only needed to rebuild with SQL support, see docs/INSTALL.md § SQL support")
 	checks = append(checks, ts)
