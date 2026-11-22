@@ -67,7 +67,11 @@ type UnresolvedArgError struct {
 }
 
 func (e *UnresolvedArgError) Error() string {
-	return fmt.Sprintf("cannot classify %q: rules considered: %s", e.Arg, strings.Join(e.Tried, "; "))
+	msg := fmt.Sprintf("cannot classify %q: rules considered: %s", e.Arg, strings.Join(e.Tried, "; "))
+	if strings.ContainsAny(e.Arg, "*?[") {
+		msg += "; the wildcard matches no tracked path (':(glob)PATTERN' or --file take a pattern as is)"
+	}
+	return msg
 }
 
 // ClassifyArgs applies docs/USAGE.md's six-rule precedence table to args,
@@ -141,6 +145,17 @@ func classifyOne(ctx context.Context, a string, allowRevisions bool, paths *GitP
 	}
 	if exists {
 		return Classification{Kind: KindPathspec, Pathspec: a}, nil
+	}
+	// A wildcard names no single path, but git commit --only takes it as one pathspec,
+	// so it classifies as a pathspec when it selects something tracked.
+	if strings.ContainsAny(a, "*?[") {
+		matched, err := paths.Repo.LsFilesTracked(ctx, "--", PrefixPath(paths.Prefix, a))
+		if err != nil {
+			return Classification{}, err
+		}
+		if len(matched) > 0 {
+			return Classification{Kind: KindPathspec, Pathspec: a}, nil
+		}
 	}
 	tried = append(tried, "existing path (worktree, index, or HEAD)")
 

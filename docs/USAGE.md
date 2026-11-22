@@ -62,7 +62,7 @@ First match wins:
 | 1 | After `--` | Pathspec, always |
 | 2 | Starts with `:` | Git pathspec magic, verbatim |
 | 3 | *(`diff` only)* `git rev-parse --verify` | Revision or `rev:path` |
-| 4 | Path in worktree, index, or HEAD | Pathspec |
+| 4 | Path in worktree, index, or HEAD, or a wildcard matching a tracked path | Pathspec |
 | 5 | Splits at some `:` into existing path + name, last colon first | Symbol anchor |
 | 6 | None | Error listing each try |
 

@@ -269,3 +269,17 @@ func TestPrefixPath(t *testing.T) {
 		}
 	}
 }
+
+func TestClassifyArgs_GlobMatchingTrackedPathIsPathspec(t *testing.T) {
+	t.Parallel()
+	checker, revs, ctx := newClassifyRepo(t)
+
+	got, err := ClassifyArgs(ctx, []string{"*.go"}, false, checker, revs)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.DeepEquals(got, []Classification{{Kind: KindPathspec, Pathspec: "*.go"}}))
+
+	_, err = ClassifyArgs(ctx, []string{"*.rs"}, false, checker, revs)
+	var uerr *UnresolvedArgError
+	qt.Assert(t, qt.IsTrue(errors.As(err, &uerr)))
+	qt.Assert(t, qt.StringContains(err.Error(), ":(glob)"))
+}
