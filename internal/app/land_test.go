@@ -2870,3 +2870,29 @@ func TestLandUnqueuedPRExitsNotEnqueued(t *testing.T) {
 		})
 	}
 }
+
+// TestLandWaitSkipsUnqueuedPR pins that --wait does not poll a PR that is neither queued nor set to auto-merge.
+func TestLandWaitSkipsUnqueuedPR(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	gitOut(t, dir, "remote", "set-url", "origin", "git@github.com:acme/demo.git")
+	gitOut(t, dir, "remote", "set-url", "--push", "origin", bare)
+	gittest.Write(t, dir, "ahead.txt", "x\n")
+	gittest.Commit(t.Context(), t, dir, "ahead")
+	d := testLandDeps(t)
+	start := d.clock.Now()
+	d.gh = &fakeGH{
+		rules:  []string{"pull_request"},
+		url:    "https://github.com/acme/demo/pull/4",
+		number: 4,
+		prs:    []prInfo{{State: "OPEN", URL: "https://github.com/acme/demo/pull/4"}},
+	}
+	var stdout, stderr strings.Builder
+	d.stdout, d.stderr = &stdout, &stderr
+	if code := runLandWith(t.Context(), dir, []string{"--wait"}, d); code != exitcode.LandNotEnqueued {
+		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	if waited := d.clock.Now().Sub(start); waited != 0 {
+		t.Errorf("--wait polled an unqueued PR for %v", waited)
+	}
+}

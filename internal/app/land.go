@@ -503,7 +503,8 @@ func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, 
 	}
 
 	for i, res := range results {
-		if res.Kind != landPR || res.PRState == "merged" || res.URL == "" {
+		// An unqueued PR never merges by itself, so polling it only burns the cap.
+		if res.Kind != landPR || res.PRState == "merged" || res.PRState == "" || res.URL == "" {
 			continue
 		}
 		job := landWatchJob{
