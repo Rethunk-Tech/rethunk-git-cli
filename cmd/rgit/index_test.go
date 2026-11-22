@@ -524,12 +524,15 @@ func TestStage_PathspecGlobAndExcludePassThrough(t *testing.T) {
 	dir, repo := gittest.New(t.Context(), t)
 	gittest.Write(t, dir, "a.txt", "a\n")
 	gittest.Write(t, dir, "docs/c.txt", "c\n")
+	gittest.Commit(t.Context(), t, dir, "chore: initial")
+	gittest.Write(t, dir, "a.txt", "a2\n")
+	gittest.Write(t, dir, "docs/c.txt", "c2\n")
 
 	mustStage(t, repo, dir, synth.PathTarget(":(glob)**/*.txt"), synth.PathTarget(":(exclude)docs/*"))
 
 	status := gittest.Git(t.Context(), t, dir, "status", "--porcelain")
-	qt.Assert(t, qt.StringContains(status, "A  a.txt"))
-	qt.Assert(t, qt.Not(qt.StringContains(status, "c.txt")))
+	qt.Assert(t, qt.StringContains(status, "M  a.txt"))
+	qt.Assert(t, qt.Not(qt.StringContains(status, "M  docs/c.txt")))
 }
 
 func TestStage_ModeOnlyChangeStages(t *testing.T) {

@@ -1192,14 +1192,23 @@ func opLineCounts(fp *filePlan, op editOp) (added, deleted int) {
 	return added, deleted
 }
 
-// isLiteralFile is true for a plain path naming one existing non-directory: the only pathspec that
+// isLiteralFile is true for a plain path naming one existing non-directory (or submodule): the only pathspec that
 // may add an untracked file, as `git commit --only` takes untracked files only when named.
 func isLiteralFile(root, spec string) bool {
 	if strings.HasPrefix(spec, ":") || strings.ContainsAny(spec, "*?[\\") {
 		return false
 	}
-	fi, err := os.Lstat(filepath.Join(root, spec))
-	return err == nil && !fi.IsDir()
+	p := filepath.Join(root, spec)
+	fi, err := os.Lstat(p)
+	if err != nil {
+		return false
+	}
+	if !fi.IsDir() {
+		return true
+	}
+	// A submodule root is one gitlink, not a directory of files.
+	_, err = os.Lstat(filepath.Join(p, ".git"))
+	return err == nil
 }
 
 // pathFile is one file a pathspec stages, with its own line counts.
