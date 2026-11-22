@@ -11,8 +11,8 @@ Authoritative exit codes and machine-readable output. Flags:
 | 1 | `diff` only, under `--exit-code`/`--quiet`: something is committable. `land` (plain and `--sha`): a repo is red, including a red gate |
 | 2 | `land --branch`: the rebase conflicted |
 | 3 | Anchor unresolvable — missing in worktree and HEAD; candidates listed. `land --branch`: the gate stayed red after a `--failed` re-run |
-| 4 | Ambiguous anchor — candidates listed. `land --branch --push`: a merge-queue PR was not enqueued |
-| 5 | One path named both as a path and as a symbol anchor. `land`: `--install` (or a catch-up install) failed |
+| 4 | Ambiguous anchor — candidates listed. `land` (plain, `--sha`, `--branch --push`): a PR is neither queued nor set to auto-merge, or its state is unknown |
+| 5 | One path named both as a path and as a symbol anchor. `land`: `--install` (or a catch-up install) failed; also `land --branch --install` |
 | 6 | Normalized LSP ↔ tree-sitter extent mismatch (`commit` only) |
 | 7 | Gitignored and untracked |
 | 9 | Unsupported language for a symbol anchor |

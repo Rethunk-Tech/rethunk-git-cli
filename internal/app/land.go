@@ -19,16 +19,17 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
 )
 
-const landUsageLine = "usage: rgit land [--repos DIR...] [--sha SHA] [--no-gate] [--wait] [--json] [--install] | rgit land --branch BR [--repos DIR] [--push] [--install]"
+const landUsageLine = "usage: rgit land [--repos DIR...] [--sha SHA] [--no-gate] [--wait] [--json] [--install] | rgit land --branch BR [--repos DIR] [--push] [--wait] [--json] [--install]"
 
 const landHelp = landUsageLine + `
 
 Gate, then push each repo's ahead commits the way its GitHub branch rules require: a
 direct push when the default branch is open, or a timestamped land/ branch,
 PR, and merge (or merge-queue) request when it is not. One summary line per
-repo; exit 1 if any repo is red, 14 if a repo was skipped because it needs action
-(dirty tracked files, wrong branch, behind origin, no upstream, not a repo; see
-docs/CODES.md). Each repo's full gate (gate in the repo
+repo; exit 1 if any repo is red, 4 if a PR is neither queued nor set to auto-merge,
+5 if an install or catch-up install failed, 14 if a repo was skipped because it
+needs action (dirty tracked files, wrong branch, behind origin, no upstream, not
+a repo; see docs/CODES.md). Each repo's full gate (gate in the repo
 directory) runs on HEAD first; a red gate pushes nothing for that repo, and
 its line names the failing gates and the log path. If HEAD or the tree
 changes during the gate, nothing is pushed.
