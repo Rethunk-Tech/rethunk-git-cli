@@ -835,7 +835,7 @@ func skipReason(lines []string) string {
 }
 
 func isUmbrella(r string) bool {
-	_, err := os.Stat(filepath.Join(r, ".gitmodules")) //nolint:gosec // r is a land repo path; this only checks the well-known git file exists
+	_, err := os.Stat(filepath.Join(r, ".gitmodules")) //nolint:gosec,nolintlint // r is a land repo path; gosec's G703 taint pass flags this only on some runs
 	return err == nil
 }
 
