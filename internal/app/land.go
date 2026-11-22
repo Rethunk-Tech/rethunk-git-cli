@@ -292,8 +292,10 @@ type landDeps struct {
 	sha       string
 	noGate    bool
 	asJSON    bool
-	stdout    io.Writer
-	stderr    io.Writer
+	// fetched is set when catchUp has just fetched origin for the repo landOne is about to read.
+	fetched bool
+	stdout  io.Writer
+	stderr  io.Writer
 	// branchJSON receives --branch's result line when --json is set.
 	branchJSON *landBranchJSON
 }
@@ -474,15 +476,18 @@ func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, 
 	var results []landResult
 	red, subRed, caughtUpFail, blocked, notEnqueued := false, false, false, false, false
 	for _, r := range ordered {
-		if d.sha == "" && catchUp(ctx, r, d) {
-			caughtUpFail = true
+		od := d
+		if d.sha == "" {
+			failed, fetched := catchUp(ctx, r, d)
+			caughtUpFail = caughtUpFail || failed
+			od.fetched = fetched
 		}
 		if subRed && isUmbrella(r) {
 			// An umbrella pushed past a red submodule can point at a commit that never reached its remote.
 			results = append(results, landResult{Repo: r, Kind: landSkipped, Lines: []string{r + ": skipped (a submodule repo is red)"}})
 			continue
 		}
-		res := landOne(r, d)
+		res := landOne(r, od)
 		results = append(results, res)
 		blocked = blocked || skipNeedsAction(res)
 		notEnqueued = notEnqueued || res.NotEnqueued
@@ -562,29 +567,29 @@ var prNumberInSubject = regexp.MustCompile(`#(\d+)`)
 
 // catchUp fast-forwards a clean default branch to a remote that gained commits since the last land (a rebase-merged PR has no #N),
 // then installs, so a PR that an earlier land opened and bosun saw merge is picked up before new work.
-// It reports whether the install failed.
-func catchUp(ctx context.Context, r string, d landDeps) bool {
+// It reports whether the install failed and whether it fetched origin.
+func catchUp(ctx context.Context, r string, d landDeps) (installFailed, fetched bool) {
 	top, err := d.git.run(r, "rev-parse", "--show-toplevel")
 	if err != nil {
-		return false
+		return false, false
 	}
 	repo := strings.TrimSpace(top)
 	def := defaultBranch(repo, d)
 	if strings.TrimSpace(mustGit(repo, d, "rev-parse", "--abbrev-ref", "HEAD")) != def || dirtyTracked(repo, d) {
-		return false
+		return false, false
 	}
 	if _, err := d.git.run(repo, "fetch", "-q", "origin"); err != nil {
-		return false
+		return false, false
 	}
 	if n, err := d.git.run(repo, "rev-list", "--count", "origin/"+def+"..HEAD"); err != nil || strings.TrimSpace(n) != "0" {
-		return false
+		return false, true
 	}
 	subjects, err := d.git.run(repo, "log", "--format=%s", "HEAD..origin/"+def)
 	if err != nil {
-		return false
+		return false, true
 	}
 	if strings.TrimSpace(subjects) == "" {
-		return false
+		return false, true
 	}
 	pr := ""
 	for line := range strings.SplitSeq(subjects, "\n") {
@@ -597,7 +602,7 @@ func catchUp(ctx context.Context, r string, d landDeps) bool {
 	fastForwardDefaultAfterMerge(landWatchJob{Repo: repo, Default: def}, d)
 	after := strings.TrimSpace(mustGit(repo, d, "rev-parse", "HEAD"))
 	if after == before {
-		return false
+		return false, true
 	}
 	short := strings.TrimSpace(mustGit(repo, d, "rev-parse", "--short", "HEAD"))
 	merged := ""
@@ -605,7 +610,7 @@ func catchUp(ctx context.Context, r string, d landDeps) bool {
 		merged = " (merged PR #" + pr + ")"
 	}
 	fmt.Fprintf(d.info(), "%s: caught up to %s%s\n", repo, short, merged)
-	return installOne(ctx, repo, d)
+	return installOne(ctx, repo, d), true
 }
 
 func installPushedRepos(ctx context.Context, results []landResult, d landDeps) bool {
@@ -823,7 +828,9 @@ func landOne(r string, d landDeps) landResult {
 		res.Lines = []string{fmt.Sprintf("%s: skipped (on %s, not %s)", repo, cur, def)}
 		return res
 	}
-	_, _ = d.git.run(repo, "fetch", "-q")
+	if !(d.fetched && upstreamRemote(repo, def, d) == "origin") {
+		_, _ = d.git.run(repo, "fetch", "-q")
+	}
 	aheadOut, err := d.git.run(repo, "rev-list", "--count", "@{u}..HEAD")
 	if err != nil {
 		res.Kind = landSkipped

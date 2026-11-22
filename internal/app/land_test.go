@@ -2409,7 +2409,7 @@ func TestCatchUpFastForwardsAndInstalls(t *testing.T) {
 	d := testLandDeps(t)
 	var stdout strings.Builder
 	d.stdout = &stdout
-	if failed := catchUp(t.Context(), dir, d); failed {
+	if failed, _ := catchUp(t.Context(), dir, d); failed {
 		t.Fatalf("install failed: %q", stdout.String())
 	}
 	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != tip {
@@ -2434,7 +2434,7 @@ func TestCatchUpLeavesDivergedAndUnrelated(t *testing.T) {
 	d := testLandDeps(t)
 	var stdout, stderr strings.Builder
 	d.stdout, d.stderr = &stdout, &stderr
-	catchUp(t.Context(), dir, d)
+	_, _ = catchUp(t.Context(), dir, d)
 	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != before {
 		t.Errorf("diverged HEAD moved to %s", got)
 	}
@@ -2450,7 +2450,7 @@ func TestCatchUpRebaseMergeWithoutPRNumber(t *testing.T) {
 	d := testLandDeps(t)
 	var stdout strings.Builder
 	d.stdout = &stdout
-	catchUp(t.Context(), dir, d)
+	_, _ = catchUp(t.Context(), dir, d)
 	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != tip {
 		t.Errorf("HEAD = %s; want %s", got, tip)
 	}
@@ -2468,7 +2468,7 @@ func TestCatchUpLeavesDirtyClone(t *testing.T) {
 	d := testLandDeps(t)
 	var stdout strings.Builder
 	d.stdout = &stdout
-	catchUp(t.Context(), dir, d)
+	_, _ = catchUp(t.Context(), dir, d)
 	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != before || stdout.Len() != 0 {
 		t.Errorf("dirty clone caught up: HEAD %s out %q", got, stdout.String())
 	}
@@ -2888,5 +2888,37 @@ func TestLandBranchJSONOnFailure(t *testing.T) {
 	}
 	if code != exitcode.LandGateRed || got.Code != int(code) || got.Branch != "feat" || got.Log == "" {
 		t.Errorf("code = %v object = %+v", code, got)
+	}
+}
+
+// countFetch counts the fetches a land makes.
+type countFetch struct {
+	gitRunner
+	n *int
+}
+
+func (c countFetch) run(dir string, args ...string) (string, error) {
+	if len(args) > 0 && args[0] == "fetch" {
+		*c.n++
+	}
+	return c.gitRunner.run(dir, args...)
+}
+
+// TestLandFetchesOncePerRepo pins that landOne reuses the fetch catchUp just made.
+func TestLandFetchesOncePerRepo(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	gittest.Write(t, dir, "ahead.txt", "x\n")
+	gittest.Commit(t.Context(), t, dir, "ahead")
+	d := testLandDeps(t)
+	fetches := 0
+	d.git = countFetch{d.git, &fetches}
+	var stdout, stderr strings.Builder
+	d.stdout, d.stderr = &stdout, &stderr
+	if code := runLandWith(t.Context(), dir, nil, d); code != exitcode.Success {
+		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	if fetches != 1 {
+		t.Errorf("fetches = %d; want 1", fetches)
 	}
 }
