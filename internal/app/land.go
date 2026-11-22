@@ -91,7 +91,9 @@ type landClock interface {
 }
 
 // realClock's Sleep returns early once ctx is cancelled.
-type realClock struct{ ctx context.Context }
+type realClock struct {
+	ctx context.Context //nolint:containedctx // per-run dependency bound to the run's signal context
+}
 
 func (realClock) Now() time.Time { return time.Now().UTC() }
 func (c realClock) Sleep(d time.Duration) {
@@ -136,7 +138,9 @@ type gitRunner interface {
 }
 
 // execGit runs git under ctx; a nil ctx never cancels.
-type execGit struct{ ctx context.Context }
+type execGit struct {
+	ctx context.Context //nolint:containedctx // per-run dependency bound to the run's signal context
+}
 
 func (g execGit) run(dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(orBackground(g.ctx), "git", args...) //nolint:gosec // git argv is constructed by rgit, never a shell string
@@ -282,7 +286,7 @@ func (g *ghCLI) latestWorkflowRun(owner, repo, branch, sha string) (workflowRun,
 
 type landDeps struct {
 	// ctx is cancelled by SIGINT/SIGTERM; the poll loops stop on it. Nil never cancels.
-	ctx       context.Context
+	ctx       context.Context //nolint:containedctx // per-run dependency bag, bound to the run's signal context
 	git       gitRunner
 	gh        gitHub
 	clock     landClock
@@ -829,7 +833,7 @@ func landOne(r string, d landDeps) landResult {
 		res.Lines = []string{fmt.Sprintf("%s: skipped (on %s, not %s)", repo, cur, def)}
 		return res
 	}
-	if !(d.fetched && upstreamRemote(repo, def, d) == "origin") {
+	if !d.fetched || upstreamRemote(repo, def, d) != "origin" {
 		_, _ = d.git.run(repo, "fetch", "-q")
 	}
 	aheadOut, err := d.git.run(repo, "rev-list", "--count", "@{u}..HEAD")
