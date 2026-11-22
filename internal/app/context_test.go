@@ -3,6 +3,7 @@
 package app
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"net"
 	"os"
@@ -150,6 +151,47 @@ func TestRun_ContextJSONMatchesTextStream(t *testing.T) {
 	}
 	qt.Assert(t, qt.IsTrue(textF > 0))
 	qt.Assert(t, qt.Equals(jsonF, textF))
+}
+
+// TestRun_ContextTextCommitHashIs12Chars pins that text C rows carry the
+// 12-character abbreviation while --json still names the full object id.
+func TestRun_ContextTextCommitHashIs12Chars(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+
+	text, _, code := runApp(t, "-C", dir, "context")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+
+	jsonOut, _, code := runApp(t, "-C", dir, "context", "--json")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+
+	var top map[string]json.RawMessage
+	qt.Assert(t, qt.IsNil(json.Unmarshal([]byte(jsonOut), &top)))
+	var records []map[string]string
+	qt.Assert(t, qt.IsNil(json.Unmarshal(top["records"], &records)))
+
+	textC, jsonC := 0, 0
+	for _, line := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
+		fields := strings.SplitN(line, "\t", 3)
+		if fields[0] != "C" {
+			continue
+		}
+		textC++
+		qt.Assert(t, qt.Equals(len(fields[1]), 12), qt.Commentf("text C hash %q", fields[1]))
+		_, err := hex.DecodeString(fields[1])
+		qt.Assert(t, qt.IsNil(err))
+	}
+	for _, rec := range records {
+		if rec["type"] != "C" {
+			continue
+		}
+		jsonC++
+		qt.Assert(t, qt.Equals(len(rec["hash"]), 40), qt.Commentf("json C hash %q", rec["hash"]))
+		_, err := hex.DecodeString(rec["hash"])
+		qt.Assert(t, qt.IsNil(err))
+	}
+	qt.Assert(t, qt.IsTrue(textC > 0))
+	qt.Assert(t, qt.Equals(jsonC, textC))
 }
 
 // TestRun_ContextEmptyRepoEmitsNothing pins the empty case: a fresh

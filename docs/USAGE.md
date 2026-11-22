@@ -243,7 +243,7 @@ F<TAB>auth.go<TAB>ValidateToken<TAB>MOD<TAB>12<TAB>3
 F<TAB>config.ini<TAB><TAB>UNTRACKED<TAB>4<TAB>0
 T<TAB>auth.go<TAB>both
 T<TAB>config.ini<TAB>untracked
-C<TAB>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2<TAB>fix(auth): reject expired tokens
+C<TAB>a1b2c3d4e5f6<TAB>fix(auth): reject expired tokens
 ```
 
 One-call orientation. It never dials a language server, so it emits no
@@ -412,7 +412,7 @@ branch rules allow it, otherwise a timestamped `land/` branch, PR, and
 merge or merge-queue request. If the `gh` rules lookup fails, the last successful lookup (cached under `~/.cache/land-rules`) is used, with a warning. Dirty or off-default repos are skipped (exit 14); untracked, non-ignored files make the repo red, since the gate would run with them; a repo with nothing to push is skipped with exit 0.
 Before anything else, each repo on a clean default branch that is behind its
 remote and not ahead is fast-forwarded and `make install`ed, printing
-`DIR: caught up to SHA`, plus ` (merged PR #N)` when a new commit subject
+`DIR: caught up to SHA`, plus `(merged PR #N)` when a new commit subject
 carries `#N` (a rebase-merged PR has none); a diverged or dirty branch is
 left alone.
 `--wait` polls each open PR until it merges (or the cap); otherwise bosun

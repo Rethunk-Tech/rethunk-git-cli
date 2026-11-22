@@ -12,6 +12,7 @@ Notable changes to `rgit`. The format follows
 
 ### Changed
 
+- `rgit context` text C rows print a 12-character commit hash; `--json` still carries the full 40.
 - `rgit land` names the dirty tracked files in its skip line.
 - `rgit land --branch --json` always prints one object with the exit code, also on failure.
 - `rgit commit` and `rgit diff` take a wildcard that matches tracked paths (`'src/*.go'`) as a pathspec; one that matches nothing points at `:(glob)`.
@@ -139,7 +140,7 @@ Notable changes to `rgit`. The format follows
 
 ### Removed
 
-- **Breaking:** `rgit commit --push` and its exit 8. The flag now exits 129 with `--push was removed: run `rgit land` after committing`; push with `rgit land`, which gates first.
+- **Breaking:** `rgit commit --push` and its exit 8. The flag now exits 129 with `--push was removed: run`rgit land`after committing`; push with `rgit land`, which gates first.
 - `rgit show --with-header`, the deprecated alias for `--porcelain`. Use `--porcelain`. See [`docs/USAGE.md`](docs/USAGE.md#show).
 
 ## [2.4.1] - 2026-11-09

@@ -322,8 +322,8 @@ F<TAB>auth.go<TAB>ValidateToken<TAB>MOD<TAB>12<TAB>3
 F<TAB>config.ini<TAB><TAB>UNTRACKED<TAB>4<TAB>0
 T<TAB>auth.go<TAB>both
 T<TAB>config.ini<TAB>untracked
-C<TAB>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2<TAB>fix(auth): reject expired tokens
-C<TAB>9e8f7d6c5b4a9e8f7d6c5b4a9e8f7d6c5b4a9e8f<TAB>feat(auth): add ValidateToken
+C<TAB>a1b2c3d4e5f6<TAB>fix(auth): reject expired tokens
+C<TAB>9e8f7d6c5b4a<TAB>feat(auth): add ValidateToken
 X<TAB>TRUNCATED<TAB>3
 ```
 
@@ -337,7 +337,7 @@ X<TAB>TRUNCATED<TAB>3
 | `W` | `warning`, `TEXT` | Non-fatal diff warning without the `[warning]` prefix |
 | `F` | `FILE`, `SYMBOL`, `STATUS`, `ADDED`, `DELETED` | One `rgit diff --porcelain` row |
 | `T` | `FILE`, `WHERE` | Per `F` file, in order: `staged`, `unstaged`, `both`, `untracked` |
-| `C` | `HASH`, `SUBJECT` | Recent commits, newest first, last 20 |
+| `C` | `HASH`, `SUBJECT` | Recent commits, newest first, last 20. Text HASH is 12 hex characters; `--json` carries the full 40 |
 | `X` | `TRUNCATED`, `COUNT` | Last when present: rows withheld for the 16 KiB budget |
 
 Order: `B` or `H`, then `S`, then `W`, then `F`, then `T`, then `C`, then

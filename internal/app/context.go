@@ -80,6 +80,7 @@ cross-check.
 
   C<TAB>HASH<TAB>SUBJECT
       One per recent commit, newest first, bounded to the last 20.
+      HASH is 12 hex characters; --json carries the full 40.
 
   X<TAB>TRUNCATED<TAB>COUNT
       At most one, always last: this many records were withheld because
@@ -100,6 +101,10 @@ Full reference: docs/USAGE.md
 // input bound, not a truncation applied after the fact -- git never
 // produces more than this many commits to begin with.
 const contextRecentCommitLimit = 20
+
+// contextCommitHashLen is the text-stream abbreviation for a C-row HASH.
+// --json still carries git's full 40-character object id.
+const contextCommitHashLen = 12
 
 // contextByteBudget is the hard ceiling on rgit context's text stream.
 // --json encodes the records that ceiling kept; it does not re-measure the
@@ -228,8 +233,31 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 		}
 		return exitcode.Success
 	}
-	fmt.Fprint(stdout, stream)
+	fmt.Fprint(stdout, abbreviateContextCommitHashes(stream))
 	return exitcode.Success
+}
+
+// abbreviateContextCommitHashes shortens each C-row HASH to
+// contextCommitHashLen after the byte cap, so --json (which encodes the
+// uncapped-against-JSON stream) still carries the full object id and the
+// two forms list the same records.
+func abbreviateContextCommitHashes(stream string) string {
+	if stream == "" {
+		return stream
+	}
+	var b strings.Builder
+	b.Grow(len(stream))
+	for line := range strings.SplitSeq(strings.TrimSuffix(stream, "\n"), "\n") {
+		if rest, ok := strings.CutPrefix(line, "C\t"); ok {
+			hash, subject, found := strings.Cut(rest, "\t")
+			if found && len(hash) >= contextCommitHashLen {
+				line = "C\t" + hash[:contextCommitHashLen] + "\t" + subject
+			}
+		}
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	return b.String()
 }
 
 // assembleContextRecords orders the stream.
