@@ -6,6 +6,26 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `rgit doctor` reports whether `gh` is authenticated.
+
+### Changed
+
+- `rgit land` names the dirty tracked files in its skip line.
+- `rgit land --branch --json` always prints one object with the exit code, also on failure.
+- `rgit commit` and `rgit diff` take a wildcard that matches tracked paths (`'src/*.go'`) as a pathspec; one that matches nothing points at `:(glob)`.
+
+### Fixed
+
+- `rgit land` stops its gate, git, gh and `--wait` polling on SIGINT/SIGTERM.
+- `rgit land --branch --push` fetches and fast-forwards a clean main first, so a stale main no longer reads as an origin move.
+- `rgit land` exits 4 for an unqueued PR under `--sha` and `--branch --push`, and `--branch` leaves local main alone.
+- `rgit land --wait` no longer polls a PR that is not enqueued for 45 minutes.
+- `rgit land` fetches each repo once instead of twice.
+- `rgit commit` explains an ambiguous anchor it cannot qualify (shared declaration, shifted ordinal) and says to commit the whole file.
+- `rgit land` no longer writes the fleet-touch inbox nothing reads.
+
 ## [3.0.7] - 2026-11-21
 
 ### Fixed
