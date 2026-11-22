@@ -18,6 +18,7 @@ Notable changes to `rgit`. The format follows
 
 ### Fixed
 
+- `rgit land` cancelled by SIGINT or SIGTERM exits 130 and names the step it stopped at.
 - `rgit land` stops its gate, git, gh and `--wait` polling on SIGINT/SIGTERM.
 - `rgit land --branch --push` fetches and fast-forwards a clean main first, so a stale main no longer reads as an origin move.
 - `rgit land` exits 4 for an unqueued PR under `--sha` and `--branch --push`, and `--branch` leaves local main alone.

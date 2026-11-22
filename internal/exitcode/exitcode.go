@@ -77,4 +77,7 @@ const (
 	GitFailure Code = 128
 
 	InvalidUsage Code = 129
+
+	// Interrupted is land's SIGINT/SIGTERM; the step itself did not fail.
+	Interrupted Code = 130
 )

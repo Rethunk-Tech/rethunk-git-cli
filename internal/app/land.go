@@ -139,10 +139,12 @@ type gitRunner interface {
 
 // execGit runs git under ctx; a nil ctx never cancels.
 type execGit struct {
-	ctx context.Context //nolint:containedctx // per-run dependency bound to the run's signal context
+	ctx  context.Context //nolint:containedctx // per-run dependency bound to the run's signal context
+	step *string
 }
 
 func (g execGit) run(dir string, args ...string) (string, error) {
+	setLandStep(g.step, "git")
 	cmd := exec.CommandContext(orBackground(g.ctx), "git", args...) //nolint:gosec // git argv is constructed by rgit, never a shell string
 	if dir != "" {
 		cmd.Dir = dir
@@ -150,6 +152,12 @@ func (g execGit) run(dir string, args ...string) (string, error) {
 	cmd.Stdin = nil
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+func setLandStep(step *string, name string) {
+	if step != nil {
+		*step = name
+	}
 }
 
 func orBackground(ctx context.Context) context.Context {
@@ -192,8 +200,11 @@ type ghCLI struct {
 	runFn func(dir string, args ...string) (string, error)
 }
 
-func newGHCLI(ctx context.Context) *ghCLI {
-	return &ghCLI{runFn: func(dir string, args ...string) (string, error) { return runGH(ctx, dir, args...) }}
+func newGHCLI(ctx context.Context, step *string) *ghCLI {
+	return &ghCLI{runFn: func(dir string, args ...string) (string, error) {
+		setLandStep(step, "gh")
+		return runGH(ctx, dir, args...)
+	}}
 }
 
 func runGH(ctx context.Context, dir string, args ...string) (string, error) {
@@ -286,7 +297,9 @@ func (g *ghCLI) latestWorkflowRun(owner, repo, branch, sha string) (workflowRun,
 
 type landDeps struct {
 	// ctx is cancelled by SIGINT/SIGTERM; the poll loops stop on it. Nil never cancels.
-	ctx       context.Context //nolint:containedctx // per-run dependency bag, bound to the run's signal context
+	ctx context.Context //nolint:containedctx // per-run dependency bag, bound to the run's signal context
+	// step is the named land step running when a signal arrives (gate, git, gh, wait).
+	step      *string
 	git       gitRunner
 	gh        gitHub
 	clock     landClock
@@ -324,12 +337,15 @@ type landBranchJSON struct {
 }
 
 func defaultLandDeps(ctx context.Context, stdout, stderr io.Writer) landDeps {
+	step := new(string)
 	return landDeps{
 		ctx:   ctx,
-		git:   execGit{ctx},
-		gh:    newGHCLI(ctx),
+		step:  step,
+		git:   execGit{ctx: ctx, step: step},
+		gh:    newGHCLI(ctx, step),
 		clock: realClock{ctx},
 		gate: func(dir string, failedOnly, pushFollows bool) (string, error) {
+			setLandStep(step, "gate")
 			return runGateCmd(ctx, dir, failedOnly, pushFollows)
 		},
 		cacheHome: cacheHome,
@@ -451,13 +467,15 @@ func landDispatch(ctx context.Context, repos []string, branch string, push, wait
 			return exitcode.InvalidUsage
 		}
 		if !asJSON {
-			return landBranch(ctx, repos[0], branch, wait, install, !push, d)
+			return landSignalExit(landBranch(ctx, repos[0], branch, wait, install, !push, d), d)
 		}
 		out := landBranchJSON{Repo: repos[0], Branch: branch}
 		d.branchJSON = &out
-		code := landBranch(ctx, repos[0], branch, wait, install, !push, d)
-		out.Code = int(code)
-		_ = json.NewEncoder(d.stdout).Encode(out)
+		code := landSignalExit(landBranch(ctx, repos[0], branch, wait, install, !push, d), d)
+		if code != exitcode.Interrupted {
+			out.Code = int(code)
+			_ = json.NewEncoder(d.stdout).Encode(out)
+		}
 		return code
 	}
 	if push {
@@ -465,7 +483,19 @@ func landDispatch(ctx context.Context, repos []string, branch string, push, wait
 		fmt.Fprintln(d.stderr, landUsageLine)
 		return exitcode.InvalidUsage
 	}
-	return landRepos(ctx, repos, wait, asJSON, install, d)
+	return landSignalExit(landRepos(ctx, repos, wait, asJSON, install, d), d)
+}
+
+func landSignalExit(code exitcode.Code, d landDeps) exitcode.Code {
+	if !d.cancelled() {
+		return code
+	}
+	step := "land"
+	if d.step != nil && *d.step != "" {
+		step = *d.step
+	}
+	fmt.Fprintf(d.stderr, "rgit land: interrupted (%s)\n", step)
+	return exitcode.Interrupted
 }
 
 func landFlagValue(args []string, i int) (value string, next int, ok bool) {
@@ -502,6 +532,10 @@ func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, 
 		}
 	}
 
+	if d.cancelled() {
+		return exitcode.Interrupted
+	}
+
 	for i, res := range results {
 		// An unqueued PR never merges by itself, so polling it only burns the cap.
 		if res.Kind != landPR || res.PRState == "merged" || res.PRState == "" || res.URL == "" {
@@ -519,6 +553,10 @@ func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, 
 			results[i].Watch = &fin
 			results[i].Lines = append([]string{}, finalWaitLine(res, fin))
 		}
+	}
+
+	if d.cancelled() {
+		return exitcode.Interrupted
 	}
 
 	if asJSON {
@@ -1247,6 +1285,9 @@ func gateLandBranch(prep landBranchPrep, d landDeps) (string, exitcode.Code) {
 	if werr := os.WriteFile(logPath, []byte(out), 0o600); werr != nil {
 		fmt.Fprintf(d.stderr, "error: %v\n", werr)
 		return "", 1
+	}
+	if d.cancelled() {
+		return logPath, exitcode.Interrupted
 	}
 	if gateErr == nil {
 		return logPath, moved()
@@ -2087,6 +2128,7 @@ func gitErrDetail(out string, err error) string {
 }
 
 func pollPR(owner, name string, ok bool, job landWatchJob, d landDeps) (prInfo, string) {
+	setLandStep(d.step, "wait")
 	deadline := d.clock.Now().Add(landPollCap)
 	var info prInfo
 	for {
@@ -2112,6 +2154,7 @@ func pollPR(owner, name string, ok bool, job landWatchJob, d landDeps) (prInfo, 
 }
 
 func waitForCI(res landWatchResult, owner, name string, ok bool, branch, sha string, d landDeps) landWatchResult {
+	setLandStep(d.step, "wait")
 	deadline := d.clock.Now().Add(landPollCap)
 	for {
 		if ok && sha != "" {

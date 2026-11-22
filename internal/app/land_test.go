@@ -2739,6 +2739,70 @@ func TestLookupRulesCache(t *testing.T) {
 	}
 }
 
+// TestLandSIGINTDuringGateExits130 pins that SIGINT while the gate is running
+// exits 130 with one line naming that step, not the gate's ordinary failure code.
+func TestLandSIGINTDuringGateExits130(t *testing.T) {
+	t.Parallel()
+	if _, err := exec.LookPath("gate"); err != nil {
+		t.Fatal("gate is required")
+	}
+	dir, _ := repoWithOrigin(t)
+	started := filepath.Join(t.TempDir(), "started")
+	gittest.Write(t, dir, ".gate.toml", "[gates.slow]\nrun = \"touch '"+started+"'; sleep 30\"\n")
+	gitOut(t, dir, "add", ".gate.toml")
+	gitOut(t, dir, "commit", "-q", "-m", "slow gate")
+
+	cmd := exec.Command(os.Args[0]) //nolint:gosec // the test binary, intercepted in TestMain
+	cmd.Env = append(os.Environ(),
+		"RGIT_TEST_LAND_SIGINT_DIR="+dir,
+		"XDG_CACHE_HOME="+t.TempDir(),
+	)
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	waited := make(chan error, 1)
+	go func() { waited <- cmd.Wait() }()
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		if _, err := os.Stat(started); err == nil {
+			break
+		}
+		select {
+		case err := <-waited:
+			t.Fatalf("land exited before the gate started: %v stdout=%q stderr=%q", err, stdout.String(), stderr.String())
+		default:
+		}
+		if time.Now().After(deadline) {
+			_ = cmd.Process.Kill()
+			t.Fatalf("gate never started; stdout=%q stderr=%q", stdout.String(), stderr.String())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err := cmd.Process.Signal(os.Interrupt); err != nil {
+		t.Fatal(err)
+	}
+	err := <-waited
+	code := 0
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			code = exitErr.ExitCode()
+		} else {
+			t.Fatalf("wait: %v stdout=%q stderr=%q", err, stdout.String(), stderr.String())
+		}
+	}
+	if code != int(exitcode.Interrupted) {
+		t.Errorf("exit = %d; want %d; stdout=%q stderr=%q", code, exitcode.Interrupted, stdout.String(), stderr.String())
+	}
+	got := strings.TrimSpace(stderr.String())
+	if got != "rgit land: interrupted (gate)" {
+		t.Errorf("stderr = %q; want %q", got, "rgit land: interrupted (gate)")
+	}
+}
+
 func TestLandCancelledContextStopsChildrenAndPolling(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithCancel(t.Context())

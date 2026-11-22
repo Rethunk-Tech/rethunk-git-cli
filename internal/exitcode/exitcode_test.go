@@ -36,6 +36,7 @@ func TestCodes_MatchDocumentedTable(t *testing.T) {
 		{"LandSkipped", LandSkipped, 14},
 		{"GitFailure", GitFailure, 128},
 		{"InvalidUsage", InvalidUsage, 129},
+		{"Interrupted", Interrupted, 130},
 	}
 	for _, tt := range tests {
 		if tt.got != tt.want {

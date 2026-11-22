@@ -23,6 +23,7 @@ Authoritative exit codes and machine-readable output. Flags:
 | 14 | `land` skipped a repo that needs action: dirty tracked files, wrong branch, behind origin with a conflicting rebase, no upstream, not a git repo, or an umbrella held back by a red submodule repo. Nothing to land (not ahead, already upstream) stays 0. `--json` still prints status and detail |
 | 128 | Fatal git / system failure (hook rejection, GPG, `-C` unenterable). `land --branch` setup: not a git repo, no default branch, worktree add failed |
 | 129 | Invalid usage. `land --branch` setup: not the main checkout, branch missing, main checkout on another branch |
+| 130 | `land` stopped by SIGINT or SIGTERM; the line names the step (gate, git, gh, or wait) |
 
 128 and 129 follow git. 1 is git's `--exit-code` convention and is not a
 named constant — it depends on a flag. Bindings: `internal/exitcode`.
