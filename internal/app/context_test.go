@@ -171,7 +171,7 @@ func TestRun_ContextTextCommitHashIs12Chars(t *testing.T) {
 	qt.Assert(t, qt.IsNil(json.Unmarshal(top["records"], &records)))
 
 	textC, jsonC := 0, 0
-	for _, line := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
+	for line := range strings.SplitSeq(strings.TrimRight(text, "\n"), "\n") {
 		fields := strings.SplitN(line, "\t", 3)
 		if fields[0] != "C" {
 			continue
