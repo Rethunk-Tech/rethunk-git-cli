@@ -1740,7 +1740,7 @@ func lookupRules(slug, def string, d landDeps) []string {
 		}
 		return rules
 	}
-	body, rerr := os.ReadFile(file)
+	body, rerr := os.ReadFile(file) //nolint:gosec // path built from the cache dir and the remote slug
 	st, serr := os.Stat(file)
 	if rerr != nil || serr != nil {
 		fmt.Fprintf(d.stderr, "%s: warning: branch-rules lookup failed (%v) and none cached; pushing direct\n", slug, err)
