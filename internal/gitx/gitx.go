@@ -1277,7 +1277,7 @@ fi
 `
 
 // installGuardHooks writes onlyGuardHook into a private hooks directory and
-// symlinks every other user hook so core.hooksPath does not skip them.
+// wraps every other executable user hook so core.hooksPath does not skip them.
 func (o *OnlyIndex) installGuardHooks(ctx context.Context, repo *Repo) (hooksPath, userHooks string, err error) {
 	hooksPath = filepath.Join(filepath.Dir(o.Path), "hooks")
 	if err := os.Mkdir(hooksPath, 0o700); err != nil {
@@ -1296,7 +1296,14 @@ func (o *OnlyIndex) installGuardHooks(ctx context.Context, repo *Repo) (hooksPat
 		if name == "reference-transaction" || strings.HasSuffix(name, ".sample") || e.IsDir() {
 			continue
 		}
-		_ = os.Symlink(filepath.Join(userHooks, name), filepath.Join(hooksPath, name))
+		// A wrapper, not a symlink: a hook that finds its siblings through $0 must see its real path.
+		if info, err := os.Stat(filepath.Join(userHooks, name)); err != nil || info.Mode()&0o111 == 0 {
+			continue
+		}
+		wrapper := "#!/bin/sh\nexec '" + strings.ReplaceAll(filepath.Join(userHooks, name), "'", `'\''`) + "' \"$@\"\n"
+		if err := os.WriteFile(filepath.Join(hooksPath, name), []byte(wrapper), 0o700); err != nil { //nolint:gosec // git runs hooks only when executable
+			return "", "", err
+		}
 	}
 	hookPath := filepath.Join(hooksPath, "reference-transaction")
 	if err := os.WriteFile(hookPath, []byte(onlyGuardHook), 0o600); err != nil {

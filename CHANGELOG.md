@@ -12,6 +12,7 @@ Notable changes to `rgit`. The format follows
 - `rgit land` resets local main after a PR only while HEAD is still the branched commit; a commit made meanwhile is kept with a warning.
 - `rgit land` exits 4 when the PR is neither queued nor set to auto-merge (or its state is unknown) and leaves main as it is.
 - `rgit land` pushes with `--recurse-submodules=check`, so a gitlink to a submodule commit its remote lacks is refused.
+- `rgit commit` with targets runs user hooks through an exec wrapper instead of a symlink, so a hook that finds files relative to `$0` (husky v9) runs.
 - `rgit land --branch` keeps a pre-existing worktree that holds ignored files instead of deleting them.
 
 ## [3.0.5] - 2026-11-21

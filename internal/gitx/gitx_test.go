@@ -921,6 +921,17 @@ func TestCommitOnlySyncsHookStagedPathsToIndex(t *testing.T) {
 	}
 }
 
+// A hook that locates its siblings relative to $0 (husky) must run from its real path under --only.
+func TestCommitOnlyHookSeesItsOwnPath(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "a.txt", "a before\n", "chore: initial")
+	gittest.InstallHook(t.Context(), t, dir, "pre-commit", "#!/bin/sh\ncase \"$0\" in */.git/hooks/pre-commit) ;; *) exit 1 ;; esac\n")
+	gittest.Write(t, dir, "a.txt", "a after\n")
+	if err := commitOnly(t, repo, []string{"a.txt"}, gitx.CommitOptions{Messages: []string{"feat: a"}}); err != nil {
+		t.Fatalf("Commit(Only): %v", err)
+	}
+}
+
 // A sibling git process (a `git status` refresh) holding index.lock as the
 // --only commit lands must be waited out: failing the sync instead leaves the
 // real index staging the reversal of the commit that just landed.
@@ -1271,7 +1282,7 @@ func TestCommitOnlyInterruptedAfterLandingSyncsIndex(t *testing.T) {
 	ignoreConfigDefinedHooks(t)
 	dir, repo := gittest.RepoWithFile(t.Context(), t, "a.txt", "a before\n", "chore: initial")
 	marker := filepath.Join(t.TempDir(), "landed")
-	gittest.InstallHook(t.Context(), t, dir, "post-commit", "#!/bin/sh\ntouch '"+marker+"'\nsleep 5\n")
+	gittest.InstallHook(t.Context(), t, dir, "post-commit", "#!/bin/sh\nexec >/dev/null 2>&1\ntouch '"+marker+"'\nsleep 5\n")
 	gittest.Write(t, dir, "a.txt", "a after\n")
 	only, err := repo.NewOnlyIndex(t.Context())
 	if err != nil {
