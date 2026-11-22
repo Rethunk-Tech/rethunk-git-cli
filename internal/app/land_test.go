@@ -2896,3 +2896,26 @@ func TestLandWaitSkipsUnqueuedPR(t *testing.T) {
 		t.Errorf("--wait polled an unqueued PR for %v", waited)
 	}
 }
+
+// TestLandBranchJSONOnFailure pins that --branch --json leaves one object with the exit code and gate log on a red gate.
+func TestLandBranchJSONOnFailure(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, "f.txt", "f\n")
+	gitOut(t, wt, "add", "f.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "feat")
+	d := testLandDeps(t)
+	d.gate = func(string, bool, bool) (string, error) { return "gate: failed: unit\n", errors.New("exit 1") }
+	var stdout, stderr strings.Builder
+	d.stdout, d.stderr = &stdout, &stderr
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--json"}, d)
+	var got landBranchJSON
+	if err := json.Unmarshal([]byte(stdout.String()), &got); err != nil {
+		t.Fatalf("stdout = %q (%v)", stdout.String(), err)
+	}
+	if code != exitcode.LandGateRed || got.Code != int(code) || got.Branch != "feat" || got.Log == "" {
+		t.Errorf("code = %v object = %+v", code, got)
+	}
+}

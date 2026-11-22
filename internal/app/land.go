@@ -314,6 +314,8 @@ type landBranchJSON struct {
 	SHA    string `json:"sha"`
 	Log    string `json:"log"`
 	Route  string `json:"route"`
+	// Code is the exit code, so a failed land still leaves one object on stdout.
+	Code int `json:"code"`
 }
 
 func defaultLandDeps(ctx context.Context, stdout, stderr io.Writer) landDeps {
@@ -455,12 +457,11 @@ func landDispatch(ctx context.Context, repos []string, branch string, push, wait
 		if !asJSON {
 			return landBranch(ctx, repos[0], branch, wait, install, !push, d)
 		}
-		var out landBranchJSON
+		out := landBranchJSON{Repo: repos[0], Branch: branch}
 		d.branchJSON = &out
 		code := landBranch(ctx, repos[0], branch, wait, install, !push, d)
-		if out.SHA != "" {
-			_ = json.NewEncoder(d.stdout).Encode(out)
-		}
+		out.Code = int(code)
+		_ = json.NewEncoder(d.stdout).Encode(out)
 		return code
 	}
 	if push {
@@ -1147,6 +1148,9 @@ func landBranch(ctx context.Context, repoArg, branch string, wait, install, noPu
 	prep.gated = strings.TrimSpace(mustGit(prep.wt, d, "rev-parse", "HEAD"))
 	logPath, code := gateLandBranch(prep, d)
 	if code != exitcode.Success {
+		if d.branchJSON != nil {
+			d.branchJSON.Log = logPath
+		}
 		return code
 	}
 	return finishLandBranch(ctx, prep, logPath, wait, install, noPush, d)
