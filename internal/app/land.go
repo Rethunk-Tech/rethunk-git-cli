@@ -658,7 +658,7 @@ func runMakeInstall(ctx context.Context, dir string) (string, error) {
 
 func installOne(ctx context.Context, repo string, d landDeps) bool {
 	if dirtyTracked(repo, d) {
-		fmt.Fprintln(d.info(), repo+": skipped (dirty tracked files)")
+		fmt.Fprintln(d.info(), dirtySkipLine(repo, d))
 		return false
 	}
 	if makefileName(repo) == "" {
@@ -814,7 +814,7 @@ func landOne(r string, d landDeps) landResult {
 	}
 	if dirtyTracked(repo, d) {
 		res.Kind = landSkipped
-		res.Lines = []string{repo + ": skipped (dirty tracked files)"}
+		res.Lines = []string{dirtySkipLine(repo, d)}
 		return res
 	}
 	cur := strings.TrimSpace(mustGit(repo, d, "rev-parse", "--abbrev-ref", "HEAD"))
@@ -908,7 +908,7 @@ func landSha(repo, def string, d landDeps) landResult {
 	}
 	if !d.noGate {
 		if dirtyTracked(repo, d) {
-			res.Lines = []string{repo + ": skipped (dirty tracked files)"}
+			res.Lines = []string{dirtySkipLine(repo, d)}
 			return res
 		}
 		if head := strings.TrimSpace(mustGit(repo, d, "rev-parse", "HEAD")); head != sha {
@@ -1586,6 +1586,17 @@ func dirtyNames(status string) string {
 		}
 	}
 	return strings.Join(names, ", ")
+}
+
+// dirtySkipLine is the skip line for a dirty tracked tree; the reason stays first so skipReason still reads it.
+func dirtySkipLine(repo string, d landDeps) string {
+	const maxNames = 8
+	st, _ := d.git.run(repo, "status", "--porcelain=v1", "-uno")
+	names := strings.Split(dirtyNames(st), ", ")
+	if len(names) > maxNames {
+		names = append(names[:maxNames], fmt.Sprintf("and %d more", len(names)-maxNames))
+	}
+	return repo + ": skipped (dirty tracked files: " + strings.Join(names, ", ") + ")"
 }
 
 func dirtyTracked(repo string, d landDeps) bool {

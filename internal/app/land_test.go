@@ -1197,7 +1197,7 @@ func TestLandOneSkipReasons(t *testing.T) {
 
 	dirty, _ := repoWithOrigin(t)
 	gittest.Write(t, dirty, "base.txt", "changed\n")
-	if res := landOne(dirty, d); res.Kind != landSkipped || res.Lines[0] != dirty+": skipped (dirty tracked files)" {
+	if res := landOne(dirty, d); res.Kind != landSkipped || res.Lines[0] != dirty+": skipped (dirty tracked files: base.txt)" {
 		t.Errorf("dirty repo = %+v", res)
 	}
 
@@ -1312,7 +1312,7 @@ func TestLandInstallSkipsDirtyTracked(t *testing.T) {
 	if code != exitcode.LandSkipped {
 		t.Fatalf("code = %v stdout=%q; a dirty skip needs action", code, stdout.String())
 	}
-	if !strings.Contains(stdout.String(), dir+": skipped (dirty tracked files)\n") {
+	if !strings.Contains(stdout.String(), dir+": skipped (dirty tracked files: base.txt)\n") {
 		t.Errorf("stdout = %q", stdout.String())
 	}
 }
@@ -1331,7 +1331,7 @@ func TestInstallOneSkipsDirtyTracked(t *testing.T) {
 	if failed := installOne(t.Context(), dir, d); failed {
 		t.Error("dirty tracked repo reported a failed install")
 	}
-	if !strings.Contains(stdout.String(), dir+": skipped (dirty tracked files)\n") {
+	if !strings.Contains(stdout.String(), dir+": skipped (dirty tracked files: base.txt)\n") {
 		t.Errorf("stdout = %q", stdout.String())
 	}
 	if _, err := os.Stat(filepath.Join(dir, "base.txt")); err != nil {
@@ -2622,7 +2622,7 @@ func TestLandShaSkips(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct{ name, line string }{
 		{"no upstream", ": skipped (no upstream)"},
-		{"dirty tree", ": skipped (dirty tracked files)"},
+		{"dirty tree", ": skipped (dirty tracked files: base.txt)"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
