@@ -6,6 +6,12 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+## [3.0.5] - 2026-11-21
+
+### Changed
+
+- `rgit land` gates with `gate --fuzz` (gate v0.10.3 skips the fuzz gate on a local run, and runs it in a pre-push hook), so the hook's pass matches land's and the push does not rerun everything.
+
 ### Fixed
 
 - The push-hook land test skips under a gate without `--isolate`, and CI installs gate v0.10.0.

@@ -149,7 +149,9 @@ func hasPrePushHook(dir string) bool {
 }
 
 func runGateCmd(dir string, failedOnly, pushFollows bool) (string, error) {
-	args := []string{"-C", dir}
+	// --fuzz: a local gate skips the fuzz gate, and a pre-push hook runs it,
+	// so land gates with it for the hook's pass to match.
+	args := []string{"-C", dir, "--fuzz"}
 	// A pre-push hook that runs gate turns --isolate on by itself, and gate
 	// reuses only a pass that ran the same way, so gate here as the hook
 	// will and the push does not run everything a second time. Without a push
