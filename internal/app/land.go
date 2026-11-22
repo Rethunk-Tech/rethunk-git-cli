@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -289,7 +288,6 @@ type landDeps struct {
 	gate      func(dir string, failedOnly, pushFollows bool) (string, error)
 	cacheHome func() string
 	pid       int
-	randN     func() int
 	parent    string
 	sha       string
 	noGate    bool
@@ -329,7 +327,6 @@ func defaultLandDeps(ctx context.Context, stdout, stderr io.Writer) landDeps {
 		},
 		cacheHome: cacheHome,
 		pid:       os.Getpid(),
-		randN:     randInt,
 		parent:    os.Getenv("CLAUDE_CODE_SESSION_ID"),
 		stdout:    stdout,
 		stderr:    stderr,
@@ -347,14 +344,6 @@ func cacheHome() string {
 		return filepath.Join(os.TempDir(), "rgit-cache")
 	}
 	return filepath.Join(home, ".cache")
-}
-
-func randInt() int {
-	var b [2]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return int(time.Now().UnixNano() & 0x7fff)
-	}
-	return int(b[0])<<8 | int(b[1])
 }
 
 // landValueFlags maps each flag that takes a value to what its missing-value error asks for.
@@ -874,16 +863,8 @@ func landOne(r string, d landDeps) landResult {
 	}
 	// Push and branch the gated commit, not whatever HEAD became after the gate.
 	res = landByRules(repo, def, d, landPushOpts{remote: upstreamRemote(repo, def, d), pushRef: gated, pushTo: def, prRef: gated, logRange: "@{u}.." + gated})
-	switch res.Kind {
-	case landPushed:
-		touchFleet(repo, 1, d)
-	case landPR:
-		if flagNotEnqueued(&res) {
-			break
-		}
+	if res.Kind == landPR && !flagNotEnqueued(&res) {
 		resetToRemote(repo, upstreamRemote(repo, def, d)+"/"+def, gated, d, &res)
-		touchFleet(repo, 0, d)
-	case landSkipped, landRed:
 	}
 	return res
 }
@@ -943,13 +924,8 @@ func landSha(repo, def string, d landDeps) landResult {
 		}
 	}
 	res = landByRules(repo, def, d, landPushOpts{remote: upstreamRemote(repo, def, d), pushRef: sha, pushTo: def, prRef: sha, logRange: "@{u}.." + sha})
-	switch res.Kind {
-	case landPushed:
-		touchFleet(repo, 1, d)
-	case landPR:
+	if res.Kind == landPR {
 		flagNotEnqueued(&res)
-		touchFleet(repo, 0, d)
-	case landSkipped, landRed:
 	}
 	return res
 }
@@ -1380,11 +1356,6 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 		return exitcode.LandNotEnqueued
 	}
 	cleanupLandBranch(prep, res, false, d)
-	if res.Kind == landPushed {
-		touchFleet(prep.repo, 1, d)
-	} else {
-		touchFleet(prep.repo, 0, d)
-	}
 	printLandBranchResult(prep, res, sha, logPath, wait, d)
 	if install && res.Kind == landPushed {
 		if installOne(ctx, prep.repo, d) {
@@ -2033,21 +2004,6 @@ func nonEmptyLines(s string) []string {
 		}
 	}
 	return out
-}
-
-func touchFleet(repo string, pushed int, d landDeps) {
-	dir := filepath.Join(d.cacheHome(), "nomad-hud", "fleet-touch")
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return
-	}
-	base := fmt.Sprintf("land-%d-%d", d.pid, d.randN())
-	tmp := filepath.Join(dir, base+".tmp")
-	final := filepath.Join(dir, base+".tsv")
-	body := fmt.Sprintf("%s\t%d\n", repo, pushed)
-	if err := os.WriteFile(tmp, []byte(body), 0o600); err != nil {
-		return
-	}
-	_ = os.Rename(tmp, final)
 }
 
 func watchUntilDone(job landWatchJob, d landDeps) landWatchResult {

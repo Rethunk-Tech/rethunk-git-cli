@@ -169,7 +169,7 @@ func TestLandPushedLocalBare(t *testing.T) {
 	if stdout.String() != want {
 		t.Errorf("stdout = %q; want %q", stdout.String(), want)
 	}
-	assertFleetTouch(t, d, dir, "1")
+	assertNoFleetTouch(t, d)
 }
 
 func TestLandPlainGate(t *testing.T) {
@@ -490,7 +490,7 @@ func TestLandPRViaRules(t *testing.T) {
 	if len(gh.merges) < 2 || gh.merges[0] != "plain" || gh.merges[1] != "auto:--squash" {
 		t.Errorf("merges = %#v; want plain then auto:--squash", gh.merges)
 	}
-	assertFleetTouch(t, d, dir, "0")
+	assertNoFleetTouch(t, d)
 	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "--abbrev-ref", "HEAD")); got != "main" {
 		t.Errorf("HEAD = %q; want main after reset --keep", got)
 	}
@@ -557,7 +557,7 @@ func TestLandBranchCleanMainFFPush(t *testing.T) {
 	if !strings.Contains(got[3], "land-branch") {
 		t.Errorf("gate log path = %q", got[3])
 	}
-	assertFleetTouch(t, d, dir, "1")
+	assertNoFleetTouch(t, d)
 }
 
 func TestLandBranchKeepsWorktreeWithIgnoredFiles(t *testing.T) {
@@ -1722,15 +1722,6 @@ func TestLandFlagsNeedValues(t *testing.T) {
 	}
 }
 
-func TestRandIntInRange(t *testing.T) {
-	t.Parallel()
-	for range 20 {
-		if n := randInt(); n < 0 || n > 0xffff {
-			t.Fatalf("randInt = %d; want 0..65535", n)
-		}
-	}
-}
-
 type ghSeq struct {
 	infos []prInfo
 	i     int
@@ -1832,7 +1823,6 @@ func testLandDeps(t *testing.T) landDeps {
 	d.cacheHome = func() string { return cache }
 	d.gate = func(string, bool, bool) (string, error) { return "", nil }
 	d.clock = &fakeClock{now: time.Date(2026, 11, 18, 0, 0, 0, 0, time.UTC)}
-	d.randN = func() int { return 1 }
 	d.pid = 1
 	return d
 }
@@ -1856,32 +1846,13 @@ func initBareOrigin(t *testing.T, dir string) string {
 	return bare
 }
 
-func assertFleetTouch(t *testing.T, d landDeps, repo, pushed string) {
+// assertNoFleetTouch pins that land leaves no fleet-touch inbox behind: nothing reads it any more.
+func assertNoFleetTouch(t *testing.T, d landDeps) {
 	t.Helper()
-	dir := filepath.Join(d.cacheHome(), "nomad-hud", "fleet-touch")
-	ents, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var found string
-	for _, e := range ents {
-		if strings.HasSuffix(e.Name(), ".tsv") {
-			b, err := os.ReadFile(filepath.Join(dir, e.Name())) //nolint:gosec // names come from the test cache dir listing
-			if err != nil {
-				t.Fatal(err)
-			}
-			found = string(b)
-		}
-		if strings.HasSuffix(e.Name(), ".tmp") {
-			t.Errorf("leftover tmp %s", e.Name())
-		}
-	}
-	want := repo + "\t" + pushed + "\n"
-	if found != want {
-		t.Errorf("fleet touch = %q; want %q", found, want)
+	if _, err := os.Stat(filepath.Join(d.cacheHome(), "nomad-hud")); !os.IsNotExist(err) {
+		t.Errorf("land wrote under the cache's nomad-hud dir (stat err %v)", err)
 	}
 }
-
 func TestLandBranchLocalDirtyUnrelatedFileLands(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
