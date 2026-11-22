@@ -336,3 +336,20 @@ func TestIndexLockAndSeedFailures(t *testing.T) {
 		})
 	}
 }
+
+// With eol=crlf the committed blob is LF while the worktree is CRLF; counts must follow the blob.
+func TestPlanStageCountsEolCRLFAgainstFilteredBlob(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t.Context(), t)
+	gittest.Write(t, dir, ".gitattributes", "*.go text eol=crlf\n")
+	gittest.Write(t, dir, "a.go", "package a\r\n\r\nfunc A() int {\r\n\treturn 1\r\n}\r\n\r\nfunc B() int {\r\n\treturn 2\r\n}\r\n")
+	gittest.Commit(t.Context(), t, dir, "chore: initial")
+	gittest.Write(t, dir, "a.go", "package a\r\n\r\nfunc A() int {\r\n\treturn 10\r\n}\r\n\r\nfunc B() int {\r\n\treturn 2\r\n}\r\n")
+	plan, err := PlanStage(t.Context(), repo, dir, []Target{AnchorTarget("a.go", "A")})
+	if err != nil {
+		t.Fatalf("PlanStage: %v", err)
+	}
+	if r := plan.Results[0]; r.Added != 1 || r.Deleted != 1 {
+		t.Errorf("counts = +%d/-%d; want +1/-1", r.Added, r.Deleted)
+	}
+}

@@ -1146,7 +1146,13 @@ func opLineCounts(fp *filePlan, op editOp) (added, deleted int) {
 		}
 	case editInsert:
 	}
-	added, deleted = diff.LineCounts(old, op.text)
+	text := op.text
+	if !bytes.Contains(fp.headSrc, []byte{'\r'}) {
+		// HEAD holds LF, so a CRLF worktree is an eol/autocrlf smudge that the commit's clean filter
+		// undoes; counting its bytes against the LF blob would call every line changed.
+		text = bytes.ReplaceAll(text, []byte("\r\n"), []byte("\n"))
+	}
+	added, deleted = diff.LineCounts(old, text)
 
 	switch op.kind {
 	case editDelete:
