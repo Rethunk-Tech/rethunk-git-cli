@@ -2725,3 +2725,15 @@ func TestLandBranchPushHookReusesGatePass(t *testing.T) {
 		t.Errorf("hook re-ran the gate: %q", b)
 	}
 }
+
+func TestLandOneRefusesUntrackedFiles(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	gittest.Write(t, dir, "ahead.txt", "x\n")
+	gittest.Commit(t.Context(), t, dir, "ahead")
+	gittest.Write(t, dir, "helper.txt", "h\n")
+	res := landOne(dir, testLandDeps(t))
+	if res.Kind != landRed || !strings.Contains(strings.Join(res.Lines, "\n"), "helper.txt") {
+		t.Errorf("kind = %v lines = %v; want red naming helper.txt", res.Kind, res.Lines)
+	}
+}

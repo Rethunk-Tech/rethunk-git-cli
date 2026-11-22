@@ -943,6 +943,10 @@ func gateHead(repo string, d landDeps) (line, logPath string, ok bool) {
 	if d.noGate {
 		return "", "", true
 	}
+	// The gate runs in this checkout, so an untracked file could make it pass for a commit that lacks it.
+	if out, _ := d.git.run(repo, "ls-files", "--others", "--exclude-standard"); strings.TrimSpace(out) != "" {
+		return repo + ": error: untracked files (" + strings.Join(strings.Fields(out), ", ") + "); add or ignore them first, nothing pushed", "", false
+	}
 	headBefore, statusBefore := gateState(repo, d)
 	out, gateErr := d.gate(repo, false, true)
 	logdir := filepath.Join(d.cacheHome(), "land")

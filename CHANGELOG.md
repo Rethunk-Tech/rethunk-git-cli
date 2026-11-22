@@ -6,6 +6,11 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `rgit commit` with a directory or glob target stages tracked files only, like `git commit --only`; a file named directly is still added.
+- `rgit land` refuses a repo with untracked, non-ignored files, naming them, since the gate runs in the checkout and could pass on files the pushed commit lacks.
+
 ### Fixed
 
 - `rgit land` pushes, opens the PR from, and reports the commit it gated, and `--install` skips when HEAD is not that commit, so a commit made after the gate never ships.
