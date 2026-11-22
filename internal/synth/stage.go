@@ -129,8 +129,10 @@ type filePlan struct {
 // rule) reads the fields below, decides, and calls Apply second.
 type Plan struct {
 	pathspecs []string
-	files     []*filePlan
-	base      string // revision symbols are spliced into; "" is the index
+	// trackedSpecs are directory and glob pathspecs, which stage tracked files only.
+	trackedSpecs []string
+	files        []*filePlan
+	base         string // revision symbols are spliced into; "" is the index
 
 	// Results reports what resolution found for each target, in the order
 	// PlanStage received them.
@@ -316,7 +318,12 @@ func (p *Plan) planPathspec(ctx context.Context, repo *gitx.Repo, root string, t
 			return err
 		}
 	}
-	p.pathspecs = append(p.pathspecs, t.Pathspec)
+	literal := isLiteralFile(root, t.Pathspec)
+	if literal {
+		p.pathspecs = append(p.pathspecs, t.Pathspec)
+	} else {
+		p.trackedSpecs = append(p.trackedSpecs, t.Pathspec)
+	}
 
 	// Pathspec targets are always reported Staged, never Unchanged:
 	// `git status` scoped to a pathspec cannot distinguish "already
@@ -330,7 +337,7 @@ func (p *Plan) planPathspec(ctx context.Context, repo *gitx.Repo, root string, t
 	// stages every file under it, and a single summed total says
 	// nothing about which. `rgit diff` already breaks the same
 	// change down this way, and the two are supposed to agree.
-	files, warnings := pathspecFileCounts(ctx, repo, root, t.Pathspec)
+	files, warnings := pathspecFileCounts(ctx, repo, root, t.Pathspec, literal)
 	p.CountingWarnings = append(p.CountingWarnings, warnings...)
 	if len(files) == 0 {
 		// Nothing matched, or nothing changed. Keep one row naming
@@ -688,7 +695,7 @@ func (p *Plan) Apply(ctx context.Context, repo *gitx.Repo, root string) error {
 // in, so snap.Restore can later undo exactly what this call staged. snap may
 // be nil.
 func (p *Plan) ApplyWithSnapshot(ctx context.Context, repo *gitx.Repo, root string, snap *IndexSnapshot) error {
-	if len(p.pathspecs) == 0 && len(p.files) == 0 {
+	if len(p.pathspecs) == 0 && len(p.trackedSpecs) == 0 && len(p.files) == 0 {
 		return nil
 	}
 	staging, err := newTempStaging(ctx, root)
@@ -710,6 +717,22 @@ func (p *Plan) StageInto(ctx context.Context, repo *gitx.Repo, root string, inde
 	if len(p.pathspecs) > 0 {
 		if err := index.Add(ctx, p.pathspecs...); err != nil {
 			return err
+		}
+	}
+	if len(p.trackedSpecs) > 0 {
+		if err := index.AddTracked(ctx, p.trackedSpecs...); err != nil {
+			return err
+		}
+		// A file only the real index tracks (a staged rename's new path) is as tracked as one in HEAD.
+		args := append([]string{"--"}, p.trackedSpecs...)
+		staged, err := repo.LsFilesTracked(ctx, args...)
+		if err != nil {
+			return err
+		}
+		if len(staged) > 0 {
+			if err := index.Add(ctx, staged...); err != nil {
+				return err
+			}
 		}
 	}
 	for _, fp := range p.files {
@@ -1169,6 +1192,16 @@ func opLineCounts(fp *filePlan, op editOp) (added, deleted int) {
 	return added, deleted
 }
 
+// isLiteralFile is true for a plain path naming one existing non-directory: the only pathspec that
+// may add an untracked file, as `git commit --only` takes untracked files only when named.
+func isLiteralFile(root, spec string) bool {
+	if strings.HasPrefix(spec, ":") || strings.ContainsAny(spec, "*?[\\") {
+		return false
+	}
+	fi, err := os.Lstat(filepath.Join(root, spec))
+	return err == nil && !fi.IsDir()
+}
+
 // pathFile is one file a pathspec stages, with its own line counts.
 type pathFile struct {
 	path           string
@@ -1198,7 +1231,7 @@ type pathFile struct {
 // expand against the index, so this listing is never the commit list. But a
 // preview built on a partial answer must say so rather than presenting an
 // understated total as if it were exact.
-func pathspecFileCounts(ctx context.Context, repo *gitx.Repo, root, pathspec string) (out []pathFile, warnings []string) {
+func pathspecFileCounts(ctx context.Context, repo *gitx.Repo, root, pathspec string, withUntracked bool) (out []pathFile, warnings []string) {
 	seen := map[string]bool{}
 
 	base, err := repo.CommittableBase(ctx)
@@ -1224,6 +1257,9 @@ func pathspecFileCounts(ctx context.Context, repo *gitx.Repo, root, pathspec str
 		out = append(out, pathFile{path: e.Path, added: a, deleted: d})
 	}
 
+	if !withUntracked {
+		return out, warnings
+	}
 	others, err := repo.LsFilesOthers(ctx, "--", pathspec)
 	if err != nil {
 		warnings = append(warnings, fmt.Sprintf("%s: untracked file counts unavailable: %v", pathspec, err))

@@ -143,7 +143,7 @@ func TestPathspecFileCounts_UnreadableUntrackedFileWarns(t *testing.T) {
 		}
 	})
 
-	files, warnings := pathspecFileCounts(ctx, repo, dir, "secret.txt")
+	files, warnings := pathspecFileCounts(ctx, repo, dir, "secret.txt", true)
 
 	for _, f := range files {
 		if f.path == "secret.txt" {

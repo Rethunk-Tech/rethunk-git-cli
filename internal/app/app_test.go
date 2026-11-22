@@ -923,8 +923,7 @@ func TestRun_PathspecListsEveryFileItStages(t *testing.T) {
 
 	writeAppFile(t, dir, "apps/svc/one.go", "package svc\n\nfunc One() int {\n\treturn 111\n}\n")
 	writeAppFile(t, dir, "apps/svc/notes.txt", "x\ny\nz\n")
-	// An untracked file under the same directory is staged by the same
-	// pathspec, so it belongs in the listing too.
+	// An untracked file under the directory is not staged by it (git commit --only takes tracked files).
 	writeAppFile(t, dir, "apps/svc/two.go", "package svc\n\nfunc Two() int {\n\treturn 2\n}\n")
 
 	stdout, _, code := runApp(t, "-C", dir, "commit", "--dry-run", "--porcelain", "-m", "chore: svc", "apps/svc")
@@ -939,7 +938,6 @@ func TestRun_PathspecListsEveryFileItStages(t *testing.T) {
 	want := map[string]string{
 		"apps/svc/one.go":    "1/1",
 		"apps/svc/notes.txt": "2/0",
-		"apps/svc/two.go":    "5/0", // untracked: every line is an addition
 	}
 	qt.Assert(t, qt.DeepEquals(got, want))
 }

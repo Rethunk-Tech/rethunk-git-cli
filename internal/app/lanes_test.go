@@ -232,9 +232,9 @@ func TestRun_OnlyDirectoryTargetSurvivesFailedPreviewCounts(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
 	qt.Assert(t, qt.StringContains(stderr, "tracked line counts unavailable"))
 	head := gitOut(t, dir, "ls-tree", "-r", "--name-only", "HEAD", "--", "d")
-	qt.Assert(t, qt.Equals(head, "d/a.txt\nd/c.txt\nd/n.txt\n"))
+	qt.Assert(t, qt.Equals(head, "d/a.txt\nd/c.txt\n"))
 	qt.Assert(t, qt.Equals(gitOut(t, dir, "show", "HEAD:d/a.txt"), "edited\n"))
-	qt.Assert(t, qt.Equals(gitOut(t, dir, "status", "--porcelain"), "A  sibling.txt\n"))
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "status", "--porcelain"), "A  sibling.txt\n?? d/n.txt\n"))
 }
 
 func TestRun_OnlyWithNoTargetsRefusesWithoutAmend(t *testing.T) {
@@ -897,4 +897,23 @@ func TestRun_ReeditMessageRefused(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.StringContains(stderr, "--reedit-message"))
 	qt.Assert(t, qt.StringContains(stderr, "--reuse-message"))
+}
+
+// A directory target stages tracked files only, like git commit --only; a file named directly is still added.
+func TestRun_OnlyDirectoryTargetSkipsUntracked(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "d/a.txt", "x\n")
+	gitOut(t, dir, "add", "--", "d/a.txt")
+	gitOut(t, dir, "commit", "-q", "-m", "add d/a")
+	writeAppFile(t, dir, "d/a.txt", "edited\n")
+	writeAppFile(t, dir, "d/secret.env", "s\n")
+
+	_, stderr, code := runApp(t, "-C", dir, "commit", "-m", "fix(d): edit", "d")
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
+	qt.Assert(t, qt.Equals(gitOut(t, dir, "ls-tree", "-r", "--name-only", "HEAD", "--", "d"), "d/a.txt\n"))
+
+	_, stderr, code = runApp(t, "-C", dir, "commit", "-m", "feat(d): env", "d/secret.env")
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
+	qt.Assert(t, qt.StringContains(gitOut(t, dir, "ls-tree", "-r", "--name-only", "HEAD", "--", "d"), "d/secret.env"))
 }

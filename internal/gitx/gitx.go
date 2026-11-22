@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -608,7 +609,21 @@ func (r *Repo) RemoveFromIndex(ctx context.Context, path string) error {
 // so every pathspec form (globs, ":(exclude)...") keeps working exactly
 // as it does under bash git.
 func (r *Repo) Add(ctx context.Context, pathspecs ...string) error {
-	args := append([]string{"add", "--"}, pathspecs...)
+	return r.add(ctx, false, pathspecs)
+}
+
+// AddTracked is Add for pathspecs that stage only what git already tracks (`git add -u`), the way
+// `git commit --only` treats a directory or glob.
+func (r *Repo) AddTracked(ctx context.Context, pathspecs ...string) error {
+	return r.add(ctx, true, pathspecs)
+}
+
+func (r *Repo) add(ctx context.Context, tracked bool, pathspecs []string) error {
+	cmd := []string{"add"}
+	if tracked {
+		cmd = append(cmd, "-u")
+	}
+	args := append(slices.Clone(cmd), append([]string{"--"}, pathspecs...)...)
 	res, err := r.run(ctx, nil, args...)
 	if err != nil {
 		return err
@@ -626,7 +641,7 @@ func (r *Repo) Add(ctx context.Context, pathspecs ...string) error {
 	// are staged.
 	var remaining []string
 	for _, spec := range pathspecs {
-		dry, derr := r.run(ctx, nil, "add", "--dry-run", "--", spec)
+		dry, derr := r.run(ctx, nil, append(slices.Clone(cmd), "--dry-run", "--", spec)...)
 		if derr != nil {
 			return derr
 		}
@@ -648,7 +663,7 @@ func (r *Repo) Add(ctx context.Context, pathspecs ...string) error {
 	if len(remaining) == 0 {
 		return nil
 	}
-	if _, err := r.checked(ctx, append([]string{"add", "--"}, remaining...)...); err != nil {
+	if _, err := r.checked(ctx, append(append(slices.Clone(cmd), "--"), remaining...)...); err != nil {
 		return err
 	}
 	return nil
