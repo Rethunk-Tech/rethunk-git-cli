@@ -2795,3 +2795,33 @@ func TestLandCancelledContextStopsChildrenAndPolling(t *testing.T) {
 		t.Errorf("polled %v after cancel", got)
 	}
 }
+
+// TestLandBranchPushCleanMainBehindOrigin pins that a clean main that fell behind origin is
+// brought up to it before the branch is rebased, so the push is not rejected as an origin move.
+func TestLandBranchPushCleanMainBehindOrigin(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, "feat.txt", "feat\n")
+	gitOut(t, wt, "add", "feat.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "feat")
+	other := filepath.Join(t.TempDir(), "other")
+	gitOut(t, t.TempDir(), "clone", "-q", bare, other)
+	gitOut(t, other, "config", "user.email", "test@test")
+	gitOut(t, other, "config", "user.name", "test")
+	gittest.Write(t, other, "moved.txt", "moved\n")
+	gitOut(t, other, "add", "moved.txt")
+	gitOut(t, other, "commit", "-q", "-m", "moved")
+	gitOut(t, other, "push", "-q", "origin", "HEAD")
+
+	d := testLandDeps(t)
+	var stdout, stderr strings.Builder
+	d.stdout, d.stderr = &stdout, &stderr
+	if code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d); code != exitcode.Success {
+		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	if got := strings.TrimSpace(gitOut(t, bare, "log", "-1", "--pretty=%s")); got != "feat" {
+		t.Errorf("origin tip = %q; want feat on top of the competing commit", got)
+	}
+}

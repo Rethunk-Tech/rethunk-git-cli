@@ -1186,8 +1186,14 @@ func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBra
 	}
 	prep := landBranchPrep{repo: repo, branch: branch, def: def, wt: wt, dirty: dirty, noPush: noPush, wtCreated: !found}
 	base := def
-	if dirty && !noPush {
+	if !noPush {
 		_, _ = d.git.run(repo, "fetch", "-q", "origin")
+	}
+	if !noPush && !dirty {
+		// A clean main that fell behind origin would make the push look like an origin move forever.
+		_, _ = d.git.run(repo, "merge", "--ff-only", "origin/"+def)
+	}
+	if dirty && !noPush {
 		base = "origin/" + def
 		prep.opts = landPushOpts{
 			pushDir:  wt,
