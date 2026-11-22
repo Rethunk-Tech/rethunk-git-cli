@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1371,14 +1372,14 @@ func TestRunGHRunsInDir(t *testing.T) {
 	}
 	t.Setenv("PATH", bin)
 	work := t.TempDir()
-	out, err := runGH(work, "repo", "view")
+	out, err := runGH(t.Context(), work, "repo", "view")
 	if err != nil {
 		t.Fatalf("runGH: %v out=%q", err, out)
 	}
 	if strings.TrimSpace(out) != work {
 		t.Errorf("runGH ran in %q; want %q", strings.TrimSpace(out), work)
 	}
-	if _, err := runGH(filepath.Join(work, "absent"), "repo", "view"); err == nil {
+	if _, err := runGH(t.Context(), filepath.Join(work, "absent"), "repo", "view"); err == nil {
 		t.Error("runGH in a missing dir: want error")
 	}
 }
@@ -1827,7 +1828,7 @@ func (f *fakeGH) latestWorkflowRun(string, string, string, string) (workflowRun,
 func testLandDeps(t *testing.T) landDeps {
 	t.Helper()
 	cache := t.TempDir()
-	d := defaultLandDeps(&strings.Builder{}, &strings.Builder{})
+	d := defaultLandDeps(t.Context(), &strings.Builder{}, &strings.Builder{})
 	d.cacheHome = func() string { return cache }
 	d.gate = func(string, bool, bool) (string, error) { return "", nil }
 	d.clock = &fakeClock{now: time.Date(2026, 11, 18, 0, 0, 0, 0, time.UTC)}
@@ -2681,11 +2682,11 @@ func TestLandShaSkips(t *testing.T) {
 
 func TestHasPrePushHook(t *testing.T) {
 	dir, _ := gittest.New(t.Context(), t)
-	if hasPrePushHook(dir) {
+	if hasPrePushHook(t.Context(), dir) {
 		t.Fatal("a repo with no hook reports one")
 	}
 	gittest.Write(t, dir, ".git/hooks/pre-push", "#!/bin/sh\n")
-	if !hasPrePushHook(dir) {
+	if !hasPrePushHook(t.Context(), dir) {
 		t.Fatal("an installed pre-push hook is not seen")
 	}
 }
@@ -2712,7 +2713,7 @@ func TestLandBranchPushHookReusesGatePass(t *testing.T) {
 	gitOut(t, wt, "commit", "-q", "-m", "feat")
 
 	d := testLandDeps(t)
-	d.gate = runGateCmd
+	d.gate = func(dir string, f, p bool) (string, error) { return runGateCmd(t.Context(), dir, f, p) }
 	var stdout, stderr strings.Builder
 	d.stdout, d.stderr = &stdout, &stderr
 	if code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d); code != exitcode.Success {
@@ -2763,5 +2764,34 @@ func TestLookupRulesCache(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "none cached; pushing direct") {
 		t.Errorf("stderr = %q", stderr.String())
+	}
+}
+
+func TestLandCancelledContextStopsChildrenAndPolling(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	d := defaultLandDeps(ctx, &strings.Builder{}, &strings.Builder{})
+	if _, err := d.git.run("", "--version"); err == nil {
+		t.Error("git ran under a cancelled context")
+	}
+	if _, err := d.gate(t.TempDir(), false, false); err == nil {
+		t.Error("gate ran under a cancelled context")
+	}
+	if _, err := runGH(ctx, "", "--version"); err == nil {
+		t.Error("gh ran under a cancelled context")
+	}
+	start := time.Now()
+	d.clock.Sleep(time.Minute)
+	if time.Since(start) > 5*time.Second {
+		t.Error("Sleep ignored the cancelled context")
+	}
+	d.clock = &fakeClock{now: time.Date(2026, 11, 18, 0, 0, 0, 0, time.UTC)}
+	d.gh = &fakeGH{}
+	if _, state := pollPR("", "", false, landWatchJob{PR: 7}, d); state != "cancelled" {
+		t.Errorf("state = %q; want cancelled", state)
+	}
+	if got := d.clock.Now().Sub(time.Date(2026, 11, 18, 0, 0, 0, 0, time.UTC)); got >= landPollCap {
+		t.Errorf("polled %v after cancel", got)
 	}
 }

@@ -90,10 +90,18 @@ type landClock interface {
 	Sleep(d time.Duration)
 }
 
-type realClock struct{}
+// realClock's Sleep returns early once ctx is cancelled.
+type realClock struct{ ctx context.Context }
 
-func (realClock) Now() time.Time        { return time.Now().UTC() }
-func (realClock) Sleep(d time.Duration) { time.Sleep(d) }
+func (realClock) Now() time.Time { return time.Now().UTC() }
+func (c realClock) Sleep(d time.Duration) {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+	case <-c.ctx.Done():
+	}
+}
 
 // gitHub talks to GitHub through gh. Tests swap in a fake; nothing in this
 // package dials api.github.com itself.
@@ -127,10 +135,11 @@ type gitRunner interface {
 	run(dir string, args ...string) (string, error)
 }
 
-type execGit struct{}
+// execGit runs git under ctx; a nil ctx never cancels.
+type execGit struct{ ctx context.Context }
 
-func (execGit) run(dir string, args ...string) (string, error) {
-	cmd := exec.CommandContext(context.Background(), "git", args...) //nolint:gosec // git argv is constructed by rgit, never a shell string
+func (g execGit) run(dir string, args ...string) (string, error) {
+	cmd := exec.CommandContext(orBackground(g.ctx), "git", args...) //nolint:gosec // git argv is constructed by rgit, never a shell string
 	if dir != "" {
 		cmd.Dir = dir
 	}
@@ -139,8 +148,15 @@ func (execGit) run(dir string, args ...string) (string, error) {
 	return string(out), err
 }
 
-func hasPrePushHook(dir string) bool {
-	out, err := exec.CommandContext(context.Background(), "git", "-C", dir, "rev-parse", "--path-format=absolute", "--git-path", "hooks/pre-push").Output() //nolint:gosec // fixed argv
+func orBackground(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
+}
+
+func hasPrePushHook(ctx context.Context, dir string) bool {
+	out, err := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--path-format=absolute", "--git-path", "hooks/pre-push").Output() //nolint:gosec // fixed argv
 	if err != nil {
 		return false
 	}
@@ -148,7 +164,7 @@ func hasPrePushHook(dir string) bool {
 	return err == nil
 }
 
-func runGateCmd(dir string, failedOnly, pushFollows bool) (string, error) {
+func runGateCmd(ctx context.Context, dir string, failedOnly, pushFollows bool) (string, error) {
 	// --fuzz: a local gate skips the fuzz gate, and a pre-push hook runs it,
 	// so land gates with it for the hook's pass to match.
 	args := []string{"-C", dir, "--fuzz"}
@@ -156,13 +172,13 @@ func runGateCmd(dir string, failedOnly, pushFollows bool) (string, error) {
 	// reuses only a pass that ran the same way, so gate here as the hook
 	// will and the push does not run everything a second time. Without a push
 	// no hook runs, so there is nothing to match.
-	if pushFollows && hasPrePushHook(dir) {
+	if pushFollows && hasPrePushHook(ctx, dir) {
 		args = append(args, "--isolate")
 	}
 	if failedOnly {
 		args = append(args, "--failed")
 	}
-	cmd := exec.CommandContext(context.Background(), "gate", args...) //nolint:gosec // gate argv is constructed by rgit, never a shell string
+	cmd := exec.CommandContext(ctx, "gate", args...) //nolint:gosec // gate argv is constructed by rgit, never a shell string
 	cmd.Stdin = nil
 	out, err := cmd.CombinedOutput()
 	return string(out), err
@@ -172,12 +188,12 @@ type ghCLI struct {
 	runFn func(dir string, args ...string) (string, error)
 }
 
-func newGHCLI() *ghCLI {
-	return &ghCLI{runFn: runGH}
+func newGHCLI(ctx context.Context) *ghCLI {
+	return &ghCLI{runFn: func(dir string, args ...string) (string, error) { return runGH(ctx, dir, args...) }}
 }
 
-func runGH(dir string, args ...string) (string, error) {
-	cmd := exec.CommandContext(context.Background(), "gh", args...) //nolint:gosec // gh argv is constructed by rgit, never a shell string
+func runGH(ctx context.Context, dir string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "gh", args...) //nolint:gosec // gh argv is constructed by rgit, never a shell string
 	if dir != "" {
 		cmd.Dir = dir
 	}
@@ -265,6 +281,8 @@ func (g *ghCLI) latestWorkflowRun(owner, repo, branch, sha string) (workflowRun,
 }
 
 type landDeps struct {
+	// ctx is cancelled by SIGINT/SIGTERM; the poll loops stop on it. Nil never cancels.
+	ctx       context.Context
 	git       gitRunner
 	gh        gitHub
 	clock     landClock
@@ -298,12 +316,15 @@ type landBranchJSON struct {
 	Route  string `json:"route"`
 }
 
-func defaultLandDeps(stdout, stderr io.Writer) landDeps {
+func defaultLandDeps(ctx context.Context, stdout, stderr io.Writer) landDeps {
 	return landDeps{
-		git:       execGit{},
-		gh:        newGHCLI(),
-		clock:     realClock{},
-		gate:      runGateCmd,
+		ctx:   ctx,
+		git:   execGit{ctx},
+		gh:    newGHCLI(ctx),
+		clock: realClock{ctx},
+		gate: func(dir string, failedOnly, pushFollows bool) (string, error) {
+			return runGateCmd(ctx, dir, failedOnly, pushFollows)
+		},
 		cacheHome: cacheHome,
 		pid:       os.Getpid(),
 		randN:     randInt,
@@ -312,6 +333,8 @@ func defaultLandDeps(stdout, stderr io.Writer) landDeps {
 		stderr:    stderr,
 	}
 }
+
+func (d landDeps) cancelled() bool { return d.ctx != nil && d.ctx.Err() != nil }
 
 func cacheHome() string {
 	if v := os.Getenv("XDG_CACHE_HOME"); v != "" {
@@ -339,7 +362,7 @@ var landValueFlags = map[string]string{
 }
 
 func runLand(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
-	return runLandWith(ctx, dir, args, defaultLandDeps(stdout, stderr))
+	return runLandWith(ctx, dir, args, defaultLandDeps(ctx, stdout, stderr))
 }
 
 func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exitcode.Code {
@@ -2082,6 +2105,9 @@ func pollPR(owner, name string, ok bool, job landWatchJob, d landDeps) (prInfo, 
 		case !d.clock.Now().Before(deadline):
 			return info, "timeout"
 		}
+		if d.cancelled() {
+			return info, "cancelled"
+		}
 		d.clock.Sleep(landPollInterval)
 	}
 }
@@ -2104,6 +2130,10 @@ func waitForCI(res landWatchResult, owner, name string, ok bool, branch, sha str
 				res.State = "timeout"
 				res.CI = "running"
 			}
+			res.FinishedAt = d.clock.Now().UTC().Format(time.RFC3339)
+			return res
+		}
+		if d.cancelled() {
 			res.FinishedAt = d.clock.Now().UTC().Format(time.RFC3339)
 			return res
 		}
