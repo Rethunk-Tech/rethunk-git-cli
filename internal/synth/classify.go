@@ -63,7 +63,11 @@ func (fp *filePlan) classify(anchor string) (op editOp, unchanged bool, err erro
 			res *resolve.Resolution
 		}{{fp.workFile, workRes}, {fp.headFile, headRes}} {
 			if names := sharedExtentNames(side.f, side.res); len(names) > 0 {
-				return editOp{}, false, &resolve.ResolveError{Code: exitcode.AnchorAmbiguous, Anchor: anchor, Candidates: names}
+				return editOp{}, false, &resolve.ResolveError{
+					Code:   exitcode.AnchorAmbiguous,
+					Anchor: anchor,
+					Detail: "shares one declaration with " + strings.Join(names, ", ") + "; commit the whole file",
+				}
 			}
 		}
 	}
@@ -71,7 +75,11 @@ func (fp *filePlan) classify(anchor string) (op editOp, unchanged bool, err erro
 	switch {
 	case workRes != nil && headRes != nil:
 		if bare, _, ok := resolve.ParseOrdinal(anchor); ok && sameNameCount(fp.headFile, bare) != sameNameCount(fp.workFile, bare) {
-			return editOp{}, false, &resolve.ResolveError{Code: exitcode.AnchorAmbiguous, Anchor: anchor}
+			return editOp{}, false, &resolve.ResolveError{
+				Code:   exitcode.AnchorAmbiguous,
+				Anchor: anchor,
+				Detail: "the count of " + bare + " differs between HEAD and the worktree, so the ordinal moved; commit the whole file",
+			}
 		}
 		workBytes := fp.workSrc[workRes.Extent.Start:workRes.Extent.End]
 		headBytes := fp.headSrc[headRes.Extent.Start:headRes.Extent.End]

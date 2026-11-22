@@ -49,6 +49,11 @@ type ResolveError struct {
 	// § Exit codes, exit 6).
 	TreeSitterRange string
 	LSPRange        string
+
+	// Detail is the reason and remedy for an AnchorAmbiguous that qualifying cannot fix
+	// (one declaration under several names, or an ordinal that shifted); it replaces the
+	// candidate list in Error.
+	Detail string
 }
 
 func (e *ResolveError) Error() string {
@@ -86,6 +91,9 @@ func (e *ResolveError) Error() string {
 		exitcode.InvalidUsage:
 		// Keep the default unresolved label for codes that do not have
 		// a more specific resolution error message.
+	}
+	if e.Code == exitcode.AnchorAmbiguous && e.Detail != "" {
+		return fmt.Sprintf("resolve: %q: %s -- %s", e.Anchor, label, e.Detail)
 	}
 	if len(e.Candidates) == 0 {
 		return fmt.Sprintf("resolve: %q: %s", e.Anchor, label)

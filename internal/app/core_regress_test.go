@@ -64,8 +64,9 @@ func TestRun_OrdinalRefusedWhenSameNameCountChanged(t *testing.T) {
 	gitOut(t, dir, "commit", "-q", "-m", "chore: init")
 	writeAppFile(t, dir, "a.go", "package a\n\nvar x, y int\n\nfunc init() {\n\tprintln(\"new\")\n}\n\nfunc init() {\n\tx = 1\n}\n\nfunc init() {\n\ty = 20\n}\n")
 	before := gitOut(t, dir, "rev-parse", "HEAD")
-	_, _, code := runApp(t, "-C", dir, "commit", "-m", "fix: y", "a.go:init#2")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "-m", "fix: y", "a.go:init#2")
 	qt.Assert(t, qt.Equals(code, exitcode.AnchorAmbiguous))
+	qt.Assert(t, qt.StringContains(stderr, "ordinal moved; commit the whole file"))
 	qt.Assert(t, qt.Equals(gitOut(t, dir, "rev-parse", "HEAD"), before))
 }
 
@@ -106,8 +107,10 @@ func TestRun_CommitMultiNameVarSpecRefused(t *testing.T) {
 	gitOut(t, dir, "commit", "-q", "-m", "chore: init")
 	writeAppFile(t, dir, "a.go", "package a\n\nvar p, q = 10, 2\n")
 	before := gitOut(t, dir, "rev-parse", "HEAD")
-	_, _, code := runApp(t, "-C", dir, "commit", "-m", "fix: q", "a.go:q")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "-m", "fix: q", "a.go:q")
 	qt.Assert(t, qt.Equals(code, exitcode.AnchorAmbiguous))
+	qt.Assert(t, qt.StringContains(stderr, "shares one declaration with p; commit the whole file"))
+	qt.Assert(t, qt.Not(qt.StringContains(stderr, "qualify with one of")))
 	qt.Assert(t, qt.Equals(gitOut(t, dir, "rev-parse", "HEAD"), before))
 }
 
