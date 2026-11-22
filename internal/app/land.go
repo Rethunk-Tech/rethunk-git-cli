@@ -876,16 +876,7 @@ func landOne(r string, d landDeps) landResult {
 	case landPushed:
 		touchFleet(repo, 1, d)
 	case landPR:
-		note := ""
-		switch res.PRState {
-		case prStateUnknown:
-			note = repo + ": note: PR state unknown (lookup failed)"
-		case "":
-			note = repo + ": note: PR open but neither queued nor set to auto-merge"
-		}
-		if note != "" {
-			res.NotEnqueued = true
-			res.Lines = append([]string{note}, res.Lines...)
+		if flagNotEnqueued(&res) {
 			break
 		}
 		resetToRemote(repo, upstreamRemote(repo, def, d)+"/"+def, gated, d, &res)
@@ -954,10 +945,28 @@ func landSha(repo, def string, d landDeps) landResult {
 	case landPushed:
 		touchFleet(repo, 1, d)
 	case landPR:
+		flagNotEnqueued(&res)
 		touchFleet(repo, 0, d)
 	case landSkipped, landRed:
 	}
 	return res
+}
+
+// flagNotEnqueued marks a PR that is neither queued nor set to auto-merge, or whose state is
+// unknown, and puts the note first in its lines.
+func flagNotEnqueued(res *landResult) bool {
+	var note string
+	switch res.PRState {
+	case prStateUnknown:
+		note = res.Repo + ": note: PR state unknown (lookup failed)"
+	case "":
+		note = res.Repo + ": note: PR open but neither queued nor set to auto-merge"
+	default:
+		return false
+	}
+	res.NotEnqueued = true
+	res.Lines = append([]string{note}, res.Lines...)
+	return true
 }
 
 // gateHead runs the repo's full gate on its HEAD before anything is pushed. It returns the
@@ -1361,8 +1370,8 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 	if res.Route == "direct" && res.SHA != "" {
 		sha = res.SHA
 	}
-	if res.Route == "queue" && res.PRState == "" {
-		fmt.Fprintf(d.stderr, "error: PR for %s is open but neither queued nor set to auto-merge\n", prep.branch)
+	if res.Kind == landPR && flagNotEnqueued(&res) {
+		fmt.Fprintln(d.stderr, res.Lines[0])
 		return exitcode.LandNotEnqueued
 	}
 	cleanupLandBranch(prep, res, false, d)

@@ -2825,3 +2825,48 @@ func TestLandBranchPushCleanMainBehindOrigin(t *testing.T) {
 		t.Errorf("origin tip = %q; want feat on top of the competing commit", got)
 	}
 }
+
+// TestLandUnqueuedPRExitsNotEnqueued pins that a PR neither queued nor set to auto-merge exits 4
+// under --sha and --branch --push, and that --branch leaves the local main where it was.
+func TestLandUnqueuedPRExitsNotEnqueued(t *testing.T) {
+	t.Parallel()
+	for _, mode := range []string{"sha", "branch"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
+			dir, bare := repoWithOrigin(t)
+			gitOut(t, dir, "remote", "set-url", "origin", "git@github.com:acme/demo.git")
+			gitOut(t, dir, "remote", "set-url", "--push", "origin", bare)
+			args := []string{"--sha", "HEAD"}
+			var tip string
+			if mode == "sha" {
+				gittest.Write(t, dir, "ahead.txt", "x\n")
+				gittest.Commit(t.Context(), t, dir, "ahead")
+			} else {
+				wt := filepath.Join(t.TempDir(), "wt")
+				gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+				gittest.Write(t, wt, "feat.txt", "feat\n")
+				gitOut(t, wt, "add", "feat.txt")
+				gitOut(t, wt, "commit", "-q", "-m", "feat")
+				args = []string{"--branch", "feat", "--push"}
+			}
+			d := testLandDeps(t)
+			d.gh = &fakeGH{
+				rules:  []string{"pull_request"},
+				url:    "https://github.com/acme/demo/pull/4",
+				number: 4,
+				prs:    []prInfo{{State: "OPEN", URL: "https://github.com/acme/demo/pull/4"}},
+			}
+			var stdout, stderr strings.Builder
+			d.stdout, d.stderr = &stdout, &stderr
+			if code := runLandWith(t.Context(), dir, args, d); code != exitcode.LandNotEnqueued {
+				t.Fatalf("code = %v stdout=%q stderr=%q; want %v", code, stdout.String(), stderr.String(), exitcode.LandNotEnqueued)
+			}
+			if mode == "branch" {
+				tip = strings.TrimSpace(gitOut(t, dir, "log", "-1", "--pretty=%s"))
+				if tip != "feat" {
+					t.Errorf("local main reset to %q although the PR is not enqueued", tip)
+				}
+			}
+		})
+	}
+}
