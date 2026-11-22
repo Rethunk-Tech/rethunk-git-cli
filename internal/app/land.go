@@ -1027,7 +1027,7 @@ func landByRules(repo, def string, d landDeps, opts landPushOpts) landResult {
 	res.Slug = slug
 	var rules []string
 	if slug != "" {
-		rules, _ = d.gh.branchRuleTypes(slug, def)
+		rules = lookupRules(slug, def, d)
 	}
 	needPR, mergeQueue := rulesNeedPR(rules)
 	res.Queue = mergeQueue
@@ -1726,6 +1726,28 @@ func parseRuleTypes(out string) []string {
 		}
 	}
 	return types
+}
+
+// lookupRules reads the default branch's rule types and remembers them per repo. A failed lookup
+// (offline, unauthenticated) falls back to the remembered rules, so a PR-only repo is not pushed
+// to directly; with none remembered it returns nil and says so.
+func lookupRules(slug, def string, d landDeps) []string {
+	file := filepath.Join(d.cacheHome(), "land-rules", strings.ReplaceAll(slug, "/", "_")+"-"+strings.ReplaceAll(def, "/", "_"))
+	rules, err := d.gh.branchRuleTypes(slug, def)
+	if err == nil {
+		if os.MkdirAll(filepath.Dir(file), 0o750) == nil {
+			_ = os.WriteFile(file, []byte(strings.Join(rules, "\n")+"\n"), 0o600)
+		}
+		return rules
+	}
+	body, rerr := os.ReadFile(file)
+	st, serr := os.Stat(file)
+	if rerr != nil || serr != nil {
+		fmt.Fprintf(d.stderr, "%s: warning: branch-rules lookup failed (%v) and none cached; pushing direct\n", slug, err)
+		return nil
+	}
+	fmt.Fprintf(d.stderr, "%s: warning: branch-rules lookup failed (%v); using rules cached %s ago\n", slug, err, d.clock.Now().Sub(st.ModTime()).Round(time.Second))
+	return strings.Fields(string(body))
 }
 
 func rulesNeedPR(types []string) (needPR, mergeQueue bool) {

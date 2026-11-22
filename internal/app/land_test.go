@@ -1762,17 +1762,18 @@ func (c *fakeClock) Sleep(d time.Duration) {
 }
 
 type fakeGH struct {
-	rules  []string
-	squash bool
-	merge  bool
-	url    string
-	err    error
-	number int
-	prs    []prInfo
-	pi     int
-	run    workflowRun
-	merges []string
-	prErr  error
+	rules    []string
+	rulesErr error
+	squash   bool
+	merge    bool
+	url      string
+	err      error
+	number   int
+	prs      []prInfo
+	pi       int
+	run      workflowRun
+	merges   []string
+	prErr    error
 	// onRules and onCreate run mid-land, where a concurrent session could commit.
 	onRules, onCreate func()
 }
@@ -1781,7 +1782,7 @@ func (f *fakeGH) branchRuleTypes(string, string) ([]string, error) {
 	if f.onRules != nil {
 		f.onRules()
 	}
-	return f.rules, nil
+	return f.rules, f.rulesErr
 }
 func (f *fakeGH) squashMergeAllowed(string) (bool, error) { return f.squash, nil }
 func (f *fakeGH) mergeCommitAllowed(string) (bool, error) { return f.merge, nil }
@@ -2735,5 +2736,32 @@ func TestLandOneRefusesUntrackedFiles(t *testing.T) {
 	res := landOne(dir, testLandDeps(t))
 	if res.Kind != landRed || !strings.Contains(strings.Join(res.Lines, "\n"), "helper.txt") {
 		t.Errorf("kind = %v lines = %v; want red naming helper.txt", res.Kind, res.Lines)
+	}
+}
+
+func TestLookupRulesCache(t *testing.T) {
+	t.Parallel()
+	d := testLandDeps(t)
+	var stderr strings.Builder
+	d.stderr = &stderr
+	gh := &fakeGH{rules: []string{"pull_request"}}
+	d.gh = gh
+
+	if got := lookupRules("acme/demo", "main", d); len(got) != 1 || got[0] != "pull_request" {
+		t.Fatalf("success = %v", got)
+	}
+	gh.rules, gh.rulesErr = nil, errors.New("offline")
+	if got := lookupRules("acme/demo", "main", d); len(got) != 1 || got[0] != "pull_request" {
+		t.Fatalf("cached fallback = %v", got)
+	}
+	if !strings.Contains(stderr.String(), "using rules cached") {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+	stderr.Reset()
+	if got := lookupRules("acme/other", "main", d); got != nil {
+		t.Fatalf("uncached = %v", got)
+	}
+	if !strings.Contains(stderr.String(), "none cached; pushing direct") {
+		t.Errorf("stderr = %q", stderr.String())
 	}
 }
