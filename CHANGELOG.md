@@ -6,6 +6,8 @@ Notable changes to `rgit`. The format follows
 
 ## [Unreleased]
 
+## [3.0.7] - 2026-11-21
+
 ### Fixed
 
 - `rgit land` falls back to the last known branch rules (cached per repo) when the `gh` rules lookup fails, instead of pushing direct past a PR rule; with no cache it warns and pushes direct.
