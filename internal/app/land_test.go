@@ -2743,19 +2743,23 @@ func TestLookupRulesCache(t *testing.T) {
 // exits 130 with one line naming that step, not the gate's ordinary failure code.
 func TestLandSIGINTDuringGateExits130(t *testing.T) {
 	t.Parallel()
-	if _, err := exec.LookPath("gate"); err != nil {
-		t.Fatal("gate is required")
-	}
 	dir, _ := repoWithOrigin(t)
 	started := filepath.Join(t.TempDir(), "started")
-	gittest.Write(t, dir, ".gate.toml", "[gates.slow]\nrun = \"touch '"+started+"'; sleep 30\"\n")
-	gitOut(t, dir, "add", ".gate.toml")
+	// A stand-in gate on PATH, so the test needs no installed gate and the gate step is the one interrupted.
+	bin := t.TempDir()
+	gittest.Write(t, bin, "gate", "#!/bin/sh\ntouch '"+started+"'\nexec sleep 30\n")
+	if err := os.Chmod(filepath.Join(bin, "gate"), 0o755); err != nil { //nolint:gosec // an executable test stub
+		t.Fatal(err)
+	}
+	gittest.Write(t, dir, "slow.txt", "x\n")
+	gitOut(t, dir, "add", "slow.txt")
 	gitOut(t, dir, "commit", "-q", "-m", "slow gate")
 
 	cmd := exec.CommandContext(t.Context(), os.Args[0]) //nolint:gosec // the test binary, intercepted in TestMain
 	cmd.Env = append(os.Environ(),
 		"RGIT_TEST_LAND_SIGINT_DIR="+dir,
 		"XDG_CACHE_HOME="+t.TempDir(),
+		"PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"),
 	)
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
