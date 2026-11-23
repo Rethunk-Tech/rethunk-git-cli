@@ -115,7 +115,7 @@ func TestEscalateToContainer_HTMLNestedInsertIgnoresTagCoincidence(t *testing.T)
 	err := stageTargets(t.Context(), repo, dir, []Target{AnchorTarget("index.html", "em#tagline")})
 	qt.Assert(t, qt.IsNil(err))
 
-	want := "<div id=\"app\">\n  <section id=\"content\">v1</section>\n\n  <em id=\"tagline\">Hi</em>\n\n</div>\n"
+	want := "<div id=\"app\">\n  <section id=\"content\">v1</section>\n  <em id=\"tagline\">Hi</em>\n</div>\n"
 	qt.Assert(t, qt.Equals(stagedBlob(t, repo, "index.html"), want))
 	qt.Assert(t, qt.Equals(strings.Count(want, "<div id=\"app\">"), 1))
 }
@@ -304,4 +304,21 @@ func TestReferencesIdentifierMatchesAWholeNameOnly(t *testing.T) {
 	if !isIdentifier("Foo_1") {
 		t.Error("Foo_1 was not an identifier")
 	}
+}
+
+// TestStageTargets_NewSymbolBetweenFlushLinesStaysFlush pins that a new
+// symbol inserted with no blank lines around it is staged byte-identical to
+// the worktree, rather than padded with top-level blank-line separators.
+func TestStageTargets_NewSymbolBetweenFlushLinesStaysFlush(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t.Context(), t)
+	gittest.Write(t, dir, "f.ts", "const a = 1\nconst b = 2\n// keep\nconst c = 3\n")
+	gittest.Commit(t.Context(), t, dir, "chore: initial f.ts")
+
+	work := "const a = 1\nconst b = 2\n// new one\nconst n = 3\n// keep\nconst c = 3\n"
+	gittest.Write(t, dir, "f.ts", work)
+
+	err := stageTargets(t.Context(), repo, dir, []Target{AnchorTarget("f.ts", "n")})
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(stagedBlob(t, repo, "f.ts"), work))
 }

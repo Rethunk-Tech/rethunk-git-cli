@@ -370,30 +370,26 @@ func trimLeadingLineBreaks(b []byte) []byte {
 	return b[start:]
 }
 
-// widerGap picks the separator a splice should actually use: gap -- the
-// real blank-line run this anchor already has on that side in the worktree
-// -- when it is wider than the structural minimum (member selects which:
-// a blank line between two top-level declarations, exactly one newline
-// between two members of the same struct, interface, or class), else the
-// minimum itself. nl is the file's own line terminator, so a minimum built
-// here is made of the same bytes the rest of the file uses. Only ever
-// widens, never narrows: gap stays nil (shorter than any minimum) for an op
-// that never computed one (addPreamble's, which already owns its trailing
-// separator via resolve.ExtendThroughOwnedSeparator), so those fall back to
-// the minimum when gap is nil.
+// widerGap picks the separator a splice should use: gap -- the real
+// line-break run this anchor has on that side in the worktree -- verbatim
+// when it was computed, so a symbol sitting flush against its neighbours
+// stays flush. Otherwise the structural minimum (member selects which: a
+// blank line between two top-level declarations, exactly one newline between
+// two members of the same struct, interface, or class) built from nl, the
+// file's own line terminator. gap is nil for an op that never computed one
+// (addPreamble's, which already owns its trailing separator via
+// resolve.ExtendThroughOwnedSeparator).
 func widerGap(member bool, gap, nl []byte) []byte {
+	if len(gap) > 0 {
+		return gap
+	}
 	if len(nl) == 0 {
 		nl = []byte("\n")
 	}
-	minimum := make([]byte, 0, 2*len(nl))
-	minimum = append(append(minimum, nl...), nl...)
 	if member {
-		minimum = minimum[:len(nl)]
+		return nl
 	}
-	if len(gap) > len(minimum) {
-		return gap
-	}
-	return minimum
+	return append(append([]byte(nil), nl...), nl...)
 }
 
 // joinWithSeparator concatenates a and b, trimming any line breaks a
