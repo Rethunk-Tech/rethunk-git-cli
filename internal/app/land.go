@@ -257,8 +257,11 @@ func (g *ghCLI) mergePR(dir, head string, auto bool, strategy string) error {
 	if strategy != "" {
 		args = append(args, strategy)
 	}
-	_, err := g.runFn(dir, args...)
-	return err
+	out, err := g.runFn(dir, args...)
+	if err != nil {
+		return fmt.Errorf("%s: %w", strings.TrimSpace(out), err)
+	}
+	return nil
 }
 
 func (g *ghCLI) prNumber(dir, head string) (int, error) {
@@ -342,7 +345,7 @@ func defaultLandDeps(ctx context.Context, stdout, stderr io.Writer) landDeps {
 		ctx:   ctx,
 		step:  step,
 		git:   execGit{ctx: ctx, step: step},
-		gh:    newGHCLI(ctx, step),
+		gh:    newGHSettingsCache(newGHCLI(ctx, step), githubSettingsPath()),
 		clock: realClock{ctx},
 		gate: func(dir string, failedOnly, pushFollows bool) (string, error) {
 			setLandStep(step, "gate")
@@ -1065,6 +1068,8 @@ type landPushOpts struct {
 	logRange string
 	// afterGate words the origin-moved error for a push that follows a gate.
 	afterGate bool
+	// slug is the GitHub slug of the push's remote, so a refusal can drop its cached settings.
+	slug string
 }
 
 func landByRules(repo, def string, d landDeps, opts landPushOpts) landResult {
@@ -1089,6 +1094,7 @@ func landByRules(repo, def string, d landDeps, opts landPushOpts) landResult {
 	origin := strings.TrimSpace(mustGit(repo, d, "config", "--get", "remote."+remote+".url"))
 	slug := slugFromOrigin(origin)
 	res.Slug = slug
+	opts.slug = slug
 	var rules []string
 	if slug != "" {
 		rules = lookupRules(slug, def, d)
@@ -1110,6 +1116,7 @@ func landByRules(repo, def string, d landDeps, opts landPushOpts) landResult {
 	}
 	pushOut, err := d.git.run(repo, "push", "--recurse-submodules=check", "-u", remote, br)
 	if err != nil {
+		dropSettingsOnHint(d.gh, slug, pushOut)
 		res.Kind = landRed
 		res.Lines = []string{summaryRed(repo, pushOut)}
 		return res
@@ -1118,6 +1125,7 @@ func landByRules(repo, def string, d landDeps, opts landPushOpts) landResult {
 	defer func() { _, _ = d.git.run(repo, "branch", "-D", br) }()
 	url, err := d.gh.createPR(repo, br, subj)
 	if err != nil {
+		dropSettingsOnHint(d.gh, slug, err.Error())
 		res.Kind = landRed
 		res.Lines = []string{summaryRed(repo, err.Error())}
 		return res
@@ -1129,11 +1137,12 @@ func landByRules(repo, def string, d landDeps, opts landPushOpts) landResult {
 	}
 	// Plain merge first: with no required checks GitHub treats the PR as
 	// mergeable now, so --auto only warns and queues nothing.
-	_ = d.gh.mergePR(repo, br, false, "")
-	if mergeQueue {
-		_ = d.gh.mergePR(repo, br, true, "")
-	} else {
-		_ = d.gh.mergePR(repo, br, true, strategy)
+	if err := d.gh.mergePR(repo, br, false, ""); err != nil {
+		dropSettingsOnHint(d.gh, slug, err.Error())
+	}
+	// strategy is empty for a merge queue, so the queued request names no merge method.
+	if err := d.gh.mergePR(repo, br, true, strategy); err != nil {
+		dropSettingsOnHint(d.gh, slug, err.Error())
 	}
 	num, _ := d.gh.prNumber(repo, br)
 	res.PRNumber = num
@@ -1673,6 +1682,9 @@ func pushDirect(repo, pushDir, remote string, d landDeps, opts landPushOpts, res
 	} else {
 		out, err = pushOnce(pushDir, remote, opts.pushTo, d)
 		pushed = strings.TrimSpace(mustGit(pushDir, d, "rev-parse", "HEAD"))
+	}
+	if err != nil {
+		dropSettingsOnHint(d.gh, opts.slug, out)
 	}
 	switch {
 	case err == nil || remoteHolds(pushDir, d, remote, pushed, opts.pushTo):

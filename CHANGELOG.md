@@ -9,6 +9,7 @@ Notable changes to `rgit`. The format follows
 ### Added
 
 - `rgit doctor` reports whether `gh` is authenticated.
+- `rgit land` caches GitHub branch rules and allowed merge methods for 24 hours, and drops a repo's entries when a push or PR is refused over changed settings.
 
 ### Changed
 
