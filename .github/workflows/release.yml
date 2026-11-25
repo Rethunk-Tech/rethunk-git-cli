@@ -56,7 +56,7 @@ jobs:
           persist-credentials: false
 
       # No restored cache: a poisoned entry would otherwise reach the published binaries.
-      - uses: Rethunk-Tech/gh-actions/setup-go@346d9d280f6dfd86c9db02310039c90e2a6ddca4 # v1.31
+      - uses: Rethunk-Tech/gh-actions/setup-go@ed6afe0e127f69c7da2c8178521fa0d049176a00 # v1.36
         with:
           # cgo grammars: the default CGO-off Windows compile cannot build rgit; the zig cross job covers Windows.
           run-windows-compile: "false"
@@ -196,7 +196,7 @@ jobs:
           name: dist
           path: dist
 
-      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+      - uses: sigstore/cosign-installer@881c63bd87e38389154debd8331404ce7ca8a3ab # v4.1.4
 
       # Keyless: signs with a short-lived OIDC-issued cert instead of a
       # managed private key, so there is no signing key to rotate or leak.

@@ -45,7 +45,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: Rethunk-Tech/gh-actions/setup-go@346d9d280f6dfd86c9db02310039c90e2a6ddca4 # v1.31
+      - uses: Rethunk-Tech/gh-actions/setup-go@ed6afe0e127f69c7da2c8178521fa0d049176a00 # v1.36
         with:
           # cgo grammars: the default CGO-off Windows compile cannot build rgit; the zig cross job covers Windows.
           run-windows-compile: "false"
@@ -65,7 +65,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: Rethunk-Tech/gh-actions/setup-go@346d9d280f6dfd86c9db02310039c90e2a6ddca4 # v1.31
+      - uses: Rethunk-Tech/gh-actions/setup-go@ed6afe0e127f69c7da2c8178521fa0d049176a00 # v1.36
         with:
           run-windows-compile: "false"
       # Same target as a local `gate` (.gate.toml): race build,
@@ -87,7 +87,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: Rethunk-Tech/gh-actions/setup-go@346d9d280f6dfd86c9db02310039c90e2a6ddca4 # v1.31
+      - uses: Rethunk-Tech/gh-actions/setup-go@ed6afe0e127f69c7da2c8178521fa0d049176a00 # v1.36
         with:
           run-windows-compile: "false"
       # cmd/rgit-install's own tests (TestRunPrereqChecks, TestFindSQLAdapter)
@@ -147,7 +147,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: Rethunk-Tech/gh-actions/setup-go@346d9d280f6dfd86c9db02310039c90e2a6ddca4 # v1.31
+      - uses: Rethunk-Tech/gh-actions/setup-go@ed6afe0e127f69c7da2c8178521fa0d049176a00 # v1.36
         with:
           run-windows-compile: "false"
       # Same toolchain release.yml drives: rgit links tree-sitter through
@@ -201,7 +201,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: Rethunk-Tech/gh-actions/setup-go@346d9d280f6dfd86c9db02310039c90e2a6ddca4 # v1.31
+      - uses: Rethunk-Tech/gh-actions/setup-go@ed6afe0e127f69c7da2c8178521fa0d049176a00 # v1.36
         with:
           run-windows-compile: "false"
         id: go
