@@ -1396,6 +1396,10 @@ func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBra
 		fmt.Fprintf(d.stderr, "error: cannot determine default branch for %s\n", repo)
 		return landBranchPrep{}, exitcode.GitFailure
 	}
+	if branch == def {
+		fmt.Fprintf(d.stderr, "error: %s is the default branch; run rgit land\n", branch)
+		return landBranchPrep{}, exitcode.InvalidUsage
+	}
 	dirty := dirtyTracked(repo, d)
 	cur, err := currentBranch(repo, d)
 	if err != nil {

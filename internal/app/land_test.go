@@ -698,6 +698,18 @@ func TestLandBranchConflictExit2(t *testing.T) {
 	}
 }
 
+func TestLandBranchRefusesDefaultBranch(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	d := testLandDeps(t)
+	var stdout, stderr strings.Builder
+	d.stdout, d.stderr = &stdout, &stderr
+	code := runLandWith(t.Context(), dir, []string{"--branch", "main"}, d)
+	if code != exitcode.InvalidUsage || !strings.Contains(stderr.String(), "is the default branch") {
+		t.Errorf("code = %v stderr=%q; want InvalidUsage naming the default branch", code, stderr.String())
+	}
+}
+
 func TestLandBranchRedGateExit3(t *testing.T) {
 	t.Parallel()
 	dir, _ := repoWithOrigin(t)
