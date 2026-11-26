@@ -262,31 +262,14 @@ func lineStart(src []byte, off uint) uint {
 // that reproduces it needs no separate "how many blank lines does this
 // file's convention want" guess (widerGap, synth.go).
 func leadingGap(src []byte, start uint) []byte {
-	end := start
-	for end > 0 && src[end-1] == '\n' {
-		end--
-		if end > 0 && src[end-1] == '\r' {
-			end--
-		}
-	}
-	return src[end:start]
+	return src[len(trimTrailingLineBreaks(src[:start])):start]
 }
 
 // trailingGap is leadingGap's mirror: the run of consecutive line breaks in
 // src immediately following end.
 func trailingGap(src []byte, end uint) []byte {
-	stop := end
-	for stop < uint(len(src)) {
-		switch {
-		case src[stop] == '\r' && stop+1 < uint(len(src)) && src[stop+1] == '\n':
-			stop += 2
-		case src[stop] == '\n':
-			stop++
-		default:
-			return src[end:stop]
-		}
-	}
-	return src[end:stop]
+	rest := src[end:]
+	return rest[:len(rest)-len(trimLeadingLineBreaks(rest))]
 }
 
 // escalateToContainer widens a new member anchor to the container that
