@@ -3470,11 +3470,11 @@ func TestLandSerializesPerRepo(t *testing.T) {
 	gitOut(t, dir, "add", "new.txt")
 	gitOut(t, dir, "commit", "-q", "-m", "new")
 	var gates, inFlight, maxInFlight atomic.Int32
-	d := testLandDeps(t)
-	d.gate = func(string, bool) (string, error) {
+	gate := func(string, bool) (string, error) {
 		gates.Add(1)
 		n := inFlight.Add(1)
-		maxInFlight.Store(max(maxInFlight.Load(), n))
+		for m := maxInFlight.Load(); n > m && !maxInFlight.CompareAndSwap(m, n); m = maxInFlight.Load() {
+		}
 		time.Sleep(400 * time.Millisecond)
 		inFlight.Add(-1)
 		return "", nil
@@ -3482,6 +3482,8 @@ func TestLandSerializesPerRepo(t *testing.T) {
 	var wg sync.WaitGroup
 	results := make([]landResult, 2)
 	for i := range results {
+		d := testLandDeps(t)
+		d.gate = gate
 		wg.Go(func() { results[i] = landOne(dir, d) })
 	}
 	wg.Wait()

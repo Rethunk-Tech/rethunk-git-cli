@@ -2,7 +2,6 @@ package app
 
 import (
 	"bytes"
-	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -964,7 +963,7 @@ func landOne(r string, d landDeps) landResult {
 		return landResult{Repo: r, Kind: landSkipped, Lines: []string{r + ": skipped (not a git repo)"}}
 	}
 	// Another land of this repo would gate and push the same commits; wait for it, then see what it left.
-	unlock, err := gitx.New(repo).LockLand(cmp.Or(d.ctx, context.Background()))
+	unlock, err := gitx.New(repo).LockLand(d.ctx)
 	if err != nil {
 		return landResult{Repo: repo, Kind: landSkipped, Lines: []string{repo + ": skipped (cannot take the land lock: " + err.Error() + ")"}}
 	}
