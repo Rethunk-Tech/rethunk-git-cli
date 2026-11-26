@@ -243,30 +243,8 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 	}
 
 	if added == 0 && deleted == 0 {
-		oldMode, oldFound, merr := scope.Old.mode(ctx, repo, root, oldPath)
-		if merr != nil {
-			return nil, nil, false, merr
-		}
-		newMode, newFound, merr := scope.New.mode(ctx, repo, root, newPath)
-		if merr != nil {
-			return nil, nil, false, merr
-		}
-		if oldFound && newFound && oldMode != newMode {
-			note := formatModeNote(oldMode, oldFound, newMode, newFound)
-			return &FileReport{Path: newPath, Rows: []Row{{Status: StatusMode, Added: "0", Deleted: "0", ModeNote: note}}}, nil, false, nil
-		}
-		// Zero counts with nothing about the mode changed is a whole-file move
-		// (git's numstat names both sides, a pure rename carries no line
-		// change) or an empty file appearing or disappearing. Neither has
-		// content to attribute by symbol, and neither is a mode change --
-		// calling it one printed "644->644" and dropped the entry's real
-		// shape. It is still a change, so it keeps a row of its own at its new
-		// path, which is the path git's own listing reports it under.
-		status := StatusMod
-		if !newFound {
-			status = StatusDeleted
-		}
-		return &FileReport{Path: newPath, Rows: []Row{{Status: status, Added: "0", Deleted: "0"}}}, nil, false, nil
+		fr, merr := zeroCountReport(ctx, repo, root, scope, oldPath, newPath)
+		return fr, nil, false, merr
 	}
 
 	ignoreCase, err := repo.IgnoreCase(ctx)

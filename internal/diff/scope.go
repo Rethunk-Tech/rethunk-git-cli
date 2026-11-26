@@ -107,6 +107,33 @@ func (s contentSide) isLink(ctx context.Context, repo *gitx.Repo, root, path str
 	return found && mode == "120000", err
 }
 
+// zeroCountReport is buildFileReport's answer for a numstat entry with no
+// line change: a mode change, a move, or an empty file appearing or
+// disappearing.
+func zeroCountReport(ctx context.Context, repo *gitx.Repo, root string, scope Scope, oldPath, newPath string) (*FileReport, error) {
+	oldMode, oldFound, err := scope.Old.mode(ctx, repo, root, oldPath)
+	if err != nil {
+		return nil, err
+	}
+	newMode, newFound, err := scope.New.mode(ctx, repo, root, newPath)
+	if err != nil {
+		return nil, err
+	}
+	if oldFound && newFound && oldMode != newMode {
+		note := formatModeNote(oldMode, oldFound, newMode, newFound)
+		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusMode, Added: "0", Deleted: "0", ModeNote: note}}}, nil
+	}
+	// A whole-file move (git's numstat names both sides, a pure rename
+	// carries no line change) or an empty file appearing or disappearing has
+	// no content to attribute by symbol and is not a mode change. It keeps a
+	// row of its own at its new path, the path git's listing reports it under.
+	status := StatusMod
+	if !newFound {
+		status = StatusDeleted
+	}
+	return &FileReport{Path: newPath, Rows: []Row{{Status: status, Added: "0", Deleted: "0"}}}, nil
+}
+
 // noSymbolsReport is the one-row answer for a file with no per-symbol
 // attribution: git's own counts.
 func noSymbolsReport(path, added, deleted string) *FileReport {

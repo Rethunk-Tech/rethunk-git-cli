@@ -3692,7 +3692,7 @@ type editAfterStop struct {
 func (e editAfterStop) run(dir string, args ...string) (string, error) {
 	out, err := e.gitRunner.run(dir, args...)
 	if err != nil && len(args) > 0 && args[0] == "pull" {
-		_ = os.WriteFile(filepath.Join(dir, e.file), []byte("sibling edit\n"), 0o600) //nolint:gosec // fixture path under t.TempDir
+		_ = os.WriteFile(filepath.Join(dir, e.file), []byte("sibling edit\n"), 0o600)
 	}
 	return out, err
 }
