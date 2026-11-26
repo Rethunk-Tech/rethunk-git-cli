@@ -64,7 +64,7 @@ Everything else stays plain `git`. Full command reference: [docs/USAGE.md](docs/
 
 ## Inherited git behaviour
 
-`rgit commit` with named targets is `git commit --only` at symbol granularity — already-staged work stays out. `-i`/`--include` takes it along. No targets: the index, like `git commit`. See [docs/USAGE.md § Behaviour inherited from git](docs/USAGE.md#behaviour-inherited-from-git).
+`rgit commit` with named targets is `git commit --only` at symbol granularity — already-staged work stays out. `-i`/`--include` takes it along. Targets are required; none only with `--amend`, `--allow-empty`, `--fixup`, `--squash` or `--reuse-message`. See [docs/USAGE.md § Behaviour inherited from git](docs/USAGE.md#behaviour-inherited-from-git).
 
 ## Anchor limits
 
