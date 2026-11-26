@@ -458,6 +458,9 @@ func runLogPathScoped(ctx context.Context, dir string, args []string, stdout, st
 		extra = append([]string{"--follow"}, extra...)
 	}
 
+	if _, born, err := repo.RevParseVerify(ctx, "HEAD"); err == nil && !born {
+		return writeLogOutput(stdout, stderr, nil, asJSON)
+	}
 	if !asJSON {
 		if err := repo.LogTo(ctx, stdout, since, until, paths, extra...); err != nil {
 			fmt.Fprintf(stderr, "rgit: %v\n", err)
