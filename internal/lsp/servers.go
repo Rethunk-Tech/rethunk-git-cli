@@ -55,6 +55,31 @@ var vtslsSpec = serverSpec{
 	stdioArgs: []string{"--stdio"},
 }
 
+// bashLSSpec serves "shell" and "zsh" (the "shellscript" languageId). Unlike
+// vtsls and pyright-langserver, its stdio mode needs no flag beyond "start".
+var bashLSSpec = serverSpec{
+	name:      "bash-language-server",
+	bin:       "bash-language-server",
+	transport: transportStdio,
+	stdioArgs: []string{"start"},
+}
+
+// jsonLSSpec serves "json" and "jsonc".
+var jsonLSSpec = serverSpec{
+	name:      "vscode-json-language-server",
+	bin:       "vscode-json-language-server",
+	transport: transportStdio,
+	stdioArgs: []string{"--stdio"},
+}
+
+// cssLSSpec serves "css" and "scss".
+var cssLSSpec = serverSpec{
+	name:      "vscode-css-language-server",
+	bin:       "vscode-css-language-server",
+	transport: transportStdio,
+	stdioArgs: []string{"--stdio"},
+}
+
 // servers maps a resolve.Language's Name() to the server that cross-checks
 // it. "tsx" shares vtsls with "typescript" — one TypeScript server handles
 // both grammars; only the didOpen languageId differs (client.go).
@@ -105,23 +130,10 @@ var servers = map[string]serverSpec{
 			"procMacro": map[string]any{"enable": false},
 		},
 	},
-	"shell": {
-		name:      "bash-language-server",
-		bin:       "bash-language-server",
-		transport: transportStdio,
-		// Unlike vtsls and pyright-langserver, bash-language-server's stdio
-		// mode needs no separate flag: "start" is stdio, full stop -- its
-		// own docs show no dedicated flag for it.
-		stdioArgs: []string{"start"},
-	},
+	"shell": bashLSSpec,
 	// zsh shares bash-language-server: it serves the "shellscript" languageId,
 	// whose symbols (functions) match zsh function definitions by name.
-	"zsh": {
-		name:      "bash-language-server",
-		bin:       "bash-language-server",
-		transport: transportStdio,
-		stdioArgs: []string{"start"},
-	},
+	"zsh": bashLSSpec,
 	// yaml, json, css, and markdown's servers hold to the same bar as the
 	// four above: their documentSymbol ranges match this resolver's own
 	// declOnlyExtent byte-for-byte on real fixtures, including the
@@ -134,30 +146,10 @@ var servers = map[string]serverSpec{
 		transport: transportStdio,
 		stdioArgs: []string{"--stdio"},
 	},
-	"json": {
-		name:      "vscode-json-language-server",
-		bin:       "vscode-json-language-server",
-		transport: transportStdio,
-		stdioArgs: []string{"--stdio"},
-	},
-	"jsonc": {
-		name:      "vscode-json-language-server",
-		bin:       "vscode-json-language-server",
-		transport: transportStdio,
-		stdioArgs: []string{"--stdio"},
-	},
-	"css": {
-		name:      "vscode-css-language-server",
-		bin:       "vscode-css-language-server",
-		transport: transportStdio,
-		stdioArgs: []string{"--stdio"},
-	},
-	"scss": {
-		name:      "vscode-css-language-server",
-		bin:       "vscode-css-language-server",
-		transport: transportStdio,
-		stdioArgs: []string{"--stdio"},
-	},
+	"json":  jsonLSSpec,
+	"jsonc": jsonLSSpec,
+	"css":   cssLSSpec,
+	"scss":  cssLSSpec,
 	// marksman, not vscode-markdown-language-server: the latter crashes on
 	// startup on this machine, an ESM/CJS interop defect
 	// in its own bundled dependency, not a transport choice. marksman's own
