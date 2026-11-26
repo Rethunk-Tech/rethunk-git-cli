@@ -1275,6 +1275,9 @@ func (r *Repo) Commit(ctx context.Context, opts CommitOptions) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	if opts.Only != nil {
+		afterOnlyGitCommit()
+	}
 	if res.ExitCode != 0 {
 		if opts.Only != nil {
 			// A signal kills git after the commit landed (a slow post-commit hook), and
@@ -1359,6 +1362,10 @@ func (opts CommitOptions) args() []string {
 // beforeOnlyCommit is a test seam: it runs between checkOnlyHead and git
 // commit starting.
 var beforeOnlyCommit = func() {}
+
+// afterOnlyGitCommit is a test seam: it runs right after git commit returns
+// for a --only commit, before the real index is synced to what it committed.
+var afterOnlyGitCommit = func() {}
 
 // onlyGuardHook is the reference-transaction hook written into a --only
 // commit's private hooksPath. git commit reads HEAD before running any hook

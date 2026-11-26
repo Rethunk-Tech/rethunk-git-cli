@@ -431,11 +431,13 @@ func (r *commitRun) refuseOnlyDuringSequencer(ctx context.Context, repo *gitx.Re
 	return exitcode.Success
 }
 
-// acquireOnlyIndex takes the commit lock and a private index for --only.
+// acquireOnlyIndex takes the commit lock for every real commit, so an index
+// commit cannot land inside a --only commit's window from git's ref update to
+// its index sync, and a private index for --only.
 // release is always safe to call, including after a failure.
 func (r *commitRun) acquireOnlyIndex(ctx context.Context, repo *gitx.Repo) (only *gitx.OnlyIndex, release func(), code exitcode.Code) {
 	release = func() {}
-	if !r.f.only || r.f.dryRun {
+	if r.f.dryRun {
 		return nil, release, exitcode.Success
 	}
 	unlock, err := repo.LockCommits(ctx)
@@ -444,6 +446,9 @@ func (r *commitRun) acquireOnlyIndex(ctx context.Context, repo *gitx.Repo) (only
 		return nil, release, exitcode.GitFailure
 	}
 	release = unlock
+	if !r.f.only {
+		return nil, release, exitcode.Success
+	}
 	only, err = repo.NewOnlyIndex(ctx)
 	if err != nil {
 		fmt.Fprintf(r.stderr, "rgit: %v\n", err)
