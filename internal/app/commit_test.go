@@ -3,7 +3,6 @@ package app
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -563,7 +562,7 @@ func TestCommit_RepoRootDotStagesTrackedFilesOnly(t *testing.T) {
 	if _, stderr, code := runApp(t, "-C", dir, "commit", "-m", "chore: edit", "."); code != exitcode.Success {
 		t.Fatalf("code = %v stderr = %q", code, stderr)
 	}
-	if got := runGit(t, dir, "status", "--porcelain"); !strings.Contains(got, "?? d/new.txt") {
+	if got := gitOut(t, dir, "status", "--porcelain"); !strings.Contains(got, "?? d/new.txt") {
 		t.Errorf("status = %q; want d/new.txt still untracked", got)
 	}
 }
