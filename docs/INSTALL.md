@@ -47,7 +47,7 @@ the status. Stripped binary is ~19.5 MB; the grammars are most of it.
 | `test`, `test-short`, `test-race` | Full suite, `-short`, raced. Lanes: [`CONTRIBUTING.md`](../CONTRIBUTING.md#tests) |
 | `cover`, `cover-short` | `-coverpkg=./...` |
 | `fix-diff`, `fix` | `go fix` preview / apply |
-| `cross` | linux/amd64, linux/arm64, windows/amd64 into `dist/`, SQL when the CLI is present |
+| `cross` | linux/amd64, linux/arm64, windows/amd64 into `dist/`, needs the tree-sitter CLI; always builds SQL |
 | `clean` | Remove build outputs |
 
 ## Cross builds
@@ -182,8 +182,9 @@ binary SHA256. Without it, SHA256-only. Dry-run fetches nothing.
 env vars: `VERSION=v2.0.0 PREFIX=/usr/local/bin sh install.sh`.
 
 `install.sh`: linux/amd64 and linux/arm64; errors on macOS. `install.ps1`:
-Windows/amd64. Neither installs a language server. No Homebrew formula
-(cgo per-platform bottles).
+Windows/amd64. Neither installs a language server. Homebrew
+(`brew install rethunk-tech/tap/rgit`) and Scoop (`rethunk` bucket) are in
+[HUMANS.md](../HUMANS.md).
 
 ## Verify
 
