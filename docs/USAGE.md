@@ -27,8 +27,8 @@ binaries collapse to one `(untracked)` row.
 
 ## Global flags
 
-`-C <path>` **before** the command. `--version`, `--json`, and `-h`/`--help`
-before or after it.
+`-C <path>` **before** the command. `--version` only before the command (or
+as `rgit version`). `--json` and `-h`/`--help` before or after it.
 
 `--json` prints one object on stdout (`diff`, `commit`, `log`, `context`,
 `languages`, `doctor`, `symbols`, `find`, `land`) and nothing else there. Human narration
@@ -334,18 +334,16 @@ informational.
 Exclusive (129). No grammar rows — `languages --porcelain` owns those.
 
 **`--deep`** dials each on-PATH server (same handshake as `commit`)
-and appends `(reachable)` or `(degraded — handshake timed out or
+and appends `(reachable)` or `(degraded -- handshake timed out or
 unanswered)`. Not the default. A server not on `PATH` is never dialed.
 
 ## Symbols
 
 ```console
 $ rgit symbols auth.go
-@imports
 ValidateToken
 
 $ rgit symbols --with-lines auth.go
-1,3<TAB>@imports
 12,27<TAB>ValidateToken
 ```
 
@@ -414,7 +412,9 @@ Before anything else, each repo on a clean default branch that is behind its
 remote and not ahead is fast-forwarded and `make install`ed, printing
 `DIR: caught up to SHA`, plus `(merged PR #N)` when a new commit subject
 carries `#N` (a rebase-merged PR has none); a diverged or dirty branch is
-left alone.
+left alone. A default branch that is both ahead and behind is rebased onto its
+upstream before the gate; a conflicting rebase is aborted and the repo skipped
+(exit 14).
 `--wait` polls each open PR until it merges (or the cap); otherwise bosun
 watches the PR (nomad-hud records the PR line). `--install` runs `make install`
 from each directly pushed, clean HEAD after every repo in the run has
@@ -471,7 +471,8 @@ line ends `<direct|PR|queue>`. Without `--branch`, `--push` is usage
 
 | Failure | Stderr | Exit |
 | --- | --- | --- |
-| BR's worktree has uncommitted changes | the worktree and the files | 1 |
+| BR's worktree has uncommitted changes | the worktree and the files | 14 |
+| The gate edited tracked files, or HEAD moved during it | the files | 14 |
 | Rebase conflict | `conflict: hand to solver`, the worktree and the conflicting files | 2 |
 | `gate -C <worktree>` red | log path and last 40 lines | 3 |
 | Merge queue that does not enqueue | names the branch | 4 |
@@ -519,7 +520,7 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 | `--reedit-message` | Refused (129). |
 | `--push` | Removed (129): run `rgit land` after committing. |
 | `--stage-only` | Stage into the real index and stop: no message, no hooks. Needs a target. Exclusive with `--include`, `--only`, `--amend`, `--allow-empty`, `-m`/`-F`, `--fixup`, `--squash`, `--reuse-message`. No unstage of one symbol — `git restore --staged FILE` takes the whole file. |
-| `--dry-run` | Preview. No objects, no staging, no hooks. Same `+N/-M` as `diff`. |
+| `--dry-run` | Preview; needs no message. No objects, no staging, no hooks. Same `+N/-M` as `diff`. |
 | `--no-verify` | Skip hooks. |
 | `--fixup <commit>` | Autosquash (`amend:`/`reword:` forwarded). Generates its subject; `-m`/`-F` append. |
 | `--squash <commit>` | Same message rule as `--fixup`. |
@@ -559,8 +560,8 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 | `-n N`, `--max-count=N` | (`log`) Cap; under `--follow-rename`, per segment (total may exceed `N`). |
 | `--json` | (`log`) `hash`/`subject` object. Exclusive with `--porcelain` and `-p`. |
 
-`commit` needs `-m` or `-F` unless `--amend`, `--fixup`, `--squash`, or
-`--reuse-message`. It needs a target unless those or `--allow-empty`.
+`commit` needs `-m` or `-F` unless `--amend`, `--fixup`, `--squash`,
+`--reuse-message`, `--dry-run`, or `--stage-only`. It needs a target unless those or `--allow-empty`.
 Zero targets means skip staging, not `git add -A`. Named targets imply
 `--only`. During merge, cherry-pick, or revert, omitting `-m`/`-F` reuses
 Git's message; naming a target then needs `-i` (partial commit is refused).
