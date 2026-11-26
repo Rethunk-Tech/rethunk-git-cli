@@ -3720,7 +3720,7 @@ func TestPullRebaseAbortKeepsSiblingTrackedEdit(t *testing.T) {
 	if pullRebase(dir, d) {
 		t.Fatal("pullRebase succeeded; want a conflicting rebase")
 	}
-	got, err := os.ReadFile(filepath.Join(dir, "other.txt"))
+	got, err := os.ReadFile(filepath.Join(dir, "other.txt")) //nolint:gosec // fixture path under t.TempDir
 	if err != nil || string(got) != "sibling edit\n" {
 		t.Errorf("other.txt = %q (%v); want the sibling edit kept", got, err)
 	}

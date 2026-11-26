@@ -291,17 +291,10 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 	// A symlink's content is its target text, not the target's source: git's
 	// counts are the whole answer, and reading through the link can escape
 	// the repo or hit a directory.
-	for _, l := range []struct {
-		side contentSide
-		path string
-	}{{scope.Old, oldPath}, {scope.New, newPath}} {
-		link, lerr := l.side.isLink(ctx, repo, root, l.path)
-		if lerr != nil {
-			return nil, nil, false, lerr
-		}
-		if link {
-			return &FileReport{Path: newPath, Rows: []Row{{Status: StatusNoSymbols, Added: addedStr, Deleted: deletedStr}}}, nil, false, nil
-		}
+	if link, lerr := eitherSideIsLink(ctx, repo, root, scope, oldPath, newPath); lerr != nil {
+		return nil, nil, false, lerr
+	} else if link {
+		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusNoSymbols, Added: addedStr, Deleted: deletedStr}}}, nil, false, nil
 	}
 
 	oldSrc, _, oldTooLarge, err := scope.Old.readBounded(ctx, repo, root, oldPath, cache)

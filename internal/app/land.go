@@ -1078,7 +1078,7 @@ func abortRebase(dir string, d landDeps) {
 		if slices.Contains(gitx.SplitNUL([]byte(unmerged)), name) {
 			continue
 		}
-		if b, err := os.ReadFile(filepath.Join(dir, name)); err == nil {
+		if b, err := os.ReadFile(filepath.Join(dir, name)); err == nil { //nolint:gosec // git-listed path inside the repo being landed
 			kept[name] = b
 		}
 	}

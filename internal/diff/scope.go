@@ -107,6 +107,13 @@ func (s contentSide) isLink(ctx context.Context, repo *gitx.Repo, root, path str
 	return found && mode == "120000", err
 }
 
+func eitherSideIsLink(ctx context.Context, repo *gitx.Repo, root string, scope Scope, oldPath, newPath string) (bool, error) {
+	if link, err := scope.Old.isLink(ctx, repo, root, oldPath); err != nil || link {
+		return link, err
+	}
+	return scope.New.isLink(ctx, repo, root, newPath)
+}
+
 // readWorktreeClean reads path from the worktree with the CRLF-to-LF
 // conversion git applies before comparing it to a blob, so a CRLF checkout
 // does not show every line as changed.
