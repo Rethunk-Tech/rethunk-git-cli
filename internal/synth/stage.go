@@ -339,6 +339,19 @@ func (p *Plan) planPathspec(ctx context.Context, repo *gitx.Repo, root string, t
 	// change down this way, and the two are supposed to agree.
 	files, warnings := pathspecFileCounts(ctx, repo, root, t.Pathspec, literal)
 	p.CountingWarnings = append(p.CountingWarnings, warnings...)
+	if len(files) == 0 && !literal {
+		// A directory with no tracked file stages nothing: git add -u would fail on it, so it is
+		// an unchanged target here, as the preview says.
+		tracked, err := repo.LsFilesTracked(ctx, "--", t.Pathspec)
+		if err != nil {
+			return err
+		}
+		if len(tracked) == 0 {
+			p.trackedSpecs = p.trackedSpecs[:len(p.trackedSpecs)-1]
+			p.Results = append(p.Results, TargetResult{Target: t, Outcome: Unchanged, Path: t.Pathspec})
+			return nil
+		}
+	}
 	if len(files) == 0 {
 		// Nothing matched, or nothing changed. Keep one row naming
 		// the pathspec as given: it is still being staged, and the

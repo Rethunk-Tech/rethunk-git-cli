@@ -532,6 +532,18 @@ func TestCommitDryRunNeedsNoMessage(t *testing.T) {
 	}
 }
 
+// TestCommit_UntrackedOnlyDirectoryIsNothingToCommit pins that a directory holding only untracked files
+// is an unchanged target at apply time, as its preview says, not git add -u's raw pathspec error.
+func TestCommit_UntrackedOnlyDirectoryIsNothingToCommit(t *testing.T) {
+	t.Parallel()
+	dir, _ := gittest.RepoWithFile(t.Context(), t, "base.txt", "base\n", "init")
+	gittest.Write(t, dir, "d/f.txt", "a\nb\n")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "-m", "chore: add d", "d")
+	if code != exitcode.NothingToCommit || strings.Contains(stderr, "git add") {
+		t.Errorf("code = %v stderr = %q; want NothingToCommit and no git add error", code, stderr)
+	}
+}
+
 // TestCommit_DanglingSymlinkPositionalClassifies pins that a dangling link is a path in the worktree.
 func TestCommit_DanglingSymlinkPositionalClassifies(t *testing.T) {
 	t.Parallel()
