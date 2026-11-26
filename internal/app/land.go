@@ -226,6 +226,43 @@ func gatePassRecorded(ctx context.Context, dir, head string) bool {
 	return rec.Fresh && rec.Exit == 0 && !rec.Partial && !rec.Dirty && !rec.Current.Dirty && rec.Head == head && rec.Current.Head == head
 }
 
+// failedGate is one red gate from gate's result record.
+type failedGate struct {
+	Name string
+	Log  string
+}
+
+// gateFailuresRecorded reads the per-gate verdicts in `gate --json record`, so a red gate is named from
+// gate's data rather than its display text. Allowed failures and passes are left out.
+func gateFailuresRecorded(ctx context.Context, dir string) []failedGate {
+	cmd := exec.CommandContext(ctx, "gate", "-C", dir, "--json", "record") //nolint:gosec // gate argv is constructed by rgit, never a shell string
+	out, _ := cmd.Output()
+	var rec struct {
+		Gates []struct {
+			Name    string `json:"name"`
+			Display string `json:"display"`
+			Status  string `json:"status"`
+			Log     string `json:"log"`
+			Allowed bool   `json:"allowed"`
+		} `json:"gates"`
+	}
+	if json.NewDecoder(bytes.NewReader(out)).Decode(&rec) != nil {
+		return nil
+	}
+	var failed []failedGate
+	for _, g := range rec.Gates {
+		if g.Status == "ok" || g.Status == "skipped" || g.Allowed {
+			continue
+		}
+		name := g.Name
+		if name == "" {
+			name = g.Display
+		}
+		failed = append(failed, failedGate{Name: name, Log: g.Log})
+	}
+	return failed
+}
+
 type ghCLI struct {
 	runFn func(dir string, args ...string) (string, error)
 }
@@ -338,12 +375,14 @@ type landDeps struct {
 	clock landClock
 	gate  func(dir string, pushFollows bool) (string, error)
 	// passed reports whether gate's result record shows a clean pass of exactly head in dir.
-	passed    func(dir, head string) bool
-	cacheHome func() string
-	pid       int
-	sha       string
-	noGate    bool
-	asJSON    bool
+	passed func(dir, head string) bool
+	// failedGates lists the gates gate's result record in dir marks failed and not excused; nil when there is no record.
+	failedGates func(dir string) []failedGate
+	cacheHome   func() string
+	pid         int
+	sha         string
+	noGate      bool
+	asJSON      bool
 	// fetched is set when catchUp has just fetched origin for the repo landOne is about to read.
 	fetched bool
 	stdout  io.Writer
@@ -386,10 +425,11 @@ func defaultLandDeps(ctx context.Context, stdout, stderr io.Writer) landDeps {
 			setLandStep(step, "gate")
 			return gatePassRecorded(ctx, dir, head)
 		},
-		cacheHome: cacheHome,
-		pid:       os.Getpid(),
-		stdout:    stdout,
-		stderr:    stderr,
+		failedGates: func(dir string) []failedGate { return gateFailuresRecorded(ctx, dir) },
+		cacheHome:   cacheHome,
+		pid:         os.Getpid(),
+		stdout:      stdout,
+		stderr:      stderr,
 	}
 }
 
@@ -1123,7 +1163,22 @@ func gateHead(repo string, d landDeps) (line, logPath string, ok bool) {
 		_ = os.WriteFile(logPath, []byte(logBody), 0o600)
 	}
 	if gateErr != nil {
-		names := failedGateNames(out)
+		var names string
+		if d.failedGates != nil {
+			if fg := d.failedGates(repo); len(fg) > 0 {
+				var ns []string
+				for _, g := range fg {
+					ns = append(ns, g.Name)
+				}
+				names = strings.Join(ns, ",")
+				if fg[0].Log != "" {
+					logPath = fg[0].Log
+				}
+			}
+		}
+		if names == "" {
+			names = failedGateNames(out)
+		}
 		if names == "?" {
 			if names = redDetail(out); names == "" {
 				names = gateErr.Error()
