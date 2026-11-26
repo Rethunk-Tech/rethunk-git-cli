@@ -137,22 +137,31 @@ func gitPrefix(root string) []string {
 // reported through Result.ExitCode with err nil, since that is git
 // behaving normally, not failing to run.
 func (r *Repo) run(ctx context.Context, stdin io.Reader, args ...string) (Result, error) {
+	var stdout bytes.Buffer
+	res, err := r.runTo(ctx, stdin, &stdout, args...)
+	res.Stdout = stdout.Bytes()
+	return res, err
+}
+
+// runTo is run with git's stdout sent to w as it is produced; the Result's
+// Stdout stays empty.
+func (r *Repo) runTo(ctx context.Context, stdin io.Reader, w io.Writer, args ...string) (Result, error) {
 	full := append(gitPrefix(r.root), args...)
 	cmd := exec.CommandContext(ctx, "git", full...) //nolint:gosec // rgit deliberately delegates git-shaped arguments directly, never through a shell
 	cmd.Env = r.env
 	cmd.Stdin = stdin
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
+	var stderr bytes.Buffer
+	cmd.Stdout = w
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
 		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
-			return Result{Stdout: stdout.Bytes(), Stderr: stderr.Bytes(), ExitCode: exitErr.ExitCode()}, nil
+			return Result{Stderr: stderr.Bytes(), ExitCode: exitErr.ExitCode()}, nil
 		}
 		return Result{}, &ExecError{Args: args, Err: err}
 	}
-	return Result{Stdout: stdout.Bytes(), Stderr: stderr.Bytes(), ExitCode: 0}, nil
+	return Result{Stderr: stderr.Bytes()}, nil
 }
 
 // gitError builds a *GitError from a completed Result for the given
@@ -1928,6 +1937,26 @@ func (r *Repo) FindRename(ctx context.Context, rev, path string) (commit, oldPat
 // unparseable date or an unwalkable path is a genuine failure -- so any
 // non-zero exit is a *GitError.
 func (r *Repo) Log(ctx context.Context, since, until string, paths []string, extra ...string) ([]byte, error) {
+	args := logArgs(since, until, paths, extra)
+	return r.checked(ctx, args...)
+}
+
+// LogTo is Log with git's output streamed to w as git produces it, so memory
+// stays flat however long the history and a reader that stops early (`| head`)
+// ends git's work early.
+func (r *Repo) LogTo(ctx context.Context, w io.Writer, since, until string, paths []string, extra ...string) error {
+	args := logArgs(since, until, paths, extra)
+	res, err := r.runTo(ctx, nil, w, args...)
+	if err != nil {
+		return err
+	}
+	if res.ExitCode != 0 {
+		return gitError(args, res)
+	}
+	return nil
+}
+
+func logArgs(since, until string, paths, extra []string) []string {
 	args := []string{"log", "--no-textconv"}
 	if since != "" {
 		args = append(args, "--since="+since)
@@ -1940,7 +1969,7 @@ func (r *Repo) Log(ctx context.Context, since, until string, paths []string, ext
 		args = append(args, "--")
 		args = append(args, paths...)
 	}
-	return r.checked(ctx, args...)
+	return args
 }
 
 // CommitSummary is one commit's hash and subject, as RecentCommits reports
