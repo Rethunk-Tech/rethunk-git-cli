@@ -1164,8 +1164,8 @@ func TestLandRootsRelativeRepos(t *testing.T) {
 		t.Fatalf("code = %v stdout=%q", code, stdout.String())
 	}
 	one, two := filepath.Join(base, "one"), filepath.Join(base, "two")
-	// Each repo is probed twice: once by the catch-up, once by the land.
-	want := []string{one, one, two, two}
+	// Each repo is probed once by the pin scan, then once by the catch-up and once by the land.
+	want := []string{one, two, one, one, two, two}
 	if strings.Join(git.dirs, "\x00") != strings.Join(want, "\x00") {
 		t.Errorf("dirs = %#v; want %#v", git.dirs, want)
 	}
@@ -3214,5 +3214,55 @@ func TestGateHeadReusesRecordedPass(t *testing.T) {
 	gittest.Write(t, dir, "base.txt", "dirty\n")
 	if _, _, ok := gateHead(dir, d); ok || gated != 1 {
 		t.Errorf("dirty tree: ok=%v gated=%d", ok, gated)
+	}
+}
+
+// pinnedPair makes app, whose ahead commit pins lib's ahead commit by git+ssh SHA, and lib.
+func pinnedPair(t *testing.T) (app, lib string) {
+	t.Helper()
+	lib, _ = repoWithOrigin(t)
+	gittest.Write(t, lib, "lib.txt", "x\n")
+	gittest.Commit(t.Context(), t, lib, "lib change")
+	sha := strings.TrimSpace(gitOut(t, lib, "rev-parse", "HEAD"))
+	app, _ = repoWithOrigin(t)
+	gittest.Write(t, app, "package.json", `{"dependencies":{"lib":"git+ssh://git@github.com/acme/lib.git#`+sha+`"}}`+"\n")
+	gittest.Commit(t.Context(), t, app, "pin lib")
+	return app, lib
+}
+
+// TestLandPushesPinnedRepoFirst pins that a repo whose package.json pins another run repo's unpushed commit lands after it.
+func TestLandPushesPinnedRepoFirst(t *testing.T) {
+	t.Parallel()
+	app, lib := pinnedPair(t)
+	d := testLandDeps(t)
+	var stdout strings.Builder
+	d.stdout = &stdout
+	if code := landRepos(t.Context(), []string{app, lib}, false, false, false, d); code != exitcode.Success {
+		t.Fatalf("code = %v stdout=%q", code, stdout.String())
+	}
+	out := stdout.String()
+	if li, ai := strings.Index(out, lib+": pushed"), strings.Index(out, app+": pushed"); li < 0 || ai < 0 || li > ai {
+		t.Errorf("lib must be pushed before app: %q", out)
+	}
+}
+
+// TestLandSkipsConsumerOfRedPinnedRepo pins that a consumer is not pushed when the repo it pins went red in the run.
+func TestLandSkipsConsumerOfRedPinnedRepo(t *testing.T) {
+	t.Parallel()
+	app, lib := pinnedPair(t)
+	d := testLandDeps(t)
+	d.gate = func(dir string, _ bool) (string, error) {
+		if dir == lib {
+			return "gate: failed: unit -> /x.log\n", errors.New("exit 1")
+		}
+		return "", nil
+	}
+	var stdout strings.Builder
+	d.stdout = &stdout
+	if code := landRepos(t.Context(), []string{app, lib}, false, false, false, d); code != exitcode.LandRed {
+		t.Fatalf("code = %v stdout=%q", code, stdout.String())
+	}
+	if !strings.Contains(stdout.String(), app+": skipped (pinned repo "+lib+" is red)") || strings.Contains(stdout.String(), app+": pushed") {
+		t.Errorf("stdout = %q", stdout.String())
 	}
 }

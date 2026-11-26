@@ -538,6 +538,12 @@ func landFlagValue(args []string, i int) (value string, next int, ok bool) {
 
 func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, d landDeps) exitcode.Code {
 	ordered := orderRepos(repos)
+	deps := map[string][]string{}
+	if d.sha == "" {
+		deps = pinDeps(ordered, d)
+		ordered = orderByPins(ordered, deps)
+	}
+	redRepos := map[string]bool{}
 	var results []landResult
 	red, subRed, caughtUpFail, blocked, notEnqueued := false, false, false, false, false
 	for _, r := range ordered {
@@ -552,12 +558,18 @@ func landRepos(ctx context.Context, repos []string, wait, asJSON, install bool, 
 			results = append(results, landResult{Repo: r, Kind: landSkipped, Lines: []string{r + ": skipped (a submodule repo is red)"}})
 			continue
 		}
+		if pinned := redDep(deps[r], redRepos); pinned != "" {
+			// The consumer's pin names a commit of a repo that was not pushed, so the remote could never resolve it.
+			results = append(results, landResult{Repo: r, Kind: landSkipped, Lines: []string{r + ": skipped (pinned repo " + pinned + " is red)"}})
+			continue
+		}
 		res := landOne(r, od)
 		results = append(results, res)
 		blocked = blocked || skipNeedsAction(res)
 		notEnqueued = notEnqueued || res.NotEnqueued
 		if res.Kind == landRed {
 			red = true
+			redRepos[r] = true
 			subRed = subRed || !isUmbrella(r)
 		}
 	}
