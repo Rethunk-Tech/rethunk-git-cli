@@ -1026,6 +1026,10 @@ func gateHead(repo string, d landDeps) (line, logPath string, ok bool) {
 		return repo + ": error: untracked files (" + strings.Join(strings.Fields(out), ", ") + "); add or ignore them first, nothing pushed", "", false
 	}
 	headBefore, statusBefore := gateState(repo, d)
+	// An edit that landed after the dirty check would be gated with the tree and then ride along unpushed.
+	if strings.TrimSpace(statusBefore) != "" {
+		return repo + ": error: tracked files changed before the gate (" + dirtyNames(statusBefore) + "); nothing pushed", "", false
+	}
 	out, gateErr := d.gate(repo, false, true)
 	logdir := filepath.Join(d.cacheHome(), "land")
 	sum := sha256.Sum256([]byte(repo))

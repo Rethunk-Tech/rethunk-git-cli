@@ -2529,6 +2529,23 @@ func TestLandJSONOneObject(t *testing.T) {
 	}
 }
 
+// TestGateHeadRefusesDirtyTree pins that an edit made after land's dirty check is never gated and pushed over.
+func TestGateHeadRefusesDirtyTree(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	gittest.Write(t, dir, "base.txt", "sibling edit\n")
+	d := testLandDeps(t)
+	gated := false
+	d.gate = func(string, bool, bool) (string, error) {
+		gated = true
+		return "", nil
+	}
+	line, _, ok := gateHead(dir, d)
+	if ok || gated || !strings.Contains(line, "tracked files changed before the gate (base.txt); nothing pushed") {
+		t.Errorf("ok=%v gated=%v line=%q", ok, gated, line)
+	}
+}
+
 func TestLandBranchJSON(t *testing.T) {
 	t.Parallel()
 	dir, _ := repoWithOrigin(t)
