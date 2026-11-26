@@ -143,7 +143,7 @@ func TestRenderText_NoTrailingWhitespace(t *testing.T) {
 func TestRender_StructuredDataIsPathOnly(t *testing.T) {
 	t.Parallel()
 	report := &Report{Files: []FileReport{
-		{Path: "config.json", lang: "json", Rows: []Row{
+		{Path: "config.json", lang: "json", structured: true, Rows: []Row{
 			{Symbol: "name", Status: StatusMod, Added: "1", Deleted: "0"},
 			{Symbol: "version", Status: StatusMod, Added: "2", Deleted: "1"},
 		}},

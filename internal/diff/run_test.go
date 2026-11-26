@@ -1287,3 +1287,19 @@ func TestRun_CRLFCheckoutReportsOnlyTheEditedSymbol(t *testing.T) {
 		})
 	}
 }
+
+func TestRun_StructuredDataCollapsesUnderIgnoreCase(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "Config.JSON", "{\n  \"name\": \"a\",\n  \"version\": 1\n}\n", "chore: config")
+	gittest.Git(t.Context(), t, dir, "config", "core.ignorecase", "true")
+	gittest.Write(t, dir, "Config.JSON", "{\n  \"name\": \"b\",\n  \"version\": 2\n}\n")
+
+	report, err := Run(t.Context(), repo, dir, Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	porcelain := RenderPorcelain(report)
+	if strings.Contains(porcelain, "\tname\t") || strings.Contains(porcelain, "\tversion\t") {
+		t.Errorf("RenderPorcelain = %q; want one path-only row (commit refuses FILE:key)", porcelain)
+	}
+}

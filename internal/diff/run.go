@@ -331,7 +331,7 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 	if len(rows) == 0 {
 		return nil, warnings, tsOnly, nil
 	}
-	return &FileReport{Path: newPath, Rows: rows, lang: lang.Name()}, warnings, tsOnly, nil
+	return &FileReport{Path: newPath, Rows: rows, lang: lang.Name(), structured: resolve.IsStructuredData(lang)}, warnings, tsOnly, nil
 }
 
 // buildUntrackedReport attributes a file git does not track at all by
@@ -413,7 +413,7 @@ func buildUntrackedReport(ctx context.Context, repo *gitx.Repo, root, path strin
 		// collapsed row rather than an empty Rows slice.
 		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: strconv.Itoa(countLines(content)), Deleted: "0"}}}, warnings, tsOnly, nil
 	}
-	return &FileReport{Path: path, Rows: rows, lang: lang.Name()}, warnings, tsOnly, nil
+	return &FileReport{Path: path, Rows: rows, lang: lang.Name(), structured: resolve.IsStructuredData(lang)}, warnings, tsOnly, nil
 }
 
 // formatModeNote renders "644->755"-shaped mode notes from git's full

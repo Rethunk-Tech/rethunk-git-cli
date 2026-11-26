@@ -6,8 +6,6 @@ import (
 	"regexp"
 	"strconv"
 	"text/tabwriter"
-
-	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/resolve"
 )
 
 // RenderText renders report in the default aligned layout from
@@ -142,8 +140,7 @@ func TrimLineEnds(s string) string { return trailingSpace.ReplaceAllString(s, ""
 // same filter `rgit symbols --for-commit` uses: commit refuses FILE:key on
 // those files, so naming the keys here would send callers into exit 12.
 func rowsForRender(f FileReport) []Row {
-	lang, ok, _, err := resolve.LanguageForPathFolding("", f.Path, false, nil)
-	if err != nil || !ok || !resolve.IsStructuredData(lang) {
+	if !f.structured {
 		return f.Rows
 	}
 	if len(f.Rows) == 0 || (len(f.Rows) == 1 && f.Rows[0].Symbol == "") {

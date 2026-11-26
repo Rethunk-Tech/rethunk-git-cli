@@ -80,6 +80,11 @@ type FileReport struct {
 	OldPath string
 	Rows    []Row
 
+	// structured is resolve.IsStructuredData of the language buildFileReport
+	// resolved (core.ignorecase folding included), so rendering collapses the
+	// same files attribution and commit's exit-12 guard do.
+	structured bool
+
 	// lang is the resolved language's Name() (resolve.Language), set only
 	// when buildFileReport actually reached attributeSymbols -- the same
 	// resolution that already ran the shebang fallback for an extensionless
