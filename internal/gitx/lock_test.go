@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -77,5 +78,17 @@ func TestLockCommitsReturnsOnCancel(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("lockCommits still blocked 1s after cancel")
+	}
+}
+
+func TestLockContentionMatchesStderrAfterRelease(t *testing.T) {
+	t.Parallel()
+	lock := filepath.Join(t.TempDir(), "index.lock")
+	held := &GitError{Stderr: []byte("fatal: Unable to create '" + filepath.ToSlash(lock) + "': File exists.")}
+	if !lockContention(held, lock) {
+		t.Error("stderr naming the released lock: want contention")
+	}
+	if lockContention(&GitError{Stderr: []byte("fatal: bad object")}, lock) {
+		t.Error("unrelated error: want no contention")
 	}
 }
