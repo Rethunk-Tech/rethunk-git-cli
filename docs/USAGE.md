@@ -11,7 +11,7 @@ $ rgit diff
                oldHelper           DELETED  +0/-14
                @imports            +1/-0
                (unanchorable)      +2/-0   -> use --file auth.go
-  README.md    (no symbols)        +2/-0
+  Makefile     (no symbols)        +2/-0
   newfile.go   @header             +2/-0
                NewFunc             +13/-0
   config.ini   (untracked)         +4/-0   -> use --file config.ini
@@ -31,7 +31,7 @@ binaries collapse to one `(untracked)` row.
 before or after it.
 
 `--json` prints one object on stdout (`diff`, `commit`, `log`, `context`,
-`languages`, `doctor`, `symbols`, `find`) and nothing else there. Human narration
+`languages`, `doctor`, `symbols`, `find`, `land`) and nothing else there. Human narration
 stays on stderr. Other commands: 129. Envelope:
 [`CODES.md`](CODES.md#output-records).
 
@@ -333,7 +333,7 @@ informational.
 `--porcelain` / `--json`: [`CODES.md`](CODES.md#rgit-doctor---porcelain).
 Exclusive (129). No grammar rows — `languages --porcelain` owns those.
 
-**`--deep`** dials each on-PATH server (same handshake as `diff`/`commit`)
+**`--deep`** dials each on-PATH server (same handshake as `commit`)
 and appends `(reachable)` or `(degraded — handshake timed out or
 unanswered)`. Not the default. A server not on `PATH` is never dialed.
 
@@ -367,7 +367,7 @@ No file argument: usage on stderr, 129. Unreadable: 128. Unsupported
 language: 9.
 
 When `core.ignorecase` is true, extension lookup is case-insensitive for
-`symbols`, `find`, `commit`, `diff`, `blame`, `log`, and `languages`; the path is
+`symbols`, `find`, `commit`, `diff`, `show`, `blame`, `log`, and `languages`; the path is
 unchanged.
 
 ## Find
@@ -546,7 +546,7 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 | `--limit N` | (`symbols`) At most N records, after `--match`. |
 | `--match REGEX` | (`symbols`) Keep symbol names matching REGEX. |
 | `--porcelain` | (`symbols`) NUL records. |
-| `--json` | Global. One object on stdout for `diff`, `commit`, `log`, `context`, `languages`, `doctor`, `symbols`, `find`. Before or after the command. Other commands: 129. |
+| `--json` | Global. One object on stdout for `diff`, `commit`, `log`, `context`, `languages`, `doctor`, `symbols`, `find`, `land`. Before or after the command. Other commands: 129. |
 | `--json` | (`symbols`) One object. Exclusive with `--porcelain`. |
 | `--bodies N` | (`find`) Print bodies for the top N hits (default 3). |
 | `--names` | (`find`) Header lines only. |
