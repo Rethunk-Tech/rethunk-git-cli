@@ -283,3 +283,22 @@ func TestClassifyArgs_GlobMatchingTrackedPathIsPathspec(t *testing.T) {
 	qt.Assert(t, qt.IsTrue(errors.As(err, &uerr)))
 	qt.Assert(t, qt.StringContains(err.Error(), ":(glob)"))
 }
+
+// TestGitPathChecker_AsksTheIndexAboutOnlyTheCandidatePath pins that ruling
+// out a colon-bearing tracked path never lists the whole index.
+func TestGitPathChecker_AsksTheIndexAboutOnlyTheCandidatePath(t *testing.T) {
+	root, repo := gittest.New(t.Context(), t)
+	gittest.Write(t, root, "a.go", "package p\n")
+	gittest.Git(t.Context(), t, root, "add", "a.go")
+	log := filepath.Join(t.TempDir(), "ls-files.log")
+	t.Setenv("PATH", gittest.GitShim(t, `case " $* " in *" ls-files "*) printf '%s\n' "$*" >> '`+log+`' ;; esac`))
+
+	checker := &GitPathChecker{Root: root, Repo: repo}
+	exists, err := checker.ExistsInWorktreeOrHEAD(t.Context(), "a.go:Sym")
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsFalse(exists))
+
+	got, err := os.ReadFile(log) //nolint:gosec // fixture path under t.TempDir
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.StringContains(string(got), "-- :(literal)a.go:Sym"))
+}

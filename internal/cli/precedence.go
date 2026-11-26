@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gitx"
 )
@@ -211,13 +210,9 @@ func PrefixPath(prefix, path string) string {
 // gitx, and HEAD existence via gitx. Prefix is the current directory relative
 // to Root (gitx.Repo.ShowPrefix), so rules 4 and 5 test the same path git would.
 type GitPathChecker struct {
-	Root            string
-	Prefix          string
-	Repo            *gitx.Repo
-	indexOnce       sync.Once
-	indexIgnoreCase bool
-	indexPaths      map[string]struct{}
-	indexErr        error
+	Root   string
+	Prefix string
+	Repo   *gitx.Repo
 
 	// ExtraRev, when non-empty, is one more revision whose tree counts as a
 	// place the path may exist. show, blame, and log --source set it to the
@@ -236,34 +231,21 @@ func (c *GitPathChecker) ExistsInWorktreeOrHEAD(ctx context.Context, path string
 		return false, err
 	}
 
-	c.indexOnce.Do(func() {
-		ignoreCase, err := c.Repo.IgnoreCase(ctx)
-		if err != nil {
-			c.indexErr = err
-			return
-		}
-		c.indexIgnoreCase = ignoreCase
-		paths, err := c.Repo.LsFilesTracked(ctx)
-		if err != nil {
-			c.indexErr = err
-			return
-		}
-		c.indexPaths = make(map[string]struct{}, len(paths))
-		for _, path := range paths {
-			if ignoreCase {
-				path = strings.ToLower(path)
-			}
-			c.indexPaths[path] = struct{}{}
-		}
-	})
-	if c.indexErr != nil {
-		return false, c.indexErr
+	// Only this path is asked of the index: listing every tracked path to
+	// rule out one colon-bearing name costs memory and time with the tree.
+	ignoreCase, err := c.Repo.IgnoreCase(ctx)
+	if err != nil {
+		return false, err
 	}
-	indexPath := rel
-	if c.indexIgnoreCase {
-		indexPath = strings.ToLower(indexPath)
+	magic := ":(literal)"
+	if ignoreCase {
+		magic = ":(literal,icase)"
 	}
-	if _, found := c.indexPaths[indexPath]; found {
+	tracked, err := c.Repo.LsFilesTracked(ctx, "--", magic+rel)
+	if err != nil {
+		return false, err
+	}
+	if len(tracked) > 0 {
 		return true, nil
 	}
 
