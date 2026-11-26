@@ -123,11 +123,13 @@ func (e *GitError) Error() string {
 	return fmt.Sprintf("git %s: exit %d: %s", strings.Join(e.Args, " "), e.ExitCode, reason)
 }
 
-// gitPrefix is the argv every git invocation starts with. core.fsmonitor is
-// forced off because a non-boolean value is a program git runs on any
+// NoFsmonitor forces core.fsmonitor off: a non-boolean value is a program git runs on any
 // index-touching verb, and a cloned repository's own config can set it.
+var NoFsmonitor = []string{"-c", "core.fsmonitor=false"}
+
+// gitPrefix is the argv every git invocation starts with.
 func gitPrefix(root string) []string {
-	return []string{"-C", root, "-c", "core.fsmonitor=false"}
+	return append([]string{"-C", root}, NoFsmonitor...)
 }
 
 // run executes git with args against the repo root. err is non-nil only

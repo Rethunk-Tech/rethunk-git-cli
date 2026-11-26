@@ -144,13 +144,9 @@ type execGit struct {
 	step *string
 }
 
-// noFsmonitor mirrors gitx's prefix: a non-boolean core.fsmonitor is a program git runs on any
-// index-touching verb, and a cloned repository's own config can set it.
-var noFsmonitor = []string{"-c", "core.fsmonitor=false"}
-
 func (g execGit) run(dir string, args ...string) (string, error) {
 	setLandStep(g.step, "git")
-	cmd := exec.CommandContext(orBackground(g.ctx), "git", append(slices.Clone(noFsmonitor), args...)...) //nolint:gosec // git argv is constructed by rgit, never a shell string
+	cmd := exec.CommandContext(orBackground(g.ctx), "git", append(slices.Clone(gitx.NoFsmonitor), args...)...) //nolint:gosec // git argv is constructed by rgit, never a shell string
 	if dir != "" {
 		cmd.Dir = dir
 	}
@@ -173,7 +169,7 @@ func orBackground(ctx context.Context) context.Context {
 }
 
 func hasPrePushHook(ctx context.Context, dir string) bool {
-	out, err := exec.CommandContext(ctx, "git", "-C", dir, "-c", "core.fsmonitor=false", "rev-parse", "--path-format=absolute", "--git-path", "hooks/pre-push").Output() //nolint:gosec // fixed argv
+	out, err := exec.CommandContext(ctx, "git", append(slices.Clone(gitx.NoFsmonitor), "-C", dir, "rev-parse", "--path-format=absolute", "--git-path", "hooks/pre-push")...).Output() //nolint:gosec // fixed argv
 	if err != nil {
 		return false
 	}
