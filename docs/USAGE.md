@@ -345,8 +345,8 @@ $ rgit symbols auth.go
 ValidateToken
 
 $ rgit symbols --with-lines auth.go
-1,3 @imports
-12,27 ValidateToken
+1,3<TAB>@imports
+12,27<TAB>ValidateToken
 ```
 
 Lists resolvable symbols from the worktree, or `HEAD` if the worktree
