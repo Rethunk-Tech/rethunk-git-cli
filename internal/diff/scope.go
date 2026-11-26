@@ -132,23 +132,18 @@ func (s contentSide) mode(ctx context.Context, repo *gitx.Repo, root, path strin
 // refuses it, instead of os.Stat following the escape and reporting an
 // outside file's mode.
 func worktreeMode(rootDir, path string) (mode string, found bool, err error) {
-	root, err := os.OpenRoot(rootDir)
-	if err != nil {
-		return "", false, err
-	}
-	defer func() {
-		if closeErr := root.Close(); closeErr != nil && err == nil {
-			err = closeErr
+	err = util.InRoot(rootDir, func(root *os.Root) error {
+		info, serr := root.Stat(path)
+		if serr != nil {
+			if os.IsNotExist(serr) {
+				return nil
+			}
+			return serr
 		}
-	}()
-	info, err := root.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", false, nil
-		}
-		return "", false, err
-	}
-	return util.GitFileMode(info), true, nil
+		mode, found = util.GitFileMode(info), true
+		return nil
+	})
+	return mode, found, err
 }
 
 // blobCache holds every git-backed blob buildFileReport's own per-file loop

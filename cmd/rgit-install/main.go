@@ -568,17 +568,10 @@ func readInstallerFile(path string) ([]byte, error) {
 	return util.ReadFileInRoot(filepath.Dir(path), filepath.Base(path))
 }
 
-func writeInstallerFile(path string, data []byte, perm os.FileMode) (err error) {
-	root, err := os.OpenRoot(filepath.Dir(path))
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if closeErr := root.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-	}()
-	return root.WriteFile(filepath.Base(path), data, perm)
+func writeInstallerFile(path string, data []byte, perm os.FileMode) error {
+	return util.InRoot(filepath.Dir(path), func(root *os.Root) error {
+		return root.WriteFile(filepath.Base(path), data, perm)
+	})
 }
 
 func relTo(root, path string) string {

@@ -60,16 +60,26 @@ func ReadFileIfExists(rootDir, path string) (content []byte, exists bool, err er
 // ReadFileInRoot reads rel beneath rootDir through os.Root, so rel cannot
 // escape the directory, and reports a Close failure when the read succeeded.
 func ReadFileInRoot(rootDir, rel string) (data []byte, err error) {
-	root, err := os.OpenRoot(rootDir)
+	err = InRoot(rootDir, func(root *os.Root) (rerr error) {
+		data, rerr = root.ReadFile(rel)
+		return rerr
+	})
+	return data, err
+}
+
+// InRoot opens dir as an os.Root, runs fn, closes the root, and reports a
+// Close failure when fn succeeded.
+func InRoot(dir string, fn func(root *os.Root) error) (err error) {
+	root, err := os.OpenRoot(dir)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer func() {
 		if closeErr := root.Close(); closeErr != nil && err == nil {
 			err = closeErr
 		}
 	}()
-	return root.ReadFile(rel)
+	return fn(root)
 }
 
 // BinarySampleLimit matches core.bigFileThreshold scale used elsewhere in git's
@@ -89,30 +99,24 @@ func LooksBinary(content []byte) bool {
 // symbol anchor's target) has no other reason to touch bytes past that
 // sample.
 func LooksBinaryFile(rootDir, path string) (binary bool, err error) {
-	root, err := os.OpenRoot(rootDir)
-	if err != nil {
-		return false, err
-	}
-	defer func() {
-		if closeErr := root.Close(); closeErr != nil && err == nil {
-			err = closeErr
+	err = InRoot(rootDir, func(root *os.Root) (rerr error) {
+		f, rerr := root.Open(path)
+		if rerr != nil {
+			return rerr
 		}
-	}()
+		defer func() {
+			if closeErr := f.Close(); closeErr != nil && rerr == nil {
+				rerr = closeErr
+			}
+		}()
 
-	f, err := root.Open(path)
-	if err != nil {
-		return false, err
-	}
-	defer func() {
-		if closeErr := f.Close(); closeErr != nil && err == nil {
-			err = closeErr
+		buf := make([]byte, BinarySampleLimit)
+		n, readErr := io.ReadFull(f, buf)
+		if readErr != nil && !errors.Is(readErr, io.EOF) && !errors.Is(readErr, io.ErrUnexpectedEOF) {
+			return readErr
 		}
-	}()
-
-	buf := make([]byte, BinarySampleLimit)
-	n, readErr := io.ReadFull(f, buf)
-	if readErr != nil && !errors.Is(readErr, io.EOF) && !errors.Is(readErr, io.ErrUnexpectedEOF) {
-		return false, readErr
-	}
-	return LooksBinary(buf[:n]), nil
+		binary = LooksBinary(buf[:n])
+		return nil
+	})
+	return binary, err
 }
