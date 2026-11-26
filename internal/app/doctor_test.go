@@ -2,8 +2,7 @@ package app
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
+	"os/exec"
 	"slices"
 	"strings"
 	"testing"
@@ -126,16 +125,17 @@ func TestRunEnvironmentChecksNamesLandTools(t *testing.T) {
 func TestWithGHAuth(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct {
-		name, script, want string
+		name, bin, want string
 	}{
-		{"logged in", "#!/bin/sh\nexit 0\n", "(authenticated)"},
-		{"logged out", "#!/bin/sh\nexit 1\n", "(not authenticated"},
+		{"logged in", "true", "(authenticated)"},
+		{"logged out", "false", "(not authenticated"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			gh := filepath.Join(t.TempDir(), "gh")
-			if err := os.WriteFile(gh, []byte(c.script), 0o700); err != nil { //nolint:gosec // test shim must be executable
-				t.Fatal(err)
+			// A shim written here can hit ETXTBSY when a parallel test forks while its fd is open.
+			gh, err := exec.LookPath(c.bin)
+			if err != nil {
+				t.Skipf("no %s on PATH", c.bin)
 			}
 			got := withGHAuth(t.Context(), prereq.Check{Name: "gh", OK: true, Detail: gh})
 			if !got.OK || !strings.Contains(got.Detail, c.want) {
