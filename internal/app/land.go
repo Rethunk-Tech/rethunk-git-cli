@@ -1268,12 +1268,12 @@ func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBra
 		_, _ = d.git.run(repo, "merge", "--ff-only", upstreamRemote(repo, def, d)+"/"+def)
 	}
 	if dirty && !noPush {
-		base = "origin/" + def
+		base = upstreamRemote(repo, def, d) + "/" + def
 		prep.opts = landPushOpts{
 			pushDir:  wt,
 			pushTo:   def,
 			prRef:    branch,
-			logRange: "origin/" + def + ".." + branch,
+			logRange: upstreamRemote(repo, def, d) + "/" + def + ".." + branch,
 		}
 	}
 	if !dirty && !noPush {
@@ -1413,7 +1413,7 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 	sha := strings.TrimSpace(mustGit(prep.repo, d, "rev-parse", prep.branch))
 	if noPush {
 		// Merged into the local default branch, so the branch and its worktree are done either way.
-		cleanupLandBranch(prep, landResult{Kind: landPushed, Route: "direct"}, true, d)
+		cleanupLandBranch(prep, &landResult{Kind: landPushed, Route: "direct"}, true, d)
 		printLandBranchLine(prep, sha, logPath, "local", d)
 		if install && installOne(ctx, prep.repo, d) {
 			return exitcode.LandInstallFailed
@@ -1442,7 +1442,7 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 		fmt.Fprintln(d.stderr, res.Lines[0])
 		return exitcode.LandNotEnqueued
 	}
-	cleanupLandBranch(prep, res, false, d)
+	cleanupLandBranch(prep, &res, false, d)
 	printLandBranchResult(prep, res, sha, logPath, wait, d)
 	if install && res.Kind == landPushed {
 		if installOne(ctx, prep.repo, d) {
@@ -1452,11 +1452,13 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 	return exitcode.Success
 }
 
-func cleanupLandBranch(prep landBranchPrep, res landResult, local bool, d landDeps) {
+// cleanupLandBranch writes resetToRemote's warnings into res, which printLandBranchResult prints.
+func cleanupLandBranch(prep landBranchPrep, res *landResult, local bool, d landDeps) {
+	remote := upstreamRemote(prep.repo, prep.def, d)
 	if prep.dirty && !local {
-		_, _ = d.git.run(prep.repo, "fetch", "-q", "origin")
+		_, _ = d.git.run(prep.repo, "fetch", "-q", remote)
 	} else if !prep.dirty && res.Route != "direct" {
-		resetToRemote(prep.repo, "origin/"+prep.def, prep.gated, d, &res)
+		resetToRemote(prep.repo, remote+"/"+prep.def, prep.gated, d, res)
 	}
 	if res.Kind == landPR && res.PRState != "merged" {
 		return
@@ -1589,7 +1591,7 @@ func mergeOverlapFiles(repo, branch string, d landDeps) []string {
 }
 
 func cherryUpstream(repo, def, branch string, d landDeps) bool {
-	out, err := d.git.run(repo, "cherry", "origin/"+def, branch)
+	out, err := d.git.run(repo, "cherry", upstreamRemote(repo, def, d)+"/"+def, branch)
 	if err != nil {
 		return false
 	}

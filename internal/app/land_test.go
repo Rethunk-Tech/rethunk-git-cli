@@ -3115,3 +3115,33 @@ func TestLandFastForwardUsesUpstreamRemote(t *testing.T) {
 		t.Errorf("HEAD = %s, want %s; stderr=%q", got, tip, stderr.String())
 	}
 }
+
+// TestCleanupLandBranchKeepsResetWarning pins that resetToRemote's warning reaches the caller's result on the --branch PR route.
+func TestCleanupLandBranchKeepsResetWarning(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	d := testLandDeps(t)
+	prep := landBranchPrep{repo: dir, def: "main", gated: strings.Repeat("a", 40), wt: dir}
+	res := landResult{Kind: landPR, PRState: "queued", Route: "pr"}
+	cleanupLandBranch(prep, &res, false, d)
+	if len(res.Lines) != 1 || !strings.Contains(res.Lines[0], "HEAD moved since the PR was opened") {
+		t.Errorf("lines = %q", res.Lines)
+	}
+}
+
+// TestLandBranchResetUsesUpstreamRemote pins that the --branch PR route resets to the remote the default branch tracks, not origin.
+func TestLandBranchResetUsesUpstreamRemote(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	gitOut(t, dir, "remote", "rename", "origin", "up")
+	head := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	gittest.Write(t, dir, "ahead.txt", "x\n")
+	gittest.Commit(t.Context(), t, dir, "ahead")
+	d := testLandDeps(t)
+	prep := landBranchPrep{repo: dir, def: "main", gated: strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")), wt: dir}
+	res := landResult{Kind: landPR, PRState: "queued", Route: "pr"}
+	cleanupLandBranch(prep, &res, false, d)
+	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != head || len(res.Lines) != 0 {
+		t.Errorf("HEAD = %s want %s; lines=%q", got, head, res.Lines)
+	}
+}
