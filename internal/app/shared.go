@@ -765,6 +765,11 @@ type anchorParser struct {
 // usage text is already written.
 func (p anchorParser) assign(f anchorCommandFlag, flag, value string) (failed bool) {
 	if f.accept == nil {
+		if flag == "--source" && *f.val != "" {
+			fmt.Fprintf(p.stderr, "rgit: %s: --source given more than once\n", p.cmdName)
+			printUsage(p.stderr, p.help)
+			return true
+		}
 		*f.val = value
 		return false
 	}

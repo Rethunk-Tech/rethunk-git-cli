@@ -329,3 +329,13 @@ func TestShow_FollowRenameNoRenameReadsHEAD(t *testing.T) {
 	qt.Assert(t, qt.Equals(stderr, ""))
 	qt.Assert(t, qt.Equals(stillHead, head))
 }
+
+func TestAnchorCommands_RefuseASecondSource(t *testing.T) {
+	t.Parallel()
+	dir, _ := gittest.RepoWithFile(t.Context(), t, "a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n", "init")
+	for _, cmd := range []string{"show", "blame", "log"} {
+		_, stderr, code := runApp(t, "-C", dir, cmd, "--source", "HEAD", "--source=HEAD", "a.go:A")
+		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage), qt.Commentf("%s", cmd))
+		qt.Assert(t, qt.StringContains(stderr, "--source given more than once"), qt.Commentf("%s", cmd))
+	}
+}
