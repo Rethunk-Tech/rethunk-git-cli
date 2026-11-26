@@ -1200,6 +1200,12 @@ func TestLandOneSkipReasons(t *testing.T) {
 	if res := landOne(even, d); res.Kind != landSkipped || res.Lines[0] != even+": skipped (not ahead)" {
 		t.Errorf("not ahead = %+v", res)
 	}
+
+	feature, _ := repoWithOrigin(t)
+	gitOut(t, feature, "checkout", "-q", "-b", "feat")
+	if res := landOne(feature, d); res.Kind != landSkipped || res.Lines[0] != feature+": skipped (on feat, not main)" {
+		t.Errorf("feature branch = %+v", res)
+	}
 }
 
 func TestLandOneNotesUnqueuedPR(t *testing.T) {
@@ -2472,6 +2478,30 @@ func TestCatchUpRebaseMergeWithoutPRNumber(t *testing.T) {
 	}
 	if want := dir + ": caught up to " + tip[:7] + "\n"; !strings.Contains(stdout.String(), want) {
 		t.Errorf("stdout = %q; want %q", stdout.String(), want)
+	}
+}
+
+// An untracked file the incoming commit adds blocks the fast-forward; catch-up must then report nothing.
+func TestCatchUpStaysQuietWhenFastForwardIsRefused(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	other := t.TempDir()
+	gitOut(t, other, "clone", bare, ".")
+	gitOut(t, other, "config", "user.name", "test")
+	gitOut(t, other, "config", "user.email", "test@test")
+	gittest.Write(t, other, "x.txt", "remote\n")
+	gittest.Commit(t.Context(), t, other, "feat: add x (#53)")
+	gitOut(t, other, "push", "origin", "HEAD")
+	gittest.Write(t, dir, "x.txt", "local\n")
+	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	d := testLandDeps(t)
+	var stdout strings.Builder
+	d.stdout = &stdout
+	if failed, _ := catchUp(t.Context(), dir, d); failed {
+		t.Error("catchUp reported an install failure")
+	}
+	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != before || stdout.Len() != 0 {
+		t.Errorf("refused fast-forward: HEAD %s out %q", got, stdout.String())
 	}
 }
 
