@@ -1091,6 +1091,48 @@ func TestRun_UntrackedSymlinkIsOneCollapsedRowCountedFromItsTarget(t *testing.T)
 	}
 }
 
+// TestRun_ModifiedTrackedSymlinkIsOneNoSymbolsRow pins that a retargeted
+// tracked symlink with a source extension is never read through its target,
+// whether that points outside the repo, at a directory or at another source
+// file.
+func TestRun_ModifiedTrackedSymlinkIsOneNoSymbolsRow(t *testing.T) {
+	t.Parallel()
+	dir, repo := newDiffTestRepo(t)
+	ctx := t.Context()
+	gittest.Write(t, dir, "t2.go", "package p\n\nfunc A() {}\n")
+	gittest.Write(t, dir, "t3.go", "package p\n\nfunc B() {}\n")
+	if err := os.Mkdir(filepath.Join(dir, "real"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("t2.go", filepath.Join(dir, "l.go")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	gittest.Git(ctx, t, dir, "add", ".")
+	gittest.Commit(ctx, t, dir, "chore: link")
+
+	for _, target := range []string{"/etc/hostname", "real", "t3.go"} {
+		if err := os.Remove(filepath.Join(dir, "l.go")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(target, filepath.Join(dir, "l.go")); err != nil {
+			t.Fatal(err)
+		}
+		report, err := Run(ctx, repo, dir, Options{})
+		if err != nil {
+			t.Fatalf("target %s: Run: %v", target, err)
+		}
+		fr, ok := findFile(report.Files, "l.go")
+		if !ok || len(fr.Rows) != 1 || fr.Rows[0].Status != StatusNoSymbols || fr.Rows[0].Added != "1" || fr.Rows[0].Deleted != "1" {
+			t.Errorf("target %s: l.go = %+v; want one NO-SYMBOLS 1/1 row", target, fr)
+		}
+	}
+
+	var rerr *resolve.ResolveError
+	if _, err := validateSym(ctx, repo, dir, Scope{Old: revSide("HEAD"), New: worktreeSide()}, SymRef{File: "l.go", Name: "A"}); !errors.As(err, &rerr) {
+		t.Errorf("validateSym on a symlink = %v; want an unresolved anchor, not a read through the link", err)
+	}
+}
+
 // TestRun_StagedRenameAcrossDirectoryDepth pins the brace-shorthand form
 // where one side is empty ("a/{ => lib/server}/f.ts"): the empty side's
 // path has exactly one separator between prefix and suffix, so HEAD content

@@ -288,6 +288,22 @@ func buildFileReport(ctx context.Context, repo *gitx.Repo, root string, scope Sc
 		return &FileReport{Path: newPath, Rows: []Row{{Status: StatusNoSymbols, Added: addedStr, Deleted: deletedStr}}}, nil, false, nil
 	}
 
+	// A symlink's content is its target text, not the target's source: git's
+	// counts are the whole answer, and reading through the link can escape
+	// the repo or hit a directory.
+	for _, l := range []struct {
+		side contentSide
+		path string
+	}{{scope.Old, oldPath}, {scope.New, newPath}} {
+		link, lerr := l.side.isLink(ctx, repo, root, l.path)
+		if lerr != nil {
+			return nil, nil, false, lerr
+		}
+		if link {
+			return &FileReport{Path: newPath, Rows: []Row{{Status: StatusNoSymbols, Added: addedStr, Deleted: deletedStr}}}, nil, false, nil
+		}
+	}
+
 	oldSrc, _, oldTooLarge, err := scope.Old.readBounded(ctx, repo, root, oldPath, cache)
 	if err != nil {
 		return nil, nil, false, err
@@ -580,12 +596,20 @@ func validateSym(ctx context.Context, repo *gitx.Repo, root string, scope Scope,
 	// before the main file loop even runs, not once per changed file, so
 	// there is nothing here worth batching the way buildFileReport's own
 	// loop is (prefetchBlobs, above).
-	src, exists, err := scope.New.read(ctx, repo, root, s.File, nil)
+	// A symlink has no symbols of its own, and reading it would follow the
+	// target: treat it as empty source so the anchor reports unresolved.
+	readSrc := func(side contentSide) ([]byte, bool, error) {
+		if link, err := side.isLink(ctx, repo, root, s.File); err != nil || link {
+			return nil, link, err
+		}
+		return side.read(ctx, repo, root, s.File, nil)
+	}
+	src, exists, err := readSrc(scope.New)
 	if err != nil {
 		return "", err
 	}
 	if !exists {
-		src, _, err = scope.Old.read(ctx, repo, root, s.File, nil)
+		src, _, err = readSrc(scope.Old)
 		if err != nil {
 			return "", err
 		}

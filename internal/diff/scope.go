@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/cli"
@@ -92,6 +93,18 @@ func (s contentSide) readBounded(ctx context.Context, repo *gitx.Repo, root, pat
 		return content, exists, false, err
 	}
 	return nil, false, false, fmt.Errorf("diff: unknown content side kind %d", s.kind)
+}
+
+// isLink reports whether path is a symlink on this side: an Lstat for the
+// worktree (a read would follow the target, possibly out of the repo or into
+// a directory), mode 120000 for a git-backed side.
+func (s contentSide) isLink(ctx context.Context, repo *gitx.Repo, root, path string) (bool, error) {
+	if s.kind == sideWorktree {
+		fi, err := os.Lstat(filepath.Join(root, path))
+		return err == nil && fi.Mode()&os.ModeSymlink != 0, nil
+	}
+	mode, found, err := s.mode(ctx, repo, root, path)
+	return found && mode == "120000", err
 }
 
 // readWorktreeClean reads path from the worktree with the CRLF-to-LF
