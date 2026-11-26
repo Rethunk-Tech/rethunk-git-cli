@@ -39,16 +39,11 @@ func (j *json5Language) MembersSitFlush() bool { return false }
 // one level in for a nested object, exactly as jsonLanguage does. A document
 // whose root is not an object has no key to address.
 func (j *json5Language) Declarations(src []byte, root *ts.Node) []Declaration {
-	for _, child := range namedChildren(root) {
-		if child.Kind() == "comment" {
-			continue
-		}
-		if child.Kind() != "object" {
-			return nil
-		}
-		return json5MemberDeclarations(&child, "", src)
+	value := topValue(root)
+	if value == nil || value.Kind() != "object" {
+		return nil
 	}
-	return nil
+	return json5MemberDeclarations(value, "", src)
 }
 
 func json5MemberDeclarations(object *ts.Node, container string, src []byte) []Declaration {
