@@ -339,8 +339,8 @@ func (p *Plan) planPathspec(ctx context.Context, repo *gitx.Repo, root string, t
 	// change down this way, and the two are supposed to agree.
 	files, warnings := pathspecFileCounts(ctx, repo, root, t.Pathspec, literal)
 	p.CountingWarnings = append(p.CountingWarnings, warnings...)
-	if len(files) == 0 && !literal && !strings.HasPrefix(t.Pathspec, ":") && !strings.ContainsAny(t.Pathspec, "*?[\\") {
-		// A directory with no tracked file stages nothing: git add -u would fail on it, so it is
+	if fi, serr := os.Lstat(filepath.Join(root, t.Pathspec)); len(files) == 0 && !literal && serr == nil && fi.IsDir() && !strings.HasPrefix(t.Pathspec, ":") && !strings.ContainsAny(t.Pathspec, "*?[\\") {
+		// An existing directory with no tracked file stages nothing: git add -u would fail on it, so it is
 		// an unchanged target here, as the preview says.
 		tracked, err := repo.LsFilesTracked(ctx, "--", t.Pathspec)
 		if err != nil {
