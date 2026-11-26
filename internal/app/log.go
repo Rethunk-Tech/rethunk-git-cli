@@ -146,7 +146,7 @@ func logInteriorColonPositionals(args []string) []string {
 			continue
 		}
 		switch {
-		case a == "--since" || a == "--until" || a == "-n" || a == "--max-count" || a == "--source":
+		case isLogValueFlag(a):
 			i++
 			continue
 		case strings.HasPrefix(a, "--since="), strings.HasPrefix(a, "--until="), strings.HasPrefix(a, "-n"), strings.HasPrefix(a, "--max-count="), strings.HasPrefix(a, "--source="):
@@ -158,6 +158,16 @@ func logInteriorColonPositionals(args []string) []string {
 		}
 	}
 	return out
+}
+
+// isLogValueFlag reports whether a is a log flag whose next token is its
+// value, so the form classifiers do not mistake that value for a positional.
+func isLogValueFlag(a string) bool {
+	switch a {
+	case "--since", "--until", "-n", "--max-count", "--source":
+		return true
+	}
+	return false
 }
 
 func runLog(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
@@ -192,7 +202,7 @@ func logHasPositionals(args []string) bool {
 			return true
 		}
 		switch {
-		case a == "--since" || a == "--until" || a == "-n" || a == "--max-count" || a == "--source":
+		case isLogValueFlag(a):
 			i++
 		case strings.HasPrefix(a, "-"):
 			continue
