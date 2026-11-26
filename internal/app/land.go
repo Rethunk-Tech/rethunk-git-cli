@@ -18,6 +18,7 @@ import (
 	"unicode"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gitx"
 )
 
 const landUsageLine = "usage: rgit land [--repos DIR...] [--sha SHA] [--no-gate] [--wait] [--json] [--install] | rgit land --branch BR [--repos DIR] [--push] [--wait] [--json] [--install]"
@@ -1568,7 +1569,7 @@ func mergeOverlapFiles(repo, branch string, d landDeps) []string {
 		return nil
 	}
 	var hit []string
-	for _, path := range statusPaths(status) {
+	for _, path := range gitx.StatusPaths(status) {
 		if changed[path] {
 			hit = append(hit, path)
 		}
@@ -1631,33 +1632,15 @@ func mustGit(repo string, d landDeps, args ...string) string {
 	return out
 }
 
-// statusPaths lists the paths in `git status --porcelain=v1 -z` output: real names, a rename as its destination.
-func statusPaths(status string) []string {
-	var paths []string
-	entries := strings.Split(status, "\x00")
-	for i := 0; i < len(entries); i++ {
-		e := entries[i]
-		if len(e) < 4 {
-			continue
-		}
-		paths = append(paths, e[3:])
-		// A rename or copy carries its source as the next NUL field.
-		if e[0] == 'R' || e[0] == 'C' || e[1] == 'R' || e[1] == 'C' {
-			i++
-		}
-	}
-	return paths
-}
-
 func dirtyNames(status string) string {
-	return strings.Join(statusPaths(status), ", ")
+	return strings.Join(gitx.StatusPaths(status), ", ")
 }
 
 // dirtySkipLine is the skip line for a dirty tracked tree; the reason stays first so skipReason still reads it.
 func dirtySkipLine(repo string, d landDeps) string {
 	const maxNames = 8
 	st, _ := d.git.run(repo, "status", "--porcelain=v1", "-z", "-uno")
-	names := statusPaths(st)
+	names := gitx.StatusPaths(st)
 	if len(names) > maxNames {
 		names = append(names[:maxNames], fmt.Sprintf("and %d more", len(names)-maxNames))
 	}

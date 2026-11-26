@@ -1657,8 +1657,13 @@ func (r *Repo) DirtyPaths(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	return StatusPaths(string(out)), nil
+}
+
+// StatusPaths lists the paths in `git status --porcelain=v1 -z` output: real names, a rename as its destination.
+func StatusPaths(status string) []string {
 	var paths []string
-	fields := strings.Split(string(out), "\x00")
+	fields := strings.Split(status, "\x00")
 	for i := 0; i < len(fields); i++ {
 		f := fields[i]
 		if len(f) < 4 {
@@ -1670,7 +1675,7 @@ func (r *Repo) DirtyPaths(ctx context.Context) ([]string, error) {
 			i++
 		}
 	}
-	return paths, nil
+	return paths
 }
 
 // LsFilesOthers lists untracked files via `git ls-files --others
