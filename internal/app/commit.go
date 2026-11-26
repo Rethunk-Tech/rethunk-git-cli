@@ -1177,9 +1177,11 @@ type commitJSONLeft struct {
 	Dirty    []string `json:"dirty"`
 	Upstream string   `json:"upstream,omitempty"`
 	Ahead    int      `json:"ahead"`
-}
 
-func writeCommitJSON(w io.Writer, sha string, results []synth.TargetResult, l *leftState) error {
+// targetRecords is the one derivation of the changed-target records both
+// --json and --porcelain promise: Unchanged results are skipped and the
+// symbol column is set only for an anchor target.
+func targetRecords(results []synth.TargetResult) []commitJSONTarget {
 	targets := make([]commitJSONTarget, 0)
 	for _, r := range results {
 		if r.Outcome == synth.Unchanged {
@@ -1196,7 +1198,13 @@ func writeCommitJSON(w io.Writer, sha string, results []synth.TargetResult, l *l
 			Deleted: fmt.Sprintf("%d", r.Deleted),
 		})
 	}
-	rep := commitJSONReport{Schema: jsonSchema, SHA: sha, Targets: targets}
+	return targets
+}
+
+}
+
+func writeCommitJSON(w io.Writer, sha string, results []synth.TargetResult, l *leftState) error {
+	rep := commitJSONReport{Schema: jsonSchema, SHA: sha, Targets: targetRecords(results)}
 	if l != nil {
 		rep.Left = &commitJSONLeft{Dirty: append([]string{}, l.Dirty...), Upstream: l.Upstream, Ahead: l.Ahead}
 	}
@@ -1204,15 +1212,8 @@ func writeCommitJSON(w io.Writer, sha string, results []synth.TargetResult, l *l
 }
 
 func writeTargetRecords(stdout io.Writer, results []synth.TargetResult) {
-	for _, r := range results {
-		if r.Outcome == synth.Unchanged {
-			continue
-		}
-		symbol := ""
-		if r.Target.Pathspec == "" {
-			symbol = r.Target.Symbol.Anchor
-		}
-		fmt.Fprintf(stdout, "%s\t%s\t%d\t%d\n", r.Path, symbol, r.Added, r.Deleted)
+	for _, t := range targetRecords(results) {
+		fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\n", t.File, t.Symbol, t.Added, t.Deleted)
 	}
 }
 
