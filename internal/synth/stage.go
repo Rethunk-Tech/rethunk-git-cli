@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -925,12 +924,6 @@ func (s *tempStaging) release() {
 // git directory comes from git itself rather than assuming root/.git, so
 // linked worktrees, submodules, and GIT_DIR overrides all resolve to the
 // file git would actually use.
-//
-// This shells out to one read-only `git rev-parse` probe. Package gitx is
-// otherwise the sole place that execs git; the probe lives here because
-// gitx exposes no index-path accessor, and it delegates no git behaviour --
-// it only asks git where its own file is, so staging and rollback can treat
-// that file opaquely.
 func callerIndexPath(ctx context.Context, root string) (string, error) {
 	if v, ok := os.LookupEnv("GIT_INDEX_FILE"); ok && v != "" {
 		if filepath.IsAbs(v) {
@@ -938,11 +931,11 @@ func callerIndexPath(ctx context.Context, root string) (string, error) {
 		}
 		return filepath.Join(root, v), nil
 	}
-	out, err := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--absolute-git-dir").Output() //nolint:gosec // root is rgit's selected repository path, passed as git -C argv rather than shell input
+	dir, err := gitx.New(root).AbsoluteGitDir(ctx)
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(strings.TrimSpace(string(out)), "index"), nil
+	return filepath.Join(dir, "index"), nil
 }
 
 // IndexSnapshot is a byte copy of the caller's index file, taken so a later
@@ -1041,11 +1034,8 @@ func (s *IndexSnapshot) Restore(ctx context.Context) error {
 	}
 	// Removing after a successful rename is a no-op.
 	defer func() { _ = os.Remove(seed.tmp) }()
-	cmd := exec.CommandContext(ctx, "git", "-C", s.root, "update-index", "-z", "--index-info") //nolint:gosec // root is rgit's selected repository path, passed as git -C argv rather than shell input
-	cmd.Env = append(os.Environ(), "GIT_INDEX_FILE="+seed.tmp)
-	cmd.Stdin = &info
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("restoring index entries: %w: %s", err, bytes.TrimSpace(out))
+	if err := gitx.New(s.root).WithIndexFile(seed.tmp).UpdateIndexInfo(ctx, &info); err != nil {
+		return fmt.Errorf("restoring index entries: %w", err)
 	}
 	return os.Rename(seed.tmp, s.path)
 }
@@ -1059,7 +1049,7 @@ type indexEntry struct {
 // indexEntries lists an index's entries keyed by path and stage. data is the
 // index file's bytes; nil lists the caller's live index instead.
 func indexEntries(ctx context.Context, root string, data []byte) (map[string]indexEntry, error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", root, "ls-files", "-s", "-z") //nolint:gosec // root is rgit's selected repository path, passed as git -C argv rather than shell input
+	repo := gitx.New(root)
 	if data != nil {
 		f, err := os.CreateTemp("", "rgit-snapshot-*")
 		if err != nil {
@@ -1073,9 +1063,9 @@ func indexEntries(ctx context.Context, root string, data []byte) (map[string]ind
 		if err := f.Close(); err != nil {
 			return nil, err
 		}
-		cmd.Env = append(os.Environ(), "GIT_INDEX_FILE="+f.Name())
+		repo = repo.WithIndexFile(f.Name())
 	}
-	out, err := cmd.Output()
+	out, err := repo.LsFilesStageZ(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("listing index entries: %w", err)
 	}

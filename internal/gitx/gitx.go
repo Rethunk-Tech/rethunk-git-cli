@@ -1107,6 +1107,23 @@ func (r *Repo) indexPath(ctx context.Context) (string, error) {
 	return index, nil
 }
 
+// AbsoluteGitDir is the repository's git directory as an absolute path.
+func (r *Repo) AbsoluteGitDir(ctx context.Context) (string, error) {
+	return r.checkedLine(ctx, "rev-parse", "--absolute-git-dir")
+}
+
+// LsFilesStageZ is the raw `ls-files -s -z` listing of r's index.
+func (r *Repo) LsFilesStageZ(ctx context.Context) ([]byte, error) {
+	return r.checked(ctx, "ls-files", "-s", "-z")
+}
+
+// UpdateIndexInfo applies NUL-terminated `<mode> <sha> <stage>\t<path>`
+// records from info to r's index.
+func (r *Repo) UpdateIndexInfo(ctx context.Context, info io.Reader) error {
+	_, err := r.checkedStdin(ctx, info, "update-index", "-z", "--index-info")
+	return err
+}
+
 // LockCommits serializes rgit's --only commits in one worktree: each builds
 // on the HEAD it read, and git's own ref check would only reject, not
 // rebase, a commit that raced another. The lock is an OS file lock, so a
@@ -1120,7 +1137,7 @@ func (r *Repo) LockCommits(ctx context.Context) (unlock func(), err error) {
 // passes after, naming the holder's pid, so a hung hook in one session does
 // not stall the others in silence.
 func (r *Repo) lockCommits(ctx context.Context, notice io.Writer, after time.Duration) (unlock func(), err error) {
-	gitDir, err := r.checkedLine(ctx, "rev-parse", "--absolute-git-dir")
+	gitDir, err := r.AbsoluteGitDir(ctx)
 	if err != nil {
 		return nil, err
 	}
