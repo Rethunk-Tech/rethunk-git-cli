@@ -400,6 +400,10 @@ func containerBodyEnd(src []byte, ext resolve.Extent) uint {
 	for lineStart > ext.Start && src[lineStart-1] != '\n' {
 		lineStart--
 	}
+	if lineStart == ext.Start {
+		// Opener and closer share a line: the member goes just inside the closer.
+		return end - 1
+	}
 	return lineStart
 }
 

@@ -266,6 +266,18 @@ func TestContainerBodyEndPlacesFirstMemberAboveTheCloser(t *testing.T) {
 			want: 2,
 		},
 		{
+			name: "one-line empty Go struct takes the member before its closer",
+			src:  "type S struct{}\n",
+			ext:  resolve.Extent{Start: 0, End: 15},
+			want: 14,
+		},
+		{
+			name: "one-line empty TS class takes the member before its closer",
+			src:  "export class A {}\n",
+			ext:  resolve.Extent{Start: 0, End: 17},
+			want: 16,
+		},
+		{
 			name: "paren closer is the start of the closing-paren line",
 			src:  "(\n)\n",
 			ext:  resolve.Extent{Start: 0, End: 3},
