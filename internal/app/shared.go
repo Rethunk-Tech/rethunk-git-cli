@@ -173,10 +173,11 @@ func parseFlagsOrHelp(fs *pflag.FlagSet, args []string, stdout, stderr io.Writer
 		fmt.Fprint(stdout, help)
 		return exitcode.Success, true
 	}
-	fmt.Fprintf(stderr, "rgit: %v\n", err)
+	fmt.Fprintf(stderr, "rgit: %s: %v\n", fs.Name(), err)
 	if strings.HasPrefix(err.Error(), "unknown shorthand flag: 'C' in ") {
 		fmt.Fprintln(stderr, dashCHint)
 	}
+	printUsage(stderr, help)
 	return exitcode.InvalidUsage, true
 }
 
@@ -700,7 +701,7 @@ func parseAnchorCommandArgs(cmdName string, args []string, flags []anchorCommand
 	}
 	if len(positionals) == 0 {
 		fmt.Fprintf(stderr, "rgit: %s requires a FILE:SYMBOL anchor\n", cmdName)
-		fmt.Fprint(stderr, help)
+		printUsage(stderr, help)
 		return nil, exitcode.InvalidUsage, true
 	}
 	return positionals, exitcode.Success, false
@@ -722,7 +723,7 @@ func (p anchorParser) assign(f anchorCommandFlag, flag, value string) (failed bo
 	if f.accept(flag, value) {
 		return false
 	}
-	fmt.Fprint(p.stderr, p.help)
+	printUsage(p.stderr, p.help)
 	return true
 }
 
@@ -744,7 +745,7 @@ func (p anchorParser) tryFlag(f anchorCommandFlag, args []string, i int) (next i
 		} else {
 			fmt.Fprintf(p.stderr, "rgit: %s: %s requires a value\n", p.cmdName, a)
 		}
-		fmt.Fprint(p.stderr, p.help)
+		printUsage(p.stderr, p.help)
 		return i, true, true
 	}
 	return i + 1, true, p.assign(f, a, args[i+1])
@@ -784,7 +785,7 @@ func (p anchorParser) refusePositional(a string, have, maxPositionals int, refus
 	default:
 		return false
 	}
-	fmt.Fprint(p.stderr, p.help)
+	printUsage(p.stderr, p.help)
 	return true
 }
 
