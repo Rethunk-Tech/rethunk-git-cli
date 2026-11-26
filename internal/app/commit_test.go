@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -532,6 +533,15 @@ func TestCommitDryRunNeedsNoMessage(t *testing.T) {
 	}
 }
 
+func runGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	out, err := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir}, args...)...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return string(out)
+}
+
 // TestCommit_UntrackedOnlyDirectoryIsNothingToCommit pins that a directory holding only untracked files
 // is an unchanged target at apply time, as its preview says, not git add -u's raw pathspec error.
 func TestCommit_UntrackedOnlyDirectoryIsNothingToCommit(t *testing.T) {
@@ -541,6 +551,20 @@ func TestCommit_UntrackedOnlyDirectoryIsNothingToCommit(t *testing.T) {
 	_, stderr, code := runApp(t, "-C", dir, "commit", "-m", "chore: add d", "d")
 	if code != exitcode.NothingToCommit || strings.Contains(stderr, "git add") {
 		t.Errorf("code = %v stderr = %q; want NothingToCommit and no git add error", code, stderr)
+	}
+}
+
+// TestCommit_RepoRootDotStagesTrackedFilesOnly pins that "." follows the directory rule: an untracked file stays untracked.
+func TestCommit_RepoRootDotStagesTrackedFilesOnly(t *testing.T) {
+	t.Parallel()
+	dir, _ := gittest.RepoWithFile(t.Context(), t, "d/f.txt", "one\n", "init")
+	gittest.Write(t, dir, "d/f.txt", "two\n")
+	gittest.Write(t, dir, "d/new.txt", "secret\n")
+	if _, stderr, code := runApp(t, "-C", dir, "commit", "-m", "chore: edit", "."); code != exitcode.Success {
+		t.Fatalf("code = %v stderr = %q", code, stderr)
+	}
+	if got := runGit(t, dir, "status", "--porcelain"); !strings.Contains(got, "?? d/new.txt") {
+		t.Errorf("status = %q; want d/new.txt still untracked", got)
 	}
 }
 

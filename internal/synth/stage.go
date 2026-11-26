@@ -1206,6 +1206,9 @@ func isLiteralFile(root, spec string) bool {
 	if !fi.IsDir() {
 		return true
 	}
+	if filepath.Clean(p) == filepath.Clean(root) {
+		return false
+	}
 	// A submodule root is one gitlink, not a directory of files.
 	_, err = os.Lstat(filepath.Join(p, ".git"))
 	return err == nil
