@@ -3175,3 +3175,25 @@ func TestLandNamesKeepSpacesAndAccents(t *testing.T) {
 		t.Errorf("conflict stderr = %q", stderr.String())
 	}
 }
+
+// TestLandPushRefusedWhenGateEditsTree pins that a tracked file edited while the gate runs is never pushed over.
+func TestLandPushRefusedWhenGateEditsTree(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	gittest.Write(t, dir, "ahead.txt", "x\n")
+	gittest.Commit(t.Context(), t, dir, "ahead")
+	before := strings.TrimSpace(gitOut(t, bare, "rev-parse", "main"))
+	d := testLandDeps(t)
+	d.gate = func(dir string, _, _ bool) (string, error) {
+		gittest.Write(t, dir, "base.txt", "sibling edit during the gate\n")
+		return "", nil
+	}
+	var stdout strings.Builder
+	d.stdout = &stdout
+	if code := landRepos(t.Context(), []string{dir}, false, false, false, d); code != exitcode.LandRed {
+		t.Errorf("code = %v stdout=%q", code, stdout.String())
+	}
+	if after := strings.TrimSpace(gitOut(t, bare, "rev-parse", "main")); after != before {
+		t.Errorf("origin main moved to %s; want %s", after, before)
+	}
+}

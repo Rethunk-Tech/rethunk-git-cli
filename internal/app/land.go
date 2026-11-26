@@ -933,6 +933,14 @@ func landOne(r string, d landDeps) landResult {
 		res.Log = log
 		return res
 	}
+	// A sibling's edit between the gate's own check and the push would ship HEAD over a tree that was never gated.
+	if !d.noGate {
+		if msg := gateMoved(repo, gated, "", d); msg != "" {
+			res.Kind = landRed
+			res.Lines = []string{msg}
+			return res
+		}
+	}
 	// Push and branch the gated commit, not whatever HEAD became after the gate.
 	res = landByRules(repo, def, d, landPushOpts{remote: upstreamRemote(repo, def, d), pushRef: gated, pushTo: def, prRef: gated, logRange: "@{u}.." + gated})
 	if res.Kind == landPR && !flagNotEnqueued(&res) {
@@ -1071,7 +1079,7 @@ func gateState(repo string, d landDeps) (head, status string) {
 // gateMoved is the refusal line when HEAD or the tracked tree differs from what was gated.
 func gateMoved(repo, headBefore, statusBefore string, d landDeps) string {
 	head, status := gateState(repo, d)
-	if head != headBefore {
+	if strings.TrimSpace(head) != strings.TrimSpace(headBefore) {
 		return repo + ": error: HEAD moved during the gate; nothing pushed, re-run"
 	}
 	if status != statusBefore {
