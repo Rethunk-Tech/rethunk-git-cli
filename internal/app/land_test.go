@@ -710,6 +710,29 @@ func TestLandBranchRefusesDefaultBranch(t *testing.T) {
 	}
 }
 
+func TestLandBranchRedPushJSONKeepsGateLog(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, "feat.txt", "feat\n")
+	gitOut(t, wt, "add", "feat.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "feat")
+	gitOut(t, dir, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "missing.git"))
+
+	d := testLandDeps(t)
+	var stdout, stderr strings.Builder
+	d.stdout, d.stderr = &stdout, &stderr
+	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push", "--json"}, d)
+	var got landBranchJSON
+	if err := json.Unmarshal([]byte(stdout.String()), &got); err != nil {
+		t.Fatalf("stdout = %q (%v)", stdout.String(), err)
+	}
+	if code != exitcode.LandRed || got.Code != int(code) || got.Log == "" {
+		t.Errorf("code = %v object = %+v", code, got)
+	}
+}
+
 func TestLandBranchRedGateExit3(t *testing.T) {
 	t.Parallel()
 	dir, _ := repoWithOrigin(t)
