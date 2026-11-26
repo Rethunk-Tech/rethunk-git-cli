@@ -783,6 +783,21 @@ func TestRun_LogFollowRenameCrossesARenameThatReordersTheSymbol(t *testing.T) {
 		}
 	})
 
+	t.Run("--follow-rename --json is one document holding commits from both sides of the rename", func(t *testing.T) {
+		stdout, stderr, code := runApp(t, "log", "new.go:Foo", "--follow-rename", "--json")
+		qt.Assert(t, qt.Equals(code, exitcode.Success))
+		qt.Assert(t, qt.Equals(stderr, ""))
+		var top struct {
+			Commits []map[string]string `json:"commits"`
+		}
+		qt.Assert(t, qt.IsNil(json.Unmarshal([]byte(stdout), &top)))
+		var subjects []string
+		for _, c := range top.Commits {
+			subjects = append(subjects, c["subject"])
+		}
+		qt.Assert(t, qt.DeepEquals(subjects, []string{"fix: bump Foo", "refactor: rename and reorder", "feat: add old.go"}))
+	})
+
 	t.Run("--follow-rename forwards date bounds across segments", func(t *testing.T) {
 		stdout, stderr, code := runApp(t, "log", "new.go:Foo", "--follow-rename", "--since=2021-01-01")
 		qt.Assert(t, qt.Equals(code, exitcode.Success))
