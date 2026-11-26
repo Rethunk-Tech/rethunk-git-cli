@@ -943,7 +943,10 @@ func resetToRemote(repo, target, branched string, d landDeps, res *landResult) {
 		res.Lines = append(res.Lines, repo+": warning: HEAD moved since the PR was opened; local branch not reset")
 		return
 	}
-	_, _ = d.git.run(repo, "reset", "-q", "--keep", target)
+	if out, err := d.git.run(repo, "reset", "-q", "--keep", target); err != nil {
+		res.Lines = append(res.Lines, fmt.Sprintf("%s: warning: local %s not reset (%s); its commits are in the PR, run git reset --keep %s once the tree is clean",
+			repo, strings.TrimSpace(mustGit(repo, d, "rev-parse", "--abbrev-ref", "HEAD")), strings.TrimSpace(out), target))
+	}
 }
 
 // landSha lands one already-committed ahead commit by the repo's branch rules. The working tree and

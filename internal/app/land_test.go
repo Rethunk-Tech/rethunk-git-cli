@@ -1275,6 +1275,23 @@ func TestLandOnePRRouteKeepsSiblingCommit(t *testing.T) {
 	}
 }
 
+func TestLandOnePRRouteReportsFailedReset(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	gittest.Write(t, dir, "base.txt", "ahead\n")
+	gittest.Commit(t.Context(), t, dir, "ahead")
+	d, f := prRouteDeps(t, dir, bare)
+	f.number = 4
+	f.onCreate = func() { gittest.Write(t, dir, "base.txt", "sibling edit\n") }
+	res := landOne(dir, d)
+	if res.Kind != landPR {
+		t.Fatalf("kind = %v lines=%v", res.Kind, res.Lines)
+	}
+	if got := strings.Join(res.Lines, "\n"); !strings.Contains(got, dir+": warning: local main not reset (") || !strings.Contains(got, "git reset --keep origin/main") {
+		t.Errorf("lines = %q; want a not-reset warning", got)
+	}
+}
+
 func TestLandOnePushesGatedCommit(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
