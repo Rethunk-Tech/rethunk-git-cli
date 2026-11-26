@@ -308,3 +308,34 @@ func TestPlanStage_UnresolvedAnchorNamesTheFile(t *testing.T) {
 		t.Fatalf("err = %v; want a ResolveError with Path a.go", err)
 	}
 }
+
+// TestPlanStage_UntrackedSymlinkCountsItsTargetText pins that an untracked symlink counts as git stores it: one line, the link text.
+func TestPlanStage_UntrackedSymlinkCountsItsTargetText(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t.Context(), t)
+	ctx := t.Context()
+	gittest.Write(t, dir, "a.txt", "one\ntwo\nthree\n")
+	gittest.Commit(ctx, t, dir, "chore: initial")
+	if err := os.Symlink("a.txt", filepath.Join(dir, "l.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("sub", filepath.Join(dir, "d")); err != nil {
+		t.Fatal(err)
+	}
+
+	plan, err := PlanStage(ctx, repo, dir, []Target{PathTarget("l.txt"), PathTarget("d")})
+	if err != nil {
+		t.Fatalf("PlanStage: %v", err)
+	}
+	if len(plan.CountingWarnings) != 0 {
+		t.Errorf("CountingWarnings = %v; want none", plan.CountingWarnings)
+	}
+	for _, res := range plan.Results {
+		if res.Added != 1 || res.Deleted != 0 {
+			t.Errorf("row %+v; want 1 added, 0 deleted", res)
+		}
+	}
+	if len(plan.Results) != 2 {
+		t.Errorf("Results = %+v; want 2 rows", plan.Results)
+	}
+}
