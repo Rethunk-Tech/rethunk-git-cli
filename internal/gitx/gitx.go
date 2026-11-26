@@ -1126,14 +1126,17 @@ func (r *Repo) copyIndexTo(ctx context.Context, dir string) error {
 // indexPath is the index file r's git invocations use, GIT_INDEX_FILE
 // included.
 func (r *Repo) indexPath(ctx context.Context) (string, error) {
-	index, err := r.checkedLine(ctx, "rev-parse", "--git-path", "index")
-	if err != nil {
-		return "", err
+	return r.GitPath(ctx, "index")
+}
+
+// GitPath is the absolute path git resolves name to inside r's git directory
+// (hooks, an index that GIT_INDEX_FILE redirects, a linked worktree's own files).
+func (r *Repo) GitPath(ctx context.Context, name string) (string, error) {
+	// git rejects an empty GIT_INDEX_FILE here though it treats it as unset elsewhere.
+	if slices.Contains(r.env, "GIT_INDEX_FILE=") {
+		r = &Repo{root: r.root, env: slices.DeleteFunc(slices.Clone(r.env), func(e string) bool { return e == "GIT_INDEX_FILE=" })}
 	}
-	if !filepath.IsAbs(index) {
-		index = filepath.Join(r.root, index)
-	}
-	return index, nil
+	return r.checkedLine(ctx, "rev-parse", "--path-format=absolute", "--git-path", name)
 }
 
 // AbsoluteGitDir is the repository's git directory as an absolute path.
@@ -1401,14 +1404,7 @@ func (o *OnlyIndex) installGuardHooks(ctx context.Context, repo *Repo) (hooksPat
 }
 
 func (r *Repo) hooksDir(ctx context.Context) (string, error) {
-	p, err := r.checkedLine(ctx, "rev-parse", "--git-path", "hooks")
-	if err != nil {
-		return "", err
-	}
-	if filepath.IsAbs(p) {
-		return p, nil
-	}
-	return filepath.Join(r.root, p), nil
+	return r.GitPath(ctx, "hooks")
 }
 
 // guarded is o.Repo with onlyGuardHook's inputs in its environment.

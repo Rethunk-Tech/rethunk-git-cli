@@ -925,17 +925,7 @@ func (s *tempStaging) release() {
 // linked worktrees, submodules, and GIT_DIR overrides all resolve to the
 // file git would actually use.
 func callerIndexPath(ctx context.Context, root string) (string, error) {
-	if v, ok := os.LookupEnv("GIT_INDEX_FILE"); ok && v != "" {
-		if filepath.IsAbs(v) {
-			return v, nil
-		}
-		return filepath.Join(root, v), nil
-	}
-	dir, err := gitx.New(root).AbsoluteGitDir(ctx)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "index"), nil
+	return gitx.New(root).GitPath(ctx, "index")
 }
 
 // IndexSnapshot is a byte copy of the caller's index file, taken so a later
