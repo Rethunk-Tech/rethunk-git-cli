@@ -58,7 +58,7 @@ const (
 	// anchor targeted JSON/YAML/TOML. Name the path instead.
 	StructuredDataAnchorRefused Code = 12
 
-	// LandGateRed means `land --branch`'s gate stayed red after a --failed re-run.
+	// LandGateRed means `land --branch`'s gate was red.
 	LandGateRed Code = 3
 
 	// LandNotEnqueued means `land --branch`'s merge-queue PR was not enqueued.

@@ -462,13 +462,12 @@ line ends `<direct|PR|queue>`. Without `--branch`, `--push` is usage
 | Dirty main | Default (local): fast-forwarded when the dirty files are not ones BR changes; otherwise exit 13 naming the overlap. `--push`: left alone; BR rebased onto `origin/<default>` in BR's worktree and pushed from there |
 | Clean main | Must be on the default branch; BR rebased onto it, fast-forwarded, and (with `--push`) pushed |
 | Before `gate -C <worktree>` | Ignored untracked `.env`, `.env.local`, `.env.*.local` in the main checkout are symlinked into the worktree at the same relative path when that path is absent; links removed after the gate, success or fail. `.env.example` and tracked files are left alone |
-| Gate flake (passes on a `--failed` re-run) | Appended to `$XDG_CACHE_HOME/land-branch/flakes.tsv`; landing continues |
 
 | Failure | Stderr | Exit |
 | --- | --- | --- |
 | BR's worktree has uncommitted changes | the worktree and the files | 1 |
 | Rebase conflict | `conflict: hand to solver`, the worktree and the conflicting files | 2 |
-| `gate -C <worktree>` red after a `--failed` re-run | log path and last 40 lines | 3 |
+| `gate -C <worktree>` red | log path and last 40 lines | 3 |
 | Merge queue that does not enqueue | names the branch | 4 |
 | `--install` failure | the failing tail | 5 |
 | Local ff-merge refused: the dirty checkout edits files BR changes | the overlapping paths | 13 |

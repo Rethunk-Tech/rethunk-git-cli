@@ -179,7 +179,7 @@ func hasPrePushHook(ctx context.Context, dir string) bool {
 	return err == nil
 }
 
-func runGateCmd(ctx context.Context, dir string, failedOnly, pushFollows bool) (string, error) {
+func runGateCmd(ctx context.Context, dir string, pushFollows bool) (string, error) {
 	// --fuzz: a local gate skips the fuzz gate, and a pre-push hook runs it,
 	// so land gates with it for the hook's pass to match.
 	args := []string{"-C", dir, "--fuzz"}
@@ -189,9 +189,6 @@ func runGateCmd(ctx context.Context, dir string, failedOnly, pushFollows bool) (
 	// no hook runs, so there is nothing to match.
 	if pushFollows && hasPrePushHook(ctx, dir) {
 		args = append(args, "--isolate")
-	}
-	if failedOnly {
-		args = append(args, "--failed")
 	}
 	cmd := exec.CommandContext(ctx, "gate", args...) //nolint:gosec // gate argv is constructed by rgit, never a shell string
 	cmd.Stdin = nil
@@ -309,7 +306,7 @@ type landDeps struct {
 	git       gitRunner
 	gh        gitHub
 	clock     landClock
-	gate      func(dir string, failedOnly, pushFollows bool) (string, error)
+	gate      func(dir string, pushFollows bool) (string, error)
 	cacheHome func() string
 	pid       int
 	parent    string
@@ -350,9 +347,9 @@ func defaultLandDeps(ctx context.Context, stdout, stderr io.Writer) landDeps {
 		git:   execGit{ctx: ctx, step: step},
 		gh:    newGHSettingsCache(newGHCLI(ctx, step), githubSettingsPath()),
 		clock: realClock{ctx},
-		gate: func(dir string, failedOnly, pushFollows bool) (string, error) {
+		gate: func(dir string, pushFollows bool) (string, error) {
 			setLandStep(step, "gate")
-			return runGateCmd(ctx, dir, failedOnly, pushFollows)
+			return runGateCmd(ctx, dir, pushFollows)
 		},
 		cacheHome: cacheHome,
 		pid:       os.Getpid(),
@@ -1045,7 +1042,7 @@ func gateHead(repo string, d landDeps) (line, logPath string, ok bool) {
 	if strings.TrimSpace(statusBefore) != "" {
 		return repo + ": error: tracked files changed before the gate (" + dirtyNames(statusBefore) + "); nothing pushed", "", false
 	}
-	out, gateErr := d.gate(repo, false, true)
+	out, gateErr := d.gate(repo, true)
 	logdir := filepath.Join(d.cacheHome(), "land")
 	sum := sha256.Sum256([]byte(repo))
 	logPath = filepath.Join(logdir, filepath.Base(repo)+"-"+hex.EncodeToString(sum[:4])+"-"+strconv.Itoa(d.pid)+".log")
@@ -1324,7 +1321,7 @@ func gateLandBranch(prep landBranchPrep, d landDeps) (string, exitcode.Code) {
 		}
 		return exitcode.Success
 	}
-	out, gateErr := d.gate(prep.wt, false, pushFollows)
+	out, gateErr := d.gate(prep.wt, pushFollows)
 	if werr := os.WriteFile(logPath, []byte(out), 0o600); werr != nil {
 		fmt.Fprintf(d.stderr, "error: %v\n", werr)
 		return "", exitcode.GitFailure
@@ -1335,26 +1332,11 @@ func gateLandBranch(prep landBranchPrep, d landDeps) (string, exitcode.Code) {
 	if gateErr == nil {
 		return logPath, moved()
 	}
-	failed := failedGateNames(out)
-	retry, retryErr := d.gate(prep.wt, true, pushFollows)
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0o600) //nolint:gosec // logPath is under the cache dir rgit created
-	if err == nil {
-		_, _ = f.WriteString(retry)
-		_ = f.Close()
+	fmt.Fprintln(d.stderr, logPath)
+	for _, line := range lastNLines(out, 40) {
+		fmt.Fprintln(d.stderr, line)
 	}
-	if retryErr != nil {
-		fmt.Fprintln(d.stderr, logPath)
-		for _, line := range lastNLines(out+retry, 40) {
-			fmt.Fprintln(d.stderr, line)
-		}
-		return logPath, exitcode.LandGateRed
-	}
-	if err := appendFlake(logdir, filepath.Base(prep.repo), prep.branch, failed, d); err != nil {
-		fmt.Fprintf(d.stderr, "error: %v\n", err)
-		return "", exitcode.GitFailure
-	}
-	fmt.Fprintf(d.stderr, "flake: %s passed on re-run\n", failed)
-	return logPath, moved()
+	return logPath, exitcode.LandGateRed
 }
 
 func isIgnoredEnvName(base string) bool {
@@ -1631,20 +1613,6 @@ func lastNLines(s string, n int) []string {
 		return lines[len(lines)-n:]
 	}
 	return lines
-}
-
-func appendFlake(logdir, repo, branch, failed string, d landDeps) error {
-	line := fmt.Sprintf("%s\t%s\t%s\t%s\n", d.clock.Now().UTC().Format("2006-01-02T15:04:05Z"), repo, branch, failed)
-	f, err := os.OpenFile(filepath.Join(logdir, "flakes.tsv"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600) //nolint:gosec // path is under the cache dir rgit created
-	if err != nil {
-		return err
-	}
-	_, werr := f.WriteString(line)
-	cerr := f.Close()
-	if werr != nil {
-		return werr
-	}
-	return cerr
 }
 
 func mustGit(repo string, d landDeps, args ...string) string {

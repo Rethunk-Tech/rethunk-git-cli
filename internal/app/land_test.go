@@ -204,7 +204,7 @@ func TestLandPlainGate(t *testing.T) {
 			gittest.Commit(t.Context(), t, dir, "ahead")
 			before := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD"))
 			d := testLandDeps(t)
-			d.gate = func(dir string, _, _ bool) (string, error) { return c.gate(dir) }
+			d.gate = func(dir string, _ bool) (string, error) { return c.gate(dir) }
 			var stdout strings.Builder
 			d.stdout = &stdout
 			code := landRepos(t.Context(), []string{dir}, false, false, false, d)
@@ -231,7 +231,7 @@ func TestLandSkipsUmbrellaWhenSubmoduleRepoRed(t *testing.T) {
 	before := strings.TrimSpace(gitOut(t, umbBare, "rev-parse", "HEAD"))
 
 	d := testLandDeps(t)
-	d.gate = func(dir string, _, _ bool) (string, error) {
+	d.gate = func(dir string, _ bool) (string, error) {
 		if dir == sub {
 			return "gate: failed: unit -> /x.log\n", errors.New("exit 1")
 		}
@@ -720,7 +720,7 @@ func TestLandBranchRedGateExit3(t *testing.T) {
 	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
 
 	d := testLandDeps(t)
-	d.gate = func(string, bool, bool) (string, error) {
+	d.gate = func(string, bool) (string, error) {
 		return "stub-gate-fail\ngate: failed: unit -> /x.log\n", errors.New("exit 1")
 	}
 	var stdout, stderr strings.Builder
@@ -863,7 +863,7 @@ func TestGateLandBranchLinksIgnoredEnvLocal(t *testing.T) {
 	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
 
 	d := testLandDeps(t)
-	d.gate = func(gateDir string, _, _ bool) (string, error) {
+	d.gate = func(gateDir string, _ bool) (string, error) {
 		if _, err := os.ReadFile(filepath.Join(gateDir, "apps", "web", ".env.local")); err != nil { //nolint:gosec // test reads the linked path, not the secret
 			return "missing env", err
 		}
@@ -900,7 +900,7 @@ func TestGateLandBranchLeavesExistingEnvLocal(t *testing.T) {
 	}
 
 	d := testLandDeps(t)
-	d.gate = func(gateDir string, _, _ bool) (string, error) {
+	d.gate = func(gateDir string, _ bool) (string, error) {
 		body, err := os.ReadFile(filepath.Join(gateDir, "apps", "web", ".env.local")) //nolint:gosec // test fixture path
 		if err != nil {
 			return "missing env", err
@@ -930,7 +930,8 @@ func TestGateLandBranchLeavesExistingEnvLocal(t *testing.T) {
 	}
 }
 
-func TestLandBranchFlakeLoggedAndLands(t *testing.T) {
+// TestLandBranchRedGateRunsOnceAndStops pins that a red --branch gate is not retried: one gate run, exit 3, nothing pushed.
+func TestLandBranchRedGateRunsOnceAndStops(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
 	wt := filepath.Join(t.TempDir(), "wt")
@@ -938,39 +939,28 @@ func TestLandBranchFlakeLoggedAndLands(t *testing.T) {
 	gittest.Write(t, wt, "feat.txt", "feat\n")
 	gitOut(t, wt, "add", "feat.txt")
 	gitOut(t, wt, "commit", "-q", "-m", "feat")
+	before := strings.TrimSpace(gitOut(t, bare, "rev-parse", "main"))
 
 	n := 0
 	d := testLandDeps(t)
-	d.gate = func(string, bool, bool) (string, error) {
+	d.gate = func(string, bool) (string, error) {
 		n++
-		if n == 1 {
-			return "gate: failed: unit -> /x.log\n", errors.New("exit 1")
-		}
-		return "ok\n", nil
+		return "gate: failed: unit -> /x.log\n", errors.New("exit 1")
 	}
 	var stdout, stderr strings.Builder
 	d.stdout = &stdout
 	d.stderr = &stderr
-	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d)
-	if code != exitcode.Success {
+	if code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d); code != exitcode.LandGateRed {
 		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "flake: unit passed on re-run") {
-		t.Errorf("stderr = %q", stderr.String())
+	if n != 1 {
+		t.Errorf("gate ran %d times; want 1", n)
 	}
-	body, err := os.ReadFile(filepath.Join(d.cacheHome(), "land-branch", "flakes.tsv"))
-	if err != nil {
-		t.Fatal(err)
+	if _, err := os.Stat(filepath.Join(d.cacheHome(), "land-branch", "flakes.tsv")); err == nil {
+		t.Error("flakes.tsv written")
 	}
-	want := "2026-11-18T00:00:00Z\t" + filepath.Base(dir) + "\tfeat\tunit\n"
-	if string(body) != want {
-		t.Errorf("flakes.tsv = %q; want %q", body, want)
-	}
-	if got := strings.TrimSpace(gitOut(t, bare, "log", "-1", "--pretty=%s")); got != "feat" {
-		t.Errorf("origin subject = %q", got)
-	}
-	if last := lastNonEmptyLine(stdout.String()); !strings.HasSuffix(last, " direct") {
-		t.Errorf("summary = %q", last)
+	if got := strings.TrimSpace(gitOut(t, bare, "rev-parse", "main")); got != before {
+		t.Errorf("origin main moved to %s", got)
 	}
 }
 
@@ -1845,7 +1835,7 @@ func testLandDeps(t *testing.T) landDeps {
 	cache := t.TempDir()
 	d := defaultLandDeps(t.Context(), &strings.Builder{}, &strings.Builder{})
 	d.cacheHome = func() string { return cache }
-	d.gate = func(string, bool, bool) (string, error) { return "", nil }
+	d.gate = func(string, bool) (string, error) { return "", nil }
 	d.clock = &fakeClock{now: time.Date(2026, 11, 18, 0, 0, 0, 0, time.UTC)}
 	d.pid = 1
 	return d
@@ -2116,7 +2106,7 @@ func TestLandBranchPushRefusesToRebaseAfterGate(t *testing.T) {
 			}
 
 			d := testLandDeps(t)
-			d.gate = func(string, bool, bool) (string, error) {
+			d.gate = func(string, bool) (string, error) {
 				other := filepath.Join(t.TempDir(), "other")
 				gitOut(t, t.TempDir(), "clone", "-q", bare, other)
 				gitOut(t, other, "config", "user.email", "test@test")
@@ -2237,7 +2227,7 @@ func TestLandRedGateReportsReasonLogAndJSON(t *testing.T) {
 	}
 
 	d := testLandDeps(t)
-	d.gate = func(dir string, _, _ bool) (string, error) {
+	d.gate = func(dir string, _ bool) (string, error) {
 		return "", errors.New("exec: \"gate\": executable file not found in $PATH")
 	}
 	var stdout strings.Builder
@@ -2539,7 +2529,7 @@ func TestGateHeadRefusesDirtyTree(t *testing.T) {
 	gittest.Write(t, dir, "base.txt", "sibling edit\n")
 	d := testLandDeps(t)
 	gated := false
-	d.gate = func(string, bool, bool) (string, error) {
+	d.gate = func(string, bool) (string, error) {
 		gated = true
 		return "", nil
 	}
@@ -2598,7 +2588,7 @@ func TestLandHonestErrors(t *testing.T) {
 	gittest.Write(t, dir, "ahead.txt", "x\n")
 	gittest.Commit(t.Context(), t, dir, "ahead")
 	d := testLandDeps(t)
-	d.gate = func(dir string, _, _ bool) (string, error) {
+	d.gate = func(dir string, _ bool) (string, error) {
 		gittest.Write(t, dir, "base.txt", "gate edit\n")
 		return "", nil
 	}
@@ -2610,7 +2600,7 @@ func TestLandHonestErrors(t *testing.T) {
 	}
 	gitOut(t, dir, "checkout", "-q", "--", "base.txt")
 
-	d.gate = func(string, bool, bool) (string, error) {
+	d.gate = func(string, bool) (string, error) {
 		other := t.TempDir()
 		gitOut(t, other, "clone", "-q", bare, "o")
 		o := filepath.Join(other, "o")
@@ -2668,7 +2658,7 @@ func TestLandBranchGateEditRefused(t *testing.T) {
 	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
 
 	d := testLandDeps(t)
-	d.gate = func(dir string, _, _ bool) (string, error) {
+	d.gate = func(dir string, _ bool) (string, error) {
 		gittest.Write(t, dir, "feat.txt", "gate edit\n")
 		return "", nil
 	}
@@ -2751,7 +2741,7 @@ func TestLandBranchPushHookReusesGatePass(t *testing.T) {
 	gitOut(t, wt, "commit", "-q", "-m", "feat")
 
 	d := testLandDeps(t)
-	d.gate = func(dir string, f, p bool) (string, error) { return runGateCmd(t.Context(), dir, f, p) }
+	d.gate = func(dir string, p bool) (string, error) { return runGateCmd(t.Context(), dir, p) }
 	var stdout, stderr strings.Builder
 	d.stdout, d.stderr = &stdout, &stderr
 	if code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d); code != exitcode.Success {
@@ -2880,7 +2870,7 @@ func TestLandCancelledContextStopsChildrenAndPolling(t *testing.T) {
 	if _, err := d.git.run("", "--version"); err == nil {
 		t.Error("git ran under a cancelled context")
 	}
-	if _, err := d.gate(t.TempDir(), false, false); err == nil {
+	if _, err := d.gate(t.TempDir(), false); err == nil {
 		t.Error("gate ran under a cancelled context")
 	}
 	if _, err := runGH(ctx, "", "--version"); err == nil {
@@ -3012,7 +3002,7 @@ func TestLandBranchJSONOnFailure(t *testing.T) {
 	gitOut(t, wt, "add", "f.txt")
 	gitOut(t, wt, "commit", "-q", "-m", "feat")
 	d := testLandDeps(t)
-	d.gate = func(string, bool, bool) (string, error) { return "gate: failed: unit\n", errors.New("exit 1") }
+	d.gate = func(string, bool) (string, error) { return "gate: failed: unit\n", errors.New("exit 1") }
 	var stdout, stderr strings.Builder
 	d.stdout, d.stderr = &stdout, &stderr
 	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--json"}, d)
@@ -3184,7 +3174,7 @@ func TestLandPushRefusedWhenGateEditsTree(t *testing.T) {
 	gittest.Commit(t.Context(), t, dir, "ahead")
 	before := strings.TrimSpace(gitOut(t, bare, "rev-parse", "main"))
 	d := testLandDeps(t)
-	d.gate = func(dir string, _, _ bool) (string, error) {
+	d.gate = func(dir string, _ bool) (string, error) {
 		gittest.Write(t, dir, "base.txt", "sibling edit during the gate\n")
 		return "", nil
 	}
