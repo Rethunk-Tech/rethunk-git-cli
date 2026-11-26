@@ -1636,18 +1636,6 @@ func mustGit(repo string, d landDeps, args ...string) string {
 	return out
 }
 
-func defaultBranch(repo string, d landDeps) string {
-	ref, err := d.git.run(repo, "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD")
-	if err == nil {
-		ref = strings.TrimSpace(ref)
-		return strings.TrimPrefix(ref, "refs/remotes/origin/")
-	}
-	if _, err := d.git.run(repo, "show-ref", "--verify", "--quiet", "refs/heads/main"); err == nil {
-		return "main"
-	}
-	return "master"
-}
-
 // dirtyNames lists the paths in `git status --porcelain=v1` output.
 func dirtyNames(status string) string {
 	var names []string
