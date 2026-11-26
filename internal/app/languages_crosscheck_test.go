@@ -97,17 +97,7 @@ func TestRun_LanguagesJSON(t *testing.T) {
 
 	porcelain, _, pcode := runApp(t, "-C", cwd, "languages", "--porcelain")
 	qt.Assert(t, qt.Equals(pcode, exitcode.Success))
-	lines := strings.Split(strings.TrimRight(porcelain, "\n"), "\n")
-	qt.Assert(t, qt.Equals(len(rows), len(lines)))
-	for i, line := range lines {
-		fields := strings.Split(line, "\t")
-		qt.Assert(t, qt.Equals(len(fields), 4))
-		qt.Assert(t, qt.DeepEquals(mapKeys(rows[i]), []string{"cross-check", "extensions", "gated", "name"}))
-		qt.Assert(t, qt.Equals(rows[i]["name"], fields[0]))
-		qt.Assert(t, qt.Equals(rows[i]["extensions"], fields[1]))
-		qt.Assert(t, qt.Equals(rows[i]["gated"], fields[2]))
-		qt.Assert(t, qt.Equals(rows[i]["cross-check"], fields[3]))
-	}
+	assertPorcelainRows(t, porcelain, rows, "name", "extensions", "gated", "cross-check")
 
 	for _, args := range [][]string{
 		{"-C", cwd, "languages", "--json", "--porcelain"},

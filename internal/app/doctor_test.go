@@ -59,17 +59,7 @@ func TestRun_DoctorJSON(t *testing.T) {
 
 	porcelain, _, pcode := runApp(t, "-C", cwd, "doctor", "--porcelain")
 	qt.Assert(t, qt.Equals(pcode, exitcode.Success))
-	rows := strings.Split(strings.TrimRight(porcelain, "\n"), "\n")
-	qt.Assert(t, qt.Equals(len(checks), len(rows)))
-	for i, line := range rows {
-		fields := strings.Split(line, "\t")
-		qt.Assert(t, qt.Equals(len(fields), 4))
-		qt.Assert(t, qt.DeepEquals(mapKeys(checks[i]), []string{"detail", "kind", "name", "status"}))
-		qt.Assert(t, qt.Equals(checks[i]["kind"], fields[0]))
-		qt.Assert(t, qt.Equals(checks[i]["name"], fields[1]))
-		qt.Assert(t, qt.Equals(checks[i]["status"], fields[2]))
-		qt.Assert(t, qt.Equals(checks[i]["detail"], fields[3]))
-	}
+	assertPorcelainRows(t, porcelain, checks, "kind", "name", "status", "detail")
 
 	envChecks, _ := runEnvironmentChecks(t.Context())
 	for _, want := range envChecks {
@@ -95,6 +85,23 @@ func TestRun_DoctorJSON(t *testing.T) {
 		_, stderr, code = runApp(t, args...)
 		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 		qt.Assert(t, qt.StringContains(stderr, "--porcelain and --json are mutually exclusive"))
+	}
+}
+
+// assertPorcelainRows checks that each porcelain line carries cols, in order,
+// as the values of the matching JSON row, and that each row has exactly those keys.
+func assertPorcelainRows(t *testing.T, porcelain string, rows []map[string]string, cols ...string) {
+	t.Helper()
+	lines := strings.Split(strings.TrimRight(porcelain, "\n"), "\n")
+	qt.Assert(t, qt.Equals(len(rows), len(lines)))
+	want := slices.Sorted(slices.Values(cols))
+	for i, line := range lines {
+		fields := strings.Split(line, "\t")
+		qt.Assert(t, qt.Equals(len(fields), len(cols)))
+		qt.Assert(t, qt.DeepEquals(mapKeys(rows[i]), want))
+		for j, col := range cols {
+			qt.Assert(t, qt.Equals(rows[i][col], fields[j]))
+		}
 	}
 }
 

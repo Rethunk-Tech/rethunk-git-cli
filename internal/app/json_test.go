@@ -105,21 +105,11 @@ func TestRun_DiffJSONAgreesWithPorcelain(t *testing.T) {
 
 	var rows []map[string]string
 	qt.Assert(t, qt.IsNil(json.Unmarshal(top["diffs"], &rows)))
-	lines := strings.Split(strings.TrimRight(porcelain, "\n"), "\n")
-	qt.Assert(t, qt.Equals(len(rows), len(lines)))
+	assertPorcelainRows(t, porcelain, rows, "file", "symbol", "status", "added", "deleted")
 	sawEmptySymbol := false
-	for i, line := range lines {
-		fields := strings.Split(line, "\t")
-		qt.Assert(t, qt.Equals(len(fields), 5))
-		qt.Assert(t, qt.DeepEquals(mapKeys(rows[i]), []string{"added", "deleted", "file", "status", "symbol"}))
-		qt.Assert(t, qt.Equals(rows[i]["file"], fields[0]))
-		qt.Assert(t, qt.Equals(rows[i]["symbol"], fields[1]))
-		qt.Assert(t, qt.Equals(rows[i]["status"], fields[2]))
-		qt.Assert(t, qt.Equals(rows[i]["added"], fields[3]))
-		qt.Assert(t, qt.Equals(rows[i]["deleted"], fields[4]))
-		if fields[1] == "" {
+	for _, row := range rows {
+		if row["symbol"] == "" {
 			sawEmptySymbol = true
-			qt.Assert(t, qt.Equals(rows[i]["symbol"], ""))
 		}
 	}
 	qt.Assert(t, qt.IsTrue(sawEmptySymbol))
@@ -200,15 +190,5 @@ func assertCommitJSONTargets(t *testing.T, raw json.RawMessage, porcelain string
 		qt.Assert(t, qt.Equals(len(rows), 0))
 		return
 	}
-	lines := strings.Split(body, "\n")
-	qt.Assert(t, qt.Equals(len(rows), len(lines)))
-	for i, line := range lines {
-		fields := strings.Split(line, "\t")
-		qt.Assert(t, qt.Equals(len(fields), 4))
-		qt.Assert(t, qt.DeepEquals(mapKeys(rows[i]), []string{"added", "deleted", "file", "symbol"}))
-		qt.Assert(t, qt.Equals(rows[i]["file"], fields[0]))
-		qt.Assert(t, qt.Equals(rows[i]["symbol"], fields[1]))
-		qt.Assert(t, qt.Equals(rows[i]["added"], fields[2]))
-		qt.Assert(t, qt.Equals(rows[i]["deleted"], fields[3]))
-	}
+	assertPorcelainRows(t, body, rows, "file", "symbol", "added", "deleted")
 }
