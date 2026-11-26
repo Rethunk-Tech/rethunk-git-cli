@@ -1603,6 +1603,7 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 		for _, line := range res.Lines {
 			fmt.Fprintln(out, line)
 		}
+		recordLandBranchJSON(prep, "", logPath, res.Route, d)
 		return exitcode.LandRed
 	}
 	if !noPush {
@@ -1615,6 +1616,7 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 	}
 	if res.Kind == landPR && flagNotEnqueued(&res) {
 		fmt.Fprintln(d.stderr, res.Lines[0])
+		recordLandBranchJSON(prep, sha, logPath, res.Route, d)
 		return exitcode.LandNotEnqueued
 	}
 	cleanupLandBranch(prep, &res, false, d)
@@ -1685,9 +1687,16 @@ func printLandBranchResult(prep landBranchPrep, res landResult, sha, logPath str
 	printLandBranchLine(prep, sha, logPath, res.Route, d)
 }
 
-func printLandBranchLine(prep landBranchPrep, sha, logPath, route string, d landDeps) {
+// recordLandBranchJSON fills --json's object for a run that fails after its gate, so the caller can find the log.
+func recordLandBranchJSON(prep landBranchPrep, sha, logPath, route string, d landDeps) {
 	if d.branchJSON != nil {
 		*d.branchJSON = landBranchJSON{Repo: prep.repo, Branch: prep.branch, SHA: sha, Log: logPath, Route: route}
+	}
+}
+
+func printLandBranchLine(prep landBranchPrep, sha, logPath, route string, d landDeps) {
+	if d.branchJSON != nil {
+		recordLandBranchJSON(prep, sha, logPath, route, d)
 		return
 	}
 	fmt.Fprintf(d.stdout, "%s %s %s %s %s\n", prep.repo, prep.branch, sha, logPath, route)

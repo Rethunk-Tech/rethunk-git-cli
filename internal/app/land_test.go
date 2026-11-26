@@ -3609,3 +3609,33 @@ func TestLandBranchMergeFailureIsNotLanded(t *testing.T) {
 		})
 	}
 }
+
+// TestLandBranchJSONKeepsTheGateLogWhenNotEnqueued pins that --json still names the gate log and route when
+// the PR stays un-enqueued (exit 4), since the gate already ran.
+func TestLandBranchJSONKeepsTheGateLogWhenNotEnqueued(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	gitOut(t, dir, "remote", "set-url", "origin", "git@github.com:acme/demo.git")
+	gitOut(t, dir, "remote", "set-url", "--push", "origin", bare)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, "feat.txt", "feat\n")
+	gitOut(t, wt, "add", "feat.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "feat")
+	d := testLandDeps(t)
+	d.gh = &fakeGH{
+		rules:  []string{"pull_request"},
+		url:    "https://github.com/acme/demo/pull/4",
+		number: 4,
+		prs:    []prInfo{{State: "OPEN", URL: "https://github.com/acme/demo/pull/4"}},
+	}
+	var stdout, stderr strings.Builder
+	d.stdout, d.stderr = &stdout, &stderr
+	if code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push", "--json"}, d); code != exitcode.LandNotEnqueued {
+		t.Fatalf("code = %v stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	var got landBranchJSON
+	if err := json.Unmarshal([]byte(stdout.String()), &got); err != nil || got.Log == "" || got.Route == "" {
+		t.Errorf("stdout = %q (%v); want the gate log and a route", stdout.String(), err)
+	}
+}
