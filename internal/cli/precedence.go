@@ -230,7 +230,7 @@ type GitPathChecker struct {
 
 func (c *GitPathChecker) ExistsInWorktreeOrHEAD(ctx context.Context, path string) (bool, error) {
 	rel := PrefixPath(c.Prefix, path)
-	if _, err := os.Stat(filepath.Join(c.Root, rel)); err == nil {
+	if _, err := os.Lstat(filepath.Join(c.Root, rel)); err == nil {
 		return true, nil
 	} else if !os.IsNotExist(err) {
 		return false, err

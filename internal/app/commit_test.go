@@ -531,3 +531,15 @@ func TestCommitDryRunNeedsNoMessage(t *testing.T) {
 		t.Fatalf("runCommit --dry-run = %v; stderr: %s", code, stderr.String())
 	}
 }
+
+// TestCommit_DanglingSymlinkPositionalClassifies pins that a dangling link is a path in the worktree.
+func TestCommit_DanglingSymlinkPositionalClassifies(t *testing.T) {
+	t.Parallel()
+	dir, _ := gittest.RepoWithFile(t.Context(), t, "base.txt", "base\n", "init")
+	if err := os.Symlink("nonexistent-target", filepath.Join(dir, "link")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if _, stderr, code := runApp(t, "-C", dir, "commit", "--dry-run", "link"); code != exitcode.Success {
+		t.Errorf("code = %v stderr = %q; want the link previewed", code, stderr)
+	}
+}
