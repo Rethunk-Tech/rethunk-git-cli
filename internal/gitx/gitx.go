@@ -1030,7 +1030,7 @@ func (r *Repo) NewOnlyIndex(ctx context.Context) (*OnlyIndex, error) {
 		return nil, err
 	}
 	o := &OnlyIndex{Path: filepath.Join(dir, "index"), BaseCommit: commit, BaseTree: tree}
-	if o.live, err = os.OpenFile(filepath.Join(dir, onlyLiveLock), os.O_CREATE|os.O_RDWR, 0o600); err == nil { //nolint:gosec // path is the dir MkdirTemp just made plus a constant
+	if o.live, err = os.OpenFile(filepath.Clean(filepath.Join(dir, onlyLiveLock)), os.O_CREATE|os.O_RDWR, 0o600); err == nil {
 		err = lockFile(o.live)
 	}
 	if err != nil {
@@ -1063,7 +1063,7 @@ const onlyLiveLock = "live.lock"
 
 // onlyDirLive reports whether a running commit holds dir's lock.
 func onlyDirLive(dir string) bool {
-	f, err := os.OpenFile(filepath.Join(dir, onlyLiveLock), os.O_RDWR, 0) //nolint:gosec // dir is an rgit-only-* entry of the temp dir plus a constant
+	f, err := os.OpenFile(filepath.Clean(filepath.Join(dir, onlyLiveLock)), os.O_RDWR, 0)
 	if err != nil {
 		return false
 	}
