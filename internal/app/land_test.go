@@ -3300,7 +3300,9 @@ func TestLandDryRunPlansWithoutActing(t *testing.T) {
 	if code := runLandWith(t.Context(), "", []string{"--dry-run", "--json", "--repos", app}, d); code != exitcode.Success {
 		t.Fatalf("json code = %v", code)
 	}
-	var got struct{ Repos []landDryRunRepo }
+	var got struct {
+		Repos []landDryRunRepo `json:"repos"`
+	}
 	if err := json.Unmarshal([]byte(stdout.String()), &got); err != nil || len(got.Repos) != 1 || got.Repos[0].Route != "push" || got.Repos[0].Gate != "would run" || len(got.Repos[0].Ahead) != 1 {
 		t.Errorf("json = %q (%v)", stdout.String(), err)
 	}
