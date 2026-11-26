@@ -1679,11 +1679,7 @@ func (r *Repo) LsFilesOthers(ctx context.Context, extra ...string) ([]string, er
 	if err != nil {
 		return nil, err
 	}
-	trimmed := bytes.Trim(out, "\x00")
-	if len(trimmed) == 0 {
-		return nil, nil
-	}
-	return strings.Split(string(trimmed), "\x00"), nil
+	return splitNUL(out), nil
 }
 
 // LsFilesTracked lists every tracked file via `git ls-files -z`,
@@ -1694,11 +1690,7 @@ func (r *Repo) LsFilesTracked(ctx context.Context, extra ...string) ([]string, e
 	if err != nil {
 		return nil, err
 	}
-	trimmed := bytes.Trim(out, "\x00")
-	if len(trimmed) == 0 {
-		return nil, nil
-	}
-	return strings.Split(string(trimmed), "\x00"), nil
+	return splitNUL(out), nil
 }
 
 // LsFilesTrackedAndOthers lists the files `git add <pathspec>` would stage:
@@ -1711,11 +1703,7 @@ func (r *Repo) LsFilesTrackedAndOthers(ctx context.Context, pathspec string) ([]
 	if err != nil {
 		return nil, err
 	}
-	trimmed := bytes.Trim(out, "\x00")
-	if len(trimmed) == 0 {
-		return nil, nil
-	}
-	return strings.Split(string(trimmed), "\x00"), nil
+	return splitNUL(out), nil
 }
 
 // CleansCRLF reports whether git's clean conversion turns path's CRLF line
@@ -2014,4 +2002,14 @@ func (r *Repo) RootAndPrefix(ctx context.Context) (root, prefix string, err erro
 		return "", "", fmt.Errorf("gitx: rev-parse --show-toplevel --show-prefix: %q; want two lines", out)
 	}
 	return strings.TrimSuffix(lines[0], "\r"), strings.TrimSuffix(lines[1], "\r"), nil
+}
+
+// splitNUL splits NUL-delimited `-z` output into its fields; empty output is
+// nil, and leading or trailing NULs add no empty field.
+func splitNUL(out []byte) []string {
+	trimmed := bytes.Trim(out, "\x00")
+	if len(trimmed) == 0 {
+		return nil
+	}
+	return strings.Split(string(trimmed), "\x00")
 }
