@@ -95,6 +95,16 @@ func TestShow_SourceDistinguishesBadRevisionFromAbsentPath(t *testing.T) {
 	_, stderr, code = runApp(t, "-C", dir, "show", "--source")
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.StringContains(stderr, "--source requires a value"))
+
+	for _, args := range [][]string{
+		{"show", "--source", "", "a.go:A"},
+		{"show", "--source=", "a.go:A"},
+		{"log", "--source", "", "--source", "HEAD", "a.go:A"},
+	} {
+		_, stderr, code = runApp(t, append([]string{"-C", dir}, args...)...)
+		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage), qt.Commentf("%v", args))
+		qt.Assert(t, qt.StringContains(stderr, "--source requires a value"), qt.Commentf("%v", args))
+	}
 }
 
 // TestShow_MissingWorktreeFileFallsBackToHEAD matches blame's own default:

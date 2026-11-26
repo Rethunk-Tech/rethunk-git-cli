@@ -759,16 +759,26 @@ type anchorParser struct {
 	cmdName string
 	help    string
 	stderr  io.Writer
+	// seenSource is set by the first --source, whatever its value.
+	seenSource bool
 }
 
 // assign stores a value-flag's value; true means accept refused it and the
 // usage text is already written.
-func (p anchorParser) assign(f anchorCommandFlag, flag, value string) (failed bool) {
+func (p *anchorParser) assign(f anchorCommandFlag, flag, value string) (failed bool) {
 	if f.accept == nil {
-		if flag == "--source" && *f.val != "" {
-			fmt.Fprintf(p.stderr, "rgit: %s: --source given more than once\n", p.cmdName)
-			printUsage(p.stderr, p.help)
-			return true
+		if flag == "--source" {
+			if value == "" {
+				fmt.Fprintf(p.stderr, "rgit: %s: --source requires a value\n", p.cmdName)
+				printUsage(p.stderr, p.help)
+				return true
+			}
+			if p.seenSource {
+				fmt.Fprintf(p.stderr, "rgit: %s: --source given more than once\n", p.cmdName)
+				printUsage(p.stderr, p.help)
+				return true
+			}
+			p.seenSource = true
 		}
 		*f.val = value
 		return false
@@ -782,7 +792,7 @@ func (p anchorParser) assign(f anchorCommandFlag, flag, value string) (failed bo
 
 // tryFlag consumes args[i] when it is f, returning the index of the last
 // argument used. failed means a refusal is already written.
-func (p anchorParser) tryFlag(f anchorCommandFlag, args []string, i int) (next int, matched, failed bool) {
+func (p *anchorParser) tryFlag(f anchorCommandFlag, args []string, i int) (next int, matched, failed bool) {
 	a := args[i]
 	if !slices.Contains(f.tokens, a) {
 		matched, failed = p.tryInlineValue(f, a)
@@ -806,7 +816,7 @@ func (p anchorParser) tryFlag(f anchorCommandFlag, args []string, i int) (next i
 
 // tryInlineValue matches the "--flag=value" and glued "-nN" spellings of a
 // value flag.
-func (p anchorParser) tryInlineValue(f anchorCommandFlag, a string) (matched, failed bool) {
+func (p *anchorParser) tryInlineValue(f anchorCommandFlag, a string) (matched, failed bool) {
 	if f.val == nil && f.accept == nil {
 		return false, false
 	}
@@ -825,7 +835,7 @@ func (p anchorParser) tryInlineValue(f anchorCommandFlag, a string) (matched, fa
 
 // refusePositional reports whether a is not acceptable as the next
 // positional, having written the refusal.
-func (p anchorParser) refusePositional(a string, have, maxPositionals int, refuseLoneSeparator bool) bool {
+func (p *anchorParser) refusePositional(a string, have, maxPositionals int, refuseLoneSeparator bool) bool {
 	switch {
 	case a == "--" && refuseLoneSeparator && have == 0:
 		fmt.Fprintf(p.stderr, "rgit: %s: %q cannot be used as a FILE:SYMBOL anchor; %s requires a FILE:SYMBOL anchor\n", p.cmdName, a, p.cmdName)
