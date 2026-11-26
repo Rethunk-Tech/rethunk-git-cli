@@ -321,6 +321,11 @@ func TestLanguageKindForName(t *testing.T) {
 		{"markdown", "note.mdx", protocol.LanguageKindMarkdown},
 		{"tsx", "page.tsx", protocol.LanguageKindTypeScriptReact},
 		{"tsx", "bin", protocol.LanguageKindTypeScriptReact},
+		{"python", "run", protocol.LanguageKindPython},
+		{"zsh", "rc", protocol.LanguageKindShellScript},
+		{"typescript", "tool", protocol.LanguageKindTypeScript},
+		// The extension wins over the grammar name.
+		{"typescript", "app.js", protocol.LanguageKindJavaScript},
 	} {
 		got, ok := LanguageKindForName(tt.lang, tt.path)
 		if !ok || got != tt.want {
