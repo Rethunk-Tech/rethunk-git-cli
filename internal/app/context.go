@@ -15,7 +15,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"maps"
 	"strconv"
 	"strings"
 
@@ -66,8 +65,7 @@ Records, one per line, tab-separated, no header:
       prefix that remains on stderr.
 
 context never dials a language server, so it has no W<TAB>ts-only record
-and no extent-disagreement warnings; rgit diff and rgit commit still
-cross-check.
+and no extent-disagreement warnings; rgit commit still cross-checks.
 
   F<TAB>FILE<TAB>SYMBOL<TAB>STATUS<TAB>ADDED<TAB>DELETED
       One per "rgit diff --porcelain" row -- identical fields, with this
@@ -212,14 +210,18 @@ func runContext(ctx context.Context, dir string, args []string, stdout, stderr i
 
 	if brief {
 		dirty, untracked := contextDirtyUntracked(report, staged, unstaged)
+		head := branchRecord
+		if head == "" {
+			head = detachedRecord
+		}
 		if asJSON {
-			if err := writeContextBriefJSON(stdout, branchRecord, dirty, untracked); err != nil {
+			if err := writeContextBriefJSON(stdout, head, dirty, untracked); err != nil {
 				fmt.Fprintf(stderr, "rgit: context: %v\n", err)
 				return exitcode.GitFailure
 			}
 			return exitcode.Success
 		}
-		writeContextBrief(stdout, branchRecord, dirty, untracked)
+		writeContextBrief(stdout, head, dirty, untracked)
 		return exitcode.Success
 	}
 
@@ -377,33 +379,33 @@ func contextDirtyUntracked(report *diffpkg.Report, staged, unstaged []string) (d
 	return dirty, untracked
 }
 
-func writeContextBrief(w io.Writer, branchRecord string, dirty, untracked int) {
-	line := strings.TrimRight(branchRecord, "\n")
+func writeContextBrief(w io.Writer, head string, dirty, untracked int) {
+	line := strings.TrimRight(head, "\n")
 	if line == "" {
 		line = "B\t\t\t0\t0"
 	}
 	fmt.Fprintf(w, "%s\t%d\t%d\n", line, dirty, untracked)
 }
 
-func writeContextBriefJSON(w io.Writer, branchRecord string, dirty, untracked int) error {
+// writeContextBriefJSON's head is the B or H record; empty (unborn) falls
+// back to an empty B.
+func writeContextBriefJSON(w io.Writer, head string, dirty, untracked int) error {
 	rec := map[string]string{
-		"type":      "B",
-		"branch":    "",
-		"upstream":  "",
-		"ahead":     "0",
-		"behind":    "0",
-		"dirty":     strconv.Itoa(dirty),
-		"untracked": strconv.Itoa(untracked),
+		"type":     "B",
+		"branch":   "",
+		"upstream": "",
+		"ahead":    "0",
+		"behind":   "0",
 	}
-	if branchRecord != "" {
-		parsed, err := contextRecord(strings.TrimRight(branchRecord, "\n"))
+	if head != "" {
+		parsed, err := contextRecord(strings.TrimRight(head, "\n"))
 		if err != nil {
 			return err
 		}
-		maps.Copy(rec, parsed)
-		rec["dirty"] = strconv.Itoa(dirty)
-		rec["untracked"] = strconv.Itoa(untracked)
+		rec = parsed
 	}
+	rec["dirty"] = strconv.Itoa(dirty)
+	rec["untracked"] = strconv.Itoa(untracked)
 	return encodeJSON(w, contextReport{Schema: jsonSchema, Records: []map[string]string{rec}})
 }
 

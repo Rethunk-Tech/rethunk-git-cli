@@ -518,3 +518,23 @@ func TestRun_ContextReportsStagedAndUnstagedSeparately(t *testing.T) {
 	qt.Assert(t, qt.IsTrue(strings.LastIndex(stdout, "F\t") < strings.Index(stdout, "T\t")))
 	qt.Assert(t, qt.IsTrue(strings.LastIndex(stdout, "T\t") < strings.Index(stdout, "C\t")))
 }
+
+func TestRun_ContextBriefDetachedHeadKeepsHash(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	sha := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	gitOut(t, dir, "checkout", "-q", "--detach", "HEAD")
+	writeAppFile(t, dir, "new.txt", "untracked content\n")
+
+	stdout, _, code := runApp(t, "-C", dir, "context", "--brief")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stdout, "H\t"+sha+"\t0\t1\n"))
+
+	jsonOut, _, code := runApp(t, "-C", dir, "context", "--brief", "--json")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	var got struct {
+		Records []map[string]string `json:"records"`
+	}
+	qt.Assert(t, qt.IsNil(json.Unmarshal([]byte(jsonOut), &got)))
+	qt.Assert(t, qt.DeepEquals(got.Records, []map[string]string{{"type": "H", "sha": sha, "dirty": "0", "untracked": "1"}}))
+}
