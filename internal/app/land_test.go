@@ -2997,3 +2997,24 @@ func TestLandFetchesOncePerRepo(t *testing.T) {
 		t.Errorf("fetches = %d; want 1", fetches)
 	}
 }
+
+func TestExecGitDisablesFsmonitor(t *testing.T) {
+	t.Parallel()
+	dir, _ := gittest.RepoWithFile(t.Context(), t, "base.txt", "base\n", "base")
+	marker := filepath.Join(t.TempDir(), "ran")
+	hook := filepath.Join(t.TempDir(), "fsmonitor.sh")
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\ntouch "+marker+"\nprintf '\\0'\n"), 0o700); err != nil { //nolint:gosec // test fixture script
+		t.Fatal(err)
+	}
+	gitOut(t, dir, "config", "core.fsmonitor", hook)
+	if _, err := (execGit{}).run(dir, "status", "--porcelain=v1", "-uno"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("land's git runner ran the repo's core.fsmonitor program")
+	}
+	hasPrePushHook(t.Context(), dir)
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("hasPrePushHook ran the repo's core.fsmonitor program")
+	}
+}
