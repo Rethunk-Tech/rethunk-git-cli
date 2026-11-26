@@ -71,6 +71,10 @@ func (e *ResolveError) Error() string {
 	// "did you mean" suffix below stays unreachable for it the same way it
 	// already is for ExtentMismatch.
 	label := "unresolved"
+	target := e.Anchor
+	if e.Path != "" {
+		target = e.Path + ":" + e.Anchor
+	}
 	switch e.Code {
 	case exitcode.AnchorAmbiguous:
 		label = "ambiguous"
@@ -94,10 +98,10 @@ func (e *ResolveError) Error() string {
 		// a more specific resolution error message.
 	}
 	if e.Code == exitcode.AnchorAmbiguous && e.Detail != "" {
-		return fmt.Sprintf("resolve: %q: %s -- %s", e.Anchor, label, e.Detail)
+		return fmt.Sprintf("resolve: %q: %s -- %s", target, label, e.Detail)
 	}
 	if len(e.Candidates) == 0 {
-		return fmt.Sprintf("resolve: %q: %s", e.Anchor, label)
+		return fmt.Sprintf("resolve: %q: %s", target, label)
 	}
 	if e.Code == exitcode.AnchorAmbiguous {
 		// Candidates here are exact matches, not guesses -- "did you mean"
@@ -105,10 +109,10 @@ func (e *ResolveError) Error() string {
 		// it: qualify with one of them (docs/ANCHORS.md's qualification
 		// invariant).
 		return fmt.Sprintf("resolve: %q: %s -- qualify with one of: %s",
-			e.Anchor, label, strings.Join(e.Candidates, ", "))
+			target, label, strings.Join(e.Candidates, ", "))
 	}
 	return fmt.Sprintf("resolve: %q: %s (did you mean: %s?)",
-		e.Anchor, label, strings.Join(e.Candidates, ", "))
+		target, label, strings.Join(e.Candidates, ", "))
 }
 
 // AsResolveError reports whether err is, or wraps, a *ResolveError, via
