@@ -3444,3 +3444,19 @@ func TestFastForwardDefaultAfterMergeLeavesOtherBranch(t *testing.T) {
 		t.Errorf("stderr = %q; want the on-feat refusal", stderr.String())
 	}
 }
+
+func TestCherryUpstreamRefusesUnpushedCommits(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	d := testLandDeps(t)
+	gitOut(t, dir, "branch", "same")
+	if !cherryUpstream(dir, "main", "same", d) {
+		t.Error("branch at origin/main: want every commit upstream")
+	}
+	gitOut(t, dir, "checkout", "-q", "-b", "feat")
+	gittest.Write(t, dir, "feat.txt", "x\n")
+	gittest.Commit(t.Context(), t, dir, "feat only")
+	if cherryUpstream(dir, "main", "feat", d) {
+		t.Error("branch with a commit absent from origin/main reported upstream; branch -D would drop it")
+	}
+}
