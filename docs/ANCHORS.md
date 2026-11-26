@@ -63,24 +63,24 @@ A setext heading (`===` / `---`) is the heading line only.
 
 | Anchor | Covers |
 | --- | --- |
-| `@header` | Preamble: shebang, copyright, build tags, package doc, package clause |
+| `@header` | Preamble: shebang, copyright, build tags, Go package doc, package clause |
 | `@imports` | Import / use / include declarations |
 | `@toplevel` | Package-level decls excluding imports and header |
 
 `@header` plus `@imports` make a synthesized new file compile; both are
-auto-staged for an untracked file. `@header` is empty when the file opens
-with code. A leading comment attached to the first declaration by the
+auto-staged for an untracked file. `@header` does not resolve (exit 3) when the file opens
+with code. Python module docstrings and Rust `//!` crate docs are not in `@header`. A leading comment attached to the first declaration by the
 blank-line rule stays with that declaration.
 
 `@imports` spans the whole import run, including grouping comments
 between imports (Go: one `import_declaration`; TypeScript/Python: one
 node per import). A comment after the last import belongs to what follows.
 
-Markdown: `@imports` is empty; `@header` is YAML/TOML frontmatter;
-`@toplevel` is every heading plus the lede. YAML: `@header` is a leading
-comment run, not `---` / `%YAML`; `@imports` is empty; `@toplevel` is every
+Markdown: `@imports` does not resolve (exit 3); `@header` is YAML/TOML frontmatter;
+`@toplevel` is the lede (text before the first heading). YAML: `@header` is a leading
+comment run, not `---` / `%YAML`; `@imports` does not resolve; `@toplevel` is every
 top-level key. HTML: `@header` is `<!DOCTYPE html>` plus an adjacent
-comment; `@imports` is empty (`<link>` / `<script src>` are ordinary tags);
+comment; `@imports` does not resolve (`<link>` / `<script src>` are ordinary tags);
 `@toplevel` is every id-bearing element.
 
 ## Paths that anchors cannot address
