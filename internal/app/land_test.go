@@ -2712,6 +2712,8 @@ func TestLandShaSkips(t *testing.T) {
 	for _, c := range []struct{ name, line string }{
 		{"no upstream", ": skipped (no upstream)"},
 		{"dirty tree", ": skipped (dirty tracked files: base.txt)"},
+		{"wrong branch", ", not main)"},
+		{"not on default", " is not on main)"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
@@ -2719,10 +2721,17 @@ func TestLandShaSkips(t *testing.T) {
 			gittest.Write(t, dir, "one.txt", "1\n")
 			gittest.Commit(t.Context(), t, dir, "one")
 			sha := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
-			if c.name == "no upstream" {
+			switch c.name {
+			case "no upstream":
 				gitOut(t, dir, "branch", "--unset-upstream")
-			} else {
+			case "dirty tree":
 				gittest.Write(t, dir, "base.txt", "dirty\n")
+			case "wrong branch":
+				gitOut(t, dir, "checkout", "-q", "-b", "feat")
+			case "not on default":
+				gitOut(t, dir, "checkout", "-q", "-b", "feat", "HEAD")
+				gitOut(t, dir, "checkout", "-q", "main")
+				gitOut(t, dir, "reset", "-q", "--hard", "HEAD~1")
 			}
 			before := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD"))
 			d := testLandDeps(t)
