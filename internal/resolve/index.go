@@ -400,6 +400,14 @@ func (idx *index) suggest(anchor string) []string {
 	all := make([]scored, 0, len(idx.order))
 	for _, s := range idx.order {
 		dist := levenshtein(anchor, s.Decl.Bare)
+		if lb, la := strings.ToLower(s.Decl.Bare), strings.ToLower(anchor); strings.HasPrefix(lb, la) {
+			dist = 0
+		} else if strings.Contains(lb, la) {
+			dist = 1
+		} else if dist*2 >= max(len(anchor), len(s.Decl.Bare)) {
+			// Most of a short name changed: not a typo of it.
+			dist = maxDistance + 1
+		}
 		if partialQualified(anchor, s.Qualified) {
 			dist = 0
 		}

@@ -85,6 +85,18 @@ func TestResolve_BareNameMatchingSeveralContainersIsAmbiguous(t *testing.T) {
 	if _, err := Resolve(lang, []byte(boxSrc), "Box.sizeX"); err != nil {
 		t.Errorf("Resolve(Box.sizeX) (the suggested candidate) = %v; want success", err)
 	}
+
+	// A truncated name suggests its extensions; an unrelated short name is not offered.
+	const landSrc = "package sample\n\nfunc LandConflict() {}\n\nfunc LandSkipped() {}\n\nfunc Name() {}\n"
+	_, err = Resolve(lang, []byte(landSrc), "Land")
+	rerr, _ = AsResolveError(err)
+	if rerr == nil || strings.Join(rerr.Candidates, ",") != "LandConflict,LandSkipped" {
+		t.Errorf("Resolve(Land) = %v; want candidates LandConflict,LandSkipped only", err)
+	}
+	rerr.Path = "a.go"
+	if !strings.HasPrefix(rerr.Error(), `resolve: "a.go:Land": unresolved`) {
+		t.Errorf("Error() = %q; want it to name the file", rerr.Error())
+	}
 }
 
 // TestResolve_RawHeadingTextResolvesOnlyForMarkdown pins the fallback's own
