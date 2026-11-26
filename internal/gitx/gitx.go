@@ -1021,6 +1021,7 @@ func (r *Repo) NewOnlyIndex(ctx context.Context) (*OnlyIndex, error) {
 	if err != nil {
 		return nil, err
 	}
+	sweepStaleOnlyDirs()
 	dir, err := os.MkdirTemp(os.TempDir(), "rgit-only-*")
 	if err != nil {
 		return nil, err
@@ -1042,6 +1043,25 @@ func (r *Repo) NewOnlyIndex(ctx context.Context) (*OnlyIndex, error) {
 		return nil, err
 	}
 	return o, nil
+}
+
+// staleOnlyAge is how long a private-index directory may sit before it counts
+// as left by a killed run; no commit's hooks run that long.
+const staleOnlyAge = time.Hour
+
+// sweepStaleOnlyDirs removes rgit-only-* directories in the system temp dir
+// that a killed commit never closed.
+func sweepStaleOnlyDirs() {
+	tmp := os.TempDir()
+	entries, _ := os.ReadDir(tmp)
+	for _, e := range entries {
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), "rgit-only-") {
+			continue
+		}
+		if info, err := e.Info(); err == nil && time.Since(info.ModTime()) > staleOnlyAge {
+			_ = os.RemoveAll(filepath.Join(tmp, e.Name()))
+		}
+	}
 }
 
 // Close removes the private index.

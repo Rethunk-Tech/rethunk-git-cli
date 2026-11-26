@@ -969,6 +969,35 @@ func TestNewOnlyIndexKeepsStatData(t *testing.T) {
 	}
 }
 
+// A commit killed before Close leaves its private index behind; the next
+// NewOnlyIndex clears directories older than an hour and keeps fresh ones.
+func TestNewOnlyIndexSweepsStaleDirs(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	stale, fresh := filepath.Join(tmp, "rgit-only-stale"), filepath.Join(tmp, "rgit-only-fresh")
+	for _, d := range []string{stale, fresh} {
+		if err := os.Mkdir(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	old := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(stale, old, old); err != nil {
+		t.Fatal(err)
+	}
+	_, repo := gittest.RepoWithFile(t.Context(), t, "a.txt", "a\n", "chore: initial")
+	only, err := repo.NewOnlyIndex(t.Context())
+	if err != nil {
+		t.Fatalf("NewOnlyIndex: %v", err)
+	}
+	defer only.Close()
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Errorf("stale dir survived: %v", err)
+	}
+	if _, err := os.Stat(fresh); err != nil {
+		t.Errorf("fresh dir removed: %v", err)
+	}
+}
+
 func TestCommitOnlyCommitsADeletedPath(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t.Context(), t)
