@@ -1298,3 +1298,23 @@ func TestRun_StructuredDataCollapsesUnderIgnoreCase(t *testing.T) {
 		t.Errorf("RenderPorcelain = %q; want one path-only row (commit refuses FILE:key)", porcelain)
 	}
 }
+
+func TestRun_UntrackedStructuredDataCollapses(t *testing.T) {
+	t.Parallel()
+	dir, repo := newDiffTestRepo(t)
+	gittest.Git(t.Context(), t, dir, "config", "core.ignorecase", "true")
+	gittest.Write(t, dir, "Config.JSON", "{\n  \"name\": \"a\",\n  \"version\": 1\n}\n")
+
+	report, err := Run(t.Context(), repo, dir, Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	porcelain := RenderPorcelain(report)
+	if strings.Contains(porcelain, "\tname\t") || strings.Contains(porcelain, "\tversion\t") {
+		t.Errorf("RenderPorcelain = %q; want one path-only row (commit refuses FILE:key)", porcelain)
+	}
+	// docs/CODES.md: an untracked file with a grammar attributes as MOD, so the collapsed row does too.
+	if want := "Config.JSON\t\tMOD\t4\t0\n"; porcelain != want {
+		t.Errorf("RenderPorcelain = %q; want %q", porcelain, want)
+	}
+}
