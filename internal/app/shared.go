@@ -458,7 +458,7 @@ func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, open
 	// misread as an anchor with an empty name.
 	checker := opened.checker
 	checker.ExtraRev = sourceRev
-	classified, err := cli.ClassifyArgs(ctx, []string{positional}, false, checker,cli.GitRevisionResolver{Repo: repo})
+	classified, err := cli.ClassifyArgs(ctx, []string{positional}, false, checker, cli.GitRevisionResolver{Repo: repo})
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return nil, "", nil, nil, "", exitcode.InvalidUsage

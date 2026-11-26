@@ -13,8 +13,8 @@ import (
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/cli"
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
-	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gitx"
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gitx"
 )
 
 // TestRunCommit_RefusesSymbolAnchorOnStructuredData pins the end-to-end

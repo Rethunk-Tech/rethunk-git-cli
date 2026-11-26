@@ -967,6 +967,8 @@ func emitLeft(ctx context.Context, repo *gitx.Repo, stdout, stderr io.Writer, mo
 		if err == nil {
 			fmt.Fprintln(stdout, l)
 		}
+	case leftPorcelain:
+		// Returned above, before the read.
 	}
 	return exitcode.Success
 }

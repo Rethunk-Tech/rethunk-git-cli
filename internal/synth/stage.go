@@ -453,12 +453,10 @@ func (p *Plan) finishFiles(ctx context.Context, named map[string]map[string]bool
 	var wg sync.WaitGroup
 	for i, fp := range p.files {
 		sem <- struct{}{}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			defer func() { <-sem }()
 			tsOnly[i], errs[i] = fp.crossCheckPending(ctx, sess, root)
-		}()
+		})
 	}
 	wg.Wait()
 
