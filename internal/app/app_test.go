@@ -760,11 +760,7 @@ func TestRun_DiffPatchIsGitPatchByteForByte(t *testing.T) {
 func TestRun_DiffFromSubdirectory(t *testing.T) {
 	dir := chdirTempRepo(t)
 	writeAppFile(t, dir, "pkg/deep/c.go", "package deep\n\nfunc C() int {\n\treturn 1\n}\n")
-	cmd := exec.CommandContext(t.Context(), "git", "add", "-A")
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git add: %v: %s", err, out)
-	}
+	gitOut(t, dir, "add", "-A")
 
 	t.Chdir(filepath.Join(dir, "pkg", "deep"))
 	stdout, _, code := runApp(t, "diff", "--porcelain", "c.go")

@@ -5,6 +5,7 @@
 package gitx_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -118,13 +119,7 @@ func TestSequencerOpAndIgnoreCase(t *testing.T) {
 
 func hashObject(t *testing.T, dir, content string) string {
 	t.Helper()
-	cmd := exec.CommandContext(t.Context(), "git", "-C", dir, "hash-object", "-w", "--stdin") //nolint:gosec // test invokes the real git binary with a fixture repository path
-	cmd.Stdin = strings.NewReader(content)
-	out, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("git hash-object: %v", err)
-	}
-	return strings.TrimSpace(string(out))
+	return strings.TrimSpace(gittest.GitInput(t.Context(), t, dir, content, "hash-object", "-w", "--stdin"))
 }
 
 // TestAdd_AlreadyStagedDeletionSucceeds pins Add's own fallback (the unit
@@ -534,6 +529,33 @@ func TestLog_FiltersByPath(t *testing.T) {
 	}
 	if strings.Contains(got, "bump b") {
 		t.Errorf("Log(paths=[a.txt]) = %q; want it to exclude the commit that never touched a.txt", got)
+	}
+}
+
+// TestLogTo_MatchesLog pins that the streamed form writes exactly what the
+// buffered one returns.
+func TestLogTo_MatchesLog(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t.Context(), t)
+	ctx := t.Context()
+	gittest.Write(t, dir, "a.txt", "a\n")
+	gittest.Commit(ctx, t, dir, "chore: add a")
+	gittest.Write(t, dir, "a.txt", "a2\n")
+	gittest.Commit(ctx, t, dir, "fix: bump a")
+
+	want, err := repo.Log(ctx, "", "", []string{"a.txt"}, "-p")
+	if err != nil {
+		t.Fatalf("Log: %v", err)
+	}
+	var got bytes.Buffer
+	if err := repo.LogTo(ctx, &got, "", "", []string{"a.txt"}, "-p"); err != nil {
+		t.Fatalf("LogTo: %v", err)
+	}
+	if got.String() != string(want) {
+		t.Errorf("LogTo = %q; want %q", got.String(), want)
+	}
+	if err := repo.LogTo(ctx, &got, "not a date", "", nil, "--bogus"); err == nil {
+		t.Error("LogTo with a bad flag: want a *GitError")
 	}
 }
 
