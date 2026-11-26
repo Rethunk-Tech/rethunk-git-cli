@@ -113,17 +113,43 @@ func TestGHSettingsCacheNonHintFailureKeepsEntry(t *testing.T) {
 }
 
 func TestGHSettingsCacheDoesNotCacheErrors(t *testing.T) {
-	inner := &settingsProbeGH{err: errors.New("gh: offline")}
-	c, _ := newSettingsTestCache(t, inner)
-	if _, err := c.branchRuleTypes("o/r", "main"); err == nil {
-		t.Fatal("want the inner error")
+	calls := map[string]func(*ghSettingsCache) error{
+		"rules":  func(c *ghSettingsCache) error { _, err := c.branchRuleTypes("o/r", "main"); return err },
+		"squash": func(c *ghSettingsCache) error { _, err := c.squashMergeAllowed("o/r"); return err },
+		"merge":  func(c *ghSettingsCache) error { _, err := c.mergeCommitAllowed("o/r"); return err },
 	}
-	inner.err = nil
-	types, err := c.branchRuleTypes("o/r", "main")
-	if err != nil || len(types) != 1 {
-		t.Fatalf("second call = %v, %v; want the inner answer", types, err)
+	for name, call := range calls {
+		t.Run(name, func(t *testing.T) {
+			inner := &settingsProbeGH{err: errors.New("gh: offline")}
+			c, _ := newSettingsTestCache(t, inner)
+			if err := call(c); err == nil {
+				t.Fatal("want the inner error")
+			}
+			inner.err = nil
+			if err := call(c); err != nil {
+				t.Fatalf("second call: %v", err)
+			}
+			if err := call(c); err != nil {
+				t.Fatalf("third call: %v", err)
+			}
+			if got := inner.rules + inner.squash + inner.merge; got != 2 {
+				t.Fatalf("inner reached %d times, want 2 (error not cached, success cached)", got)
+			}
+		})
 	}
-	if inner.rules != 2 {
-		t.Fatalf("inner reached %d times, want 2 (error must not be cached)", inner.rules)
+}
+
+func TestGHSettingsCacheFutureDatedEntryRereads(t *testing.T) {
+	inner := &settingsProbeGH{}
+	c, advance := newSettingsTestCache(t, inner)
+	if _, err := c.squashMergeAllowed("o/r"); err != nil {
+		t.Fatal(err)
+	}
+	advance(-time.Hour)
+	if _, err := c.squashMergeAllowed("o/r"); err != nil {
+		t.Fatal(err)
+	}
+	if inner.squash != 2 {
+		t.Fatalf("inner reached %d times after the clock moved back, want 2", inner.squash)
 	}
 }
