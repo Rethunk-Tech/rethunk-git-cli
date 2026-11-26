@@ -107,6 +107,12 @@ func (s contentSide) isLink(ctx context.Context, repo *gitx.Repo, root, path str
 	return found && mode == "120000", err
 }
 
+// noSymbolsReport is the one-row answer for a file with no per-symbol
+// attribution: git's own counts.
+func noSymbolsReport(path, added, deleted string) *FileReport {
+	return &FileReport{Path: path, Rows: []Row{{Status: StatusNoSymbols, Added: added, Deleted: deleted}}}
+}
+
 func eitherSideIsLink(ctx context.Context, repo *gitx.Repo, root string, scope Scope, oldPath, newPath string) (bool, error) {
 	if link, err := scope.Old.isLink(ctx, repo, root, oldPath); err != nil || link {
 		return link, err
