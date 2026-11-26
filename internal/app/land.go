@@ -560,7 +560,7 @@ func finishLandRepos(ctx context.Context, results []landResult, wait, asJSON, in
 		if wait {
 			fin := watchUntilDone(job, d)
 			results[i].Watch = &fin
-			results[i].Lines = append([]string{}, finalWaitLine(res, fin))
+			results[i].Lines = append(append([]string{}, res.Lines...), finalWaitLine(res, fin))
 		}
 	}
 
@@ -571,6 +571,12 @@ func finishLandRepos(ctx context.Context, results []landResult, wait, asJSON, in
 	if asJSON {
 		enc := json.NewEncoder(d.stdout)
 		_ = enc.Encode(landJSON{Repos: jsonResults(results)})
+		// Stdout holds the one object; the result lines go where --branch's do, for nomad-hud's watch.
+		for _, res := range results {
+			for _, line := range res.Lines {
+				fmt.Fprintln(d.stderr, line)
+			}
+		}
 	} else {
 		for _, res := range results {
 			out := d.stdout

@@ -2527,6 +2527,9 @@ func TestLandJSONOneObject(t *testing.T) {
 	if !strings.Contains(stderr.String(), ": installed ok") {
 		t.Errorf("install line missing from stderr: %q", stderr.String())
 	}
+	if !strings.Contains(stderr.String(), ": pushed "+head) {
+		t.Errorf("pushed line missing from stderr: %q", stderr.String())
+	}
 }
 
 // TestGateHeadRefusesDirtyTree pins that an edit made after land's dirty check is never gated and pushed over.
@@ -2543,6 +2546,28 @@ func TestGateHeadRefusesDirtyTree(t *testing.T) {
 	line, _, ok := gateHead(dir, d)
 	if ok || gated || !strings.Contains(line, "tracked files changed before the gate (base.txt); nothing pushed") {
 		t.Errorf("ok=%v gated=%v line=%q", ok, gated, line)
+	}
+}
+
+// TestLandWaitKeepsPRLine pins that --wait leaves the summary PR line ahead of the final CI line.
+func TestLandWaitKeepsPRLine(t *testing.T) {
+	t.Parallel()
+	d := testLandDeps(t)
+	d.gh = &fakeGH{
+		prs: []prInfo{{State: "OPEN", URL: "https://github.com/acme/demo/pull/4"}},
+		run: workflowRun{Status: "completed", Conclusion: "success"},
+	}
+	var stdout strings.Builder
+	d.stdout = &stdout
+	res := landResult{
+		Repo: t.TempDir(), Kind: landPR, PRState: "queued", PRNumber: 4, Slug: "acme/demo", Default: "main",
+		URL:   "https://github.com/acme/demo/pull/4",
+		Lines: []string{"r: PR https://github.com/acme/demo/pull/4 (queued)"},
+	}
+	finishLandRepos(t.Context(), []landResult{res}, true, false, false, false, false, false, false, d)
+	out := strings.Split(strings.TrimSpace(stdout.String()), "\n")
+	if len(out) != 2 || out[0] != res.Lines[0] || !strings.Contains(out[1], "; CI ") {
+		t.Errorf("stdout = %q", stdout.String())
 	}
 }
 
