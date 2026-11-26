@@ -65,7 +65,7 @@ func refuseUnsupportedJSON(asJSON bool, cmd string, stderr io.Writer) exitcode.C
 	if !asJSON {
 		return exitcode.Success
 	}
-	remedy := ""
+	remedy := "; run rgit " + cmd + " without --json, its output is plain text"
 	if cmd == "show" || cmd == "blame" {
 		remedy = "; use rgit " + cmd + " --porcelain"
 	}
