@@ -3018,3 +3018,19 @@ func TestExecGitDisablesFsmonitor(t *testing.T) {
 		t.Error("hasPrePushHook ran the repo's core.fsmonitor program")
 	}
 }
+
+func TestDirtySkipLineNamesRealPaths(t *testing.T) {
+	t.Parallel()
+	dir, _ := gittest.RepoWithFile(t.Context(), t, "a b.txt", "x\n", "base")
+	gittest.Write(t, dir, "café.txt", "x\n")
+	gittest.Write(t, dir, "old.txt", "x\n")
+	gitOut(t, dir, "add", ".")
+	gitOut(t, dir, "commit", "-q", "-m", "more")
+	gittest.Write(t, dir, "a b.txt", "changed\n")
+	gittest.Write(t, dir, "café.txt", "changed\n")
+	gitOut(t, dir, "mv", "old.txt", "new.txt")
+	want := dir + ": skipped (dirty tracked files: a b.txt, café.txt, new.txt)"
+	if got := dirtySkipLine(dir, testLandDeps(t)); got != want {
+		t.Errorf("dirtySkipLine = %q; want %q", got, want)
+	}
+}

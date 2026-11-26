@@ -142,12 +142,11 @@ type gitRunner interface {
 type execGit struct {
 	ctx  context.Context //nolint:containedctx // per-run dependency bound to the run's signal context
 	step *string
+}
 
 // noFsmonitor mirrors gitx's prefix: a non-boolean core.fsmonitor is a program git runs on any
 // index-touching verb, and a cloned repository's own config can set it.
 var noFsmonitor = []string{"-c", "core.fsmonitor=false"}
-
-}
 
 func (g execGit) run(dir string, args ...string) (string, error) {
 	setLandStep(g.step, "git")
@@ -1053,7 +1052,7 @@ func gateHead(repo string, d landDeps) (line, logPath string, ok bool) {
 }
 
 func gateState(repo string, d landDeps) (head, status string) {
-	st, _ := d.git.run(repo, "status", "--porcelain", "-uno")
+	st, _ := d.git.run(repo, "status", "--porcelain=v1", "-z", "-uno")
 	return mustGit(repo, d, "rev-parse", "HEAD"), st
 }
 
@@ -1272,7 +1271,7 @@ func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBra
 	}
 	prep.opts.afterGate = true
 	if dirty := dirtyTracked(wt, d); dirty {
-		st, _ := d.git.run(wt, "status", "--porcelain=v1", "-uno")
+		st, _ := d.git.run(wt, "status", "--porcelain=v1", "-z", "-uno")
 		fmt.Fprintf(d.stderr, "error: worktree %s has uncommitted changes (%s); %s not rebased\n", wt, dirtyNames(st), branch)
 		return landBranchPrep{}, exitcode.LandSkipped
 	}
@@ -1570,17 +1569,8 @@ func mergeOverlapFiles(repo, branch string, d landDeps) []string {
 		return nil
 	}
 	var hit []string
-	entries := strings.Split(status, "\x00")
-	for i := 0; i < len(entries); i++ {
-		e := entries[i]
-		if len(e) < 4 {
-			continue
-		}
-		// A rename or copy carries its source as the next NUL field.
-		if e[0] == 'R' || e[0] == 'C' || e[1] == 'R' || e[1] == 'C' {
-			i++
-		}
-		if path := e[3:]; changed[path] {
+	for _, path := range statusPaths(status) {
+		if changed[path] {
 			hit = append(hit, path)
 		}
 	}
@@ -1642,22 +1632,33 @@ func mustGit(repo string, d landDeps, args ...string) string {
 	return out
 }
 
-// dirtyNames lists the paths in `git status --porcelain=v1` output.
-func dirtyNames(status string) string {
-	var names []string
-	for l := range strings.SplitSeq(status, "\n") {
-		if len(l) > 3 {
-			names = append(names, l[3:])
+// statusPaths lists the paths in `git status --porcelain=v1 -z` output: real names, a rename as its destination.
+func statusPaths(status string) []string {
+	var paths []string
+	entries := strings.Split(status, "\x00")
+	for i := 0; i < len(entries); i++ {
+		e := entries[i]
+		if len(e) < 4 {
+			continue
+		}
+		paths = append(paths, e[3:])
+		// A rename or copy carries its source as the next NUL field.
+		if e[0] == 'R' || e[0] == 'C' || e[1] == 'R' || e[1] == 'C' {
+			i++
 		}
 	}
-	return strings.Join(names, ", ")
+	return paths
+}
+
+func dirtyNames(status string) string {
+	return strings.Join(statusPaths(status), ", ")
 }
 
 // dirtySkipLine is the skip line for a dirty tracked tree; the reason stays first so skipReason still reads it.
 func dirtySkipLine(repo string, d landDeps) string {
 	const maxNames = 8
-	st, _ := d.git.run(repo, "status", "--porcelain=v1", "-uno")
-	names := strings.Split(dirtyNames(st), ", ")
+	st, _ := d.git.run(repo, "status", "--porcelain=v1", "-z", "-uno")
+	names := statusPaths(st)
 	if len(names) > maxNames {
 		names = append(names[:maxNames], fmt.Sprintf("and %d more", len(names)-maxNames))
 	}
