@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -80,7 +79,7 @@ func parseFindArgs(ctx context.Context, args []string, stdout, stderr io.Writer)
 		case arg == "--json":
 			opts.asJSON = true
 		case arg == "--bodies" || strings.HasPrefix(arg, "--bodies="):
-			n, next, code, ok := parseFindCount(args, i, "--bodies", stderr)
+			n, next, code, ok := parseCountFlag(args, i, "find", "--bodies", findHelp, stderr)
 			if !ok {
 				return opts, code, true
 			}
@@ -89,7 +88,7 @@ func parseFindArgs(ctx context.Context, args []string, stdout, stderr io.Writer)
 				i++
 			}
 		case arg == "--limit" || strings.HasPrefix(arg, "--limit="):
-			n, next, code, ok := parseFindCount(args, i, "--limit", stderr)
+			n, next, code, ok := parseCountFlag(args, i, "find", "--limit", findHelp, stderr)
 			if !ok {
 				return opts, code, true
 			}
@@ -117,22 +116,6 @@ func parseFindArgs(ctx context.Context, args []string, stdout, stderr io.Writer)
 		opts.bodies = 0
 	}
 	return opts, exitcode.Success, false
-}
-
-func parseFindCount(args []string, i int, name string, stderr io.Writer) (n int, next bool, code exitcode.Code, ok bool) {
-	value, next, ok := flagValue(args, i, name)
-	if !ok {
-		fmt.Fprintf(stderr, "rgit: %s requires a count\n", name)
-		printUsage(stderr, findHelp)
-		return 0, false, exitcode.InvalidUsage, false
-	}
-	n, err := strconv.Atoi(value)
-	if err != nil || n < 0 {
-		fmt.Fprintf(stderr, "rgit: find: invalid value %q for %s\n", value, name)
-		printUsage(stderr, findHelp)
-		return 0, false, exitcode.InvalidUsage, false
-	}
-	return n, next, exitcode.Success, true
 }
 
 func runFind(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {

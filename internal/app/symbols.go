@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
@@ -84,7 +83,7 @@ func parseSymbolsArgs(ctx context.Context, args []string, stdout, stderr io.Writ
 		case arg == "--json":
 			opts.asJSON = true
 		case arg == "--limit" || strings.HasPrefix(arg, "--limit="):
-			n, next, code, ok := parseSymbolsLimit(args, i, stderr)
+			n, next, code, ok := parseCountFlag(args, i, "symbols", "--limit", symbolsHelp, stderr)
 			if !ok {
 				return opts, code, true
 			}
@@ -120,22 +119,6 @@ func parseSymbolsArgs(ctx context.Context, args []string, stdout, stderr io.Writ
 		return opts, exitcode.InvalidUsage, true
 	}
 	return opts, exitcode.Success, false
-}
-
-func parseSymbolsLimit(args []string, i int, stderr io.Writer) (n int, next bool, code exitcode.Code, ok bool) {
-	value, next, ok := flagValue(args, i, "--limit")
-	if !ok {
-		fmt.Fprintln(stderr, "rgit: --limit requires a count")
-		printUsage(stderr, symbolsHelp)
-		return 0, false, exitcode.InvalidUsage, false
-	}
-	n, err := strconv.Atoi(value)
-	if err != nil || n < 0 {
-		fmt.Fprintf(stderr, "rgit: symbols: invalid value %q for --limit\n", value)
-		printUsage(stderr, symbolsHelp)
-		return 0, false, exitcode.InvalidUsage, false
-	}
-	return n, next, exitcode.Success, true
 }
 
 func parseSymbolsMatch(args []string, i int, stderr io.Writer) (re *regexp.Regexp, next bool, code exitcode.Code, ok bool) {

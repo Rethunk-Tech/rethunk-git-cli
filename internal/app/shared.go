@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -85,6 +86,24 @@ func repoPath(root, prefix, path string) (string, error) {
 		return "", err
 	}
 	return p, nil
+}
+
+// parseCountFlag parses the non-negative count after a value flag, printing
+// the refusal with help on a missing or invalid value.
+func parseCountFlag(args []string, i int, cmd, name, help string, stderr io.Writer) (n int, next bool, code exitcode.Code, ok bool) {
+	value, next, ok := flagValue(args, i, name)
+	if !ok {
+		fmt.Fprintf(stderr, "rgit: %s requires a count\n", name)
+		printUsage(stderr, help)
+		return 0, false, exitcode.InvalidUsage, false
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil || n < 0 {
+		fmt.Fprintf(stderr, "rgit: %s: invalid value %q for %s\n", cmd, value, name)
+		printUsage(stderr, help)
+		return 0, false, exitcode.InvalidUsage, false
+	}
+	return n, next, exitcode.Success, true
 }
 
 func readWorktreeFile(rootDir, path string) ([]byte, error) {
