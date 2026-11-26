@@ -1259,6 +1259,7 @@ func TestLandOnePRRouteKeepsSiblingCommit(t *testing.T) {
 	gittest.Write(t, dir, "ahead.txt", "x\n")
 	gittest.Commit(t.Context(), t, dir, "ahead")
 	d, f := prRouteDeps(t, dir, bare)
+	f.number = 4
 	f.onCreate = func() {
 		gittest.Write(t, dir, "sib.txt", "s\n")
 		gittest.Commit(t.Context(), t, dir, "sibling")
@@ -1269,6 +1270,9 @@ func TestLandOnePRRouteKeepsSiblingCommit(t *testing.T) {
 	}
 	if got := strings.TrimSpace(gitOut(t, dir, "log", "-1", "--pretty=%s")); got != "sibling" {
 		t.Errorf("sibling commit dropped, HEAD = %q", got)
+	}
+	if got := strings.Join(res.Lines, "\n"); !strings.Contains(got, "warning: HEAD moved since the PR was opened; local branch not reset") {
+		t.Errorf("lines = %q; want the HEAD-moved warning", got)
 	}
 }
 
@@ -3413,5 +3417,30 @@ func TestInstallPushedReposSkipsWhenHeadIsNotPushed(t *testing.T) {
 	}
 	if _, err := os.Stat(marker); err == nil {
 		t.Error("make install ran for a HEAD that was never pushed")
+	}
+}
+
+func TestFastForwardDefaultAfterMergeLeavesOtherBranch(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	other := t.TempDir()
+	gitOut(t, other, "clone", bare, ".")
+	gitOut(t, other, "config", "user.name", "test")
+	gitOut(t, other, "config", "user.email", "test@test")
+	gittest.Write(t, other, "merged.txt", "from-pr\n")
+	gittest.Commit(t.Context(), t, other, "merged via pr")
+	gitOut(t, other, "push", "origin", "HEAD")
+	gitOut(t, dir, "checkout", "-q", "-b", "feat")
+	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+
+	var stderr strings.Builder
+	d := testLandDeps(t)
+	d.stderr = &stderr
+	fastForwardDefaultAfterMerge(landWatchJob{Repo: dir, Default: "main"}, d)
+	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != before {
+		t.Errorf("feat moved %s -> %s", before, got)
+	}
+	if !strings.Contains(stderr.String(), "(on feat, not main)") {
+		t.Errorf("stderr = %q; want the on-feat refusal", stderr.String())
 	}
 }
