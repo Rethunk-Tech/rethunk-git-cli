@@ -204,19 +204,21 @@ func DeclExtents(lang Language, src []byte) ([]Declared, error) {
 	return f.DeclExtents(), nil
 }
 
-// parserPools holds one *sync.Pool of *ts.Parser per distinct *ts.Language.
-// A *ts.Parser is not safe for concurrent use, so find's parallel file
-// walk needs one in-flight parser per worker rather than one per language.
-// Sequential callers still reuse a parser across Open calls: the pool
-// hands the same instance back when nothing else is parsing.
+// parserFree holds idle *ts.Parser values per distinct *ts.Language. A
+// *ts.Parser is not safe for concurrent use, so find's parallel file walk
+// needs one in-flight parser per worker. go-tree-sitter frees a parser's C
+// memory only on Close, so a sync.Pool (which drops entries on GC without
+// closing them) would leak; this free list never evicts and stays bounded
+// by the number of concurrent workers.
 //
-// Keyed by *ts.Language rather than by name: TSLanguage() already returns
-// the one compiled grammar handle each adapter caches for itself
-// (lang_go.go's own goLanguage.lang is the pattern every adapter follows),
-// so pointer identity is exactly "the same grammar".
-var parserPools sync.Map // *ts.Language -> *sync.Pool
+// Keyed by *ts.Language: TSLanguage() returns the one compiled grammar
+// handle each adapter caches, so pointer identity is "the same grammar".
+var (
+	parserFreeMu sync.Mutex
+	parserFree   = map[*ts.Language][]*ts.Parser{}
+)
 
-// parseSource parses src with a pooled parser for lang.
+// parseSource parses src with a recycled parser for lang.
 //
 // oldTree is always nil (no caller here does incremental reparsing), so
 // reusing a parser across unrelated src buffers is safe without an
@@ -224,31 +226,29 @@ var parserPools sync.Map // *ts.Language -> *sync.Pool
 // scratch, regardless of what the same parser instance parsed before.
 func parseSource(lang Language, src []byte) (*ts.Tree, error) {
 	tsLang := lang.TSLanguage()
-	poolAny, _ := parserPools.LoadOrStore(tsLang, &sync.Pool{})
-	pool, ok := poolAny.(*sync.Pool)
-	if !ok {
-		return nil, fmt.Errorf("resolve: parser pool has unexpected type %T", poolAny)
-	}
-	parser, err := parserFromPool(pool, lang, tsLang)
+	parser, err := takeParser(lang, tsLang)
 	if err != nil {
 		return nil, err
 	}
 	tree := parser.Parse(ctypeSafe(lang, src), nil)
-	pool.Put(parser)
+	parserFreeMu.Lock()
+	parserFree[tsLang] = append(parserFree[tsLang], parser)
+	parserFreeMu.Unlock()
 	if tree == nil {
 		return nil, fmt.Errorf("resolve: %s: parse produced no tree", lang.Name())
 	}
 	return tree, nil
 }
 
-func parserFromPool(pool *sync.Pool, lang Language, tsLang *ts.Language) (*ts.Parser, error) {
-	if v := pool.Get(); v != nil {
-		p, ok := v.(*ts.Parser)
-		if !ok {
-			return nil, fmt.Errorf("resolve: pooled parser has unexpected type %T", v)
-		}
+func takeParser(lang Language, tsLang *ts.Language) (*ts.Parser, error) {
+	parserFreeMu.Lock()
+	if free := parserFree[tsLang]; len(free) > 0 {
+		p := free[len(free)-1]
+		parserFree[tsLang] = free[:len(free)-1]
+		parserFreeMu.Unlock()
 		return p, nil
 	}
+	parserFreeMu.Unlock()
 	p := ts.NewParser()
 	if err := p.SetLanguage(tsLang); err != nil {
 		p.Close()
