@@ -91,6 +91,7 @@ func (e *ResolveError) Error() string {
 		exitcode.LandConflict,
 		exitcode.DirtyOverlap,
 		exitcode.LandSkipped,
+		exitcode.LandRed,
 		exitcode.GitFailure,
 		exitcode.InvalidUsage,
 		exitcode.Interrupted:

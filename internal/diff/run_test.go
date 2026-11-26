@@ -61,7 +61,7 @@ func TestRun_UnresolvableSymReturnsResolveError(t *testing.T) {
 	})
 
 	rerr := assertUnresolvable(t, err)
-	if got, want := rerr.Error(), `resolve: "doesNotExist": unresolved`; got != want {
+	if got, want := rerr.Error(), `resolve: "b.py:doesNotExist": unresolved`; got != want {
 		t.Errorf("Error() = %q; want %q", got, want)
 	}
 }
@@ -86,7 +86,7 @@ func TestRun_SymOnNonexistentFileReturnsResolveError(t *testing.T) {
 	// failure modes must produce the identical string, not merely the
 	// identical exit code.
 	rerr := assertUnresolvable(t, err)
-	if got, want := rerr.Error(), `resolve: "foo": unresolved`; got != want {
+	if got, want := rerr.Error(), `resolve: "nosuch.py:foo": unresolved`; got != want {
 		t.Errorf("Error() = %q; want %q", got, want)
 	}
 }
