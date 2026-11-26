@@ -483,7 +483,7 @@ func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, posi
 		return nil, "", nil, nil, "", exitcode.GitFailure
 	}
 	if !ok {
-		rerr := &resolve.ResolveError{Code: exitcode.UnsupportedLanguage, Anchor: c.Anchor.Name}
+		rerr := &resolve.ResolveError{Code: exitcode.UnsupportedLanguage, Anchor: c.Anchor.Name, Path: file}
 		fmt.Fprintf(stderr, "rgit: %s\n", rerr.Error()+unsupportedLanguageHint(filepath.Ext(file)))
 		return nil, "", nil, nil, "", rerr.Code
 	}
@@ -494,7 +494,7 @@ func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, posi
 		return nil, "", nil, nil, "", exitcode.GitFailure
 	}
 	if !ok {
-		rerr := &resolve.ResolveError{Code: exitcode.AnchorUnresolvable, Anchor: c.Anchor.Name}
+		rerr := &resolve.ResolveError{Code: exitcode.AnchorUnresolvable, Anchor: c.Anchor.Name, Path: file}
 		fmt.Fprintf(stderr, "rgit: %s (%q %s)\n", rerr.Error(), file, notFoundDetail)
 		return nil, "", nil, nil, "", rerr.Code
 	}

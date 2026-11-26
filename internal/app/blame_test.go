@@ -466,3 +466,31 @@ func TestRun_FollowRenameResolvesShebangLanguageBeforeTheRename(t *testing.T) {
 		qt.Assert(t, qt.StringContains(stdout, "def greet():"))
 	})
 }
+
+// TestRun_AnchorErrorsNameTheFile pins that the unsupported-language and absent-at-HEAD refusals of
+// show, blame and log name FILE:SYMBOL, not the bare symbol.
+func TestRun_AnchorErrorsNameTheFile(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "note.xyz", "hello\n")
+	gitOut(t, dir, "add", "note.xyz")
+	for _, cmd := range []string{"show", "blame", "log"} {
+		_, errOut, _ := runApp(t, "-C", dir, cmd, "note.xyz:foo")
+		qt.Assert(t, qt.StringContains(errOut, `"note.xyz:foo": unsupported language`), qt.Commentf("%s: %s", cmd, errOut))
+	}
+	writeAppFile(t, dir, "new.go", "package a\n\nfunc New() {}\n")
+	_, stderr, _ := runApp(t, "-C", dir, "log", "new.go:New")
+	qt.Assert(t, qt.StringContains(stderr, `"new.go:New": unresolved`), qt.Commentf("%s", stderr))
+}
+
+// TestRun_LogOnUnbornBranchIsEmptyHistory pins that a repo with no commits has an empty history, not git's fatal.
+func TestRun_LogOnUnbornBranchIsEmptyHistory(t *testing.T) {
+	t.Parallel()
+	dir, _ := gittest.New(t.Context(), t)
+	writeAppFile(t, dir, "a.go", "package a\n")
+	stdout, stderr, code := runApp(t, "-C", dir, "log", "--json", "a.go")
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("%s", stderr))
+	qt.Assert(t, qt.StringContains(stdout, `"commits": []`))
+	_, stderr, code = runApp(t, "-C", dir, "log", "a.go")
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("%s", stderr))
+}
