@@ -23,7 +23,7 @@ type Code int
 const (
 	Success Code = 0
 
-	// LandRed means a repo's gate or push stayed red, plain, --sha or --branch.
+	// LandRed means a repo's gate or push stayed red (plain, --sha), or `land --branch`'s push did; its red gate is LandGateRed.
 	LandRed Code = 1
 
 	// LandConflict means `land --branch` could not rebase the branch.

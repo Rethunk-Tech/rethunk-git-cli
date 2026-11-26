@@ -48,9 +48,10 @@ checkout whose uncommitted changes touch none of BR's files, then stops:
 no push, land/ branch, PR, or watch. Last stdout line: <repo> <branch>
 <sha> <gate log> local. --push pushes through the repo's branch rules
 instead; its last line ends <direct|PR|queue>. --push without --branch
-is a usage error. Exit 2 on rebase conflict, 3 on a red gate, 4 if a
-merge-queue PR does not enqueue, 5 if --install fails, 13 if the checkout's
-dirty files overlap BR's.
+is a usage error. Exit 1 on a red push or a moved origin, 2 on rebase
+conflict, 3 on a red gate, 4 if a merge-queue PR does not enqueue, 5 if
+--install fails, 13 if the checkout's dirty files overlap BR's, 14 if the
+branch's worktree is dirty or the gate edited tracked files.
 
 Before anything else, a clean default branch that is behind its remote and not
 ahead is fast-forwarded and installed: "DIR: caught up to SHA", with
