@@ -3364,3 +3364,31 @@ func TestLandDryRunJSONAheadEmptyAtUpstream(t *testing.T) {
 		t.Errorf("json = %q; want \"ahead\":[]", stdout.String())
 	}
 }
+
+func TestLandBehindWithConflictingRebaseIsAborted(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	other := t.TempDir()
+	gitOut(t, other, "clone", bare, ".")
+	gitOut(t, other, "config", "user.name", "test")
+	gitOut(t, other, "config", "user.email", "test@test")
+	gittest.Write(t, other, "base.txt", "theirs\n")
+	gittest.Commit(t.Context(), t, other, "theirs")
+	gitOut(t, other, "push", "origin", "HEAD")
+	gittest.Write(t, dir, "base.txt", "ours\n")
+	gittest.Commit(t.Context(), t, dir, "ours")
+	originBefore := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD"))
+
+	d := testLandDeps(t)
+	var stdout strings.Builder
+	d.stdout = &stdout
+	if code := landRepos(t.Context(), []string{dir}, false, false, false, d); code != exitcode.LandSkipped || !strings.Contains(stdout.String(), ": skipped (behind 1, rebase not clean)") {
+		t.Fatalf("code = %v stdout=%q; want 14 with the rebase skip", code, stdout.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".git", "rebase-merge")); err == nil {
+		t.Error("checkout left mid-rebase")
+	}
+	if got := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD")); got != originBefore {
+		t.Error("skipped land pushed")
+	}
+}
