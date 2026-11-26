@@ -334,7 +334,6 @@ type landDeps struct {
 	passed    func(dir, head string) bool
 	cacheHome func() string
 	pid       int
-	parent    string
 	sha       string
 	noGate    bool
 	asJSON    bool
@@ -382,7 +381,6 @@ func defaultLandDeps(ctx context.Context, stdout, stderr io.Writer) landDeps {
 		},
 		cacheHome: cacheHome,
 		pid:       os.Getpid(),
-		parent:    os.Getenv("CLAUDE_CODE_SESSION_ID"),
 		stdout:    stdout,
 		stderr:    stderr,
 	}
