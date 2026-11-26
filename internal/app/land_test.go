@@ -3085,7 +3085,7 @@ func TestLandBranchJSONOnFailure(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout.String()), &got); err != nil {
 		t.Fatalf("stdout = %q (%v)", stdout.String(), err)
 	}
-	if code != exitcode.LandGateRed || got.Code != int(code) || got.Branch != "feat" || got.Log == "" {
+	if code != exitcode.LandGateRed || got.Code != int(code) || got.Branch != "feat" || got.Log == "" || got.Route != "local" {
 		t.Errorf("code = %v object = %+v", code, got)
 	}
 }

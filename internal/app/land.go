@@ -1372,6 +1372,9 @@ func landBranch(ctx context.Context, repoArg, branch string, wait, install, noPu
 	if code != exitcode.Success {
 		if d.branchJSON != nil {
 			d.branchJSON.Log = logPath
+			if noPush {
+				d.branchJSON.Route = "local"
+			}
 		}
 		return code
 	}
