@@ -153,7 +153,11 @@ jobs:
       # Same toolchain release.yml drives: rgit links tree-sitter through
       # cgo, so every target needs a real C compiler (docs/INSTALL.md § Cross
       # builds). setup-zig caches zig's global cache itself.
+      # A pinned version: unpinned, the post step re-fetches ziglang.org's index to name "latest",
+      # and a failed fetch there turns a green build red.
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: 0.17.1
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: sql-csrc
         with:
