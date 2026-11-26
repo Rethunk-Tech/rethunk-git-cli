@@ -329,3 +329,32 @@ func TestResolve_CrossCheckLiveHTML(t *testing.T) {
 	qt.Assert(t, qt.IsFalse(degraded))
 	qt.Assert(t, qt.IsNil(cerr))
 }
+
+// TestResolve_CrossCheckLiveExtensionlessShebangShell pins the languageId plumbing for a path whose extension
+// names no language: the grammar's own name must reach the server, or the file silently degrades to ts-only.
+func TestResolve_CrossCheckLiveExtensionlessShebangShell(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("live language-server cross-check skipped under -short")
+	}
+	if _, err := exec.LookPath("bash-language-server"); err != nil {
+		t.Skip("bash-language-server not on PATH")
+	}
+
+	dir := t.TempDir()
+	src := []byte("#!/bin/bash\nfoo() {\n  echo hi\n}\n")
+	path := filepath.Join(dir, "deploy")
+	if err := os.WriteFile(path, src, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	lang, ok := resolve.ForPathFolding("deploy", src, false)
+	qt.Assert(t, qt.IsTrue(ok))
+	res, err := resolve.Resolve(lang, src, "foo")
+	qt.Assert(t, qt.IsNil(err))
+
+	sess := lsp.NewSession()
+	defer sess.Close()
+	degraded, err := crossCheckOne(t.Context(), sess, lang, dir, path, src, res)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.IsFalse(degraded))
+}
