@@ -3686,13 +3686,14 @@ func TestLandBranchJSONKeepsTheGateLogWhenNotEnqueued(t *testing.T) {
 // way a sibling session could while the stopped rebase waits for its abort.
 type editAfterStop struct {
 	gitRunner
+	t    *testing.T
 	file string
 }
 
 func (e editAfterStop) run(dir string, args ...string) (string, error) {
 	out, err := e.gitRunner.run(dir, args...)
 	if err != nil && len(args) > 0 && args[0] == "pull" {
-		_ = os.WriteFile(filepath.Join(dir, e.file), []byte("sibling edit\n"), 0o600)
+		gittest.Write(e.t, dir, e.file, "sibling edit\n")
 	}
 	return out, err
 }
@@ -3716,7 +3717,7 @@ func TestPullRebaseAbortKeepsSiblingTrackedEdit(t *testing.T) {
 	gittest.Commit(t.Context(), t, dir, "local")
 
 	d := testLandDeps(t)
-	d.git = editAfterStop{gitRunner: d.git, file: "other.txt"}
+	d.git = editAfterStop{gitRunner: d.git, t: t, file: "other.txt"}
 	if pullRebase(dir, d) {
 		t.Fatal("pullRebase succeeded; want a conflicting rebase")
 	}
