@@ -432,8 +432,8 @@ Empty history is `"commits": []`. `--json` with `--porcelain` or `-p` is
 
 ```text
 START,END<TAB>SYMBOL
-1,3 @imports
-12,27 ValidateToken
+1,3	@imports
+12,27	ValidateToken
 ```
 
 Source order. `START,END` is git's 1-based inclusive `-L` range — the same
