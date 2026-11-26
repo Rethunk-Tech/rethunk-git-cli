@@ -1054,7 +1054,7 @@ func landOne(r string, d landDeps) landResult {
 // pullRebase rebases onto the upstream and aborts a rebase that fails, under the commit lock: an rgit
 // commit landing mid-rebase would fail the rebase's ref update, and the abort would reset it away.
 func pullRebase(repo string, d landDeps) bool {
-	unlock, err := gitx.New(repo).LockCommits(orBackground(d.ctx))
+	unlock, err := gitx.New(repo).LockCommits(d.ctx)
 	if err != nil {
 		return false
 	}
@@ -1069,7 +1069,7 @@ func pullRebase(repo string, d landDeps) bool {
 // resetToRemote moves the checkout off commits that now live in a PR, only while HEAD is still the
 // commit that was branched: a commit made meanwhile is left on the branch with a warning.
 func resetToRemote(repo, target, branched string, d landDeps, res *landResult) {
-	unlock, err := gitx.New(repo).LockCommits(orBackground(d.ctx))
+	unlock, err := gitx.New(repo).LockCommits(d.ctx)
 	if err != nil {
 		res.Lines = append(res.Lines, fmt.Sprintf("%s: warning: local %s not reset (%v)", repo, branchOrHEAD(repo, d), err))
 		return
@@ -1454,7 +1454,7 @@ func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBra
 		fmt.Fprintf(d.stderr, "error: worktree %s has uncommitted changes (%s); %s not rebased\n", wt, dirtyNames(st), branch)
 		return landBranchPrep{}, exitcode.LandSkipped
 	}
-	unlock, err := gitx.New(wt).LockCommits(orBackground(d.ctx))
+	unlock, err := gitx.New(wt).LockCommits(d.ctx)
 	if err != nil {
 		fmt.Fprintf(d.stderr, "error: %v\n", err)
 		return landBranchPrep{}, exitcode.GitFailure
