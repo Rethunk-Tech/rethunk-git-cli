@@ -938,20 +938,24 @@ func TestRun_PathspecListsEveryFileItStages(t *testing.T) {
 	qt.Assert(t, qt.DeepEquals(got, want))
 }
 
-// TestRun_PathspecMatchingNothingStillListsItself keeps git's own answer
-// reachable: a pathspec that matches no file must not vanish from the
-// listing, because `git add` is what reports "did not match any files" and
-// it only gets the chance if the target is still staged.
-func TestRun_PathspecMatchingNothingStillListsItself(t *testing.T) {
+// TestRun_CleanPathspecIsUnchanged pins that an existing clean tracked file, directory or "."
+// is an unchanged target (exit 11, omitted from the listing), and that a path matching nothing
+// fails in a dry run as git add does.
+func TestRun_CleanPathspecIsUnchanged(t *testing.T) {
 	t.Parallel()
 	dir := tempRepo(t)
 	writeAppFile(t, dir, "kept/keep.txt", "x\n")
 	gittest.Commit(t.Context(), t, dir, "chore: fixture")
 
-	stdout, _, code := runApp(t, "-C", dir, "commit", "--dry-run", "--porcelain", "-m", "chore: none", "kept")
+	for _, target := range []string{"kept", "kept/keep.txt", "."} {
+		stdout, stderr, code := runApp(t, "-C", dir, "commit", "--dry-run", "--porcelain", "-m", "chore: none", target)
+		qt.Assert(t, qt.Equals(code, exitcode.NothingToCommit), qt.Commentf("%s: %s", target, stderr))
+		qt.Assert(t, qt.Equals(stdout, ""))
+	}
 
-	qt.Assert(t, qt.Equals(code, exitcode.Success))
-	qt.Assert(t, qt.StringContains(stdout, "kept\t\t0\t0"))
+	_, stderr, code := runApp(t, "-C", dir, "commit", "--dry-run", "-m", "chore: none", "--", "missing.txt")
+	qt.Assert(t, qt.Equals(code, exitcode.GitFailure))
+	qt.Assert(t, qt.StringContains(stderr, "did not match any files"))
 }
 
 // assertShellParses feeds script through "<shell> -n", the cheapest

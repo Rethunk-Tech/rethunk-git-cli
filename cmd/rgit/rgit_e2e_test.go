@@ -1084,6 +1084,7 @@ func TestCommit_GPGSignFlagsForwarded(t *testing.T) {
 	qt.Assert(t, qt.Equals(bare.ExitCode, int(exitcode.GitFailure)))
 	qt.Assert(t, qt.StringContains(bare.Stderr, "sign"))
 
+	gittest.Write(t, repo, "a.go", "package main\n\nfunc A() {}\n\nfunc C() {}\n")
 	keyed := runRgit(t, repo, "commit", "--gpg-sign=DEADBEEF", "-m", "feat(c): add C", "a.go")
 	qt.Assert(t, qt.Equals(keyed.ExitCode, int(exitcode.GitFailure)))
 

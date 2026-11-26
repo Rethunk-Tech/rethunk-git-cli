@@ -324,37 +324,41 @@ func (p *Plan) planPathspec(ctx context.Context, repo *gitx.Repo, root string, t
 		p.trackedSpecs = append(p.trackedSpecs, t.Pathspec)
 	}
 
-	// Pathspec targets are always reported Staged, never Unchanged:
-	// `git status` scoped to a pathspec cannot distinguish "already
-	// clean" from "matches nothing at all", and folding a
-	// nonexistent path into a silent "nothing to commit" warning
-	// would swallow git add's own fatal "did not match any files"
-	// error -- exactly the kind of divergence AGENTS.md's governing
-	// principle forbids. `git add` is left to answer both cases
-	// itself, at apply time, the way plain git would.
+	// A literal path or directory that exists but changes nothing is
+	// Unchanged (warning, exit 11 when every target is); a path that
+	// does not exist and matches no tracked file is git add's fatal
+	// "did not match any files", raised here so a dry run agrees with
+	// the real run. Globs and magic pathspecs are left to git add.
 	// One row per file, not one per pathspec: naming a directory
 	// stages every file under it, and a single summed total says
 	// nothing about which. `rgit diff` already breaks the same
 	// change down this way, and the two are supposed to agree.
 	files, warnings := pathspecFileCounts(ctx, repo, root, t.Pathspec, literal)
 	p.CountingWarnings = append(p.CountingWarnings, warnings...)
-	if fi, serr := os.Lstat(filepath.Join(root, t.Pathspec)); len(files) == 0 && !literal && serr == nil && fi.IsDir() && !strings.HasPrefix(t.Pathspec, ":") && !strings.ContainsAny(t.Pathspec, "*?[\\") {
-		// An existing directory with no tracked file stages nothing: git add -u would fail on it, so it is
-		// an unchanged target here, as the preview says.
+	if len(files) == 0 && len(warnings) == 0 && !strings.HasPrefix(t.Pathspec, ":") && !strings.ContainsAny(t.Pathspec, "*?[\\") {
+		// Skip-worktree and assume-unchanged entries hide edits from the counts; git add answers for them.
+		skip, assume, _, berr := repo.IndexWorktreeBits(ctx, t.Pathspec)
+		if berr != nil {
+			return berr
+		}
+		if _, serr := os.Lstat(filepath.Join(root, t.Pathspec)); serr == nil && !skip && !assume {
+			if literal {
+				p.pathspecs = p.pathspecs[:len(p.pathspecs)-1]
+			} else {
+				p.trackedSpecs = p.trackedSpecs[:len(p.trackedSpecs)-1]
+			}
+			p.Results = append(p.Results, TargetResult{Target: t, Outcome: Unchanged, Path: t.Pathspec})
+			return nil
+		}
 		tracked, err := repo.LsFilesTracked(ctx, "--", t.Pathspec)
 		if err != nil {
 			return err
 		}
 		if len(tracked) == 0 {
-			p.trackedSpecs = p.trackedSpecs[:len(p.trackedSpecs)-1]
-			p.Results = append(p.Results, TargetResult{Target: t, Outcome: Unchanged, Path: t.Pathspec})
-			return nil
+			return &PathError{Code: exitcode.GitFailure, Path: t.Pathspec, Reason: "did not match any files"}
 		}
 	}
 	if len(files) == 0 {
-		// Nothing matched, or nothing changed. Keep one row naming
-		// the pathspec as given: it is still being staged, and the
-		// "did not match any files" answer is git add's to give.
 		p.Results = append(p.Results, TargetResult{
 			Target:  t,
 			Outcome: Staged,
