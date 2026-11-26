@@ -3145,3 +3145,33 @@ func TestLandBranchResetUsesUpstreamRemote(t *testing.T) {
 		t.Errorf("HEAD = %s want %s; lines=%q", got, head, res.Lines)
 	}
 }
+
+// TestLandNamesKeepSpacesAndAccents pins that file names in land's refusals come from -z output, not whitespace splits of git's quoted lines.
+func TestLandNamesKeepSpacesAndAccents(t *testing.T) {
+	t.Parallel()
+	const name = "café notes.txt"
+	dir, _ := repoWithOrigin(t)
+	gittest.Write(t, dir, name, "x\n")
+	line, _, ok := gateHead(dir, testLandDeps(t))
+	if ok || !strings.Contains(line, "("+name+")") {
+		t.Errorf("untracked: ok=%v line=%q", ok, line)
+	}
+
+	dir, _ = repoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, name, "branch\n")
+	gitOut(t, wt, "add", name)
+	gitOut(t, wt, "commit", "-q", "-m", "branch")
+	gittest.Write(t, dir, name, "mainline\n")
+	gittest.Commit(t.Context(), t, dir, "mainline")
+	d := testLandDeps(t)
+	var stderr strings.Builder
+	d.stderr = &stderr
+	if code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d); code != 2 {
+		t.Fatalf("code = %v stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "files "+name+")") {
+		t.Errorf("conflict stderr = %q", stderr.String())
+	}
+}

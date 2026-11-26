@@ -50,7 +50,7 @@ func (r *Repo) ChangedPaths(ctx context.Context) (staged, unstaged []string, err
 		if cerr != nil {
 			return nil, cerr
 		}
-		return splitNUL(out), nil
+		return SplitNUL(out), nil
 	}
 	if staged, err = names("--cached"); err != nil {
 		return nil, nil, err

@@ -1028,8 +1028,8 @@ func gateHead(repo string, d landDeps) (line, logPath string, ok bool) {
 		return "", "", true
 	}
 	// The gate runs in this checkout, so an untracked file could make it pass for a commit that lacks it.
-	if out, _ := d.git.run(repo, "ls-files", "--others", "--exclude-standard"); strings.TrimSpace(out) != "" {
-		return repo + ": error: untracked files (" + strings.Join(strings.Fields(out), ", ") + "); add or ignore them first, nothing pushed", "", false
+	if out, _ := d.git.run(repo, "ls-files", "-z", "--others", "--exclude-standard"); strings.TrimSpace(out) != "" {
+		return repo + ": error: untracked files (" + strings.Join(gitx.SplitNUL([]byte(out)), ", ") + "); add or ignore them first, nothing pushed", "", false
 	}
 	headBefore, statusBefore := gateState(repo, d)
 	// An edit that landed after the dirty check would be gated with the tree and then ride along unpushed.
@@ -1287,9 +1287,9 @@ func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBra
 		return landBranchPrep{}, exitcode.LandSkipped
 	}
 	if _, err := d.git.run(wt, "rebase", base); err != nil {
-		files, _ := d.git.run(wt, "diff", "--name-only", "--diff-filter=U")
+		files, _ := d.git.run(wt, "diff", "--name-only", "-z", "--diff-filter=U")
 		_, _ = d.git.run(wt, "rebase", "--abort")
-		fmt.Fprintf(d.stderr, "conflict: hand to solver (worktree %s, files %s)\n", wt, strings.Join(strings.Fields(files), ", "))
+		fmt.Fprintf(d.stderr, "conflict: hand to solver (worktree %s, files %s)\n", wt, strings.Join(gitx.SplitNUL([]byte(files)), ", "))
 		return landBranchPrep{}, exitcode.LandConflict
 	}
 	return prep, exitcode.Success
@@ -1572,10 +1572,8 @@ func mergeOverlapFiles(repo, branch string, d landDeps) []string {
 		return nil
 	}
 	changed := map[string]bool{}
-	for p := range strings.SplitSeq(out, "\x00") {
-		if p != "" {
-			changed[p] = true
-		}
+	for _, p := range gitx.SplitNUL([]byte(out)) {
+		changed[p] = true
 	}
 	status, err := d.git.run(repo, "status", "--porcelain=v1", "-z", "-uno")
 	if err != nil {
