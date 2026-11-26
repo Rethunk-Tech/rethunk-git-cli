@@ -1472,14 +1472,14 @@ func TestLandUnknownDefaultBranchSkips(t *testing.T) {
 
 func TestLastNLinesTail(t *testing.T) {
 	t.Parallel()
-	if got := lastNLines("a\nb\nc\n", 2); strings.Join(got, ",") != "b,c" {
-		t.Errorf("lastNLines tail = %v", got)
+	if got := tail("a\nb\nc\n", 2); strings.Join(got, ",") != "b,c" {
+		t.Errorf("tail tail = %v", got)
 	}
-	if got := lastNLines("a\nb\nc\n", 9); strings.Join(got, ",") != "a,b,c" {
-		t.Errorf("lastNLines all = %v", got)
+	if got := tail("a\nb\nc\n", 9); strings.Join(got, ",") != "a,b,c" {
+		t.Errorf("tail all = %v", got)
 	}
-	if got := lastNLines("\n", 2); got != nil {
-		t.Errorf("lastNLines blank = %v", got)
+	if got := tail("\n", 2); got != nil {
+		t.Errorf("tail blank = %v", got)
 	}
 }
 

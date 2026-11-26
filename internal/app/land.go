@@ -682,13 +682,12 @@ var prNumberInSubject = regexp.MustCompile(`#(\d+)`)
 // then installs, so a PR that an earlier land opened and bosun saw merge is picked up before new work.
 // It reports whether the install failed and whether it fetched origin.
 func catchUp(ctx context.Context, r string, d landDeps) (installFailed, fetched bool) {
-	top, err := d.git.run(r, "rev-parse", "--show-toplevel")
+	repo, err := toplevel(r, d)
 	if err != nil {
 		return false, false
 	}
-	repo := strings.TrimSpace(top)
 	def, ok := defaultBranchChecked(repo, d)
-	if !ok || strings.TrimSpace(mustGit(repo, d, "rev-parse", "--abbrev-ref", "HEAD")) != def || dirtyTracked(repo, d) {
+	if cur, err := currentBranch(repo, d); !ok || err != nil || cur != def || dirtyTracked(repo, d) {
 		return false, false
 	}
 	remote := upstreamRemote(repo, def, d)
@@ -790,7 +789,7 @@ func installOne(ctx context.Context, repo string, d landDeps) bool {
 	}
 	out, err := runMakeInstall(ctx, repo)
 	if err != nil {
-		lines := lastNLines(out, 40)
+		lines := tail(out, 40)
 		if len(lines) == 0 {
 			fmt.Fprintln(d.info(), repo+": "+err.Error())
 		} else {
@@ -919,11 +918,10 @@ func orderRepos(repos []string) []string {
 }
 
 func landOne(r string, d landDeps) landResult {
-	repo, err := d.git.run(r, "rev-parse", "--show-toplevel")
+	repo, err := toplevel(r, d)
 	if err != nil {
 		return landResult{Repo: r, Kind: landSkipped, Lines: []string{r + ": skipped (not a git repo)"}}
 	}
-	repo = strings.TrimSpace(repo)
 	res := landResult{Repo: repo}
 
 	def, ok := defaultBranchChecked(repo, d)
@@ -941,7 +939,12 @@ func landOne(r string, d landDeps) landResult {
 		res.Lines = []string{dirtySkipLine(repo, d)}
 		return res
 	}
-	cur := strings.TrimSpace(mustGit(repo, d, "rev-parse", "--abbrev-ref", "HEAD"))
+	cur, err := currentBranch(repo, d)
+	if err != nil {
+		res.Kind = landSkipped
+		res.Lines = []string{repo + ": skipped (cannot determine current branch)"}
+		return res
+	}
 	if cur != def {
 		res.Kind = landSkipped
 		res.Lines = []string{fmt.Sprintf("%s: skipped (on %s, not %s)", repo, cur, def)}
@@ -950,20 +953,17 @@ func landOne(r string, d landDeps) landResult {
 	if !d.fetched || upstreamRemote(repo, def, d) != "origin" {
 		_, _ = d.git.run(repo, "fetch", "-q")
 	}
-	aheadOut, err := d.git.run(repo, "rev-list", "--count", "@{u}..HEAD")
+	ahead, behind, err := aheadBehind(repo, d)
 	if err != nil {
 		res.Kind = landSkipped
 		res.Lines = []string{repo + ": skipped (no upstream)"}
 		return res
 	}
-	ahead, _ := strconv.Atoi(strings.TrimSpace(aheadOut))
 	if ahead == 0 {
 		res.Kind = landSkipped
 		res.Lines = []string{repo + ": skipped (not ahead)"}
 		return res
 	}
-	behindOut, _ := d.git.run(repo, "rev-list", "--count", "HEAD..@{u}")
-	behind, _ := strconv.Atoi(strings.TrimSpace(behindOut))
 	if behind > 0 {
 		if _, err := d.git.run(repo, "pull", "-q", "--rebase"); err != nil {
 			_, _ = d.git.run(repo, "rebase", "--abort")
@@ -971,13 +971,16 @@ func landOne(r string, d landDeps) landResult {
 			res.Lines = []string{fmt.Sprintf("%s: skipped (behind %d, rebase not clean)", repo, behind)}
 			return res
 		}
-	}
-	aheadOut, _ = d.git.run(repo, "rev-list", "--count", "@{u}..HEAD")
-	ahead, _ = strconv.Atoi(strings.TrimSpace(aheadOut))
-	if ahead == 0 {
-		res.Kind = landSkipped
-		res.Lines = []string{summarySkippedAlreadyUpstream(repo)}
-		return res
+		if ahead, _, err = aheadBehind(repo, d); err != nil {
+			res.Kind = landRed
+			res.Lines = []string{summaryRed(repo, err.Error())}
+			return res
+		}
+		if ahead == 0 {
+			res.Kind = landSkipped
+			res.Lines = []string{summarySkippedAlreadyUpstream(repo)}
+			return res
+		}
 	}
 
 	gated := strings.TrimSpace(mustGit(repo, d, "rev-parse", "HEAD"))
@@ -1012,7 +1015,7 @@ func resetToRemote(repo, target, branched string, d landDeps, res *landResult) {
 	}
 	if out, err := d.git.run(repo, "reset", "-q", "--keep", target); err != nil {
 		res.Lines = append(res.Lines, fmt.Sprintf("%s: warning: local %s not reset (%s); its commits are in the PR, run git reset --keep %s once the tree is clean",
-			repo, strings.TrimSpace(mustGit(repo, d, "rev-parse", "--abbrev-ref", "HEAD")), strings.TrimSpace(out), target))
+			repo, branchOrHEAD(repo, d), strings.TrimSpace(out), target))
 	}
 }
 
@@ -1026,7 +1029,12 @@ func landSha(repo, def string, d landDeps) landResult {
 		res.Lines = []string{fmt.Sprintf("%s: skipped (no commit %s)", repo, d.sha)}
 		return res
 	}
-	if cur := strings.TrimSpace(mustGit(repo, d, "rev-parse", "--abbrev-ref", "HEAD")); cur != def {
+	cur, err := currentBranch(repo, d)
+	if err != nil {
+		res.Lines = []string{repo + ": skipped (cannot determine current branch)"}
+		return res
+	}
+	if cur != def {
 		res.Lines = []string{fmt.Sprintf("%s: skipped (on %s, not %s)", repo, cur, def)}
 		return res
 	}
@@ -1284,12 +1292,11 @@ func landBranch(ctx context.Context, repoArg, branch string, wait, install, noPu
 }
 
 func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBranchPrep, exitcode.Code) {
-	repo, err := d.git.run(repoArg, "rev-parse", "--show-toplevel")
+	repo, err := toplevel(repoArg, d)
 	if err != nil {
 		fmt.Fprintf(d.stderr, "error: %s is not a git repo\n", repoArg)
 		return landBranchPrep{}, exitcode.GitFailure
 	}
-	repo = strings.TrimSpace(repo)
 	if isLinkedWorktree(repo, d) {
 		fmt.Fprintf(d.stderr, "error: %s is not the main checkout\n", repo)
 		return landBranchPrep{}, exitcode.InvalidUsage
@@ -1300,7 +1307,11 @@ func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBra
 		return landBranchPrep{}, exitcode.GitFailure
 	}
 	dirty := dirtyTracked(repo, d)
-	cur := strings.TrimSpace(mustGit(repo, d, "rev-parse", "--abbrev-ref", "HEAD"))
+	cur, err := currentBranch(repo, d)
+	if err != nil {
+		fmt.Fprintf(d.stderr, "error: cannot determine current branch for %s\n", repo)
+		return landBranchPrep{}, exitcode.GitFailure
+	}
 	if !dirty || noPush {
 		if cur != def {
 			fmt.Fprintf(d.stderr, "error: %s is on %s, not %s\n", repo, cur, def)
@@ -1394,7 +1405,7 @@ func gateLandBranch(prep landBranchPrep, d landDeps) (string, exitcode.Code) {
 		return logPath, moved()
 	}
 	fmt.Fprintln(d.stderr, logPath)
-	for _, line := range lastNLines(out, 40) {
+	for _, line := range tail(out, 40) {
 		fmt.Fprintln(d.stderr, line)
 	}
 	return logPath, exitcode.LandGateRed
@@ -1664,16 +1675,38 @@ func failedGateNames(log string) string {
 	return strings.Join(names, ",")
 }
 
-func lastNLines(s string, n int) []string {
-	s = strings.TrimSuffix(s, "\n")
-	if s == "" {
-		return nil
-	}
-	lines := strings.Split(s, "\n")
+func tail(s string, n int) []string {
+	lines := nonEmptyLines(s)
 	if len(lines) > n {
 		return lines[len(lines)-n:]
 	}
 	return lines
+}
+
+func toplevel(r string, d landDeps) (string, error) {
+	out, err := d.git.run(r, "rev-parse", "--show-toplevel")
+	return strings.TrimSpace(out), err
+}
+
+func currentBranch(repo string, d landDeps) (string, error) {
+	out, err := d.git.run(repo, "rev-parse", "--abbrev-ref", "HEAD")
+	return strings.TrimSpace(out), err
+}
+
+// branchOrHEAD names the branch in a warning line, where a failed lookup must not hide the warning.
+func branchOrHEAD(repo string, d landDeps) string {
+	if cur, err := currentBranch(repo, d); err == nil {
+		return cur
+	}
+	return "HEAD"
+}
+
+func aheadBehind(repo string, d landDeps) (ahead, behind int, err error) {
+	out, err := d.git.run(repo, "rev-list", "--left-right", "--count", "HEAD...@{u}")
+	if err != nil {
+		return 0, 0, err
+	}
+	return gitx.ParseAheadBehind(strings.TrimSpace(out))
 }
 
 func mustGit(repo string, d landDeps, args ...string) string {
@@ -2013,11 +2046,7 @@ func lastLogLines(path string, n int) []string {
 	if err != nil {
 		return nil
 	}
-	lines := nonEmptyLines(string(b))
-	if len(lines) > n {
-		lines = lines[len(lines)-n:]
-	}
-	return lines
+	return tail(string(b), n)
 }
 
 func meaningfulLines(out string) []string {
@@ -2151,7 +2180,11 @@ func fastForwardDefaultAfterMerge(job landWatchJob, d landDeps) {
 		fmt.Fprintf(d.stderr, "rgit land: %s: left %s (%s)\n", job.Repo, job.Default, gitErrDetail(out, err))
 		return
 	}
-	cur := strings.TrimSpace(mustGit(job.Repo, d, "rev-parse", "--abbrev-ref", "HEAD"))
+	cur, err := currentBranch(job.Repo, d)
+	if err != nil {
+		fmt.Fprintf(d.stderr, "rgit land: %s: left %s (cannot determine current branch)\n", job.Repo, job.Default)
+		return
+	}
 	if cur != job.Default {
 		fmt.Fprintf(d.stderr, "rgit land: %s: left %s (on %s, not %s)\n", job.Repo, job.Default, cur, job.Default)
 		return

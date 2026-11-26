@@ -1681,6 +1681,11 @@ func (r *Repo) AheadBehind(ctx context.Context) (ahead, behind int, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
+	return ParseAheadBehind(line)
+}
+
+// ParseAheadBehind parses `rev-list --left-right --count` output: two counts.
+func ParseAheadBehind(line string) (ahead, behind int, err error) {
 	fields := strings.Fields(line)
 	if len(fields) != 2 {
 		return 0, 0, fmt.Errorf("gitx: malformed rev-list --left-right --count output %q", line)
