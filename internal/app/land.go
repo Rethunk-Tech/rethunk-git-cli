@@ -1562,7 +1562,7 @@ func ffLandBranch(prep landBranchPrep, noPush bool, d landDeps) exitcode.Code {
 				prep.repo, strings.Join(overlap, ", "), prep.branch)
 			return exitcode.DirtyOverlap
 		}
-		fmt.Fprintf(d.stderr, "error: %s\n", strings.TrimSpace(out))
+		fmt.Fprintf(d.stderr, "error: %s\n", strings.TrimPrefix(strings.TrimSpace(out), "error: "))
 		return exitcode.GitFailure
 	}
 	head := strings.TrimSpace(mustGit(prep.repo, d, "rev-parse", "HEAD"))

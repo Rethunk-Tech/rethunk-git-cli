@@ -3570,3 +3570,42 @@ func TestResetToRemoteHoldsTheCommitLock(t *testing.T) {
 	}
 	probe.assertAlwaysLocked(t)
 }
+
+// TestLandBranchMergeFailureIsNotLanded pins that a failed merge --ff-only (an untracked main file the
+// branch adds) exits non-zero, keeps main, the branch and its worktree, and prints one "error:" prefix.
+func TestLandBranchMergeFailureIsNotLanded(t *testing.T) {
+	t.Parallel()
+	for _, args := range [][]string{{"--branch", "feat"}, {"--branch", "feat", "--push"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			t.Parallel()
+			dir, _ := repoWithOrigin(t)
+			wt := filepath.Join(t.TempDir(), "wt")
+			gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+			gittest.Write(t, wt, "feat.txt", "branch\n")
+			gitOut(t, wt, "add", "feat.txt")
+			gitOut(t, wt, "commit", "-q", "-m", "branch")
+			gittest.Write(t, dir, "feat.txt", "untracked on main\n")
+			before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+
+			d := testLandDeps(t)
+			var stdout, stderr strings.Builder
+			d.stdout, d.stderr = &stdout, &stderr
+			code := runLandWith(t.Context(), dir, args, d)
+			if code == exitcode.Success {
+				t.Fatalf("code = %v stdout=%q stderr=%q; want a failure", code, stdout.String(), stderr.String())
+			}
+			if strings.Contains(stderr.String(), "error: error:") {
+				t.Errorf("stderr = %q; want one error prefix", stderr.String())
+			}
+			if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != before {
+				t.Errorf("main moved to %s", got)
+			}
+			if _, err := d.git.run(dir, "show-ref", "--verify", "--quiet", "refs/heads/feat"); err != nil {
+				t.Error("branch feat deleted")
+			}
+			if _, err := os.Stat(wt); err != nil {
+				t.Errorf("worktree removed: %v", err)
+			}
+		})
+	}
+}
