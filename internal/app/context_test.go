@@ -538,3 +538,19 @@ func TestRun_ContextBriefDetachedHeadKeepsHash(t *testing.T) {
 	qt.Assert(t, qt.IsNil(json.Unmarshal([]byte(jsonOut), &got)))
 	qt.Assert(t, qt.DeepEquals(got.Records, []map[string]string{{"type": "H", "sha": sha, "dirty": "0", "untracked": "1"}}))
 }
+
+// TestRun_ContextBriefOnUnbornRepoKeepsTheBRecord pins the empty-B fallback: no commit means no B line to read, and
+// the brief still prints a typed record carrying the untracked count.
+func TestRun_ContextBriefOnUnbornRepoKeepsTheBRecord(t *testing.T) {
+	t.Parallel()
+	dir, _ := gittest.New(t.Context(), t)
+	writeAppFile(t, dir, "a.txt", "x\n")
+	stdout, _, code := runApp(t, "-C", dir, "context", "--brief")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.Equals(stdout, "B\t\t\t0\t0\t0\t1\n"))
+	jsonOut, _, code := runApp(t, "-C", dir, "context", "--brief", "--json")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	qt.Assert(t, qt.StringContains(jsonOut, `"type": "B"`))
+	qt.Assert(t, qt.StringContains(jsonOut, `"untracked": "1"`))
+	qt.Assert(t, qt.StringContains(jsonOut, `"dirty": "0"`))
+}
