@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -213,4 +214,23 @@ func findHeaderNames(t *testing.T, stdout string) []string {
 		names = append(names, m[1])
 	}
 	return names
+}
+
+func TestTrimFindHitsKeepsBestAndOneForZero(t *testing.T) {
+	t.Parallel()
+	hits := []findHit{
+		{file: "b.go", name: "B", rank: findRankSubstring},
+		{file: "a.go", name: "A", rank: findRankExact},
+		{file: "c.go", name: "C", rank: findRankPrefix},
+	}
+	got := trimFindHits(slices.Clone(hits), 2)
+	if len(got) != 2 || got[0].name != "A" || got[1].name != "C" {
+		t.Errorf("limit 2 = %+v; want A then C", got)
+	}
+	if got := trimFindHits(slices.Clone(hits), 0); len(got) != 1 {
+		t.Errorf("limit 0 kept %d hits; want 1 so a match is not read as no match", len(got))
+	}
+	if got := trimFindHits(slices.Clone(hits), -1); len(got) != 3 {
+		t.Errorf("limit -1 kept %d hits; want all 3", len(got))
+	}
 }

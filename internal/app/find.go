@@ -1,12 +1,14 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -144,27 +146,18 @@ func runFind(ctx context.Context, dir string, args []string, stdout, stderr io.W
 		}
 		fileCount += len(files)
 		dirLabels = append(dirLabels, s.labels...)
-		hits = append(hits, collectFindHits(ctx, s.root, s.repo, ignoreCase, files, opts.query)...)
+		hits = append(hits, collectFindHits(ctx, s.root, s.repo, ignoreCase, files, opts.query, opts.limit)...)
 	}
-	sort.SliceStable(hits, func(i, j int) bool {
-		if hits[i].rank != hits[j].rank {
-			return hits[i].rank < hits[j].rank
-		}
-		if hits[i].file != hits[j].file {
-			return hits[i].file < hits[j].file
-		}
-		if hits[i].start != hits[j].start {
-			return hits[i].start < hits[j].start
-		}
-		return hits[i].name < hits[j].name
-	})
-	matched := len(hits)
-	if opts.limit >= 0 && len(hits) > opts.limit {
-		hits = hits[:opts.limit]
-	}
-	if matched == 0 {
+	hits = trimFindHits(hits, opts.limit)
+	if len(hits) == 0 {
 		fmt.Fprintf(stderr, "rgit: no symbols matching %q in %s (%d files)\n", opts.query, strings.Join(dirLabels, ", "), fileCount)
 		return findNoMatch
+	}
+	if opts.limit >= 0 {
+		hits = hits[:min(len(hits), opts.limit)]
+	}
+	for i := range min(len(hits), opts.bodies) {
+		hits[i].loadBody(ctx)
 	}
 
 	if opts.asJSON {
@@ -282,11 +275,16 @@ type findHit struct {
 	file       string
 	start, end int
 	kind, name string
-	body       []byte
-	rank       findRank
+	// body is filled after ranking, for the hits whose body is printed only:
+	// holding every hit's slice would pin every matched file's source.
+	body               []byte
+	bodyStart, bodyEnd uint
+	root               string
+	repo               *gitx.Repo
+	rank               findRank
 }
 
-func collectFindHits(ctx context.Context, root string, repo *gitx.Repo, ignoreCase bool, files []string, query string) []findHit {
+func collectFindHits(ctx context.Context, root string, repo *gitx.Repo, ignoreCase bool, files []string, query string, limit int) []findHit {
 	n := max(1, runtime.GOMAXPROCS(0))
 	jobs := make(chan string)
 	var mu sync.Mutex
@@ -301,6 +299,11 @@ func collectFindHits(ctx context.Context, root string, repo *gitx.Repo, ignoreCa
 				}
 				mu.Lock()
 				hits = append(hits, fileHits...)
+				// Only the best limit hits are ever printed, so the rest are
+				// dropped as the walk goes rather than held to the end.
+				if limit >= 0 && len(hits) >= max(2*limit, 1024) {
+					hits = trimFindHits(hits, limit)
+				}
 				mu.Unlock()
 			}
 		})
@@ -321,22 +324,60 @@ send:
 	return hits
 }
 
+// trimFindHits sorts hits best-first and keeps at most limit of them (all
+// when limit is negative). It keeps one hit for a zero limit so a match is
+// still told apart from no match.
+func trimFindHits(hits []findHit, limit int) []findHit {
+	keep := max(limit, 1)
+	sort.SliceStable(hits, func(i, j int) bool {
+		if hits[i].rank != hits[j].rank {
+			return hits[i].rank < hits[j].rank
+		}
+		if hits[i].file != hits[j].file {
+			return hits[i].file < hits[j].file
+		}
+		if hits[i].start != hits[j].start {
+			return hits[i].start < hits[j].start
+		}
+		return hits[i].name < hits[j].name
+	})
+	if limit >= 0 && len(hits) > keep {
+		hits = slices.Clone(hits[:keep])
+	}
+	return hits
+}
+
 func findHasGrammar(path string, ignoreCase bool) bool {
 	_, ok := resolve.ForExtensionFolding(filepath.Ext(path), ignoreCase)
 	return ok
 }
 
-func findHitsInFile(ctx context.Context, root string, repo *gitx.Repo, ignoreCase bool, path, query string) []findHit {
+// loadBody re-reads the hit's file and keeps only its declaration's bytes.
+func (h *findHit) loadBody(ctx context.Context) {
+	if src, ok := readFindSource(ctx, h.root, h.repo, h.file); ok && h.bodyEnd <= uint(len(src)) {
+		h.body = bytes.Clone(src[h.bodyStart:h.bodyEnd])
+	}
+}
+
+func readFindSource(ctx context.Context, root string, repo *gitx.Repo, path string) ([]byte, bool) {
 	src, err := readWorktreeFile(root, path)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return nil
-		}
-		blob, exists, err := repo.CatFile(ctx, "HEAD", path)
-		if err != nil || !exists {
-			return nil
-		}
-		src = blob
+	if err == nil {
+		return src, true
+	}
+	if !os.IsNotExist(err) {
+		return nil, false
+	}
+	blob, exists, err := repo.CatFile(ctx, "HEAD", path)
+	if err != nil || !exists {
+		return nil, false
+	}
+	return blob, true
+}
+
+func findHitsInFile(ctx context.Context, root string, repo *gitx.Repo, ignoreCase bool, path, query string) []findHit {
+	src, ok := readFindSource(ctx, root, repo, path)
+	if !ok {
+		return nil
 	}
 	lang, ok := resolve.ForExtensionFolding(filepath.Ext(path), ignoreCase)
 	if !ok {
@@ -354,15 +395,17 @@ func findHitsInFile(ctx context.Context, root string, repo *gitx.Repo, ignoreCas
 			continue
 		}
 		start, end := lineRange(src, decl.Extent)
-		body := src[decl.Extent.Start:decl.Extent.End]
 		out = append(out, findHit{
-			file:  path,
-			start: start,
-			end:   end,
-			kind:  shortFindKind(decl.Kind),
-			name:  name,
-			body:  body,
-			rank:  rank,
+			file:      path,
+			start:     start,
+			end:       end,
+			kind:      shortFindKind(decl.Kind),
+			name:      name,
+			bodyStart: decl.Extent.Start,
+			bodyEnd:   decl.Extent.End,
+			root:      root,
+			repo:      repo,
+			rank:      rank,
 		})
 	}
 	return out
