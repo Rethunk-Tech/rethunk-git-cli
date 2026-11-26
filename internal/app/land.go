@@ -630,13 +630,14 @@ func catchUp(ctx context.Context, r string, d landDeps) (installFailed, fetched 
 	if !ok || strings.TrimSpace(mustGit(repo, d, "rev-parse", "--abbrev-ref", "HEAD")) != def || dirtyTracked(repo, d) {
 		return false, false
 	}
-	if _, err := d.git.run(repo, "fetch", "-q", "origin"); err != nil {
+	remote := upstreamRemote(repo, def, d)
+	if _, err := d.git.run(repo, "fetch", "-q", remote); err != nil {
 		return false, false
 	}
-	if n, err := d.git.run(repo, "rev-list", "--count", "origin/"+def+"..HEAD"); err != nil || strings.TrimSpace(n) != "0" {
+	if n, err := d.git.run(repo, "rev-list", "--count", remote+"/"+def+"..HEAD"); err != nil || strings.TrimSpace(n) != "0" {
 		return false, true
 	}
-	subjects, err := d.git.run(repo, "log", "--format=%s", "HEAD..origin/"+def)
+	subjects, err := d.git.run(repo, "log", "--format=%s", "HEAD.."+remote+"/"+def)
 	if err != nil {
 		return false, true
 	}
@@ -1250,11 +1251,11 @@ func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBra
 	prep := landBranchPrep{repo: repo, branch: branch, def: def, wt: wt, dirty: dirty, noPush: noPush, wtCreated: !found}
 	base := def
 	if !noPush {
-		_, _ = d.git.run(repo, "fetch", "-q", "origin")
+		_, _ = d.git.run(repo, "fetch", "-q", upstreamRemote(repo, def, d))
 	}
 	if !noPush && !dirty {
-		// A clean main that fell behind origin would make the push look like an origin move forever.
-		_, _ = d.git.run(repo, "merge", "--ff-only", "origin/"+def)
+		// A clean main that fell behind its remote would make the push look like a remote move forever.
+		_, _ = d.git.run(repo, "merge", "--ff-only", upstreamRemote(repo, def, d)+"/"+def)
 	}
 	if dirty && !noPush {
 		base = "origin/" + def
@@ -2097,7 +2098,8 @@ func fastForwardDefaultAfterMerge(job landWatchJob, d landDeps) {
 	if job.Repo == "" || job.Default == "" {
 		return
 	}
-	if out, err := d.git.run(job.Repo, "fetch", "-q", "origin"); err != nil {
+	remote := upstreamRemote(job.Repo, job.Default, d)
+	if out, err := d.git.run(job.Repo, "fetch", "-q", remote); err != nil {
 		fmt.Fprintf(d.stderr, "rgit land: %s: left %s (%s)\n", job.Repo, job.Default, gitErrDetail(out, err))
 		return
 	}
@@ -2110,7 +2112,7 @@ func fastForwardDefaultAfterMerge(job landWatchJob, d landDeps) {
 		fmt.Fprintf(d.stderr, "rgit land: %s: left %s (dirty tracked files)\n", job.Repo, job.Default)
 		return
 	}
-	if out, err := d.git.run(job.Repo, "merge", "--ff-only", "origin/"+job.Default); err != nil {
+	if out, err := d.git.run(job.Repo, "merge", "--ff-only", remote+"/"+job.Default); err != nil {
 		fmt.Fprintf(d.stderr, "rgit land: %s: left %s (%s)\n", job.Repo, job.Default, gitErrDetail(out, err))
 	}
 }

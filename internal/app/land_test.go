@@ -3051,3 +3051,25 @@ func TestDirtySkipLineNamesRealPaths(t *testing.T) {
 		t.Errorf("dirtySkipLine = %q; want %q", got, want)
 	}
 }
+
+// TestLandFastForwardUsesUpstreamRemote pins that the post-merge fast-forward reads the remote the default branch tracks, not a hard-coded origin.
+func TestLandFastForwardUsesUpstreamRemote(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	gitOut(t, dir, "remote", "rename", "origin", "up")
+	other := t.TempDir()
+	gitOut(t, other, "clone", bare, ".")
+	gitOut(t, other, "config", "user.name", "test")
+	gitOut(t, other, "config", "user.email", "test@test")
+	gittest.Write(t, other, "merged.txt", "from-pr\n")
+	gittest.Commit(t.Context(), t, other, "merged via pr")
+	gitOut(t, other, "push", "origin", "HEAD")
+	tip := strings.TrimSpace(gitOut(t, other, "rev-parse", "HEAD"))
+	var stderr strings.Builder
+	d := testLandDeps(t)
+	d.stderr = &stderr
+	fastForwardDefaultAfterMerge(landWatchJob{Repo: dir, Default: "main"}, d)
+	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != tip {
+		t.Errorf("HEAD = %s, want %s; stderr=%q", got, tip, stderr.String())
+	}
+}
