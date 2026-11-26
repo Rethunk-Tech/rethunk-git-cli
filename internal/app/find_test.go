@@ -251,3 +251,16 @@ func TestRunFindMissingDirIsUsage(t *testing.T) {
 	qt.Assert(t, qt.StringContains(stderr, `no such directory "foo"`))
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "rev-parse")))
 }
+
+func TestRunFindDirThatIsAFileIsUsage(t *testing.T) {
+	t.Parallel()
+	dir := findRankRepo(t)
+	file := filepath.Join(dir, "afile.txt")
+	if err := os.WriteFile(file, []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, stderr, code := runApp(t, "-C", dir, "find", "init", "afile.txt")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, `not a directory "afile.txt"`))
+	qt.Assert(t, qt.Not(qt.StringContains(stderr, "rev-parse")))
+}

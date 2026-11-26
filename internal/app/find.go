@@ -214,8 +214,13 @@ func planFindSearches(ctx context.Context, chdir string, dirs []string, stderr i
 		if code != exitcode.Success {
 			return nil, code
 		}
-		if _, err := os.Stat(abs); err != nil {
+		fi, err := os.Stat(abs)
+		if err != nil {
 			fmt.Fprintf(stderr, "rgit: find: no such directory %q\n%s", d, usageHint(findHelp))
+			return nil, exitcode.InvalidUsage
+		}
+		if !fi.IsDir() {
+			fmt.Fprintf(stderr, "rgit: find: not a directory %q\n%s", d, usageHint(findHelp))
 			return nil, exitcode.InvalidUsage
 		}
 		root, _, repo, code := openRepo(ctx, abs, stderr)
