@@ -772,7 +772,6 @@ type tempStaging struct {
 	repo  *gitx.Repo
 	tmp   string
 	final string
-	mode  os.FileMode
 	lock  string
 }
 
@@ -878,11 +877,7 @@ func seedTempIndex(final string) (*tempStaging, error) {
 		return nil, err
 	}
 	keep = true
-	var mode os.FileMode = 0o644
-	if info, serr := os.Stat(final); serr == nil {
-		mode = info.Mode()
-	}
-	return &tempStaging{tmp: tmp, final: final, mode: mode}, nil
+	return &tempStaging{tmp: tmp, final: final}, nil
 }
 
 // swap moves the staged temp index over the caller's index and records the
