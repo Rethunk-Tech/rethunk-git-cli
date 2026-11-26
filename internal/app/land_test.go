@@ -3266,3 +3266,45 @@ func TestLandSkipsConsumerOfRedPinnedRepo(t *testing.T) {
 		t.Errorf("stdout = %q", stdout.String())
 	}
 }
+
+// TestLandDryRunPlansWithoutActing pins --dry-run: run order, route, gate status and ahead commits, with no gate, push or catch-up.
+func TestLandDryRunPlansWithoutActing(t *testing.T) {
+	t.Parallel()
+	app, lib := pinnedPair(t)
+	libTip := strings.TrimSpace(gitOut(t, lib, "rev-parse", "--short", "HEAD"))
+	d := testLandDeps(t)
+	gated := false
+	d.gate = func(string, bool) (string, error) {
+		gated = true
+		return "", nil
+	}
+	d.passed = func(dir, _ string) bool { return dir == lib }
+	var stdout, stderr strings.Builder
+	d.stdout, d.stderr = &stdout, &stderr
+	if code := runLandWith(t.Context(), "", []string{"--dry-run", "--repos", app, lib}, d); code != exitcode.Success {
+		t.Fatalf("code = %v stderr=%q", code, stderr.String())
+	}
+	out := stdout.String()
+	wantLib := "1. " + lib + ": would push (gate: would reuse pass; 1 ahead)\n   " + libTip + " lib change\n"
+	if !strings.HasPrefix(out, wantLib) || !strings.Contains(out, "2. "+app+": would push (gate: would run; 1 ahead)") {
+		t.Errorf("stdout = %q", out)
+	}
+	if gated {
+		t.Error("dry run gated")
+	}
+	if ahead := strings.TrimSpace(gitOut(t, lib, "rev-list", "--count", "@{u}..HEAD")); ahead != "1" {
+		t.Errorf("lib ahead = %s after dry run; want 1", ahead)
+	}
+
+	stdout.Reset()
+	if code := runLandWith(t.Context(), "", []string{"--dry-run", "--json", "--repos", app}, d); code != exitcode.Success {
+		t.Fatalf("json code = %v", code)
+	}
+	var got struct{ Repos []landDryRunRepo }
+	if err := json.Unmarshal([]byte(stdout.String()), &got); err != nil || len(got.Repos) != 1 || got.Repos[0].Route != "push" || got.Repos[0].Gate != "would run" || len(got.Repos[0].Ahead) != 1 {
+		t.Errorf("json = %q (%v)", stdout.String(), err)
+	}
+	if code := runLandWith(t.Context(), "", []string{"--dry-run", "--wait", "--repos", app}, d); code != exitcode.InvalidUsage {
+		t.Errorf("--dry-run --wait = %v; want usage error", code)
+	}
+}

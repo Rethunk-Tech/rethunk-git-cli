@@ -22,7 +22,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gitx"
 )
 
-const landUsageLine = "usage: rgit land [--repos DIR...] [--sha SHA] [--no-gate] [--wait] [--json] [--install] | rgit land --branch BR [--repos DIR] [--push] [--wait] [--json] [--install]"
+const landUsageLine = "usage: rgit land [--repos DIR...] [--sha SHA] [--no-gate] [--dry-run] [--wait] [--json] [--install] | rgit land --branch BR [--repos DIR] [--push] [--wait] [--json] [--install]"
 
 const landHelp = landUsageLine + `
 
@@ -36,6 +36,12 @@ a repo; see docs/CODES.md). Each repo's full gate (gate in the repo
 directory) runs on HEAD first; a red gate pushes nothing for that repo, and
 its line names the failing gates and the log path. If HEAD or the tree
 changes during the gate, nothing is pushed.
+
+--dry-run prints, in run order, each repo's route (push, PR or queue), gate status
+("would run", "would reuse pass" or skipped) and ahead commits, then exits 0
+without catch-up, gating or pushing. It takes only --repos, --no-gate and --json.
+A repo that pins another run repo's unpushed commit by git+ssh SHA (package.json,
+go.mod) runs after it, and is skipped if that repo went red.
 
 --sha SHA lands that ahead commit (an ancestor of HEAD) instead of HEAD:
 the same direct, PR or queue route, no rebase, dirty tree allowed, local
@@ -74,6 +80,7 @@ Flags:
   --repos DIR...  repositories to land (default: the current directory)
   --sha SHA       land this ahead commit instead of HEAD (not with --branch)
   --no-gate       skip the gate; for callers that already gated the commit
+  --dry-run       print each repo's order, route, gate status and ahead commits; change nothing
   --branch BR     land local branch BR onto the local default branch (no push)
   --push          with --branch: also push through the repo's branch rules
   --wait          poll each open PR until it merges or the cap is hit
@@ -413,6 +420,7 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 	wait := false
 	install := false
 	push := false
+	dryRun := false
 	argJSON := false
 	branch := ""
 	var repos []string
@@ -429,6 +437,8 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 			install = true
 		case a == "--push":
 			push = true
+		case a == "--dry-run":
+			dryRun = true
 		case a == "--no-gate":
 			d.noGate = true
 		case a == "--json":
@@ -476,6 +486,14 @@ func runLandWith(ctx context.Context, dir string, args []string, d landDeps) exi
 		}
 	}
 	d.asJSON = jsonFlag(ctx) || argJSON
+	if dryRun {
+		if branch != "" || d.sha != "" || push || wait || install {
+			fmt.Fprintln(d.stderr, "rgit land: --dry-run combines only with --repos, --no-gate and --json")
+			fmt.Fprintln(d.stderr, landUsageLine)
+			return exitcode.InvalidUsage
+		}
+		return landDryRun(repos, d.asJSON, d)
+	}
 	return landDispatch(ctx, repos, branch, push, wait, install, d.asJSON, d)
 }
 

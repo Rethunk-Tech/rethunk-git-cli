@@ -7,7 +7,7 @@ Authoritative exit codes and machine-readable output. Flags:
 
 | Exit | Condition |
 | --- | --- |
-| 0 | Success (stderr warnings for unchanged targets allowed) |
+| 0 | Success (stderr warnings for unchanged targets allowed). `land --dry-run` always exits 0 once its arguments parse; skips show in the plan, not the exit code |
 | 1 | `diff` only, under `--exit-code`/`--quiet`: something is committable. `land` (plain and `--sha`): a repo is red, including a red gate or push; `--branch`: the push is red or origin moved (a red gate is 3). `find`: no match |
 | 2 | `land --branch`: the rebase conflicted |
 | 3 | Anchor unresolvable — missing in worktree and HEAD; candidates listed. `land --branch`: the gate was red |

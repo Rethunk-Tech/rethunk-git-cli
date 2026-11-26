@@ -442,6 +442,12 @@ commits stay local. Not with `--branch`. A gate can run only on the checkout,
 so `--sha` is gated when SHA is HEAD and the tracked tree is clean, and is
 refused otherwise (red, exit 1) unless `--no-gate` is given.
 
+`--dry-run` prints each repo in run order with its route (push, PR or queue), gate status
+(`would run`, `would reuse pass`, or skipped under `--no-gate`) and ahead commits, then exits 0
+without catch-up, gate or push; `--json` prints the same as one object. It combines only with
+`--repos`, `--no-gate` and `--json`. A repo whose `package.json` or `go.mod` change pins another
+run repo's unpushed commit by SHA runs after that repo, and is skipped if that repo is red.
+
 `--branch BR` lands local branch BR onto the default branch in one repo
 (`--repos DIR` or the current directory). The repo must be the main
 checkout. By default it does the rebase, gate, and local fast-forward,
