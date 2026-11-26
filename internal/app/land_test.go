@@ -696,6 +696,13 @@ func TestLandBranchConflictExit2(t *testing.T) {
 	if _, err := os.Stat(wt); err != nil {
 		t.Errorf("conflict removed worktree: %v", err)
 	}
+	gitDir := strings.TrimSpace(gitOut(t, wt, "rev-parse", "--absolute-git-dir"))
+	if _, err := os.Stat(filepath.Join(gitDir, "rebase-merge")); err == nil {
+		t.Error("conflict left the worktree mid-rebase")
+	}
+	if st := strings.TrimSpace(gitOut(t, wt, "status", "--short")); st != "" {
+		t.Errorf("conflict left the worktree dirty: %q", st)
+	}
 }
 
 func TestLandBranchRefusesDefaultBranch(t *testing.T) {
