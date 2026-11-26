@@ -254,3 +254,40 @@ func TestSnapshotIndex_RestoreWithNoIndexFile(t *testing.T) {
 		t.Errorf("status after Restore = %q; want the pre-staging %q", got, before)
 	}
 }
+
+// TestSnapshotIndex_RestoreReAddsRemovedAndKeepsForeignStaging covers the two
+// rollback rules the other Restore tests miss: an entry Apply removed comes
+// back, and an entry another session restaged after Apply is left alone.
+func TestSnapshotIndex_RestoreReAddsRemovedAndKeepsForeignStaging(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	dir, repo := gittest.New(ctx, t)
+	gittest.Write(t, dir, "gone.txt", "one\n")
+	gittest.Write(t, dir, "edit.txt", "one\n")
+	gittest.Commit(ctx, t, dir, "chore: initial")
+	if err := os.Remove(filepath.Join(dir, "gone.txt")); err != nil {
+		t.Fatal(err)
+	}
+	gittest.Write(t, dir, "edit.txt", "two\n")
+
+	snap, err := SnapshotIndex(ctx, dir)
+	if err != nil {
+		t.Fatalf("SnapshotIndex: %v", err)
+	}
+	plan, err := PlanStage(ctx, repo, dir, []Target{PathTarget("gone.txt"), PathTarget("edit.txt")})
+	if err != nil {
+		t.Fatalf("PlanStage: %v", err)
+	}
+	if err := plan.ApplyWithSnapshot(ctx, repo, dir, snap); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	gittest.Write(t, dir, "edit.txt", "three\n")
+	gittest.Git(ctx, t, dir, "add", "edit.txt")
+
+	if err := snap.Restore(ctx); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if got := gittest.Git(ctx, t, dir, "status", "--porcelain"); got != "M  edit.txt\n D gone.txt\n" {
+		t.Errorf("status after Restore = %q; want edit.txt still staged and gone.txt's deletion unstaged", got)
+	}
+}
