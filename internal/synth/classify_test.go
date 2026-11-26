@@ -322,3 +322,18 @@ func TestStageTargets_NewSymbolBetweenFlushLinesStaysFlush(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 	qt.Assert(t, qt.Equals(stagedBlob(t, repo, "f.ts"), work))
 }
+
+// TestClassify_CSSIDSelectorIsNotAnOrdinal pins that `a#main` is a distinct
+// anchor, not a third `a`: appending it must not move the ordinal of a#2.
+func TestClassify_CSSIDSelectorIsNotAnOrdinal(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "s.css", "a { color: red; }\n\na { color: blue; }\n", "chore: fixture")
+	gittest.Write(t, dir, "s.css", "a { color: red; }\n\na { color: green; }\n\na#main { color: black; }\n")
+
+	fp, err := openFilePlan(t.Context(), repo, dir, "s.css")
+	qt.Assert(t, qt.IsNil(err))
+	defer fp.close()
+
+	_, _, err = fp.classify("a#2")
+	qt.Assert(t, qt.IsNil(err))
+}

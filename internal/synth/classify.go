@@ -175,7 +175,7 @@ func sharedExtentNames(f *resolve.File, res *resolve.Resolution) []string {
 func sameNameCount(f *resolve.File, bare string) int {
 	n := 0
 	for _, a := range f.DeclOrder() {
-		if a == bare || strings.HasPrefix(a, bare+"#") {
+		if b, _, ok := resolve.ParseOrdinal(a); a == bare || ok && b == bare {
 			n++
 		}
 	}
