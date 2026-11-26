@@ -1060,10 +1060,34 @@ func pullRebase(repo string, d landDeps) bool {
 	}
 	defer unlock()
 	if _, err := d.git.run(repo, "pull", "-q", "--rebase"); err != nil {
-		_, _ = d.git.run(repo, "rebase", "--abort")
+		abortRebase(repo, d)
 		return false
 	}
 	return true
+}
+
+// abortRebase aborts a stopped rebase, then rewrites any tracked file whose
+// worktree copy differed from the index just before: a rebase leaves clean
+// merges staged and conflicts unmerged, so an unstaged modification is an
+// edit made by someone else, which the abort's hard reset would discard.
+func abortRebase(dir string, d landDeps) {
+	out, _ := d.git.run(dir, "diff", "--name-only", "-z", "--diff-filter=M")
+	unmerged, _ := d.git.run(dir, "diff", "--name-only", "-z", "--diff-filter=U")
+	kept := map[string][]byte{}
+	for _, name := range gitx.SplitNUL([]byte(out)) {
+		if slices.Contains(gitx.SplitNUL([]byte(unmerged)), name) {
+			continue
+		}
+		if b, err := os.ReadFile(filepath.Join(dir, name)); err == nil {
+			kept[name] = b
+		}
+	}
+	_, _ = d.git.run(dir, "rebase", "--abort")
+	for name, b := range kept {
+		if fi, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			_ = os.WriteFile(filepath.Join(dir, name), b, fi.Mode().Perm())
+		}
+	}
 }
 
 // resetToRemote moves the checkout off commits that now live in a PR, only while HEAD is still the
@@ -1469,7 +1493,7 @@ func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBra
 	defer unlock()
 	if _, err := d.git.run(wt, "rebase", base); err != nil {
 		files, _ := d.git.run(wt, "diff", "--name-only", "-z", "--diff-filter=U")
-		_, _ = d.git.run(wt, "rebase", "--abort")
+		abortRebase(wt, d)
 		fmt.Fprintf(d.stderr, "conflict: hand to solver (worktree %s, files %s)\n", wt, strings.Join(gitx.SplitNUL([]byte(files)), ", "))
 		return landBranchPrep{}, exitcode.LandConflict
 	}

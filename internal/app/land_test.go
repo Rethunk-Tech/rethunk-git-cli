@@ -3681,3 +3681,47 @@ func TestLandBranchJSONKeepsTheGateLogWhenNotEnqueued(t *testing.T) {
 		t.Errorf("stdout = %q (%v); want the gate log and a route", stdout.String(), err)
 	}
 }
+
+// editAfterStop edits a tracked file once git pull --rebase has stopped, the
+// way a sibling session could while the stopped rebase waits for its abort.
+type editAfterStop struct {
+	gitRunner
+	file string
+}
+
+func (e editAfterStop) run(dir string, args ...string) (string, error) {
+	out, err := e.gitRunner.run(dir, args...)
+	if err != nil && len(args) > 0 && args[0] == "pull" {
+		_ = os.WriteFile(filepath.Join(dir, e.file), []byte("sibling edit\n"), 0o600)
+	}
+	return out, err
+}
+
+// TestPullRebaseAbortKeepsSiblingTrackedEdit pins that aborting a failed
+// pull --rebase never discards a tracked edit made while it sat stopped.
+func TestPullRebaseAbortKeepsSiblingTrackedEdit(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	gittest.Write(t, dir, "other.txt", "other\n")
+	gittest.Commit(t.Context(), t, dir, "other")
+	gitOut(t, dir, "push", "origin", "HEAD")
+
+	other := t.TempDir()
+	gitOut(t, other, "clone", "-q", bare, ".")
+	gittest.Write(t, other, "base.txt", "remote\n")
+	gittest.Commit(t.Context(), t, other, "remote")
+	gitOut(t, other, "push", "-q", "origin", "HEAD")
+
+	gittest.Write(t, dir, "base.txt", "local\n")
+	gittest.Commit(t.Context(), t, dir, "local")
+
+	d := testLandDeps(t)
+	d.git = editAfterStop{gitRunner: d.git, file: "other.txt"}
+	if pullRebase(dir, d) {
+		t.Fatal("pullRebase succeeded; want a conflicting rebase")
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "other.txt"))
+	if err != nil || string(got) != "sibling edit\n" {
+		t.Errorf("other.txt = %q (%v); want the sibling edit kept", got, err)
+	}
+}
