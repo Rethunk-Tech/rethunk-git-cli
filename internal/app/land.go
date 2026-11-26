@@ -1525,31 +1525,32 @@ func unlinkLandEnvLinks(links []string) {
 	}
 }
 
-func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, wait, install, noPush bool, d landDeps) exitcode.Code {
-	// A pushed branch fast-forwards local main only after the push, so a red push leaves main re-runnable.
-	ff := func() exitcode.Code {
-		if prep.dirty && !noPush {
-			return exitcode.Success
-		}
-		if out, err := d.git.run(prep.repo, "merge", "--ff-only", prep.branch); err != nil {
-			if overlap := mergeOverlapFiles(prep.repo, prep.branch, d); noPush && prep.dirty && len(overlap) > 0 {
-				fmt.Fprintf(d.stderr, "error: %s has uncommitted changes to %s; %s not landed\n",
-					prep.repo, strings.Join(overlap, ", "), prep.branch)
-				return exitcode.DirtyOverlap
-			}
-			fmt.Fprintf(d.stderr, "error: %s\n", strings.TrimSpace(out))
-			return exitcode.GitFailure
-		}
-		head := strings.TrimSpace(mustGit(prep.repo, d, "rev-parse", "HEAD"))
-		tip := strings.TrimSpace(mustGit(prep.repo, d, "rev-parse", prep.branch))
-		if head != tip {
-			fmt.Fprintf(d.stderr, "error: HEAD %s != %s %s\n", head, prep.branch, tip)
-			return exitcode.GitFailure
-		}
+// ffLandBranch fast-forwards the default branch to the landed branch. A pushed branch does it only after the push, so a red push leaves main re-runnable.
+func ffLandBranch(prep landBranchPrep, noPush bool, d landDeps) exitcode.Code {
+	if prep.dirty && !noPush {
 		return exitcode.Success
 	}
+	if out, err := d.git.run(prep.repo, "merge", "--ff-only", prep.branch); err != nil {
+		if overlap := mergeOverlapFiles(prep.repo, prep.branch, d); noPush && prep.dirty && len(overlap) > 0 {
+			fmt.Fprintf(d.stderr, "error: %s has uncommitted changes to %s; %s not landed\n",
+				prep.repo, strings.Join(overlap, ", "), prep.branch)
+			return exitcode.DirtyOverlap
+		}
+		fmt.Fprintf(d.stderr, "error: %s\n", strings.TrimSpace(out))
+		return exitcode.GitFailure
+	}
+	head := strings.TrimSpace(mustGit(prep.repo, d, "rev-parse", "HEAD"))
+	tip := strings.TrimSpace(mustGit(prep.repo, d, "rev-parse", prep.branch))
+	if head != tip {
+		fmt.Fprintf(d.stderr, "error: HEAD %s != %s %s\n", head, prep.branch, tip)
+		return exitcode.GitFailure
+	}
+	return exitcode.Success
+}
+
+func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, wait, install, noPush bool, d landDeps) exitcode.Code {
 	if noPush {
-		if code := ff(); code != exitcode.Success {
+		if code := ffLandBranch(prep, noPush, d); code != exitcode.Success {
 			return code
 		}
 	}
@@ -1579,7 +1580,7 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 		return exitcode.LandRed
 	}
 	if !noPush {
-		if code := ff(); code != exitcode.Success {
+		if code := ffLandBranch(prep, noPush, d); code != exitcode.Success {
 			return code
 		}
 	}
