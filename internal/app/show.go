@@ -82,7 +82,7 @@ func runShow(ctx context.Context, dir string, args []string, stdout, stderr io.W
 	}
 	extents := make([][]byte, 0, len(positionals))
 	for _, positional := range positionals {
-		repo, file, src, res, anchorName, code := resolveAnchorExtent(ctx, dir, stderr, positional, source, "show", showHelp, fetch)
+		repo, file, src, res, anchorName, code := resolveAnchorExtent(ctx, dir, stderr, nil, positional, source, "show", showHelp, fetch)
 		if code != exitcode.Success {
 			return code
 		}

@@ -176,15 +176,16 @@ func runLog(ctx context.Context, dir string, args []string, stdout, stderr io.Wr
 	// says every positional is a pathspec, date or not. --follow selects
 	// the same path form, then requires exactly one path.
 	if hasTimeRangeFlag(args) || hasFollowFlag(args) || logHasPositionals(args) {
-		anchor, code := logSelectsAnchor(ctx, dir, args, stderr)
+		anchor, opened, code := logSelectsAnchor(ctx, dir, args, stderr)
 		if code != exitcode.Success {
 			return code
 		}
 		if !anchor {
 			return runLogPathScoped(ctx, dir, args, stdout, stderr)
 		}
+		return runLogAnchor(ctx, dir, opened, args, stdout, stderr)
 	}
-	return runLogAnchor(ctx, dir, args, stdout, stderr)
+	return runLogAnchor(ctx, dir, nil, args, stdout, stderr)
 }
 
 // logHasPositionals reports whether args names a path or anchor, including
@@ -219,38 +220,41 @@ func logHasPositionals(args []string) bool {
 // and diff already apply, and that form is path-scoped history. A token
 // that classifies as KindAnchor, or that fails classification entirely
 // (so runLogAnchor can print its own message), keeps the symbol-scoped form.
-func logSelectsAnchor(ctx context.Context, dir string, args []string, stderr io.Writer) (bool, exitcode.Code) {
+//
+// The repo it opened is returned so the anchor form does not open and
+// classify it a second time.
+func logSelectsAnchor(ctx context.Context, dir string, args []string, stderr io.Writer) (bool, *openedRepo, exitcode.Code) {
 	candidates := logInteriorColonPositionals(args)
 	if len(candidates) == 0 {
-		return false, exitcode.Success
+		return false, nil, exitcode.Success
 	}
 
 	root, prefix, repo, code := openRepo(ctx, dir, stderr)
 	if code != exitcode.Success {
 		hintRepoForTargets(ctx, stderr, "log", dir, candidates)
-		return false, code
+		return false, nil, code
 	}
-	checker := &cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}
+	opened := &openedRepo{root: root, prefix: prefix, repo: repo, checker: &cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}}
 	revs := cli.GitRevisionResolver{Repo: repo}
 	for _, a := range candidates {
-		classified, err := cli.ClassifyArgs(ctx, []string{a}, false, checker, revs)
+		classified, err := cli.ClassifyArgs(ctx, []string{a}, false, opened.checker, revs)
 		if err != nil {
 			if _, ok := errors.AsType[*cli.UnresolvedArgError](err); ok {
-				return true, exitcode.Success
+				return true, opened, exitcode.Success
 			}
 			fmt.Fprintf(stderr, "rgit: %v\n", err)
-			return false, exitcode.GitFailure
+			return false, nil, exitcode.GitFailure
 		}
 		if len(classified) > 0 && classified[0].Kind == cli.KindAnchor {
-			return true, exitcode.Success
+			return true, opened, exitcode.Success
 		}
 	}
-	return false, exitcode.Success
+	return false, nil, exitcode.Success
 }
 
 // runLogAnchor is rgit log's FILE:SYMBOL form. Flags go through the shared
 // anchor parser; setLogMaxCount still checks -n/--max-count.
-func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
+func runLogAnchor(ctx context.Context, dir string, opened *openedRepo, args []string, stdout, stderr io.Writer) exitcode.Code {
 	var opts logAnchorOptions
 	opts.asJSON = jsonFlag(ctx)
 	positionals, code, done := parseAnchorCommandArgs("log", args, []anchorCommandFlag{
@@ -282,7 +286,7 @@ func runLogAnchor(ctx context.Context, dir string, args []string, stdout, stderr
 	if opts.source != "" {
 		fetch = showSource(opts.source)
 	}
-	repo, file, blob, res, anchorName, code := resolveAnchorExtent(ctx, dir, stderr, opts.positional, opts.source, "log", logHelp, fetch)
+	repo, file, blob, res, anchorName, code := resolveAnchorExtent(ctx, dir, stderr, opened, opts.positional, opts.source, "log", logHelp, fetch)
 	if code != exitcode.Success {
 		return code
 	}

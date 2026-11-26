@@ -906,3 +906,18 @@ func TestRun_LogHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
 	_, _, code = runApp(t, "-C", dir, "log", "Foo.GO:First")
 	qt.Assert(t, qt.Equals(code, exitcode.UnsupportedLanguage))
 }
+
+// TestRunLogAnchorOpensRepoOnce pins that log's anchor form resolves the
+// repository and lists the index once, not once for choosing the form and
+// again for resolving the anchor.
+func TestRunLogAnchorOpensRepoOnce(t *testing.T) {
+	dir := tempRepo(t)
+	bin, countFile := gittest.CountingGit(t, "--show-toplevel")
+	t.Setenv("PATH", bin)
+
+	_, stderr, code := runApp(t, "-C", dir, "log", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr = %q", stderr))
+	info, err := os.Stat(countFile)
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(info.Size(), int64(1)))
+}

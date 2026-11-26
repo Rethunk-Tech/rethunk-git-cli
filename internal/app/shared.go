@@ -336,6 +336,15 @@ func openRepo(ctx context.Context, dir string, stderr io.Writer) (root, prefix s
 	return top, pfx, probe.Reroot(top), exitcode.Success
 }
 
+// openedRepo is a repository openRepo already resolved, with the path checker
+// whose index lookup is cached, handed from log's anchor selection to its
+// anchor resolution so neither is repeated.
+type openedRepo struct {
+	root, prefix string
+	repo         *gitx.Repo
+	checker      *cli.GitPathChecker
+}
+
 // hintRepoForTargets follows a failed openRepo when rgit ran outside any
 // repository: if every target path lies in one repository, it prints the -C
 // spelling with repo-relative targets, the form the caller meant.
@@ -417,12 +426,16 @@ type anchorSourceFunc func(ctx context.Context, repo *gitx.Repo, root, file stri
 // On success code is exitcode.Success and repo, file, src, res are all
 // populated; otherwise every refusal has already been written to stderr
 // and the caller must return code immediately.
-func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, positional, sourceRev, cmdName, help string, fetchSource anchorSourceFunc) (repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, anchorName string, code exitcode.Code) {
-	root, prefix, repo, code := openRepo(ctx, dir, stderr)
-	if code != exitcode.Success {
-		hintRepoForTargets(ctx, stderr, cmdName, dir, []string{positional})
-		return nil, "", nil, nil, "", code
+func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, opened *openedRepo, positional, sourceRev, cmdName, help string, fetchSource anchorSourceFunc) (repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, anchorName string, code exitcode.Code) {
+	if opened == nil {
+		root, prefix, repo, code := openRepo(ctx, dir, stderr)
+		if code != exitcode.Success {
+			hintRepoForTargets(ctx, stderr, cmdName, dir, []string{positional})
+			return nil, "", nil, nil, "", code
+		}
+		opened = &openedRepo{root: root, prefix: prefix, repo: repo, checker: &cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}}
 	}
+	root, prefix, repo := opened.root, opened.prefix, opened.repo
 
 	// sourceRev is verified here, before classification consults it: rule 4
 	// asks git whether the FILE half exists at that revision, and a revision
@@ -443,8 +456,9 @@ func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, posi
 	// commit and diff, and a bare pathspec here (an existing path with no
 	// name after it) must be refused the same way rather than silently
 	// misread as an anchor with an empty name.
-	checker := cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo, ExtraRev: sourceRev}
-	classified, err := cli.ClassifyArgs(ctx, []string{positional}, false, &checker, cli.GitRevisionResolver{Repo: repo})
+	checker := opened.checker
+	checker.ExtraRev = sourceRev
+	classified, err := cli.ClassifyArgs(ctx, []string{positional}, false, checker,cli.GitRevisionResolver{Repo: repo})
 	if err != nil {
 		fmt.Fprintf(stderr, "rgit: %v\n", err)
 		return nil, "", nil, nil, "", exitcode.InvalidUsage
