@@ -377,14 +377,7 @@ func TestLandInstallSkipsPR(t *testing.T) {
 func TestLandWatchFastForwardsCleanDefault(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
-	other := t.TempDir()
-	gitOut(t, other, "clone", bare, ".")
-	gitOut(t, other, "config", "user.name", "test")
-	gitOut(t, other, "config", "user.email", "test@test")
-	gittest.Write(t, other, "merged.txt", "from-pr\n")
-	gittest.Commit(t.Context(), t, other, "merged via pr")
-	gitOut(t, other, "push", "origin", "HEAD")
-	originTip := strings.TrimSpace(gitOut(t, other, "rev-parse", "HEAD"))
+	originTip := pushToOrigin(t, bare, "merged.txt", "from-pr\n", "merged via pr")
 	localBefore := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
 	if localBefore == originTip {
 		t.Fatal("origin did not advance past the local default")
@@ -414,14 +407,7 @@ func TestLandWatchFastForwardsCleanDefault(t *testing.T) {
 func TestLandWatchLeavesDirtyDefault(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
-	other := t.TempDir()
-	gitOut(t, other, "clone", bare, ".")
-	gitOut(t, other, "config", "user.name", "test")
-	gitOut(t, other, "config", "user.email", "test@test")
-	gittest.Write(t, other, "merged.txt", "from-pr\n")
-	gittest.Commit(t.Context(), t, other, "merged via pr")
-	gitOut(t, other, "push", "origin", "HEAD")
-	originTip := strings.TrimSpace(gitOut(t, other, "rev-parse", "HEAD"))
+	originTip := pushToOrigin(t, bare, "merged.txt", "from-pr\n", "merged via pr")
 	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
 	gittest.Write(t, dir, "base.txt", "dirty\n")
 
@@ -2418,22 +2404,25 @@ func TestIsLinkedWorktree(t *testing.T) {
 	}
 }
 
-func pushMergedPR(t *testing.T, bare, subject string) (tip string) {
+// pushToOrigin commits one file to a second clone of bare, pushes it and returns the pushed tip.
+func pushToOrigin(t *testing.T, bare, file, content, subject string) (tip string) {
 	t.Helper()
 	other := t.TempDir()
 	gitOut(t, other, "clone", bare, ".")
 	gitOut(t, other, "config", "user.name", "test")
 	gitOut(t, other, "config", "user.email", "test@test")
-	gittest.Write(t, other, "Makefile", ".PHONY: install\ninstall:\n\t@echo caught > installed.marker\n\t@echo caught\n")
+	gittest.Write(t, other, file, content)
 	gittest.Commit(t.Context(), t, other, subject)
 	gitOut(t, other, "push", "origin", "HEAD")
 	return strings.TrimSpace(gitOut(t, other, "rev-parse", "HEAD"))
 }
 
+const installMakefile = ".PHONY: install\ninstall:\n\t@echo caught > installed.marker\n\t@echo caught\n"
+
 func TestCatchUpFastForwardsAndInstalls(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
-	tip := pushMergedPR(t, bare, "feat: thing (#51)")
+	tip := pushToOrigin(t, bare, "Makefile", installMakefile, "feat: thing (#51)")
 	d := testLandDeps(t)
 	var stdout strings.Builder
 	d.stdout = &stdout
@@ -2455,7 +2444,7 @@ func TestCatchUpFastForwardsAndInstalls(t *testing.T) {
 func TestCatchUpLeavesDivergedAndUnrelated(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
-	pushMergedPR(t, bare, "feat: thing (#52)")
+	pushToOrigin(t, bare, "Makefile", installMakefile, "feat: thing (#52)")
 	gittest.Write(t, dir, "local.txt", "x\n")
 	gittest.Commit(t.Context(), t, dir, "local work")
 	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
@@ -2474,7 +2463,7 @@ func TestCatchUpLeavesDivergedAndUnrelated(t *testing.T) {
 func TestCatchUpRebaseMergeWithoutPRNumber(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
-	tip := pushMergedPR(t, bare, "chore: direct push")
+	tip := pushToOrigin(t, bare, "Makefile", installMakefile, "chore: direct push")
 	d := testLandDeps(t)
 	var stdout strings.Builder
 	d.stdout = &stdout
@@ -2491,13 +2480,7 @@ func TestCatchUpRebaseMergeWithoutPRNumber(t *testing.T) {
 func TestCatchUpStaysQuietWhenFastForwardIsRefused(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
-	other := t.TempDir()
-	gitOut(t, other, "clone", bare, ".")
-	gitOut(t, other, "config", "user.name", "test")
-	gitOut(t, other, "config", "user.email", "test@test")
-	gittest.Write(t, other, "x.txt", "remote\n")
-	gittest.Commit(t.Context(), t, other, "feat: add x (#53)")
-	gitOut(t, other, "push", "origin", "HEAD")
+	pushToOrigin(t, bare, "x.txt", "remote\n", "feat: add x (#53)")
 	gittest.Write(t, dir, "x.txt", "local\n")
 	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
 	d := testLandDeps(t)
@@ -2514,7 +2497,7 @@ func TestCatchUpStaysQuietWhenFastForwardIsRefused(t *testing.T) {
 func TestCatchUpLeavesDirtyClone(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
-	pushMergedPR(t, bare, "chore: direct push")
+	pushToOrigin(t, bare, "Makefile", installMakefile, "chore: direct push")
 	gittest.Write(t, dir, "base.txt", "dirty\n")
 	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
 	d := testLandDeps(t)
@@ -2531,7 +2514,7 @@ func TestCatchUpLeavesDirtyClone(t *testing.T) {
 func TestLandJSONOneObject(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
-	pushMergedPR(t, bare, "feat: thing (#61)")
+	pushToOrigin(t, bare, "Makefile", installMakefile, "feat: thing (#61)")
 	gitOut(t, dir, "pull", "-q", "--ff-only")
 	gittest.Write(t, dir, "Makefile", ".PHONY: install\ninstall:\n\t@echo ok\n")
 	gittest.Commit(t.Context(), t, dir, "ahead")
@@ -3135,14 +3118,7 @@ func TestLandFastForwardUsesUpstreamRemote(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
 	gitOut(t, dir, "remote", "rename", "origin", "up")
-	other := t.TempDir()
-	gitOut(t, other, "clone", bare, ".")
-	gitOut(t, other, "config", "user.name", "test")
-	gitOut(t, other, "config", "user.email", "test@test")
-	gittest.Write(t, other, "merged.txt", "from-pr\n")
-	gittest.Commit(t.Context(), t, other, "merged via pr")
-	gitOut(t, other, "push", "origin", "HEAD")
-	tip := strings.TrimSpace(gitOut(t, other, "rev-parse", "HEAD"))
+	tip := pushToOrigin(t, bare, "merged.txt", "from-pr\n", "merged via pr")
 	var stderr strings.Builder
 	d := testLandDeps(t)
 	d.stderr = &stderr
@@ -3373,13 +3349,7 @@ func TestLandDryRunJSONAheadEmptyAtUpstream(t *testing.T) {
 func TestLandBehindWithConflictingRebaseIsAborted(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
-	other := t.TempDir()
-	gitOut(t, other, "clone", bare, ".")
-	gitOut(t, other, "config", "user.name", "test")
-	gitOut(t, other, "config", "user.email", "test@test")
-	gittest.Write(t, other, "base.txt", "theirs\n")
-	gittest.Commit(t.Context(), t, other, "theirs")
-	gitOut(t, other, "push", "origin", "HEAD")
+	pushToOrigin(t, bare, "base.txt", "theirs\n", "theirs")
 	gittest.Write(t, dir, "base.txt", "ours\n")
 	gittest.Commit(t.Context(), t, dir, "ours")
 	originBefore := strings.TrimSpace(gitOut(t, bare, "rev-parse", "HEAD"))
@@ -3424,13 +3394,7 @@ func TestInstallPushedReposSkipsWhenHeadIsNotPushed(t *testing.T) {
 func TestFastForwardDefaultAfterMergeLeavesOtherBranch(t *testing.T) {
 	t.Parallel()
 	dir, bare := repoWithOrigin(t)
-	other := t.TempDir()
-	gitOut(t, other, "clone", bare, ".")
-	gitOut(t, other, "config", "user.name", "test")
-	gitOut(t, other, "config", "user.email", "test@test")
-	gittest.Write(t, other, "merged.txt", "from-pr\n")
-	gittest.Commit(t.Context(), t, other, "merged via pr")
-	gitOut(t, other, "push", "origin", "HEAD")
+	pushToOrigin(t, bare, "merged.txt", "from-pr\n", "merged via pr")
 	gitOut(t, dir, "checkout", "-q", "-b", "feat")
 	before := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
 
