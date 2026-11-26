@@ -949,6 +949,10 @@ func readLeft(ctx context.Context, repo *gitx.Repo) (leftState, error) {
 // before any push), or the human "left:" line. A failed lookup never fails
 // an already-landed commit.
 func emitLeft(ctx context.Context, repo *gitx.Repo, stdout, stderr io.Writer, mode leftMode, sha string, results []synth.TargetResult) exitcode.Code {
+	if mode == leftPorcelain {
+		// The H and target rows already carried the result.
+		return exitcode.Success
+	}
 	l, err := readLeft(ctx, repo)
 	if err != nil {
 		fmt.Fprintf(stderr, "[warning] reading remaining state: %v\n", err)
@@ -963,8 +967,6 @@ func emitLeft(ctx context.Context, repo *gitx.Repo, stdout, stderr io.Writer, mo
 		if err == nil {
 			fmt.Fprintln(stdout, l)
 		}
-	case leftPorcelain:
-		// The H and target rows already carried the result.
 	}
 	return exitcode.Success
 }

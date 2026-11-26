@@ -13,6 +13,7 @@ import (
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/cli"
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gitx"
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gittest"
 )
 
@@ -578,5 +579,22 @@ func TestCommit_DanglingSymlinkPositionalClassifies(t *testing.T) {
 	}
 	if _, stderr, code := runApp(t, "-C", dir, "commit", "--dry-run", "link"); code != exitcode.Success {
 		t.Errorf("code = %v stderr = %q; want the link previewed", code, stderr)
+	}
+}
+
+// TestEmitLeftPorcelainReadsNoRepoState pins that -q and --porcelain, which print no "left:" line,
+// spend no git process on the remaining-state read.
+func TestEmitLeftPorcelainReadsNoRepoState(t *testing.T) {
+	dir, _ := gittest.RepoWithFile(t.Context(), t, "base.txt", "base\n", "init")
+	bin, countFile := gittest.CountingGit(t, "")
+	t.Setenv("PATH", bin)
+
+	var stdout, stderr strings.Builder
+	code := emitLeft(t.Context(), gitx.New(dir), &stdout, &stderr, leftPorcelain, "", nil)
+	if code != exitcode.Success || stdout.Len() != 0 {
+		t.Fatalf("code = %v stdout = %q", code, stdout.String())
+	}
+	if _, err := os.Stat(countFile); err == nil {
+		t.Error("emitLeft in porcelain mode ran git")
 	}
 }
