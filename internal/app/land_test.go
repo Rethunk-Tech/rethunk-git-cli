@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gitx"
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gittest"
 )
 
@@ -3487,4 +3488,50 @@ func TestLandSerializesPerRepo(t *testing.T) {
 	if gates.Load() != 1 || maxInFlight.Load() != 1 {
 		t.Errorf("gates = %d, max in flight = %d; want 1, 1 (%+v)", gates.Load(), maxInFlight.Load(), results)
 	}
+}
+
+// lockProbe records the watched git verbs that ran while no rgit commit held the checkout's commit
+// lock: a sibling rgit commit could have landed inside such a call.
+type lockProbe struct {
+	inner gitRunner
+	watch map[string]bool
+	mu    sync.Mutex
+	free  []string
+}
+
+func (p *lockProbe) run(dir string, args ...string) (string, error) {
+	if p.watch[args[0]] {
+		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+		unlock, err := gitx.New(dir).LockCommits(ctx)
+		cancel()
+		if err == nil {
+			unlock()
+			p.mu.Lock()
+			p.free = append(p.free, strings.Join(args, " "))
+			p.mu.Unlock()
+		}
+	}
+	return p.inner.run(dir, args...)
+}
+
+func (p *lockProbe) assertAlwaysLocked(t *testing.T) {
+	t.Helper()
+	if len(p.free) > 0 {
+		t.Errorf("git ran without the commit lock: %q", p.free)
+	}
+}
+
+func TestLandBehindRebaseAndAbortHoldTheCommitLock(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	pushToOrigin(t, bare, "base.txt", "theirs\n", "theirs")
+	gittest.Write(t, dir, "base.txt", "ours\n")
+	gittest.Commit(t.Context(), t, dir, "ours")
+	d := testLandDeps(t)
+	probe := &lockProbe{inner: d.git, watch: map[string]bool{"pull": true, "rebase": true}}
+	d.git = probe
+	if res := landOne(dir, d); res.Kind != landSkipped {
+		t.Fatalf("kind = %v lines=%v", res.Kind, res.Lines)
+	}
+	probe.assertAlwaysLocked(t)
 }

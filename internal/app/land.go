@@ -1011,8 +1011,7 @@ func landOne(r string, d landDeps) landResult {
 		return res
 	}
 	if behind > 0 {
-		if _, err := d.git.run(repo, "pull", "-q", "--rebase"); err != nil {
-			_, _ = d.git.run(repo, "rebase", "--abort")
+		if !pullRebase(repo, d) {
 			res.Kind = landSkipped
 			res.Lines = []string{fmt.Sprintf("%s: skipped (behind %d, rebase not clean)", repo, behind)}
 			return res
@@ -1050,6 +1049,21 @@ func landOne(r string, d landDeps) landResult {
 		resetToRemote(repo, upstreamRemote(repo, def, d)+"/"+def, gated, d, &res)
 	}
 	return res
+}
+
+// pullRebase rebases onto the upstream and aborts a rebase that fails, under the commit lock: an rgit
+// commit landing mid-rebase would fail the rebase's ref update, and the abort would reset it away.
+func pullRebase(repo string, d landDeps) bool {
+	unlock, err := gitx.New(repo).LockCommits(orBackground(d.ctx))
+	if err != nil {
+		return false
+	}
+	defer unlock()
+	if _, err := d.git.run(repo, "pull", "-q", "--rebase"); err != nil {
+		_, _ = d.git.run(repo, "rebase", "--abort")
+		return false
+	}
+	return true
 }
 
 // resetToRemote moves the checkout off commits that now live in a PR, only while HEAD is still the
