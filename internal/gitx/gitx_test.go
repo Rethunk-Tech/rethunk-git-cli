@@ -972,6 +972,47 @@ func TestNewOnlyIndexSweepsStaleDirs(t *testing.T) {
 	}
 }
 
+// An old directory whose commit still holds its lock survives the sweep; once
+// the lock is gone the same directory is removed.
+func TestNewOnlyIndexSweepSkipsLockedDirs(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	_, repo := gittest.RepoWithFile(t.Context(), t, "a.txt", "a\n", "chore: initial")
+	live, err := repo.NewOnlyIndex(t.Context())
+	if err != nil {
+		t.Fatalf("NewOnlyIndex: %v", err)
+	}
+	liveDir := filepath.Dir(live.Path)
+	old := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(liveDir, old, old); err != nil {
+		t.Fatal(err)
+	}
+	other, err := repo.NewOnlyIndex(t.Context())
+	if err != nil {
+		t.Fatalf("NewOnlyIndex: %v", err)
+	}
+	defer other.Close()
+	if _, err := os.Stat(live.Path); err != nil {
+		t.Fatalf("locked dir swept: %v", err)
+	}
+	// Simulate a killed run: lock released, dir left behind.
+	live.Close()
+	if err := os.Mkdir(liveDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(liveDir, old, old); err != nil {
+		t.Fatal(err)
+	}
+	third, err := repo.NewOnlyIndex(t.Context())
+	if err != nil {
+		t.Fatalf("NewOnlyIndex: %v", err)
+	}
+	defer third.Close()
+	if _, err := os.Stat(liveDir); !os.IsNotExist(err) {
+		t.Errorf("unlocked old dir survived: %v", err)
+	}
+}
+
 func TestCommitOnlyCommitsADeletedPath(t *testing.T) {
 	t.Parallel()
 	dir, repo := gittest.New(t.Context(), t)

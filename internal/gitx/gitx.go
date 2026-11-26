@@ -1004,6 +1004,7 @@ type OnlyIndex struct {
 	Path       string
 	BaseCommit string // "" on an unborn branch
 	BaseTree   string
+	live       *os.File // flock held for the commit's life; the sweep skips a locked dir
 }
 
 // NewOnlyIndex seeds a private index from HEAD's tree, or the empty tree on
@@ -1029,6 +1030,13 @@ func (r *Repo) NewOnlyIndex(ctx context.Context) (*OnlyIndex, error) {
 		return nil, err
 	}
 	o := &OnlyIndex{Path: filepath.Join(dir, "index"), BaseCommit: commit, BaseTree: tree}
+	if o.live, err = os.OpenFile(filepath.Join(dir, onlyLiveLock), os.O_CREATE|os.O_RDWR, 0o600); err == nil {
+		err = lockFile(o.live)
+	}
+	if err != nil {
+		o.Close()
+		return nil, err
+	}
 	o.Repo = r.WithIndexFile(o.Path)
 	// A one-tree read-tree -m over a copy of the real index keeps its stat
 	// data wherever the entry matches the tree, as git's own --only does;
@@ -1051,6 +1059,18 @@ func (r *Repo) NewOnlyIndex(ctx context.Context) (*OnlyIndex, error) {
 // as left by a killed run; no commit's hooks run that long.
 const staleOnlyAge = time.Hour
 
+const onlyLiveLock = "live.lock"
+
+// onlyDirLive reports whether a running commit holds dir's lock.
+func onlyDirLive(dir string) bool {
+	f, err := os.OpenFile(filepath.Join(dir, onlyLiveLock), os.O_RDWR, 0)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	return lockFile(f) != nil
+}
+
 // sweepStaleOnlyDirs removes rgit-only-* directories in the system temp dir
 // that a killed commit never closed.
 func sweepStaleOnlyDirs() {
@@ -1061,13 +1081,20 @@ func sweepStaleOnlyDirs() {
 			continue
 		}
 		if info, err := e.Info(); err == nil && time.Since(info.ModTime()) > staleOnlyAge {
-			_ = os.RemoveAll(filepath.Join(tmp, e.Name()))
+			if dir := filepath.Join(tmp, e.Name()); !onlyDirLive(dir) {
+				_ = os.RemoveAll(dir)
+			}
 		}
 	}
 }
 
 // Close removes the private index.
-func (o *OnlyIndex) Close() { _ = os.RemoveAll(filepath.Dir(o.Path)) }
+func (o *OnlyIndex) Close() {
+	if o.live != nil {
+		_ = o.live.Close()
+	}
+	_ = os.RemoveAll(filepath.Dir(o.Path))
+}
 
 // copyIndexTo byte-copies r's index file to dir/index, keeping its mtime:
 // git trusts an entry's stat only when it is older than the index file
