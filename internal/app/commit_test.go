@@ -520,3 +520,14 @@ func TestCollapseRepeats(t *testing.T) {
 		}
 	}
 }
+
+// TestCommitDryRunNeedsNoMessage pins that a preview takes no message, as git commit --dry-run.
+func TestCommitDryRunNeedsNoMessage(t *testing.T) {
+	t.Parallel()
+	dir, _ := gittest.New(t.Context(), t)
+	gittest.Write(t, dir, "new.txt", "hello\n")
+	var stdout, stderr strings.Builder
+	if code := runCommit(t.Context(), dir, []string{"--dry-run", "new.txt"}, &stdout, &stderr); code != exitcode.Success {
+		t.Fatalf("runCommit --dry-run = %v; stderr: %s", code, stderr.String())
+	}
+}

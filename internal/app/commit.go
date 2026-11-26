@@ -194,7 +194,7 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		return code
 	}
 
-	if !f.stageOnly && len(f.messages) == 0 && f.msgFile == "" && !autoMessage {
+	if !f.stageOnly && !f.dryRun && len(f.messages) == 0 && f.msgFile == "" && !autoMessage {
 		var code exitcode.Code
 		if noEdit, code = r.requireSequencerMessage(ctx, repo); code != exitcode.Success {
 			return code
