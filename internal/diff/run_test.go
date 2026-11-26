@@ -989,6 +989,22 @@ func TestRun_BinaryChangeReportsDashCounts(t *testing.T) {
 	}
 }
 
+// An untracked binary has no countable lines, so its row carries "-" counts like a tracked one.
+func TestRun_UntrackedBinaryReportsDashCounts(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.RepoWithFile(t.Context(), t, "keep.go", "package p\n", "chore: initial")
+	gittest.Write(t, dir, "blob.bin", "PNGFAKE\x00\x01binary")
+
+	report, err := Run(t.Context(), repo, dir, Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	fr, ok := findFile(report.Files, "blob.bin")
+	if !ok || len(fr.Rows) != 1 || fr.Rows[0].Status != StatusUntracked || fr.Rows[0].Added != "-" || fr.Rows[0].Deleted != "-" {
+		t.Errorf("blob.bin = %+v; want one UNTRACKED -/- row", fr)
+	}
+}
+
 // TestRun_FreeFloatingCommentIsUnanchorable pins docs/ANCHORS.md's example
 // at the unit lane: a comment separated from every declaration by a blank
 // line on both sides belongs to no symbol, so editing only it must surface
@@ -1159,6 +1175,23 @@ func TestRun_ZeroCountChangeIsNotAModeRow(t *testing.T) {
 		}
 		if len(fr.Rows) != 1 || fr.Rows[0].Status == StatusMode {
 			t.Errorf("empty.go rows = %+v; want no MODE row for an added empty file", fr.Rows)
+		}
+	})
+
+	t.Run("deleted empty file", func(t *testing.T) {
+		t.Parallel()
+		dir, repo := gittest.RepoWithFile(t.Context(), t, "empty.go", "", "chore: initial")
+		if err := os.Remove(filepath.Join(dir, "empty.go")); err != nil {
+			t.Fatal(err)
+		}
+
+		report, err := Run(t.Context(), repo, dir, Options{})
+		if err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		fr, ok := findFile(report.Files, "empty.go")
+		if !ok || len(fr.Rows) != 1 || fr.Rows[0].Status != StatusDeleted || fr.Rows[0].Added != "0" || fr.Rows[0].Deleted != "0" {
+			t.Errorf("empty.go = %+v; want one DELETED 0/0 row", fr)
 		}
 	})
 
