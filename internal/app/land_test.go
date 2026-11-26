@@ -2618,6 +2618,22 @@ func TestLandBranchJSON(t *testing.T) {
 	}
 }
 
+// TestLandBranchJSONFailureNamesTheRepo pins that a failed --branch --json reports the resolved repo path, not the raw argument.
+func TestLandBranchJSONFailureNamesTheRepo(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	d := testLandDeps(t)
+	var stdout, stderr strings.Builder
+	d.stdout, d.stderr = &stdout, &stderr
+	if code := runLandWith(t.Context(), dir, []string{"--repos", dir + "/./", "--branch", "nope", "--json"}, d); code == exitcode.Success {
+		t.Fatalf("want a failure; stdout=%q", stdout.String())
+	}
+	var got landBranchJSON
+	if err := json.Unmarshal([]byte(stdout.String()), &got); err != nil || got.Repo != dir {
+		t.Errorf("stdout = %q (%v); want repo "+dir, stdout.String(), err)
+	}
+}
+
 // TestLandHonestErrors pins the wording of a gate that edits tracked files, an origin that moved, and a dirty branch worktree.
 func TestLandHonestErrors(t *testing.T) {
 	t.Parallel()

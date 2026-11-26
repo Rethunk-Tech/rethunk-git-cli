@@ -516,7 +516,7 @@ One object, `{"repos": [...]}`, in run order. It has no `schema` field.
     { "path": "/src/a", "status": "pushed", "sha": "a1b2c3d4e5f6" },
     { "path": "/src/b", "status": "pr", "url": "https://github.com/o/b/pull/7", "state": "open" },
     { "path": "/src/c", "status": "red", "detail": "gate failed", "log": "/var/tmp/gate/c.log" },
-    { "path": "/src/d", "status": "skipped", "detail": "nothing ahead" }
+    { "path": "/src/d", "status": "skipped", "detail": "not ahead" }
   ]
 }
 ```
@@ -526,6 +526,14 @@ One object, `{"repos": [...]}`, in run order. It has no `schema` field.
 is `{path, order, status, detail, route, gate, ahead}` instead: `status`
 is `would-land` or `skipped`, and `ahead` is the array of commit lines
 that would land.
+
+### `rgit land --branch BRANCH --json`
+
+One object, also on failure: `{"repo", "branch", "sha", "log", "route", "code"}`.
+`repo` is the absolute path of the repository, `route` is `local` with
+`--no-push` or the landing route otherwise, `log` is the gate log, and `code`
+is the exit code. `sha`, `log` and `route` are empty strings when the land
+stopped before them.
 
 ## Rules the diff and commit forms obey
 

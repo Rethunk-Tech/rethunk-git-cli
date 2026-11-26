@@ -1364,6 +1364,9 @@ func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBra
 		fmt.Fprintf(d.stderr, "error: %s is not a git repo\n", repoArg)
 		return landBranchPrep{}, exitcode.GitFailure
 	}
+	if d.branchJSON != nil {
+		d.branchJSON.Repo = repo
+	}
 	if isLinkedWorktree(repo, d) {
 		fmt.Fprintf(d.stderr, "error: %s is not the main checkout\n", repo)
 		return landBranchPrep{}, exitcode.InvalidUsage
