@@ -64,8 +64,7 @@ func runLanguages(ctx context.Context, dir string, args []string, stdout, stderr
 			return refuseExtraArgs("languages", []string{a}, stderr, languagesHelp)
 		}
 	}
-	if porcelain && asJSON {
-		fmt.Fprintln(stderr, "rgit: --porcelain and --json are mutually exclusive")
+	if refuseFormatConflict(stderr, porcelain, asJSON, false, false) {
 		printUsage(stderr, languagesHelp)
 		return exitcode.InvalidUsage
 	}

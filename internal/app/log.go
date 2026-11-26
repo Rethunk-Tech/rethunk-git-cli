@@ -467,14 +467,7 @@ func runLogPathScoped(ctx context.Context, dir string, args []string, stdout, st
 }
 
 func refuseLogFormatConflict(porcelain, asJSON, patch bool, stderr io.Writer) exitcode.Code {
-	switch {
-	case porcelain && patch:
-		fmt.Fprintln(stderr, "rgit: --porcelain and --patch are mutually exclusive")
-	case porcelain && asJSON:
-		fmt.Fprintln(stderr, "rgit: --porcelain and --json are mutually exclusive")
-	case asJSON && patch:
-		fmt.Fprintln(stderr, "rgit: --json and --patch are mutually exclusive")
-	default:
+	if !refuseFormatConflict(stderr, porcelain, asJSON, patch, false) {
 		return exitcode.Success
 	}
 	printUsage(stderr, logHelp)

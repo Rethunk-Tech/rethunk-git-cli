@@ -303,21 +303,10 @@ func writeDiffReport(f *diffFlags, asJSON bool, report *diffpkg.Report, stdout, 
 }
 
 func refuseDiffFormatConflict(porcelain, asJSON, patch, quiet bool, stderr io.Writer) exitcode.Code {
-	switch {
-	case porcelain && quiet:
-		fmt.Fprintln(stderr, "rgit: --porcelain and --quiet are mutually exclusive")
-	case asJSON && quiet:
-		fmt.Fprintln(stderr, "rgit: --json and --quiet are mutually exclusive")
-	case porcelain && patch:
-		fmt.Fprintln(stderr, "rgit: --porcelain and --patch are mutually exclusive")
-	case asJSON && patch:
-		fmt.Fprintln(stderr, "rgit: --json and --patch are mutually exclusive")
-	case porcelain && asJSON:
-		fmt.Fprintln(stderr, "rgit: --porcelain and --json are mutually exclusive")
-	default:
-		return exitcode.Success
+	if refuseFormatConflict(stderr, porcelain, asJSON, patch, quiet) {
+		return exitcode.InvalidUsage
 	}
-	return exitcode.InvalidUsage
+	return exitcode.Success
 }
 
 type diffJSONRow struct {

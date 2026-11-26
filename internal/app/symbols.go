@@ -108,8 +108,7 @@ func parseSymbolsArgs(ctx context.Context, args []string, stdout, stderr io.Writ
 			opts.positionals = append(opts.positionals, arg)
 		}
 	}
-	if opts.porcelain && opts.asJSON {
-		fmt.Fprintln(stderr, "rgit: --porcelain and --json are mutually exclusive")
+	if refuseFormatConflict(stderr, opts.porcelain, opts.asJSON, false, false) {
 		printUsage(stderr, symbolsHelp)
 		return opts, exitcode.InvalidUsage, true
 	}

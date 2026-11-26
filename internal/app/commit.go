@@ -531,13 +531,8 @@ func (r *commitRun) validateFlags() exitcode.Code {
 	// Asking for machine-readable output and for no output is a
 	// contradiction, and silently letting one win would leave a script
 	// parsing an empty stream that it cannot tell from "nothing staged".
-	switch {
-	case f.porcelain && f.quiet:
-		return r.usage("--porcelain and --quiet are mutually exclusive")
-	case r.asJSON && f.quiet:
-		return r.usage("--json and --quiet are mutually exclusive")
-	case f.porcelain && r.asJSON:
-		return r.usage("--porcelain and --json are mutually exclusive")
+	if refuseFormatConflict(r.stderr, f.porcelain, r.asJSON, false, f.quiet) {
+		return exitcode.InvalidUsage
 	}
 	// git commit -i and -o are alternate ways to build the commit from
 	// paths (builtin/commit.c die_for_incompatible_opt4).
@@ -1177,6 +1172,7 @@ type commitJSONLeft struct {
 	Dirty    []string `json:"dirty"`
 	Upstream string   `json:"upstream,omitempty"`
 	Ahead    int      `json:"ahead"`
+}
 
 // targetRecords is the one derivation of the changed-target records both
 // --json and --porcelain promise: Unchanged results are skipped and the
@@ -1199,8 +1195,6 @@ func targetRecords(results []synth.TargetResult) []commitJSONTarget {
 		})
 	}
 	return targets
-}
-
 }
 
 func writeCommitJSON(w io.Writer, sha string, results []synth.TargetResult, l *leftState) error {

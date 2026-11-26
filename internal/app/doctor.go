@@ -72,8 +72,7 @@ func runDoctor(ctx context.Context, dir string, args []string, stdout, stderr io
 			return refuseExtraArgs("doctor", []string{a}, stderr, doctorHelp)
 		}
 	}
-	if porcelain && asJSON {
-		fmt.Fprintln(stderr, "rgit: --porcelain and --json are mutually exclusive")
+	if refuseFormatConflict(stderr, porcelain, asJSON, false, false) {
 		printUsage(stderr, doctorHelp)
 		return exitcode.InvalidUsage
 	}

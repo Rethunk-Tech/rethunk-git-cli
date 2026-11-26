@@ -558,6 +558,30 @@ func usageHint(help string) string {
 	return hint
 }
 
+// refuseFormatConflict prints the mutual-exclusion refusal for the first
+// conflicting pair among the output-format flags, in one fixed order for
+// every command, and reports whether it refused. The caller adds its usage
+// text and exit code. Commands without a flag pass false for it.
+func refuseFormatConflict(stderr io.Writer, porcelain, asJSON, patch, quiet bool) bool {
+	pairs := []struct {
+		a, b         bool
+		aName, bName string
+	}{
+		{porcelain, quiet, "--porcelain", "--quiet"},
+		{asJSON, quiet, "--json", "--quiet"},
+		{porcelain, patch, "--porcelain", "--patch"},
+		{asJSON, patch, "--json", "--patch"},
+		{porcelain, asJSON, "--porcelain", "--json"},
+	}
+	for _, p := range pairs {
+		if p.a && p.b {
+			fmt.Fprintf(stderr, "rgit: %s and %s are mutually exclusive\n", p.aName, p.bName)
+			return true
+		}
+	}
+	return false
+}
+
 func printUsage(w io.Writer, help string) { fmt.Fprint(w, usageHint(help)) }
 
 func refuseExtraArgs(cmdName string, args []string, stderr io.Writer, help string) exitcode.Code {
