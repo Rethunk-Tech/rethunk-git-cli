@@ -225,12 +225,14 @@ func nodeText(src []byte, n *ts.Node) string {
 // read a quoted key's full node text, including its delimiters, and only
 // need the same one-byte-off-each-end trim. ok=false means text is too
 // short to have both an opening and a closing quote to strip -- callers
-// treat that as unaddressable rather than fabricating a name.
+// treat that as unaddressable rather than fabricating a name. An empty
+// inner ("") is also ok=false: no anchor can name it.
 func stripQuotes(text string) (string, bool) {
 	if len(text) < 2 {
 		return "", false
 	}
-	return text[1 : len(text)-1], true
+	inner := text[1 : len(text)-1]
+	return inner, inner != ""
 }
 
 // namedDecl builds a Declaration staged as extent but named from nameHost's

@@ -98,7 +98,7 @@ func TestStripQuotes(t *testing.T) {
 	}{
 		{name: "ordinary double-quoted", in: `"abc"`, want: "abc", wantOK: true},
 		{name: "ordinary single-quoted", in: `'abc'`, want: "abc", wantOK: true},
-		{name: "empty quoted string", in: `""`, want: "", wantOK: true},
+		{name: "empty quoted string", in: `""`, wantOK: false},
 		{name: "single character: too short to have both quotes", in: `"`, wantOK: false},
 		{name: "empty string", in: "", wantOK: false},
 	}

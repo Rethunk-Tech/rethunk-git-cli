@@ -258,6 +258,18 @@ func TestDeclOrder_LanguageAdapters(t *testing.T) {
 			want: "quoted,also",
 		},
 		{
+			name: "yaml empty key is absent",
+			ext:  ".yaml",
+			src:  "\"\": 1\nb: 2\n",
+			want: "b",
+		},
+		{
+			name: "toml empty key is absent",
+			ext:  ".toml",
+			src:  "\"\" = 1\nb = 2\n",
+			want: "b",
+		},
+		{
 			name: "json top-level array is not a keyed object",
 			ext:  ".json",
 			src:  "[1, 2]\n",
