@@ -271,16 +271,7 @@ func (l *tsFamily) extendThroughSeparator(src []byte, node *ts.Node) uint {
 	if p := node.Parent(); p == nil || p.Kind() != "object" {
 		return end
 	}
-	for i := end; i < uint(len(src)); i++ {
-		switch src[i] {
-		case ' ', '\t':
-		case ',':
-			return i + 1
-		default:
-			return end
-		}
-	}
-	return end
+	return extentThroughComma(src, end)
 }
 
 // overloadRun tracks a run of same-name overload signatures

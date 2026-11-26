@@ -165,6 +165,22 @@ type separatorExtender interface {
 	extendThroughSeparator(src []byte, node *ts.Node) uint
 }
 
+// extentThroughComma returns the end of the comma that follows end after any
+// spaces or tabs, or end itself when something else (a newline included) comes
+// first.
+func extentThroughComma(src []byte, end uint) uint {
+	for i := end; i < uint(len(src)); i++ {
+		switch src[i] {
+		case ' ', '\t':
+		case ',':
+			return i + 1
+		default:
+			return end
+		}
+	}
+	return end
+}
+
 // declOnlyEndTrimmer is declOnlyExtent's optional refinement, separate from
 // trailingCommentTrimmer because the two fix unrelated defects (YAML's
 // scanner misattaching a comment vs. HTML's node absorbing a void element's

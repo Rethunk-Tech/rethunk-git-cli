@@ -61,16 +61,7 @@ func (r *rustLanguage) crossCheckUsesFullExtent() bool { return true }
 // trailing comma has nothing to extend over, so the scan simply finds none.
 func (r *rustLanguage) extendThroughSeparator(src []byte, node *ts.Node) uint {
 	end := node.EndByte()
-	for i := end; i < uint(len(src)); i++ {
-		switch src[i] {
-		case ' ', '\t':
-		case ',':
-			return i + 1
-		default:
-			return end
-		}
-	}
-	return end
+	return extentThroughComma(src, end)
 }
 
 // ImportKinds is both routes a name enters scope by: a "use" path, and the
