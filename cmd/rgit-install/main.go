@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/prereq"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/util"
 )
 
 // sqlGrammarModule is the Go module that publishes the SQL grammar's
@@ -563,17 +564,8 @@ func copyFile(src, dst string) error {
 	return writeInstallerFile(dst, data, 0o600)
 }
 
-func readInstallerFile(path string) (data []byte, err error) {
-	root, err := os.OpenRoot(filepath.Dir(path))
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if closeErr := root.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-	}()
-	return root.ReadFile(filepath.Base(path))
+func readInstallerFile(path string) ([]byte, error) {
+	return util.ReadFileInRoot(filepath.Dir(path), filepath.Base(path))
 }
 
 func writeInstallerFile(path string, data []byte, perm os.FileMode) (err error) {

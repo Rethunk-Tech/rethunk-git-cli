@@ -24,17 +24,7 @@ func GitFileMode(info os.FileInfo) string {
 // and it matches gitx.CatFile's convention for the same question asked of a
 // tree, so the two sides of a comparison read alike.
 func ReadFileIfExists(rootDir, path string) (content []byte, exists bool, err error) {
-	root, err := os.OpenRoot(rootDir)
-	if err != nil {
-		return nil, false, err
-	}
-	defer func() {
-		if closeErr := root.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-	}()
-
-	content, err = root.ReadFile(path)
+	content, err = ReadFileInRoot(rootDir, path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, false, nil
@@ -42,6 +32,21 @@ func ReadFileIfExists(rootDir, path string) (content []byte, exists bool, err er
 		return nil, false, err
 	}
 	return content, true, nil
+}
+
+// ReadFileInRoot reads rel beneath rootDir through os.Root, so rel cannot
+// escape the directory, and reports a Close failure when the read succeeded.
+func ReadFileInRoot(rootDir, rel string) (data []byte, err error) {
+	root, err := os.OpenRoot(rootDir)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if closeErr := root.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+	return root.ReadFile(rel)
 }
 
 // BinarySampleLimit matches core.bigFileThreshold scale used elsewhere in git's

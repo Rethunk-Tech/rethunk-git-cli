@@ -18,6 +18,7 @@ import (
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gitx"
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/resolve"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/util"
 )
 
 // splitAnchor splits a FILE:NAME anchor the way cli.ClassifyArgs's rule 5
@@ -86,17 +87,8 @@ func repoPath(root, prefix, path string) (string, error) {
 	return p, nil
 }
 
-func readWorktreeFile(rootDir, path string) (data []byte, err error) {
-	root, err := os.OpenRoot(rootDir)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if closeErr := root.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-	}()
-	return root.ReadFile(path)
+func readWorktreeFile(rootDir, path string) ([]byte, error) {
+	return util.ReadFileInRoot(rootDir, path)
 }
 
 // newTargetFlagSet builds the flag set both subcommands start from: git's
