@@ -234,3 +234,20 @@ func TestTrimFindHitsKeepsBestAndOneForZero(t *testing.T) {
 		t.Errorf("limit -1 kept %d hits; want all 3", len(got))
 	}
 }
+
+func TestRunFindNoHitJSONWritesAnEmptyObject(t *testing.T) {
+	t.Parallel()
+	dir := findRankRepo(t)
+	stdout, _, code := runApp(t, "-C", dir, "find", "--json", "ZZZNoSuchSymbol")
+	qt.Assert(t, qt.Equals(code, findNoMatch))
+	qt.Assert(t, qt.StringContains(stdout, `"hits": []`))
+}
+
+func TestRunFindMissingDirIsUsage(t *testing.T) {
+	t.Parallel()
+	dir := findRankRepo(t)
+	_, stderr, code := runApp(t, "-C", dir, "find", "init", "foo")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, `no such directory "foo"`))
+	qt.Assert(t, qt.Not(qt.StringContains(stderr, "rev-parse")))
+}

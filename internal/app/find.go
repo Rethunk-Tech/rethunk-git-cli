@@ -151,6 +151,12 @@ func runFind(ctx context.Context, dir string, args []string, stdout, stderr io.W
 	hits = trimFindHits(hits, opts.limit)
 	if len(hits) == 0 {
 		fmt.Fprintf(stderr, "rgit: no symbols matching %q in %s (%d files)\n", opts.query, strings.Join(dirLabels, ", "), fileCount)
+		if opts.asJSON {
+			if err := writeFindJSON(stdout, nil, 0); err != nil {
+				fmt.Fprintf(stderr, "rgit: find: %v\n", err)
+				return exitcode.GitFailure
+			}
+		}
 		return findNoMatch
 	}
 	if opts.limit >= 0 {
@@ -207,6 +213,10 @@ func planFindSearches(ctx context.Context, chdir string, dirs []string, stderr i
 		abs, code := absFindDir(chdir, d, stderr)
 		if code != exitcode.Success {
 			return nil, code
+		}
+		if _, err := os.Stat(abs); err != nil {
+			fmt.Fprintf(stderr, "rgit: find: no such directory %q\n%s", d, usageHint(findHelp))
+			return nil, exitcode.InvalidUsage
 		}
 		root, _, repo, code := openRepo(ctx, abs, stderr)
 		if code != exitcode.Success {
