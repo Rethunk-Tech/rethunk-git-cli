@@ -118,7 +118,7 @@ func TestRun_BlameUnresolvableAnchorNeverWidensToWholeFile(t *testing.T) {
 	stdout, stderr, code := runApp(t, "-C", cwd, "blame", "a.go:NoSuchFunc")
 	qt.Assert(t, qt.Equals(code, exitcode.AnchorUnresolvable))
 	qt.Assert(t, qt.Equals(stdout, ""))
-	qt.Assert(t, qt.StringContains(stderr, `"NoSuchFunc"`))
+	qt.Assert(t, qt.StringContains(stderr, `"a.go:NoSuchFunc"`))
 }
 
 // TestRun_BlameAmbiguousAnchor pins exit 4 through the same ResolveError

@@ -76,7 +76,7 @@ func TestRun_LogUnresolvableAnchor(t *testing.T) {
 	stdout, stderr, code := runApp(t, "-C", cwd, "log", "a.go:NoSuchFunc")
 	qt.Assert(t, qt.Equals(code, exitcode.AnchorUnresolvable))
 	qt.Assert(t, qt.Equals(stdout, ""))
-	qt.Assert(t, qt.StringContains(stderr, `"NoSuchFunc"`))
+	qt.Assert(t, qt.StringContains(stderr, `"a.go:NoSuchFunc"`))
 }
 
 // TestRun_LogAmbiguousAnchor mirrors blame's own case: a bare name matching

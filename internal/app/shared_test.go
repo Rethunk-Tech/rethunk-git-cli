@@ -115,3 +115,35 @@ func TestRun_DashCAfterTheCommandSaysWhereItGoes(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
 	qt.Assert(t, qt.StringContains(stderr, "-C goes before the command"))
 }
+
+func TestRun_UsageErrorsAreShortWithAPointer(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	for _, cmd := range []string{"show", "blame", "log", "diff"} {
+		_, stderr, code := runApp(t, "-C", dir, cmd, "--bogus", "a.go:A")
+		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage), qt.Commentf("%s", cmd))
+		qt.Assert(t, qt.StringContains(stderr, "see rgit "+cmd+" --help\n"), qt.Commentf("%s: %s", cmd, stderr))
+		qt.Assert(t, qt.IsTrue(strings.Count(stderr, "\n") < 12), qt.Commentf("%s: %s", cmd, stderr))
+	}
+}
+
+func TestRun_UnresolvedAnchorNamesTheFile(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	_, stderr, code := runApp(t, "-C", dir, "show", "a.go:Nope")
+	qt.Assert(t, qt.Equals(code, exitcode.AnchorUnresolvable))
+	qt.Assert(t, qt.StringContains(stderr, `"a.go:Nope"`))
+}
+
+// No t.Parallel: the case needs a working directory outside any repository.
+func TestRun_ReadCommandsOutsideARepoHintTheDashCSpelling(t *testing.T) {
+	dir := tempRepo(t)
+	top, err := filepath.EvalSymlinks(dir)
+	qt.Assert(t, qt.IsNil(err))
+	t.Chdir(t.TempDir())
+	for _, cmd := range []string{"show", "blame", "log", "symbols"} {
+		_, stderr, code := runApp(t, cmd, filepath.Join(dir, "a.go")+":A")
+		qt.Assert(t, qt.Not(qt.Equals(code, exitcode.Success)))
+		qt.Assert(t, qt.StringContains(stderr, "run: rgit -C "+top+" "+cmd+" … a.go:A\n"), qt.Commentf("%s: %s", cmd, stderr))
+	}
+}

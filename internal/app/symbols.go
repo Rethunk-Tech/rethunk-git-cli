@@ -178,6 +178,7 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 
 	root, prefix, repo, code := openRepo(ctx, dir, stderr)
 	if code != exitcode.Success {
+		hintRepoForTargets(ctx, stderr, "symbols", dir, opts.positionals)
 		return code
 	}
 	ignoreCase, err := repo.IgnoreCase(ctx)

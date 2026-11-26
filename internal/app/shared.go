@@ -398,6 +398,7 @@ type anchorSourceFunc func(ctx context.Context, repo *gitx.Repo, root, file stri
 func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, positional, sourceRev, cmdName, help string, fetchSource anchorSourceFunc) (repo *gitx.Repo, file string, src []byte, res *resolve.Resolution, anchorName string, code exitcode.Code) {
 	root, prefix, repo, code := openRepo(ctx, dir, stderr)
 	if code != exitcode.Success {
+		hintRepoForTargets(ctx, stderr, cmdName, dir, []string{positional})
 		return nil, "", nil, nil, "", code
 	}
 
@@ -431,13 +432,13 @@ func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, posi
 		// a pathspec, always) and classifies to nothing -- the same refusal
 		// as no positional at all, not a classified[0] panic.
 		fmt.Fprintf(stderr, "rgit: %s requires a FILE:SYMBOL anchor\n", cmdName)
-		fmt.Fprint(stderr, help)
+		printUsage(stderr, help)
 		return nil, "", nil, nil, "", exitcode.InvalidUsage
 	}
 	c := classified[0]
 	if c.Kind != cli.KindAnchor {
 		fmt.Fprintf(stderr, "rgit: %s requires a FILE:SYMBOL anchor, not a plain path\n", cmdName)
-		fmt.Fprint(stderr, help)
+		printUsage(stderr, help)
 		return nil, "", nil, nil, "", exitcode.InvalidUsage
 	}
 
@@ -480,6 +481,9 @@ func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, posi
 	res, err = resolve.Resolve(lang, src, c.Anchor.Name)
 	if err != nil {
 		if rerr, ok := errors.AsType[*resolve.ResolveError](err); ok {
+			if rerr.Path == "" {
+				rerr.Path = file
+			}
 			fmt.Fprintf(stderr, "rgit: %s\n", rerr.Error())
 			return nil, "", nil, nil, "", rerr.Code
 		}

@@ -217,6 +217,7 @@ func logSelectsAnchor(ctx context.Context, dir string, args []string, stderr io.
 
 	root, prefix, repo, code := openRepo(ctx, dir, stderr)
 	if code != exitcode.Success {
+		hintRepoForTargets(ctx, stderr, "log", dir, candidates)
 		return false, code
 	}
 	checker := &cli.GitPathChecker{Root: root, Prefix: prefix, Repo: repo}
@@ -417,6 +418,7 @@ func runLogPathScoped(ctx context.Context, dir string, args []string, stdout, st
 
 	root, prefix, repo, code := openRepo(ctx, dir, stderr)
 	if code != exitcode.Success {
+		hintRepoForTargets(ctx, stderr, "log", dir, fs.Args())
 		return code
 	}
 
