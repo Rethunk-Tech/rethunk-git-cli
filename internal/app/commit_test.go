@@ -532,15 +532,6 @@ func TestCommitDryRunNeedsNoMessage(t *testing.T) {
 	}
 }
 
-func runGit(t *testing.T, dir string, args ...string) string {
-	t.Helper()
-	out, err := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir}, args...)...).CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
-	return string(out)
-}
-
 // TestCommit_UntrackedOnlyDirectoryIsNothingToCommit pins that a directory holding only untracked files
 // is an unchanged target at apply time, as its preview says, not git add -u's raw pathspec error.
 func TestCommit_UntrackedOnlyDirectoryIsNothingToCommit(t *testing.T) {
