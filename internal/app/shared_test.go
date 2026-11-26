@@ -147,3 +147,35 @@ func TestRun_ReadCommandsOutsideARepoHintTheDashCSpelling(t *testing.T) {
 		qt.Assert(t, qt.StringContains(stderr, "run: rgit -C "+top+" "+cmd+" … a.go:A\n"), qt.Commentf("%s: %s", cmd, stderr))
 	}
 }
+
+// No t.Parallel: the cases need a working directory outside any repository.
+func TestRun_DashCHintBranches(t *testing.T) {
+	a, b := tempRepo(t), tempRepo(t)
+	colon := filepath.Join(t.TempDir(), "d:e")
+	qt.Assert(t, qt.IsNil(os.Rename(tempRepo(t), colon)))
+	t.Chdir(t.TempDir())
+	top := func(p string) string {
+		r, err := filepath.EvalSymlinks(p)
+		qt.Assert(t, qt.IsNil(err))
+		return r
+	}
+	tests := []struct {
+		name string
+		args []string
+		want string // "" means no hint at all
+	}{
+		{"targets in two repos", []string{"commit", "-m", "x", filepath.Join(a, "a.go"), filepath.Join(b, "a.go")}, ""},
+		{"a repo root names itself", []string{"commit", "-m", "x", a}, "run: rgit -C " + top(a) + " commit … .\n"},
+		{"a colon in the repo's own path is not an anchor", []string{"commit", "-m", "x", filepath.Join(colon, "a.go")}, "run: rgit -C " + top(colon) + " commit … a.go\n"},
+		{"-C already given", []string{"-C", t.TempDir(), "commit", "-m", "x", filepath.Join(a, "a.go")}, ""},
+	}
+	for _, tt := range tests {
+		_, stderr, code := runApp(t, tt.args...)
+		qt.Assert(t, qt.Not(qt.Equals(code, exitcode.Success)), qt.Commentf("%s", tt.name))
+		if tt.want == "" {
+			qt.Assert(t, qt.Not(qt.StringContains(stderr, "run: rgit -C")), qt.Commentf("%s: %s", tt.name, stderr))
+		} else {
+			qt.Assert(t, qt.StringContains(stderr, tt.want), qt.Commentf("%s: %s", tt.name, stderr))
+		}
+	}
+}
