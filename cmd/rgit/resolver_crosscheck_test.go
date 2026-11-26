@@ -74,7 +74,7 @@ func TestLSP_DocumentSymbolsDecodesBothUnionShapes(t *testing.T) {
 			}
 			defer func() { _ = client.Close() }()
 
-			got, err := client.DocumentSymbols(t.Context(), "/tmp/a.go", []byte("package p\n"))
+			got, err := client.DocumentSymbols(t.Context(), "/tmp/a.go", "go", []byte("package p\n"))
 			if err != nil {
 				t.Fatalf("DocumentSymbols: %v", err)
 			}

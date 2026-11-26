@@ -251,7 +251,7 @@ func TestDocumentSymbols_SendsDidClose(t *testing.T) {
 	defer func() { _ = client.Close() }()
 
 	const path = "/tmp/a.go"
-	if _, err := client.DocumentSymbols(t.Context(), path, []byte("package p\n")); err != nil {
+	if _, err := client.DocumentSymbols(t.Context(), path, "go", []byte("package p\n")); err != nil {
 		t.Fatalf("DocumentSymbols: %v", err)
 	}
 
@@ -308,5 +308,26 @@ func TestFlattenTreatsRangeEndAsExclusive(t *testing.T) {
 				t.Errorf("flattenFlat EndLine = %v, want %d", flat, tc.wantEnd)
 			}
 		})
+	}
+}
+
+func TestLanguageKindForName(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		lang, path string
+		want       protocol.LanguageKind
+	}{
+		{"shell", "deploy", protocol.LanguageKindShellScript},
+		{"markdown", "note.mdx", protocol.LanguageKindMarkdown},
+		{"tsx", "page.tsx", protocol.LanguageKindTypeScriptReact},
+		{"tsx", "bin", protocol.LanguageKindTypeScriptReact},
+	} {
+		got, ok := LanguageKindForName(tt.lang, tt.path)
+		if !ok || got != tt.want {
+			t.Errorf("LanguageKindForName(%q, %q) = (%q, %v); want %q", tt.lang, tt.path, got, ok, tt.want)
+		}
+	}
+	if _, ok := LanguageKindForName("toml", "x.toml"); ok {
+		t.Error("toml has no languageId")
 	}
 }

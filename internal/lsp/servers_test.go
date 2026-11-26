@@ -99,7 +99,7 @@ func TestDial_NewServers(t *testing.T) {
 			}
 			defer func() { _ = client.Close() }()
 
-			syms, err := client.DocumentSymbols(ctx, path, []byte(tc.src))
+			syms, err := client.DocumentSymbols(ctx, path, tc.lang, []byte(tc.src))
 			if err != nil {
 				t.Fatalf("DocumentSymbols: %v", err)
 			}

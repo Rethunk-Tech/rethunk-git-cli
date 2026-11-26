@@ -246,7 +246,7 @@ func TestDialStdio_SuccessfulHandshake(t *testing.T) {
 	if second := client.Close(); second != first { //nolint:errorlint // closeOnce must return the identical value
 		t.Errorf("second Close() = %v; want same as first %v (closeOnce)", second, first)
 	}
-	if _, err := client.DocumentSymbols(t.Context(), "x.go", []byte("package x\n")); err == nil {
+	if _, err := client.DocumentSymbols(t.Context(), "x.go", "go", []byte("package x\n")); err == nil {
 		t.Error("DocumentSymbols after Close = nil error; want one -- the connection should already be closed")
 	}
 }

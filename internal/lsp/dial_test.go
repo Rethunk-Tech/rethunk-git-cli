@@ -259,7 +259,7 @@ func TestDialStdio_CloseTearsDownConnectionThenProcess(t *testing.T) {
 	if degraded {
 		t.Fatal("Dial degraded with bash-language-server on PATH")
 	}
-	if _, err := client.DocumentSymbols(ctx, path, src); err != nil {
+	if _, err := client.DocumentSymbols(ctx, path, "shell", src); err != nil {
 		t.Fatalf("DocumentSymbols before Close: %v", err)
 	}
 
@@ -270,7 +270,7 @@ func TestDialStdio_CloseTearsDownConnectionThenProcess(t *testing.T) {
 	// pinning. What matters is that the connection came down.
 	_ = client.Close()
 
-	if _, err := client.DocumentSymbols(ctx, path, src); err == nil {
+	if _, err := client.DocumentSymbols(ctx, path, "shell", src); err == nil {
 		t.Error("DocumentSymbols after Close = nil error; want one -- the connection should already be closed")
 	}
 }
@@ -302,7 +302,7 @@ func TestDialStdio_CloseLeavesNothingInTMPDIR(t *testing.T) {
 	if degraded {
 		t.Fatal("Dial degraded with pyright-langserver on PATH")
 	}
-	if _, err := client.DocumentSymbols(ctx, path, src); err != nil {
+	if _, err := client.DocumentSymbols(ctx, path, "python", src); err != nil {
 		t.Fatalf("DocumentSymbols: %v", err)
 	}
 	_ = client.Close()

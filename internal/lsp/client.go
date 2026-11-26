@@ -115,14 +115,16 @@ func (c *Client) Close() error {
 }
 
 // DocumentSymbols requests textDocument/documentSymbol for path with
-// content src and returns the flattened, shape-normalized result. ctx is
+// content src and returns the flattened, shape-normalized result. lang is
+// the caller's resolved resolve.Language.Name(), which names the languageId
+// when path's extension cannot (a shebang script, .mdx). ctx is
 // wrapped in queryDeadline internally; callers do not need their own
 // timeout for this specific call.
-func (c *Client) DocumentSymbols(ctx context.Context, path string, src []byte) ([]Symbol, error) {
+func (c *Client) DocumentSymbols(ctx context.Context, path, lang string, src []byte) ([]Symbol, error) {
 	ctx, cancel := context.WithTimeout(ctx, queryDeadline())
 	defer cancel()
 
-	langID, ok := LanguageKindFor(path)
+	langID, ok := LanguageKindForName(lang, path)
 	if !ok {
 		// resolve.ForExtension has already gated which extensions reach
 		// here in practice, but a newly registered grammar can land
@@ -300,6 +302,45 @@ func flattenFlat(syms []protocol.SymbolInformation) []Symbol {
 		})
 	}
 	return out
+}
+
+// LanguageKindForName is LanguageKindFor with a fallback to lang, a
+// resolve.Language.Name(), for a path whose extension carries no mapping
+// (shebang scripts, .mdx). The extension wins so the TypeScript/TSX/JSX/JS
+// split stays by extension.
+func LanguageKindForName(lang, path string) (protocol.LanguageKind, bool) {
+	if kind, ok := LanguageKindFor(path); ok {
+		return kind, true
+	}
+	switch lang {
+	case "go":
+		return protocol.LanguageKindGo, true
+	case "typescript":
+		return protocol.LanguageKindTypeScript, true
+	case "tsx":
+		return protocol.LanguageKindTypeScriptReact, true
+	case "python":
+		return protocol.LanguageKindPython, true
+	case "rust":
+		return protocol.LanguageKindRust, true
+	case "shell", "zsh":
+		return protocol.LanguageKindShellScript, true
+	case "yaml":
+		return protocol.LanguageKindYAML, true
+	case "json":
+		return protocol.LanguageKindJSON, true
+	case "jsonc":
+		return protocol.LanguageKind("jsonc"), true
+	case "css":
+		return protocol.LanguageKindCSS, true
+	case "scss":
+		return protocol.LanguageKindSCSS, true
+	case "markdown":
+		return protocol.LanguageKindMarkdown, true
+	case "html":
+		return protocol.LanguageKindHTML, true
+	}
+	return "", false
 }
 
 // LanguageKindFor maps a file extension to the LSP languageId didOpen

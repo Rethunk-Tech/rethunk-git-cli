@@ -10,9 +10,9 @@ import (
 // the three places a language's LSP wiring is encoded (AGENTS.md's delegation
 // boundary): an adapter here in internal/resolve, internal/lsp/servers.go's
 // servers map (keyed by Language.Name()), and internal/lsp/client.go's
-// LanguageKindFor (keyed by file extension). This test asserts every
+// LanguageKindForName (keyed by file extension, then language name). This test asserts every
 // servers-map language also has a working didOpen languageId, so a newly
-// added server entry with no matching LanguageKindFor case fails here
+// added server entry with no matching LanguageKindForName case fails here
 // instead of degrading silently at runtime (client.go's DocumentSymbols).
 //
 // This lives in package resolve, not lsp, because it needs Languages()'s own
@@ -39,15 +39,14 @@ func TestServerLanguages_HaveLanguageKindMapping(t *testing.T) {
 				continue
 			}
 
-			mapped := false
 			for _, ext := range exts {
-				if _, ok := lsp.LanguageKindFor("fixture" + ext); ok {
-					mapped = true
-					break
+				if _, ok := lsp.LanguageKindForName(name, "fixture"+ext); !ok {
+					t.Errorf("language %q (server bin %q) has no languageId for extension %s", name, server.Bin, ext)
 				}
 			}
-			if !mapped {
-				t.Errorf("language %q (extensions %v, server bin %q) has no LanguageKindFor mapping for any of its extensions", name, exts, server.Bin)
+			// An extensionless file (a shebang script) resolves by language alone.
+			if _, ok := lsp.LanguageKindForName(name, "fixture"); !ok {
+				t.Errorf("language %q (server bin %q) has no languageId for an extensionless file", name, server.Bin)
 			}
 		}
 	}

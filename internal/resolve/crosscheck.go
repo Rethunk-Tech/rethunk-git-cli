@@ -51,7 +51,7 @@ func CrossCheckExtents(ctx context.Context, sess *lsp.Session, lang Language, re
 	if deg {
 		return true, nil
 	}
-	symbols, err := client.DocumentSymbols(ctx, absPath, src)
+	symbols, err := client.DocumentSymbols(ctx, absPath, lang.Name(), src)
 	if err != nil {
 		return true, nil
 	}

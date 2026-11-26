@@ -102,7 +102,7 @@ func main() {
 			f.Close()
 			continue
 		}
-		symbols, err := client.DocumentSymbols(ctx, abs, src)
+		symbols, err := client.DocumentSymbols(ctx, abs, name, src)
 		cancel()
 		if err != nil {
 			sess.Close()
