@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -962,6 +963,12 @@ func landOne(r string, d landDeps) landResult {
 	if err != nil {
 		return landResult{Repo: r, Kind: landSkipped, Lines: []string{r + ": skipped (not a git repo)"}}
 	}
+	// Another land of this repo would gate and push the same commits; wait for it, then see what it left.
+	unlock, err := gitx.New(repo).LockLand(cmp.Or(d.ctx, context.Background()))
+	if err != nil {
+		return landResult{Repo: repo, Kind: landSkipped, Lines: []string{repo + ": skipped (cannot take the land lock: " + err.Error() + ")"}}
+	}
+	defer unlock()
 	res := landResult{Repo: repo}
 
 	def, ok := defaultBranchChecked(repo, d)
@@ -1331,6 +1338,12 @@ type landBranchPrep struct {
 }
 
 func landBranch(ctx context.Context, repoArg, branch string, wait, install, noPush bool, d landDeps) exitcode.Code {
+	unlock, err := gitx.New(repoArg).LockLand(ctx)
+	if err != nil {
+		fmt.Fprintf(d.stderr, "error: cannot take the land lock for %s: %v\n", repoArg, err)
+		return exitcode.GitFailure
+	}
+	defer unlock()
 	prep, code := prepareLandBranch(repoArg, branch, noPush, d)
 	if code != exitcode.Success {
 		return code

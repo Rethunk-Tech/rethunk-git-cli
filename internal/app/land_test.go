@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -3458,5 +3459,33 @@ func TestCherryUpstreamRefusesUnpushedCommits(t *testing.T) {
 	gittest.Commit(t.Context(), t, dir, "feat only")
 	if cherryUpstream(dir, "main", "feat", d) {
 		t.Error("branch with a commit absent from origin/main reported upstream; branch -D would drop it")
+	}
+}
+
+// TestLandSerializesPerRepo pins that two lands of one repo do not gate at once: the second waits, then finds nothing ahead.
+func TestLandSerializesPerRepo(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	gittest.Write(t, dir, "new.txt", "new\n")
+	gitOut(t, dir, "add", "new.txt")
+	gitOut(t, dir, "commit", "-q", "-m", "new")
+	var gates, inFlight, maxInFlight atomic.Int32
+	d := testLandDeps(t)
+	d.gate = func(string, bool) (string, error) {
+		gates.Add(1)
+		n := inFlight.Add(1)
+		maxInFlight.Store(max(maxInFlight.Load(), n))
+		time.Sleep(400 * time.Millisecond)
+		inFlight.Add(-1)
+		return "", nil
+	}
+	var wg sync.WaitGroup
+	results := make([]landResult, 2)
+	for i := range results {
+		wg.Go(func() { results[i] = landOne(dir, d) })
+	}
+	wg.Wait()
+	if gates.Load() != 1 || maxInFlight.Load() != 1 {
+		t.Errorf("gates = %d, max in flight = %d; want 1, 1 (%+v)", gates.Load(), maxInFlight.Load(), results)
 	}
 }

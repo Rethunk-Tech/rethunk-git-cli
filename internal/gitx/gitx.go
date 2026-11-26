@@ -1182,11 +1182,25 @@ func (r *Repo) lockCommits(ctx context.Context, notice io.Writer, after time.Dur
 	if err != nil {
 		return nil, err
 	}
+	return lockNamed(ctx, gitDir, "rgit-commit.lock", "commit", notice, after)
+}
+
+// LockLand serializes `rgit land` per repository: the lock lives in the common git dir, so
+// every worktree of one repo shares it, and waits like LockCommits.
+func (r *Repo) LockLand(ctx context.Context) (unlock func(), err error) {
+	common, err := r.checkedLine(ctx, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		return nil, err
+	}
+	return lockNamed(ctx, common, "rgit-land.lock", "land", os.Stderr, 2*time.Second)
+}
+
+func lockNamed(ctx context.Context, gitDir, name, what string, notice io.Writer, after time.Duration) (unlock func(), err error) {
 	root, err := os.OpenRoot(gitDir)
 	if err != nil {
 		return nil, err
 	}
-	f, err := root.OpenFile("rgit-commit.lock", os.O_CREATE|os.O_RDWR, 0o600)
+	f, err := root.OpenFile(name, os.O_CREATE|os.O_RDWR, 0o600)
 	_ = root.Close()
 	if err != nil {
 		return nil, err
@@ -1203,8 +1217,8 @@ func (r *Repo) lockCommits(ctx context.Context, notice io.Writer, after time.Dur
 			return nil, err
 		}
 		if !noticed && !time.Now().Before(deadline) {
-			holder, _ := os.ReadFile(filepath.Clean(filepath.Join(gitDir, "rgit-commit.lock")))
-			msg := "rgit: waiting for the commit lock held by another rgit commit"
+			holder, _ := os.ReadFile(filepath.Clean(filepath.Join(gitDir, name)))
+			msg := "rgit: waiting for the " + what + " lock held by another rgit " + what
 			if pid := strings.TrimSpace(string(holder)); pid != "" {
 				msg += " (pid " + pid + ")"
 			}
