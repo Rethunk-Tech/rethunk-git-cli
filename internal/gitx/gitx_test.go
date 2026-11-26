@@ -266,7 +266,7 @@ func TestCatFileSample(t *testing.T) {
 
 func TestCatFilePromisorMissingIsAnError(t *testing.T) {
 	t.Parallel()
-	_, repo := newBloblessClone(t)
+	_, repo := gittest.BloblessClone(t.Context(), t)
 	ctx := t.Context()
 
 	if _, exists, err := repo.CatFile(ctx, "HEAD", "absent.go"); err != nil || exists {
@@ -311,32 +311,6 @@ func assertPromisorMissing(t *testing.T, name string, exists bool, err error) {
 	if strings.Contains(string(gerr.Stderr), "promisor object is unavailable") {
 		t.Errorf("%s stderr contains synthetic promisor message: %q", name, gerr.Stderr)
 	}
-}
-
-func newBloblessClone(t *testing.T) (string, *gitx.Repo) {
-	t.Helper()
-	dir, _ := gittest.New(t.Context(), t)
-	const missingBlob = "1111111111111111111111111111111111111111"
-	treeInput := fmt.Sprintf("100644 blob %s\ttracked.go\n", missingBlob)
-	tree := runGitInput(t, dir, treeInput, "mktree", "--missing")
-	commit := gittest.Git(t.Context(), t, dir, "commit-tree", tree, "-m", "chore: add tracked file")
-	gittest.Git(t.Context(), t, dir, "update-ref", "refs/heads/main", strings.TrimSpace(commit))
-	gittest.Git(t.Context(), t, dir, "symbolic-ref", "HEAD", "refs/heads/main")
-	gittest.Git(t.Context(), t, dir, "remote", "add", "origin", filepath.Join(t.TempDir(), "unreachable"))
-	gittest.Git(t.Context(), t, dir, "config", "remote.origin.promisor", "true")
-	gittest.Git(t.Context(), t, dir, "config", "extensions.partialClone", "origin")
-	return dir, gitx.New(dir)
-}
-
-func runGitInput(t *testing.T, dir, input string, args ...string) string {
-	t.Helper()
-	cmd := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir}, args...)...) //nolint:gosec // test arguments go directly to the real git binary, never through a shell
-	cmd.Stdin = strings.NewReader(input)
-	out, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("git %s: %v", strings.Join(args, " "), err)
-	}
-	return strings.TrimSpace(string(out))
 }
 
 // TestBlame pins the -L bounding itself: blaming lines 2,2 of a three-line
