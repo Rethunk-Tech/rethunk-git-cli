@@ -3392,3 +3392,26 @@ func TestLandBehindWithConflictingRebaseIsAborted(t *testing.T) {
 		t.Error("skipped land pushed")
 	}
 }
+
+func TestInstallPushedReposSkipsWhenHeadIsNotPushed(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	marker := filepath.Join(t.TempDir(), "installed")
+	makefile := ".PHONY: install\ninstall:\n\t@touch " + marker + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "Makefile"), []byte(makefile), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d := testLandDeps(t)
+	var stdout strings.Builder
+	d.stdout = &stdout
+	res := landResult{Repo: dir, Kind: landPushed, SHA: strings.Repeat("0", 40)}
+	if !installPushedRepos(t.Context(), []landResult{res}, d) {
+		t.Error("install of an unpushed HEAD did not report failure")
+	}
+	if !strings.Contains(stdout.String(), ": skipped install (HEAD ") {
+		t.Errorf("stdout = %q; want the skipped-install line", stdout.String())
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("make install ran for a HEAD that was never pushed")
+	}
+}
