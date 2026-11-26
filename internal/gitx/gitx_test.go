@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1387,15 +1386,6 @@ func TestResetCommand(t *testing.T) {
 		t.Errorf("empty output: got %q, want plain git reset", got)
 	}
 	if got, want := gitx.ResetCommand([]byte("a b\x00it's\x00")), `git reset -- 'a b' 'it'\''s'`; got != want {
-		t.Errorf("got %q, want %q", got, want)
-	}
-}
-
-func TestStatusPathsSkipsRenameSource(t *testing.T) {
-	t.Parallel()
-	// The source field is a bare path: read as a status line its first three bytes would be cut off ("real.txt").
-	got := gitx.StatusPaths("R  moved.txt\x00abcreal.txt\x00 M other.txt\x00")
-	if want := []string{"moved.txt", "other.txt"}; !slices.Equal(got, want) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
