@@ -263,7 +263,7 @@ func GitShim(t *testing.T, body string) (bin string) {
 		t.Skipf("git not on PATH: %v", err)
 	}
 	bin = t.TempDir()
-	script := "#!/bin/sh\n" + body + "\nexec " + ShellQuote(gitPath) + " \"$@\"\n"
+	script := "#!/bin/sh\n" + body + "\nexec " + gitx.ShellQuote(gitPath) + " \"$@\"\n"
 	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0o755); err != nil { //nolint:gosec // executable git shim is the behavior under test
 		t.Fatal(err)
 	}
@@ -276,12 +276,9 @@ func GitShim(t *testing.T, body string) (bin string) {
 func CountingGit(t *testing.T, subcommand string) (bin, countFile string) {
 	t.Helper()
 	countFile = filepath.Join(t.TempDir(), "count")
-	count := "printf x >> " + ShellQuote(countFile)
+	count := "printf x >> " + gitx.ShellQuote(countFile)
 	if subcommand != "" {
-		count = "case \" $* \" in *" + ShellQuote(" "+subcommand+" ") + "*) " + count + " ;; esac"
+		count = "case \" $* \" in *" + gitx.ShellQuote(" "+subcommand+" ") + "*) " + count + " ;; esac"
 	}
 	return GitShim(t, count), countFile
 }
-
-// ShellQuote single-quotes s for a POSIX shell script, escaping embedded quotes.
-func ShellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }

@@ -385,7 +385,7 @@ func shellWord(s string) string {
 	if s != "" && !strings.ContainsAny(s, " \t\n'\"$`\\*?[]{}()<>|&;!#~") {
 		return s
 	}
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+	return gitx.ShellQuote(s)
 }
 
 // anchorSourceFunc fetches the blob resolveAnchorExtent resolves an

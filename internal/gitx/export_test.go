@@ -15,3 +15,6 @@ func SetBeforeOnlyCommit(f func()) (restore func()) {
 func (r *Repo) FinishOnlyCommit(ctx context.Context, opts CommitOptions) error {
 	return r.finishOnlyCommit(ctx, r, opts)
 }
+
+// ResetCommand exposes resetCommand to the external test package.
+var ResetCommand = resetCommand

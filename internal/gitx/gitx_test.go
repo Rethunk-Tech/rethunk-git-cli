@@ -1348,7 +1348,7 @@ func TestCommitOnlyInterruptedAfterLandingSyncsIndex(t *testing.T) {
 	ignoreConfigDefinedHooks(t)
 	dir, repo := gittest.RepoWithFile(t.Context(), t, "a.txt", "a before\n", "chore: initial")
 	marker := filepath.Join(t.TempDir(), "landed")
-	gittest.InstallHook(t.Context(), t, dir, "post-commit", "#!/bin/sh\nexec >/dev/null 2>&1\ntouch "+gittest.ShellQuote(marker)+"\nsleep 5\n")
+	gittest.InstallHook(t.Context(), t, dir, "post-commit", "#!/bin/sh\nexec >/dev/null 2>&1\ntouch "+gitx.ShellQuote(marker)+"\nsleep 5\n")
 	gittest.Write(t, dir, "a.txt", "a after\n")
 	only, err := repo.NewOnlyIndex(t.Context())
 	if err != nil {
@@ -1377,5 +1377,15 @@ func TestCommitOnlyInterruptedAfterLandingSyncsIndex(t *testing.T) {
 	}
 	if got := gittest.Git(t.Context(), t, dir, "status", "--porcelain"); got != "" {
 		t.Errorf("status after interrupted --only commit = %q; want the index in sync with HEAD", got)
+	}
+}
+
+func TestResetCommand(t *testing.T) {
+	t.Parallel()
+	if got := gitx.ResetCommand(nil); got != "git reset" {
+		t.Errorf("empty output: got %q, want plain git reset", got)
+	}
+	if got, want := gitx.ResetCommand([]byte("a b\x00it's\x00")), `git reset -- 'a b' 'it'\''s'`; got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }

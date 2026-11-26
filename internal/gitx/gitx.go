@@ -1393,7 +1393,7 @@ func (o *OnlyIndex) installGuardHooks(ctx context.Context, repo *Repo) (hooksPat
 		if info, err := os.Stat(filepath.Join(userHooks, name)); err != nil || info.Mode()&0o111 == 0 {
 			continue
 		}
-		wrapper := "#!/bin/sh\nexec '" + strings.ReplaceAll(filepath.Join(userHooks, name), "'", `'\''`) + "' \"$@\"\n"
+		wrapper := "#!/bin/sh\nexec " + ShellQuote(filepath.Join(userHooks, name)) + " \"$@\"\n"
 		if err := os.WriteFile(filepath.Join(hooksPath, name), []byte(wrapper), 0o700); err != nil { //nolint:gosec // git runs hooks only when executable
 			return "", "", err
 		}
@@ -1485,12 +1485,24 @@ func (r *Repo) resetHint(ctx context.Context) string {
 	if err != nil {
 		return "git reset"
 	}
-	var quoted []string
-	for name := range bytes.SplitSeq(bytes.TrimRight(out, "\x00"), []byte{0}) {
-		quoted = append(quoted, "'"+strings.ReplaceAll(string(name), "'", `'\''`)+"'")
+	return resetCommand(out)
+}
+
+// resetCommand renders the reset for diff-tree -z output; no paths means a plain reset.
+func resetCommand(out []byte) string {
+	names := SplitNUL(out)
+	if len(names) == 0 {
+		return "git reset"
+	}
+	quoted := make([]string, len(names))
+	for i, name := range names {
+		quoted[i] = ShellQuote(name)
 	}
 	return "git reset -- " + strings.Join(quoted, " ")
 }
+
+// ShellQuote single-quotes s for a POSIX shell, escaping embedded quotes.
+func ShellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
 // checkOnlyBase is the after-the-fact check when onlyGuardHook never armed
 // its marker: it verifies the private index was built on the commit git

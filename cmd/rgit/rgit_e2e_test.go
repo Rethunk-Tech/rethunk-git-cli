@@ -24,6 +24,7 @@ import (
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gitx"
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/lsptest"
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/resolve"
 )
@@ -1179,7 +1180,7 @@ func runBashCompletion(t *testing.T, repo, bashScript string, words ...string) [
 func shellQuoteAll(words []string) string {
 	quoted := make([]string, len(words))
 	for i, w := range words {
-		quoted[i] = "'" + strings.ReplaceAll(w, "'", `'\''`) + "'"
+		quoted[i] = gitx.ShellQuote(w)
 	}
 	return strings.Join(quoted, " ")
 }
