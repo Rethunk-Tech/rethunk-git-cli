@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/diff"
@@ -230,10 +231,8 @@ func planStage(ctx context.Context, repo *gitx.Repo, root string, targets []Targ
 		}
 	}
 
-	for _, fp := range plan.files {
-		if err := plan.finishFile(ctx, fp, named[fp.path], sess, root); err != nil {
-			return nil, err
-		}
+	if err := plan.finishFiles(ctx, named, sess, root); err != nil {
+		return nil, err
 	}
 
 	plan.countFreshFileSeparators()
@@ -429,29 +428,55 @@ func (p *Plan) planSymbol(fp *filePlan, t Target, named map[string]map[string]bo
 	return nil
 }
 
-// finishFile adds the siblings and preamble for one file and runs its
-// language-server cross-check. named is the anchors the caller named in it.
-func (p *Plan) finishFile(ctx context.Context, fp *filePlan, named map[string]bool, sess *lsp.Session, root string) error {
+// maxConcurrentCrossChecks bounds the files whose language-server queries run
+// at once; the work is round trips, not CPU.
+const maxConcurrentCrossChecks = 8
+
+// finishFiles adds every file's siblings, then runs the per-file
+// language-server cross-checks concurrently (one batched query per file, not
+// one per anchor), then folds the outcomes and adds each preamble in file
+// order. A mismatch still aborts the whole plan before Apply runs.
+func (p *Plan) finishFiles(ctx context.Context, named map[string]map[string]bool, sess *lsp.Session, root string) error {
 	// Ahead of the cross-check, so a sibling pulled in here is verified
 	// against the language server in the same batched query its anchor is.
-	siblings, err := fp.addReferencedSiblings(named)
-	if err != nil {
-		return err
-	}
-	p.addAutoResults(fp, siblings)
-
-	// One batched language-server query per file, not one per anchor --
-	// every anchor named in this file has already been
-	// resolved and its op built above, so a mismatch here still aborts
-	// the whole plan before Apply ever runs.
-	tsOnly, err := fp.crossCheckPending(ctx, sess, root)
-	if err != nil {
-		return err
-	}
-	if tsOnly {
-		p.TSOnly = true
+	for _, fp := range p.files {
+		siblings, err := fp.addReferencedSiblings(named[fp.path])
+		if err != nil {
+			return err
+		}
+		p.addAutoResults(fp, siblings)
 	}
 
+	tsOnly := make([]bool, len(p.files))
+	errs := make([]error, len(p.files))
+	sem := make(chan struct{}, maxConcurrentCrossChecks)
+	var wg sync.WaitGroup
+	for i, fp := range p.files {
+		sem <- struct{}{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			tsOnly[i], errs[i] = fp.crossCheckPending(ctx, sess, root)
+		}()
+	}
+	wg.Wait()
+
+	for i, fp := range p.files {
+		if errs[i] != nil {
+			return errs[i]
+		}
+		if tsOnly[i] {
+			p.TSOnly = true
+		}
+		p.finishFile(fp, named[fp.path])
+	}
+	return nil
+}
+
+// finishFile adds the preamble for one file once its cross-check passed.
+// named is the anchors the caller named in it.
+func (p *Plan) finishFile(fp *filePlan, named map[string]bool) {
 	pseudos := fp.addPreamble(named)
 	p.addAutoResults(fp, pseudos)
 	if len(pseudos) > 0 {
@@ -460,7 +485,6 @@ func (p *Plan) finishFile(ctx context.Context, fp *filePlan, named map[string]bo
 	for _, e := range fp.escalated {
 		p.Escalated = append(p.Escalated, fp.path+":"+e)
 	}
-	return nil
 }
 
 // autoOp pairs one anchor staged without the caller naming it -- a new

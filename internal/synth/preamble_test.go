@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -337,5 +338,42 @@ func TestPlanStage_UntrackedSymlinkCountsItsTargetText(t *testing.T) {
 	}
 	if len(plan.Results) != 2 {
 		t.Errorf("Results = %+v; want 2 rows", plan.Results)
+	}
+}
+
+// TestPlanStage_ManyFilesKeepFileOrderAcrossConcurrentCrossChecks pins that
+// the per-file language-server checks, run concurrently, still fold their
+// outcomes and preambles in file order and account for every target.
+func TestPlanStage_ManyFilesKeepFileOrderAcrossConcurrentCrossChecks(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t.Context(), t)
+	ctx := t.Context()
+	gittest.Write(t, dir, "existing.go", "package sample\n")
+	gittest.Commit(ctx, t, dir, "chore: initial")
+
+	var targets []Target
+	var want []string
+	for _, n := range []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"} {
+		path := n + ".go"
+		gittest.Write(t, dir, path, "package sample\n\nfunc Fn"+n+"() {}\n")
+		targets = append(targets, AnchorTarget(path, "Fn"+n))
+		want = append(want, path)
+	}
+
+	plan, err := PlanStage(ctx, repo, dir, targets)
+	if err != nil {
+		t.Fatalf("PlanStage: %v", err)
+	}
+	if !slices.Equal(plan.Preamble, want) {
+		t.Errorf("Preamble = %v; want file order %v", plan.Preamble, want)
+	}
+	for _, path := range want {
+		found := false
+		for _, res := range plan.Results {
+			found = found || (res.Path == path && res.Target.Symbol.Anchor != "@header")
+		}
+		if !found {
+			t.Errorf("no result row for %s", path)
+		}
 	}
 }
