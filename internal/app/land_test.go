@@ -3707,11 +3707,7 @@ func TestPullRebaseAbortKeepsSiblingTrackedEdit(t *testing.T) {
 	gittest.Commit(t.Context(), t, dir, "other")
 	gitOut(t, dir, "push", "origin", "HEAD")
 
-	other := t.TempDir()
-	gitOut(t, other, "clone", "-q", bare, ".")
-	gittest.Write(t, other, "base.txt", "remote\n")
-	gittest.Commit(t.Context(), t, other, "remote")
-	gitOut(t, other, "push", "-q", "origin", "HEAD")
+	pushToOrigin(t, bare, "base.txt", "remote\n", "remote")
 
 	gittest.Write(t, dir, "base.txt", "local\n")
 	gittest.Commit(t.Context(), t, dir, "local")
