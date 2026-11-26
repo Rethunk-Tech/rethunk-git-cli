@@ -405,38 +405,6 @@ func pathWithGitOnly(t *testing.T) string {
 	return bin
 }
 
-// countingGitWrapper installs a shell script named "git" ahead of the real
-// one on PATH, counting every "cat-file" invocation to countFile before
-// exec'ing straight through to it -- the concrete measurement
-// prefetchBlobs' own subprocess-count claim needs, not just a structural
-// argument that the code only calls BatchCatFile once. Skips cleanly (not
-// a hard failure) on a platform with no /bin/sh, matching this package's
-// own git-not-on-PATH skip precedent.
-func countingGitWrapper(t *testing.T) (bin, countFile string) {
-	t.Helper()
-	if _, err := exec.LookPath("sh"); err != nil {
-		t.Skipf("sh not on PATH: %v", err)
-	}
-	gitPath, err := exec.LookPath("git")
-	if err != nil {
-		t.Skipf("git not on PATH: %v", err)
-	}
-	bin = t.TempDir()
-	countFile = filepath.Join(t.TempDir(), "cat-file.count")
-	// Every call in this package goes through "-C <root> cat-file ...", not
-	// "cat-file" as $1 -- matched against the whole argument list, not a
-	// fixed position.
-	script := "#!/bin/sh\n" +
-		"case \" $* \" in *\\ cat-file\\ *) printf x >> " + shellQuote(countFile) + " ;; esac\n" +
-		"exec " + shellQuote(gitPath) + " \"$@\"\n"
-	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0o755); err != nil { //nolint:gosec // executable git shim is the behavior under test
-		t.Fatal(err)
-	}
-	return bin, countFile
-}
-
-func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
-
 // TestRun_BatchesGitCatFileAcrossManyChangedFiles is the measured half of
 // the batching claim: buildFileReport's own read of each side, for N
 // changed files each with a real content edit against a rev (not the
@@ -457,7 +425,7 @@ func TestRun_BatchesGitCatFileAcrossManyChangedFiles(t *testing.T) {
 	}
 	gittest.Commit(t.Context(), t, dir, "chore: edit all")
 
-	bin, countFile := countingGitWrapper(t)
+	bin, countFile := gittest.CountingGit(t, "cat-file")
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	// A rev-to-rev comparison: both sides are git-backed (sideRev), so
@@ -499,7 +467,7 @@ func TestRun_DoesNotPrefetchBinarySides(t *testing.T) {
 	// A NUL byte in the leading sample is what makes git call it binary.
 	gittest.Write(t, dir, "blob.bin", "text after\x00\n")
 
-	bin, countFile := countingGitWrapper(t)
+	bin, countFile := gittest.CountingGit(t, "cat-file")
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	report, err := Run(t.Context(), repo, dir, Options{Revisions: []string{"HEAD"}})

@@ -247,3 +247,40 @@ func InstallHook(ctx context.Context, t testing.TB, dir, name, script string) {
 		t.Fatal(err)
 	}
 }
+
+// GitShim returns a directory holding an executable "git" that runs the shell
+// lines in body, then execs the real git with the original arguments. body may
+// refuse a call with its own `exit`. The shim carries git's absolute path, so
+// it also works when the caller replaces PATH with the returned directory.
+// Skips the test when sh or git is not on PATH.
+func GitShim(t *testing.T, body string) (bin string) {
+	t.Helper()
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skipf("sh not on PATH: %v", err)
+	}
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		t.Skipf("git not on PATH: %v", err)
+	}
+	bin = t.TempDir()
+	script := "#!/bin/sh\n" + body + "\nexec " + shellQuote(gitPath) + " \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0o755); err != nil { //nolint:gosec // executable git shim is the behavior under test
+		t.Fatal(err)
+	}
+	return bin
+}
+
+// CountingGit is a GitShim that appends one byte to countFile per git call
+// whose argument list contains subcommand, or per call at all when subcommand
+// is empty. The file's size is the count; it does not exist before a match.
+func CountingGit(t *testing.T, subcommand string) (bin, countFile string) {
+	t.Helper()
+	countFile = filepath.Join(t.TempDir(), "count")
+	count := "printf x >> " + shellQuote(countFile)
+	if subcommand != "" {
+		count = "case \" $* \" in *" + shellQuote(" "+subcommand+" ") + "*) " + count + " ;; esac"
+	}
+	return GitShim(t, count), countFile
+}
+
+func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }

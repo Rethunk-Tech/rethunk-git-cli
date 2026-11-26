@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -347,11 +346,7 @@ func TestRun_ContextFailsWhenRevListCannotCountUpstream(t *testing.T) {
 	gitOut(t, dir, "remote", "add", "origin", remote)
 	gitOut(t, dir, "push", "-q", "-u", "origin", "main")
 
-	realGit, err := exec.LookPath("git")
-	qt.Assert(t, qt.IsNil(err))
-	shimDir := t.TempDir()
-	shim := "#!/bin/sh\ncase \" $* \" in *\" rev-list \"*) echo 'shim: rev-list refused' >&2; exit 128;; esac\nexec '" + realGit + "' \"$@\"\n"
-	qt.Assert(t, qt.IsNil(os.WriteFile(filepath.Join(shimDir, "git"), []byte(shim), 0o755))) //nolint:gosec // executable git shim is the behavior under test
+	shimDir := gittest.GitShim(t, "case \" $* \" in *\" rev-list \"*) echo 'shim: rev-list refused' >&2; exit 128;; esac")
 	t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	_, stderr, code := runApp(t, "-C", dir, "context")
