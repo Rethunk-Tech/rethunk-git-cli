@@ -569,7 +569,7 @@ Git's message; naming a target then needs `-i` (partial commit is refused).
 `-S` is rewritten to the long form before pflag: an optional-value
 shorthand would misread `-SDEADBEEF` as a flag chain. Everything after
 `-S` in the same token is the key id (`-Ss` is key `s`). `-sS` is
-refused by name.
+refused (129): write `-s -S`.
 
 Success relays `git commit`'s summary, then each target's `+N/-M`. Hook output is held and printed only when the commit fails; `--verbose` prints it always. Last line: `left: N dirty (a, b, c, …) · M ahead of UPSTREAM`, or `left: clean`; the ahead part is omitted with no upstream; not printed with `-q` or `--porcelain`.
 `--porcelain`: [`CODES.md`](CODES.md#output-records).

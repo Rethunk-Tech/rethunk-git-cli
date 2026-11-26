@@ -70,8 +70,8 @@ type commitFlags struct {
 // therefore means the key "s", not "-s -S", and that is exactly why this
 // cannot expand general shorthand chains -- there is no way to tell a key
 // id from a run of flags, and git does not try either. A token that packs
-// S in behind other shorthands (-sS) is left alone and pflag rejects it by
-// name, which is an honest refusal rather than a silent misread.
+// S in behind other shorthands (-sS) is refused by packedGPGSign before this
+// runs, an honest refusal rather than a silent misread.
 //
 // A token that is already some flag's value is copied verbatim: `-m -S`
 // commits the subject "-S", exactly as plain git does, rather than turning
@@ -102,6 +102,38 @@ func expandGPGSignShorthand(fs *pflag.FlagSet, args []string) []string {
 		}
 	}
 	return out
+}
+
+// packedGPGSign returns the first token that packs -S behind boolean
+// shorthands (-sS), which git reads as -s -S but expandGPGSignShorthand
+// cannot tell from a key id. A shorthand taking a value ends the scan: the
+// rest of that token is its value.
+func packedGPGSign(fs *pflag.FlagSet, args []string) (string, bool) {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			return "", false
+		}
+		if strings.HasPrefix(a, "--") || !strings.HasPrefix(a, "-") || len(a) < 3 || a[1] == 'S' {
+			if takesSeparateValue(fs, a) {
+				i++
+			}
+			continue
+		}
+		for _, c := range a[1:] {
+			if c == 'S' {
+				return a, true
+			}
+			fl := fs.ShorthandLookup(string(c))
+			if fl == nil || fl.NoOptDefVal == "" {
+				break
+			}
+		}
+		if takesSeparateValue(fs, a) {
+			i++
+		}
+	}
+	return "", false
 }
 
 // takesSeparateValue reports whether pflag will read the following argument
@@ -139,7 +171,7 @@ const gpgSignBare = "<default-key>"
 func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) exitcode.Code {
 	var f commitFlags
 	fs := newTargetFlagSet("commit", &f.syms, &f.files)
-	reeditMessage := registerCommitFlags(fs, &f)
+	registerCommitFlags(fs, &f)
 
 	help := "usage: rgit commit [flags] [target...]\n\n" +
 		"Commit named targets -- pathspecs and/or FILE:NAME symbol anchors\n" +
@@ -149,10 +181,14 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		"half-staged symbol comes out with its whole file.\n\n" +
 		fs.FlagUsages() +
 		"\nFull reference: docs/USAGE.md\n"
+	if tok, packed := packedGPGSign(fs, args); packed {
+		fmt.Fprintf(stderr, "rgit: commit: %s packs -S behind another flag; write -s -S\n", tok)
+		return exitcode.InvalidUsage
+	}
 	if code, done := parseFlagsOrHelp(fs, expandGPGSignShorthand(fs, args), stdout, stderr, help); done {
 		return code
 	}
-	if *reeditMessage {
+	if fs.Changed("reedit-message") {
 		fmt.Fprintln(stderr, "rgit: --reedit-message is unsupported; use --reuse-message")
 		return exitcode.InvalidUsage
 	}
@@ -325,7 +361,7 @@ func (r *commitRun) usage(format string, a ...any) exitcode.Code {
 	return exitcode.InvalidUsage
 }
 
-func registerCommitFlags(fs *pflag.FlagSet, f *commitFlags) (reeditMessage *bool) {
+func registerCommitFlags(fs *pflag.FlagSet, f *commitFlags) {
 	// -m's long spelling matches git commit's own --message, and -F's long
 	// spelling is --message-file (to avoid collision with rgit's --file
 	// pathspec flag).
@@ -342,7 +378,9 @@ func registerCommitFlags(fs *pflag.FlagSet, f *commitFlags) (reeditMessage *bool
 	fs.StringVar(&f.fixup, "fixup", "", "autosquash fixup for <commit> (or amend:<commit>/reword:<commit>)")
 	fs.StringVar(&f.squash, "squash", "", "autosquash squash for <commit>")
 	fs.StringVar(&f.reuseMessage, "reuse-message", "", "reuse the message and authorship from <commit>")
-	reeditMessage = fs.Bool("reedit-message", false, "unsupported; use --reuse-message")
+	// git's form is --reedit-message=<commit>; any use is refused in runCommit.
+	fs.String("reedit-message", "", "unsupported; use --reuse-message")
+	fs.Lookup("reedit-message").NoOptDefVal = "true"
 	fs.StringVar(&f.author, "author", "", "override the commit author")
 	fs.StringVar(&f.date, "date", "", "override the commit date")
 	fs.BoolVar(&f.resetAuthor, "reset-author", false, "take the author identity from the committer (with --amend)")
@@ -360,7 +398,6 @@ func registerCommitFlags(fs *pflag.FlagSet, f *commitFlags) (reeditMessage *bool
 	fs.BoolVar(&f.noGPGSign, "no-gpg-sign", false, "do not GPG-sign, overriding commit.gpgsign")
 	fs.StringVar(&f.pathspecFile, "pathspec-from-file", "", "read targets from a file, or - for stdin")
 	fs.BoolVar(&f.pathspecNUL, "pathspec-file-nul", false, "separate pathspec-file targets with NUL")
-	return reeditMessage
 }
 
 // stageOnlyConflict names the first flag that cannot combine with

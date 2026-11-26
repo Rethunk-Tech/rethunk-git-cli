@@ -884,15 +884,30 @@ func TestRun_ReuseMessageWithExplicitMessageUsesGitFailure(t *testing.T) {
 	qt.Assert(t, qt.Not(qt.StringContains(stderr, "[warning] message does not look like")))
 }
 
+func TestRun_PackedGPGSignRefusedByName(t *testing.T) {
+	t.Parallel()
+	cwd := tempRepo(t)
+
+	_, stderr, code := runApp(t, "-C", cwd, "commit", "-sS", "-m", "fix: x", "a.go:A")
+
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "-sS packs -S behind another flag; write -s -S"))
+
+	// A glued -m value that happens to contain S is a message, not a packed flag.
+	_, stderr, _ = runApp(t, "-C", cwd, "commit", "-mSubject", "--dry-run", "a.go:A")
+	qt.Assert(t, qt.Not(qt.StringContains(stderr, "packs -S")))
+}
+
 func TestRun_ReeditMessageRefused(t *testing.T) {
 	t.Parallel()
 	cwd := tempRepo(t)
 
-	_, stderr, code := runApp(t, "-C", cwd, "commit", "--reedit-message")
+	for _, flag := range []string{"--reedit-message", "--reedit-message=true", "--reedit-message=HEAD"} {
+		_, stderr, code := runApp(t, "-C", cwd, "commit", flag)
 
-	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-	qt.Assert(t, qt.StringContains(stderr, "--reedit-message"))
-	qt.Assert(t, qt.StringContains(stderr, "--reuse-message"))
+		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage), qt.Commentf("%s", flag))
+		qt.Assert(t, qt.StringContains(stderr, "--reedit-message is unsupported; use --reuse-message"), qt.Commentf("%s", flag))
+	}
 }
 
 // A directory target stages tracked files only, like git commit --only; a file named directly is still added.
