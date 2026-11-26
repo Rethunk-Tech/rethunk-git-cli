@@ -544,6 +544,17 @@ func TestCommit_UntrackedOnlyDirectoryIsNothingToCommit(t *testing.T) {
 	}
 }
 
+// TestCommit_MissingPathspecStaysGitAddsRefusal pins that a path matching nothing is git add's own
+// fatal error, not a clean "nothing to commit".
+func TestCommit_MissingPathspecStaysGitAddsRefusal(t *testing.T) {
+	t.Parallel()
+	dir, _ := gittest.RepoWithFile(t.Context(), t, "base.txt", "base\n", "init")
+	_, stderr, code := runApp(t, "-C", dir, "commit", "-m", "chore: x", "--", "nosuch")
+	if code != exitcode.GitFailure || !strings.Contains(stderr, "nosuch") {
+		t.Errorf("code = %v stderr = %q; want GitFailure naming nosuch", code, stderr)
+	}
+}
+
 // TestCommit_RepoRootDotStagesTrackedFilesOnly pins that "." follows the directory rule: an untracked file stays untracked.
 func TestCommit_RepoRootDotStagesTrackedFilesOnly(t *testing.T) {
 	t.Parallel()
