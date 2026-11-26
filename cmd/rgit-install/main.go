@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gitx"
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/prereq"
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/util"
 )
@@ -586,7 +587,7 @@ func relTo(root, path string) string {
 // that stamp unset rather than inventing a version scheme this repo has
 // not established.
 func gitVersion(repoRoot string) string {
-	out, err := exec.CommandContext(context.Background(), "git", "-C", repoRoot, "describe", "--tags", "--always", "--dirty").Output() //nolint:gosec // repoRoot is passed as git's -C argument, never interpreted by a shell
+	out, err := exec.CommandContext(context.Background(), "git", append(slices.Clone(gitx.NoFsmonitor), "-C", repoRoot, "describe", "--tags", "--always", "--dirty")...).Output() //nolint:gosec // repoRoot is passed as git's -C argument, never interpreted by a shell
 	if err != nil {
 		return ""
 	}
