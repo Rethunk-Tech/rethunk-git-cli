@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -119,7 +120,7 @@ func TestRun_CommitRefusesStructuredDataSymbolViaRunApp(t *testing.T) {
 	if code != exitcode.Success {
 		t.Fatalf("runApp symbols = %v; want exitcode.Success; stderr: %s", code, stderr)
 	}
-	if !containsString(strings.Fields(stdout), "name") {
+	if !slices.Contains(strings.Fields(stdout), "name") {
 		t.Errorf("symbols stdout = %q; want discrete key token %q", stdout, "name")
 	}
 

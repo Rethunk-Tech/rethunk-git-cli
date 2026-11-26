@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -70,7 +71,7 @@ func TestRunSymbolsListsCleanWorktreeDeclarations(t *testing.T) {
 
 	got := strings.Fields(stdout.String())
 	for _, want := range []string{"answer", "First", "Thing", "Thing.Method"} {
-		if !containsString(got, want) {
+		if !slices.Contains(got, want) {
 			t.Errorf("runSymbols() omitted %q from %q", want, got)
 		}
 	}
@@ -109,7 +110,7 @@ func TestRunSymbolsLimitAndMatch(t *testing.T) {
 			t.Errorf("runSymbols(--match ^Thing) listed %q", name)
 		}
 	}
-	if !containsString(got, "Thing") || !containsString(got, "Thing.Method") {
+	if !slices.Contains(got, "Thing") || !slices.Contains(got, "Thing.Method") {
 		t.Errorf("runSymbols(--match ^Thing) = %q; want Thing and Thing.Method", got)
 	}
 
@@ -156,7 +157,7 @@ func TestRunSymbolsHonorsCoreIgnoreCaseForExtensions(t *testing.T) {
 	if code != exitcode.Success {
 		t.Fatalf("runSymbols(Foo.GO) with core.ignorecase=true = %d, stderr = %q", code, stderr.String())
 	}
-	if !containsString(strings.Fields(stdout.String()), "First") {
+	if !slices.Contains(strings.Fields(stdout.String()), "First") {
 		t.Fatalf("runSymbols(Foo.GO) omitted First from %q", stdout.String())
 	}
 
@@ -188,7 +189,7 @@ func TestRun_SymbolsListsHeadDeclarationsWhenWorktreeFileIsGone(t *testing.T) {
 	if code != exitcode.Success {
 		t.Fatalf("runSymbols() = %d, stderr = %q", code, stderr.String())
 	}
-	if !containsString(strings.Fields(stdout.String()), "Foo") {
+	if !slices.Contains(strings.Fields(stdout.String()), "Foo") {
 		t.Fatalf("runSymbols() omitted HEAD symbol from %q", stdout.String())
 	}
 }
@@ -224,7 +225,7 @@ func TestRunSymbolsStructuredDataCommitMode(t *testing.T) {
 	if code != exitcode.Success {
 		t.Fatalf("runSymbols() = %d, stderr = %q", code, stderr.String())
 	}
-	if !containsString(strings.Fields(stdout.String()), "name") {
+	if !slices.Contains(strings.Fields(stdout.String()), "name") {
 		t.Fatalf("runSymbols() omitted structured-data symbol from %q", stdout.String())
 	}
 
