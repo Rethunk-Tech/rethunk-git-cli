@@ -624,8 +624,8 @@ func catchUp(ctx context.Context, r string, d landDeps) (installFailed, fetched 
 		return false, false
 	}
 	repo := strings.TrimSpace(top)
-	def := defaultBranch(repo, d)
-	if strings.TrimSpace(mustGit(repo, d, "rev-parse", "--abbrev-ref", "HEAD")) != def || dirtyTracked(repo, d) {
+	def, ok := defaultBranchChecked(repo, d)
+	if !ok || strings.TrimSpace(mustGit(repo, d, "rev-parse", "--abbrev-ref", "HEAD")) != def || dirtyTracked(repo, d) {
 		return false, false
 	}
 	if _, err := d.git.run(repo, "fetch", "-q", "origin"); err != nil {
@@ -862,7 +862,12 @@ func landOne(r string, d landDeps) landResult {
 	repo = strings.TrimSpace(repo)
 	res := landResult{Repo: repo}
 
-	def := defaultBranch(repo, d)
+	def, ok := defaultBranchChecked(repo, d)
+	if !ok {
+		res.Kind = landSkipped
+		res.Lines = []string{repo + ": skipped (cannot determine default branch)"}
+		return res
+	}
 	res.Default = def
 	if d.sha != "" {
 		return landSha(repo, def, d)

@@ -1426,22 +1426,29 @@ func TestDefaultBranchFallbacks(t *testing.T) {
 	t.Parallel()
 	d := testLandDeps(t)
 	dir, _ := gittest.RepoWithFile(t.Context(), t, "base.txt", "base\n", "base")
-	if got := defaultBranch(dir, d); got != "main" {
-		t.Errorf("defaultBranch on main = %q", got)
+	if got, ok := defaultBranchChecked(dir, d); !ok || got != "main" {
+		t.Errorf("defaultBranchChecked on main = %q,%v", got, ok)
 	}
 	gitOut(t, dir, "branch", "-M", "master")
-	if got := defaultBranch(dir, d); got != "master" {
-		t.Errorf("defaultBranch on master = %q", got)
-	}
 	if got, ok := defaultBranchChecked(dir, d); !ok || got != "master" {
 		t.Errorf("defaultBranchChecked on master = %q,%v", got, ok)
 	}
 	gitOut(t, dir, "branch", "-M", "trunk")
-	if got := defaultBranch(dir, d); got != "master" {
-		t.Errorf("defaultBranch without main or master = %q", got)
-	}
 	if got, ok := defaultBranchChecked(dir, d); ok || got != "" {
 		t.Errorf("defaultBranchChecked without main or master = %q,%v", got, ok)
+	}
+}
+
+func TestLandUnknownDefaultBranchSkips(t *testing.T) {
+	t.Parallel()
+	dir, _ := gittest.RepoWithFile(t.Context(), t, "base.txt", "base\n", "base")
+	gitOut(t, dir, "branch", "-M", "trunk")
+	d := testLandDeps(t)
+	var stdout strings.Builder
+	d.stdout = &stdout
+	code := runLandWith(t.Context(), dir, []string{"--no-gate"}, d)
+	if code != exitcode.LandSkipped || !strings.Contains(stdout.String(), "skipped (cannot determine default branch)") {
+		t.Errorf("code = %v stdout = %q", code, stdout.String())
 	}
 }
 
