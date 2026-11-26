@@ -794,8 +794,8 @@ func TestLandBranchRedPushLeavesBoth(t *testing.T) {
 	d.stdout = &stdout
 	d.stderr = &stderr
 	code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d)
-	if code != 1 {
-		t.Fatalf("code = %v stdout=%q stderr=%q; want 1", code, stdout.String(), stderr.String())
+	if code != exitcode.LandRed {
+		t.Fatalf("code = %v stdout=%q stderr=%q; want LandRed", code, stdout.String(), stderr.String())
 	}
 	if _, err := d.git.run(dir, "show-ref", "--verify", "--quiet", "refs/heads/feat"); err != nil {
 		t.Error("red push deleted branch feat")
@@ -2574,7 +2574,7 @@ func TestLandHonestErrors(t *testing.T) {
 	var stderr2 strings.Builder
 	d2 := testLandDeps(t)
 	d2.stderr = &stderr2
-	if code := runLandWith(t.Context(), dir2, []string{"--branch", "d1"}, d2); code != 1 ||
+	if code := runLandWith(t.Context(), dir2, []string{"--branch", "d1"}, d2); code != exitcode.LandSkipped ||
 		!strings.Contains(stderr2.String(), wt) || !strings.Contains(stderr2.String(), "base.txt") || strings.Contains(stderr2.String(), "conflict") {
 		t.Errorf("dirty worktree: code=%v stderr=%q", code, stderr2.String())
 	}
@@ -2616,8 +2616,8 @@ func TestLandBranchGateEditRefused(t *testing.T) {
 	var stdout, stderr strings.Builder
 	d.stdout, d.stderr = &stdout, &stderr
 	code := runLandWith(t.Context(), dir, []string{"--branch", "feat"}, d)
-	if code != 1 || !strings.Contains(stderr.String(), "gate modified tracked files (feat.txt)") {
-		t.Fatalf("code = %v stderr=%q; want 1 with gate-modified refusal", code, stderr.String())
+	if code != exitcode.LandSkipped || !strings.Contains(stderr.String(), "gate modified tracked files (feat.txt)") {
+		t.Fatalf("code = %v stderr=%q; want LandSkipped with gate-modified refusal", code, stderr.String())
 	}
 	if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD")); got != before {
 		t.Error("ungated branch landed on main")

@@ -592,7 +592,7 @@ func finishLandRepos(ctx context.Context, results []landResult, wait, asJSON, in
 func landExit(red, installFailed, blocked, notEnqueued bool) exitcode.Code {
 	switch {
 	case red:
-		return 1
+		return exitcode.LandRed
 	case notEnqueued:
 		return exitcode.LandNotEnqueued
 	case installFailed:
@@ -1268,7 +1268,7 @@ func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBra
 	if dirty := dirtyTracked(wt, d); dirty {
 		st, _ := d.git.run(wt, "status", "--porcelain=v1", "-uno")
 		fmt.Fprintf(d.stderr, "error: worktree %s has uncommitted changes (%s); %s not rebased\n", wt, dirtyNames(st), branch)
-		return landBranchPrep{}, 1
+		return landBranchPrep{}, exitcode.LandSkipped
 	}
 	if _, err := d.git.run(wt, "rebase", base); err != nil {
 		files, _ := d.git.run(wt, "diff", "--name-only", "--diff-filter=U")
@@ -1283,7 +1283,7 @@ func gateLandBranch(prep landBranchPrep, d landDeps) (string, exitcode.Code) {
 	logdir := filepath.Join(d.cacheHome(), "land-branch")
 	if err := os.MkdirAll(logdir, 0o750); err != nil {
 		fmt.Fprintf(d.stderr, "error: %v\n", err)
-		return "", 1
+		return "", exitcode.GitFailure
 	}
 	safe := strings.ReplaceAll(prep.branch, "/", "_")
 	logPath := filepath.Join(logdir, filepath.Base(prep.repo)+"-"+safe+"-"+strconv.Itoa(d.pid)+".log")
@@ -1295,14 +1295,14 @@ func gateLandBranch(prep landBranchPrep, d landDeps) (string, exitcode.Code) {
 	moved := func() exitcode.Code {
 		if msg := gateMoved(prep.wt, headBefore, statusBefore, d); msg != "" {
 			fmt.Fprintln(d.stderr, msg)
-			return 1
+			return exitcode.LandSkipped
 		}
 		return exitcode.Success
 	}
 	out, gateErr := d.gate(prep.wt, false, pushFollows)
 	if werr := os.WriteFile(logPath, []byte(out), 0o600); werr != nil {
 		fmt.Fprintf(d.stderr, "error: %v\n", werr)
-		return "", 1
+		return "", exitcode.GitFailure
 	}
 	if d.cancelled() {
 		return logPath, exitcode.Interrupted
@@ -1326,7 +1326,7 @@ func gateLandBranch(prep landBranchPrep, d landDeps) (string, exitcode.Code) {
 	}
 	if err := appendFlake(logdir, filepath.Base(prep.repo), prep.branch, failed, d); err != nil {
 		fmt.Fprintf(d.stderr, "error: %v\n", err)
-		return "", 1
+		return "", exitcode.GitFailure
 	}
 	fmt.Fprintf(d.stderr, "flake: %s passed on re-run\n", failed)
 	return logPath, moved()
@@ -1385,13 +1385,13 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 				return exitcode.DirtyOverlap
 			}
 			fmt.Fprintf(d.stderr, "error: %s\n", strings.TrimSpace(out))
-			return 1
+			return exitcode.GitFailure
 		}
 		head := strings.TrimSpace(mustGit(prep.repo, d, "rev-parse", "HEAD"))
 		tip := strings.TrimSpace(mustGit(prep.repo, d, "rev-parse", prep.branch))
 		if head != tip {
 			fmt.Fprintf(d.stderr, "error: HEAD %s != %s %s\n", head, prep.branch, tip)
-			return 1
+			return exitcode.GitFailure
 		}
 	}
 	sha := strings.TrimSpace(mustGit(prep.repo, d, "rev-parse", prep.branch))
@@ -1417,7 +1417,7 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 		for _, line := range res.Lines {
 			fmt.Fprintln(out, line)
 		}
-		return 1
+		return exitcode.LandRed
 	}
 	if res.Route == "direct" && res.SHA != "" {
 		sha = res.SHA

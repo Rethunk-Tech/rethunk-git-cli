@@ -8,7 +8,7 @@ Authoritative exit codes and machine-readable output. Flags:
 | Exit | Condition |
 | --- | --- |
 | 0 | Success (stderr warnings for unchanged targets allowed) |
-| 1 | `diff` only, under `--exit-code`/`--quiet`: something is committable. `land` (plain and `--sha`): a repo is red, including a red gate |
+| 1 | `diff` only, under `--exit-code`/`--quiet`: something is committable. `land` (plain, `--sha` and `--branch`): a repo is red, including a red gate or push |
 | 2 | `land --branch`: the rebase conflicted |
 | 3 | Anchor unresolvable — missing in worktree and HEAD; candidates listed. `land --branch`: the gate stayed red after a `--failed` re-run |
 | 4 | Ambiguous anchor — candidates listed. `land` (plain, `--sha`, `--branch --push`): a PR is neither queued nor set to auto-merge, or its state is unknown |
@@ -20,13 +20,13 @@ Authoritative exit codes and machine-readable output. Flags:
 | 11 | All named targets resolve but have no uncommitted changes |
 | 12 | Symbol anchor on JSON/JSONC/JSON5/YAML/TOML (`commit` only) |
 | 13 | `land --branch` (without `--push`) could not fast-forward: the checkout's own uncommitted edits touch files the branch changes. Retry later |
-| 14 | `land` skipped a repo that needs action: dirty tracked files, wrong branch, behind origin with a conflicting rebase, no upstream, not a git repo, or an umbrella held back by a red submodule repo. Nothing to land (not ahead, already upstream) stays 0. `--json` still prints status and detail |
-| 128 | Fatal git / system failure (hook rejection, GPG, `-C` unenterable). `land --branch` setup: not a git repo, no default branch, worktree add failed |
+| 14 | `land` skipped a repo that needs action: dirty tracked files (`--branch`: the branch's worktree is dirty, or the gate edited tracked files), wrong branch, behind origin with a conflicting rebase, no upstream, not a git repo, or an umbrella held back by a red submodule repo. Nothing to land (not ahead, already upstream) stays 0. `--json` still prints status and detail |
+| 128 | Fatal git / system failure (hook rejection, GPG, `-C` unenterable). `land --branch` setup: not a git repo, no default branch, worktree add failed; later: cache or log write failed, fast-forward refused without overlap, HEAD not at the branch tip afterwards |
 | 129 | Invalid usage. `land --branch` setup: not the main checkout, branch missing, main checkout on another branch |
 | 130 | `land` stopped by SIGINT or SIGTERM; the line names the step (gate, git, gh, or wait) |
 
-128 and 129 follow git. 1 is git's `--exit-code` convention and is not a
-named constant — it depends on a flag. Bindings: `internal/exitcode`.
+128 and 129 follow git. `diff`'s 1 is git's `--exit-code` convention and is not
+a named constant — it depends on a flag. Bindings: `internal/exitcode`.
 
 Every command can produce 128 and 129: global `-C` is validated before
 dispatch ([`USAGE.md`](USAGE.md#global-flags)).

@@ -12,10 +12,9 @@
 //
 // Exit 8 is retired with `rgit commit --push` and not reused.
 //
-// Exit 1 is deliberately absent: `rgit diff --exit-code` uses it for "there
-// is something committable", git's own convention, and unlike every status
-// below its meaning is conditional on a flag rather than fixed. It lives at
-// its point of use, in internal/app.
+// Exit 1 as `rgit diff --exit-code` ("something is committable", git's own
+// convention) is conditional on a flag, so it lives at its point of use in
+// internal/app; LandRed below is land's fixed meaning of the same status.
 package exitcode
 
 // Code is a process exit status. See docs/CODES.md § Exit codes.
@@ -23,6 +22,9 @@ type Code int
 
 const (
 	Success Code = 0
+
+	// LandRed means a repo's gate or push stayed red, plain, --sha or --branch.
+	LandRed Code = 1
 
 	// LandConflict means `land --branch` could not rebase the branch.
 	LandConflict Code = 2
