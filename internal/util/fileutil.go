@@ -6,7 +6,30 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 )
+
+// WriteFileAtomic writes data to path through a temp file in the same
+// directory and a rename, so a concurrent reader never sees a partial file.
+// The temp file is removed on any failure.
+func WriteFileAtomic(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
+	if err != nil {
+		return err
+	}
+	_, werr := tmp.Write(data)
+	cerr := tmp.Close()
+	if werr == nil {
+		werr = cerr
+	}
+	if werr == nil {
+		werr = os.Rename(tmp.Name(), path)
+	}
+	if werr != nil {
+		_ = os.Remove(tmp.Name())
+	}
+	return werr
+}
 
 // GitFileMode is the tree mode git records for a regular worktree file:
 // executable-by-anyone is 100755, everything else 100644.

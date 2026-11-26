@@ -8,6 +8,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/util"
 )
 
 // stopGrace is how long a stranded daemon gets to honour SIGTERM before
@@ -20,15 +22,7 @@ func pidPath(sockPath string) string { return sockPath + ".pid" }
 // writePIDFile records the daemon rgit just spawned at sockPath. The
 // temp-then-rename keeps a concurrent reader from ever seeing a partial PID.
 func writePIDFile(sockPath string, pid int) {
-	tmp, err := os.CreateTemp(filepath.Dir(sockPath), ".pid-*")
-	if err != nil {
-		return
-	}
-	_, werr := tmp.WriteString(strconv.Itoa(pid))
-	cerr := tmp.Close()
-	if werr != nil || cerr != nil || os.Rename(tmp.Name(), pidPath(sockPath)) != nil {
-		_ = os.Remove(tmp.Name())
-	}
+	_ = util.WriteFileAtomic(pidPath(sockPath), []byte(strconv.Itoa(pid)))
 }
 
 // stopStrandedDaemon terminates the daemon rgit spawned at sockPath, whose

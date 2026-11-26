@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/util"
 )
 
 // settingsTTL is how long a GitHub answer that rarely changes (branch rules, allowed merge methods) is reused.
@@ -104,15 +106,7 @@ func (c *ghSettingsCache) save(f ghSettingsFile) {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return
 	}
-	tmp, err := os.CreateTemp(dir, ".github-settings-*.json")
-	if err != nil {
-		return
-	}
-	_, werr := tmp.Write(b)
-	cerr := tmp.Close()
-	if werr != nil || cerr != nil || os.Rename(tmp.Name(), c.path) != nil {
-		_ = os.Remove(tmp.Name())
-	}
+	_ = util.WriteFileAtomic(c.path, b)
 }
 
 func (c *ghSettingsCache) fresh(read time.Time) bool {
