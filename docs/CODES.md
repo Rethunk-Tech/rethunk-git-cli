@@ -166,7 +166,7 @@ package.json<TAB><TAB>4<TAB>1
 emits `H`.
 
 A pathspec produces **one record per file it stages**. A directory lists
-each file; untracked files under it are listed; a rename is listed at its
+each file; only tracked files under it (a file named directly is still added); a rename is listed at its
 new path; a binary has zero counts; a pathspec that matches nothing keeps
 one record naming the pathspec. No `STATUS` column — unchanged targets
 are omitted (stderr warning). `--porcelain` replaces `git commit`'s
@@ -442,7 +442,6 @@ Empty history is `"commits": []`. `--json` with `--porcelain` or `-p` is
 
 ```text
 START,END<TAB>SYMBOL
-1,3	@imports
 12,27	ValidateToken
 ```
 
@@ -530,8 +529,8 @@ that would land.
 ### `rgit land --branch BRANCH --json`
 
 One object, also on failure: `{"repo", "branch", "sha", "log", "route", "code"}`.
-`repo` is the absolute path of the repository, `route` is `local` with
-`--no-push` or the landing route otherwise, `log` is the gate log, and `code`
+`repo` is the absolute path of the repository, `route` is `local`
+without `--push` or the landing route otherwise, `log` is the gate log, and `code`
 is the exit code. `sha`, `log` and `route` are empty strings when the land
 stopped before them.
 
