@@ -109,8 +109,14 @@ func Run(ctx context.Context, version string, args []string, stdout, stderr io.W
 		fmt.Fprint(stdout, topLevelHelp)
 		return exitcode.Success
 	case "help":
+		if code := refuseUnsupportedJSON(asJSON || hasJSONFlag(args[1:]), "help", stderr); code != exitcode.Success {
+			return code
+		}
 		return runHelp(ctx, dir, args[1:], stdout, stderr)
 	case "--version", "version":
+		if code := refuseUnsupportedJSON(asJSON || hasJSONFlag(args[1:]), "version", stderr); code != exitcode.Success {
+			return code
+		}
 		// The first line stays byte-identical to what scripts and
 		// cmd/rgit-install already parse (docs/USAGE.md) -- everything a
 		// caller might want beyond the bare version goes on lines after it,
