@@ -2104,8 +2104,14 @@ func TestLandBranchPushRefusesToRebaseAfterGate(t *testing.T) {
 				gittest.Write(t, dir, "base.txt", "dirty\n")
 			}
 
+			mainBefore := strings.TrimSpace(gitOut(t, dir, "rev-parse", "main"))
+			moveOnce := true
 			d := testLandDeps(t)
 			d.gate = func(string, bool) (string, error) {
+				if !moveOnce {
+					return "ok\n", nil
+				}
+				moveOnce = false
 				other := filepath.Join(t.TempDir(), "other")
 				gitOut(t, t.TempDir(), "clone", "-q", bare, other)
 				gitOut(t, other, "config", "user.email", "test@test")
@@ -2128,6 +2134,17 @@ func TestLandBranchPushRefusesToRebaseAfterGate(t *testing.T) {
 			}
 			if got := strings.TrimSpace(gitOut(t, bare, "log", "-1", "--pretty=%s")); got != "moved" {
 				t.Errorf("origin tip = %q; want the competing commit untouched", got)
+			}
+			if got := strings.TrimSpace(gitOut(t, dir, "rev-parse", "main")); got != mainBefore {
+				t.Errorf("local main = %s; want %s unchanged after the red return", got, mainBefore)
+			}
+			if dirty {
+				return
+			}
+			stdout.Reset()
+			stderr.Reset()
+			if code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d); code != 0 {
+				t.Errorf("re-run code = %v stderr=%q; want 0", code, stderr.String())
 			}
 		})
 	}

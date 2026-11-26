@@ -1523,7 +1523,11 @@ func unlinkLandEnvLinks(links []string) {
 }
 
 func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, wait, install, noPush bool, d landDeps) exitcode.Code {
-	if !prep.dirty || noPush {
+	// A pushed branch fast-forwards local main only after the push, so a red push leaves main re-runnable.
+	ff := func() exitcode.Code {
+		if prep.dirty && !noPush {
+			return exitcode.Success
+		}
 		if out, err := d.git.run(prep.repo, "merge", "--ff-only", prep.branch); err != nil {
 			if overlap := mergeOverlapFiles(prep.repo, prep.branch, d); noPush && prep.dirty && len(overlap) > 0 {
 				fmt.Fprintf(d.stderr, "error: %s has uncommitted changes to %s; %s not landed\n",
@@ -1538,6 +1542,12 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 		if head != tip {
 			fmt.Fprintf(d.stderr, "error: HEAD %s != %s %s\n", head, prep.branch, tip)
 			return exitcode.GitFailure
+		}
+		return exitcode.Success
+	}
+	if noPush {
+		if code := ff(); code != exitcode.Success {
+			return code
 		}
 	}
 	sha := strings.TrimSpace(mustGit(prep.repo, d, "rev-parse", prep.branch))
@@ -1564,6 +1574,11 @@ func finishLandBranch(ctx context.Context, prep landBranchPrep, logPath string, 
 			fmt.Fprintln(out, line)
 		}
 		return exitcode.LandRed
+	}
+	if !noPush {
+		if code := ff(); code != exitcode.Success {
+			return code
+		}
 	}
 	if res.Route == "direct" && res.SHA != "" {
 		sha = res.SHA
