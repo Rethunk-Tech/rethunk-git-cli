@@ -398,17 +398,28 @@ func findHitsInFile(ctx context.Context, root string, repo *gitx.Repo, ignoreCas
 	if !ok {
 		return nil
 	}
-	decls, err := resolve.DeclExtents(lang, src)
+	dotted := strings.Contains(query, ".")
+	type ranked struct {
+		rank findRank
+		name string
+	}
+	// Extents are computed only for declarations that rank: most of a tree's
+	// declarations are not hits.
+	ranks := map[string]ranked{}
+	decls, err := resolve.DeclExtentsWhere(lang, src, func(d resolve.Declared) bool {
+		rank, name := rankFindDecl(d, query, dotted)
+		if rank == findRankNone {
+			return false
+		}
+		ranks[d.Anchor] = ranked{rank, name}
+		return true
+	})
 	if err != nil {
 		return nil
 	}
-	dotted := strings.Contains(query, ".")
 	out := make([]findHit, 0)
 	for _, decl := range decls {
-		rank, name := rankFindDecl(decl, query, dotted)
-		if rank == findRankNone {
-			continue
-		}
+		rank, name := ranks[decl.Anchor].rank, ranks[decl.Anchor].name
 		start, end := lineRange(src, decl.Extent)
 		out = append(out, findHit{
 			file:      path,

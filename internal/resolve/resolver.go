@@ -204,6 +204,38 @@ func DeclExtents(lang Language, src []byte) ([]Declared, error) {
 	return f.DeclExtents(), nil
 }
 
+// DeclExtentsWhere is DeclExtents for a caller that wants extents of only some
+// declarations: keep sees each one's Anchor and Kind (Extent unset), and only
+// those it accepts pay for an extent. The anchors are the same ones
+// DeclExtents reports, and an accepted declaration's extent is identical.
+func DeclExtentsWhere(lang Language, src []byte, keep func(Declared) bool) ([]Declared, error) {
+	tree, err := parseSource(lang, src)
+	if err != nil {
+		return nil, err
+	}
+	defer tree.Close()
+	decls := lang.Declarations(src, tree.RootNode())
+	syms := make([]*Symbol, len(decls))
+	for i := range decls {
+		syms[i] = &Symbol{Decl: decls[i]}
+	}
+	assignQualifiedNames(syms)
+
+	var out []Declared
+	for _, s := range syms {
+		d := Declared{Anchor: s.Qualified}
+		if s.Decl.Node != nil {
+			d.Kind = s.Decl.Node.Kind()
+		}
+		if !keep(d) {
+			continue
+		}
+		d.Extent = declFullExtent(lang, src, s.Decl)
+		out = append(out, d)
+	}
+	return out, nil
+}
+
 // parserFree holds idle *ts.Parser values per distinct *ts.Language. A
 // *ts.Parser is not safe for concurrent use, so find's parallel file walk
 // needs one in-flight parser per worker. go-tree-sitter frees a parser's C

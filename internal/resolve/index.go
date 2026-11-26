@@ -189,16 +189,23 @@ type index struct {
 	allowRawHeading bool
 }
 
+// declFullExtent is a declaration's extent with its doc comment: what Resolve
+// returns for its anchor.
+func declFullExtent(lang Language, src []byte, d Declaration) Extent {
+	full := fullExtent(lang, src, d.Node)
+	if d.Lead != nil {
+		full.Start = docStart(lang, src, d.Lead)
+	}
+	return full
+}
+
 func buildIndex(lang Language, src []byte, root *ts.Node) *index {
 	decls := lang.Declarations(src, root)
 
 	syms := make([]*Symbol, len(decls))
 	for i := range decls {
 		d := decls[i]
-		full := fullExtent(lang, src, d.Node)
-		if d.Lead != nil {
-			full.Start = docStart(lang, src, d.Lead)
-		}
+		full := declFullExtent(lang, src, d)
 		declOnly := declOnlyExtent(lang, src, d)
 		if c, ok := lang.(fullExtentCrossChecker); ok && c.crossCheckUsesFullExtent() {
 			declOnly = full

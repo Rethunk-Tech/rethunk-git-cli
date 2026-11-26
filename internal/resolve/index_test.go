@@ -404,3 +404,44 @@ func srcAt(src []byte, ext Extent) []byte {
 	}
 	return src[ext.Start:ext.End]
 }
+
+// TestDeclExtentsWhere_AcceptedMatchDeclExtentsAndRejectedCostNoExtent pins
+// that the filtered table reports, for each declaration it keeps, the anchor
+// and extent DeclExtents does, and that the filter sees no extent.
+func TestDeclExtentsWhere_AcceptedMatchDeclExtentsAndRejectedCostNoExtent(t *testing.T) {
+	t.Parallel()
+
+	lang := goLang(t)
+	all, err := DeclExtents(lang, []byte(goTwoGetters))
+	if err != nil {
+		t.Fatalf("DeclExtents: %v", err)
+	}
+	var seen int
+	got, err := DeclExtentsWhere(lang, []byte(goTwoGetters), func(d Declared) bool {
+		seen++
+		if d.Extent != (Extent{}) {
+			t.Errorf("keep saw extent %+v for %q; want none", d.Extent, d.Anchor)
+		}
+		return strings.Contains(d.Anchor, "Get")
+	})
+	if err != nil {
+		t.Fatalf("DeclExtentsWhere: %v", err)
+	}
+	if seen != len(all) {
+		t.Errorf("keep saw %d declarations; want %d", seen, len(all))
+	}
+	var want []Declared
+	for _, d := range all {
+		if strings.Contains(d.Anchor, "Get") {
+			want = append(want, d)
+		}
+	}
+	if len(got) == 0 || len(got) != len(want) {
+		t.Fatalf("got %d kept declarations; want %d (>0)", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("kept[%d] = %+v; want %+v", i, got[i], want[i])
+		}
+	}
+}
