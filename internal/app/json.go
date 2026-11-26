@@ -65,8 +65,11 @@ func refuseUnsupportedJSON(asJSON bool, cmd string, stderr io.Writer) exitcode.C
 	if !asJSON {
 		return exitcode.Success
 	}
-	fmt.Fprintf(stderr, "rgit: %s does not support --json\n", cmd)
-	fmt.Fprintln(stderr, usageLine)
+	remedy := ""
+	if cmd == "show" || cmd == "blame" {
+		remedy = "; use rgit " + cmd + " --porcelain"
+	}
+	fmt.Fprintf(stderr, "rgit: %s does not support --json%s\n", cmd, remedy)
 	return exitcode.InvalidUsage
 }
 

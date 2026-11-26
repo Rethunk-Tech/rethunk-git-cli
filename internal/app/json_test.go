@@ -69,7 +69,10 @@ func TestRun_JSONUnsupportedCommand(t *testing.T) {
 		_, stderr, code := runApp(t, "-C", cwd, "--json", cmd)
 		qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage), qt.Commentf("%s", cmd))
 		qt.Assert(t, qt.StringContains(stderr, "rgit: "+cmd+" does not support --json"))
-		qt.Assert(t, qt.StringContains(stderr, usageLine))
+		qt.Assert(t, qt.Not(qt.StringContains(stderr, usageLine)))
+		if cmd == "show" || cmd == "blame" {
+			qt.Assert(t, qt.StringContains(stderr, "use rgit "+cmd+" --porcelain"))
+		}
 	}
 }
 
