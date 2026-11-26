@@ -773,6 +773,10 @@ type tempStaging struct {
 	tmp   string
 	final string
 	lock  string
+	// seed is the caller's index bytes as read under the index lock;
+	// absent means there was no index file to read.
+	seed   []byte
+	absent bool
 }
 
 // newTempStaging seeds a temp index file beside the caller's own (same
@@ -877,7 +881,7 @@ func seedTempIndex(final string) (*tempStaging, error) {
 		return nil, err
 	}
 	keep = true
-	return &tempStaging{tmp: tmp, final: final}, nil
+	return &tempStaging{tmp: tmp, final: final, seed: seed, absent: os.IsNotExist(err)}, nil
 }
 
 // swap moves the staged temp index over the caller's index and records the
@@ -898,6 +902,9 @@ func (s *tempStaging) swap(snap *IndexSnapshot) error {
 	}
 	if snap != nil {
 		snap.applied = data
+		// The before-state is what this call seeded from under the index
+		// lock, not an earlier unlocked read a sibling's staging can predate.
+		snap.data, snap.absent = s.seed, s.absent
 	}
 	return nil
 }

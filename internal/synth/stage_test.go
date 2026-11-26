@@ -353,3 +353,31 @@ func TestPlanStageCountsEolCRLFAgainstFilteredBlob(t *testing.T) {
 		t.Errorf("counts = +%d/-%d; want +1/-1", r.Added, r.Deleted)
 	}
 }
+
+// A sibling `git add` between SnapshotIndex and ApplyWithSnapshot's index lock
+// is part of the before-state, so a hook rejection's Restore keeps it staged.
+func TestRestoreKeepsSiblingStagedBeforeIndexLock(t *testing.T) {
+	ctx := t.Context()
+	dir, repo := gittest.RepoWithFile(ctx, t, "a.txt", "a\n", "chore: initial")
+	gittest.Write(t, dir, "a.txt", "a changed\n")
+	gittest.Write(t, dir, "c.txt", "sibling\n")
+
+	plan, err := PlanStage(ctx, repo, dir, []Target{PathTarget("a.txt")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap, err := SnapshotIndex(ctx, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gittest.Git(ctx, t, dir, "add", "c.txt")
+	if err := plan.ApplyWithSnapshot(ctx, repo, dir, snap); err != nil {
+		t.Fatal(err)
+	}
+	if err := snap.Restore(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := gittest.Git(ctx, t, dir, "diff", "--cached", "--name-only"); got != "c.txt\n" {
+		t.Errorf("staged after rollback = %q; want the sibling's c.txt kept staged", got)
+	}
+}
