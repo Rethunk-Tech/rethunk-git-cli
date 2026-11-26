@@ -1836,6 +1836,7 @@ func testLandDeps(t *testing.T) landDeps {
 	d := defaultLandDeps(t.Context(), &strings.Builder{}, &strings.Builder{})
 	d.cacheHome = func() string { return cache }
 	d.gate = func(string, bool) (string, error) { return "", nil }
+	d.passed = func(string, string) bool { return false }
 	d.clock = &fakeClock{now: time.Date(2026, 11, 18, 0, 0, 0, 0, time.UTC)}
 	d.pid = 1
 	return d
@@ -3185,5 +3186,33 @@ func TestLandPushRefusedWhenGateEditsTree(t *testing.T) {
 	}
 	if after := strings.TrimSpace(gitOut(t, bare, "rev-parse", "main")); after != before {
 		t.Errorf("origin main moved to %s; want %s", after, before)
+	}
+}
+
+// TestGateHeadReusesRecordedPass pins that a recorded pass of this exact HEAD skips the gate with one line, and any other HEAD gates.
+func TestGateHeadReusesRecordedPass(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	head := strings.TrimSpace(gitOut(t, dir, "rev-parse", "HEAD"))
+	d := testLandDeps(t)
+	var stdout strings.Builder
+	d.stdout = &stdout
+	gated := 0
+	d.gate = func(string, bool) (string, error) {
+		gated++
+		return "", nil
+	}
+	d.passed = func(_, h string) bool { return strings.TrimSpace(h) == head }
+	if _, _, ok := gateHead(dir, d); !ok || gated != 0 || !strings.Contains(stdout.String(), "reused the recorded pass of "+head[:7]) {
+		t.Errorf("recorded pass: ok=%v gated=%d out=%q", ok, gated, stdout.String())
+	}
+	d.passed = func(string, string) bool { return false }
+	if _, _, ok := gateHead(dir, d); !ok || gated != 1 {
+		t.Errorf("no record: ok=%v gated=%d", ok, gated)
+	}
+	d.passed = func(string, string) bool { return true }
+	gittest.Write(t, dir, "base.txt", "dirty\n")
+	if _, _, ok := gateHead(dir, d); ok || gated != 1 {
+		t.Errorf("dirty tree: ok=%v gated=%d", ok, gated)
 	}
 }

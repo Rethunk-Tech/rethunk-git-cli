@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -196,6 +197,28 @@ func runGateCmd(ctx context.Context, dir string, pushFollows bool) (string, erro
 	return string(out), err
 }
 
+// gatePassRecorded reads `gate --json record`: a fresh, complete, exit-0 pass of head on a clean tree.
+func gatePassRecorded(ctx context.Context, dir, head string) bool {
+	cmd := exec.CommandContext(ctx, "gate", "-C", dir, "--json", "record") //nolint:gosec // gate argv is constructed by rgit, never a shell string
+	out, _ := cmd.Output()
+	var rec struct {
+		Head    string `json:"head"`
+		Dirty   bool   `json:"dirty"`
+		Partial bool   `json:"partial"`
+		Exit    int    `json:"exit"`
+		Fresh   bool   `json:"fresh"`
+		Current struct {
+			Head  string `json:"head"`
+			Dirty bool   `json:"dirty"`
+		} `json:"current"`
+	}
+	if json.NewDecoder(bytes.NewReader(out)).Decode(&rec) != nil {
+		return false
+	}
+	head = strings.TrimSpace(head)
+	return rec.Fresh && rec.Exit == 0 && !rec.Partial && !rec.Dirty && !rec.Current.Dirty && rec.Head == head && rec.Current.Head == head
+}
+
 type ghCLI struct {
 	runFn func(dir string, args ...string) (string, error)
 }
@@ -302,11 +325,13 @@ type landDeps struct {
 	// ctx is cancelled by SIGINT/SIGTERM; the poll loops stop on it. Nil never cancels.
 	ctx context.Context //nolint:containedctx // per-run dependency bag, bound to the run's signal context
 	// step is the named land step running when a signal arrives (gate, git, gh, wait).
-	step      *string
-	git       gitRunner
-	gh        gitHub
-	clock     landClock
-	gate      func(dir string, pushFollows bool) (string, error)
+	step  *string
+	git   gitRunner
+	gh    gitHub
+	clock landClock
+	gate  func(dir string, pushFollows bool) (string, error)
+	// passed reports whether gate's result record shows a clean pass of exactly head in dir.
+	passed    func(dir, head string) bool
 	cacheHome func() string
 	pid       int
 	parent    string
@@ -350,6 +375,10 @@ func defaultLandDeps(ctx context.Context, stdout, stderr io.Writer) landDeps {
 		gate: func(dir string, pushFollows bool) (string, error) {
 			setLandStep(step, "gate")
 			return runGateCmd(ctx, dir, pushFollows)
+		},
+		passed: func(dir, head string) bool {
+			setLandStep(step, "gate")
+			return gatePassRecorded(ctx, dir, head)
 		},
 		cacheHome: cacheHome,
 		pid:       os.Getpid(),
@@ -1041,6 +1070,10 @@ func gateHead(repo string, d landDeps) (line, logPath string, ok bool) {
 	// An edit that landed after the dirty check would be gated with the tree and then ride along unpushed.
 	if strings.TrimSpace(statusBefore) != "" {
 		return repo + ": error: tracked files changed before the gate (" + dirtyNames(statusBefore) + "); nothing pushed", "", false
+	}
+	if d.passed != nil && d.passed(repo, headBefore) {
+		fmt.Fprintf(d.info(), "%s: gate: reused the recorded pass of %s\n", repo, strings.TrimSpace(headBefore)[:min(7, len(strings.TrimSpace(headBefore)))])
+		return "", "", true
 	}
 	out, gateErr := d.gate(repo, true)
 	logdir := filepath.Join(d.cacheHome(), "land")
