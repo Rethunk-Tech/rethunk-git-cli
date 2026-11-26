@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -384,6 +385,10 @@ func (p *Plan) planSymbol(fp *filePlan, t Target, named map[string]map[string]bo
 	}
 	op, unchanged, err := fp.classify(t.Symbol.Anchor)
 	if err != nil {
+		var rerr *resolve.ResolveError
+		if errors.As(err, &rerr) && rerr.Path == "" {
+			rerr.Path = fp.path
+		}
 		return err
 	}
 	fp.ops = append(fp.ops, op)

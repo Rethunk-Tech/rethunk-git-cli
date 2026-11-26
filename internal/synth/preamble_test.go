@@ -9,6 +9,7 @@ import (
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/exitcode"
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/gittest"
+	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/resolve"
 )
 
 // TestPlanStage_NewFileCarriesHeaderAndImports pins the new-file preamble:
@@ -289,5 +290,21 @@ func TestSnapshotIndex_RestoreReAddsRemovedAndKeepsForeignStaging(t *testing.T) 
 	}
 	if got := gittest.Git(ctx, t, dir, "status", "--porcelain"); got != "M  edit.txt\n D gone.txt\n" {
 		t.Errorf("status after Restore = %q; want edit.txt still staged and gone.txt's deletion unstaged", got)
+	}
+}
+
+// TestPlanStage_UnresolvedAnchorNamesTheFile pins that the unresolved-anchor error carries its file.
+func TestPlanStage_UnresolvedAnchorNamesTheFile(t *testing.T) {
+	t.Parallel()
+	dir, repo := gittest.New(t.Context(), t)
+	ctx := t.Context()
+	gittest.Write(t, dir, "a.go", "package sample\n\nfunc A() {}\n")
+	gittest.Commit(ctx, t, dir, "chore: initial")
+	gittest.Write(t, dir, "a.go", "package sample\n\nfunc A() { println() }\n")
+
+	_, err := PlanStage(ctx, repo, dir, []Target{AnchorTarget("a.go", "Nope")})
+	var rerr *resolve.ResolveError
+	if !errors.As(err, &rerr) || rerr.Path != "a.go" {
+		t.Fatalf("err = %v; want a ResolveError with Path a.go", err)
 	}
 }
