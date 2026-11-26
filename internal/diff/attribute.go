@@ -283,7 +283,16 @@ func topLevelComma(text []byte) int {
 	return -1
 }
 
-// separatorLines reports how many blank lines a region that exists on only
+// regionSeparator is SeparatorLines for a named region; a pseudo-region (@header,
+// @imports) carries none, matching `commit --dry-run`.
+func regionSeparator(name string, src []byte, ext resolve.Extent) int {
+	if strings.HasPrefix(name, "@") {
+		return 0
+	}
+	return SeparatorLines(src, ext.Start, ext.End)
+}
+
+// SeparatorLines reports how many blank lines a region that exists on only
 // one side takes with it, so attribution counts what internal/synth will
 // actually move rather than the declaration's extent alone.
 //
@@ -305,21 +314,9 @@ func topLevelComma(text []byte) int {
 // end-of-file, mirroring spliceExcise: it trims the following gap when
 // anything follows, and falls back to the preceding one when the region was
 // last in the file.
-func separatorLines(src []byte, ext resolve.Extent) int {
-	return SeparatorLines(src, ext.Start, ext.End)
-}
-
-// regionSeparator is separatorLines for a named region; a pseudo-region (@header,
-// @imports) carries none, matching `commit --dry-run`.
-func regionSeparator(name string, src []byte, ext resolve.Extent) int {
-	if strings.HasPrefix(name, "@") {
-		return 0
-	}
-	return separatorLines(src, ext)
-}
-
-// SeparatorLines is separatorLines' own rule, taking a plain byte range so
-// internal/synth can apply it to the edit it is about to splice.
+//
+// It takes a plain byte range so internal/synth can apply it to the edit it
+// is about to splice.
 //
 // Exported for the same reason LineCounts is: `rgit diff` and
 // `rgit commit --dry-run` promise to agree row for row (docs/CODES.md), and
