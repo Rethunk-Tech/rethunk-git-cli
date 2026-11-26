@@ -1266,7 +1266,7 @@ func pathspecFileCounts(ctx context.Context, repo *gitx.Repo, root, pathspec str
 			continue
 		}
 		seen[rel] = true
-		content, exists, rerr := readUntracked(root, rel)
+		content, exists, rerr := util.ReadUntracked(root, rel)
 		if rerr != nil || !exists {
 			// A transient read failure (permissions, a race with something
 			// else removing the file) would otherwise understate the
@@ -1296,15 +1296,4 @@ func sortResults(results []TargetResult) {
 			cmp.Compare(a.Target.Symbol.Anchor, b.Target.Symbol.Anchor),
 		)
 	})
-}
-
-// readUntracked is the content git would store for an untracked path: a
-// symlink's target text, never the file it points at.
-func readUntracked(root, rel string) ([]byte, bool, error) {
-	full := filepath.Join(root, rel)
-	if fi, err := os.Lstat(full); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-		target, err := os.Readlink(full)
-		return []byte(target), err == nil, err
-	}
-	return util.ReadFileIfExists(root, rel)
 }

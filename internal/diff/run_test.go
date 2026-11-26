@@ -1060,39 +1060,34 @@ func B() int {
 	}
 }
 
-// TestRun_UntrackedFileThatVanishesIsWarnedNotFatal pins the race
-// buildUntrackedReport shares with synth's preview counts: ls-files
-// --others names a path, and by the time the report reads it the file is
-// gone. Returning that error failed the whole report -- every other file
-// with it -- for one file that stopped existing. A dangling symlink is the
-// deterministic stand-in: git lists it as untracked, and reading it gets
-// the same ENOENT the real race produces.
-func TestRun_UntrackedFileThatVanishesIsWarnedNotFatal(t *testing.T) {
+// TestRun_UntrackedSymlinkIsOneCollapsedRowCountedFromItsTarget pins that an
+// untracked symlink is reported the way commit counts it: one UNTRACKED row
+// for the link's target text, never the symbols of the file it points at, and
+// a dangling link is listed rather than skipped as vanished.
+func TestRun_UntrackedSymlinkIsOneCollapsedRowCountedFromItsTarget(t *testing.T) {
 	t.Parallel()
 	dir, repo := newDiffTestRepo(t)
 	gittest.Write(t, dir, "real.go", "package p\n\nfunc Kept() int { return 1 }\n")
-	if err := os.Symlink(filepath.Join(dir, "gone.go"), filepath.Join(dir, "dangling.go")); err != nil {
-		t.Skipf("symlinks unavailable: %v", err)
+	for link, target := range map[string]string{"alias.go": "real.go", "dangling.go": "gone.go"} {
+		if err := os.Symlink(target, filepath.Join(dir, link)); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
 	}
 
 	report, err := Run(t.Context(), repo, dir, Options{})
 	if err != nil {
-		t.Fatalf("Run: %v; want the unreadable path skipped, not a failed report", err)
+		t.Fatalf("Run: %v", err)
 	}
-	if _, ok := findFile(report.Files, "real.go"); !ok {
-		t.Errorf("Files = %+v; want the readable untracked file still reported", report.Files)
-	}
-	if _, ok := findFile(report.Files, "dangling.go"); ok {
-		t.Errorf("Files = %+v; want the unreadable path absent", report.Files)
-	}
-	var warned bool
-	for _, w := range report.Warnings {
-		if strings.Contains(w, "dangling.go") {
-			warned = true
+	for _, link := range []string{"alias.go", "dangling.go"} {
+		fr, ok := findFile(report.Files, link)
+		if !ok || len(fr.Rows) != 1 || fr.Rows[0].Status != StatusUntracked || fr.Rows[0].Symbol != "" || fr.Rows[0].Added != "1" || fr.Rows[0].Deleted != "0" {
+			t.Errorf("%s = %+v; want one collapsed UNTRACKED 1/0 row", link, fr)
 		}
 	}
-	if !warned {
-		t.Errorf("Warnings = %v; want one naming dangling.go, so the skip is not silent", report.Warnings)
+	for _, w := range report.Warnings {
+		if strings.Contains(w, "alias.go") || strings.Contains(w, "dangling.go") {
+			t.Errorf("unexpected warning %q", w)
+		}
 	}
 }
 

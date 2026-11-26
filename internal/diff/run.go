@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -358,13 +359,17 @@ func buildUntrackedReport(ctx context.Context, repo *gitx.Repo, root, path strin
 	// race on the same listing already does in synth's preview counts;
 	// returning the error instead let one vanished temp file fail the whole
 	// report, every other file included.
-	content, exists, err := util.ReadFileIfExists(root, path)
+	content, exists, err := util.ReadUntracked(root, path)
 	if !exists {
 		reason := "no longer present"
 		if err != nil {
 			reason = err.Error()
 		}
 		return nil, []string{fmt.Sprintf("%s: untracked file skipped: %s", path, reason)}, false, nil
+	}
+	if fi, lerr := os.Lstat(filepath.Join(root, path)); lerr == nil && fi.Mode()&os.ModeSymlink != 0 {
+		// The row counts the link's target text, as commit does; the target's own symbols are not the link's.
+		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: strconv.Itoa(countLines(content)), Deleted: "0"}}}, nil, false, nil
 	}
 	if util.LooksBinary(content) {
 		return &FileReport{Path: path, Rows: []Row{{Status: StatusUntracked, Added: "-", Deleted: "-"}}}, nil, false, nil

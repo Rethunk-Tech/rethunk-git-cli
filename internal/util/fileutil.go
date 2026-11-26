@@ -120,3 +120,14 @@ func LooksBinaryFile(rootDir, path string) (binary bool, err error) {
 	})
 	return binary, err
 }
+
+// ReadUntracked is the content git would store for an untracked path: a
+// symlink's target text, never the file it points at.
+func ReadUntracked(root, rel string) ([]byte, bool, error) {
+	full := filepath.Join(root, rel)
+	if fi, err := os.Lstat(full); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		target, err := os.Readlink(full)
+		return []byte(target), err == nil, err
+	}
+	return ReadFileIfExists(root, rel)
+}
