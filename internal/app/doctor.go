@@ -36,7 +36,7 @@ language server or the tree-sitter CLI is informational, since degraded
 [ts-only] resolution is normal and documented, not an error.
 
 --deep dials each language server for real -- the identical handshake rgit
-diff/commit already perform for the cross-check -- and reports "reachable"
+commit performs for the cross-check -- and reports "reachable"
 or "degraded" in its detail column instead of the default's bare "on PATH"
 answer, which is not proof a server actually answers. Slower, and not the
 default for exactly that reason: a cold CI host with no servers installed
