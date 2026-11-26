@@ -1448,6 +1448,12 @@ func prepareLandBranch(repoArg, branch string, noPush bool, d landDeps) (landBra
 		fmt.Fprintf(d.stderr, "error: worktree %s has uncommitted changes (%s); %s not rebased\n", wt, dirtyNames(st), branch)
 		return landBranchPrep{}, exitcode.LandSkipped
 	}
+	unlock, err := gitx.New(wt).LockCommits(orBackground(d.ctx))
+	if err != nil {
+		fmt.Fprintf(d.stderr, "error: %v\n", err)
+		return landBranchPrep{}, exitcode.GitFailure
+	}
+	defer unlock()
 	if _, err := d.git.run(wt, "rebase", base); err != nil {
 		files, _ := d.git.run(wt, "diff", "--name-only", "-z", "--diff-filter=U")
 		_, _ = d.git.run(wt, "rebase", "--abort")

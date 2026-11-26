@@ -3535,3 +3535,23 @@ func TestLandBehindRebaseAndAbortHoldTheCommitLock(t *testing.T) {
 	}
 	probe.assertAlwaysLocked(t)
 }
+
+func TestLandBranchRebaseAndAbortHoldTheWorktreeCommitLock(t *testing.T) {
+	t.Parallel()
+	dir, _ := repoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitOut(t, dir, "worktree", "add", "-b", "feat", wt)
+	gittest.Write(t, wt, "base.txt", "branch\n")
+	gitOut(t, wt, "add", "base.txt")
+	gitOut(t, wt, "commit", "-q", "-m", "branch")
+	gittest.Write(t, dir, "base.txt", "mainline\n")
+	gittest.Commit(t.Context(), t, dir, "mainline")
+	d := testLandDeps(t)
+	d.stdout, d.stderr = &strings.Builder{}, &strings.Builder{}
+	probe := &lockProbe{inner: d.git, watch: map[string]bool{"rebase": true}}
+	d.git = probe
+	if code := runLandWith(t.Context(), dir, []string{"--branch", "feat", "--push"}, d); code != exitcode.LandConflict {
+		t.Fatalf("code = %v; want conflict", code)
+	}
+	probe.assertAlwaysLocked(t)
+}
