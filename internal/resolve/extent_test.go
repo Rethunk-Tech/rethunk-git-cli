@@ -382,15 +382,26 @@ func TestResolve_SameLineCommentJoinsSymbol(t *testing.T) {
 	}
 }
 
-// TestResolve_PythonPartialQualifiedNameSuggests pins did-you-mean for a name that skips a nesting level.
-func TestResolve_PythonPartialQualifiedNameSuggests(t *testing.T) {
+// TestResolve_PythonSuggestions pins did-you-mean: a name that skips a nesting level or is a substring of a
+// symbol suggests it, while dotted names whose parts are out of order or end elsewhere suggest nothing.
+func TestResolve_PythonSuggestions(t *testing.T) {
 	t.Parallel()
 	lang, _ := ForExtension(".py")
-	src := []byte("class Outer:\n    class Inner:\n        def meth(self):\n            pass\n")
-	for _, anchor := range []string{"Inner.meth", "Outer.meth"} {
+	src := []byte("def validate_token():\n    pass\n\nclass Outer:\n    class Inner:\n        def meth(self):\n            pass\n")
+	for anchor, want := range map[string]string{
+		"Inner.meth":  "did you mean: Outer.Inner.meth",
+		"Outer.meth":  "did you mean: Outer.Inner.meth",
+		"token":       "did you mean: validate_token",
+		"Wrong.meth":  "",
+		"Inner.other": "",
+	} {
 		_, err := Resolve(lang, src, anchor)
-		if err == nil || !strings.Contains(err.Error(), "did you mean: Outer.Inner.meth") {
-			t.Errorf("%s: err = %v", anchor, err)
+		if err == nil {
+			t.Errorf("%s: want an error", anchor)
+			continue
+		}
+		if got := strings.Contains(err.Error(), "did you mean"); got != (want != "") || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v; want suggestion %q", anchor, err, want)
 		}
 	}
 }
