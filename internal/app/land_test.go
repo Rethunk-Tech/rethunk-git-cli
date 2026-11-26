@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -3338,5 +3339,19 @@ func TestLandDryRunPlansWithoutActing(t *testing.T) {
 	}
 	if code := runLandWith(t.Context(), "", []string{"--dry-run", "--wait", "--repos", app}, d); code != exitcode.InvalidUsage {
 		t.Errorf("--dry-run --wait = %v; want usage error", code)
+	}
+}
+
+func TestLandDryRunJSONAheadEmptyAtUpstream(t *testing.T) {
+	t.Parallel()
+	even, _ := repoWithOrigin(t)
+	d := testLandDeps(t)
+	var stdout, stderr strings.Builder
+	d.stdout, d.stderr = &stdout, &stderr
+	if code := runLandWith(t.Context(), "", []string{"--dry-run", "--json", "--repos", even}, d); code != exitcode.Success {
+		t.Fatalf("code = %v stderr=%q", code, stderr.String())
+	}
+	if !regexp.MustCompile(`"ahead":\s*\[\]`).MatchString(stdout.String()) {
+		t.Errorf("json = %q; want \"ahead\":[]", stdout.String())
 	}
 }

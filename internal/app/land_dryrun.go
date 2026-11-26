@@ -15,7 +15,7 @@ type landDryRunRepo struct {
 	Detail string   `json:"detail,omitempty"`
 	Route  string   `json:"route,omitempty"`
 	Gate   string   `json:"gate,omitempty"`
-	Ahead  []string `json:"ahead,omitempty"`
+	Ahead  []string `json:"ahead"`
 }
 
 // landDryRun prints, in run order, what a land would do to each repo, and changes nothing: no catch-up, gate or push.
@@ -50,7 +50,7 @@ func landDryRun(repos []string, asJSON bool, d landDeps) exitcode.Code {
 }
 
 func dryRunRepo(r string, d landDeps) landDryRunRepo {
-	p := landDryRunRepo{Path: r}
+	p := landDryRunRepo{Path: r, Ahead: []string{}}
 	skip := func(why string) landDryRunRepo {
 		p.Status, p.Detail = "skipped", why
 		return p
@@ -75,10 +75,10 @@ func dryRunRepo(r string, d landDeps) landDryRunRepo {
 	if err != nil {
 		return skip("no upstream")
 	}
-	p.Ahead = strings.Split(strings.TrimSpace(log), "\n")
-	if p.Ahead[0] == "" {
+	if log = strings.TrimSpace(log); log == "" {
 		return skip("not ahead")
 	}
+	p.Ahead = strings.Split(log, "\n")
 	remote := upstreamRemote(repo, def, d)
 	var rules []string
 	if slug := slugFromOrigin(strings.TrimSpace(mustGit(repo, d, "config", "--get", "remote."+remote+".url"))); slug != "" {
