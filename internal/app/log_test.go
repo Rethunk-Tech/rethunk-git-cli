@@ -516,10 +516,10 @@ func TestRun_LogPathWithoutDate(t *testing.T) {
 
 	t.Run("flags without a path or a date still require an anchor", func(t *testing.T) {
 		t.Parallel()
-		for _, args := range [][]string{{"--porcelain"}, {"-n", "1"}} {
+		for _, args := range [][]string{{}, {"--porcelain"}, {"-n", "1"}} {
 			_, stderr, code := runApp(t, append([]string{"-C", dir, "log"}, args...)...)
 			qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
-			qt.Assert(t, qt.StringContains(stderr, "requires a FILE:SYMBOL anchor"))
+			qt.Assert(t, qt.StringContains(stderr, "requires a FILE:SYMBOL anchor, a path, or --since/--until"))
 		}
 	})
 }

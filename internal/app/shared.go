@@ -748,7 +748,11 @@ func parseAnchorCommandArgs(cmdName string, args []string, flags []anchorCommand
 		positionals = append(positionals, a)
 	}
 	if len(positionals) == 0 {
-		fmt.Fprintf(stderr, "rgit: %s requires a FILE:SYMBOL anchor\n", cmdName)
+		if cmdName == "log" {
+			fmt.Fprintf(stderr, "rgit: log requires a FILE:SYMBOL anchor, a path, or --since/--until\n")
+		} else {
+			fmt.Fprintf(stderr, "rgit: %s requires a FILE:SYMBOL anchor\n", cmdName)
+		}
 		printUsage(stderr, help)
 		return nil, exitcode.InvalidUsage, true
 	}
