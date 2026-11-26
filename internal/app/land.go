@@ -1069,6 +1069,12 @@ func pullRebase(repo string, d landDeps) bool {
 // resetToRemote moves the checkout off commits that now live in a PR, only while HEAD is still the
 // commit that was branched: a commit made meanwhile is left on the branch with a warning.
 func resetToRemote(repo, target, branched string, d landDeps, res *landResult) {
+	unlock, err := gitx.New(repo).LockCommits(orBackground(d.ctx))
+	if err != nil {
+		res.Lines = append(res.Lines, fmt.Sprintf("%s: warning: local %s not reset (%v)", repo, branchOrHEAD(repo, d), err))
+		return
+	}
+	defer unlock()
 	if head := strings.TrimSpace(mustGit(repo, d, "rev-parse", "HEAD")); head != branched {
 		res.Lines = append(res.Lines, repo+": warning: HEAD moved since the PR was opened; local branch not reset")
 		return

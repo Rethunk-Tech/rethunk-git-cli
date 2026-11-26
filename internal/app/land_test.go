@@ -3555,3 +3555,18 @@ func TestLandBranchRebaseAndAbortHoldTheWorktreeCommitLock(t *testing.T) {
 	}
 	probe.assertAlwaysLocked(t)
 }
+
+func TestResetToRemoteHoldsTheCommitLock(t *testing.T) {
+	t.Parallel()
+	dir, bare := repoWithOrigin(t)
+	gittest.Write(t, dir, "ahead.txt", "x\n")
+	gittest.Commit(t.Context(), t, dir, "ahead")
+	d, f := prRouteDeps(t, dir, bare)
+	f.number = 4
+	probe := &lockProbe{inner: d.git, watch: map[string]bool{"reset": true}}
+	d.git = probe
+	if res := landOne(dir, d); res.Kind != landPR {
+		t.Fatalf("kind = %v lines=%v", res.Kind, res.Lines)
+	}
+	probe.assertAlwaysLocked(t)
+}
