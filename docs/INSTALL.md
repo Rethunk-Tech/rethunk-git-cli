@@ -191,7 +191,7 @@ Windows/amd64. Neither installs a language server. No Homebrew formula
 rgit --version
 cd /some/git/repo && rgit diff
 rgit diff --quiet   # 1 if committable, 0 if clean
-rgit diff 2>&1 >/dev/null | grep -q 'ts-only' && echo "degraded" || echo "cross-check active"
+rgit doctor --deep | grep -Eq 'not on PATH|degraded' && echo "degraded" || echo "cross-check active"
 ```
 
 A clean repo prints nothing and exits 0.

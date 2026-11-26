@@ -33,8 +33,7 @@ dispatch ([`USAGE.md`](USAGE.md#global-flags)).
 
 ### Exit 6 is `commit`'s alone
 
-`diff` reports the same disagreement as a `[warning]` and still exits 0
-(or 1 under `--exit-code`).
+`diff` does not cross-check, so it never reports the disagreement.
 
 ### Exit 12 is `commit`'s alone
 
@@ -192,9 +191,18 @@ summary.
       "added": "4",
       "deleted": "1"
     }
-  ]
+  ],
+  "left": {
+    "dirty": ["README.md"],
+    "upstream": "origin/main",
+    "ahead": 1
+  }
 }
 ```
+
+`left` is what remains after the commit: `dirty` (paths), `upstream`
+(omitted with none) and `ahead` (a number). It is absent when the commit
+leaves the state unreported (`--dry-run`, `--stage-only`).
 
 `sha` is the full commit object id porcelain would print as `H`. It is
 omitted when porcelain would print no `H` (`--dry-run`, `--stage-only`).
@@ -211,8 +219,9 @@ html<TAB>.html .htm<TAB>0<TAB>wired
 json<TAB>.json<TAB>0<TAB>wired
 json5<TAB>.json5<TAB>0<TAB>ts-only
 jsonc<TAB>.jsonc<TAB>0<TAB>wired
-markdown<TAB>.md .markdown<TAB>0<TAB>wired
+markdown<TAB>.md .markdown .mdx<TAB>0<TAB>wired
 python<TAB>.py .pyi<TAB>0<TAB>wired
+rust<TAB>.rs<TAB>0<TAB>wired
 scss<TAB>.scss<TAB>0<TAB>wired
 shell<TAB>.sh .bash<TAB>0<TAB>wired
 sql<TAB>.sql<TAB>1<TAB>ts-only
@@ -262,7 +271,7 @@ wiring, not reachability. `--in-repo` narrows rows, not shape.
 env<TAB>git<TAB>ok<TAB>/usr/bin/git
 env<TAB>git version<TAB>ok<TAB>2.43.0
 env<TAB>gate<TAB>ok<TAB>/home/user/go/bin/gate
-env<TAB>gh<TAB>ok<TAB>/usr/bin/gh
+env<TAB>gh<TAB>ok<TAB>/usr/bin/gh (authenticated)
 env<TAB>tree-sitter CLI<TAB>MISSING<TAB>optional -- only needed to rebuild with SQL support, see docs/INSTALL.md § SQL support
 server<TAB>gopls (go)<TAB>ok<TAB>/home/user/go/bin/gopls (reachable)
 server<TAB>vtsls (typescript, tsx)<TAB>MISSING<TAB>not on PATH -- see docs/INSTALL.md § Language servers
@@ -273,7 +282,7 @@ server<TAB>vtsls (typescript, tsx)<TAB>MISSING<TAB>not on PATH -- see docs/INSTA
 | `KIND` | `env` or `server` |
 | `NAME` | Check name; a server includes its languages |
 | `STATUS` | `ok` or `MISSING` — `--deep` never changes this column |
-| `DETAIL` | Path when `ok`, note when `MISSING`. `--deep` appends `(reachable)` or `(degraded -- handshake timed out or unanswered)` |
+| `DETAIL` | Path when `ok`, note when `MISSING`. `gh` appends ` (authenticated)` or ` (not authenticated -- rgit land cannot read branch rules; run gh auth login)`. `--deep` appends `(reachable)` or `(degraded -- handshake timed out or unanswered)` |
 
 Grammars stay in `rgit languages --porcelain`. Missing git is still 128;
 a missing server or CLI is still 0.
@@ -331,6 +340,7 @@ X<TAB>TRUNCATED<TAB>3
 | --- | --- | --- |
 | `B` | `BRANCH`, `UPSTREAM`, `AHEAD`, `BEHIND` | Current branch. Empty `UPSTREAM` and `0`/`0` with no upstream. Absent on unborn; replaced by `H` when detached |
 | `H` | `SHA` | Detached HEAD; absent on unborn |
+| `B`/`H` with `--brief` | the record's fields, then `DIRTY`, `UNTRACKED` | `--brief` only: dirty and untracked file counts appended (json: `dirty`, `untracked`). Unborn prints an empty `B` with `0`/`0`; detached prints `H` |
 | `S` | `OP` | `merge`, `cherry-pick`, `revert`, `rebase`, or `bisect` |
 | `W` | `stash` | `refs/stash` exists |
 | `W` | `sparse` | `core.sparseCheckout` is true |
@@ -496,12 +506,33 @@ import (
 Every extent: `FILE:ANCHOR<TAB>NBYTES` then exactly `NBYTES` bytes.
 Without the flag, one anchor is raw bytes.
 
+### `rgit land --json`
+
+One object, `{"repos": [...]}`, in run order. It has no `schema` field.
+
+```json
+{
+  "repos": [
+    { "path": "/src/a", "status": "pushed", "sha": "a1b2c3d4e5f6" },
+    { "path": "/src/b", "status": "pr", "url": "https://github.com/o/b/pull/7", "state": "open" },
+    { "path": "/src/c", "status": "red", "detail": "gate failed", "log": "/var/tmp/gate/c.log" },
+    { "path": "/src/d", "status": "skipped", "detail": "nothing ahead" }
+  ]
+}
+```
+
+`status` is `pushed`, `pr`, `red` or `skipped`. `url`, `state`, `detail`,
+`sha`, `log` and `watch` appear only when set. With `--dry-run` each repo
+is `{path, order, status, detail, route, gate, ahead}` instead: `status`
+is `would-land` or `skipped`, and `ahead` is the array of commit lines
+that would land.
+
 ## Rules the diff and commit forms obey
 
 `SYMBOL` is empty when the row owns no anchor. A non-empty `SYMBOL` is
 exactly the string an anchor accepts back.
 
-Binary counts are `-`, matching `git diff --numstat`.
+In `diff` records binary counts are `-`, matching `git diff --numstat`; `commit` records print `0`/`0`.
 
 **Order: alphabetical by path, then source position.** `commit` lists
 targets that way regardless of name order. `(unanchorable)` sorts last.
