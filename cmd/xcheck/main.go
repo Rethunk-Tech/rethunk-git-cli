@@ -42,9 +42,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/Rethunk-Tech/rethunk-git-cli/v3/internal/lsp"
@@ -142,11 +143,7 @@ func main() {
 	}
 
 	fmt.Fprintf(os.Stderr, "files with no server answer: %d\n", failed)
-	langs := make([]string, 0, len(stats))
-	for k := range stats {
-		langs = append(langs, k)
-	}
-	sort.Strings(langs)
+	langs := slices.Sorted(maps.Keys(stats))
 	fmt.Println("\nlang\tfiles\tcompared\tagree\tdisagree\tnotNamed")
 	disagreed := 0
 	for _, l := range langs {
