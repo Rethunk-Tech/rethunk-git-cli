@@ -164,10 +164,9 @@ func runSymbols(ctx context.Context, dir string, args []string, stdout, stderr i
 		hintRepoForTargets(ctx, stderr, "symbols", dir, opts.positionals)
 		return code
 	}
-	ignoreCase, err := repo.IgnoreCase(ctx)
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: cannot read core.ignorecase: %v\n", err)
-		return exitcode.GitFailure
+	ignoreCase, ignoreCaseCode := ignoreCaseOrFail(ctx, repo, stderr)
+	if ignoreCaseCode != exitcode.Success {
+		return ignoreCaseCode
 	}
 
 	// Every file is resolved before anything is written, matching show's own

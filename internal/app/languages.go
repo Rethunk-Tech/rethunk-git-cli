@@ -104,10 +104,9 @@ func filterLanguagesInRepo(ctx context.Context, dir string, langs []resolve.Lang
 		return nil, code
 	}
 
-	ignoreCase, err := repo.IgnoreCase(ctx)
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: cannot read core.ignorecase: %v\n", err)
-		return nil, exitcode.GitFailure
+	ignoreCase, ignoreCaseCode := ignoreCaseOrFail(ctx, repo, stderr)
+	if ignoreCaseCode != exitcode.Success {
+		return nil, ignoreCaseCode
 	}
 
 	tracked, err := repo.LsFilesTracked(ctx)

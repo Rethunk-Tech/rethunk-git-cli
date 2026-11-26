@@ -88,6 +88,17 @@ func repoPath(root, prefix, path string) (string, error) {
 	return p, nil
 }
 
+// ignoreCaseOrFail reads core.ignorecase, printing the shared refusal and
+// returning GitFailure when git cannot answer.
+func ignoreCaseOrFail(ctx context.Context, repo *gitx.Repo, stderr io.Writer) (bool, exitcode.Code) {
+	ignoreCase, err := repo.IgnoreCase(ctx)
+	if err != nil {
+		fmt.Fprintf(stderr, "rgit: cannot read core.ignorecase: %v\n", err)
+		return false, exitcode.GitFailure
+	}
+	return ignoreCase, exitcode.Success
+}
+
 // parseCountFlag parses the non-negative count after a value flag, printing
 // the refusal with help on a missing or invalid value.
 func parseCountFlag(args []string, i int, cmd, name, help string, stderr io.Writer) (n int, next bool, code exitcode.Code, ok bool) {
@@ -459,10 +470,9 @@ func resolveAnchorExtent(ctx context.Context, dir string, stderr io.Writer, posi
 		return nil, "", nil, nil, "", exitcode.InvalidUsage
 	}
 
-	ignoreCase, err := repo.IgnoreCase(ctx)
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: cannot read core.ignorecase: %v\n", err)
-		return nil, "", nil, nil, "", exitcode.GitFailure
+	ignoreCase, ignoreCaseCode := ignoreCaseOrFail(ctx, repo, stderr)
+	if ignoreCaseCode != exitcode.Success {
+		return nil, "", nil, nil, "", ignoreCaseCode
 	}
 
 	lang, ok, _, err := resolve.LanguageForPathFolding(root, file, ignoreCase, func() ([]byte, bool, error) {
@@ -563,10 +573,9 @@ func refuseExtraArgs(cmdName string, args []string, stderr io.Writer, help strin
 // cmdName is only the "blame", "log", or "show" in the missing-blob and
 // unsupported-language sentences.
 func walkRenameSegments(ctx context.Context, repo *gitx.Repo, cmdName, startRev, file, anchorName string, src []byte, res *resolve.Resolution, stderr io.Writer, visit func(rev, file string, src []byte, res *resolve.Resolution, renameCommit string, found bool) exitcode.Code) exitcode.Code {
-	ignoreCase, err := repo.IgnoreCase(ctx)
-	if err != nil {
-		fmt.Fprintf(stderr, "rgit: cannot read core.ignorecase: %v\n", err)
-		return exitcode.GitFailure
+	ignoreCase, ignoreCaseCode := ignoreCaseOrFail(ctx, repo, stderr)
+	if ignoreCaseCode != exitcode.Success {
+		return ignoreCaseCode
 	}
 
 	rev := startRev

@@ -133,10 +133,9 @@ func runFind(ctx context.Context, dir string, args []string, stdout, stderr io.W
 	var dirLabels []string
 	fileCount := 0
 	for _, s := range searches {
-		ignoreCase, err := s.repo.IgnoreCase(ctx)
-		if err != nil {
-			fmt.Fprintf(stderr, "rgit: cannot read core.ignorecase: %v\n", err)
-			return exitcode.GitFailure
+		ignoreCase, ignoreCaseCode := ignoreCaseOrFail(ctx, s.repo, stderr)
+		if ignoreCaseCode != exitcode.Success {
+			return ignoreCaseCode
 		}
 		files, err := listFindFiles(ctx, s.repo, s.specs)
 		if err != nil {
