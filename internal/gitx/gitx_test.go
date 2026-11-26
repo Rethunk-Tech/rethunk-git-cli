@@ -1285,7 +1285,7 @@ func TestCommitOnlyInterruptedAfterLandingSyncsIndex(t *testing.T) {
 	ignoreConfigDefinedHooks(t)
 	dir, repo := gittest.RepoWithFile(t.Context(), t, "a.txt", "a before\n", "chore: initial")
 	marker := filepath.Join(t.TempDir(), "landed")
-	gittest.InstallHook(t.Context(), t, dir, "post-commit", "#!/bin/sh\nexec >/dev/null 2>&1\ntouch '"+marker+"'\nsleep 5\n")
+	gittest.InstallHook(t.Context(), t, dir, "post-commit", "#!/bin/sh\nexec >/dev/null 2>&1\ntouch "+gittest.ShellQuote(marker)+"\nsleep 5\n")
 	gittest.Write(t, dir, "a.txt", "a after\n")
 	only, err := repo.NewOnlyIndex(t.Context())
 	if err != nil {
