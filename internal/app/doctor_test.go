@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"maps"
 	"os/exec"
 	"slices"
 	"strings"
@@ -98,12 +99,7 @@ func TestRun_DoctorJSON(t *testing.T) {
 }
 
 func mapKeys[V any](m map[string]V) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	return keys
+	return slices.Sorted(maps.Keys(m))
 }
 
 // TestRunEnvironmentChecksNamesLandTools pins that doctor reports the tools rgit land shells out to.
