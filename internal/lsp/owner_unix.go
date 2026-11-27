@@ -20,3 +20,9 @@ func sameOwner(info fs.FileInfo) bool {
 	}
 	return int(stat.Uid) == os.Getuid()
 }
+
+// pidDead reports whether pid is provably gone: kill(pid, 0) answering ESRCH.
+// EPERM means a live process of another user, so it is not dead.
+func pidDead(pid int) bool {
+	return syscall.Kill(pid, 0) == syscall.ESRCH
+}

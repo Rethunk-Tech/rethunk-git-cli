@@ -13,3 +13,7 @@ import "io/fs"
 func sameOwner(fs.FileInfo) bool {
 	return true
 }
+
+// pidDead always reports false on Windows: without a cheap liveness probe,
+// a scratch dir is never presumed abandoned.
+func pidDead(int) bool { return false }

@@ -343,7 +343,8 @@ func dialStdio(ctx context.Context, spec serverSpec, repoRoot string) (*Client, 
 	cmd.Stderr = nil
 	// killAndReap's SIGKILL lands before the server can remove what it put
 	// in TMPDIR (pyright's pyright-<pid>-* dir), so it gets one of its own.
-	tmp, err := os.MkdirTemp("", "rgit-lsp-")
+	sweepStdioTmp()
+	tmp, err := newStdioTmp()
 	if err != nil {
 		return nil, true
 	}
