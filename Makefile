@@ -53,6 +53,7 @@ build:
 
 install:
 	go run ./cmd/rgit-install $(if $(PREFIX),-prefix $(PREFIX))
+	@mkdir -p "$$HOME/.local/state" && printf '{"repo":"rethunk-git-cli","sha":"%s","at":"%s","target":"local-bin"}\n' "$$(git rev-parse HEAD)" "$$(date -u +%FT%TZ)" >>"$$HOME/.local/state/deploys.jsonl"
 
 test:
 	go test ./...
