@@ -217,18 +217,30 @@ func runCommit(ctx context.Context, dir string, args []string, stdout, stderr io
 		return code
 	}
 	targetCount := len(positionalsGiven) + len(f.syms) + len(f.files)
-	if code := r.validateTargetCount(targetCount); code != exitcode.Success {
-		return code
+	// A bare "commit requires a target" is deferred until the repository is
+	// open: mid-merge, no targets concludes the merge from the index.
+	targetless := targetCount == 0 && r.targetOptional()
+	if !targetless {
+		if code := r.validateTargetCount(targetCount); code != exitcode.Success {
+			return code
+		}
 	}
-	f.implyOnly(targetCount)
 
 	r.warnUnconventionalMessage()
 
 	root, prefix, repo, code := openRepo(ctx, dir, stderr)
 	if code != exitcode.Success {
+		if targetless {
+			return r.usage("commit requires at least one target")
+		}
 		hintRepoForTargets(ctx, stderr, "commit", dir, slices.Concat(positionalsGiven, f.syms, f.files))
 		return code
 	}
+
+	if code := r.concludeSequencer(ctx, repo, prefix, &positionalsGiven, &targetCount, targetless); code != exitcode.Success {
+		return code
+	}
+	f.implyOnly(targetCount)
 
 	if !f.stageOnly && !f.dryRun && len(f.messages) == 0 && f.msgFile == "" && !autoMessage {
 		var code exitcode.Code
@@ -463,7 +475,7 @@ func (r *commitRun) refuseOnlyDuringSequencer(ctx context.Context, repo *gitx.Re
 		return exitcode.GitFailure
 	}
 	if ok && (op == "merge" || op == "cherry-pick" || op == "revert") {
-		return r.usage("cannot do a partial commit during a " + op + ".")
+		return r.usage("cannot do a partial commit during a " + op + ": to conclude it, stage everything and run `rgit commit -m MSG` with no targets")
 	}
 	return exitcode.Success
 }
@@ -601,6 +613,39 @@ func (f *commitFlags) implyOnly(targetCount int) {
 	if targetCount > 0 && !f.include && !f.only && !f.stageOnly {
 		f.only = true
 	}
+}
+
+// targetOptional is true when only the generic missing-target refusal would
+// fire, which a merge, cherry-pick, or revert in progress waives.
+func (r *commitRun) targetOptional() bool {
+	f := r.f
+	return !f.include && !f.only && !f.stageOnly && !f.amend && !f.allowEmpty && f.fixup == "" && f.squash == "" && f.reuseMessage == ""
+}
+
+// concludeSequencer lets a merge, cherry-pick, or revert in progress finish
+// from the index: no targets, or a lone "." from the repo root, commits what
+// is staged (git commit with no paths). Anywhere else, no targets is the
+// usual usage error.
+func (r *commitRun) concludeSequencer(ctx context.Context, repo *gitx.Repo, prefix string, positionals *[]string, targetCount *int, targetless bool) exitcode.Code {
+	f := r.f
+	wholeTree := *targetCount == 1 && len(f.syms) == 0 && len(f.files) == 0 && len(*positionals) == 1 &&
+		(*positionals)[0] == "." && prefix == "" && r.targetOptional()
+	if !targetless && !wholeTree {
+		return exitcode.Success
+	}
+	op, ok, err := repo.SequencerOp(ctx)
+	if err != nil {
+		fmt.Fprintf(r.stderr, "rgit: %v\n", err)
+		return exitcode.GitFailure
+	}
+	if ok && (op == "merge" || op == "cherry-pick" || op == "revert") {
+		*positionals, *targetCount = nil, 0
+		return exitcode.Success
+	}
+	if targetless {
+		return r.usage("commit requires at least one target")
+	}
+	return exitcode.Success
 }
 
 func (r *commitRun) validateTargetCount(targetCount int) exitcode.Code {

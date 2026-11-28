@@ -488,6 +488,40 @@ func TestRun_OnlyRefusedDuringMerge(t *testing.T) {
 	gitOut(t, dir, "rev-parse", "-q", "--verify", "MERGE_HEAD")
 }
 
+func TestRun_ConcludeMergeWithoutTargets(t *testing.T) {
+	t.Parallel()
+	for _, args := range [][]string{{"commit", "-m", "chore(merge): x"}, {"commit", "-m", "chore(merge): x", "."}} {
+		dir := tempRepo(t)
+		writeAppFile(t, dir, "f.txt", "f\n")
+		gitOut(t, dir, "add", "--", "f.txt")
+		gitOut(t, dir, "commit", "-q", "-m", "chore: f")
+		gitOut(t, dir, "checkout", "-q", "-b", "side")
+		writeAppFile(t, dir, "f.txt", "side\n")
+		gitOut(t, dir, "commit", "-qam", "feat: side")
+		gitOut(t, dir, "checkout", "-q", "main")
+		writeAppFile(t, dir, "f.txt", "main\n")
+		gitOut(t, dir, "commit", "-qam", "feat: main")
+		_ = exec.CommandContext(t.Context(), "git", "-C", dir, "merge", "--no-ff", "side").Run() //nolint:gosec // test args; conflicts by design
+		writeAppFile(t, dir, "f.txt", "resolved\n")
+		_, stderr, code := runApp(t, "-C", dir, "commit", "--stage-only", "f.txt")
+		qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("%s", stderr))
+
+		_, stderr, code = runApp(t, append([]string{"-C", dir}, args...)...)
+
+		qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("%s", stderr))
+		qt.Assert(t, qt.Equals(strings.TrimSpace(gitOut(t, dir, "log", "-1", "--format=%s")), "chore(merge): x"))
+		qt.Assert(t, qt.Equals(len(strings.Fields(gitOut(t, dir, "rev-list", "--parents", "-n1", "HEAD"))), 3))
+	}
+}
+
+func TestRun_NoTargetsOutsideSequencerStillRefused(t *testing.T) {
+	t.Parallel()
+	dir := tempRepo(t)
+	_, stderr, code := runApp(t, "-C", dir, "commit", "-m", "x")
+	qt.Assert(t, qt.Equals(code, exitcode.InvalidUsage))
+	qt.Assert(t, qt.StringContains(stderr, "commit requires at least one target"))
+}
+
 func TestRun_OnlyRefusedDuringConflictedCherryPick(t *testing.T) {
 	t.Parallel()
 	dir := tempRepo(t)

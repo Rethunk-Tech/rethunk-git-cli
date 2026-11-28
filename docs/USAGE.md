@@ -608,7 +608,9 @@ A missing conventional-commit shape warns; the commit proceeds.
   session did meanwhile stays. Index entries only — no worktree file is
   written. Staging holds git's `index.lock`.
 + `--only` during a merge, cherry-pick, or revert is refused ("cannot do a
-  partial commit during a merge"), as in git.
+  partial commit during a merge"), as in git. To conclude one, stage
+  everything and run `rgit commit -m MSG` with no targets (or a lone `.`
+  from the repo root): it commits the index.
 + Hooks are not policed. `--no-verify` disables them.
 + Merge / cherry-pick / revert without `-m`/`-F` uses `--no-edit`. Rebase
   remains `git rebase --continue`.
