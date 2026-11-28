@@ -503,7 +503,7 @@ func (r *commitRun) commitOptions(noEdit bool, only *gitx.OnlyIndex) (gitx.Commi
 	opts := gitx.CommitOptions{
 		Messages:     f.messages,
 		Signoff:      f.signoff,
-		Trailers:     f.trailers,
+		Trailers:     withSessionTrailer(f.trailers),
 		ReuseMessage: f.reuseMessage,
 		Amend:        f.amend,
 		AllowEmpty:   f.allowEmpty,
@@ -1281,4 +1281,19 @@ func writeTargetListing(stdout io.Writer, results []synth.TargetResult) {
 		}
 		fmt.Fprintf(stdout, "  %-*s  +%d/-%d\n", width, resultLabel(r), r.Added, r.Deleted)
 	}
+}
+
+// withSessionTrailer appends a Claude-Session trailer naming the running
+// Claude Code session, unless the caller already supplied one.
+func withSessionTrailer(trailers []string) []string {
+	id := os.Getenv("CLAUDE_CODE_SESSION_ID")
+	if id == "" {
+		return trailers
+	}
+	for _, t := range trailers {
+		if k, _, _ := strings.Cut(t, ":"); strings.EqualFold(strings.TrimSpace(k), "Claude-Session") {
+			return trailers
+		}
+	}
+	return append(append([]string(nil), trailers...), "Claude-Session: "+id)
 }

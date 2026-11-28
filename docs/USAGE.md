@@ -511,7 +511,7 @@ symbols FILE` (or `--for-commit` for `commit`). Failure (no repo, not on
 | `-m MSG`, `--message MSG` | Repeatable; values join as blank-line paragraphs. A value may span lines, as in git. |
 | `-F FILE`, `--message-file FILE` | Message from file or stdin. Exclusive with `-m`. |
 | `-s`, `--signoff` | `Signed-off-by:`. Forwarded. |
-| `--trailer TOKEN:VALUE` | Repeatable, forwarded. |
+| `--trailer TOKEN:VALUE` | Repeatable, forwarded. When `CLAUDE_CODE_SESSION_ID` is set, a `Claude-Session` trailer is added unless given. |
 | `--amend` | Amend previous. No `-m`/`-F`: reuse HEAD (`--no-edit`). No targets: amend the index as it stands. |
 | `--allow-empty` | Permit no changes; suppresses exit 11. No targets: commit the index; still needs a message unless another auto-message flag is set. |
 | `-i`, `--include` | Stage named targets into the index, then commit it (git's `--include`). Needs a target. Exclusive with `--only` and `--stage-only`. The way to take already-staged work along when naming targets. |

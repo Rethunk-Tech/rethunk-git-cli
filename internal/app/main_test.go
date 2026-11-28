@@ -11,6 +11,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	_ = os.Unsetenv("CLAUDE_CODE_SESSION_ID")
 	if dir := os.Getenv("RGIT_TEST_LAND_SIGINT_DIR"); dir != "" {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		code := Run(ctx, "test", []string{"-C", dir, "land"}, os.Stdout, os.Stderr)

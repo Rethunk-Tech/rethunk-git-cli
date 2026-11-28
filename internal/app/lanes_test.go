@@ -928,3 +928,20 @@ func TestRun_OnlyDirectoryTargetSkipsUntracked(t *testing.T) {
 	qt.Assert(t, qt.Equals(code, exitcode.Success), qt.Commentf("stderr: %s", stderr))
 	qt.Assert(t, qt.StringContains(gitOut(t, dir, "ls-tree", "-r", "--name-only", "HEAD", "--", "d"), "d/secret.env"))
 }
+
+func TestRun_CommitRecordsClaudeSessionTrailer(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "sess-123")
+	dir := tempRepo(t)
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 111\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+
+	_, _, code := runApp(t, "-C", dir, "commit", "-m", "fix(a): session", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	got := gitOut(t, dir, "log", "-1", "--format=%(trailers:key=Claude-Session,valueonly)")
+	qt.Assert(t, qt.Equals(strings.TrimSpace(got), "sess-123"))
+
+	writeAppFile(t, dir, "a.go", "package a\n\n// A returns one.\nfunc A() int {\n\treturn 222\n}\n\nfunc B() int {\n\treturn 2\n}\n")
+	_, _, code = runApp(t, "-C", dir, "commit", "--trailer", "Claude-Session: other", "-m", "fix(a): explicit", "a.go:A")
+	qt.Assert(t, qt.Equals(code, exitcode.Success))
+	got = gitOut(t, dir, "log", "-1", "--format=%(trailers:key=Claude-Session,valueonly)")
+	qt.Assert(t, qt.Equals(strings.TrimSpace(got), "other"))
+}

@@ -41,6 +41,7 @@ func TestMain(m *testing.M) {
 	// it can be consulted -- m.Run() would otherwise be the first thing to
 	// do it, which is already too late to decide whether to build.
 	flag.Parse()
+	_ = os.Unsetenv("CLAUDE_CODE_SESSION_ID")
 	if testing.Short() {
 		// Only the full lane's live-gopls case wants a managed daemon.
 		os.Exit(lsptest.RunWithoutManagedDaemon(m))

@@ -12,7 +12,7 @@ needs a new measurement, not a reword.
 ## Commits
 
 `type(scope): subject` — imperative, ~72 characters, one unit, why in the
-body, no AI trailers.
+body, no AI trailers (the `Claude-Session` provenance trailer `rgit commit` adds is the exception).
 
 ## Changelog
 

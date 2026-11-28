@@ -8,6 +8,7 @@ Notable changes to `rgit`. The format follows
 
 ### Added
 
+- `rgit commit` adds a `Claude-Session: <id>` trailer when `CLAUDE_CODE_SESSION_ID` is set.
 - `rgit doctor` reports whether `gh` is authenticated.
 - `rgit land` caches GitHub branch rules and allowed merge methods for 24 hours, and drops a repo's entries when a push or PR is refused over changed settings.
 
